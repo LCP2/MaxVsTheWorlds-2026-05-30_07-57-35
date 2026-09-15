@@ -55,6 +55,17 @@ namespace MaxWorlds.Factories
         /// at 1.3-1.6 m, always outside a 1.2 m gate.</summary>
         public const float ArriveTolerance = 0.35f;
 
+        /// <summary>MV-807: the queue a lured robot actually walks into. Two robots pressed against
+        /// the same hatch point could never both close on it (see <see cref="QueueSlotPosition"/>'s
+        /// own doc), so at most this many are ever steered at once — every other eligible robot goes
+        /// back to chasing Max until a slot frees.</summary>
+        public const int MaxQueueSlots = 2;
+
+        /// <summary>MV-807: metres between consecutive queue slots along <see cref="HatchOutwardNormal"/>,
+        /// and between the hatch itself and slot 0. Lee's own "queue 2 deep" is a line, not a pile —
+        /// this is what keeps two queued robots from ever being steered at the same point.</summary>
+        public const float QueueSlotSpacing = 1.2f;
+
         /// <summary>MV-775 Intake beat: seconds a consumed robot spends being drawn from its arrival
         /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
         /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
@@ -123,10 +134,12 @@ namespace MaxWorlds.Factories
             }
         }
 
-        // Robots currently walking toward this box's hatch.
-        private readonly List<RobotEnemy> _seeking = new List<RobotEnemy>(8);
+        // MV-807: robots currently walking toward this box, ordered slot 0 (nearest the hatch, the
+        // only one ever eligible for Intake) to slot MaxQueueSlots-1. Index IS queue position — a
+        // robot's own QueueSlotPosition is always its index here, never a separate lookup.
+        private readonly List<RobotEnemy> _queue = new List<RobotEnemy>(MaxQueueSlots);
         // The one robot currently being drawn through the Intake beat (MV-775) — the hatch only ever
-        // has room for one at a time, so a second arrival waits in _seeking until this slot frees.
+        // has room for one at a time, so a second arrival waits in _queue until this slot frees.
         private RobotEnemy _intakeRobot;
         private Vector3 _intakeStartPos;
         private float _intakeTimer;
@@ -217,6 +230,27 @@ namespace MaxWorlds.Factories
         /// without re-deriving <see cref="FactoryBodies.BuildReplicator"/>'s own hatch-offset formula.</summary>
         public Vector3 HatchPosition => _hatch != null ? _hatch.position : transform.position;
 
+        /// <summary>MV-807: the direction a queued robot lines up along, away from the hatch — the
+        /// same -Z box-local face <see cref="FactoryBodies.BuildReplicator"/> put the hatch on
+        /// (<c>hatchAt</c>'s own -Z offset), flattened to the ground plane since a queue is a walking
+        /// line, not a ramp. World-space so it stays correct under whatever rotation the level authors
+        /// this box at.</summary>
+        private Vector3 HatchOutwardNormal
+        {
+            get
+            {
+                Vector3 n = -transform.forward;
+                n.y = 0f;
+                return n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.back;
+            }
+        }
+
+        /// <summary>MV-807: where the robot at queue index <paramref name="slot"/> steers to — a line
+        /// leading away from the hatch along <see cref="HatchOutwardNormal"/>, slot 0 closest
+        /// (<see cref="QueueSlotSpacing"/> out) and each further slot one more spacing beyond it. Public
+        /// so a test can read a slot back without re-deriving this formula.</summary>
+        public Vector3 QueueSlotPosition(int slot) => HatchPosition + HatchOutwardNormal * (QueueSlotSpacing * (slot + 1));
+
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
@@ -232,6 +266,7 @@ namespace MaxWorlds.Factories
         public void TickLure()
         {
             if (!IsAlive || capacity <= 0) return;
+            if (_queue.Count >= MaxQueueSlots) return; // MV-807: a full queue lures nobody
 
             if (_target == null)
             {
@@ -240,7 +275,7 @@ namespace MaxWorlds.Factories
             }
 
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
+            for (int i = 0; i < active.Count && _queue.Count < MaxQueueSlots; i++)
             {
                 RobotEnemy r = active[i];
                 if (r == null || !r.IsAlive || r.IsDormant) continue;
@@ -266,11 +301,10 @@ namespace MaxWorlds.Factories
                     Vector3.Distance(r.transform.position, _target.position) <= MaxMeleeExclusionRadius)
                     continue;
 
-                // MV-775: the steering target is the hatch's own face, not the box's centre — a robot
-                // must walk to the mouth it's actually consumed at, never "through the box" to whichever
-                // face happened to be nearest.
-                r.SeekReplicator(HatchPosition);
-                _seeking.Add(r);
+                // MV-807: the steering target is this robot's own queue slot, never the hatch itself —
+                // two robots must never be steered at the same point (that was the jam Lee reported).
+                _queue.Add(r);
+                r.SeekReplicator(QueueSlotPosition(_queue.Count - 1));
             }
         }
 
@@ -282,29 +316,41 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
 
-            for (int i = _seeking.Count - 1; i >= 0; i--)
+            // MV-807: a queued robot that died, got converted, or is otherwise no longer eligible is
+            // dropped and every remaining slot behind it closes up — re-targeted onto its new slot.
+            bool queueClosedUp = false;
+            for (int i = _queue.Count - 1; i >= 0; i--)
             {
-                RobotEnemy r = _seeking[i];
+                RobotEnemy r = _queue[i];
                 if (r == null || !r.IsAlive || r.Current != RobotEnemy.State.ReplicatorSeeking)
                 {
-                    _seeking.RemoveAt(i);
-                    continue;
+                    _queue.RemoveAt(i);
+                    queueClosedUp = true;
                 }
+            }
+            if (queueClosedUp) RetargetQueue();
 
-                if (_intakeRobot != null) continue; // MV-775: the hatch only fits one robot at a time
-                if (DistanceToHatchFace(r) > ArriveTolerance) continue;
+            // MV-807: only the robot at slot 0 — nearest the hatch — is ever eligible for Intake. The
+            // rest of the queue is still walking toward its own slot further back.
+            if (_intakeRobot == null && _queue.Count > 0)
+            {
+                RobotEnemy head = _queue[0];
+                bool atSlot = Vector3.Distance(head.transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
                 // MV-809: never consume a robot this box can't at least give back — see
-                // EnemySpawner.HasRoomForReplicatorIntake's reservation contract. The robot stays
-                // right where it arrived (still in _seeking) until room frees up.
-                if (!EnemySpawner.HasRoomForReplicatorIntake()) continue;
-
-                // At the hatch: hand its position over to the Intake beat rather than despawning it
-                // here outright — TickIntake is what actually draws it in and despawns it.
-                _seeking.RemoveAt(i);
-                _intakeRobot = r;
-                _intakeStartPos = r.transform.position;
-                _intakeTimer = 0f;
-                r.BeginReplicatorIntake();
+                // EnemySpawner.HasRoomForReplicatorIntake's reservation contract. The robot stays right
+                // where it arrived (still queued at slot 0) until room frees up.
+                if (atSlot && EnemySpawner.HasRoomForReplicatorIntake())
+                {
+                    // At its slot: hand its position over to the Intake beat rather than despawning it
+                    // here outright — TickIntake is what actually draws it in and despawns it. Slot 1
+                    // (if occupied) is promoted to slot 0 and re-targeted immediately, same tick.
+                    _queue.RemoveAt(0);
+                    RetargetQueue();
+                    _intakeRobot = head;
+                    _intakeStartPos = head.transform.position;
+                    _intakeTimer = 0f;
+                    head.BeginReplicatorIntake();
+                }
             }
 
             if (_intakeRobot != null) TickIntake(dt);
@@ -384,16 +430,14 @@ namespace MaxWorlds.Factories
             _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
         }
 
-        /// <summary>How far a lured robot still is from the hatch it's actually being consumed at
-        /// (MV-775) — a point on the hatch itself, never the box's nearest face (MV-756's original
-        /// collider-surface fix, but scoped to the one face a robot is meant to walk to). The robot's
-        /// own <see cref="EnemyArchetype.ColliderRadius"/> is still subtracted so a real
-        /// <see cref="CharacterController"/>-driven approach can actually satisfy this gate — the
-        /// Intake beat that follows is what then draws it the rest of the way to the exact hatch point.</summary>
-        private float DistanceToHatchFace(RobotEnemy r)
+        /// <summary>MV-807: re-stamps every queued robot's steering target onto its CURRENT index —
+        /// called whenever the queue's membership changes (a slot vacates, an entry drops out), so a
+        /// robot promoted from slot 1 to slot 0 is re-targeted the same tick, never left walking toward
+        /// a slot that's no longer its own.</summary>
+        private void RetargetQueue()
         {
-            float robotRadius = EnemyArchetype.Of(r.Kind).ColliderRadius;
-            return Vector3.Distance(r.transform.position, HatchPosition) - robotRadius;
+            for (int i = 0; i < _queue.Count; i++)
+                _queue[i].SeekReplicator(QueueSlotPosition(i));
         }
 
         private void Update()
@@ -428,12 +472,12 @@ namespace MaxWorlds.Factories
 
             // A robot still walking toward a box that no longer exists resumes chasing Max instead of
             // beelining for a dead wreck's position forever.
-            for (int i = 0; i < _seeking.Count; i++)
+            for (int i = 0; i < _queue.Count; i++)
             {
-                RobotEnemy r = _seeking[i];
+                RobotEnemy r = _queue[i];
                 if (r != null && r.IsAlive) r.CancelReplicatorSeeking();
             }
-            _seeking.Clear();
+            _queue.Clear();
 
             // MV-775: a robot mid-Intake (already through the arrive gate, not yet despawned) resumes
             // chasing Max too, same as one still walking in from further out — the box dying mid-draw-in
@@ -481,9 +525,9 @@ namespace MaxWorlds.Factories
             // seeking the box must read as a thing about to happen, from the box itself, before
             // anything is actually consumed. Every other tell here was downstream of a consume that
             // could never happen (MV-756 Cause 2); this is the one that isn't. MV-775 adds
-            // _intakeRobot: a robot mid-Intake has already left _seeking but the hatch is still open
+            // _intakeRobot: a robot mid-Intake has already left _queue but the hatch is still open
             // on it.
-            bool hatchWanted = _pending.Count > 0 || _seeking.Count > 0 || _intakeRobot != null;
+            bool hatchWanted = _pending.Count > 0 || _queue.Count > 0 || _intakeRobot != null;
             if (_hatchGlow != null)
             {
                 Color glow = hatchWanted ? hatchGlowColor : Color.clear;
@@ -497,7 +541,7 @@ namespace MaxWorlds.Factories
             // beat the way the glow (above) does.
             if (_hatch != null)
             {
-                bool hatchSwingWanted = _seeking.Count > 0 || _intakeRobot != null;
+                bool hatchSwingWanted = _queue.Count > 0 || _intakeRobot != null;
                 float target = hatchSwingWanted ? 1f : 0f;
                 _hatchOpenAmount = Mathf.MoveTowards(_hatchOpenAmount, target, Time.deltaTime / HatchSwingSeconds);
                 _hatch.localRotation = _hatchClosedLocalRotation * Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg, Vector3.up);
