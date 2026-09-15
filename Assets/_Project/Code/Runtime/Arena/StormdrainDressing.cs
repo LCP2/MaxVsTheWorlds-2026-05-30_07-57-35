@@ -47,6 +47,44 @@ namespace MaxWorlds.Arena
             public int Total => Kerbs + Pipes + Lamps + Soffits + CoverProps + SludgeTiles;
         }
 
+        // ---------------------------------------------------------------- lit ground (MV-799)
+
+        /// <summary>One light-fitting source for <see cref="LightingMultiplier"/> (MV-799, change 1-2):
+        /// its own world XZ position and the radius its own kind reaches to. Collected as the wall pass
+        /// (<see cref="StormdrainKit.DressWallFace"/>, which also builds the kerb strip) and
+        /// <see cref="DressHazardBulkheads"/> actually build fittings — not re-derived, so a fitting the
+        /// post-pass sees is always one that actually exists in the built scene.</summary>
+        private readonly struct Fitting
+        {
+            public readonly Vector2 Pos;
+            public readonly float Radius;
+            public Fitting(Vector2 pos, float radius) { Pos = pos; Radius = radius; }
+        }
+
+        private const float BulkheadLampFittingRadius = 4.6f;
+        private const float KerbStripFittingRadius = 3.0f;
+
+        private const float LitGroundBaseMultiplier = 0.38f;
+        private const float LitGroundMaxMultiplier = 1.30f;
+        private const float LitGroundFalloffExponent = 1.35f;
+        private const float LitGroundFittingContribution = 0.62f;
+
+        /// <summary>MV-799: how much a fitting brightens one point on the floor — the approved design's
+        /// own formula, summed over every fitting that reaches <paramref name="p"/> and capped. Consumed
+        /// for a bay's own resolved tone and, so a stain or crack never floats brighter than the bay
+        /// under it, for that bay's silt stains, water stains and cracks too.</summary>
+        private static float LightingMultiplier(Vector2 p, List<Fitting> fittings)
+        {
+            float sum = 0f;
+            foreach (Fitting f in fittings)
+            {
+                float d = Vector2.Distance(p, f.Pos);
+                if (d >= f.Radius) continue;
+                sum += Mathf.Pow(1f - d / f.Radius, LitGroundFalloffExponent) * LitGroundFittingContribution;
+            }
+            return Mathf.Min(LitGroundMaxMultiplier, LitGroundBaseMultiplier + sum);
+        }
+
         /// <summary>How many pump housings the last <see cref="Dress"/> call actually built (MV-794) —
         /// what <see cref="StormdrainFloodRunner"/> reads instead of a hard-coded 0, so
         /// <see cref="StormdrainFlood"/>'s pump counterweight runs off the real world instead of a
@@ -83,6 +121,7 @@ namespace MaxWorlds.Arena
             root.gameObject.AddComponent<KeepsOwnMaterial>();
 
             int kerbs = 0, pipes = 0, lamps = 0, soffits = 0;
+            var fittings = new List<Fitting>();
 
             var walls = new GameObject("Walls").transform;
             walls.SetParent(root, false);
@@ -110,11 +149,25 @@ namespace MaxWorlds.Arena
                 // DressWallFace declines short faces and skips lamps that would land in a doorway.
                 for (int i = before; i < walls.childCount; i++)
                 {
-                    string n = walls.GetChild(i).name;
+                    Transform child = walls.GetChild(i);
+                    string n = child.name;
                     if (n.StartsWith("Kerb")) kerbs++;
                     else if (n.StartsWith("Pipe") || n.StartsWith("Collar")) pipes++;
-                    else if (n.StartsWith("Bulkhead Lamp")) lamps++;
+                    else if (n.StartsWith("Bulkhead Lamp"))
+                    {
+                        lamps++;
+                        fittings.Add(new Fitting(new Vector2(child.position.x, child.position.z),
+                            BulkheadLampFittingRadius));
+                    }
                     else if (n.StartsWith("Soffit")) soffits++;
+                    else if (n == "Guide Rail")
+                    {
+                        // MV-799: each kerb-strip segment is its own fitting (change 1) — the guide
+                        // rail's host object itself carries no position worth collecting.
+                        foreach (Transform seg in child)
+                            fittings.Add(new Fitting(new Vector2(seg.position.x, seg.position.z),
+                                KerbStripFittingRadius));
+                    }
                 }
 
                 StormdrainKit.DressOverheadRun(overhead, face.A, face.B, face.Out, map.wallHeight, seed);
@@ -160,10 +213,11 @@ namespace MaxWorlds.Arena
 
             int tiles = DressSludge(root, map);
 
-            DressFloorComposition(root, map);
+            // MV-799: hazard bulkheads must build (and add to fittings) BEFORE the floor composition
+            // post-pass runs, or a gate/outfall's own light would never lighten the bays around it.
+            DressHazardBulkheads(root, host, map, fittings);
+            DressFloorComposition(root, map, fittings);
             LowerMapFloor(host);
-
-            DressHazardBulkheads(root, host, map);
 
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
         }
@@ -287,7 +341,7 @@ namespace MaxWorlds.Arena
         /// <paramref name="host"/> (the same lookup <see cref="BackyardPath"/> already uses to reskin
         /// them), not re-derived from <paramref name="map"/>, so a gate this pass sees is always one
         /// that actually exists in the built scene.</summary>
-        private static void DressHazardBulkheads(Transform root, Transform host, MapData map)
+        private static void DressHazardBulkheads(Transform root, Transform host, MapData map, List<Fitting> fittings)
         {
             var fittingHost = new GameObject("Light Fittings").transform;
             fittingHost.SetParent(root, false);
@@ -306,6 +360,7 @@ namespace MaxWorlds.Arena
                 at.y = 0f;
                 StormdrainLightKit.BuildBulkheadLamp(fittingHost, "Hazard Bulkhead", at, inward, along,
                     StormdrainLightKit.Red, pulsing: true, mountHeight);
+                fittings.Add(new Fitting(new Vector2(at.x, at.z), BulkheadLampFittingRadius));
             }
 
             MapEntity outfall = map.Entity(OutfallGateId);
@@ -314,6 +369,7 @@ namespace MaxWorlds.Arena
                 Vector3 at = new Vector3(outfall.x, 0f, outfall.z);
                 StormdrainLightKit.BuildBulkheadLamp(fittingHost, "Hazard Bulkhead", at, Vector3.forward, Vector3.right,
                     StormdrainLightKit.Red, pulsing: true, mountHeight);
+                fittings.Add(new Fitting(new Vector2(at.x, at.z), BulkheadLampFittingRadius));
             }
         }
 
@@ -353,7 +409,7 @@ namespace MaxWorlds.Arena
         /// panel joints (change 2), and silt/standing-water stains (change 4) — skipped for a
         /// <see cref="MapZone.level"/> &gt; 0 zone (a deck overlay shares its target's floor, MV-697, so
         /// it never gets a second pass of it).</summary>
-        private static void DressFloorComposition(Transform root, MapData map)
+        private static void DressFloorComposition(Transform root, MapData map, List<Fitting> fittings)
         {
             if (map.zones == null) return;
 
@@ -369,22 +425,31 @@ namespace MaxWorlds.Arena
 
                 foreach (Bay bay in BayRects(zoneRect, zone.id))
                 {
-                    StormdrainKit.BuildBay(floorHost, bay.Rect, bay.Tone);
+                    // MV-799: the floor itself carries the lighting — a bay's authored tone is only the
+                    // starting point, scaled by how close it sits to a fitting.
+                    float m = LightingMultiplier(bay.Rect.center, fittings);
+                    StormdrainKit.BuildBay(floorHost, bay.Rect, bay.Tone * m);
                     if (bay.HasCrack)
                         StormdrainKit.BuildCrack(floorHost,
-                            new Vector3(bay.Rect.center.x, 0f, bay.Rect.center.y), bay.CrackHash);
+                            new Vector3(bay.Rect.center.x, 0f, bay.Rect.center.y), bay.CrackHash, toneScale: m);
                 }
 
                 foreach (Rect seg in JointRects(zoneRect, obstacles))
                     StormdrainKit.BuildPanelJoint(floorHost, seg);
 
                 foreach (Stain silt in SiltRects(zoneRect, zone.id, obstacles))
+                {
+                    float m = LightingMultiplier(silt.Center, fittings);
                     StormdrainKit.BuildSiltStain(floorHost,
-                        new Vector3(silt.Center.x, 0f, silt.Center.y), silt.CoreRadius, silt.Seed);
+                        new Vector3(silt.Center.x, 0f, silt.Center.y), silt.CoreRadius, silt.Seed, toneScale: m);
+                }
 
                 foreach (Stain water in WaterRects(zoneRect, zone.id, obstacles))
+                {
+                    float m = LightingMultiplier(water.Center, fittings);
                     StormdrainKit.BuildWaterStain(floorHost,
-                        new Vector3(water.Center.x, 0f, water.Center.y), water.CoreRadius, water.Seed);
+                        new Vector3(water.Center.x, 0f, water.Center.y), water.CoreRadius, water.Seed, toneScale: m);
+                }
             }
         }
 
