@@ -70,8 +70,10 @@ namespace MaxWorlds.Factories
         /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
         /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
         /// pinned to the hatch face rather than wherever <see cref="ArriveTolerance"/> first let it
-        /// through — see <see cref="TickIntake"/>.</summary>
-        public const float IntakeSeconds = 0.5f;
+        /// through — see <see cref="TickIntake"/>. MV-808: lengthened from 0.5 to 1.0 so the ramp
+        /// ascent this ticket adds is actually readable at the play camera — the only timing change
+        /// this ticket makes.</summary>
+        public const float IntakeSeconds = 1.0f;
 
         /// <summary>MV-775 Cycle beat: seconds from a robot being despawned into the box to the FIRST
         /// of its doubled pair emerging.</summary>
@@ -92,7 +94,10 @@ namespace MaxWorlds.Factories
 
         [SerializeField] private int capacity;
 
-        [SerializeField] private Color ledCapacityColor = new Color(0.25f, 0.95f, 1f);   // cyan: capacity left
+        // MV-808: the LED now signals BUSY (a robot mid-Intake or mid-Cycle/Output), not just capacity
+        // remaining — see LateUpdate. ledSpentColor is unchanged and still wins once capacity hits 0.
+        [SerializeField] private Color ledIdleColor = new Color(0.30f, 0.95f, 0.35f);    // green: idle, can take a robot
+        [SerializeField] private Color ledBusyColor = new Color(1.00f, 0.18f, 0.14f);    // red: consuming/cycling a robot
         [SerializeField] private Color ledSpentColor = new Color(0.9f, 0.15f, 0.1f);     // red: spent, still a target
         [SerializeField] private Color hatchGlowColor = new Color(1f, 0.82f, 0.45f);     // warm amber: mid-consume
 
@@ -115,6 +120,10 @@ namespace MaxWorlds.Factories
         private Transform _hatch;
         private Quaternion _hatchClosedLocalRotation;
         private float _hatchOpenAmount;
+
+        /// <summary>MV-808: the output face's own reference point (mirrors <see cref="_hatch"/> on the
+        /// opposite side) — where a doubled twin's out-ramp foot is measured from.</summary>
+        private Transform _outputLip;
 
         /// <summary>MV-775: the roof fan — "the only moving thing in a quiet room" — spun continuously
         /// in <see cref="Update"/> while this box is alive.</summary>
@@ -212,8 +221,8 @@ namespace MaxWorlds.Factories
             _emitFlash = parts.EmitFlash;
             _emitFlashMpb = new MaterialPropertyBlock();
 
-            // The status LED — cyan while it can still double a robot, red once spent, off once
-            // destroyed (OnDestroyed hides it).
+            // The status LED — green idle / red busy while it can still double a robot (MV-808), red
+            // (spent) once capacity hits 0, off once destroyed (OnDestroyed hides it).
             _led = parts.Led;
             _ledMpb = new MaterialPropertyBlock();
 
@@ -222,6 +231,7 @@ namespace MaxWorlds.Factories
             _hatch = parts.Hatch;
             _hatchClosedLocalRotation = _hatch != null ? _hatch.localRotation : Quaternion.identity;
             _fan = parts.Fan;
+            _outputLip = parts.OutputLip;
         }
 
         /// <summary>The hatch's own world position (MV-775) — where <see cref="TickLure"/> steers a
@@ -250,6 +260,66 @@ namespace MaxWorlds.Factories
         /// (<see cref="QueueSlotSpacing"/> out) and each further slot one more spacing beyond it. Public
         /// so a test can read a slot back without re-deriving this formula.</summary>
         public Vector3 QueueSlotPosition(int slot) => HatchPosition + HatchOutwardNormal * (QueueSlotSpacing * (slot + 1));
+
+        /// <summary>MV-808: the output face's own world position — the same hatch-mirroring reasoning
+        /// as <see cref="HatchPosition"/>, read off <see cref="_outputLip"/> instead of <see cref="_hatch"/>.</summary>
+        public Vector3 OutputPosition => _outputLip != null ? _outputLip.position : transform.position;
+
+        /// <summary>MV-808: the direction a twin walks away from the box on the output face — the
+        /// opposite face to <see cref="HatchOutwardNormal"/> (+Z box-local, flattened), same reasoning.</summary>
+        private Vector3 OutputOutwardNormal
+        {
+            get
+            {
+                Vector3 n = transform.forward;
+                n.y = 0f;
+                return n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.forward;
+            }
+        }
+
+        /// <summary>MV-808: true ground level — the box's own pivot sits at its vertical centre
+        /// (<see cref="MaxWorlds.Arena.Map.MapData.GroundedCenter"/>), so this is always just the
+        /// half-height below it. Used as the ramp foot's Y for both the Intake walk-up and the out-ramp
+        /// foot, so the rise to <see cref="HatchPosition"/>'s elevated Y is always real, not merely
+        /// however close a given robot's own resting height happens to land.</summary>
+        private float GroundY => transform.position.y - transform.lossyScale.y * 0.5f;
+
+        /// <summary>MV-808: the out-ramp's own foot, at true ground level — the single reference point
+        /// both twins are placed near (each staggered slightly off it, see <see cref="TwinPlacement"/>).
+        /// Public so a test can read it back without re-deriving this formula, the same reasoning
+        /// <see cref="QueueSlotPosition"/> already documents for the in-ramp foot.</summary>
+        public Vector3 OutRampFootPosition
+        {
+            get
+            {
+                Vector3 foot = OutputPosition + OutputOutwardNormal * QueueSlotSpacing;
+                foot.y = GroundY;
+                return foot;
+            }
+        }
+
+        /// <summary>MV-808: where twin <paramref name="twinIndex"/> (0 or 1) actually lands — the
+        /// out-ramp foot, staggered sideways so the pair doesn't overlap (still well within the 1.2 m
+        /// the ticket's own test tolerates).</summary>
+        private Vector3 TwinPlacement(int twinIndex)
+        {
+            Vector3 side = transform.right; side.y = 0f;
+            side = side.sqrMagnitude > 0.0001f ? side.normalized : Vector3.right;
+            return OutRampFootPosition + side * (twinIndex == 0 ? -0.4f : 0.4f);
+        }
+
+        /// <summary>MV-808: hands a just-spawned twin its out-ramp position and an outward facing,
+        /// overriding wherever <see cref="EnemySpawner.SpawnKind"/> put it — <paramref name="spawned"/>
+        /// is <see cref="EnemySpawner.SpawnExact"/>'s own return, empty when a population cap ate the
+        /// spawn (nothing to place in that case).</summary>
+        private void PlaceAtOutRamp(List<RobotEnemy> spawned, int twinIndex)
+        {
+            if (spawned.Count == 0) return;
+            RobotEnemy e = spawned[0];
+            e.transform.position = TwinPlacement(twinIndex);
+            Vector3 face = OutputOutwardNormal;
+            if (face.sqrMagnitude > 0.0001f) e.transform.rotation = Quaternion.LookRotation(face, Vector3.up);
+        }
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -335,7 +405,12 @@ namespace MaxWorlds.Factories
             if (_intakeRobot == null && _queue.Count > 0)
             {
                 RobotEnemy head = _queue[0];
-                bool atSlot = Vector3.Distance(head.transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
+                // MV-808: horizontal-only — QueueSlotPosition's own Y sits at the hatch's elevation
+                // (see HatchPosition), while a robot arriving to walk the ramp is at true ground level
+                // (GroundY) until TickIntake lifts it. A 3D distance here would gate arrival on a
+                // vertical gap ArriveTolerance was never sized to cover; TickReplicatorSeeking's own
+                // steering already ignores Y for the same reason.
+                bool atSlot = HorizontalDistance(head.transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
                 // MV-809: never consume a robot this box can't at least give back — see
                 // EnemySpawner.HasRoomForReplicatorIntake's reservation contract. The robot stays right
                 // where it arrived (still queued at slot 0) until room frees up.
@@ -367,7 +442,9 @@ namespace MaxWorlds.Factories
                     // room check (inside SpawnExact) sees the slot as free rather than double-counting
                     // it against itself. HasRoomForReplicatorIntake already proved this always fits.
                     EnemySpawner.ReleaseReplicatorReservation();
-                    _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
+                    // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
+                    // placement is for the ordinary emergence walk, not this box's own theatre.
+                    PlaceAtOutRamp(_spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds), twinIndex: 0);
                     firstEmitted = true;
                 }
 
@@ -378,9 +455,10 @@ namespace MaxWorlds.Factories
                     // Emitted (monotonic, this spawner only) rather than assuming success, since
                     // SpawnExact silently emits 0 when GlobalHasRoom is false.
                     int emittedBefore = _spawner.Emitted;
-                    _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
+                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
                     if (_spawner.Emitted > emittedBefore)
                     {
+                        PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808
                         // Capacity is spent only when the cycle actually gave back the full pair — a
                         // cycle that could only manage the guaranteed replacement must not burn it.
                         capacity = Mathf.Max(0, capacity - 1);
@@ -398,7 +476,10 @@ namespace MaxWorlds.Factories
         /// arrive gate to the hatch mouth itself over <see cref="IntakeSeconds"/>, then despawns it
         /// into the Cycle beat. Driving its position directly (rather than its own SafeMove) is what
         /// pins the robot's resolved position at the moment of removal to the hatch face regardless of
-        /// its own collider radius — see <see cref="RobotEnemy.IsBeingDrawnIn"/>.</summary>
+        /// its own collider radius — see <see cref="RobotEnemy.IsBeingDrawnIn"/>. MV-808: the path now
+        /// starts at the ramp foot's true ground level (<see cref="GroundY"/>), not wherever the
+        /// robot's own resting height happened to be, so the walk up the ramp to the hatch lip is
+        /// always a real, monotonic rise, not merely however close those two Y values already were.</summary>
         private void TickIntake(float dt)
         {
             RobotEnemy r = _intakeRobot;
@@ -411,9 +492,10 @@ namespace MaxWorlds.Factories
             _intakeTimer += dt;
             float u = Mathf.Clamp01(_intakeTimer / IntakeSeconds);
             Vector3 hatchPos = HatchPosition;
-            r.transform.position = Vector3.Lerp(_intakeStartPos, hatchPos, AnimSequence.OutQuad(u));
+            Vector3 rampFoot = _intakeStartPos; rampFoot.y = GroundY;
+            r.transform.position = Vector3.Lerp(rampFoot, hatchPos, AnimSequence.OutQuad(u));
 
-            Vector3 face = hatchPos - _intakeStartPos; face.y = 0f;
+            Vector3 face = hatchPos - rampFoot; face.y = 0f;
             if (face.sqrMagnitude > 0.0001f) r.transform.rotation = Quaternion.LookRotation(face.normalized, Vector3.up);
 
             if (_intakeTimer < IntakeSeconds) return;
@@ -438,6 +520,14 @@ namespace MaxWorlds.Factories
         {
             for (int i = 0; i < _queue.Count; i++)
                 _queue[i].SeekReplicator(QueueSlotPosition(i));
+        }
+
+        /// <summary>MV-808: distance ignoring Y — see the "atSlot" arrival check's own doc comment for
+        /// why a queued robot's arrival must never be gated on the vertical gap to a target elevation.</summary>
+        private static float HorizontalDistance(Vector3 a, Vector3 b)
+        {
+            Vector3 d = a - b; d.y = 0f;
+            return d.magnitude;
         }
 
         private void Update()
@@ -513,7 +603,11 @@ namespace MaxWorlds.Factories
 
             if (_led != null)
             {
-                Color c = capacity > 0 ? ledCapacityColor : ledSpentColor;
+                // MV-808: busy — a robot is mid-Intake or a doubled pair is mid-Cycle/Output — from the
+                // instant Intake begins until the second twin emits (removing the pending entry below).
+                // A merely-queued robot (still walking to slot 0) does NOT count; only Intake onward.
+                bool busy = _intakeRobot != null || _pending.Count > 0;
+                Color c = capacity > 0 ? (busy ? ledBusyColor : ledIdleColor) : ledSpentColor;
                 _led.GetPropertyBlock(_ledMpb);
                 _ledMpb.SetColor("_BaseColor", c);
                 _ledMpb.SetColor("_EmissionColor", c * 2f);
