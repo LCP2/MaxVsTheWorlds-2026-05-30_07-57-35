@@ -412,6 +412,21 @@ namespace MaxWorlds.Enemies
         /// only calls this once, right as it removes the robot from its own seeking list).</summary>
         public void BeginReplicatorIntake() => IsBeingDrawnIn = true;
 
+        /// <summary>MV-816: "is this robot fighting <paramref name="targetTransform"/> right now" —
+        /// within <see cref="Replicator.MaxMeleeExclusionRadius"/> of it, OR has sight and is within
+        /// its own <see cref="lungeRange"/>. The single predicate <see cref="Replicator.TickLure"/>'s
+        /// selection screen and <see cref="TickReplicatorSeeking"/>'s per-tick cancel both call, so the
+        /// two can never disagree about who counts as already engaged (the root cause of Chargers never
+        /// charging: the lure used only the 7 m radius while the seek-cancel used only lungeRange, and a
+        /// Charger's 12 m lungeRange sat outside the 7 m the lure screened on).</summary>
+        public bool IsEngagingTarget(Transform targetTransform)
+        {
+            if (targetTransform == null) return false;
+            float dist = Vector3.Distance(transform.position, targetTransform.position);
+            if (dist <= Replicator.MaxMeleeExclusionRadius) return true;
+            return _sight.HasSight && dist <= lungeRange;
+        }
+
         /// <summary>MV-812: seconds of no real progress toward <see cref="ReplicatorSeekTarget"/> before
         /// <see cref="TickReplicatorSeeking"/> stops trusting <see cref="CharacterControllerMotion.SafeMove"/>
         /// and steps the robot directly for one frame instead — a robot pinned by another body's collider
@@ -441,22 +456,11 @@ namespace MaxWorlds.Enemies
         {
             if (IsBeingDrawnIn) return; // MV-775: the Replicator now moves this robot directly
 
-            // MV-811 change 1: re-checked every tick, not just at selection — a robot that closes to
-            // within MaxMeleeExclusionRadius of Max WHILE walking to a hatch is pulled back the instant
-            // it gets there, not left to keep walking to a box it no longer needs.
-            if (target != null &&
-                Vector3.Distance(transform.position, target.position) <= Replicator.MaxMeleeExclusionRadius)
-            {
-                CancelReplicatorSeeking();
-                return;
-            }
-
-            // MV-811 change 2: a queued robot keeps its ordinary threat check — the same sight+lungeRange
-            // commit TickChase already uses to trigger an attack (lungeRange doubles as a ranged kind's
-            // own engage distance too, see BeamRange). Being lured never suppresses a fight that would
-            // otherwise happen.
-            if (target != null && _sight.HasSight &&
-                Vector3.Distance(transform.position, target.position) <= lungeRange)
+            // MV-811 change 1 / MV-816: re-checked every tick, not just at selection, via the same
+            // IsEngagingTarget predicate TickLure's own selection screen uses — a robot that starts
+            // (or resumes) fighting Max WHILE walking to a hatch is pulled back the instant that's
+            // true, not left to keep walking to a box it no longer needs.
+            if (IsEngagingTarget(target))
             {
                 CancelReplicatorSeeking();
                 return;
@@ -478,6 +482,11 @@ namespace MaxWorlds.Enemies
             if (dist <= 0.001f) return;
             Vector3 dir = to / dist;
             float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
+
+            // MV-816 change 4: face the slot it's actually walking to, not whatever it was last facing
+            // before the lure took over — same capped-rate turn FaceAndMove already uses elsewhere, so
+            // a lured robot doesn't visibly drag sideways still facing Max.
+            RotateToward(dir, dt);
 
             // MV-812 change 3: track whether this seek is actually closing the gap.
             if (_seekLastProgressDist < 0f) _seekLastProgressDist = dist; // first tick of this seek
