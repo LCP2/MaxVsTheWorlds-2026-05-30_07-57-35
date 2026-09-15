@@ -425,6 +425,14 @@ namespace MaxWorlds.VFX
         /// <see cref="TickShoulderRackMount"/>/<see cref="TickRun"/> respectively.</summary>
         private AnimSequence _gunRecoilSeq, _rackRecoilSeq, _shockLeanSeq;
 
+        /// <summary>MV-804: the movement lean's own smoothed state, kept separate from
+        /// <c>_body.localRotation</c> so the Shock lean composes fresh on top of it every frame
+        /// instead of being multiplied into a field <see cref="TickRun"/> also reads back the
+        /// next frame — which is what let the Shock lean re-apply itself on top of its own prior
+        /// application every frame it ran, arching Max further back each frame instead of kicking
+        /// once and returning.</summary>
+        private Quaternion _moveLean = Quaternion.identity;
+
         private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
                          _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat, _beltMat, _pouchMat;
         private MaterialPropertyBlock _lensMpb;
@@ -455,6 +463,20 @@ namespace MaxWorlds.VFX
 
         /// <summary>Stride phase, in radians. Advances only while he is moving.</summary>
         public float Stride => _stride;
+
+        /// <summary>MV-804: <c>_body</c>'s own resolved local pitch (X-axis), in degrees, signed to
+        /// (-180, 180] rather than wrapped to [0, 360) the way <see cref="Quaternion.eulerAngles"/>
+        /// reports it — so a test can read the lean's magnitude and direction without reasoning
+        /// about wrap-around. The same "expose the resolved value" contract <see cref="Stride"/>
+        /// and <see cref="AimPose"/> already make for this rig.</summary>
+        public float BodyLeanPitchDegrees
+        {
+            get
+            {
+                float x = _body.localRotation.eulerAngles.x;
+                return x > 180f ? x - 360f : x;
+            }
+        }
 
         /// <summary>MV-730: the shoulder point <see cref="PoseArm"/> stretches the left sleeve from,
         /// in torso space — the same claim <see cref="AimPose"/> makes for the gadget's own pose, here
@@ -843,20 +865,27 @@ namespace MaxWorlds.VFX
             _torso.localPosition = new Vector3(0f, HipY + bounce + idleBounce, 0f);
             _torso.localRotation = Quaternion.Euler(0f, -swing * 0.35f, weightShift);
 
-            _body.localRotation = Quaternion.Slerp(
-                _body.localRotation,
+            _moveLean = Quaternion.Slerp(
+                _moveLean,
                 Quaternion.Euler(moveLocal.z * leanAngle, 0f, -moveLocal.x * leanAngle),
                 1f - Mathf.Exp(-14f * dt));
 
             // MV-770 spec part 2, item 2: "on the SHOCK pulse the whole body leans" — additive on top
             // of the movement lean above, not replacing it, so a Shock landing mid-backpedal still
             // reads as a punch through whatever he is already doing.
+            //
+            // MV-804: composed fresh from _moveLean each frame, never multiplied into
+            // _body.localRotation itself — that field used to be both the Slerp's target-of-record
+            // AND the thing the Shock lean multiplied into, so the Shock lean re-applied on top of
+            // its own accumulated effect every frame it ran instead of kicking once.
+            Quaternion shock = Quaternion.identity;
             if (_shockLeanSeq != null)
             {
                 _shockLeanSeq.Tick(dt);
                 float u = RecoilAmount(_shockLeanSeq);
-                if (u > 0f) _body.localRotation *= Quaternion.Euler(-shockLeanAngle * u, 0f, 0f);
+                if (u > 0f) shock = Quaternion.Euler(-shockLeanAngle * u, 0f, 0f);
             }
+            _body.localRotation = _moveLean * shock;
         }
 
         /// <summary>MV-770: the eased 0..1 "how far into its kick-then-return" a two-step recoil/lean
