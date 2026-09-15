@@ -131,7 +131,11 @@ namespace MaxWorlds.Tests.EditMode
                 "the Cycle beat (3 s) hasn't elapsed yet — nothing should have emerged");
 
             // --- Cycle -> Output: the doubled pair emerges staggered, never in the same tick. ---
-            replicator.TickConsumption(2.5f); // total ~3.01 s: past CycleSeconds — first robot emerges
+            // MV-808 lengthened IntakeSeconds 0.5 -> 1.0, which shifted the pending-Cycle timer's own
+            // starting point (seeded by the SAME call that completes Intake, above) from ~0.51 s to
+            // ~1.01 s — this first jump is shortened by that same 0.5 s so the totals below land back
+            // on the same ~3.01/3.21/3.46 s marks the original MV-775 staging intended.
+            replicator.TickConsumption(2.0f); // total ~3.01 s: past CycleSeconds — first robot emerges
             Assert.AreEqual(1, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the FIRST of the doubled pair must emerge once the Cycle beat completes");
 
