@@ -87,6 +87,14 @@ namespace MaxWorlds.Arena
             var walls = new GameObject("Walls").transform;
             walls.SetParent(root, false);
 
+            // MV-802: overhead structure gets its own host, not "Walls" — it sits inset 0.95 m off the
+            // wall face by design (the ticket's own "the single constraint that makes the feature
+            // work"), which would fail MV765's "wall-hung pieces stay within half a metre of their
+            // face" guard if it were parented there instead.
+            var overhead = new GameObject("Overhead").transform;
+            overhead.SetParent(root, false);
+            var overheadFaces = new List<WallFace>();
+
             int seed = 0;
             foreach (WallFace face in MapGeometry.Faces(map))
             {
@@ -108,7 +116,13 @@ namespace MaxWorlds.Arena
                     else if (n.StartsWith("Bulkhead Lamp")) lamps++;
                     else if (n.StartsWith("Soffit")) soffits++;
                 }
+
+                StormdrainKit.DressOverheadRun(overhead, face.A, face.B, face.Out, map.wallHeight, seed);
+                if (map.wallHeight >= 2.2f) overheadFaces.Add(face);
             }
+
+            DressOverheadJunctions(overhead, overheadFaces);
+            DressOverheadCrossMains(overhead, map);
 
             DressWallPanels(root, host, map);
 
@@ -152,6 +166,91 @@ namespace MaxWorlds.Arena
             DressHazardBulkheads(root, host, map);
 
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
+        }
+
+        // ---------------------------------------------------------------- overhead structure (MV-802)
+
+        /// <summary>How close two wall-face endpoints must sit to count as the same corner — generous
+        /// enough for floating-point noise carried through <see cref="MapGeometry.Faces"/>, tight enough
+        /// to never merge two genuinely different corners on this world's own room scale.</summary>
+        private const float JunctionEpsilon = 0.05f;
+
+        /// <summary>One junction box per corner where two of this ticket's own overhead runs meet
+        /// (change 4) — found by pairing up the wall faces that actually got a run (already filtered to
+        /// <c>wallHeight &gt;= 2.2 m</c> by the caller) and looking for a shared endpoint, deduplicated so
+        /// three-plus faces meeting at one point (an L or a T) still get exactly one box.</summary>
+        private static void DressOverheadJunctions(Transform overhead, List<WallFace> faces)
+        {
+            var seen = new HashSet<Vector2Int>();
+
+            for (int i = 0; i < faces.Count; i++)
+            {
+                for (int j = i + 1; j < faces.Count; j++)
+                {
+                    if (!SharedEndpoint(faces[i], faces[j], out Vector2 corner, out Vector2 outSum)) continue;
+                    if (outSum.sqrMagnitude < 0.0001f) continue;
+
+                    var key = new Vector2Int(Mathf.RoundToInt(corner.x * 20f), Mathf.RoundToInt(corner.y * 20f));
+                    if (!seen.Add(key)) continue;
+
+                    Vector2 n = outSum.normalized;
+                    Vector3 at = new Vector3(corner.x, 0f, corner.y)
+                                 + new Vector3(n.x, 0f, n.y) * StormdrainKit.OverheadMainInset
+                                 + Vector3.up * StormdrainKit.OverheadMainY;
+                    StormdrainKit.BuildOverheadJunctionBox(overhead, at);
+                }
+            }
+        }
+
+        private static bool SharedEndpoint(WallFace f1, WallFace f2, out Vector2 corner, out Vector2 outSum)
+        {
+            if (Vector2.Distance(f1.A, f2.A) < JunctionEpsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.A, f2.B) < JunctionEpsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.B, f2.A) < JunctionEpsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.B, f2.B) < JunctionEpsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
+            corner = default; outSum = default; return false;
+        }
+
+        /// <summary>The one cross-main each room gets (change 1) — at the end furthest from that room's
+        /// own entry, never over the middle. <see cref="MapRuntime.EntryDirection"/> already resolves
+        /// "which way did the player walk in from" per zone; the far end is simply further along that
+        /// same direction, inset from the wall there exactly like every overhead run already insets from
+        /// the wall it hugs. A zone with no resolvable entry (area 1 — entered from outside the map, not
+        /// through any authored gate) has no "far end" to speak of and gets no cross-main; nor does one
+        /// too narrow, across, to carry a main inset on both sides.</summary>
+        private static void DressOverheadCrossMains(Transform overhead, MapData map)
+        {
+            if (map.zones == null || map.wallHeight < 2.2f) return;
+
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.level > 0) continue;
+
+                Vector3 entryDir = MapRuntime.EntryDirection(map, zone.id);
+                if (entryDir.sqrMagnitude < 0.0001f) continue;
+
+                Rect r = zone.Footprint;
+                bool alongX = Mathf.Abs(entryDir.x) >= Mathf.Abs(entryDir.z);
+
+                float farLine = alongX
+                    ? (entryDir.x > 0f ? r.xMax : r.xMin)
+                    : (entryDir.z > 0f ? r.yMax : r.yMin);
+                float sign = alongX
+                    ? (entryDir.x > 0f ? -1f : 1f)
+                    : (entryDir.z > 0f ? -1f : 1f);
+                float lineCoord = farLine + sign * StormdrainKit.OverheadMainInset;
+
+                float crossSpan = (alongX ? r.height : r.width) - StormdrainKit.OverheadMainInset * 2f;
+                if (crossSpan < 1.2f) continue;
+
+                float crossMid = alongX ? r.center.y : r.center.x;
+                Vector3 center = alongX
+                    ? new Vector3(lineCoord, StormdrainKit.OverheadCrossY, crossMid)
+                    : new Vector3(crossMid, StormdrainKit.OverheadCrossY, lineCoord);
+                Vector3 acrossDir = alongX ? Vector3.forward : Vector3.right;
+
+                StormdrainKit.BuildOverheadCrossMain(overhead, center, crossSpan, acrossDir);
+            }
         }
 
         /// <summary>MV-791: <c>MapGeometry.Floor</c>'s single "Map Floor" slab and this kit's cast bays
@@ -522,11 +621,11 @@ namespace MaxWorlds.Arena
 
         /// <summary>Maps a cover piece's authored dressing class onto its drain equivalent (MV-786:
         /// five turned forms — Standpipe cluster, Collapsed grating, Silt hopper, Pump set, Burst
-        /// main). Every class has one — including <see cref="CoverDressing.None"/>, which here falls
-        /// back to Burst main, same as anything that fails to parse. That is the difference from
-        /// <see cref="ReefDressing"/>, which deliberately dresses only one class: World 3's ticket said
-        /// place nothing where there is no equivalent, and the result is a world of grey boxes. World 2
-        /// is not repeating that.</summary>
+        /// main; MV-802 adds a sixth, Pipe main). Every class has one — including
+        /// <see cref="CoverDressing.None"/>, which here falls back to Burst main, same as anything that
+        /// fails to parse. That is the difference from <see cref="ReefDressing"/>, which deliberately
+        /// dresses only one class: World 3's ticket said place nothing where there is no equivalent, and
+        /// the result is a world of grey boxes. World 2 is not repeating that.</summary>
         private static bool BuildFor(Transform parent, CoverPiece piece)
         {
             ArenaCover c = piece.Cover;
@@ -551,6 +650,11 @@ namespace MaxWorlds.Arena
                 case CoverDressing.Machinery:
                     // Heavy fixed machinery, not loose debris — stays square.
                     StormdrainKit.BuildPumpHousing(parent, at, size);
+                    return true;
+                case CoverDressing.Pipe:
+                    // MV-802, change 3: structure, not loose debris — stays square, same reasoning as
+                    // Shed/Machinery above, so it keeps lying exactly along its own footprint's axis.
+                    StormdrainKit.BuildPipeMain(parent, at, size);
                     return true;
                 default:
                     GameObject burstMain = StormdrainKit.BuildBurstMain(parent, at, size);

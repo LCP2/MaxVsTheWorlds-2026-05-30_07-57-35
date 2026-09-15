@@ -14,8 +14,14 @@ namespace MaxWorlds.Arena
     /// (<see cref="MaxWorlds.Rendering.ReefKit.BuildCoolantTurret"/>) instead of a Backyard kit model.
     /// A cover piece authored "crate" stays <see cref="None"/> on purpose — a bare box already reads
     /// as cargo once <see cref="MaxWorlds.Rendering.WorldMaterials"/> sweeps it into the Reef palette,
-    /// so it needs nothing built on top of it.</summary>
-    public enum CoverDressing { None, Tree, Hedge, Planter, Shed, Machinery }
+    /// so it needs nothing built on top of it.
+    ///
+    /// <see cref="Pipe"/> (MV-802, "Pipes as structure") is World 2's own sixth class — a floor-level
+    /// main lying along the cover's longer axis, built by
+    /// <see cref="MaxWorlds.Rendering.StormdrainKit.BuildPipeMain"/> — the ticket's answer to "floor
+    /// mains as a cover dressing, not a freestanding placement": it uses the cover piece's own
+    /// collider and footprint, adding none.</summary>
+    public enum CoverDressing { None, Tree, Hedge, Planter, Shed, Machinery, Pipe }
 
     /// <summary>One free-standing cover prop in the lawn (YT-68). Sits on the floor by construction:
     /// only its XZ centre is authored, the height follows from the size, so a prop can never be
