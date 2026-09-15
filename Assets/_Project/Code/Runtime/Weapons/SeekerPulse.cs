@@ -25,7 +25,9 @@ namespace MaxWorlds.Weapons
         /// every renderer <see cref="BuildVisual"/> builds sizes off this same struct.</summary>
         private static readonly CombatVfxTuning.LppeBoltTuning BoltTuning = CombatVfxTuning.LppeBolt();
 
-        private static readonly Color BoltColor = new Color(0.55f, 0.95f, 1f);
+        /// <summary>MV-805: fire orange, not the cold cyan-white it shipped with -- the LPPE read as
+        /// water (Lee, 2026-09-15) because this colour was identical to <c>WaterBlaster</c>'s own.</summary>
+        private static readonly Color BoltColor = new Color(1.00f, 0.52f, 0.12f);
 
         private RobotEnemy _target;
         private IDamageable _targetDamageable;
@@ -316,18 +318,47 @@ namespace MaxWorlds.Weapons
             trail.sharedMaterial = boltMat;
             trail.Clear();
 
-            var bolt = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            bolt.name = "Bolt";
-            var col = bolt.GetComponent<Collider>();
-            if (col != null)
-            {
-                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-            }
+            var bolt = new GameObject("Bolt");
             bolt.transform.SetParent(parent, false);
+            // Same local rotation the old capsule used: the lathe's revolve axis (Y) is the mesh's own
+            // long axis, so this still points the bolt down the travel axis.
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            bolt.transform.localScale = new Vector3(BoltTuning.CrossSection, BoltTuning.Length * 0.5f,
-                BoltTuning.CrossSection);
-            if (boltMat != null) bolt.GetComponent<MeshRenderer>().sharedMaterial = boltMat;
+            bolt.AddComponent<MeshFilter>().sharedMesh = BuildBoltMesh();
+            var meshRenderer = bolt.AddComponent<MeshRenderer>();
+            if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
+        }
+
+        // MV-805: sampled resolution for the lathed bolt -- see BuildBoltMesh's own doc comment.
+        private const int BoltProfilePoints = 24;
+        private const int BoltRadialSegments = 16;
+        private const float BoltPeakFractionFromNose = 0.45f;
+
+        /// <summary>MV-805: an ogive of revolution (<see cref="CharacterMeshes.Lathe"/>), replacing the
+        /// capsule primitive Lee reported as having "a bend" — a Unity capsule at this aspect
+        /// (<see cref="BoltTuning"/>'s cross-section vs. length) is two hemispheres meeting in a hard
+        /// crease across the middle. This profile is one continuous curve from nose to tail instead:
+        /// radius rises from 0 at the nose to <see cref="BoltTuning"/>'s cross-section-derived peak at
+        /// <see cref="BoltPeakFractionFromNose"/> of the length, then eases back to 0 at the tail. The
+        /// nose sits at the profile's own high-Y end, which the 90-degree rotation in
+        /// <see cref="BuildVisual"/> points down +Z — this object's own forward, i.e. the direction of
+        /// travel — so the bolt's point genuinely leads.</summary>
+        private static Mesh BuildBoltMesh()
+        {
+            float length = BoltTuning.Length;
+            float peakRadius = BoltTuning.CrossSection * 0.5f;
+
+            var profile = new Vector2[BoltProfilePoints];
+            for (int i = 0; i < BoltProfilePoints; i++)
+            {
+                float tFromTail = (float)i / (BoltProfilePoints - 1);   // 0 = tail, 1 = nose
+                float tFromNose = 1f - tFromTail;
+                float radius = tFromNose <= BoltPeakFractionFromNose
+                    ? Mathf.SmoothStep(0f, peakRadius, tFromNose / BoltPeakFractionFromNose)
+                    : Mathf.SmoothStep(peakRadius, 0f,
+                        (tFromNose - BoltPeakFractionFromNose) / (1f - BoltPeakFractionFromNose));
+                profile[i] = new Vector2(radius, tFromTail * length);
+            }
+            return CharacterMeshes.Lathe(profile, BoltRadialSegments);
         }
     }
 }

@@ -276,6 +276,14 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                // MV-805: InvokeUpdate above fires a SentinelBolt -- its own top-level GameObject, not
+                // a child of sentinelGo, and nothing else in this suite tracks it -- so it must be
+                // found and destroyed here or it leaks into every test that runs after this one for
+                // the rest of the EditMode run. This exact leak is what made MV806SentinelBoltTests'
+                // own FindAnyObjectByType<SentinelBolt>() pick up a stray bolt at the wrong position
+                // once MV-805 added a new test file and shifted execution order enough to expose it.
+                var strayBolt = Object.FindAnyObjectByType<SentinelBolt>();
+                if (strayBolt != null) Object.DestroyImmediate(strayBolt.gameObject);
                 Object.DestroyImmediate(sentinelGo);
                 if (target != null) Object.DestroyImmediate(target.gameObject);
                 if (wallGo != null) Object.DestroyImmediate(wallGo);
