@@ -388,6 +388,12 @@ namespace MaxWorlds.Factories
             if (!IsAlive || capacity <= 0) return;
             if (_queue.Count >= MaxQueueSlots) return; // MV-807: a full queue lures nobody
 
+            // MV-816 change 3: a box that couldn't actually take a robot right now lures nobody — the
+            // old behaviour lured one anyway, walked it to slot 0, and left it standing there until
+            // LureTimeoutSeconds gave up, then repeated with the next robot. Room is re-checked on
+            // every tick, same cadence as everything else here, so lure resumes the instant it frees.
+            if (!EnemySpawner.HasRoomForReplicatorIntake()) return;
+
             // MV-811 change 5: a field-wide ceiling — at most MaxSeekingFraction of the currently live
             // robots may be seeking at once. Max(1, ...) rather than a bare fraction: with only a
             // handful of robots alive, a strict 25% floors to 0 and would forbid luring anyone at all —
@@ -432,18 +438,21 @@ namespace MaxWorlds.Factories
                 // dev-tuning override ever forces a global move speed onto every robot, visibly slide a
                 // "static" turret across the yard. Excluded outright, same reasoning as Lurker above.
                 if (r.Kind == EnemyKind.Turret) continue;
-                if (r.Current == RobotEnemy.State.ReplicatorSeeking) continue; // already lured (by this box or another)
+                // MV-816 change 2: only Chase or Search may be lured — this single gate covers
+                // Telegraph, Lunge, Recover, Emerging, Teleport, Alert, Submerged AND ReplicatorSeeking
+                // (already lured, by this box or another) in one place, rather than naming each one.
+                if (r.Current != RobotEnemy.State.Chase && r.Current != RobotEnemy.State.Search) continue;
 
                 float distToMe = Vector3.Distance(r.transform.position, transform.position);
                 if (distToMe > LureRadius) continue;
 
-                // The 7 m rule (MV-798): a robot already close enough to Max to be fighting him is never
-                // pulled off. MV-811: this is still only the SELECTION screen — RobotEnemy's own seeking
-                // tick re-checks the same radius every tick afterward, so a robot that closes on Max
-                // mid-walk-to-the-hatch is pulled back too, not just one that was already close here.
-                if (_target != null &&
-                    Vector3.Distance(r.transform.position, _target.position) <= MaxMeleeExclusionRadius)
-                    continue;
+                // MV-816 change 1: the same IsEngagingTarget predicate TickReplicatorSeeking's own
+                // per-tick cancel now uses — a robot already fighting Max (within the 7 m exclusion, OR
+                // in sight and within its own lungeRange) is never pulled off. MV-811: this is still
+                // only the SELECTION screen — RobotEnemy's own seeking tick re-checks the identical
+                // predicate every tick afterward, so a robot that starts fighting Max mid-walk-to-the-
+                // hatch is pulled back too, not just one that was already engaging here.
+                if (r.IsEngagingTarget(_target)) continue;
 
                 // MV-807: the steering target is this robot's own queue slot, never the hatch itself —
                 // two robots must never be steered at the same point (that was the jam Lee reported).
