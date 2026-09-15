@@ -395,14 +395,19 @@ namespace MaxWorlds.Enemies
         /// already-crowded field never blows past them; a capped emission comes out short rather than
         /// silently over budget. <paramref name="noReplicateSeconds"/>, when positive, tags every robot
         /// this call emits <see cref="RobotEnemy.NoReplicate"/> for that long — the "fresh pair can't
-        /// immediately walk back in" rule.</summary>
-        public void SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f)
+        /// immediately walk back in" rule. Returns exactly the robots this call actually spawned (short
+        /// of <paramref name="count"/> when a cap bites), so a caller like <see cref="MaxWorlds.Factories.Replicator"/>
+        /// (MV-808) can place them itself instead of trusting wherever <see cref="SpawnKind"/> put them.</summary>
+        public List<RobotEnemy> SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f)
         {
+            var spawned = new List<RobotEnemy>(count);
             for (int i = 0; i < count && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom; i++)
             {
                 RobotEnemy e = SpawnKind(kind);
                 if (noReplicateSeconds > 0f) e.TagNoReplicate(noReplicateSeconds);
+                spawned.Add(e);
             }
+            return spawned;
         }
 
         /// <summary>

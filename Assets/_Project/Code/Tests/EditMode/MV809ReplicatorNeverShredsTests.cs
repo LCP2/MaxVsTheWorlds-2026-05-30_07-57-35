@@ -126,9 +126,11 @@ namespace MaxWorlds.Tests.EditMode
             // Same staged dt sequence as MV775ReplicatorStagingTests: the Intake-completing call above
             // already ticks the freshly-added PendingEmission's own timer by its own dt (TickConsumption
             // runs the Intake beat and the pending-emission loop off the SAME dt in one call), so the
-            // first Cycle-beat tick below is 2.5s - not CycleSeconds - to land just past the 3s mark
-            // without also overshooting CycleSeconds + EmitStaggerSeconds in the same call.
-            replicator.TickConsumption(2.5f); // cumulative ~3.01s: past CycleSeconds - first emission fires
+            // first Cycle-beat tick below is 2.0s - not CycleSeconds - to land just past the 3s mark
+            // without also overshooting CycleSeconds + EmitStaggerSeconds in the same call. (MV-808
+            // lengthened IntakeSeconds 0.5 -> 1.0, shifting that seeded starting point from ~0.51s to
+            // ~1.01s, so this first jump is shortened by the same 0.5s to land back on the same marks.)
+            replicator.TickConsumption(2.0f); // cumulative ~3.01s: past CycleSeconds - first emission fires
             // MV-809: sync BETWEEN the two emissions, not just once at the end — in Play mode the
             // first emitted robot's OnEnable fires synchronously, so the second emission's own
             // GlobalHasRoom check already sees it. Syncing only after both would let the second

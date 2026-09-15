@@ -38,10 +38,16 @@ namespace MaxWorlds.VFX
             public readonly MeshRenderer EmitFlash;
             public readonly MeshRenderer Led;
             public readonly Transform Fan;
+            /// <summary>MV-808: the output face's own reference point, mirroring <see cref="Hatch"/> on
+            /// the opposite side — where a doubled twin's out-ramp foot is measured from. A bare
+            /// Transform, never a rendered part: there is no door to swing on this face.</summary>
+            public readonly Transform OutputLip;
 
-            public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led, Transform fan)
+            public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
+                                   Transform fan, Transform outputLip)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
+                OutputLip = outputLip;
             }
         }
 
@@ -110,7 +116,63 @@ namespace MaxWorlds.VFX
             // Replicator.Update spins continuously, "the only moving thing in a quiet room".
             Transform fan = BuildValveWheel(root, new Vector3(-hw * 0.4f, hh + 0.02f, hd * 0.15f));
 
-            return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan);
+            // MV-808: the output lip, mirroring the hatch on the +Z face — no door, no glow, just the
+            // point Replicator.OutputPosition reads back to place a doubled twin at the out-ramp foot.
+            var outputLipGo = new GameObject("OutputLip");
+            outputLipGo.transform.SetParent(root, worldPositionStays: false);
+            outputLipGo.transform.localPosition = new Vector3(0f, -hh * 0.05f, hd + 0.02f);
+            outputLipGo.transform.localRotation = Quaternion.identity;
+
+            // MV-808: ramp in/out — a slatted steel slope from ground level up to the hatch lip (and,
+            // mirrored, from the output lip back down to ground), so the Intake walk-up and the twins'
+            // walk-out both read as a robot using a real crossing rather than appearing/disappearing at
+            // the box's face. Dressing only: built with CharacterPart.Add, which never attaches a
+            // Collider, so it can never alter navigation (the ticket's own "no collider" requirement) —
+            // ramp geometry is deliberately kept off the box's own destructible collider entirely.
+            const float rampSlopeLength = 1.6f; // the ticket's own authored figure
+            float groundLocalY = -hh;
+            float rise = hatchAt.y - groundLocalY;
+            float run = Mathf.Sqrt(Mathf.Max(0f, rampSlopeLength * rampSlopeLength - rise * rise));
+            BuildRamp(root, new Vector3(0f, groundLocalY, hatchAt.z - run), new Vector3(0f, hatchAt.y, hatchAt.z),
+                hatchHalfW, s_rust, "RampIn");
+            BuildRamp(root, new Vector3(0f, groundLocalY, hd + 0.02f + run), new Vector3(0f, hatchAt.y, hd + 0.02f),
+                hatchHalfW, s_rust, "RampOut");
+
+            return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
+                outputLipGo.transform);
+        }
+
+        /// <summary>MV-808: one sloped deck plus a handful of cross-slats between <paramref name="footLocal"/>
+        /// (ground level) and <paramref name="topLocal"/> (the hatch/output lip) — the same "slatted"
+        /// read as the game's other plank crossings, built from <see cref="CharacterMeshes.Bevelled"/>
+        /// and <see cref="CharacterMeshes.Beam"/> rather than a primitive, per this file's own rule.
+        /// Both ends must share the same local X (0) — this only ever slopes along Z.</summary>
+        private static void BuildRamp(Transform root, Vector3 footLocal, Vector3 topLocal, float halfWidth,
+                                      Material mat, string name)
+        {
+            Vector3 delta = topLocal - footLocal;
+            float length = delta.magnitude;
+            if (length < 0.01f) return; // degenerate (zero rise/run) box — nothing to build
+
+            var rampRoot = new GameObject(name).transform;
+            rampRoot.SetParent(root, worldPositionStays: false);
+            rampRoot.localPosition = (footLocal + topLocal) * 0.5f;
+            // Both ends share local X = 0 (see doc comment), so this is always a pure rotation about X —
+            // FromToRotation sidesteps hand-deriving that angle's sign for the mirrored in/out ramps.
+            rampRoot.localRotation = Quaternion.FromToRotation(Vector3.forward, delta / length);
+
+            const float deckThickness = 0.06f;
+            Add(rampRoot, CharacterMeshes.Bevelled(new Vector3(halfWidth * 2f, deckThickness, length), 0.02f), mat,
+                Vector3.zero, Quaternion.identity, Vector3.one, "Deck");
+
+            const int slatCount = 5;
+            for (int i = 1; i < slatCount; i++)
+            {
+                float t = (float)i / slatCount - 0.5f;
+                Add(rampRoot, CharacterMeshes.Beam(halfWidth * 1.8f, 0.02f, 0.02f, 6), mat,
+                    new Vector3(0f, deckThickness * 0.5f + 0.015f, t * length), Quaternion.Euler(0f, 0f, 90f),
+                    Vector3.one, "Slat");
+            }
         }
 
         /// <summary>Built under its own "Fan" parent, at <paramref name="at"/>, so the whole rim/hub/
