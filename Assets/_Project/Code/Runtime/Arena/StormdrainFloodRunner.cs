@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
-using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 
 namespace MaxWorlds.Arena
@@ -12,8 +10,12 @@ namespace MaxWorlds.Arena
     /// wiring, so it exists in every scene, including a bare test fixture, with zero setup.
     ///
     /// The flood's slow is applied passively, through <see cref="MapSlowZones"/> (every mover already
-    /// consults that hook every frame) — only the damage-over-time needs a per-frame driver, since
-    /// "flooded ground hurts" has no other natural home the way "flooded ground slows" already does.
+    /// consults that hook every frame) — every mover, robots included, still slows in flooded ground.
+    /// The damage-over-time here is the player's ALONE (MV-795): the flood is meant as pressure on the
+    /// player's own route against the clock, not a second, uncontrolled source of robot deaths — MV-774's
+    /// own robot loop killed every robot standing in flooded ground, which emptied the world of its own
+    /// population and, through <see cref="MaxWorlds.Feel.GameFeel"/>'s damage/kill trauma, pinned the
+    /// camera shake on permanently once enough robots were dying in the flood at once.
     /// </summary>
     public sealed class StormdrainFloodRunner : MonoBehaviour
     {
@@ -28,16 +30,14 @@ namespace MaxWorlds.Arena
         private IDamageable _targetDamageable;
         private FloodDamageTicker _playerTicker;
 
-        // Keyed by instance rather than removed on death: RobotEnemy is pooled (the same instance comes
-        // back to life for a later spawn), and a stray few-hundred-millisecond accumulator residue
-        // carried into a fresh spawn is harmless — Rule 2 already guarantees flooded ground is never
-        // more than a slow + damage-over-time, never instant.
-        private readonly Dictionary<RobotEnemy, FloodDamageTicker> _robotTickers =
-            new Dictionary<RobotEnemy, FloodDamageTicker>();
+        private void Update() => TickFlood(Time.deltaTime);
 
-        private void Update()
+        /// <summary>The runner's whole per-frame job, pulled out so a test can drive it directly at a
+        /// cadence it controls — same "a caller decides the cadence, a test drives it directly" idiom
+        /// <see cref="MaxWorlds.Factories.Replicator.TickLure"/> / <see cref="MaxWorlds.Factories.MowerHutch.TickMobility"/>
+        /// already use.</summary>
+        public void TickFlood(float dt)
         {
-            float dt = Time.deltaTime;
             StormdrainFlood.Tick(dt, FactoryCensus.ReplicatorsAlive, StormdrainDressing.PumpHousingsAlive);
 
             if (_target == null)
@@ -52,17 +52,6 @@ namespace MaxWorlds.Arena
 
             if (_target != null)
                 _playerTicker.Tick(dt, StormdrainFlood.IsFlooded(_target.position), _targetDamageable, _target.position);
-
-            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
-            {
-                RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive) continue;
-
-                _robotTickers.TryGetValue(r, out FloodDamageTicker ticker);
-                ticker.Tick(dt, StormdrainFlood.IsFlooded(r.transform.position), r, r.transform.position);
-                _robotTickers[r] = ticker;
-            }
         }
     }
 }
