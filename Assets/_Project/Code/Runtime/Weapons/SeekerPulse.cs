@@ -323,7 +323,7 @@ namespace MaxWorlds.Weapons
             // Same local rotation the old capsule used: the lathe's revolve axis (Y) is the mesh's own
             // long axis, so this still points the bolt down the travel axis.
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            bolt.AddComponent<MeshFilter>().sharedMesh = BuildBoltMesh();
+            bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh();
             var meshRenderer = bolt.AddComponent<MeshRenderer>();
             if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
         }
@@ -332,6 +332,29 @@ namespace MaxWorlds.Weapons
         private const int BoltProfilePoints = 24;
         private const int BoltRadialSegments = 16;
         private const float BoltPeakFractionFromNose = 0.45f;
+
+        /// <summary>MV-810: the one instance every bolt shares -- see <see cref="GetBoltMesh"/>.</summary>
+        private static Mesh s_boltMesh;
+
+        /// <summary>MV-810: the single cached bolt mesh, built lazily on first use and handed out by
+        /// reference to every LPPE pulse AND (MV-806's own gap) the Sentinel's matching bolt
+        /// (<see cref="MaxWorlds.Arena.SentinelBolt"/>) -- the profile depends only on compile-time
+        /// constants and <see cref="BoltTuning"/>, so one mesh is correct for all of them. Before this,
+        /// every single shot lathed a fresh ~384-vertex mesh (<see cref="BuildBoltMesh"/>) and never
+        /// freed it.</summary>
+        public static Mesh GetBoltMesh()
+        {
+            if (s_boltMesh == null) s_boltMesh = BuildBoltMesh();
+            return s_boltMesh;
+        }
+
+        /// <summary>Drop this class's own reference to the cached bolt mesh. The <see cref="Mesh"/>
+        /// object itself is owned by <see cref="CharacterMeshes"/>'s own cache (see
+        /// <see cref="CharacterMeshes.Lathe"/>) and only ever destroyed by
+        /// <see cref="CharacterMeshes.ClearCache"/> -- this just stops a domain reload or a fresh test
+        /// run holding a pointer to whatever CharacterMeshes may since have cleared, same idiom as
+        /// <see cref="MaxWorlds.Weapons.RigFusionState.ResetForTests"/>.</summary>
+        public static void ResetForTests() => s_boltMesh = null;
 
         /// <summary>MV-805: an ogive of revolution (<see cref="CharacterMeshes.Lathe"/>), replacing the
         /// capsule primitive Lee reported as having "a bend" — a Unity capsule at this aspect

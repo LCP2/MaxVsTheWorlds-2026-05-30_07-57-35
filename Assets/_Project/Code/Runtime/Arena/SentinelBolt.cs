@@ -2,6 +2,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -106,9 +107,10 @@ namespace MaxWorlds.Arena
             else DestroyImmediate(gameObject);
         }
 
-        /// <summary>Same build idiom as <see cref="MaxWorlds.Weapons.SeekerPulse.BuildVisual"/>: a
-        /// generated capsule (no authored mesh), an additive unlit material, a short trail — just
-        /// smaller and red instead of cyan-white.</summary>
+        /// <summary>Same build idiom as <see cref="MaxWorlds.Weapons.SeekerPulse.BuildVisual"/>: the
+        /// same cached lathed bolt mesh (MV-810 -- was its own <c>GameObject.CreatePrimitive</c> capsule,
+        /// rebuilt and its collider destroyed on every single shot), an additive unlit material, a short
+        /// trail — just smaller and red instead of cyan-white.</summary>
         private static void BuildVisual(Transform parent)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
@@ -126,18 +128,13 @@ namespace MaxWorlds.Arena
             trail.sharedMaterial = boltMat;
             trail.Clear();
 
-            var bolt = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            bolt.name = "Bolt";
-            var col = bolt.GetComponent<Collider>();
-            if (col != null)
-            {
-                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-            }
+            var bolt = new GameObject("Bolt");
             bolt.transform.SetParent(parent, false);
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            bolt.transform.localScale = new Vector3(t.CrossSection * SizeScale, t.Length * SizeScale * 0.5f,
-                t.CrossSection * SizeScale);
-            if (boltMat != null) bolt.GetComponent<MeshRenderer>().sharedMaterial = boltMat;
+            bolt.transform.localScale = Vector3.one * SizeScale;
+            bolt.AddComponent<MeshFilter>().sharedMesh = SeekerPulse.GetBoltMesh();
+            var meshRenderer = bolt.AddComponent<MeshRenderer>();
+            if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
         }
     }
 }
