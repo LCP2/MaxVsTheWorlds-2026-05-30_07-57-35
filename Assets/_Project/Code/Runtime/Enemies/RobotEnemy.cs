@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -161,6 +162,22 @@ namespace MaxWorlds.Enemies
 
         /// <summary>How many robots are switched on right now, field-wide (not per-factory).</summary>
         public static int ActiveCount => _active.Count;
+
+        /// <summary>MV-811: how many robots, field-wide, are currently <see cref="State.ReplicatorSeeking"/>
+        /// — what <see cref="MaxWorlds.Factories.Replicator.TickLure"/> checks against its own
+        /// <see cref="MaxWorlds.Factories.Replicator.MaxSeekingFraction"/> ceiling before adding another.
+        /// Computed from the live registry rather than tracked incrementally, so it can never drift from
+        /// what <see cref="Current"/> actually says.</summary>
+        public static int ReplicatorSeekingCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < _active.Count; i++)
+                    if (_active[i] != null && _active[i].Current == State.ReplicatorSeeking) count++;
+                return count;
+            }
+        }
 
         /// <summary>Empties the registry. Called when a level starts building, alongside
         /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
@@ -402,6 +419,37 @@ namespace MaxWorlds.Enemies
         private void TickReplicatorSeeking(float dt)
         {
             if (IsBeingDrawnIn) return; // MV-775: the Replicator now moves this robot directly
+
+            // MV-811 change 1: re-checked every tick, not just at selection — a robot that closes to
+            // within MaxMeleeExclusionRadius of Max WHILE walking to a hatch is pulled back the instant
+            // it gets there, not left to keep walking to a box it no longer needs.
+            if (target != null &&
+                Vector3.Distance(transform.position, target.position) <= Replicator.MaxMeleeExclusionRadius)
+            {
+                CancelReplicatorSeeking();
+                return;
+            }
+
+            // MV-811 change 2: a queued robot keeps its ordinary threat check — the same sight+lungeRange
+            // commit TickChase already uses to trigger an attack (lungeRange doubles as a ranged kind's
+            // own engage distance too, see BeamRange). Being lured never suppresses a fight that would
+            // otherwise happen.
+            if (target != null && _sight.HasSight &&
+                Vector3.Distance(transform.position, target.position) <= lungeRange)
+            {
+                CancelReplicatorSeeking();
+                return;
+            }
+
+            // MV-811 change 3: nobody waits forever — a robot that can't physically reach its slot
+            // within LureTimeoutSeconds gives up, resumes chasing, and refuses to immediately re-queue
+            // at the same box.
+            if (_stateTimer >= Replicator.LureTimeoutSeconds)
+            {
+                CancelReplicatorSeeking();
+                TagNoReplicate(Replicator.LureTimeoutNoReplicateSeconds);
+                return;
+            }
 
             Vector3 to = ReplicatorSeekTarget - transform.position;
             to.y = 0f;
