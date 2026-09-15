@@ -1195,8 +1195,9 @@ namespace MaxWorlds.Rendering
 
                 GameObject l = Box(chevronsGroup, $"Chevron{i}L", Vector3.zero,
                     new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
-                l.transform.localRotation = yawRot * Quaternion.Euler(0f, 45f, 0f);
-                Vector3 extraL = yawRot * new Vector3(-0.30f, 0f, -0.30f) + pivotUp;
+                // Apex points downstream (+local Z), matching the direction the bands/foam scroll (MV-797).
+                l.transform.localRotation = yawRot * Quaternion.Euler(0f, -45f, 0f);
+                Vector3 extraL = yawRot * new Vector3(-0.30f, 0f, 0.30f) + pivotUp;
                 l.transform.localPosition = extraL;
                 int idxL = i * 2;
                 chevronT[idxL] = l.transform;
@@ -1206,8 +1207,8 @@ namespace MaxWorlds.Rendering
 
                 GameObject r = Box(chevronsGroup, $"Chevron{i}R", Vector3.zero,
                     new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
-                r.transform.localRotation = yawRot * Quaternion.Euler(0f, -45f, 0f);
-                Vector3 extraR = yawRot * new Vector3(0.30f, 0f, -0.30f) + pivotUp;
+                r.transform.localRotation = yawRot * Quaternion.Euler(0f, 45f, 0f);
+                Vector3 extraR = yawRot * new Vector3(0.30f, 0f, 0.30f) + pivotUp;
                 r.transform.localPosition = extraR;
                 int idxR = idxL + 1;
                 chevronT[idxR] = r.transform;
