@@ -382,6 +382,8 @@ namespace MaxWorlds.Enemies
             {
                 Current = State.ReplicatorSeeking;
                 _stateTimer = 0f;
+                _seekStallTimer = 0f; // MV-812: fresh stall window for a fresh seek
+                _seekLastProgressDist = -1f;
                 _bar?.SetReplicatorMarker(true);
             }
             ReplicatorSeekTarget = hatchPosition;
@@ -410,12 +412,31 @@ namespace MaxWorlds.Enemies
         /// only calls this once, right as it removes the robot from its own seeking list).</summary>
         public void BeginReplicatorIntake() => IsBeingDrawnIn = true;
 
+        /// <summary>MV-812: seconds of no real progress toward <see cref="ReplicatorSeekTarget"/> before
+        /// <see cref="TickReplicatorSeeking"/> stops trusting <see cref="CharacterControllerMotion.SafeMove"/>
+        /// and steps the robot directly for one frame instead — a robot pinned by another body's collider
+        /// must not be able to stand still forever.</summary>
+        private const float ReplicatorSeekStallSeconds = 1f;
+
+        /// <summary>MV-812: closing less than this much distance counts as "no progress" for
+        /// <see cref="ReplicatorSeekStallSeconds"/>'s own stall window.</summary>
+        private const float ReplicatorSeekProgressThreshold = 0.05f;
+
+        private float _seekStallTimer;
+        private float _seekLastProgressDist = -1f; // MV-812: -1 is "no checkpoint yet this seek"
+
         /// <summary>Walks straight toward <see cref="ReplicatorSeekTarget"/> (MV-706) — the same
         /// direct point-to-point <see cref="CharacterControllerMotion.SafeMove"/> idiom
         /// <see cref="MaxWorlds.Factories.MowerHutch"/>'s own mobile pursuit already uses, reused rather
         /// than forked: no sight, no navigation waypoints, no cover-routing — a lured robot beelines for
         /// the box it's been pulled toward. Arrival itself is the Replicator's own call (it watches the
-        /// distance and consumes the robot); this only ever closes the gap.</summary>
+        /// distance and consumes the robot); this only ever closes the gap.
+        ///
+        /// MV-812 change 3: if distance to target hasn't closed by <see cref="ReplicatorSeekProgressThreshold"/>
+        /// over the last <see cref="ReplicatorSeekStallSeconds"/>, this frame's step is applied directly to
+        /// <see cref="Transform.position"/> instead of going through <see cref="CharacterControllerMotion.SafeMove"/>
+        /// — a robot nudged off its slot or wedged by another body's collider closes the gap anyway rather
+        /// than standing there forever.</summary>
         private void TickReplicatorSeeking(float dt)
         {
             if (IsBeingDrawnIn) return; // MV-775: the Replicator now moves this robot directly
@@ -457,7 +478,31 @@ namespace MaxWorlds.Enemies
             if (dist <= 0.001f) return;
             Vector3 dir = to / dist;
             float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
-            CharacterControllerMotion.SafeMove(_cc, dir * step);
+
+            // MV-812 change 3: track whether this seek is actually closing the gap.
+            if (_seekLastProgressDist < 0f) _seekLastProgressDist = dist; // first tick of this seek
+            if (_seekLastProgressDist - dist >= ReplicatorSeekProgressThreshold)
+            {
+                _seekLastProgressDist = dist;
+                _seekStallTimer = 0f;
+            }
+            else
+            {
+                _seekStallTimer += dt;
+            }
+
+            if (_seekStallTimer >= ReplicatorSeekStallSeconds)
+            {
+                // Stalled for a full window — step directly this frame, bypassing whatever collider is
+                // pinning the CharacterController, then start a fresh window from the new position.
+                transform.position += dir * step;
+                _seekStallTimer = 0f;
+                _seekLastProgressDist = dist - step;
+            }
+            else
+            {
+                CharacterControllerMotion.SafeMove(_cc, dir * step);
+            }
         }
 
         /// <summary>How far through the wind-up this enemy is, 0..1 (0 when not telegraphing).

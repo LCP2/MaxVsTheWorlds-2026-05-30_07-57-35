@@ -137,14 +137,16 @@ namespace MaxWorlds.Tests.EditMode
             var positions = new Vector3[10];
             for (int i = 0; i < 9; i++)
             {
-                replicator.TickConsumption(0.075f); // 9 x 0.075 = 0.675 s — stays short of IntakeSeconds (1.0)
+                replicator.TickConsumption(0.03f); // 9 x 0.03 = 0.27 s — stays short of IntakeSeconds (0.35)
                 LateUpdateMethod.Invoke(replicator, null);
                 positions[i] = rusher.transform.position;
                 ys[i] = positions[i].y;
                 AssertLed(led, ledMpb, red, $"mid-ascent (sample {i}), the LED must read red");
             }
-            // Sample 10: a generous overshoot past IntakeSeconds — completes the Intake beat.
-            replicator.TickConsumption(1.0f);
+            // Sample 10: enough to complete the Intake beat (0.27 + 0.15 = 0.42, past IntakeSeconds
+            // 0.35) without this same call's dt also seeding the pending-Cycle timer (see below) past
+            // CycleSeconds — a bigger overshoot here would fire the first emission inside this same call.
+            replicator.TickConsumption(0.15f);
             LateUpdateMethod.Invoke(replicator, null);
             positions[9] = rusher.transform.position;
             ys[9] = positions[9].y;
@@ -166,16 +168,16 @@ namespace MaxWorlds.Tests.EditMode
                 "the Cycle beat (3 s) hasn't elapsed yet — nothing should have emerged");
 
             // --- Cross CycleSeconds only (never CycleSeconds + EmitStaggerSeconds in the same call) —
-            // pending.Timer is 1.0 after the sampling loop above (the completing call's own dt), so
-            // +2.05 lands at 3.05: past CycleSeconds (3.0), short of +EmitStaggerSeconds (3.4). ---
-            replicator.TickConsumption(2.05f);
+            // pending.Timer is 0.15 after the sampling loop above (the completing call's own dt), so
+            // +0.85 lands at 1.00: past CycleSeconds (0.9), short of +EmitStaggerSeconds (1.1). ---
+            replicator.TickConsumption(0.85f);
             LateUpdateMethod.Invoke(replicator, null);
             Assert.AreEqual(1, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the FIRST of the doubled pair must emerge once the Cycle beat completes");
             AssertLed(led, ledMpb, red, "between the first and second emission, the LED must still read red");
 
-            // --- Cross CycleSeconds + EmitStaggerSeconds: 3.05 + 0.5 = 3.55. ---
-            replicator.TickConsumption(0.5f);
+            // --- Cross CycleSeconds + EmitStaggerSeconds: 1.00 + 0.2 = 1.20. ---
+            replicator.TickConsumption(0.2f);
             LateUpdateMethod.Invoke(replicator, null);
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
