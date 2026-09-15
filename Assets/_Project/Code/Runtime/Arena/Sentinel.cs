@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -138,12 +139,13 @@ namespace MaxWorlds.Arena
         /// one machine built in Max's own colour family, not a robot wearing the enemy shed's grey.</summary>
         private static readonly Color BodyAccent = new Color(0.62f, 0.78f, 0.90f);
 
-        /// <summary>MV-580: the eye. Deliberately the SAME cyan family as the water beam's own colour
-        /// (Max's own primary weapon colour) and nowhere near the enemy roster's tell colours — gold
-        /// idle, warn orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on
-        /// this body never reads as "about to hit you". "Friendly eye colour rather than the enemies'
-        /// [tell]", per the ticket.</summary>
-        private static readonly Color EyeColor = new Color(0.55f, 0.9f, 1f);
+        /// <summary>MV-580: the eye, nowhere near the enemy roster's tell colours — gold idle, warn
+        /// orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on this body never
+        /// reads as "about to hit you". MV-806: moved off the old cyan (which matched the water beam
+        /// that colour used to belong to) to match <see cref="SentinelBolt.BoltColor"/> instead, now
+        /// that the beam fires a red bolt — the eye still has to move with whatever the turret actually
+        /// fires, or the comment becomes a lie about live code.</summary>
+        private static readonly Color EyeColor = SentinelBolt.BoltColor;
 
         /// <summary>MV-580: the body's silhouette is <see cref="RobotBodies.Build"/>'s Gunner — the
         /// closest existing body to Lee's reference (a squat, domed, multi-legged walker) of anything
@@ -192,34 +194,10 @@ namespace MaxWorlds.Arena
         private static readonly List<Vector3> s_otherSentinelPositions = new List<Vector3>(8);
 
         // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
-        // turret to its target. MV-616 replaced the original bare two-point LineRenderer tracer (a
-        // flat-coloured "laser") with the SAME water VFX Max's own jet fires (WaterVfx, see
-        // Runtime/VFX/WaterVfx.cs) — the sentinel fires the same substance from a smaller nozzle, so
-        // it should read as the same material at a smaller scale, not a second hand-authored effect.
+        // turret to its target. MV-616 fixed that with a bare LineRenderer, then reused the SAME water
+        // VFX Max's own jet fires. MV-806 replaces THAT: a friendly turret spraying Max's own jet, only
+        // bigger, upstaged him — the beam is now a small red SentinelBolt instead (see FireBeam).
         private const float MuzzleHeight = 1.1f; // near the top of the built body (see BuildBody)
-
-        /// <summary>The beam's nozzle radius, fed to <see cref="WaterVfx.Init"/> — deliberately well
-        /// under the jet's own 1.1 m visual radius (<c>WaterBlaster.streamVisualRadius</c>) since this
-        /// is "a hose pipe on a stick" (class doc), not Max's two-handed blaster.</summary>
-        private const float SentinelBeamRadius = 0.28f;
-
-        /// <summary>The beam's cone half-angle, fed to <see cref="WaterVfx.Init"/>. The turret aims a
-        /// single locked-on shot at one target (see <see cref="Update"/>) rather than spraying a wide
-        /// arc like Max's cone weapon, so this is kept tight — <see cref="WaterVfx.SprayHalfAngleFor"/>
-        /// floors the visible stream at 1 degree regardless, i.e. effectively a straight jet.</summary>
-        private const float SentinelBeamConeHalfAngle = 3f;
-
-        /// <summary>Cosmetic damage value handed to <see cref="WaterVfx.Splash"/> purely to size the
-        /// impact droplet count (<see cref="WaterVfxTuning.SplashDroplets"/>) — NOT the shot's actual
-        /// damage, which already landed on the target before this VFX call runs (see <see cref="Update"/>).</summary>
-        private const float SentinelBeamSplashWeight = 2f;
-
-        /// <summary>How long the beam stays visible per shot. Capped below the fire interval so a
-        /// fast-firing turret's beam never runs into the next shot's own flash.</summary>
-        private float BeamVisibleSeconds => Mathf.Min(0.12f, _fireInterval * 0.9f);
-
-        private WaterVfx _beamVfx;
-        private float _beamTimer;
 
         public string ReadoutName => "SENTINEL";
 
@@ -559,12 +537,6 @@ namespace MaxWorlds.Arena
                 _model.localPosition = modelPos;
             }
 
-            if (_beamTimer > 0f)
-            {
-                _beamTimer -= dt;
-                if (_beamTimer <= 0f && _beamVfx != null) _beamVfx.SetStreaming(false);
-            }
-
             _fireCooldown -= dt;
             if (_fireCooldown > 0f) return;
 
@@ -671,42 +643,16 @@ namespace MaxWorlds.Arena
             if (displacement != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement);
         }
 
-        /// <summary>Fires the water VFX from the turret's muzzle to the point it just hit. Cosmetic
-        /// only — the damage above has already landed regardless of whether this draws. Reuses
-        /// <see cref="WaterVfx"/> (MV-616) rather than a second hand-authored effect: each shot re-Inits
-        /// the same built instance at the CURRENT target distance (cheap — see <c>WaterVfx.Refit</c>,
-        /// the same path a nozzle upgrade takes on the jet), so the stream always lands exactly on the
-        /// robot it just hit rather than a fixed authored range.</summary>
+        /// <summary>Fires a <see cref="SentinelBolt"/> from the turret's muzzle to the point it just
+        /// hit. Cosmetic only — the damage above has already landed regardless of whether this draws.
+        /// A fresh bolt every shot, not a reused instance (MV-806: unlike the old <c>WaterVfx</c> beam,
+        /// there is no per-shot re-Init — the bolt just flies and destroys itself, see
+        /// <see cref="SentinelBolt.Tick"/>).</summary>
         private void FireBeam(Vector3 targetPosition)
         {
-            if (_beamVfx == null) _beamVfx = BuildBeamVfx();
-
             Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
-            float distance = Mathf.Max(0.5f, Vector3.Distance(muzzle, end));
-
-            _beamVfx.Init(distance, SentinelBeamRadius, SentinelBeamConeHalfAngle);
-            _beamVfx.SetStreaming(true);
-
-            Vector3 dir = end - muzzle;
-            dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : transform.forward;
-            _beamVfx.Splash(end, dir, SentinelBeamSplashWeight);
-
-            _beamTimer = BeamVisibleSeconds;
-        }
-
-        /// <summary>Built once and reused for this turret's whole life (a Sentinel is never pooled —
-        /// see the class doc), parented at <see cref="MuzzleHeight"/> with identity local rotation so
-        /// it inherits the turret's own facing — <see cref="Update"/> already rotates the whole body
-        /// to look at the target before calling <see cref="FireBeam"/>, so the water needs no separate
-        /// aim logic of its own.</summary>
-        private WaterVfx BuildBeamVfx()
-        {
-            var go = new GameObject("BeamOrigin");
-            go.transform.SetParent(transform, worldPositionStays: false);
-            go.transform.localPosition = new Vector3(0f, MuzzleHeight, 0f);
-            go.transform.localRotation = Quaternion.identity;
-            return go.AddComponent<WaterVfx>();
+            SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed);
         }
 
         private RobotEnemy NearestRobotInRange()
