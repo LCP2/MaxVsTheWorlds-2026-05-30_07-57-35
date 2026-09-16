@@ -153,6 +153,7 @@ namespace MaxWorlds.Arena
                     }
 
                     FactoryCensus.RegisterReplicator(replicator, area.id);
+                    replicator.SetAreaIndex(AreaAccumulationDirector.AreaIndexOf(area.id)); // MV-820
                     _replicators.Add(replicator);
                 }
             }

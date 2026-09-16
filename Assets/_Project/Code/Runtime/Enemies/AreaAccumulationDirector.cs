@@ -498,6 +498,7 @@ namespace MaxWorlds.Enemies
                 // needs its home/area grates to already be set for the initial hidden state to be correct.
                 if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
                 _areaByRobot[e] = areaIndex;
+                e.SetAreaIndex(areaIndex); // MV-820: Replicator queueing's own eligibility filter
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state.
@@ -593,6 +594,7 @@ namespace MaxWorlds.Enemies
                 // MV-688: see PlacePendingGarrison's own comment on this same line.
                 if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
                 _areaByRobot[e] = areaIndex;
+                e.SetAreaIndex(areaIndex); // MV-820: Replicator queueing's own eligibility filter
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
@@ -692,6 +694,7 @@ namespace MaxWorlds.Enemies
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
             _areaByRobot[e] = areaIndex;
+            e.SetAreaIndex(areaIndex); // MV-820: Replicator queueing's own eligibility filter
 
             // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
             // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.

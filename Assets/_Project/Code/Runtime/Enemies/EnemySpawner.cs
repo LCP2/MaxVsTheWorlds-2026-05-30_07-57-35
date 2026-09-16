@@ -75,15 +75,6 @@ namespace MaxWorlds.Enemies
         private static bool GlobalHasRoom =>
             RobotEnemy.ActiveCount + _replicatorReservedSlots < GlobalMaxLiveEnemies;
 
-        /// <summary>MV-809: true if a Replicator may safely consume a robot right now. Consuming (which
-        /// drops <see cref="RobotEnemy.ActiveCount"/> by one) and reserving (which raises
-        /// <see cref="_replicatorReservedSlots"/> by one) change their sum by exactly zero, so this same
-        /// comparison also guarantees a slot will be free for at least the one-for-one replacement
-        /// later. Public so <see cref="MaxWorlds.Factories.Replicator"/>'s own intake gate reads this
-        /// rather than duplicating the ActiveCount/GlobalMaxLiveEnemies comparison.</summary>
-        public static bool HasRoomForReplicatorIntake() =>
-            RobotEnemy.ActiveCount + _replicatorReservedSlots <= GlobalMaxLiveEnemies;
-
         /// <summary>MV-809: called the instant a Replicator despawns a consumed robot — holds that
         /// robot's now-vacant slot until <see cref="ReleaseReplicatorReservation"/> spends it, so
         /// nothing else can fill it out from under the guaranteed replacement.</summary>
@@ -403,11 +394,16 @@ namespace MaxWorlds.Enemies
         /// in a run and has nothing to do with how many robots a box (whose own live count sits at 0 —
         /// it never spawns on its own) is allowed to hand back. True skips that per-factory check
         /// entirely; <see cref="GlobalHasRoom"/> — and with it the MV-809 reservation — still applies
-        /// unconditionally, so this can never spawn past the field-wide budget.</summary>
-        public List<RobotEnemy> SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f, bool ignorePerFactoryCap = false)
+        /// unconditionally, so this can never spawn past the field-wide budget. <paramref name="ignoreGlobalRoom"/>
+        /// (MV-820): a Replicator's guaranteed first twin is never dropped for lack of room — consuming
+        /// the robot that produced it already freed the field-wide budget by exactly one, so this call
+        /// can bypass <see cref="GlobalHasRoom"/> too and never come back short.</summary>
+        public List<RobotEnemy> SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f,
+            bool ignorePerFactoryCap = false, bool ignoreGlobalRoom = false)
         {
             var spawned = new List<RobotEnemy>(count);
-            for (int i = 0; i < count && (ignorePerFactoryCap || _live.Count < EffectiveMaxLiveEnemies) && GlobalHasRoom; i++)
+            for (int i = 0; i < count && (ignorePerFactoryCap || _live.Count < EffectiveMaxLiveEnemies)
+                             && (ignoreGlobalRoom || GlobalHasRoom); i++)
             {
                 RobotEnemy e = SpawnKind(kind);
                 if (noReplicateSeconds > 0f) e.TagNoReplicate(noReplicateSeconds);
