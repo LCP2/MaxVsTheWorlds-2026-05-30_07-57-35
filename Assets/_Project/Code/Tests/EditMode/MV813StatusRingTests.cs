@@ -136,30 +136,48 @@ namespace MaxWorlds.Tests.EditMode
                 "within lure radius, capacity > 0, clear of Max's melee exclusion — this Rusher must be lured");
             rusher.transform.position = rusher.ReplicatorSeekTarget;
 
-            // --- Red at three samples spread across the intake-to-second-emission window: Intake
-            // (0.35 s) + Cycle (0.9 s) + stagger (0.2 s) = 1.45 s total. ---
-            replicator.TickConsumption(0.2f); // mid-Intake
+            // --- Red at one sample while still walking in, then MV-823's own warm-white replication
+            // override for two samples once the robot is fully inside. Polled rather than fixed offsets
+            // — MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence (not a flat IntakeSeconds
+            // lerp), changed CycleSeconds 0.9 -> 2.0, and (change 2) overrides the ring to warm white for
+            // as long as a replication is actually running — fixed offsets and a red-only expectation
+            // tied to the old behaviour are exactly what broke this test on that change. ---
+            replicator.TickConsumption(0.1f); // a small step in: still mid-walk, definitely busy
             LateUpdateMethod.Invoke(replicator, null);
             Color redSample1 = SampleRing(ring, mpb);
 
-            replicator.TickConsumption(0.5f); // past Intake, mid-Cycle (0.7 s total)
-            LateUpdateMethod.Invoke(replicator, null);
-            Color redSample2 = SampleRing(ring, mpb);
+            int guard = 0;
+            while (rusher.IsAlive && guard++ < 300) // drive past Intake into the Cycle beat
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
+            Assert.IsFalse(rusher.IsAlive, "setup failure: the robot must be despawned into the Cycle beat by now");
+            Color replicatingSample2 = SampleRing(ring, mpb);
 
-            replicator.TickConsumption(0.55f); // just past the first emission (1.25 s total)
+            replicator.TickConsumption(0.1f); // a further step, still mid-Cycle (well short of CycleSeconds)
             LateUpdateMethod.Invoke(replicator, null);
-            Color redSample3 = SampleRing(ring, mpb);
+            Color replicatingSample3 = SampleRing(ring, mpb);
 
-            AssertRedFamily(redSample1, "1");
-            AssertRedFamily(redSample2, "2");
-            AssertRedFamily(redSample3, "3");
+            AssertRedFamily(redSample1, "1 (still walking in — not yet a replication)");
+            AssertWarmWhiteReplicationFamily(replicatingSample2, "2 (fully inside — MV-823's own replication light)");
+            AssertWarmWhiteReplicationFamily(replicatingSample3, "3 (mid-Cycle — still replicating)");
 
             // --- Finish the cycle: second twin emits, capacity drops from 3 to 2 (still > 0) ---
-            replicator.TickConsumption(0.2f); // cross the stagger too
-            LateUpdateMethod.Invoke(replicator, null);
+            guard = 0;
+            while (replicator.Capacity >= 3 && guard++ < 300)
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Assert.AreEqual(2, replicator.Capacity, "one doubling must spend exactly one of the three starting capacity");
 
-            // --- Green again ---
+            // --- Green again, once MV-823's own 0.4 s replication-light linger has also cleared. ---
+            for (int i = 0; i < 30; i++) // 30 x 0.02 s = 0.6 s, comfortably past the 0.4 s linger
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Color after = SampleRing(ring, mpb);
             Assert.AreEqual(green.r, after.r, 0.01f, "once both twins have emerged, with capacity still > 0, the ring must read idle green again (r)");
             Assert.AreEqual(green.g, after.g, 0.01f, "...idle green again (g)");
@@ -177,7 +195,7 @@ namespace MaxWorlds.Tests.EditMode
             var busySamples = new float[10];
             for (int i = 0; i < 10; i++)
             {
-                replicator.TickConsumption(0.1f); // 10 x 0.1 s = 1.0 s, still short of the 1.45 s busy window
+                replicator.TickConsumption(0.1f); // 10 x 0.1 s = 1.0 s — well short of the total busy window
                 LateUpdateMethod.Invoke(replicator, null);
                 busySamples[i] = SampleRing(ring, mpb).r; // red's dominant channel (base 1.0) tracks the multiplier directly
             }
@@ -187,10 +205,20 @@ namespace MaxWorlds.Tests.EditMode
                 $"while busy, the ring's emissive strength must swing at least 1.8x peak-to-trough over 1 s " +
                 $"(max {busyMax:F3}, min {busyMin:F3}) — it must visibly pulse, not sit still");
 
-            // --- Finish this second cycle: capacity 2 -> 1 (still > 0, idle green, never spent). ---
-            replicator.TickConsumption(2f);
-            LateUpdateMethod.Invoke(replicator, null);
+            // --- Finish this second cycle: capacity 2 -> 1 (still > 0, idle green, never spent). Polled
+            // rather than a fixed jump — MV-823 changed CycleSeconds 0.9 -> 2.0. ---
+            guard = 0;
+            while (replicator.Capacity >= 2 && guard++ < 300)
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Assert.AreEqual(1, replicator.Capacity, "the second doubling must spend exactly one more of the starting capacity");
+            for (int i = 0; i < 30; i++) // 30 x 0.02 s = 0.6 s, comfortably past MV-823's own 0.4 s replication-light linger
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Color idleCheck = SampleRing(ring, mpb);
             Assert.AreEqual(green.r, idleCheck.r, 0.01f, "the ring must be back to idle green before the steadiness sampling");
 
@@ -213,5 +241,15 @@ namespace MaxWorlds.Tests.EditMode
         /// never drift toward the idle green.</summary>
         private static void AssertRedFamily(Color sample, string label) =>
             Assert.Greater(sample.r, sample.g * 2f, $"sample '{label}' must be red-dominant (r >> g), not the idle green");
+
+        /// <summary>MV-823 change 2: while a replication is actually running, the ring takes the same
+        /// warm-white <see cref="Replicator.ReplicationLightColor"/> the beacon/pool do (r &gt; g &gt; b,
+        /// unlike busy red's r &gt;&gt; g&#x2248;0 or idle green's g &gt;&gt; r&#x2248;0).</summary>
+        private static void AssertWarmWhiteReplicationFamily(Color sample, string label)
+        {
+            Assert.Greater(sample.r, sample.g, $"sample '{label}' must be warm white (r > g), not idle green");
+            Assert.Greater(sample.g, sample.b, $"sample '{label}' must be warm white (g > b)");
+            Assert.Greater(sample.g, sample.r * 0.5f, $"sample '{label}' must be warm white (g not red-dominant like busy)");
+        }
     }
 }

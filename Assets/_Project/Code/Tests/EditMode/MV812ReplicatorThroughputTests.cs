@@ -120,9 +120,14 @@ namespace MaxWorlds.Tests.EditMode
             }
             Assert.AreEqual(2, spawnerA.LiveCountOf(EnemyKind.Rusher),
                 "setup failure: both twins must eventually emerge");
-            Assert.Less(elapsed, 1.6f,
-                "elapsed simulated time from Intake start to the second twin existing must be under 1.6 s " +
-                "(MV-812) — one robot's occupancy was 4.4 s before this fix");
+            // MV-823 superseded this ticket's own throughput ceiling on purpose — Lee's own "a CLEAR
+            // BRIGHT LIGHT" replication tell needs long enough on screen to read, so CycleSeconds went
+            // 0.9 -> 2.0 and total occupancy grew back from MV-812's ~1.45 s to roughly 3 s. The bound
+            // below only guards against a regression back toward MV-812's original 4.4 s, not against
+            // MV-823's own deliberately longer cycle.
+            Assert.Less(elapsed, 4.5f,
+                "elapsed simulated time from Intake start to the second twin existing must stay well under " +
+                "the pre-MV-812 4.4 s — MV-823 deliberately lengthened the cycle to ~3 s for the replication light");
 
             // --- Change 2: a robot 0.8 m from its slot must be drawn into Intake (a 0.35 m gate never
             // closed on it; a 0.9 m gate does). ---
@@ -137,7 +142,10 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 slot0 = boxB.QueueSlotPosition(0);
             robotB.transform.position = new Vector3(slot0.x + 0.8f, robotB.transform.position.y, slot0.z);
-            boxB.TickConsumption(Replicator.IntakeSeconds + 0.01f);
+            // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat
+            // IntakeSeconds lerp, so this polls to the despawn rather than assuming a fixed duration.
+            int guardB = 0;
+            while (robotB.IsAlive && guardB++ < 300) boxB.TickConsumption(0.02f);
             Assert.IsFalse(robotB.IsAlive,
                 "a robot 0.8 m from its slot must be taken into Intake and consumed — ArriveTolerance " +
                 "must actually be wide enough to close (MV-812)");

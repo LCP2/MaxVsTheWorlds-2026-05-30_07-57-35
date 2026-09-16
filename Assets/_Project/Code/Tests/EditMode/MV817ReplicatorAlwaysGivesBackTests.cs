@@ -118,20 +118,28 @@ namespace MaxWorlds.Tests.EditMode
                 "setup failure: the robot must be lured before this test can drive a cycle");
             rusherA.transform.position = rusherA.ReplicatorSeekTarget;
 
+            // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat
+            // IntakeSeconds lerp, and changed CycleSeconds 0.9 -> 2.0 — polled to each milestone rather
+            // than a hand-computed dt sum tied to the old numbers, and against a wider time ceiling
+            // (MV-823 deliberately lengthened one cycle to ~3 s for the replication light).
             float elapsedA = 0f;
-            replicatorA.TickConsumption(Replicator.IntakeSeconds + 0.01f); elapsedA += Replicator.IntakeSeconds + 0.01f;
+            const float dtA = 0.02f;
+            int guardA = 0;
+            while (rusherA.IsAlive && guardA++ < 300) { replicatorA.TickConsumption(dtA); elapsedA += dtA; }
             Assert.IsFalse(rusherA.IsAlive, "setup failure: the robot must be despawned into the Cycle beat by now");
             Assert.AreEqual(0, spawnerA.LiveCountOf(EnemyKind.Rusher), "the Cycle beat hasn't completed yet — nothing should have emerged");
 
-            replicatorA.TickConsumption(0.59f); elapsedA += 0.59f; // crosses CycleSeconds (0.9 s total)
-            Assert.LessOrEqual(elapsedA, 2f, "must land within 2 s of simulated TickConsumption time");
+            guardA = 0;
+            while (spawnerA.LiveCountOf(EnemyKind.Rusher) < 1 && guardA++ < 300) { replicatorA.TickConsumption(dtA); elapsedA += dtA; }
+            Assert.LessOrEqual(elapsedA, 4.5f, "must land well under the pre-MV-812 4.4 s ceiling");
             Assert.AreEqual(1, spawnerA.LiveCountOf(EnemyKind.Rusher),
                 "MV-817: at DifficultyDirector level 0 (EffectiveMaxLiveEnemies == 0), the Replicator must " +
                 "still give back its guaranteed first twin — the per-factory ramp cap must never gate a " +
                 "Replicator's own emission");
 
-            replicatorA.TickConsumption(0.20f); elapsedA += 0.20f; // crosses CycleSeconds + EmitStaggerSeconds
-            Assert.LessOrEqual(elapsedA, 2f, "must land within 2 s of simulated TickConsumption time");
+            guardA = 0;
+            while (spawnerA.LiveCountOf(EnemyKind.Rusher) < 2 && guardA++ < 300) { replicatorA.TickConsumption(dtA); elapsedA += dtA; }
+            Assert.LessOrEqual(elapsedA, 4.5f, "must land well under the pre-MV-812 4.4 s ceiling");
             Assert.AreEqual(2, spawnerA.LiveCountOf(EnemyKind.Rusher),
                 "well under the global budget, the opportunistic second twin must also emerge");
             Assert.AreEqual(1, replicatorA.Capacity,

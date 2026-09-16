@@ -58,20 +58,64 @@ namespace MaxWorlds.Factories
         /// this is what keeps two queued robots from ever being steered at the same point.</summary>
         public const float QueueSlotSpacing = 1.2f;
 
-        /// <summary>MV-775 Intake beat: seconds a consumed robot spends being drawn from its arrival
-        /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
-        /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
-        /// pinned to the hatch face rather than wherever <see cref="ArriveTolerance"/> first let it
-        /// through — see <see cref="TickIntake"/>. MV-808 lengthened this from 0.5 to 1.0 so the ramp
-        /// ascent it added was readable at the play camera; MV-812 cut it back to 0.35 — Lee, on build
-        /// 9751529: "they take ages to replicate" — the ramp is short enough that the walk still reads
-        /// at 0.35 s.</summary>
+        /// <summary>MV-775 Intake beat: superseded by MV-823's own walk-speed-derived duration (see
+        /// <see cref="TickIntake"/> — the walk step is now distance / max(the robot's own MoveSpeed,
+        /// <see cref="MinIntakeWalkSpeed"/>), not a flat constant), kept only as the safety margin the
+        /// existing tests add into their own total-tick sum so a single big synthetic dt still resolves
+        /// the whole walk-in + Cycle + Output beat in one call.</summary>
         public const float IntakeSeconds = 0.35f;
+
+        /// <summary>MV-823 change 1: "the robot walks up the RampIn at its own seeking speed" — floored
+        /// at this so a slow archetype's walk-in never reads as a crawl.</summary>
+        public const float MinIntakeWalkSpeed = 1.5f;
+
+        /// <summary>MV-823 change 1: seconds the hatch takes to swing fully open, authored as its own
+        /// <see cref="AnimSequence"/> step (OutQuad) rather than the pre-Intake MoveTowards creep
+        /// <see cref="LateUpdate"/> still uses while a robot is merely queued.</summary>
+        public const float HatchOpenSeconds = 0.25f;
+
+        /// <summary>MV-823 change 1: how far beyond the hatch plane, into the hull, a consumed robot
+        /// continues before it despawns — the walk no longer stops dead at the hatch face.</summary>
+        public const float PassThroughDistance = 0.6f;
+
+        /// <summary>MV-823 change 1: seconds the pass-through-and-shrink-to-0% step (InQuad) takes.</summary>
+        public const float PassThroughSeconds = 0.4f;
+
+        /// <summary>MV-823 change 1: the gap between the robot fully passing through and the hatch
+        /// beginning to swing shut.</summary>
+        public const float HatchCloseDelaySeconds = 0.2f;
+
+        /// <summary>MV-823 change 1: seconds the hatch takes to swing shut (OutQuad, same as open).</summary>
+        public const float HatchCloseSeconds = 0.25f;
+
+        /// <summary>MV-823 change 1: the swing angle about the hatch's own top/hinge edge — widened
+        /// from MV-775's 70 to Lee's own 80.</summary>
+        public const float HatchOpenAngleDeg = 80f;
+
+        /// <summary>MV-823 change 2: how long the replication light lingers after the second twin has
+        /// emitted — Lee's own "the whole time it is replicating", read generously rather than cutting
+        /// the light the instant the second twin appears.</summary>
+        public const float ReplicationLightLingerSeconds = 0.4f;
+
+        /// <summary>MV-823 change 2: the beacon's strobe rate and its emissive range (60%-100%).</summary>
+        public const float BeaconStrobeHz = 3f;
+        public const float BeaconStrobeMin = 0.6f;
+        public const float BeaconStrobeMax = 1.0f;
+
+        /// <summary>MV-823 change 2: the floor pool's strength — unmistakably brighter than an ordinary
+        /// wall-lamp pool's 0.17 (<see cref="MaxWorlds.Rendering.StormdrainLightKit.PoolStrength"/>).</summary>
+        public const float ReplicationPoolStrength = 0.60f;
+
+        /// <summary>MV-823 change 2: Lee's own "a CLEAR BRIGHT LIGHT" — warm white, shared by the
+        /// beacon, the floor pool, and the status ring while a replication is running.</summary>
+        public static readonly Color ReplicationLightColor = new Color(1.00f, 0.85f, 0.45f);
 
         /// <summary>MV-775 Cycle beat: seconds from a robot being despawned into the box to the FIRST
         /// of its doubled pair emerging. MV-812: cut 3.0 -> 0.9 — one robot's total occupancy (Intake +
-        /// Cycle + Output) drops from 4.4 s to 1.45 s.</summary>
-        public const float CycleSeconds = 0.9f;
+        /// Cycle + Output) drops from 4.4 s to 1.45 s. MV-823: 0.9 -> 2.0 — Lee's own "a clear bright
+        /// light switch on" tell (see <see cref="ReplicationLightColor"/>) needs long enough on-screen
+        /// to actually read; total busy is now roughly 3 s.</summary>
+        public const float CycleSeconds = 2.0f;
 
         /// <summary>MV-775 Output beat: the gap between the first and second emitted robot — the
         /// ticket's own "walk out one after the other, not simultaneously". MV-812: cut 0.4 -> 0.2,
@@ -122,6 +166,13 @@ namespace MaxWorlds.Factories
         private Renderer _emitFlash;
         private MaterialPropertyBlock _emitFlashMpb;
         private float _emitFlashTimer;
+        /// <summary>MV-823: the roof beacon dome and floor pool — Lee's own "a CLEAR BRIGHT LIGHT",
+        /// driven directly by <see cref="TickConsumption"/> (never <see cref="LateUpdate"/>) so an
+        /// EditMode test can read their resolved active state back off a synthetic dt.</summary>
+        private Renderer _replicationBeacon;
+        private MaterialPropertyBlock _replicationBeaconMpb;
+        private Renderer _replicationPool;
+        private MaterialPropertyBlock _replicationPoolMpb;
         /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
@@ -145,7 +196,10 @@ namespace MaxWorlds.Factories
         /// in <see cref="Update"/> while this box is alive.</summary>
         private Transform _fan;
         private const float FanIdleSpeedDegPerSec = 40f;
-        private const float HatchOpenAngleDeg = 70f;
+
+        /// <summary>MV-775: how long the pre-Intake "queue non-empty, hatch cracks open" creep
+        /// (<see cref="LateUpdate"/>) takes — unrelated to the MV-823 Intake-beat swing, which is
+        /// authored on <see cref="HatchOpenSeconds"/>/<see cref="HatchCloseSeconds"/> instead.</summary>
         private const float HatchSwingSeconds = 0.15f;
 
         private readonly struct PendingEmission
@@ -167,10 +221,29 @@ namespace MaxWorlds.Factories
         // has room for one at a time, so a second arrival waits in _queue until this slot frees.
         private RobotEnemy _intakeRobot;
         private Vector3 _intakeStartPos;
-        private float _intakeTimer;
+        /// <summary>MV-823: the walk-in/pass-through/hatch-swing beat, authored fresh every time a
+        /// robot is taken off the queue head (see <see cref="TickConsumption"/>'s "atSlot" branch) —
+        /// null once the hatch has finished swinging shut again. Ticked (never null-checked against
+        /// <see cref="_intakeRobot"/> alone) so the hatch-close tail keeps running for
+        /// <see cref="HatchCloseDelaySeconds"/> + <see cref="HatchCloseSeconds"/> after the robot itself
+        /// has already despawned — see <see cref="TickIntake"/>.</summary>
+        private AnimSequence _intakeSeq;
+        /// <summary>MV-823: the ramp foot the current <see cref="_intakeSeq"/> walk step lerps from —
+        /// <see cref="_intakeStartPos"/> flattened to <see cref="GroundY"/>, captured once so the walk
+        /// traces a straight line even though <see cref="HatchPosition"/> is read live every tick.</summary>
+        private Vector3 _intakeRampFoot;
         // Robots that have been despawned into the box and are mid-Cycle, waiting on CycleSeconds (and
         // then EmitStaggerSeconds) to emit.
         private readonly List<PendingEmission> _pending = new List<PendingEmission>(4);
+
+        /// <summary>MV-823 change 2: true from the instant a robot is fully drawn in (added to
+        /// <see cref="_pending"/>) until the second twin has emitted and <see cref="ReplicationLightLingerSeconds"/>
+        /// has elapsed since. Read by <see cref="LateUpdate"/> for the status ring's own warm-white
+        /// override and set every tick in <see cref="TickConsumption"/> so it's true test-drivable with a
+        /// synthetic dt, same as every other beat in this file.</summary>
+        private bool _replicationLightOn;
+        private float _replicationLingerTimer;
+        private float _beaconStrobeTime;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -261,6 +334,13 @@ namespace MaxWorlds.Factories
             _hatchGlowMpb = new MaterialPropertyBlock();
             _emitFlash = parts.EmitFlash;
             _emitFlashMpb = new MaterialPropertyBlock();
+
+            // MV-823: the replication tells, both built inactive — TickConsumption switches them on
+            // for exactly the "robot fully inside" to "second twin emitted + linger" window.
+            _replicationBeacon = parts.ReplicationBeacon;
+            _replicationBeaconMpb = new MaterialPropertyBlock();
+            _replicationPool = parts.ReplicationPool;
+            _replicationPoolMpb = new MaterialPropertyBlock();
 
             // The status LED — green idle / red busy while it can still double a robot (MV-808), red
             // (spent) once capacity hits 0, off once destroyed (OnDestroyed hides it).
@@ -501,7 +581,23 @@ namespace MaxWorlds.Factories
                     RetargetQueue();
                     _intakeRobot = head;
                     _intakeStartPos = head.transform.position;
-                    _intakeTimer = 0f;
+
+                    // MV-823: the walk-in is authored fresh per robot — distance / the robot's own
+                    // MoveSpeed (floored at MinIntakeWalkSpeed), so a Brute's walk genuinely takes longer
+                    // than a Rusher's rather than both sharing one flat duration.
+                    _intakeRampFoot = _intakeStartPos; _intakeRampFoot.y = GroundY;
+                    float walkDistance = Vector3.Distance(_intakeRampFoot, HatchPosition);
+                    float walkSpeed = Mathf.Max(EnemyArchetype.Of(head.Kind).MoveSpeed, MinIntakeWalkSpeed);
+                    float walkSeconds = walkDistance / walkSpeed;
+                    _intakeSeq = new AnimSequence(new[]
+                    {
+                        new AnimStep(0f, HatchOpenSeconds, AnimEase.OutQuad),                 // 0: hatch open
+                        new AnimStep(0f, walkSeconds, AnimEase.Linear),                        // 1: walk to hatch
+                        new AnimStep(walkSeconds, PassThroughSeconds, AnimEase.InQuad),        // 2: pass-through + shrink
+                        new AnimStep(walkSeconds + PassThroughSeconds + HatchCloseDelaySeconds,
+                            HatchCloseSeconds, AnimEase.OutQuad),                              // 3: hatch close
+                    });
+
                     head.BeginReplicatorIntake();
                     // MV-820 R2: the instant Intake takes the head, the next nearest eligible robot is
                     // assigned to the slot that just freed, same tick.
@@ -509,7 +605,10 @@ namespace MaxWorlds.Factories
                 }
             }
 
-            if (_intakeRobot != null) TickIntake(dt);
+            // MV-823: keeps ticking through the hatch-close tail even after the robot itself has
+            // despawned (see TickIntake) — _intakeRobot goes null the instant the robot passes fully
+            // through, but the hatch still has HatchCloseDelaySeconds + HatchCloseSeconds left to run.
+            if (_intakeRobot != null || _intakeSeq != null) TickIntake(dt);
 
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
@@ -560,46 +659,126 @@ namespace MaxWorlds.Factories
 
                 _pending[i] = new PendingEmission(p.Kind, timer, firstEmitted);
             }
+
+            // MV-823 change 2: "from the moment the robot is fully inside" (i.e. it's landed in
+            // _pending — not merely walking through the hatch) "until the second twin has emitted" (the
+            // pending loop above just removed it) "(plus 0.4 s linger)". Driven here, not LateUpdate, so
+            // a synthetic-dt test can read the resolved renderer state straight back.
+            bool pendingActive = _pending.Count > 0;
+            if (pendingActive) _replicationLingerTimer = ReplicationLightLingerSeconds;
+            else if (_replicationLingerTimer > 0f) _replicationLingerTimer = Mathf.Max(0f, _replicationLingerTimer - dt);
+            _replicationLightOn = pendingActive || _replicationLingerTimer > 0f;
+
+            _beaconStrobeTime += dt;
+            UpdateReplicationLight();
         }
 
-        /// <summary>MV-775 Intake beat: draws <see cref="_intakeRobot"/> from wherever it crossed the
-        /// arrive gate to the hatch mouth itself over <see cref="IntakeSeconds"/>, then despawns it
-        /// into the Cycle beat. Driving its position directly (rather than its own SafeMove) is what
-        /// pins the robot's resolved position at the moment of removal to the hatch face regardless of
-        /// its own collider radius — see <see cref="RobotEnemy.IsBeingDrawnIn"/>. MV-808: the path now
-        /// starts at the ramp foot's true ground level (<see cref="GroundY"/>), not wherever the
-        /// robot's own resting height happened to be, so the walk up the ramp to the hatch lip is
-        /// always a real, monotonic rise, not merely however close those two Y values already were.</summary>
+        /// <summary>MV-823: paints/toggles <see cref="_replicationBeacon"/> and <see cref="_replicationPool"/>
+        /// off <see cref="_replicationLightOn"/> — both fully inactive when off ("the difference must be
+        /// unmistakable", the ticket's own words), the beacon strobing 60%-100% at <see cref="BeaconStrobeHz"/>
+        /// and the pool steady at <see cref="ReplicationPoolStrength"/> when on.</summary>
+        private void UpdateReplicationLight()
+        {
+            if (_replicationBeacon != null)
+            {
+                _replicationBeacon.gameObject.SetActive(_replicationLightOn);
+                if (_replicationLightOn)
+                {
+                    float phase = Mathf.Sin(_beaconStrobeTime * BeaconStrobeHz * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    float mult = Mathf.Lerp(BeaconStrobeMin, BeaconStrobeMax, phase);
+                    Color c = ReplicationLightColor * mult;
+                    _replicationBeacon.GetPropertyBlock(_replicationBeaconMpb);
+                    _replicationBeaconMpb.SetColor("_BaseColor", c);
+                    _replicationBeaconMpb.SetColor("_EmissionColor", c * 2f);
+                    _replicationBeacon.SetPropertyBlock(_replicationBeaconMpb);
+                }
+            }
+
+            if (_replicationPool != null)
+            {
+                _replicationPool.gameObject.SetActive(_replicationLightOn);
+                if (_replicationLightOn)
+                {
+                    Color c = ReplicationLightColor * ReplicationPoolStrength;
+                    _replicationPool.GetPropertyBlock(_replicationPoolMpb);
+                    _replicationPoolMpb.SetColor("_BaseColor", c);
+                    _replicationPoolMpb.SetColor("_Color", c);
+                    _replicationPool.SetPropertyBlock(_replicationPoolMpb);
+                }
+            }
+        }
+
+        /// <summary>MV-775 Intake beat, rebuilt on MV-823's own <see cref="AnimSequence"/> (hatch open ->
+        /// walk -> pass-through+shrink -> hatch close — see where <see cref="_intakeSeq"/> is authored in
+        /// <see cref="TickConsumption"/>). Driving the robot's position directly (rather than its own
+        /// SafeMove) is what pins its resolved position to the hatch/hull rather than wherever
+        /// <see cref="ArriveTolerance"/> first let it through — see <see cref="RobotEnemy.IsBeingDrawnIn"/>.
+        /// Keeps running after the robot itself has despawned (<see cref="_intakeRobot"/> null but
+        /// <see cref="_intakeSeq"/> not) purely to finish swinging the hatch shut.</summary>
         private void TickIntake(float dt)
         {
-            RobotEnemy r = _intakeRobot;
-            if (r == null || !r.IsAlive)
+            if (_intakeSeq == null)
             {
                 _intakeRobot = null;
                 return;
             }
 
-            _intakeTimer += dt;
-            float u = Mathf.Clamp01(_intakeTimer / IntakeSeconds);
-            Vector3 hatchPos = HatchPosition;
-            Vector3 rampFoot = _intakeStartPos; rampFoot.y = GroundY;
-            r.transform.position = Vector3.Lerp(rampFoot, hatchPos, AnimSequence.OutQuad(u));
+            RobotEnemy r = _intakeRobot;
+            if (r != null && !r.IsAlive)
+            {
+                // MV-775: a robot that died mid-walk (e.g. the Water Blaster caught it through the
+                // opening) — abandon the sequence outright rather than continuing to animate a corpse;
+                // LateUpdate's own pre-Intake creep takes the hatch back to whatever the queue wants.
+                _intakeRobot = null;
+                _intakeSeq = null;
+                return;
+            }
 
-            Vector3 face = hatchPos - rampFoot; face.y = 0f;
-            if (face.sqrMagnitude > 0.0001f) r.transform.rotation = Quaternion.LookRotation(face.normalized, Vector3.up);
+            _intakeSeq.Tick(dt);
 
-            if (_intakeTimer < IntakeSeconds) return;
+            // Hatch: fully open by the time step 0 finishes, fully shut by the time step 3 finishes —
+            // the two windows never overlap (step 3's own Delay is well past step 0's end), so reading
+            // "closing wins once it has started" is unambiguous.
+            float closeProgress = _intakeSeq.Progress(3);
+            _hatchOpenAmount = closeProgress > 0f ? 1f - closeProgress : _intakeSeq.Progress(0);
+            if (_hatch != null)
+                _hatch.localRotation = _hatchClosedLocalRotation * Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg, Vector3.right);
 
-            // Fully drawn in: gone, and the pair it becomes starts its Cycle beat now.
-            EnemyKind kind = r.Kind;
-            r.Despawn();
-            // MV-809: hold the slot this robot just vacated until the Cycle beat's first emission
-            // spends it (see TickConsumption's pending loop below) — otherwise an ordinary spawn (or
-            // another Replicator) could fill it during the 3 s Cycle beat, and this box's own
-            // "always return at least what it consumed" guarantee would have nothing left to spend.
-            EnemySpawner.ReserveReplicatorSlot();
-            _intakeRobot = null;
-            _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
+            if (r != null)
+            {
+                Vector3 hatchPos = HatchPosition;
+                Vector3 pos = Vector3.Lerp(_intakeRampFoot, hatchPos, _intakeSeq.Progress(1));
+
+                float passProgress = _intakeSeq.Progress(2);
+                if (passProgress > 0f)
+                {
+                    Vector3 dir = hatchPos - _intakeRampFoot; dir.y = 0f;
+                    dir = dir.sqrMagnitude > 0.0001f ? dir.normalized : Vector3.forward;
+                    pos = hatchPos + dir * (PassThroughDistance * passProgress);
+                    r.transform.localScale = Vector3.one * (1f - passProgress);
+                }
+                r.transform.position = pos;
+
+                Vector3 face = hatchPos - _intakeRampFoot; face.y = 0f;
+                if (face.sqrMagnitude > 0.0001f) r.transform.rotation = Quaternion.LookRotation(face.normalized, Vector3.up);
+
+                if (passProgress >= 1f)
+                {
+                    // Fully passed through: gone, and the pair it becomes starts its Cycle beat now.
+                    EnemyKind kind = r.Kind;
+                    r.Despawn();
+                    r.transform.localScale = Vector3.one; // MV-823: reset before the pool hands it back out
+                    // MV-809: hold the slot this robot just vacated until the Cycle beat's first
+                    // emission spends it — otherwise an ordinary spawn (or another Replicator) could
+                    // fill it during the Cycle beat, and this box's own "always return at least what it
+                    // consumed" guarantee would have nothing left to spend.
+                    EnemySpawner.ReserveReplicatorSlot();
+                    _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
+                    _intakeRobot = null; // the hatch-close tail keeps _intakeSeq running without it
+                }
+            }
+
+            if (_intakeSeq.IsComplete) _intakeSeq = null;
         }
 
         /// <summary>MV-807: re-stamps every queued robot's steering target onto its CURRENT index —
@@ -655,6 +834,7 @@ namespace MaxWorlds.Factories
                 if (_intakeRobot.IsAlive) _intakeRobot.CancelReplicatorSeeking();
                 _intakeRobot = null;
             }
+            _intakeSeq = null;
 
             // Exactly the shed drop (MV-706 change 5): PickupDirector.OnFactoryDestroyed is subscribed
             // to this same signal, and drops one Device if any RIG category is locked, otherwise one
@@ -696,16 +876,28 @@ namespace MaxWorlds.Factories
             // MV-813: the top-face beacon takes the exact same resolved colour as _led — Change 3's
             // own "never disagree" rule — and additionally pulses its emissive strength 1.0x-2.2x at
             // StatusRingPulseHz while busy; steady (1x) idle or spent, per the ticket's own Change 4.
+            // MV-823 change 2: overridden to steady warm white at full strength while a replication is
+            // actually running (_replicationLightOn, set by TickConsumption) — Lee's own "the existing
+            // status ring switches to the same warm white" bullet.
             if (_statusRing != null)
             {
-                float multiplier = 1f;
-                if (capacity > 0 && busy)
+                Color ringColor;
+                if (_replicationLightOn)
                 {
-                    float phase = Mathf.Sin(_statusRingPulseTime * StatusRingPulseHz * Mathf.PI * 2f) * 0.5f + 0.5f;
-                    multiplier = Mathf.Lerp(StatusRingPulseMin, StatusRingPulseMax, phase);
+                    ringColor = ReplicationLightColor;
+                }
+                else
+                {
+                    float multiplier = 1f;
+                    if (capacity > 0 && busy)
+                    {
+                        float phase = Mathf.Sin(_statusRingPulseTime * StatusRingPulseHz * Mathf.PI * 2f) * 0.5f + 0.5f;
+                        multiplier = Mathf.Lerp(StatusRingPulseMin, StatusRingPulseMax, phase);
+                    }
+                    ringColor = c * multiplier;
                 }
                 _statusRing.GetPropertyBlock(_statusRingMpb);
-                _statusRingMpb.SetColor("_BaseColor", c * multiplier);
+                _statusRingMpb.SetColor("_BaseColor", ringColor);
                 _statusRing.SetPropertyBlock(_statusRingMpb);
             }
 
@@ -726,15 +918,19 @@ namespace MaxWorlds.Factories
                 _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
             }
 
-            // MV-775: the hatch itself swings open through Lure and Intake only — it closes again the
-            // instant a robot is drawn fully in, rather than sitting open through the whole Cycle/Output
-            // beat the way the glow (above) does.
-            if (_hatch != null)
+            // MV-775: the hatch cracks open while a robot is merely queued, as a "something's coming"
+            // tell — but only when MV-823's own Intake-beat AnimSequence isn't already driving the swing
+            // (TickIntake fully owns _hatchOpenAmount from the instant a robot leaves the queue until the
+            // hatch has finished swinging shut again). MV-823: axis fixed from Vector3.up (which, after
+            // the panel's own Euler(90,0,0) build rotation, resolved to the face NORMAL — the door spun
+            // in its own plane instead of opening, MV-706's original bug) to Vector3.right — an axis
+            // parallel to the hull face, the same hinge-edge swing the Intake beat now uses.
+            if (_hatch != null && _intakeSeq == null)
             {
-                bool hatchSwingWanted = _queue.Count > 0 || _intakeRobot != null;
+                bool hatchSwingWanted = _queue.Count > 0;
                 float target = hatchSwingWanted ? 1f : 0f;
                 _hatchOpenAmount = Mathf.MoveTowards(_hatchOpenAmount, target, Time.deltaTime / HatchSwingSeconds);
-                _hatch.localRotation = _hatchClosedLocalRotation * Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg, Vector3.up);
+                _hatch.localRotation = _hatchClosedLocalRotation * Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg, Vector3.right);
             }
 
             // The 0.6 s white "twin" flash (MV-693 Reads), decaying from the timer TickConsumption

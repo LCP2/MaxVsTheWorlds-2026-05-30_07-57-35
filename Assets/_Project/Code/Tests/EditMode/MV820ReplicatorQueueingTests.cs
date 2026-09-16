@@ -183,7 +183,10 @@ namespace MaxWorlds.Tests.EditMode
                 "setup failure: with a full 2-deep queue, the third-nearest must not be assigned yet");
 
             slot0D.transform.position = slot0D.ReplicatorSeekTarget; // at slot 0 — Intake begins this tick
-            boxD.TickConsumption(Replicator.IntakeSeconds + 0.01f);
+            // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat
+            // IntakeSeconds lerp, so this polls to the despawn rather than assuming a fixed duration.
+            int guardD = 0;
+            while (slot0D.IsAlive && guardD++ < 300) boxD.TickConsumption(0.02f);
 
             Assert.IsFalse(slot0D.IsAlive, "setup failure: slot 0 must have been taken into Intake and despawned");
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, refillD.Current,
@@ -207,11 +210,16 @@ namespace MaxWorlds.Tests.EditMode
 
             robotE.transform.position = robotE.ReplicatorSeekTarget;
             EnemySpawner spawnerE = boxE.GetComponent<EnemySpawner>();
-            boxE.TickConsumption(Replicator.IntakeSeconds + 0.01f);
+            // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat
+            // IntakeSeconds lerp, so this polls to the despawn rather than assuming a fixed duration.
+            int guardE = 0;
+            while (robotE.IsAlive && guardE++ < 300) boxE.TickConsumption(0.02f);
             Assert.IsFalse(robotE.IsAlive,
                 "over budget, the slot-0 robot must still be taken into Intake and despawned (MV-820 Change 6)");
 
-            boxE.TickConsumption(0.59f); // crosses CycleSeconds (0.9 s total)
+            // Polled rather than a fixed dt sum — MV-823 changed CycleSeconds 0.9 -> 2.0.
+            guardE = 0;
+            while (spawnerE.LiveCountOf(EnemyKind.Rusher) < 1 && guardE++ < 300) boxE.TickConsumption(0.02f);
             Assert.AreEqual(1, spawnerE.LiveCountOf(EnemyKind.Rusher),
                 "over budget, the guaranteed first twin must still emit (MV-820 Change 6) — it must never be dropped or deferred");
         }

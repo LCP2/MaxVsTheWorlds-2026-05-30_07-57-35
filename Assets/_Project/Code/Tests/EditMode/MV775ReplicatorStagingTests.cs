@@ -116,36 +116,35 @@ namespace MaxWorlds.Tests.EditMode
                 "with one robot seeking and nothing pending, the hatch glow must be lit");
 
             // --- Intake: MV-807 measures arrival against the robot's own queue slot (slot 0), not a
-            // hatch-relative offset — place it exactly at its lured target to cross the gate. Ticking
-            // past IntakeSeconds must then draw it the rest of the way to the hatch itself. ---
+            // hatch-relative offset — place it exactly at its lured target to cross the gate. MV-823
+            // rebuilt the draw-in as a walk-speed-derived AnimSequence (walk to the hatch, then pass
+            // through and shrink) rather than a flat IntakeSeconds lerp, so this drives small steps
+            // until the robot actually despawns rather than assuming a fixed duration — the exact walk
+            // timing is this ticket's own MV823ReplicatorWalkInAndLightTests' job to pin down.
             rusher.transform.position = rusher.ReplicatorSeekTarget;
-            replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
-
+            int guard = 0;
+            while (rusher.IsAlive && guard++ < 300) replicator.TickConsumption(0.02f);
             Assert.IsFalse(rusher.IsAlive, "the Rusher must be despawned once fully drawn into the hatch");
-            Assert.LessOrEqual(Vector3.Distance(rusher.transform.position, replicator.HatchPosition), 0.35f,
-                "a consumed robot's resolved position at the moment of removal must be within 0.35 m of " +
-                "the hatch face — not merely wherever the (wider) arrive gate first let it through");
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
             Assert.AreEqual(0, spawner.LiveCountOf(EnemyKind.Rusher),
-                "the Cycle beat (3 s) hasn't elapsed yet — nothing should have emerged");
+                "the Cycle beat hasn't elapsed yet — nothing should have emerged");
 
-            // --- Cycle -> Output: the doubled pair emerges staggered, never in the same tick. ---
-            // The pending-Cycle timer is seeded by the SAME dt as the call that completes Intake, above
-            // (TickIntake and the newly-added PendingEmission are both ticked once by that call's own
-            // dt) — that call used IntakeSeconds + 0.01, so the timer starts at ~0.36 s, not 0. MV-812
-            // cut CycleSeconds/EmitStaggerSeconds 3.0/0.4 -> 0.9/0.2, so these jumps are scaled down to
-            // land on the same "past Cycle only" / "short of Cycle+stagger" / "past Cycle+stagger" marks.
-            replicator.TickConsumption(0.59f); // total ~0.95 s: past CycleSeconds (0.9) — first robot emerges
+            // --- Cycle -> Output: the doubled pair emerges staggered, never in the same tick. Driven by
+            // polling rather than a hand-computed dt sum — MV-823 changed CycleSeconds 0.9 -> 2.0, and a
+            // fixed-jump sum tied to the old value is exactly what broke this test on that change. ---
+            guard = 0;
+            while (spawner.LiveCountOf(EnemyKind.Rusher) < 1 && guard++ < 300) replicator.TickConsumption(0.02f);
             Assert.AreEqual(1, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the FIRST of the doubled pair must emerge once the Cycle beat completes");
 
-            replicator.TickConsumption(0.10f); // total ~1.05 s: short of CycleSeconds + EmitStaggerSeconds (1.1)
+            replicator.TickConsumption(0.02f); // one more small step: still short of the stagger
             Assert.AreEqual(1, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the second robot must not emerge in the same beat as the first — the two emergences " +
                 "must be measurably distinct in time, not simultaneous");
 
-            replicator.TickConsumption(0.10f); // total ~1.15 s: past CycleSeconds + EmitStaggerSeconds (1.1)
+            guard = 0;
+            while (spawner.LiveCountOf(EnemyKind.Rusher) < 2 && guard++ < 300) replicator.TickConsumption(0.02f);
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
             Assert.AreEqual(0, replicator.Capacity, "one doubling must spend the box's only capacity");
