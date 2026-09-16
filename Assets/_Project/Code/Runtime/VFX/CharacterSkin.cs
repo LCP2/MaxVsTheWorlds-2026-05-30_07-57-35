@@ -160,7 +160,7 @@ namespace MaxWorlds.VFX
         /// clipped-then-washed correction.</summary>
         private static readonly Color StormdrainRusher = new Color(0.600f, 0.330f, 0.090f);
         private static readonly Color StormdrainBruiser = new Color(0.540f, 0.130f, 0.600f);
-        private static readonly Color StormdrainHeavy = new Color(0.600f, 0.110f, 0.190f);
+        private static readonly Color StormdrainHeavy = new Color(0.600f, 0.080f, 0.200f);
         private static readonly Color StormdrainBrute = new Color(0.170f, 0.330f, 0.600f);
 
         /// <summary>MV-800: the Lurker moves off oil-black for World 2 — MV-688 made it oil-black
@@ -170,8 +170,8 @@ namespace MaxWorlds.VFX
         /// <see cref="LurkerBody"/> is untouched — this only ever applies under the "stormdrain" skin.</summary>
         private static readonly Color StormdrainLurker = new Color(0.230f, 0.120f, 0.420f);
         private static readonly Color StormdrainSludger = new Color(0.430f, 0.600f, 0.070f);
-        private static readonly Color StormdrainCharger = new Color(0.600f, 0.250f, 0.060f);
-        private static readonly Color StormdrainTurret = new Color(0.180f, 0.460f, 0.560f);
+        private static readonly Color StormdrainCharger = new Color(0.080f, 0.580f, 0.040f);
+        private static readonly Color StormdrainTurret = new Color(0.100f, 0.600f, 0.400f);
 
         /// <summary>World 3's "reef" skin (MV-715) — every one of its eight re-skins wears this one
         /// barnacled dark-teal metal, the same "one flat tint per world skin" idiom as
