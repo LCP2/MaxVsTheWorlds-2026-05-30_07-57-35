@@ -26,9 +26,14 @@ namespace MaxWorlds.VFX
         /// <summary>The single Tier-1 gold tell. It foreshadows the Curator and only pays if withheld.</summary>
         public readonly Material Gold;
 
-        public RobotPalette(Material warm, Material cool, Material dark, Material gold)
+        /// <summary>MV-800: World 2's shared stormdrain shoulder-band material — null for every other
+        /// skin/world, in which case <see cref="RobotBodies.Build"/> builds no band at all. Optional so
+        /// every existing 4-argument caller (Sentinel, the EditMode tests) keeps compiling unchanged.</summary>
+        public readonly Material Hazard;
+
+        public RobotPalette(Material warm, Material cool, Material dark, Material gold, Material hazard = null)
         {
-            Warm = warm; Cool = cool; Dark = dark; Gold = gold;
+            Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard;
         }
     }
 
@@ -48,6 +53,10 @@ namespace MaxWorlds.VFX
         /// constant, the same "one literal per file that needs it" idiom <see cref="CharacterSkin"/>
         /// and <see cref="MaxWorlds.Enemies.RobotEnemy"/> already use for it.</summary>
         private const string ReefSkinTag = "reef";
+
+        /// <summary>World 2's skin tag (MV-701/MV-800) — same "one literal per file that needs it"
+        /// idiom as <see cref="ReefSkinTag"/>.</summary>
+        private const string StormdrainSkinTag = "stormdrain";
 
         /// <summary>Build <paramref name="kind"/>'s body under <paramref name="root"/> and return the
         /// emissive lenses the rig drives as its tell. <paramref name="skin"/> selects a world
@@ -78,7 +87,31 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
                 default:                 BuildRusher(visualRoot, p, eyes, wheels, legs); break;
             }
+
+            // MV-800: the shared faction signature, on top of whichever silhouette the switch above
+            // just built — never a silhouette change of its own (ticket AC4).
+            if (skin == StormdrainSkinTag) AddStormdrainShoulderBand(kind, visualRoot, p);
+
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
+        }
+
+        /// <summary>MV-800: World 2's shared faction signature — a hazard-yellow band ringing every
+        /// stormdrain-skinned body at 50% of its collider height, 0.085x its archetype's body scale
+        /// tall, so eight different hues still read as one faction assembled from one shed. The
+        /// Lurker's own single eye lens and gold neck ring (already built by <see cref="BuildLurker"/>)
+        /// carry the rest of its read and are untouched; every other kind's own eye/status lens is
+        /// untouched too. A no-op if the caller passed no <see cref="RobotPalette.Hazard"/> material.</summary>
+        private static void AddStormdrainShoulderBand(EnemyKind kind, Transform root, in RobotPalette p)
+        {
+            if (p.Hazard == null) return;
+
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            float radius = archetype.ColliderRadius;
+            float thickness = 0.085f * archetype.BodyScale.y;
+            float y = archetype.ColliderHeight * 0.5f;
+
+            Add(root, CharacterMeshes.Ring(radius * 0.82f, radius * 1.02f, thickness, 20), p.Hazard,
+                new Vector3(0f, y, 0f), Quaternion.identity, Vector3.one, "StormdrainBand");
         }
 
         /// <summary>MV-669 revision 3: reverting Max's own +10% scale-up re-exposed a pre-existing
