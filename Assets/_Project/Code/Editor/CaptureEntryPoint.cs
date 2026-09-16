@@ -105,6 +105,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv825LppeFire() => RunFromMenu(CapturePresets.All["mv825lppefire"]);
         public static void CaptureMv825LppeFire() => Run(CapturePresets.All["mv825lppefire"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Lit Ground a3 (MV-824)")]
+        public static void MenuMv824LitGround() => RunFromMenu(CapturePresets.All["mv824litground"]);
+        public static void CaptureMv824LitGround() => Run(CapturePresets.All["mv824litground"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
