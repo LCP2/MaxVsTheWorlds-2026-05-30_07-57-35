@@ -99,6 +99,22 @@ namespace MaxWorlds.VFX
                 sparkSpeedMin: 3.5f, sparkSpeedMax: 7.5f, sparkSizeMin: 0.09f, sparkSizeMax: 0.2f,
                 sparkLifeMin: 0.16f, sparkLifeMax: 0.32f);
 
+        /// <summary>MV-814: FORK's own tell — a short, bright point flash at the fork point, its own
+        /// event distinct from the ordinary <see cref="LppeImpact"/> beat that just landed there.</summary>
+        public readonly struct LppeForkFlashTuning
+        {
+            public readonly float FlashSize;
+            public readonly float FlashLifetime;
+
+            public LppeForkFlashTuning(float flashSize, float flashLifetime)
+            {
+                FlashSize = flashSize;
+                FlashLifetime = flashLifetime;
+            }
+        }
+
+        public static LppeForkFlashTuning LppeForkFlash() => new LppeForkFlashTuning(flashSize: 1.6f, flashLifetime: 0.22f);
+
         // --- MV-770: the bolt/rocket/salvo weight pass. Every magnitude the visual rescale needs
         // lives here too, same "nothing buried in an emit path" rule LppeVfx's own header states.
 

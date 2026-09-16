@@ -36,12 +36,18 @@ namespace MaxWorlds.VFX
         // orange family as MuzzleColor above.
         private static readonly Color WindupColor = new Color(2.20f, 1.30f, 0.42f, 1f);
 
+        /// <summary>MV-814: FORK's own flash colour — the same fire-orange family as the forked bolt's
+        /// own brightened trail tint, so the flash reads as the SAME event as the bright bolt that
+        /// follows it, not a second, competing colour language.</summary>
+        private static readonly Color ForkFlashColor = new Color(1.75f, 0.85f, 0.20f, 1f);
+
         private VfxBurst _muzzleFlash;
         private VfxBurst _impactFlash;
         private VfxBurst _impactSparks;
         private VfxBurst _shockFlash;
         private VfxBurst _shockSparks;
         private VfxBurst _windupRing;
+        private VfxBurst _forkFlash;
         private bool _initialized;
 
         /// <summary>How many muzzle flashes this instance has ever emitted — the resolved count a
@@ -68,6 +74,10 @@ namespace MaxWorlds.VFX
             // MV-770: its own burst, never sharing _muzzleFlash — sharing would double-count a fire
             // cycle's flashes against the "one FireTick, one muzzle flash" contract (Mv758LppeVfxTests).
             _windupRing = new VfxBurst("LppeWindupRing", VfxMaterials.Additive(VfxMaterials.Ring()), 24, 0f, perFrameCap: 4);
+
+            // MV-814: its own burst — FORK's flash must never share _impactFlash, or a fork release
+            // landing back-to-back with an ordinary impact would silently swallow one of the two beats.
+            _forkFlash = new VfxBurst("LppeForkFlash", additive, 24, 0f, perFrameCap: 4);
         }
 
         /// <summary>The muzzle punctuation (spec item 1) — a short, hard flash at the emitter, along
@@ -119,6 +129,22 @@ namespace MaxWorlds.VFX
                 colorA: WindupColor, colorB: WindupColor);
         }
 
+        /// <summary>MV-814: FORK's own tell (spec item 2) — a short bright flash at the point the fork
+        /// released from, so the extra bolt that follows reads as deliberate rather than one more
+        /// identical pulse landing at the same instant.</summary>
+        public void Fork(Vector3 point)
+        {
+            if (!_initialized) return;
+            CombatVfxTuning.LppeForkFlashTuning t = CombatVfxTuning.LppeForkFlash();
+
+            _forkFlash.Emit(point, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: t.FlashSize, sizeMax: t.FlashSize,
+                lifeMin: t.FlashLifetime, lifeMax: t.FlashLifetime,
+                colorA: ForkFlashColor, colorB: ForkFlashColor);
+        }
+
         private static void Emit(VfxBurst flash, VfxBurst sparks, Vector3 point,
             CombatVfxTuning.LppeImpactTuning t, Color flashColor, Color sparkColor)
         {
@@ -142,12 +168,14 @@ namespace MaxWorlds.VFX
             if (!_initialized) return;
             _muzzleFlash.EndFrame(); _impactFlash.EndFrame(); _impactSparks.EndFrame();
             _shockFlash.EndFrame(); _shockSparks.EndFrame(); _windupRing.EndFrame();
+            _forkFlash.EndFrame();
         }
 
         private void OnDestroy()
         {
             Dispose(_muzzleFlash); Dispose(_impactFlash); Dispose(_impactSparks);
             Dispose(_shockFlash); Dispose(_shockSparks); Dispose(_windupRing);
+            Dispose(_forkFlash);
         }
 
         private static void Dispose(VfxBurst b)
