@@ -107,6 +107,26 @@ namespace MaxWorlds.Arena
             else DestroyImmediate(gameObject);
         }
 
+        /// <summary>MV-815: this bolt's own cached straight mesh -- no longer <see cref="SeekerPulse.GetBoltMesh"/>,
+        /// which now hands out Max's own bowed crescent. MV-806 made this bolt small, red and
+        /// straight-line-only precisely so it cannot be confused with Max's; sharing his new crescent
+        /// mesh would undo that. Built once, lazily, from the same straight ogive profile
+        /// (<see cref="SeekerPulse.BuildStraightBoltMesh"/>) Max's own bolt used before MV-815 -- never
+        /// rebuilt per shot (MV-810).</summary>
+        private static Mesh s_boltMesh;
+
+        /// <summary>The single cached straight bolt mesh, built lazily on first use and shared by
+        /// every Sentinel bolt.</summary>
+        public static Mesh GetBoltMesh()
+        {
+            if (s_boltMesh == null) s_boltMesh = SeekerPulse.BuildStraightBoltMesh();
+            return s_boltMesh;
+        }
+
+        /// <summary>Drop this class's own reference to the cached bolt mesh -- same idiom as
+        /// <see cref="SeekerPulse.ResetForTests"/>.</summary>
+        public static void ResetForTests() => s_boltMesh = null;
+
         /// <summary>Same build idiom as <see cref="MaxWorlds.Weapons.SeekerPulse.BuildVisual"/>: the
         /// same cached lathed bolt mesh (MV-810 -- was its own <c>GameObject.CreatePrimitive</c> capsule,
         /// rebuilt and its collider destroyed on every single shot), an additive unlit material, a short
@@ -132,7 +152,7 @@ namespace MaxWorlds.Arena
             bolt.transform.SetParent(parent, false);
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             bolt.transform.localScale = Vector3.one * SizeScale;
-            bolt.AddComponent<MeshFilter>().sharedMesh = SeekerPulse.GetBoltMesh();
+            bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh();
             var meshRenderer = bolt.AddComponent<MeshRenderer>();
             if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
         }

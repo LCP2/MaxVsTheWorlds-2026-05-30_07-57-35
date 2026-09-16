@@ -135,6 +135,12 @@ namespace MaxWorlds.Tests.EditMode
                 // The forked bolt's own tell: built facing the SAME direction as an ordinary pulse (so
                 // their resolved MeshRenderer bounds are directly comparable per-axis), it must read at
                 // least 1.2x wider across its cross-section (spec: 1.25x).
+                //
+                // MV-815: measured along Y, not X. Max's bolt is now a crescent whose chord (an
+                // authored, fork-invariant span) runs along local X -- comparing X would compare the
+                // chord's own fixed width, not the cross-section FORK actually widens. Y carries only
+                // the cross-section's own radius (the spine never leaves Y=0), so it isolates exactly
+                // the dimension FORK's own wider mesh (see SeekerPulse.GetBoltMesh) changes.
                 SeekerPulse ordinary = SeekerPulse.Fire(Vector3.zero, Vector3.forward, PulseLaser.DefaultPulseSpeed,
                     PulseLaser.DefaultPulseTurnRateDegPerSec, PulseLaser.DefaultPulseLifetime, dmg, laser.LockRange,
                     PulseLaser.DefaultLockHalfAngle, canFork: false);
@@ -143,8 +149,8 @@ namespace MaxWorlds.Tests.EditMode
                     PulseLaser.DefaultLockHalfAngle, canFork: false, isFork: true);
                 try
                 {
-                    float ordinaryWidth = ordinary.BoltRendererForTests.bounds.size.x;
-                    float forkWidth = forkVisual.BoltRendererForTests.bounds.size.x;
+                    float ordinaryWidth = ordinary.BoltRendererForTests.bounds.size.y;
+                    float forkWidth = forkVisual.BoltRendererForTests.bounds.size.y;
                     Assert.GreaterOrEqual(forkWidth, ordinaryWidth * 1.2f,
                         $"a forked pulse's bolt must render at least 1.2x an ordinary pulse's cross-section " +
                         $"width -- ordinary was {ordinaryWidth:0.000}m, forked was {forkWidth:0.000}m");

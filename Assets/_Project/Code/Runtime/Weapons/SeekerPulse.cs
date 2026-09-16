@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -353,53 +354,185 @@ namespace MaxWorlds.Weapons
             // Same local rotation the old capsule used: the lathe's revolve axis (Y) is the mesh's own
             // long axis, so this still points the bolt down the travel axis.
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            // MV-814: scaling X/Z only (never Y) widens the cross-section without touching the bolt's
-            // authored length — see ForkCrossSectionScale's own doc comment for why this is safe against
-            // the rotation applied above.
-            if (isFork) bolt.transform.localScale = new Vector3(ForkCrossSectionScale, 1f, ForkCrossSectionScale);
-            bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh();
+            // MV-815: the crescent is built directly in this object's own local axes (chord across
+            // local X, sagitta along local Z, cross-section in Y/outward) -- no rotation needed to
+            // point it down the travel axis, unlike the old lathed ogive. FORK's own wider
+            // cross-section (MV-814) is now baked into a second cached mesh (see GetBoltMesh) rather
+            // than a non-uniform Transform scale: the crescent's spine occupies two local axes at once
+            // (X and Z), so scaling only X/Z (the old trick) would widen the chord itself, not just
+            // the cross-section.
+            bolt.transform.localRotation = Quaternion.identity;
+            bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh(isFork);
             var meshRenderer = bolt.AddComponent<MeshRenderer>();
             if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
         }
 
-        // MV-805: sampled resolution for the lathed bolt -- see BuildBoltMesh's own doc comment.
+        // MV-805: sampled resolution for the Sentinel's own straight lathed bolt -- see
+        // BuildStraightBoltMesh's own doc comment.
         private const int BoltProfilePoints = 24;
         private const int BoltRadialSegments = 16;
         private const float BoltPeakFractionFromNose = 0.45f;
 
-        /// <summary>MV-810: the one instance every bolt shares -- see <see cref="GetBoltMesh"/>.</summary>
+        // MV-815: sampled resolution for Max's own crescent -- see BuildCrescentBoltMesh's own doc
+        // comment. Spec: "16 samples along the spine, 10 around the cross-section (~160 vertices)".
+        private const int CrescentSpineSamples = 16;
+        private const int CrescentCrossSectionSegments = 10;
+
+        /// <summary>MV-815: the sagitta (the belly's own lead ahead of the tip-to-tip chord, along the
+        /// travel axis) -- spec: "sagitta 0.20 m".</summary>
+        private const float CrescentSagitta = 0.20f;
+
+        /// <summary>MV-810/815: the one instance every ordinary bolt shares -- see <see cref="GetBoltMesh"/>.</summary>
         private static Mesh s_boltMesh;
 
-        /// <summary>MV-810: the single cached bolt mesh, built lazily on first use and handed out by
-        /// reference to every LPPE pulse AND (MV-806's own gap) the Sentinel's matching bolt
-        /// (<see cref="MaxWorlds.Arena.SentinelBolt"/>) -- the profile depends only on compile-time
-        /// constants and <see cref="BoltTuning"/>, so one mesh is correct for all of them. Before this,
-        /// every single shot lathed a fresh ~384-vertex mesh (<see cref="BuildBoltMesh"/>) and never
-        /// freed it.</summary>
-        public static Mesh GetBoltMesh()
+        /// <summary>MV-814/815: the one instance every FORK-released bolt shares -- a separate cached
+        /// mesh (wider cross-section baked in) rather than a runtime Transform scale, see
+        /// <see cref="BuildVisual"/>'s own doc comment for why the scale trick stopped working once
+        /// the bolt became a crescent.</summary>
+        private static Mesh s_forkBoltMesh;
+
+        /// <summary>MV-810: the single cached bolt mesh for the given fork-ness, built lazily on first
+        /// use and shared by every LPPE pulse of that kind -- never rebuilt per shot. MV-815: this is
+        /// now Max's own crescent; the Sentinel's matching straight bolt is
+        /// <see cref="MaxWorlds.Arena.SentinelBolt.GetBoltMesh"/>'s own separate cache, not this one.</summary>
+        public static Mesh GetBoltMesh(bool isFork = false)
         {
-            if (s_boltMesh == null) s_boltMesh = BuildBoltMesh();
-            return s_boltMesh;
+            if (!isFork)
+            {
+                if (s_boltMesh == null) s_boltMesh = BuildCrescentBoltMesh(BoltTuning.CrossSection * 0.5f);
+                return s_boltMesh;
+            }
+            if (s_forkBoltMesh == null)
+                s_forkBoltMesh = BuildCrescentBoltMesh(BoltTuning.CrossSection * 0.5f * ForkCrossSectionScale);
+            return s_forkBoltMesh;
         }
 
-        /// <summary>Drop this class's own reference to the cached bolt mesh. The <see cref="Mesh"/>
-        /// object itself is owned by <see cref="CharacterMeshes"/>'s own cache (see
-        /// <see cref="CharacterMeshes.Lathe"/>) and only ever destroyed by
-        /// <see cref="CharacterMeshes.ClearCache"/> -- this just stops a domain reload or a fresh test
-        /// run holding a pointer to whatever CharacterMeshes may since have cleared, same idiom as
-        /// <see cref="MaxWorlds.Weapons.RigFusionState.ResetForTests"/>.</summary>
-        public static void ResetForTests() => s_boltMesh = null;
+        /// <summary>Drop this class's own reference to the cached bolt meshes -- same idiom as
+        /// <see cref="MaxWorlds.Weapons.RigFusionState.ResetForTests"/>, so a domain reload or a fresh
+        /// test run never holds a pointer to a mesh a previous run already destroyed.</summary>
+        public static void ResetForTests()
+        {
+            s_boltMesh = null;
+            s_forkBoltMesh = null;
+        }
 
-        /// <summary>MV-805: an ogive of revolution (<see cref="CharacterMeshes.Lathe"/>), replacing the
-        /// capsule primitive Lee reported as having "a bend" — a Unity capsule at this aspect
-        /// (<see cref="BoltTuning"/>'s cross-section vs. length) is two hemispheres meeting in a hard
-        /// crease across the middle. This profile is one continuous curve from nose to tail instead:
-        /// radius rises from 0 at the nose to <see cref="BoltTuning"/>'s cross-section-derived peak at
-        /// <see cref="BoltPeakFractionFromNose"/> of the length, then eases back to 0 at the tail. The
-        /// nose sits at the profile's own high-Y end, which the 90-degree rotation in
-        /// <see cref="BuildVisual"/> points down +Z — this object's own forward, i.e. the direction of
-        /// travel — so the bolt's point genuinely leads.</summary>
-        private static Mesh BuildBoltMesh()
+        /// <summary>A point on the crescent's own spine at <paramref name="s"/> (0 at one tip, 1 at
+        /// the other): the chord (tip-to-tip) runs along local X, and the sagitta -- the belly's own
+        /// lead ahead of that chord, along local Z, the direction of travel -- eases in and back out
+        /// with the same <see cref="Mathf.SmoothStep"/> shape <see cref="BuildCrescentBoltMesh"/> uses
+        /// for the cross-section radius, so the curve is flat (zero slope) at every sample rather than
+        /// only at the two ends -- the spine's own resolved deviation profile stays smooth
+        /// sample-to-sample everywhere, not only near the tips, which a plain circular arc would not
+        /// (its slope is steepest right where 16 samples are sparsest, next to the tips).</summary>
+        private static Vector3 CrescentSpinePoint(float s, float chord, float sagitta)
+        {
+            float x = Mathf.Lerp(-chord * 0.5f, chord * 0.5f, s);
+            float z = s <= 0.5f
+                ? Mathf.SmoothStep(0f, sagitta, s * 2f)
+                : Mathf.SmoothStep(sagitta, 0f, (s - 0.5f) * 2f);
+            return new Vector3(x, 0f, z);
+        }
+
+        /// <summary>Newton's method inverse of the 3t^2-2t^3 Hermite ease <see cref="Mathf.SmoothStep"/>
+        /// itself uses: given the eased fraction <paramref name="y"/> in [0,1], finds t such that
+        /// SmoothStep(0,1,t) == y. Only used to choose sample placement, see
+        /// <see cref="CrescentSampleParameter"/>.</summary>
+        private static float InverseSmoothStep01(float y)
+        {
+            if (y <= 0f) return 0f;
+            if (y >= 1f) return 1f;
+            float t = y;
+            for (int i = 0; i < 20; i++)
+            {
+                float f = 3f * t * t - 2f * t * t * t - y;
+                float fp = 6f * t - 6f * t * t;
+                if (Mathf.Abs(fp) < 1e-6f) break;
+                t = Mathf.Clamp01(t - f / fp);
+            }
+            return t;
+        }
+
+        /// <summary>Where to place the <paramref name="i"/>'th of <see cref="CrescentSpineSamples"/>
+        /// spine samples along the spine's own [0,1] parameter -- NOT i/(N-1) (evenly spaced in the raw
+        /// parameter), which crowds most of the curve's actual bend into the handful of samples nearest
+        /// each quarter-point (where <see cref="Mathf.SmoothStep"/> is steepest) and leaves the rest
+        /// nearly flat: with only 16 samples, that concentration alone pushes the worst adjacent step
+        /// just past the ticket's own 20%-of-peak ceiling. Placing samples evenly spaced in the
+        /// resulting DEVIATION instead (via <see cref="InverseSmoothStep01"/>) keeps the exact same
+        /// smooth curve -- flat at both tips and flat at the midpoint, the shape that avoids a visible
+        /// crease at the bolt's own thickest point -- while keeping every step well under that
+        /// ceiling.</summary>
+        private static float CrescentSampleParameter(int i)
+        {
+            float mid = (CrescentSpineSamples - 1) * 0.5f;
+            float y = 1f - Mathf.Abs(i - mid) / mid;
+            float t = InverseSmoothStep01(y);
+            return i <= (CrescentSpineSamples - 1) / 2 ? t * 0.5f : 1f - t * 0.5f;
+        }
+
+        /// <summary>MV-815: a crescent swept along a bowed spine, replacing the ogive of revolution
+        /// Lee rejected -- "the LPPE bolt is literally arched, bowed like a drawn bow, curved across
+        /// its travel axis. Not a straight needle, not a flat blade." The spine
+        /// (<see cref="CrescentSpinePoint"/>) lies flat in this object's own local XZ plane (the
+        /// ground plane the angled play camera actually reads), tips trailing and the midpoint
+        /// leading. The cross-section is a circle swept perpendicular to the spine's own tangent at
+        /// each sample, radius 0 at both tips and peaking at <paramref name="peakRadius"/> at the
+        /// midpoint, eased both directions so the silhouette is one continuous curve with no crease
+        /// anywhere -- the crease that was wrong with the old capsule and must not come back. Built
+        /// once per <paramref name="peakRadius"/> (see <see cref="GetBoltMesh"/>), never per shot.</summary>
+        private static Mesh BuildCrescentBoltMesh(float peakRadius)
+        {
+            float chord = BoltTuning.Length;
+            float sagitta = CrescentSagitta;
+            const float tangentEps = 0.001f;
+
+            var verts = new List<Vector3>(CrescentSpineSamples * (CrescentCrossSectionSegments + 1));
+            var tris = new List<int>();
+
+            for (int i = 0; i < CrescentSpineSamples; i++)
+            {
+                float s = CrescentSampleParameter(i);
+                Vector3 spine = CrescentSpinePoint(s, chord, sagitta);
+                Vector3 tangent = (CrescentSpinePoint(Mathf.Min(1f, s + tangentEps), chord, sagitta)
+                                  - CrescentSpinePoint(Mathf.Max(0f, s - tangentEps), chord, sagitta)).normalized;
+                Vector3 outward = new Vector3(-tangent.z, 0f, tangent.x);
+
+                float radius = s <= 0.5f
+                    ? Mathf.SmoothStep(0f, peakRadius, s * 2f)
+                    : Mathf.SmoothStep(peakRadius, 0f, (s - 0.5f) * 2f);
+
+                for (int j = 0; j <= CrescentCrossSectionSegments; j++)
+                {
+                    float phi = (float)j / CrescentCrossSectionSegments * Mathf.PI * 2f;
+                    verts.Add(spine + radius * (Mathf.Cos(phi) * Vector3.up + Mathf.Sin(phi) * outward));
+                }
+            }
+
+            int w = CrescentCrossSectionSegments + 1;
+            for (int i = 0; i < CrescentSpineSamples - 1; i++)
+                for (int j = 0; j < CrescentCrossSectionSegments; j++)
+                {
+                    int a = i * w + j, b = a + 1, c = a + w, d = c + 1;
+                    tris.Add(a); tris.Add(c); tris.Add(b);
+                    tris.Add(b); tris.Add(c); tris.Add(d);
+                }
+
+            var mesh = new Mesh { name = "SeekerPulseCrescentBolt" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>MV-806/815: the Sentinel's own straight bolt -- the same ogive of revolution
+        /// (<see cref="CharacterMeshes.Lathe"/>) Max's own bolt used before this ticket, kept
+        /// unchanged and now exclusively the Sentinel's: MV-806 made the Sentinel's bolt small, red
+        /// and straight-line-only precisely so it cannot be confused with Max's, and Max's own bolt
+        /// becoming a crescent must not undo that. Internal (not private) so
+        /// <see cref="MaxWorlds.Arena.SentinelBolt"/>'s own cache can call it -- see that type's
+        /// <c>GetBoltMesh</c>.</summary>
+        internal static Mesh BuildStraightBoltMesh()
         {
             float length = BoltTuning.Length;
             float peakRadius = BoltTuning.CrossSection * 0.5f;
