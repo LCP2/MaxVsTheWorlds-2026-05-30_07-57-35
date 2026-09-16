@@ -29,6 +29,15 @@ namespace MaxWorlds.Intro
         /// a live test to exercise. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
         public static IntroVideoSourceKind? OverrideKindForTests;
 
+        /// <summary>Test-only: skip the actual <see cref="VideoPlayer.Play"/> call in <see cref="Build"/>.
+        /// A real, committed film now exists under StreamingAssets (MV-826), and <c>Play()</c> is what
+        /// makes the player start opening/decoding it; the CI Linux runner can't decode that container and
+        /// logs an error that fails the EditMode run (MV-827). Everything else in <c>Build</c> — the
+        /// GameObject, the <see cref="VideoPlayer"/> component, <see cref="Player"/>, <see cref="SourceKind"/>,
+        /// <see cref="HasSource"/> — still runs, so <see cref="IntroCinematic"/>'s routing and skip/restore
+        /// behaviour on the video path stay fully exercised. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
+        public static bool SuppressPlaybackForTests;
+
         public IntroVideoSourceKind SourceKind { get; }
 
         /// <summary>True once a source resolved — the harness plays this instead of the box timeline.</summary>
@@ -96,7 +105,7 @@ namespace MaxWorlds.Intro
                 if (clip == null) return;   // a test-forced kind with no real asset behind it — no-op surface
                 Player.source = VideoSource.VideoClip;
                 Player.clip = clip;
-                Player.Play();
+                if (!SuppressPlaybackForTests) Player.Play();
             }
             else
             {
@@ -108,7 +117,7 @@ namespace MaxWorlds.Intro
                 if (Application.platform != RuntimePlatform.WebGLPlayer && !File.Exists(path)) return;
                 Player.source = VideoSource.Url;
                 Player.url = path;
-                Player.Play();
+                if (!SuppressPlaybackForTests) Player.Play();
             }
         }
     }

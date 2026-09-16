@@ -93,6 +93,7 @@ namespace MaxWorlds.Intro
             s_consumed = false;
             Enabled = false;
             IntroVideo.OverrideKindForTests = null;
+            IntroVideo.SuppressPlaybackForTests = false;
         }
 
         // The three acts live far apart in world space so nothing overlaps the yard (at the origin) or

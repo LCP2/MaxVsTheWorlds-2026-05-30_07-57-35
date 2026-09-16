@@ -75,6 +75,8 @@ namespace MaxWorlds.Tests.EditMode
 
             RenderSettings.fog = true;   // a known state the intro must restore
             IntroCinematic.ResetForTests();
+            // MV-827: the committed film can't be decoded by CI's Linux runner — never let a test open it.
+            IntroVideo.SuppressPlaybackForTests = true;
         }
 
         [TearDown]
@@ -96,7 +98,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FallbackBeatTimelineRunsWhenNoVideoSourceResolves()
         {
-            // MV-826 committed the real intro.mp4 under StreamingAssets, so forcing None here is what
+            // MV-826 committed the real streamed film under StreamingAssets, so forcing None here is what
             // keeps this deterministic — otherwise it would resolve Url off the file that's now
             // actually on disk instead of exercising the true "nothing resolved" fallback.
             IntroVideo.OverrideKindForTests = IntroVideoSourceKind.None;
