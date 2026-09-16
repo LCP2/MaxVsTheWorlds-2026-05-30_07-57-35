@@ -329,6 +329,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
+            Add(BuildMv821DeckWalkwayCheck());
             return d;
         }
 
@@ -2285,6 +2286,57 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-819", NoSetup) },
+            };
+        }
+
+        // ---- Mv821DeckWalkwayCheck (MV-821 AC4) -----------------------------------------------
+
+        /// <summary>MV-821's own AC4 evidence: World 2's real shipped area a3 ("Junction Hall,
+        /// floor"), same "at the play camera" framing <see cref="BuildMv819PipeCheck"/> uses (a1's own
+        /// centre, actual gameplay pitch/distance) — the deck rails there used to read as a walled
+        /// block; this proves the rebuilt open walkway (flat hazard edge, posts, beam, ground shadow)
+        /// reads as walkable at the angle players actually see it.</summary>
+        private static CapturePreset BuildMv821DeckWalkwayCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            var areaCentre = new Vector3(72f, 0f, 111f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 26.02f;
+
+                Vector3 focus = areaCentre + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv821deckwalkway",
+                LogTag = "[MV821Capture]",
+                Flag = "-mv821shot",
+                ArmFile = "Temp/mv821.arm",
+                HeadlessMarker = "Temp/mv821.headless",
+                DoneFileName = "_mv821_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-821", NoSetup) },
             };
         }
     }

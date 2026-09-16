@@ -93,6 +93,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv819PipeCheck() => RunFromMenu(CapturePresets.All["mv819pipecheck"]);
         public static void CaptureMv819PipeCheck() => Run(CapturePresets.All["mv819pipecheck"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Deck Walkway a3 (MV-821)")]
+        public static void MenuMv821DeckWalkway() => RunFromMenu(CapturePresets.All["mv821deckwalkway"]);
+        public static void CaptureMv821DeckWalkway() => Run(CapturePresets.All["mv821deckwalkway"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
