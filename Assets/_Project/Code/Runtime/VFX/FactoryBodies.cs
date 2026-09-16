@@ -142,6 +142,21 @@ namespace MaxWorlds.VFX
             BuildRamp(root, new Vector3(0f, groundLocalY, hd + 0.02f + run), new Vector3(0f, hatchAt.y, hd + 0.02f),
                 hatchHalfW, s_rust, "RampOut");
 
+            // MV-803: hazard banding around the base — a Replicator lures and consumes robots, and the
+            // ticket's own placement rule is "only on what can hurt you or what you must act on". One
+            // straight band per side of the box, at floor level.
+            float baseBandHeight = Mathf.Min(0.22f, size.y * 0.14f);
+            float baseBandY = -hh + baseBandHeight * 0.5f + 0.01f;
+            const float baseBandDepth = 0.02f;
+            StormdrainKit.BuildHazardBanding(root, new Vector3(hw, baseBandY, 0f),
+                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
+            StormdrainKit.BuildHazardBanding(root, new Vector3(-hw, baseBandY, 0f),
+                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
+            StormdrainKit.BuildHazardBanding(root, new Vector3(0f, baseBandY, hd),
+                size.x * 0.92f, baseBandHeight, alongX: true, baseBandDepth);
+            StormdrainKit.BuildHazardBanding(root, new Vector3(0f, baseBandY, -hd),
+                size.x * 0.92f, baseBandHeight, alongX: true, baseBandDepth);
+
             // MV-813: the status ring — centred on the top face, unlit additive so it reads as its own
             // light source (StormdrainLightKit's own fitting material family), seeded green (idle);
             // Replicator.LateUpdate repaints and pulses it every frame off the same colour the small

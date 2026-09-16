@@ -133,6 +133,10 @@ namespace MaxWorlds.Arena
         private const float StormdrainDressingProud = 0.04f; // same AntiZFightMargin idiom as MapRuntime.BuildAreaGate
         private const float DoorSlideDuration = 0.45f;
 
+        /// <summary>MV-803: the ticket's own figure for a gate jamb's hazard banding — taller than the
+        /// flat stripe it replaces (0.2 m) since it now has to carry actual diagonal stripes.</summary>
+        private const float GateHazardBandHeight = 0.55f;
+
         private static readonly Color StormdrainLampLocked = new Color(0.90f, 0.15f, 0.10f);
         // Deliberately brighter/more saturated than StormdrainKit.Hazard (the ring's own rust-adjacent
         // warm tone) — the QA capture pass caught the Hazard shade blending into the surrounding rust
@@ -343,9 +347,10 @@ namespace MaxWorlds.Arena
             _lampLensRenderer = lens.AddComponent<MeshRenderer>();
             _lampLensRenderer.sharedMaterial = StormdrainKit.Unlit(StormdrainLampAmber, "GateLamp");
 
-            _hazardStripe = StormdrainKit.Box(parent, "Hazard Stripe", Vector3.zero,
-                new Vector3(width * 1.02f, 0.2f, depth + StormdrainDressingProud * 2f),
-                StormdrainKit.Hazard, SurfaceKind.Metal);
+            // MV-803: the flat "Hazard Stripe" box is now striped diagonal banding — same position and
+            // footprint (width/depth), just taller (0.55 m, not 0.2 m) to actually carry the stripes.
+            _hazardStripe = StormdrainKit.BuildHazardBanding(parent, Vector3.zero,
+                width * 1.02f, GateHazardBandHeight, alongX: true, depth + StormdrainDressingProud * 2f);
         }
 
         private void OnStormdrainLockedChanged(bool locked) => RefreshStormdrainLamp();
