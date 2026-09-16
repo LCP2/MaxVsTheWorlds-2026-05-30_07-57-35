@@ -37,10 +37,11 @@ namespace MaxWorlds.UI
     /// shots must not open on a frozen pick-a-slot screen (YT-97; MV-441 — this screen's own
     /// sortingOrder=220 canvas was sitting on top of every ui-screens capture uncaught).
     ///
-    /// PLAY also triggers <see cref="IntroCinematic"/> (YT-155/156) on a derived true-first-launch
-    /// (MV-550): <see cref="ShouldPlayIntroOnFirstLaunch"/> is true only when every save slot is empty
-    /// and no capture director is armed. The gate is derived from <see cref="SaveSystem"/>'s live slot
-    /// state every call, never persisted — see that method's doc.
+    /// PLAY also triggers <see cref="IntroCinematic"/> (YT-155/156) whenever it starts a run on a slot
+    /// holding no data (MV-826, superseding MV-550's whole-device version):
+    /// <see cref="ShouldPlayIntroForSlot"/> is true for that slot and no capture director is armed. The
+    /// gate is derived from <see cref="SaveSystem"/>'s live slot state every call, never persisted —
+    /// see that method's doc.
     ///
     /// Each occupied slot also carries a RESET control (MV-282) gated by a confirm/cancel dialog —
     /// <see cref="SaveSystem.Delete"/> is the whole reset, since <see cref="SaveSlotData"/> is the only
@@ -215,9 +216,9 @@ namespace MaxWorlds.UI
         private bool StartSlot(int slot, bool playIntro)
         {
             WipeForFreshRun(slot);
-            // force: true — MV-550's derived first-launch gate (or a manual IntroCinematic.Enabled
-            // override, see ShouldPlayIntroOnFirstLaunch's caller) decides playIntro; TryPlay must not
-            // re-apply its own Enabled check on top of that decision.
+            // force: true — ShouldPlayIntroForSlot's derived per-slot gate (or a manual
+            // IntroCinematic.Enabled override, see OnPlay) decides playIntro; TryPlay must not re-apply
+            // its own Enabled check on top of that decision.
             return playIntro && IntroCinematic.TryPlay(force: true);
         }
 
@@ -330,27 +331,29 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>MV-550's derived first-launch gate: true only when every save slot is empty
-        /// (never played on this device) AND no capture director is armed — a filming or fixed-state
-        /// run must never wait on the ~25s sequence. Reads <see cref="SaveSystem"/>'s live slot state
-        /// on every call; nothing here is persisted or cached, so a wiped device reads as first-launch
-        /// again — deliberate, per MV-550 (no <c>SeenIntro</c> flag).</summary>
-        public static bool ShouldPlayIntroOnFirstLaunch()
+        /// <summary>MV-826's derived per-slot gate (supersedes MV-550's whole-device
+        /// <c>ShouldPlayIntroOnFirstLaunch</c>): true whenever PLAY is about to start a run on a slot
+        /// that holds no data — a never-used slot, or one just RESET — AND no capture director is
+        /// armed — a filming or fixed-state run must never wait on the ~14.5s film. Reads
+        /// <see cref="SaveSystem"/>'s live slot state on every call; nothing here is persisted or
+        /// cached, so a slot reads as intro-eligible again immediately after RESET (Lee's decision —
+        /// no <c>SeenIntro</c> flag). Must be evaluated BEFORE <see cref="StartSlot"/>, which creates
+        /// the slot's data and would otherwise make every slot read as occupied.</summary>
+        public static bool ShouldPlayIntroForSlot(int slot)
         {
             if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
                 MaxWorlds.Dev.PerfCaptureDirector.Armed())
                 return false;
 
-            for (int i = 0; i < SaveSystem.SlotCount; i++)
-                if (SaveSystem.Load(i).HasData) return false;
-            return true;
+            return !SaveSystem.Load(slot).HasData;
         }
 
         private void OnPlay(int slot)
         {
             // Enabled stays a manual override on top of the derived gate (AC3) — a dev/test can still
-            // force the cinematic on a device that already has save data.
-            bool playIntro = IntroCinematic.Enabled || ShouldPlayIntroOnFirstLaunch();
+            // force the cinematic on a slot that already has save data. Evaluated before StartSlot,
+            // which creates the slot's data (see ShouldPlayIntroForSlot's doc).
+            bool playIntro = IntroCinematic.Enabled || ShouldPlayIntroForSlot(slot);
             bool introStarted = StartSlot(slot, playIntro);
             Close(introStarted);
         }

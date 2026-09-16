@@ -478,7 +478,12 @@ namespace MaxWorlds.Intro
                 // instead of at TotalDuration. Trigger, skip, camera takeover, HUD/fog/player suspend and
                 // Restore are unchanged and shared with the beat path below.
                 _clock += dt;
-                if (_video.IsComplete) BeginHandover();
+                // MV-826 stall guard: a WebGL stream that never actually starts (host hiccup, a codec
+                // the browser rejects) would otherwise hold the player on a black screen forever — 5s is
+                // long enough for a real stream to report first progress, past which "hasn't moved" means
+                // "isn't going to".
+                bool stalled = _clock > 5f && _video.Position <= 0d;
+                if (_video.IsComplete || stalled) BeginHandover();
                 return;
             }
 
