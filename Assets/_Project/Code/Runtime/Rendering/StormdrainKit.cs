@@ -73,6 +73,33 @@ namespace MaxWorlds.Rendering
         /// <summary>Hazard stripe yellow — the one place World 2 is allowed a pure warning colour.</summary>
         public static readonly Color Hazard = new Color(0.85f, 0.65f, 0.15f);
 
+        /// <summary>MV-803, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 ("the diagonal
+        /// striped outlines should be bright enough to lift the overall design"). The banding's own
+        /// bright yellow — deliberately its own tone, not <see cref="Hazard"/>: this is the striped
+        /// paint on a backing plate, brighter and carrying real emission, while <see cref="Hazard"/>
+        /// stays the flat warning tone used elsewhere (the light kit's tone list).</summary>
+        public static readonly Color HazardStripeColor = new Color(0.980f, 0.800f, 0.140f);
+
+        /// <summary>The banding's backing plate — near-black, so the yellow stripes read as paint on a
+        /// dark ground rather than as a bright shape floating in the room.</summary>
+        public static readonly Color HazardStripeBacking = new Color(0.050f, 0.048f, 0.045f);
+
+        /// <summary>The ticket's own approved figure — do not re-raise (dimmer "to sit back" was
+        /// explicitly rejected; Lee asked for the banding bright enough to lift the design).</summary>
+        public const float HazardStripeEmissive = 0.22f;
+
+        /// <summary>The ticket's own approved figures — do not re-raise.</summary>
+        public const float HazardStripeLeanDeg = 34f;
+        public const float HazardStripePitch = 0.42f;
+
+        /// <summary>A stripe's own width, measured across its long axis before the lean is applied.</summary>
+        public const float HazardStripeThickness = 0.16f;
+
+        /// <summary>"Proud of the backing face by a hair" (the ticket's own words) — just enough that a
+        /// stripe reads as painted onto the plate rather than flush with (or sunk into) it, on both
+        /// faces of the plate at once.</summary>
+        public const float HazardStripeProud = 0.006f;
+
         /// <summary>Cyan status lamps on machinery. The cold counterpoint to all that rust.</summary>
         public static readonly Color Status = new Color(0.35f, 0.85f, 0.95f);
 
@@ -225,6 +252,29 @@ namespace MaxWorlds.Rendering
 
         /// <summary>MV-802, change 3: the floor-level main a "pipe"-dressed cover piece resolves to.</summary>
         public const float FloorMainRadius = 0.40f;
+
+        /// <summary>MV-801, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 — a channel-eligible
+        /// sludge rect's own numbers. The trough floor sits <see cref="ChannelTroughDepth"/> below the
+        /// pre-ticket floor (not deeper: 0.62 m was tested and rejected for hiding the ooze at the 60
+        /// degree camera); the ooze SURFACE itself only drops <see cref="ChannelOozeDrop"/>, so there is
+        /// visible headroom between the ooze and the trough floor beneath it.</summary>
+        public const float ChannelTroughDepth = 0.45f;
+        public const float ChannelOozeDrop = 0.18f;
+        private const float ChannelWallThickness = 0.10f;
+        private const float ChannelLipHeight = 0.10f;
+        private const float ChannelKerbWidth = 0.44f;
+        private const float ChannelKerbHeight = 0.20f;
+
+        /// <summary>MV-803: both drop edges of a channel get hazard banding, full length, this tall —
+        /// the ticket's own figure.</summary>
+        private const float ChannelHazardBandHeight = 0.22f;
+
+        private const float ChannelCrossingSpacingMin = 8f;
+        private const float ChannelCrossingSpacingMax = 12f;
+        private const float ChannelCrossingWidth = 1.5f;
+        private const float ChannelCrossingOverhang = 0.6f;
+        private const float ChannelCrossingSlatPitch = 0.34f;
+        private const float ChannelCrossingPostHeight = 0.75f;
 
         // ---------------------------------------------------------------- primitives
 
@@ -504,6 +554,11 @@ namespace MaxWorlds.Rendering
 
             StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, 0f, -bodyR * 0.9f));
 
+            // MV-803: one hazard band, low on the front face — a junction box is something you must
+            // act on (it feeds the overhead structure), not decoration.
+            BuildHazardBanding(root.transform, new Vector3(0f, -bodyH * 0.28f, -bodyR * 0.9f),
+                bodyR * 1.05f, bodyH * 0.32f, alongX: true, depth: 0.02f);
+
             return root;
         }
 
@@ -731,6 +786,11 @@ namespace MaxWorlds.Rendering
             // 5x3-cell fitting with its own pool (StormdrainLightKit.BuildLedPanel) — machinery is one
             // of the two places the ticket's table puts an LED panel.
             StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f));
+
+            // MV-803: one hazard band on the pump intake — the front face, just above the base flange.
+            BuildHazardBanding(root.transform, new Vector3(0f, fh + h * 0.10f, -r * 0.84f),
+                r * 1.1f, h * 0.16f, alongX: true, depth: 0.02f);
+
             return root;
         }
 
@@ -1113,7 +1173,7 @@ namespace MaxWorlds.Rendering
         /// chevrons and bands are for, and why this is dressing and not decoration.
         /// </summary>
         public static SludgeFlowRig DressSludgeTile(Transform parent, Vector3 center, float width, float depth,
-                                                     Vector3 flowDirection, int seed)
+                                                     Vector3 flowDirection, int seed, bool isChannel = false)
         {
             var root = new GameObject("Sludge Dressing");
             root.transform.SetParent(parent, false);
@@ -1288,7 +1348,250 @@ namespace MaxWorlds.Rendering
                 BuildReedCluster(root.transform, at, seed + i);
             }
 
+            // MV-801: the trough is cut and dressed at the tile's own pre-ticket floor level — it must
+            // NOT ride down with the ooze surface below, or the trough floor and the ooze would end up
+            // at the same depth. Built as a CHILD of `root` (MV-755's own per-tile chevron check walks
+            // "Sludge"'s direct children expecting each one to be a whole dressed tile, so a sibling
+            // object here would read as a tile with no chevron) with a local Y offset that cancels the
+            // shift `root` itself is about to take below — its resolved WORLD position ends up exactly
+            // where it would have been had `root` never moved.
+            if (isChannel)
+            {
+                BuildChannelTrough(root.transform, width, depth, flow, seed);
+                root.transform.position += Vector3.down * ChannelOozeDrop;
+            }
+
             return rig;
+        }
+
+        // ---------------------------------------------------------------- channel trough (MV-801)
+
+        /// <summary>The trough a channel-eligible sludge rect gets (MV-801, change 2, 4 and 5): a sunk
+        /// floor slab, two banks (a wall down to it capped by a dark lip just under the old floor line),
+        /// a kerb outboard of each lip, and grate-plank crossings along the dry route across it. Parented
+        /// under the tile's own <paramref name="root"/> at local Y = <see cref="ChannelOozeDrop"/> — the
+        /// caller drops <paramref name="root"/> by that same amount immediately after this call returns,
+        /// so this structure's resolved WORLD position lands back on the tile's pre-ticket floor datum,
+        /// never offset by the ooze surface built above it in <see cref="DressSludgeTile"/>.</summary>
+        private static void BuildChannelTrough(Transform root, float width, float depth, Vector3 flow, int seed)
+        {
+            bool alongZ = Mathf.Abs(Vector3.Dot(flow, Vector3.forward)) > 0.5f;
+
+            var trough = new GameObject("Channel Trough").transform;
+            trough.SetParent(root, false);
+            trough.localPosition = Vector3.up * ChannelOozeDrop;
+            root = trough;
+
+            Box(root, "Trough Floor", Vector3.up * (-ChannelTroughDepth - 0.05f),
+                new Vector3(width, 0.10f, depth), GroundDry);
+
+            float wallY = -ChannelTroughDepth * 0.5f;
+            float lipY = -ChannelLipHeight * 0.5f;
+            float kerbY = ChannelKerbHeight * 0.5f;
+
+            if (alongZ)
+            {
+                Box(root, "Trough Wall A", new Vector3(width * 0.5f, wallY, 0f),
+                    new Vector3(ChannelWallThickness, ChannelTroughDepth, depth), GroundDry);
+                Box(root, "Trough Wall B", new Vector3(-width * 0.5f, wallY, 0f),
+                    new Vector3(ChannelWallThickness, ChannelTroughDepth, depth), GroundDry);
+
+                // MV-803: hazard banding on both drop edges, flush with the cut at the top of each wall
+                // (the lip's own line) — the run is along Z here, so alongX is false.
+                BuildHazardBanding(root, new Vector3(width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
+                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                BuildHazardBanding(root, new Vector3(-width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
+                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+
+                Box(root, "Trough Lip A", new Vector3(width * 0.5f, lipY, 0f),
+                    new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
+                Box(root, "Trough Lip B", new Vector3(-width * 0.5f, lipY, 0f),
+                    new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
+
+                Box(root, "Channel Kerb A", new Vector3(width * 0.5f + ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
+                Box(root, "Channel Kerb B", new Vector3(-width * 0.5f - ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
+            }
+            else
+            {
+                Box(root, "Trough Wall A", new Vector3(0f, wallY, depth * 0.5f),
+                    new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
+                Box(root, "Trough Wall B", new Vector3(0f, wallY, -depth * 0.5f),
+                    new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
+
+                // MV-803: hazard banding on both drop edges — the run is along X here.
+                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, depth * 0.5f),
+                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, -depth * 0.5f),
+                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+
+                Box(root, "Trough Lip A", new Vector3(0f, lipY, depth * 0.5f),
+                    new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
+                Box(root, "Trough Lip B", new Vector3(0f, lipY, -depth * 0.5f),
+                    new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
+
+                Box(root, "Channel Kerb A", new Vector3(0f, kerbY, depth * 0.5f + ChannelKerbWidth * 0.5f),
+                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
+                Box(root, "Channel Kerb B", new Vector3(0f, kerbY, -depth * 0.5f - ChannelKerbWidth * 0.5f),
+                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
+            }
+
+            BuildChannelCrossings(root, width, depth, alongZ, seed);
+        }
+
+        /// <summary>Grate-plank crossings (MV-801, change 5) — every
+        /// <see cref="ChannelCrossingSpacingMin"/>-<see cref="ChannelCrossingSpacingMax"/> m along the
+        /// channel, and at least one however short the channel is (a floor of 1, same idiom
+        /// <see cref="DressWallFace"/>'s own bulkhead-lamp count already uses). Each plank is
+        /// <see cref="ChannelCrossingWidth"/> wide along the direction of travel, spans the channel's
+        /// full width plus <see cref="ChannelCrossingOverhang"/> each side, slatted crosswise at
+        /// <see cref="ChannelCrossingSlatPitch"/>, with a rust handrail post at each of its four
+        /// corners. Dressing only — no collider, same contract every other piece in this kit keeps, so
+        /// this never changes where anything can walk.</summary>
+        private static void BuildChannelCrossings(Transform root, float width, float depth, bool alongZ, int seed)
+        {
+            float run = alongZ ? depth : width;
+            float span = alongZ ? width : depth;
+            float crossSpan = span + ChannelCrossingOverhang * 2f;
+
+            float spacing = Mathf.Lerp(ChannelCrossingSpacingMin, ChannelCrossingSpacingMax,
+                Frac(seed * 0.8123f));
+            int count = Mathf.Max(1, Mathf.FloorToInt(run / spacing));
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (i + 0.5f) / count;
+                float along = (t - 0.5f) * run;
+
+                var plank = new GameObject($"Crossing{i}").transform;
+                plank.SetParent(root, false);
+                plank.localPosition = alongZ ? new Vector3(0f, 0f, along) : new Vector3(along, 0f, 0f);
+
+                int slats = Mathf.Max(1, Mathf.RoundToInt(ChannelCrossingWidth / ChannelCrossingSlatPitch));
+                for (int s = 0; s < slats; s++)
+                {
+                    float slatOffset = ((s + 0.5f) / slats - 0.5f) * ChannelCrossingWidth;
+                    Vector3 slatLocal = alongZ ? new Vector3(0f, 0f, slatOffset) : new Vector3(slatOffset, 0f, 0f);
+                    Vector3 slatSize = alongZ
+                        ? new Vector3(crossSpan, 0.05f, ChannelCrossingSlatPitch * 0.8f)
+                        : new Vector3(ChannelCrossingSlatPitch * 0.8f, 0.05f, crossSpan);
+                    Box(plank, $"Slat{s}", slatLocal, slatSize, RustDark, SurfaceKind.Metal);
+                }
+
+                for (int corner = 0; corner < 4; corner++)
+                {
+                    float alongSign = corner < 2 ? -1f : 1f;
+                    float crossSign = corner % 2 == 0 ? -1f : 1f;
+                    float postAlong = alongSign * ChannelCrossingWidth * 0.5f;
+                    float postCross = crossSign * crossSpan * 0.5f;
+                    Vector3 postLocal = alongZ
+                        ? new Vector3(postCross, ChannelCrossingPostHeight * 0.5f, postAlong)
+                        : new Vector3(postAlong, ChannelCrossingPostHeight * 0.5f, postCross);
+                    Box(plank, $"Post{corner}", postLocal,
+                        new Vector3(0.08f, ChannelCrossingPostHeight, 0.08f), Rust, SurfaceKind.Metal);
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- hazard banding (MV-803)
+
+        /// <summary>MV-803, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 ("the diagonal
+        /// striped outlines should be bright enough to lift the overall design"). A backing plate in
+        /// <see cref="HazardStripeBacking"/> plus a run of diagonal yellow stripes painted flat on its
+        /// face — every <see cref="HazardStripePitch"/> along the run, leaning
+        /// <see cref="HazardStripeLeanDeg"/> off the run's own axis, at <see cref="HazardStripeEmissive"/>
+        /// so it holds up unlit. Stripes are proud of the backing face by <see cref="HazardStripeProud"/>
+        /// (a hair, on both faces at once) rather than standing off it — proud geometry read as teeth in
+        /// review and was rejected.
+        ///
+        /// This is HAZARD marking, not decoration (the ticket's own rule) — every call site anchors it
+        /// to something that can hurt you or that you must act on: a channel drop edge, a gate jamb, a
+        /// Replicator housing, a pump intake, or a junction box base. Nothing else in World 2 gets it.
+        ///
+        /// <paramref name="centre"/> is the band's own centre in the parent's local space;
+        /// <paramref name="length"/> runs along local X when <paramref name="alongX"/>, local Z
+        /// otherwise — the same convention <see cref="BuildWallPanels"/> already uses. A stripe whose
+        /// own footprint would poke past either end of the plate is dropped rather than drawn
+        /// overhanging ("clipped at both ends", the ticket's own words).</summary>
+        public static GameObject BuildHazardBanding(Transform parent, Vector3 centre, float length, float height,
+                                                     bool alongX, float depth)
+        {
+            var root = new GameObject("Hazard Banding");
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = centre;
+
+            Vector3 plateSize = alongX
+                ? new Vector3(length, height, depth)
+                : new Vector3(depth, height, length);
+            Box(root.transform, "Plate", Vector3.zero, plateSize, HazardStripeBacking, SurfaceKind.Metal);
+
+            if (length < HazardStripePitch * 0.5f) return root;   // too short for even one stripe
+
+            Vector3 along = alongX ? Vector3.right : Vector3.forward;
+            float stripeDepth = depth + HazardStripeProud * 2f;
+
+            // The stripe's own long-axis length before the lean: long enough that, once tilted
+            // HazardStripeLeanDeg off horizontal, its vertical (Y) span still reaches the band's full
+            // height. Sin, not cos: the long axis starts along the RUN axis (0 degrees off it) and
+            // leans toward vertical, so it is the SINE of the lean angle that recovers the height.
+            float leanLength = height / Mathf.Sin(HazardStripeLeanDeg * Mathf.Deg2Rad);
+
+            // The stripe's own footprint along the run axis, after the lean — what "clipped at both
+            // ends" is measured against, so an end stripe that would poke past the plate is dropped
+            // rather than drawn overhanging it.
+            float footprint = leanLength * Mathf.Cos(HazardStripeLeanDeg * Mathf.Deg2Rad)
+                             + HazardStripeThickness * Mathf.Sin(HazardStripeLeanDeg * Mathf.Deg2Rad);
+
+            // Exact pitch, centred on the plate — never stretched to fill the run (a stretch-to-fit
+            // spacing, as the kerb strip's own segments use, drifts arbitrarily far from the ticket's
+            // approved 0.42 m on a short run; a fixed pitch holds it exactly regardless of length).
+            int slots = Mathf.Max(1, Mathf.FloorToInt(length / HazardStripePitch));
+            float firstOffset = -(slots - 1) * 0.5f * HazardStripePitch;
+            for (int i = 0; i < slots; i++)
+            {
+                float offset = firstOffset + i * HazardStripePitch;
+                if (offset - footprint * 0.5f < -length * 0.5f || offset + footprint * 0.5f > length * 0.5f)
+                    continue;   // clipped at the plate's own end
+
+                Vector3 stripeSize = alongX
+                    ? new Vector3(leanLength, HazardStripeThickness, stripeDepth)
+                    : new Vector3(stripeDepth, HazardStripeThickness, leanLength);
+                Quaternion stripeRot = alongX
+                    ? Quaternion.Euler(0f, 0f, HazardStripeLeanDeg)
+                    : Quaternion.Euler(HazardStripeLeanDeg, 0f, 0f);
+
+                GameObject stripe = BevelledPart(root.transform, $"Stripe{i}", along * offset, stripeSize,
+                    HazardStripeMaterial());
+                stripe.transform.localRotation = stripeRot;
+            }
+
+            return root;
+        }
+
+        private static Material _hazardStripeMaterial;
+
+        /// <summary>The banding's own yellow, cached once — a real lit material (not
+        /// <see cref="Unlit"/>) carrying an actual <c>_EmissionColor</c>, the same "reads as LIT, not
+        /// just coloured" idiom <see cref="WorldMaterials"/>'s own hazard/circuit materials use, since a
+        /// stripe has to hold up inside an unlit bay on its own emission rather than a boosted albedo.
+        /// </summary>
+        private static Material HazardStripeMaterial()
+        {
+            if (_hazardStripeMaterial != null) return _hazardStripeMaterial;
+
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader) { name = "Stormdrain_HazardStripe", hideFlags = HideFlags.HideAndDontSave };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", HazardStripeColor);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", HazardStripeColor);
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", HazardStripeColor * HazardStripeEmissive);
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+
+            _hazardStripeMaterial = m;
+            return m;
         }
 
         /// <summary>A foam clump (MV-785) — the same flat, per-segment-jittered "Blob" every other
@@ -1399,6 +1702,14 @@ namespace MaxWorlds.Rendering
             foreach (var m in _unlit.Values)
                 if (m != null) { if (Application.isPlaying) Object.Destroy(m); else Object.DestroyImmediate(m); }
             _unlit.Clear();
+
+            if (_hazardStripeMaterial != null)
+            {
+                if (Application.isPlaying) Object.Destroy(_hazardStripeMaterial);
+                else Object.DestroyImmediate(_hazardStripeMaterial);
+                _hazardStripeMaterial = null;
+            }
+
             StormdrainLightKit.ClearCache();
         }
     }

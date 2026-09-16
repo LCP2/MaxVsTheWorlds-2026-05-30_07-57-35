@@ -388,6 +388,12 @@ namespace MaxWorlds.Factories
             if (!IsAlive || capacity <= 0) return;
             if (_queue.Count >= MaxQueueSlots) return; // MV-807: a full queue lures nobody
 
+            // MV-816 change 3: a box that couldn't actually take a robot right now lures nobody — the
+            // old behaviour lured one anyway, walked it to slot 0, and left it standing there until
+            // LureTimeoutSeconds gave up, then repeated with the next robot. Room is re-checked on
+            // every tick, same cadence as everything else here, so lure resumes the instant it frees.
+            if (!EnemySpawner.HasRoomForReplicatorIntake()) return;
+
             // MV-811 change 5: a field-wide ceiling — at most MaxSeekingFraction of the currently live
             // robots may be seeking at once. Max(1, ...) rather than a bare fraction: with only a
             // handful of robots alive, a strict 25% floors to 0 and would forbid luring anyone at all —
@@ -432,18 +438,21 @@ namespace MaxWorlds.Factories
                 // dev-tuning override ever forces a global move speed onto every robot, visibly slide a
                 // "static" turret across the yard. Excluded outright, same reasoning as Lurker above.
                 if (r.Kind == EnemyKind.Turret) continue;
-                if (r.Current == RobotEnemy.State.ReplicatorSeeking) continue; // already lured (by this box or another)
+                // MV-816 change 2: only Chase or Search may be lured — this single gate covers
+                // Telegraph, Lunge, Recover, Emerging, Teleport, Alert, Submerged AND ReplicatorSeeking
+                // (already lured, by this box or another) in one place, rather than naming each one.
+                if (r.Current != RobotEnemy.State.Chase && r.Current != RobotEnemy.State.Search) continue;
 
                 float distToMe = Vector3.Distance(r.transform.position, transform.position);
                 if (distToMe > LureRadius) continue;
 
-                // The 7 m rule (MV-798): a robot already close enough to Max to be fighting him is never
-                // pulled off. MV-811: this is still only the SELECTION screen — RobotEnemy's own seeking
-                // tick re-checks the same radius every tick afterward, so a robot that closes on Max
-                // mid-walk-to-the-hatch is pulled back too, not just one that was already close here.
-                if (_target != null &&
-                    Vector3.Distance(r.transform.position, _target.position) <= MaxMeleeExclusionRadius)
-                    continue;
+                // MV-816 change 1: the same IsEngagingTarget predicate TickReplicatorSeeking's own
+                // per-tick cancel now uses — a robot already fighting Max (within the 7 m exclusion, OR
+                // in sight and within its own lungeRange) is never pulled off. MV-811: this is still
+                // only the SELECTION screen — RobotEnemy's own seeking tick re-checks the identical
+                // predicate every tick afterward, so a robot that starts fighting Max mid-walk-to-the-
+                // hatch is pulled back too, not just one that was already engaging here.
+                if (r.IsEngagingTarget(_target)) continue;
 
                 // MV-807: the steering target is this robot's own queue slot, never the hatch itself —
                 // two robots must never be steered at the same point (that was the jam Lee reported).
@@ -520,10 +529,32 @@ namespace MaxWorlds.Factories
                     // room check (inside SpawnExact) sees the slot as free rather than double-counting
                     // it against itself. HasRoomForReplicatorIntake already proved this always fits.
                     EnemySpawner.ReleaseReplicatorReservation();
-                    // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
-                    // placement is for the ordinary emergence walk, not this box's own theatre.
-                    PlaceAtOutRamp(_spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds), twinIndex: 0);
-                    firstEmitted = true;
+                    // MV-817: ignorePerFactoryCap true — a Replicator's own EnemySpawner authors
+                    // maxLiveEnemies/startingRobots defaults meant for an ordinary factory stream, and
+                    // EffectiveMaxLiveEnemies ramps from 0 early in a run. Gating a doubled twin on that
+                    // silently ate every replication before the Invasion Level cleared ~6% (MV-817's own
+                    // root cause) — GlobalHasRoom (and the MV-809 reservation just released above) is
+                    // still the real gate.
+                    List<RobotEnemy> firstSpawn = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
+                    if (firstSpawn.Count > 0)
+                    {
+                        // MV-808: place the twin at the out-ramp foot itself — the spawner's own
+                        // door/mouth placement is for the ordinary emergence walk, not this box's own
+                        // theatre.
+                        PlaceAtOutRamp(firstSpawn, twinIndex: 0);
+                        firstEmitted = true;
+                    }
+                    else
+                    {
+                        // MV-817 change 2: the first twin is guaranteed and must never be dropped. The
+                        // global budget was genuinely full despite the reservation (e.g. it was spent
+                        // elsewhere) — reclaim the slot so nothing else can take it either, and retry on
+                        // every subsequent tick (timer stays >= CycleSeconds, so this branch re-runs next
+                        // frame) until room actually frees. firstEmitted stays false, so the pending
+                        // entry is kept (box stays busy — see LateUpdate's own busy check) instead of
+                        // being removed below.
+                        EnemySpawner.ReserveReplicatorSlot();
+                    }
                 }
 
                 if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
@@ -531,9 +562,10 @@ namespace MaxWorlds.Factories
                     // MV-809: the second twin is opportunistic, never guaranteed — only spawns if
                     // genuine room exists beyond what's already reserved elsewhere. Measured via
                     // Emitted (monotonic, this spawner only) rather than assuming success, since
-                    // SpawnExact silently emits 0 when GlobalHasRoom is false.
+                    // SpawnExact silently emits 0 when GlobalHasRoom is false. MV-817: ignorePerFactoryCap
+                    // true, same reasoning as the first twin above.
                     int emittedBefore = _spawner.Emitted;
-                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
+                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
                     if (_spawner.Emitted > emittedBefore)
                     {
                         PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808

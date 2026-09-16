@@ -84,11 +84,15 @@ namespace MaxWorlds.Tests.EditMode
                 MeshRenderer renderer = bolt.GetComponent<MeshRenderer>();
                 Bounds bounds = renderer.bounds;
 
-                Assert.That(bounds.size.x, Is.GreaterThanOrEqualTo(0.24f),
+                // MV-815: Max's bolt became a bowed crescent -- its chord (the old "length") now runs
+                // along local X, across the travel axis, and its cross-section (the old "width") is
+                // isolated on local Y, since the spine itself never leaves Y=0. See
+                // SeekerPulse.BuildCrescentBoltMesh's own doc comment.
+                Assert.That(bounds.size.y, Is.GreaterThanOrEqualTo(0.24f),
                     $"the LPPE bolt's resolved cross-section must be at least 0.24m across (was " +
-                    $"{bounds.size.x:0.000}m) — the old 0.08m sliver read as 3.8px at the play camera");
-                Assert.That(bounds.size.z, Is.GreaterThanOrEqualTo(0.85f),
-                    $"the LPPE bolt's resolved length must be at least 0.85m (was {bounds.size.z:0.000}m)");
+                    $"{bounds.size.y:0.000}m) — the old 0.08m sliver read as 3.8px at the play camera");
+                Assert.That(bounds.size.x, Is.GreaterThanOrEqualTo(0.85f),
+                    $"the LPPE bolt's resolved chord must be at least 0.85m (was {bounds.size.x:0.000}m)");
 
                 Assert.AreNotEqual(MaterialLibrary.SurfaceShader, renderer.sharedMaterial.shader,
                     "the bolt must not use the lit surface shader — a weapon bolt in a world made " +

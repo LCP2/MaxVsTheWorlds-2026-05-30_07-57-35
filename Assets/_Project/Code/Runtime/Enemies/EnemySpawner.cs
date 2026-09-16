@@ -397,11 +397,17 @@ namespace MaxWorlds.Enemies
         /// this call emits <see cref="RobotEnemy.NoReplicate"/> for that long — the "fresh pair can't
         /// immediately walk back in" rule. Returns exactly the robots this call actually spawned (short
         /// of <paramref name="count"/> when a cap bites), so a caller like <see cref="MaxWorlds.Factories.Replicator"/>
-        /// (MV-808) can place them itself instead of trusting wherever <see cref="SpawnKind"/> put them.</summary>
-        public List<RobotEnemy> SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f)
+        /// (MV-808) can place them itself instead of trusting wherever <see cref="SpawnKind"/> put them.
+        /// <paramref name="ignorePerFactoryCap"/> (MV-817): a Replicator's emitted twins are not this
+        /// factory's own production stream — <see cref="EffectiveMaxLiveEnemies"/> ramps from 0 early
+        /// in a run and has nothing to do with how many robots a box (whose own live count sits at 0 —
+        /// it never spawns on its own) is allowed to hand back. True skips that per-factory check
+        /// entirely; <see cref="GlobalHasRoom"/> — and with it the MV-809 reservation — still applies
+        /// unconditionally, so this can never spawn past the field-wide budget.</summary>
+        public List<RobotEnemy> SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f, bool ignorePerFactoryCap = false)
         {
             var spawned = new List<RobotEnemy>(count);
-            for (int i = 0; i < count && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom; i++)
+            for (int i = 0; i < count && (ignorePerFactoryCap || _live.Count < EffectiveMaxLiveEnemies) && GlobalHasRoom; i++)
             {
                 RobotEnemy e = SpawnKind(kind);
                 if (noReplicateSeconds > 0f) e.TagNoReplicate(noReplicateSeconds);

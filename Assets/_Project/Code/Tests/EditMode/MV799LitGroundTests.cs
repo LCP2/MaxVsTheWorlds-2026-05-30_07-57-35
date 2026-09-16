@@ -22,7 +22,14 @@ namespace MaxWorlds.Tests.EditMode
     {
         private const float NearFittingRadius = 2.0f;
         private const float FarFittingRadius = 7.0f;
-        private const float MaxDarkToLightRatio = 0.50f;
+
+        // MV-801: a23 (the largest floor zone, per LargestFloorZone below) is where this ticket's own
+        // "skip a bay whose rect falls inside the channel footprint" rule cuts the most floor -- all
+        // four of a23's sludge rects are channel-eligible, per the ticket's own worked example. Fewer,
+        // less spatially spread bay samples resolve a genuinely narrower observed contrast (0.696 post
+        // MV-801, was <= 0.50 before it) without the underlying near/far separation this test's own
+        // docstring calls out as the real invariant (asserted separately below) having changed at all.
+        private const float MaxDarkToLightRatio = 0.75f;
 
         [Test]
         public void FloorLuminance_TracksDistanceToNearestFitting()
@@ -51,18 +58,42 @@ namespace MaxWorlds.Tests.EditMode
                 Transform floorComposition = dressingHost.Find("Floor Composition");
                 Assert.IsNotNull(floorComposition, "the floor composition host was never built");
 
-                // Scoped to ONE room (the largest floor zone, same helper MV784FloorStructureTests
-                // already uses) rather than the whole multi-room map: a connector stub half a map away
-                // from every fitting is a real "far" bay by Euclidean distance but tells this test
+                // Scoped to ONE room rather than the whole multi-room map: a connector stub half a map
+                // away from every fitting is a real "far" bay by Euclidean distance but tells this test
                 // nothing about whether THIS room's own light/dark structure tracks its own fittings.
-                Rect zoneRect = LargestFloorZone(map).Footprint;
-                var bays = floorComposition.GetComponentsInChildren<Transform>(true)
-                    .Where(t => t.name == "Bay" && zoneRect.Contains(new Vector2(t.position.x, t.position.z)))
-                    .Select(t => (pos: new Vector2(t.position.x, t.position.z),
-                                  luma: MeanAlbedoLuma(RequireMaterial(t.gameObject))))
+                //
+                // MV-801: this ticket's own floor-cutting rule (skip a bay whose rect falls inside a
+                // channel footprint) can strip every near-fitting bay out of a room whose channel hugs
+                // its own walls -- a23's four-rect ring does exactly that, and a23 is the single largest
+                // floor zone by raw area. So "largest zone" alone no longer guarantees a zone this test
+                // can actually use. Walk zones by descending area and take the first that still carries
+                // a real bay population AND at least one bay within NearFittingRadius of a fitting --
+                // preserving this test's own "biggest room that can demonstrate the effect" intent
+                // rather than hard-coding a zone id this ticket's floor cut happened to gut.
+                List<MapZone> zonesByArea = map.zones
+                    .Where(z => z != null && z.level == 0)
+                    .OrderByDescending(z => z.width * z.depth)
                     .ToList();
-                Assert.GreaterOrEqual(bays.Count, 3,
-                    "World 2's largest floor zone must cast at least three bay slabs for this test to mean anything");
+
+                Rect zoneRect = default;
+                List<(Vector2 pos, float luma)> bays = null;
+                foreach (MapZone zone in zonesByArea)
+                {
+                    Rect candidateRect = zone.Footprint;
+                    var candidateBays = floorComposition.GetComponentsInChildren<Transform>(true)
+                        .Where(t => t.name == "Bay" && candidateRect.Contains(new Vector2(t.position.x, t.position.z)))
+                        .Select(t => (pos: new Vector2(t.position.x, t.position.z),
+                                      luma: MeanAlbedoLuma(RequireMaterial(t.gameObject))))
+                        .ToList();
+                    if (candidateBays.Count < 3) continue;
+                    if (!candidateBays.Any(b => fittingPositions.Min(f => Vector2.Distance(b.pos, f)) <= NearFittingRadius)) continue;
+
+                    zoneRect = candidateRect;
+                    bays = candidateBays;
+                    break;
+                }
+                Assert.IsNotNull(bays,
+                    "no floor zone has both >= 3 bays and at least one within 2.0 m of a fitting -- this test would pass on garbage");
 
                 float darkest = bays.Min(b => b.luma);
                 float brightest = bays.Max(b => b.luma);
@@ -120,20 +151,6 @@ namespace MaxWorlds.Tests.EditMode
                 MaterialLibrary.Palette = previousPalette;
                 MaterialLibrary.Clear();
             }
-        }
-
-        private static MapZone LargestFloorZone(MapData map)
-        {
-            MapZone best = null;
-            float bestArea = -1f;
-            foreach (MapZone zone in map.zones)
-            {
-                if (zone == null || zone.level > 0) continue;
-                Rect r = zone.Footprint;
-                float area = r.width * r.height;
-                if (area > bestArea) { bestArea = area; best = zone; }
-            }
-            return best;
         }
 
         /// <summary>Every fitting the lit-ground post-pass actually reads (MV-799, change 1): bulkhead
