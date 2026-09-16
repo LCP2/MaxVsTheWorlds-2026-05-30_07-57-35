@@ -451,7 +451,10 @@ namespace MaxWorlds.Tests.EditMode
                     "the lamp must change colour the instant LockedChanged fires");
 
                 gate.Locked = false;
-                Assert.IsFalse(hazardStripe.activeSelf, "the hazard stripe must hide once unlocked");
+                // MV-822: a gate is something you must act on whether or not it happens to be locked
+                // right now (only a condition-gated gate ever locks at all), so the hazard stripe stays
+                // up regardless of Locked -- superseding this assertion's old "hide once unlocked".
+                Assert.IsTrue(hazardStripe.activeSelf, "the hazard stripe must stay visible once unlocked");
                 Assert.AreEqual(closedColor, lampRenderer.sharedMaterial.GetColor("_BaseColor"),
                     "unlocking with the gate still shut must return the lamp to its closed colour");
 

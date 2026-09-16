@@ -97,6 +97,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv821DeckWalkway() => RunFromMenu(CapturePresets.All["mv821deckwalkway"]);
         public static void CaptureMv821DeckWalkway() => Run(CapturePresets.All["mv821deckwalkway"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Hazard Banding a3 (MV-822)")]
+        public static void MenuMv822HazardBanding() => RunFromMenu(CapturePresets.All["mv822hazardbanding"]);
+        public static void CaptureMv822HazardBanding() => Run(CapturePresets.All["mv822hazardbanding"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

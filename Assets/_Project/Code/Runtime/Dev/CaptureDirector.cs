@@ -330,6 +330,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
+            Add(BuildMv822HazardBandingCheck());
             return d;
         }
 
@@ -2337,6 +2338,57 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-821", NoSetup) },
+            };
+        }
+
+        // ---- Mv822HazardBandingCheck (MV-822 AC4) ---------------------------------------------
+
+        /// <summary>MV-822's own AC4 evidence: World 2's real shipped area a3 ("Junction Hall,
+        /// floor"), same "at the play camera" framing <see cref="BuildMv821DeckWalkwayCheck"/> uses
+        /// (a3's own centre, actual gameplay pitch/distance) — proof the channel banding now reads
+        /// past the MapRuntime slab this ticket switches off, and that a3's own gate jamb carries its
+        /// hazard stripe whether or not it happens to be locked.</summary>
+        private static CapturePreset BuildMv822HazardBandingCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            var areaCentre = new Vector3(72f, 0f, 111f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 26.02f;
+
+                Vector3 focus = areaCentre + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv822hazardbanding",
+                LogTag = "[MV822Capture]",
+                Flag = "-mv822shot",
+                ArmFile = "Temp/mv822.arm",
+                HeadlessMarker = "Temp/mv822.headless",
+                DoneFileName = "_mv822_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-822", NoSetup) },
             };
         }
     }
