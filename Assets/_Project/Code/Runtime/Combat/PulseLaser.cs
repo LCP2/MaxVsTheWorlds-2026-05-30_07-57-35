@@ -268,12 +268,19 @@ namespace MaxWorlds.Combat
             if (_vfx != null) _vfx.Impact(target.transform.position + Vector3.up * 0.6f, damage, isShockHit);
         }
 
-        /// <summary>MV-768 FORK (<c>p_frk</c>): a pulse whose damage KILLED its locked target releases
-        /// one further pulse at the nearest OTHER valid target within the LPPE's current lock range,
-        /// fired from the kill point. Never chains — <see cref="SeekerPulse.Fire"/> is called with
-        /// <c>canFork: false</c>, so however many targets the forked pulse itself goes on to kill, it
-        /// can never trigger a further fork (the board comment's own "must not chain" rule, enforced by
-        /// <see cref="SeekerPulse.ApplyHit"/> never reporting a kill for a pulse fired that way).</summary>
+        /// <summary>MV-768 FORK (<c>p_frk</c>): a pulse whose damage KILLED its locked target — or (MV-814)
+        /// left it under <see cref="SeekerPulse"/>'s own near-death threshold — releases one further
+        /// pulse at the nearest OTHER valid target within the LPPE's current lock range, fired from the
+        /// kill point. Never chains — <see cref="SeekerPulse.Fire"/> is called with <c>canFork: false</c>,
+        /// so however many targets the forked pulse itself goes on to kill, it can never trigger a
+        /// further fork (the board comment's own "must not chain" rule, enforced by
+        /// <see cref="SeekerPulse.ApplyHit"/> never reporting a kill for a pulse fired that way).
+        ///
+        /// MV-814: measured against a scripted 60s engagement (focus-firing a 55 HP Sludger, FORK at
+        /// level 1, 272 pulses fired) — the kill-only trigger released 38 forks (one per kill, and every
+        /// kill found a second target); widening it to also fire on a near-death hit (see
+        /// <see cref="SeekerPulse"/>'s own doc) raised that to 77 releases over the identical script,
+        /// same kill count. The fix comment quotes both runs in full.</summary>
         private void RegisterKill(RobotEnemy killedTarget, Vector3 point)
         {
             if (WeaponSystemState.LppeTrackLevel(LppeTrackKind.Fork) < 1) return;
@@ -281,10 +288,11 @@ namespace MaxWorlds.Combat
             RobotEnemy next = NearestOtherAliveRobotInRange(killedTarget, point, LockRange);
             if (next == null) return;
 
+            if (_vfx != null) _vfx.Fork(point);
             LastForkedPulseForTests = SeekerPulse.Fire(point, next.transform.position - point,
                 DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec, DefaultPulseLifetime,
                 EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
-                forcedTarget: next, canFork: false);
+                forcedTarget: next, canFork: false, isFork: true);
         }
 
         /// <summary>The nearest alive, awake robot other than <paramref name="exclude"/> within

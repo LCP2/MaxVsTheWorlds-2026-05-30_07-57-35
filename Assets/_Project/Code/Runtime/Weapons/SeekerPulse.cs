@@ -29,6 +29,23 @@ namespace MaxWorlds.Weapons
         /// water (Lee, 2026-09-15) because this colour was identical to <c>WaterBlaster</c>'s own.</summary>
         private static readonly Color BoltColor = new Color(1.00f, 0.52f, 0.12f);
 
+        /// <summary>MV-814: the same fire-orange family pushed past 1.0 headroom (same idiom
+        /// <c>LppeVfx.MuzzleColor</c>/<c>WindupColor</c> already use) so a fork's own bolt+trail reads
+        /// as a visibly brighter event than an ordinary pulse, not just one more identical bolt.</summary>
+        private static readonly Color ForkBoltColor = new Color(1.55f, 0.75f, 0.16f);
+
+        /// <summary>MV-814: how much wider than an ordinary pulse's a forked bolt's cross-section is
+        /// (spec: "1.25x cross-section") -- scales only <see cref="Transform.localScale"/>'s X/Z, which
+        /// the lathed mesh's authored Y-axis length ignores (scale is applied in the mesh's own local
+        /// axes before <see cref="BuildVisual"/>'s 90-degree rotation swings Y to the travel axis).</summary>
+        private const float ForkCrossSectionScale = 1.25f;
+
+        /// <summary>MV-814: a pulse whose hit didn't kill but left its target under this fraction of
+        /// max health also releases a FORK, widening the old kill-only trigger -- against World 2's
+        /// health pools an outright kill was rare enough that FORK read as doing nothing (measured:
+        /// see PulseLaser.RegisterKill's own doc comment).</summary>
+        private const float NearDeathForkThreshold = 0.15f;
+
         private RobotEnemy _target;
         private IDamageable _targetDamageable;
         private float _speed;
@@ -54,6 +71,11 @@ namespace MaxWorlds.Weapons
         /// resolved value MV-708 AC1 asserts against.</summary>
         public RobotEnemy Target => _target;
 
+        /// <summary>MV-814: the resolved bolt renderer, for a test to compare cross-section bounds
+        /// between an ordinary pulse and a forked one — same "public accessor for a test" idiom as
+        /// <see cref="PulseLaser.LastForkedPulseForTests"/>.</summary>
+        public MeshRenderer BoltRendererForTests => GetComponentInChildren<MeshRenderer>();
+
         /// <summary>True once this pulse has hit its target, been blocked, or expired — it takes no
         /// further action after this, so a test can keep ticking it without double-applying damage.</summary>
         public bool IsSpent => _spent;
@@ -74,7 +96,7 @@ namespace MaxWorlds.Weapons
         public static SeekerPulse Fire(Vector3 origin, Vector3 aimDir, float speed, float turnRateDegPerSec,
             float lifetime, float damage, float lockRange, float lockHalfAngleDeg,
             Action<RobotEnemy, float> onHit = null, RobotEnemy forcedTarget = null, bool canFork = true,
-            Action<RobotEnemy, Vector3> onKill = null)
+            Action<RobotEnemy, Vector3> onKill = null, bool isFork = false)
         {
             aimDir.y = 0f;
             if (aimDir.sqrMagnitude < 1e-4f) aimDir = Vector3.forward;
@@ -83,7 +105,7 @@ namespace MaxWorlds.Weapons
             var go = new GameObject("SeekerPulse (stand-in)");
             go.transform.position = origin;
             go.transform.rotation = Quaternion.LookRotation(aimDir, Vector3.up);
-            BuildVisual(go.transform);
+            BuildVisual(go.transform, isFork);
 
             RobotEnemy target = forcedTarget != null
                 ? forcedTarget
@@ -273,7 +295,11 @@ namespace MaxWorlds.Weapons
                 // IsAlive by the time we check it here -- see RobotEnemy.TakeDamage/Die. _canFork is
                 // false for a pulse FORK itself released (see Fire's own doc), so a forked pulse's own
                 // kill never reports one -- the "must not chain" rule.
-                if (_canFork && !killedTarget.IsAlive) _onKill?.Invoke(killedTarget, point);
+                // MV-814: widened past kill-only -- a hit that leaves the target under
+                // NearDeathForkThreshold also releases a fork, measured to trigger far more often than
+                // an outright kill against World 2's health pools (see PulseLaser.RegisterKill's doc).
+                bool nearDeath = killedTarget.IsAlive && killedTarget.HealthNormalized < NearDeathForkThreshold;
+                if (_canFork && (!killedTarget.IsAlive || nearDeath)) _onKill?.Invoke(killedTarget, point);
             }
             Retire();
         }
@@ -298,12 +324,16 @@ namespace MaxWorlds.Weapons
         /// to <see cref="BoltTuning"/>'s own numbers, and switched from a LIT surface material to an
         /// unlit additive one — a weapon bolt in a world this dark has to be its own light source, not
         /// a dimly-shaded sliver of metal). Same build idiom as <see cref="HomingMissile.BuildVisual"/>.
-        /// </summary>
-        private static void BuildVisual(Transform parent)
+        /// MV-814: <paramref name="isFork"/> gives a FORK-released bolt its own tell — the same
+        /// fire-orange family pushed brighter (<see cref="ForkBoltColor"/>) on both the bolt and its
+        /// trail, plus a <see cref="ForkCrossSectionScale"/>-wider cross-section — so one extra bolt
+        /// appearing out of a kill reads as deliberate, not as another identical pulse.</summary>
+        private static void BuildVisual(Transform parent, bool isFork)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Material boltMat = VfxMaterials.AdditiveTinted(BoltColor);
+            Color color = isFork ? ForkBoltColor : BoltColor;
+            Material boltMat = VfxMaterials.AdditiveTinted(color);
 
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
             // MV-770: a taut, fast taper (0.12s) rather than MV-758's 0.16s — the bolt itself is now
@@ -323,6 +353,10 @@ namespace MaxWorlds.Weapons
             // Same local rotation the old capsule used: the lathe's revolve axis (Y) is the mesh's own
             // long axis, so this still points the bolt down the travel axis.
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // MV-814: scaling X/Z only (never Y) widens the cross-section without touching the bolt's
+            // authored length — see ForkCrossSectionScale's own doc comment for why this is safe against
+            // the rotation applied above.
+            if (isFork) bolt.transform.localScale = new Vector3(ForkCrossSectionScale, 1f, ForkCrossSectionScale);
             bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh();
             var meshRenderer = bolt.AddComponent<MeshRenderer>();
             if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
