@@ -305,6 +305,12 @@ namespace MaxWorlds.Rendering
         /// the ticket's own figure.</summary>
         private const float ChannelHazardBandHeight = 0.22f;
 
+        /// <summary>MV-822: the pump band's own offset from the housing's centre must clear the hex
+        /// prism's forward CORNER (a real vertex — <see cref="CharacterMeshes.Prism"/>'s <c>+ PI/sides</c>
+        /// rotation lands one square on the forward axis), not just its flat-face radius, or the band's
+        /// middle sits inside the body. The ticket's own figure: 1.0*r plus this clearance.</summary>
+        private const float PumpHazardBandRadialClearance = 0.02f;
+
         private const float ChannelCrossingSpacingMin = 8f;
         private const float ChannelCrossingSpacingMax = 12f;
         private const float ChannelCrossingWidth = 1.5f;
@@ -900,8 +906,9 @@ namespace MaxWorlds.Rendering
             // of the two places the ticket's table puts an LED panel.
             StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f));
 
-            // MV-803: one hazard band on the pump intake — the front face, just above the base flange.
-            BuildHazardBanding(root.transform, new Vector3(0f, fh + h * 0.10f, -r * 0.84f),
+            // MV-822: one hazard band on the pump intake — the front face, just above the base flange,
+            // clear of the housing's own forward corner (see PumpHazardBandRadialClearance's own doc).
+            BuildHazardBanding(root.transform, new Vector3(0f, fh + h * 0.10f, -(r + PumpHazardBandRadialClearance)),
                 r * 1.1f, h * 0.16f, alongX: true, depth: 0.02f);
 
             return root;

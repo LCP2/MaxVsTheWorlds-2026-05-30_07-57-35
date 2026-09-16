@@ -142,20 +142,41 @@ namespace MaxWorlds.VFX
             BuildRamp(root, new Vector3(0f, groundLocalY, hd + 0.02f + run), new Vector3(0f, hatchAt.y, hd + 0.02f),
                 hatchHalfW, s_rust, "RampOut");
 
-            // MV-803: hazard banding around the base — a Replicator lures and consumes robots, and the
+            // MV-822: hazard banding around the base — a Replicator lures and consumes robots, and the
             // ticket's own placement rule is "only on what can hurt you or what you must act on". One
-            // straight band per side of the box, at floor level.
-            float baseBandHeight = Mathf.Min(0.22f, size.y * 0.14f);
+            // straight band per side of the box, at floor level, at least 0.42 m tall (MV-822's own
+            // figure; the old 0.14x-of-height formula capped at 0.22 m read as a 5 px sliver at the play
+            // camera).
+            float baseBandHeight = Mathf.Max(0.42f, size.y * 0.14f);
             float baseBandY = -hh + baseBandHeight * 0.5f + 0.01f;
             const float baseBandDepth = 0.02f;
             StormdrainKit.BuildHazardBanding(root, new Vector3(hw, baseBandY, 0f),
                 size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
             StormdrainKit.BuildHazardBanding(root, new Vector3(-hw, baseBandY, 0f),
                 size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
-            StormdrainKit.BuildHazardBanding(root, new Vector3(0f, baseBandY, hd),
-                size.x * 0.92f, baseBandHeight, alongX: true, baseBandDepth);
-            StormdrainKit.BuildHazardBanding(root, new Vector3(0f, baseBandY, -hd),
-                size.x * 0.92f, baseBandHeight, alongX: true, baseBandDepth);
+
+            // MV-822: the hatch/output faces' own bands used to run the plate's full width, straight
+            // through the footprint RampIn/RampOut occupy (+-hatchHalfW) — the ramp's own sloped deck
+            // then sat on top of the band's middle ~55%, exactly like a hazard stripe painted on a floor
+            // and then carpeted over. Flanking segments either side of the ramp's own width keep the
+            // band on plate the ramp never covers, rather than raising or shrinking it into invisibility.
+            // A real gap (not just an abutting edge) from the ramp's own halfWidth — Bounds.Intersects
+            // treats exactly-touching AABBs as intersecting, and the ramp's rotation is purely about
+            // local X (both its ends share local X = 0, per BuildRamp's own doc), so it never bleeds
+            // past +-hatchHalfW in X and a small clearance here is sufficient on its own.
+            const float rampClearance = 0.05f;
+            float flankBandLength = Mathf.Max(0f, size.x * 0.46f - hatchHalfW - rampClearance);
+            if (flankBandLength > 0.05f)
+            {
+                float flankCentreX = hatchHalfW + rampClearance + flankBandLength * 0.5f;
+                foreach (float faceZ in new[] { hd, -hd })
+                {
+                    StormdrainKit.BuildHazardBanding(root, new Vector3(flankCentreX, baseBandY, faceZ),
+                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth);
+                    StormdrainKit.BuildHazardBanding(root, new Vector3(-flankCentreX, baseBandY, faceZ),
+                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth);
+                }
+            }
 
             // MV-813: the status ring — centred on the top face, unlit additive so it reads as its own
             // light source (StormdrainLightKit's own fitting material family), seeded green (idle);

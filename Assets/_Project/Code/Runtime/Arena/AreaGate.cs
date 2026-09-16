@@ -377,7 +377,11 @@ namespace MaxWorlds.Arena
             // lamp's whole (one) renderer was.
             if (_lampLensRenderer != null) _lampLensRenderer.sharedMaterial = StormdrainKit.Unlit(color, "GateLamp");
 
-            if (_hazardStripe != null) _hazardStripe.SetActive(Locked);
+            // MV-822: a gate is something you must act on whether or not it happens to be locked right
+            // now, so its hazard banding stays up regardless of Locked — only a condition-gated gate
+            // ever locks (WorldRunner), so an unconditional gate's banding was being built and then
+            // switched off forever.
+            if (_hazardStripe != null) _hazardStripe.SetActive(true);
         }
 
         private void StartStormdrainSlide(bool opening)

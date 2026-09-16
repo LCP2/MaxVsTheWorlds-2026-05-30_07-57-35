@@ -221,7 +221,7 @@ namespace MaxWorlds.Arena
             PumpHousingsAlive = pumpHousings;
 
             var channelRects = new List<Rect>();
-            int tiles = DressSludge(root, map, channelRects);
+            int tiles = DressSludge(root, host, map, channelRects);
 
             // MV-799: hazard bulkheads must build (and add to fittings) BEFORE the floor composition
             // post-pass runs, or a gate/outfall's own light would never lighten the bays around it.
@@ -998,12 +998,12 @@ namespace MaxWorlds.Arena
         /// rather than disagreeing with it.</summary>
         private const string OutfallGateId = "outfall";
 
-        private static int DressSludge(Transform root, MapData map, List<Rect> channelRects)
+        private static int DressSludge(Transform root, Transform mapHost, MapData map, List<Rect> channelRects)
         {
             if (map.entities == null) return 0;
 
-            var host = new GameObject("Sludge").transform;
-            host.SetParent(root, false);
+            var sludgeHost = new GameObject("Sludge").transform;
+            sludgeHost.SetParent(root, false);
 
             int tiles = 0, seed = 0;
 
@@ -1018,13 +1018,41 @@ namespace MaxWorlds.Arena
                 var sludgeRect = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
                 MapZone zone = map.ZoneAt(e.x, e.z);
                 bool isChannel = zone != null && IsChannelEligible(sludgeRect, zone.Footprint);
-                if (isChannel) channelRects.Add(sludgeRect);
+                if (isChannel)
+                {
+                    channelRects.Add(sludgeRect);
 
-                StormdrainKit.DressSludgeTile(host, center, e.width, e.depth, flow, seed, isChannel);
+                    // MV-822: MapRuntime.BuildSludge already built this rect's own opaque slab at
+                    // y 0-0.05 (SludgeThickness), covering the trough BuildChannelTrough is about to cut
+                    // below y 0 — that slab, not this dressing pass, is what the player actually saw as
+                    // "no diagonal striping" at every channel. Found by the SludgeFlow component MapRuntime
+                    // uniquely tags its own slab with (StormdrainKit's own SludgeFlowRig is a different
+                    // type), matched by id since a level can build more than one sludge rect.
+                    HideMapRuntimeSlabRenderer(mapHost, e.id);
+                }
+
+                StormdrainKit.DressSludgeTile(sludgeHost, center, e.width, e.depth, flow, seed, isChannel);
                 tiles++;
             }
 
             return tiles;
+        }
+
+        /// <summary>Switches off the renderer <see cref="MaxWorlds.Arena.MapRuntime.BuildSludge"/> built
+        /// for a channel-eligible rect (see <see cref="DressSludge"/>'s own call site) — its slow-zone
+        /// behaviour comes from <see cref="MaxWorlds.Arena.MapSlowZones"/> sampling the map data directly,
+        /// never from this renderer or this GameObject's active state, so disabling only the renderer
+        /// (not the whole object, not the <see cref="SludgeFlow"/> component driving it) changes nothing
+        /// gameplay depends on.</summary>
+        private static void HideMapRuntimeSlabRenderer(Transform mapHost, string sludgeId)
+        {
+            foreach (SludgeFlow flow in mapHost.GetComponentsInChildren<SludgeFlow>(true))
+            {
+                if (flow.gameObject.name != sludgeId) continue;
+                var rend = flow.GetComponent<Renderer>();
+                if (rend != null) rend.enabled = false;
+                return;
+            }
         }
 
         /// <summary>MV-801, "the second thing the level forces" — computed from the rect itself rather
