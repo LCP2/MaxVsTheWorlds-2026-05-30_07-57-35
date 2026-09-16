@@ -89,6 +89,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv818Cover() => RunFromMenu(CapturePresets.All["mv818cover"]);
         public static void CaptureMv818Cover() => Run(CapturePresets.All["mv818cover"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Overhead Pipes a3 (MV-819)")]
+        public static void MenuMv819PipeCheck() => RunFromMenu(CapturePresets.All["mv819pipecheck"]);
+        public static void CaptureMv819PipeCheck() => Run(CapturePresets.All["mv819pipecheck"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

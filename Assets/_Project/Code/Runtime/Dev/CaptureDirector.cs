@@ -328,6 +328,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv818CoverCheck());
+            Add(BuildMv819PipeCheck());
             return d;
         }
 
@@ -2230,6 +2231,60 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-818", NoSetup) },
+            };
+        }
+
+        // ---- Mv819PipeCheck (MV-819 AC4) ------------------------------------------------------
+
+        /// <summary>MV-819's own AC4 evidence: World 2's real shipped area a3 ("Junction Hall,
+        /// floor"), framed at the ACTUAL gameplay camera's own pitch/distance — unlike
+        /// <see cref="BuildMv818CoverCheck"/>'s deliberately pulled-back design-review framing, this
+        /// ticket's AC asks for "one capture ... at the play camera", so the retuned overhead mains,
+        /// cross-main and junction boxes are proven to read at the angle players actually see, not a
+        /// flattering angle chosen for the screenshot. Framed on a3's own centre (world2_config.json:
+        /// origin x=54 z=96, size 36x30 -> centre 72,111) rather than Max's spawn, since a3 is not
+        /// where he starts.</summary>
+        private static CapturePreset BuildMv819PipeCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            var areaCentre = new Vector3(72f, 0f, 111f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 26.02f;
+
+                Vector3 focus = areaCentre + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv819pipecheck",
+                LogTag = "[MV819Capture]",
+                Flag = "-mv819shot",
+                ArmFile = "Temp/mv819.arm",
+                HeadlessMarker = "Temp/mv819.headless",
+                DoneFileName = "_mv819_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-819", NoSetup) },
             };
         }
     }
