@@ -332,6 +332,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv821DeckWalkwayCheck());
             Add(BuildMv822HazardBandingCheck());
             Add(BuildMv825LppeFire());
+            Add(BuildMv824LitGroundCheck());
             return d;
         }
 
@@ -2390,6 +2391,57 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-822", NoSetup) },
+            };
+        }
+
+        // ---- Mv824LitGroundCheck (MV-824 AC4) --------------------------------------------------
+
+        /// <summary>MV-824's own AC4 evidence: World 2's real shipped area a3 ("Junction Hall,
+        /// floor"), same "at the play camera" framing <see cref="BuildMv822HazardBandingCheck"/> uses
+        /// (a3's own centre, actual gameplay pitch/distance) — proof the raised
+        /// <c>LitGroundBaseMultiplier</c> (0.38 -> 0.72) reads as a floor whose cast bays, joints and
+        /// cracks are actually legible far from any fitting, not just brighter in the abstract.</summary>
+        private static CapturePreset BuildMv824LitGroundCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            var areaCentre = new Vector3(72f, 0f, 111f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 26.02f;
+
+                Vector3 focus = areaCentre + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv824litground",
+                LogTag = "[MV824Capture]",
+                Flag = "-mv824shot",
+                ArmFile = "Temp/mv824.arm",
+                HeadlessMarker = "Temp/mv824.headless",
+                DoneFileName = "_mv824_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck/BuildMv822HazardBandingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-824", NoSetup) },
             };
         }
 

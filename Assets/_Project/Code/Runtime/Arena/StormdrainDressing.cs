@@ -64,7 +64,7 @@ namespace MaxWorlds.Arena
         private const float BulkheadLampFittingRadius = 4.6f;
         private const float KerbStripFittingRadius = 3.0f;
 
-        private const float LitGroundBaseMultiplier = 0.38f;
+        private const float LitGroundBaseMultiplier = 0.72f;
         private const float LitGroundMaxMultiplier = 1.30f;
         private const float LitGroundFalloffExponent = 1.35f;
         private const float LitGroundFittingContribution = 0.62f;
