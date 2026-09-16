@@ -73,6 +73,33 @@ namespace MaxWorlds.Rendering
         /// <summary>Hazard stripe yellow — the one place World 2 is allowed a pure warning colour.</summary>
         public static readonly Color Hazard = new Color(0.85f, 0.65f, 0.15f);
 
+        /// <summary>MV-803, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 ("the diagonal
+        /// striped outlines should be bright enough to lift the overall design"). The banding's own
+        /// bright yellow — deliberately its own tone, not <see cref="Hazard"/>: this is the striped
+        /// paint on a backing plate, brighter and carrying real emission, while <see cref="Hazard"/>
+        /// stays the flat warning tone used elsewhere (the light kit's tone list).</summary>
+        public static readonly Color HazardStripeColor = new Color(0.980f, 0.800f, 0.140f);
+
+        /// <summary>The banding's backing plate — near-black, so the yellow stripes read as paint on a
+        /// dark ground rather than as a bright shape floating in the room.</summary>
+        public static readonly Color HazardStripeBacking = new Color(0.050f, 0.048f, 0.045f);
+
+        /// <summary>The ticket's own approved figure — do not re-raise (dimmer "to sit back" was
+        /// explicitly rejected; Lee asked for the banding bright enough to lift the design).</summary>
+        public const float HazardStripeEmissive = 0.22f;
+
+        /// <summary>The ticket's own approved figures — do not re-raise.</summary>
+        public const float HazardStripeLeanDeg = 34f;
+        public const float HazardStripePitch = 0.42f;
+
+        /// <summary>A stripe's own width, measured across its long axis before the lean is applied.</summary>
+        public const float HazardStripeThickness = 0.16f;
+
+        /// <summary>"Proud of the backing face by a hair" (the ticket's own words) — just enough that a
+        /// stripe reads as painted onto the plate rather than flush with (or sunk into) it, on both
+        /// faces of the plate at once.</summary>
+        public const float HazardStripeProud = 0.006f;
+
         /// <summary>Cyan status lamps on machinery. The cold counterpoint to all that rust.</summary>
         public static readonly Color Status = new Color(0.35f, 0.85f, 0.95f);
 
@@ -237,6 +264,10 @@ namespace MaxWorlds.Rendering
         private const float ChannelLipHeight = 0.10f;
         private const float ChannelKerbWidth = 0.44f;
         private const float ChannelKerbHeight = 0.20f;
+
+        /// <summary>MV-803: both drop edges of a channel get hazard banding, full length, this tall —
+        /// the ticket's own figure.</summary>
+        private const float ChannelHazardBandHeight = 0.22f;
 
         private const float ChannelCrossingSpacingMin = 8f;
         private const float ChannelCrossingSpacingMax = 12f;
@@ -523,6 +554,11 @@ namespace MaxWorlds.Rendering
 
             StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, 0f, -bodyR * 0.9f));
 
+            // MV-803: one hazard band, low on the front face — a junction box is something you must
+            // act on (it feeds the overhead structure), not decoration.
+            BuildHazardBanding(root.transform, new Vector3(0f, -bodyH * 0.28f, -bodyR * 0.9f),
+                bodyR * 1.05f, bodyH * 0.32f, alongX: true, depth: 0.02f);
+
             return root;
         }
 
@@ -750,6 +786,11 @@ namespace MaxWorlds.Rendering
             // 5x3-cell fitting with its own pool (StormdrainLightKit.BuildLedPanel) — machinery is one
             // of the two places the ticket's table puts an LED panel.
             StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f));
+
+            // MV-803: one hazard band on the pump intake — the front face, just above the base flange.
+            BuildHazardBanding(root.transform, new Vector3(0f, fh + h * 0.10f, -r * 0.84f),
+                r * 1.1f, h * 0.16f, alongX: true, depth: 0.02f);
+
             return root;
         }
 
@@ -1355,6 +1396,13 @@ namespace MaxWorlds.Rendering
                 Box(root, "Trough Wall B", new Vector3(-width * 0.5f, wallY, 0f),
                     new Vector3(ChannelWallThickness, ChannelTroughDepth, depth), GroundDry);
 
+                // MV-803: hazard banding on both drop edges, flush with the cut at the top of each wall
+                // (the lip's own line) — the run is along Z here, so alongX is false.
+                BuildHazardBanding(root, new Vector3(width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
+                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                BuildHazardBanding(root, new Vector3(-width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
+                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+
                 Box(root, "Trough Lip A", new Vector3(width * 0.5f, lipY, 0f),
                     new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
                 Box(root, "Trough Lip B", new Vector3(-width * 0.5f, lipY, 0f),
@@ -1371,6 +1419,12 @@ namespace MaxWorlds.Rendering
                     new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
                 Box(root, "Trough Wall B", new Vector3(0f, wallY, -depth * 0.5f),
                     new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
+
+                // MV-803: hazard banding on both drop edges — the run is along X here.
+                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, depth * 0.5f),
+                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, -depth * 0.5f),
+                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
 
                 Box(root, "Trough Lip A", new Vector3(0f, lipY, depth * 0.5f),
                     new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
@@ -1438,6 +1492,106 @@ namespace MaxWorlds.Rendering
                         new Vector3(0.08f, ChannelCrossingPostHeight, 0.08f), Rust, SurfaceKind.Metal);
                 }
             }
+        }
+
+        // ---------------------------------------------------------------- hazard banding (MV-803)
+
+        /// <summary>MV-803, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 ("the diagonal
+        /// striped outlines should be bright enough to lift the overall design"). A backing plate in
+        /// <see cref="HazardStripeBacking"/> plus a run of diagonal yellow stripes painted flat on its
+        /// face — every <see cref="HazardStripePitch"/> along the run, leaning
+        /// <see cref="HazardStripeLeanDeg"/> off the run's own axis, at <see cref="HazardStripeEmissive"/>
+        /// so it holds up unlit. Stripes are proud of the backing face by <see cref="HazardStripeProud"/>
+        /// (a hair, on both faces at once) rather than standing off it — proud geometry read as teeth in
+        /// review and was rejected.
+        ///
+        /// This is HAZARD marking, not decoration (the ticket's own rule) — every call site anchors it
+        /// to something that can hurt you or that you must act on: a channel drop edge, a gate jamb, a
+        /// Replicator housing, a pump intake, or a junction box base. Nothing else in World 2 gets it.
+        ///
+        /// <paramref name="centre"/> is the band's own centre in the parent's local space;
+        /// <paramref name="length"/> runs along local X when <paramref name="alongX"/>, local Z
+        /// otherwise — the same convention <see cref="BuildWallPanels"/> already uses. A stripe whose
+        /// own footprint would poke past either end of the plate is dropped rather than drawn
+        /// overhanging ("clipped at both ends", the ticket's own words).</summary>
+        public static GameObject BuildHazardBanding(Transform parent, Vector3 centre, float length, float height,
+                                                     bool alongX, float depth)
+        {
+            var root = new GameObject("Hazard Banding");
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = centre;
+
+            Vector3 plateSize = alongX
+                ? new Vector3(length, height, depth)
+                : new Vector3(depth, height, length);
+            Box(root.transform, "Plate", Vector3.zero, plateSize, HazardStripeBacking, SurfaceKind.Metal);
+
+            if (length < HazardStripePitch * 0.5f) return root;   // too short for even one stripe
+
+            Vector3 along = alongX ? Vector3.right : Vector3.forward;
+            float stripeDepth = depth + HazardStripeProud * 2f;
+
+            // The stripe's own long-axis length before the lean: long enough that, once tilted
+            // HazardStripeLeanDeg off horizontal, its vertical (Y) span still reaches the band's full
+            // height. Sin, not cos: the long axis starts along the RUN axis (0 degrees off it) and
+            // leans toward vertical, so it is the SINE of the lean angle that recovers the height.
+            float leanLength = height / Mathf.Sin(HazardStripeLeanDeg * Mathf.Deg2Rad);
+
+            // The stripe's own footprint along the run axis, after the lean — what "clipped at both
+            // ends" is measured against, so an end stripe that would poke past the plate is dropped
+            // rather than drawn overhanging it.
+            float footprint = leanLength * Mathf.Cos(HazardStripeLeanDeg * Mathf.Deg2Rad)
+                             + HazardStripeThickness * Mathf.Sin(HazardStripeLeanDeg * Mathf.Deg2Rad);
+
+            // Exact pitch, centred on the plate — never stretched to fill the run (a stretch-to-fit
+            // spacing, as the kerb strip's own segments use, drifts arbitrarily far from the ticket's
+            // approved 0.42 m on a short run; a fixed pitch holds it exactly regardless of length).
+            int slots = Mathf.Max(1, Mathf.FloorToInt(length / HazardStripePitch));
+            float firstOffset = -(slots - 1) * 0.5f * HazardStripePitch;
+            for (int i = 0; i < slots; i++)
+            {
+                float offset = firstOffset + i * HazardStripePitch;
+                if (offset - footprint * 0.5f < -length * 0.5f || offset + footprint * 0.5f > length * 0.5f)
+                    continue;   // clipped at the plate's own end
+
+                Vector3 stripeSize = alongX
+                    ? new Vector3(leanLength, HazardStripeThickness, stripeDepth)
+                    : new Vector3(stripeDepth, HazardStripeThickness, leanLength);
+                Quaternion stripeRot = alongX
+                    ? Quaternion.Euler(0f, 0f, HazardStripeLeanDeg)
+                    : Quaternion.Euler(HazardStripeLeanDeg, 0f, 0f);
+
+                GameObject stripe = BevelledPart(root.transform, $"Stripe{i}", along * offset, stripeSize,
+                    HazardStripeMaterial());
+                stripe.transform.localRotation = stripeRot;
+            }
+
+            return root;
+        }
+
+        private static Material _hazardStripeMaterial;
+
+        /// <summary>The banding's own yellow, cached once — a real lit material (not
+        /// <see cref="Unlit"/>) carrying an actual <c>_EmissionColor</c>, the same "reads as LIT, not
+        /// just coloured" idiom <see cref="WorldMaterials"/>'s own hazard/circuit materials use, since a
+        /// stripe has to hold up inside an unlit bay on its own emission rather than a boosted albedo.
+        /// </summary>
+        private static Material HazardStripeMaterial()
+        {
+            if (_hazardStripeMaterial != null) return _hazardStripeMaterial;
+
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader) { name = "Stormdrain_HazardStripe", hideFlags = HideFlags.HideAndDontSave };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", HazardStripeColor);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", HazardStripeColor);
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", HazardStripeColor * HazardStripeEmissive);
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+
+            _hazardStripeMaterial = m;
+            return m;
         }
 
         /// <summary>A foam clump (MV-785) — the same flat, per-segment-jittered "Blob" every other
@@ -1548,6 +1702,14 @@ namespace MaxWorlds.Rendering
             foreach (var m in _unlit.Values)
                 if (m != null) { if (Application.isPlaying) Object.Destroy(m); else Object.DestroyImmediate(m); }
             _unlit.Clear();
+
+            if (_hazardStripeMaterial != null)
+            {
+                if (Application.isPlaying) Object.Destroy(_hazardStripeMaterial);
+                else Object.DestroyImmediate(_hazardStripeMaterial);
+                _hazardStripeMaterial = null;
+            }
+
             StormdrainLightKit.ClearCache();
         }
     }
