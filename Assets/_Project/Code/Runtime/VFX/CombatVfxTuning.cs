@@ -37,11 +37,11 @@ namespace MaxWorlds.VFX
             }
         }
 
-        // MV-770: at the ~48px/m play camera a 0.5m/0.08s flash punctuates a bolt too thin to see in
-        // the first place. Sized up alongside the bolt itself so the muzzle reads as the source of
-        // something, not a spark in front of nothing.
+        // MV-825 item 7: "a 0.35m white-orange flash at the muzzle for 0.06s per shot" -- tighter and
+        // shorter than MV-770's own 1.1m/0.14s now that the bolt itself carries the brightness (a
+        // sleek core + glow sheath), not the muzzle punctuating a sliver too thin to see.
         public static LppeMuzzleFlashTuning LppeMuzzle() =>
-            new LppeMuzzleFlashTuning(size: 1.1f, lifetime: 0.14f, spreadDegrees: 22f, forwardOffset: 0.4f);
+            new LppeMuzzleFlashTuning(size: 0.35f, lifetime: 0.06f, spreadDegrees: 22f, forwardOffset: 0.4f);
 
         /// <summary>A pulse impact: a flash sized to the damage plus a handful of sparks along the
         /// surface normal (spec: "3-5 short sparks").</summary>
@@ -115,33 +115,100 @@ namespace MaxWorlds.VFX
 
         public static LppeForkFlashTuning LppeForkFlash() => new LppeForkFlashTuning(flashSize: 1.6f, flashLifetime: 0.22f);
 
-        // --- MV-770: the bolt/rocket/salvo weight pass. Every magnitude the visual rescale needs
+        /// <summary>MV-825 item 7: an added spark burst on every hit -- 8 short streaks, layered on
+        /// top of whichever flash <see cref="LppeImpact"/>/<see cref="LppeShockImpact"/> just played,
+        /// never replacing it.</summary>
+        public readonly struct LppeBoltStreakTuning
+        {
+            public readonly int Count;
+            public readonly float Lifetime;
+            public readonly float SpreadDegrees;
+            public readonly float SpeedMin;
+            public readonly float SpeedMax;
+            public readonly float SizeMin;
+            public readonly float SizeMax;
+
+            public LppeBoltStreakTuning(int count, float lifetime, float spreadDegrees, float speedMin,
+                float speedMax, float sizeMin, float sizeMax)
+            {
+                Count = count;
+                Lifetime = lifetime;
+                SpreadDegrees = spreadDegrees;
+                SpeedMin = speedMin;
+                SpeedMax = speedMax;
+                SizeMin = sizeMin;
+                SizeMax = sizeMax;
+            }
+        }
+
+        public static LppeBoltStreakTuning LppeBoltImpactStreaks() =>
+            new LppeBoltStreakTuning(count: 8, lifetime: 0.12f, spreadDegrees: 110f, speedMin: 2.0f,
+                speedMax: 3.2f, sizeMin: 0.08f, sizeMax: 0.12f);
+
+        // --- MV-770/825: the bolt/rocket/salvo weight pass. Every magnitude the visual rescale needs
         // lives here too, same "nothing buried in an emit path" rule LppeVfx's own header states.
 
-        /// <summary>The LPPE bolt's own resolved shape — was 0.08m across and 0.35m long (3.8px/16.8px
-        /// at the ~48px/m play camera, thinner than the nameplate text above the robot it hits).</summary>
+        /// <summary>MV-825: Max's own LPPE bolt, rebuilt straight and ALONG the travel axis -- Lee
+        /// rejected the MV-815 crescent as reading like "a giant arrow sign" (a 0.9m chord lying
+        /// ACROSS travel, the trail spilling out of its own midpoint like an arrow's shaft). A thin
+        /// white-hot core carries the shape, a soft additive glow sheath around it carries the
+        /// brightness, three crackling filaments carry the "electric" read, and the trail now emits
+        /// from the bolt's own TAIL.</summary>
         public readonly struct LppeBoltTuning
         {
-            public readonly float CrossSection;
-            public readonly float Length;
+            public readonly float CoreLength;
+            public readonly float CoreDiameter;
+            public readonly float SheathDiameter;
+            public readonly float SheathExtension;
+            public readonly float SheathAlpha;
             public readonly float TrailWidth;
             public readonly float TrailLifetime;
             public readonly float GroundGlowDiameter;
+            public readonly int CrackleFilamentCount;
+            public readonly int CrackleVertexCount;
+            public readonly float CrackleWidth;
+            public readonly float CrackleMaxOffset;
+            public readonly float CrackleRerandomizeInterval;
+            public readonly float FlickerInterval;
+            public readonly float FlickerAmount;
+            public readonly float ForkSheathScale;
 
-            public LppeBoltTuning(float crossSection, float length, float trailWidth, float trailLifetime,
-                float groundGlowDiameter)
+            public LppeBoltTuning(float coreLength, float coreDiameter, float sheathDiameter,
+                float sheathExtension, float sheathAlpha, float trailWidth, float trailLifetime,
+                float groundGlowDiameter, int crackleFilamentCount, int crackleVertexCount,
+                float crackleWidth, float crackleMaxOffset, float crackleRerandomizeInterval,
+                float flickerInterval, float flickerAmount, float forkSheathScale)
             {
-                CrossSection = crossSection;
-                Length = length;
+                CoreLength = coreLength;
+                CoreDiameter = coreDiameter;
+                SheathDiameter = sheathDiameter;
+                SheathExtension = sheathExtension;
+                SheathAlpha = sheathAlpha;
                 TrailWidth = trailWidth;
                 TrailLifetime = trailLifetime;
                 GroundGlowDiameter = groundGlowDiameter;
+                CrackleFilamentCount = crackleFilamentCount;
+                CrackleVertexCount = crackleVertexCount;
+                CrackleWidth = crackleWidth;
+                CrackleMaxOffset = crackleMaxOffset;
+                CrackleRerandomizeInterval = crackleRerandomizeInterval;
+                FlickerInterval = flickerInterval;
+                FlickerAmount = flickerAmount;
+                ForkSheathScale = forkSheathScale;
             }
         }
 
         public static LppeBoltTuning LppeBolt() =>
-            new LppeBoltTuning(crossSection: 0.26f, length: 0.9f, trailWidth: 0.3f, trailLifetime: 0.12f,
-                groundGlowDiameter: 0.9f);
+            new LppeBoltTuning(
+                coreLength: 1.4f, coreDiameter: 0.05f,
+                sheathDiameter: 0.20f, sheathExtension: 0.1f, sheathAlpha: 0.55f,
+                trailWidth: 0.08f, trailLifetime: 0.10f,
+                groundGlowDiameter: 0.9f,
+                crackleFilamentCount: 3, crackleVertexCount: 7, crackleWidth: 0.025f,
+                crackleMaxOffset: 0.09f, crackleRerandomizeInterval: 0.04f,
+                flickerInterval: 0.03f, flickerAmount: 0.2f,
+                forkSheathScale: 1.25f);
+
 
         /// <summary>The Rack rocket body — was a 0.16m capsule (7.7px, roughly a third the bolt's own
         /// new length).</summary>

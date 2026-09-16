@@ -101,6 +101,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv822HazardBanding() => RunFromMenu(CapturePresets.All["mv822hazardbanding"]);
         public static void CaptureMv822HazardBanding() => Run(CapturePresets.All["mv822hazardbanding"]);
 
+        [MenuItem("MaxWorlds/Capture/LPPE Laser Fire (MV-825)")]
+        public static void MenuMv825LppeFire() => RunFromMenu(CapturePresets.All["mv825lppefire"]);
+        public static void CaptureMv825LppeFire() => Run(CapturePresets.All["mv825lppefire"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

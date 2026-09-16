@@ -21,11 +21,13 @@ namespace MaxWorlds.Tests.EditMode
     /// to it.
     ///
     /// MV-815 update: this test's own second half -- the resolved bolt mesh, walked along its own long
-    /// axis, is a single smooth curve, never the capsule's abrupt crease -- is culled. MV-815 replaced
-    /// the ogive of revolution that check was written against with a bowed crescent (a different mesh,
-    /// not a tweak to the same profile), so "walked along its own long axis" no longer resolves to
-    /// anything meaningful; the same "one smooth curve, no crease" property is now proven for the
-    /// crescent by <c>MV815CrescentBoltTests</c> instead.
+    /// axis, is a single smooth curve, never the capsule's abrupt crease -- was culled (the crescent
+    /// shape it proved has since been rejected and removed by MV-825).
+    ///
+    /// MV-825 update: the bolt itself split into a white-hot core plus an orange glow sheath, so "the
+    /// bolt reads orange" no longer resolves to the "Bolt" child (the core, now white-hot) -- it's the
+    /// "Sheath" child that carries the weapon's own orange identity, and the gauge (1b) is checked
+    /// against that instead.
     ///
     /// Fails on base commit f89c4e7: <c>SeekerPulse.BoltColor</c> is still the cold cyan-white
     /// (0.55, 0.95, 1).
@@ -58,12 +60,16 @@ namespace MaxWorlds.Tests.EditMode
             _pulse = SeekerPulse.Fire(Vector3.zero, Vector3.forward, speed: 18f, turnRateDegPerSec: 360f,
                 lifetime: 0.01f, damage: 9f, lockRange: 14f, lockHalfAngleDeg: 35f);
 
-            Transform boltMesh = _pulse.transform.Find("Bolt");
-            Assert.IsNotNull(boltMesh, "test precondition: SeekerPulse must build a child named 'Bolt'");
-            var renderer = boltMesh.GetComponent<MeshRenderer>();
+            Transform sheath = _pulse.transform.Find("Sheath");
+            Assert.IsNotNull(sheath, "test precondition: SeekerPulse must build a child named 'Sheath'");
+            var renderer = sheath.GetComponent<MeshRenderer>();
 
-            // --- (1a) colour: the bolt itself reads orange, not cyan-white ---
-            Color boltTint = renderer.sharedMaterial.GetColor("_BaseColor");
+            // --- (1a) colour: the sheath reads orange, not cyan-white -- MV-825 moved the bolt's own
+            // orange identity off the core (now white-hot) and onto the glow sheath around it, set via
+            // a MaterialPropertyBlock rather than the shared material.
+            var mpb = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(mpb);
+            Color boltTint = mpb.GetColor("_BaseColor");
             Assert.That(boltTint.r, Is.GreaterThan(boltTint.g),
                 $"bolt red ({boltTint.r:0.000}) is not ahead of green ({boltTint.g:0.000}) -- doesn't read orange");
             Assert.That(boltTint.g, Is.GreaterThan(boltTint.b),

@@ -331,6 +331,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
             Add(BuildMv822HazardBandingCheck());
+            Add(BuildMv825LppeFire());
             return d;
         }
 
@@ -2389,6 +2390,109 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-822", NoSetup) },
+            };
+        }
+
+        // ---- Mv825LppeFire (MV-825 AC4) --------------------------------------------------------
+
+        /// <summary>MV-825's own AC4 evidence: Max's rebuilt LPPE bolt (straight, along the travel
+        /// axis, with its glow sheath and crackle) firing at a live target, framed at the ACTUAL
+        /// gameplay camera's own pitch/distance -- same "at the play camera" idiom
+        /// <see cref="BuildMv819PipeCheck"/> established -- rather than <see cref="BuildMv758LppeSalvo"/>'s
+        /// own deliberately close, hand-picked design-review angle. Fires the REAL
+        /// <see cref="PulseLaser"/> component <see cref="PlayerController"/> self-attaches to Max
+        /// (MV-739) directly via <c>FireTick()</c>, not a standalone stand-in laser, so the bolt
+        /// genuinely originates from Max's own rig and the shot is "Max firing", not a VFX-only
+        /// isolate.</summary>
+        private static CapturePreset BuildMv825LppeFire()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            MethodInfo fireTickMethod =
+                typeof(PulseLaser).GetMethod("FireTick", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            GameObject targetGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo == null) throw new CaptureAbortException("no Player GameObject in the loaded scene");
+
+                PulseLaser laser = playerGo.GetComponent<PulseLaser>();
+                if (laser == null) throw new CaptureAbortException("Max's own PulseLaser never self-attached");
+
+                // Max's actual equipped primary drives which weapon MaxRig renders in his hand --
+                // FireTick() itself bypasses that gate (same reflection idiom BuildMv758LppeSalvo
+                // uses), but the shot must still show the LPPE, not whatever World 1 defaults to.
+                WeaponSystemState.ActivePrimary = WeaponCatalog.PrimaryKind.Lppe;
+
+                // Max's own real spawn position/facing, untouched. Two different teleport-to-open-room
+                // attempts (a plain transform write, then the same write with his CharacterController
+                // disabled for the move) both left the captured frame showing nothing but his own
+                // floating nameplate over a giant close dark surface -- something about his starting
+                // alcove's own collision setup doesn't tolerate a scripted relocation this way, and
+                // chasing it further isn't worth this one evidence shot. His real spawn, at a close but
+                // untouched-position combat distance, is the one configuration already proven to render
+                // correctly.
+                Vector3 focus = playerGo.transform.position;
+                Vector3 aimDir = playerGo.transform.forward;
+                aimDir.y = 0f;
+                if (aimDir.sqrMagnitude < 0.01f) aimDir = Vector3.forward; else aimDir.Normalize();
+
+                // Close enough that the pulse locks well inside PulseLaser.DefaultLockRange/
+                // DefaultLockHalfAngle (the reticle bracket + homing both read as real combat, not a
+                // straight miss).
+                Vector3 targetPos = focus + aimDir * 3f;
+                targetGo = BuildClusterRobot(EnemyKind.Bruiser, targetPos);
+                Physics.SyncTransforms();
+
+                // AC4: "at the play camera" -- the live FixedAngleCameraRig's own pitch, and a
+                // moderate partial zoom on its own distance (a hand-picked short distance put the
+                // camera through this starting alcove's own low roof -- see this method's own doc
+                // comment) so Max's actual rig and the bolt's flight both read clearly.
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = (rig != null ? rig.Distance : 24f) * 0.33f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + aimDir * 0.6f + Vector3.up * 1.1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                fireTickMethod.Invoke(laser, null);   // real FireTick() -> real SeekerPulse.Fire + Muzzle()
+
+                if (laser.LastSpawnedPulseForTests == null)
+                    throw new CaptureAbortException("FireTick did not spawn a SeekerPulse");
+
+                for (int settle = 0; settle < 2; settle++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv825lppefire",
+                LogTag = "[MV825Capture]",
+                Flag = "-mv825shot",
+                ArmFile = "Temp/mv825.arm",
+                HeadlessMarker = "Temp/mv825.headless",
+                DoneFileName = "_mv825_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck --
+                    // the LPPE is World 2's primary (MV-708).
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-825", Setup) },
+                Cleanup = () =>
+                {
+                    if (targetGo != null) Destroy(targetGo);
+                },
             };
         }
     }
