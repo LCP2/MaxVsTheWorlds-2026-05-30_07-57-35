@@ -67,8 +67,14 @@ namespace MaxWorlds.Tests.EditMode
                     "the pipe cover piece's collider size must be unchanged from its authored footprint");
 
                 // ---- bullet 1: nothing overhead crosses the playable middle. Every pipe renderer whose
-                // bounds centre sits above 1.5 m must be either within 1.6 m of a wall face or within
-                // 2.5 m of the area's near or far end. ----
+                // bounds centre sits above 1.5 m must be either within 1.7 m of a wall face or within
+                // 2.5 m of the area's near or far end. MV-819 raised StormdrainKit.OverheadMainInset from
+                // 0.95 to 1.65 m (the ticket's own worked example, pulling mains out from under the
+                // soffit) — this threshold was the OLD inset's own 1.6 m, now stale by construction: a
+                // correctly-inset main sits ~1.65 m out, which the old constant would always fail. 1.7 m
+                // is the new inset plus a small margin for endpoint/rounding slack, not a loosened gate —
+                // it stays well under the 2.5 m "near a zone end" branch, so this still catches a main
+                // that actually drifts into the room's own middle. ----
                 var faces = MapGeometry.Faces(map).Where(f => f.FacesRoom && f.Length >= 1.2f).ToList();
                 Assert.IsNotEmpty(faces, "World 2's map must have at least one dressable wall face for this test to mean anything");
 
@@ -95,7 +101,7 @@ namespace MaxWorlds.Tests.EditMode
                     float nearestWall = faces.Min(f => DistanceToSegment(c2, f.A, f.B));
                     float nearestEnd = zoneRects.Min(z => DistanceToNearestZoneEnd(c2, z));
 
-                    Assert.IsTrue(nearestWall <= 1.6f || nearestEnd <= 2.5f,
+                    Assert.IsTrue(nearestWall <= 1.7f || nearestEnd <= 2.5f,
                         $"{r.name} at {r.bounds.center} sits {r.bounds.center.y:F2} m up, {nearestWall:F2} m " +
                         $"from the nearest wall face and {nearestEnd:F2} m from the nearest zone end — it is " +
                         "crossing the playable middle");

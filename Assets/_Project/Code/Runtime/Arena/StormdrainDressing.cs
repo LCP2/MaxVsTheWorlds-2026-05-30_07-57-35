@@ -134,6 +134,11 @@ namespace MaxWorlds.Arena
             overhead.SetParent(root, false);
             var overheadFaces = new List<WallFace>();
 
+            // MV-819: resolved BEFORE the face loop below (not after, as MV-802 had it) so each face can
+            // be checked against its own zone's cross-main placement before building a competing main on
+            // the same wall — see FaceIsCrossMainWall's own doc for why the two can't coexist.
+            List<CrossMainTarget> crossMainTargets = ResolveCrossMainTargets(map);
+
             int seed = 0;
             foreach (WallFace face in MapGeometry.Faces(map))
             {
@@ -170,12 +175,16 @@ namespace MaxWorlds.Arena
                     }
                 }
 
-                StormdrainKit.DressOverheadRun(overhead, face.A, face.B, face.Out, map.wallHeight, seed);
+                // MV-819: a face that IS the wall a cross-main insets from never gets its own separate
+                // hugging main — see FaceIsCrossMainWall's own doc. Still added to overheadFaces below
+                // regardless, so the corner it sits on keeps its junction box.
+                if (!FaceIsCrossMainWall(face, crossMainTargets, map.wallThickness))
+                    StormdrainKit.DressOverheadRun(overhead, face.A, face.B, face.Out, map.wallHeight, seed);
                 if (map.wallHeight >= 2.2f) overheadFaces.Add(face);
             }
 
-            DressOverheadJunctions(overhead, overheadFaces);
-            DressOverheadCrossMains(overhead, map);
+            DressOverheadJunctions(overhead, overheadFaces, map.wallThickness);
+            DressOverheadCrossMains(overhead, crossMainTargets);
 
             DressWallPanels(root, host, map);
 
@@ -225,27 +234,33 @@ namespace MaxWorlds.Arena
 
         // ---------------------------------------------------------------- overhead structure (MV-802)
 
-        /// <summary>How close two wall-face endpoints must sit to count as the same corner — generous
-        /// enough for floating-point noise carried through <see cref="MapGeometry.Faces"/>, tight enough
-        /// to never merge two genuinely different corners on this world's own room scale.</summary>
-        private const float JunctionEpsilon = 0.05f;
+        /// <summary>MV-819: two wall faces that meet at what reads as one room corner are NOT built from
+        /// the same point — <see cref="MapGeometry.Cap"/> extends each wall run's own ends outward by a
+        /// full <c>wallThickness</c>, independently per line, so an alongX face's endpoint sits pushed
+        /// out along X while the perpendicular alongZ face's endpoint sits pushed out along Z. The two
+        /// points end up up to <c>wallThickness * sqrt(2)</c> apart, not touching — which is why no
+        /// junction box ever built before this ticket. <see cref="DressOverheadJunctions"/> is called
+        /// with <c>2 * wallThickness</c>, comfortably above that gap on this game's own wall scale,
+        /// without being loose enough to merge two actually-different corners.</summary>
+        private static float JunctionEpsilon(float wallThickness) => 2f * wallThickness;
 
         /// <summary>One junction box per corner where two of this ticket's own overhead runs meet
         /// (change 4) — found by pairing up the wall faces that actually got a run (already filtered to
         /// <c>wallHeight &gt;= 2.2 m</c> by the caller) and looking for a shared endpoint, deduplicated so
         /// three-plus faces meeting at one point (an L or a T) still get exactly one box.</summary>
-        private static void DressOverheadJunctions(Transform overhead, List<WallFace> faces)
+        private static void DressOverheadJunctions(Transform overhead, List<WallFace> faces, float wallThickness)
         {
+            float epsilon = JunctionEpsilon(wallThickness);
             var seen = new HashSet<Vector2Int>();
 
             for (int i = 0; i < faces.Count; i++)
             {
                 for (int j = i + 1; j < faces.Count; j++)
                 {
-                    if (!SharedEndpoint(faces[i], faces[j], out Vector2 corner, out Vector2 outSum)) continue;
+                    if (!SharedEndpoint(faces[i], faces[j], epsilon, out Vector2 corner, out Vector2 outSum)) continue;
                     if (outSum.sqrMagnitude < 0.0001f) continue;
 
-                    var key = new Vector2Int(Mathf.RoundToInt(corner.x * 20f), Mathf.RoundToInt(corner.y * 20f));
+                    var key = new Vector2Int(Mathf.RoundToInt(corner.x * 2f), Mathf.RoundToInt(corner.y * 2f));
                     if (!seen.Add(key)) continue;
 
                     Vector2 n = outSum.normalized;
@@ -257,25 +272,48 @@ namespace MaxWorlds.Arena
             }
         }
 
-        private static bool SharedEndpoint(WallFace f1, WallFace f2, out Vector2 corner, out Vector2 outSum)
+        private static bool SharedEndpoint(WallFace f1, WallFace f2, float epsilon, out Vector2 corner, out Vector2 outSum)
         {
-            if (Vector2.Distance(f1.A, f2.A) < JunctionEpsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
-            if (Vector2.Distance(f1.A, f2.B) < JunctionEpsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
-            if (Vector2.Distance(f1.B, f2.A) < JunctionEpsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
-            if (Vector2.Distance(f1.B, f2.B) < JunctionEpsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.A, f2.A) < epsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.A, f2.B) < epsilon) { corner = f1.A; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.B, f2.A) < epsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
+            if (Vector2.Distance(f1.B, f2.B) < epsilon) { corner = f1.B; outSum = f1.Out + f2.Out; return true; }
             corner = default; outSum = default; return false;
         }
 
-        /// <summary>The one cross-main each room gets (change 1) — at the end furthest from that room's
-        /// own entry, never over the middle. <see cref="MapRuntime.EntryDirection"/> already resolves
-        /// "which way did the player walk in from" per zone; the far end is simply further along that
-        /// same direction, inset from the wall there exactly like every overhead run already insets from
-        /// the wall it hugs. A zone with no resolvable entry (area 1 — entered from outside the map, not
-        /// through any authored gate) has no "far end" to speak of and gets no cross-main; nor does one
-        /// too narrow, across, to carry a main inset on both sides.</summary>
-        private static void DressOverheadCrossMains(Transform overhead, MapData map)
+        /// <summary>One zone's own resolved cross-main placement (MV-819, split out of
+        /// <see cref="DressOverheadCrossMains"/> so <see cref="FaceIsCrossMainWall"/> can test a wall
+        /// face against it BEFORE any main is built, not just build off it after the fact).
+        /// <see cref="FarLine"/> is the WALL's own coordinate (the zone edge the cross-main insets from),
+        /// not the cross-main's own line — that is what a wall face's own constant coordinate is
+        /// compared against.</summary>
+        private readonly struct CrossMainTarget
         {
-            if (map.zones == null || map.wallHeight < 2.2f) return;
+            public readonly bool AlongX;
+            public readonly float FarLine;
+            public readonly float Sign;
+            public readonly float CrossSpan;
+            public readonly float CrossMid;
+            public readonly Vector3 AcrossDir;
+
+            public CrossMainTarget(bool alongX, float farLine, float sign, float crossSpan, float crossMid, Vector3 acrossDir)
+            {
+                AlongX = alongX; FarLine = farLine; Sign = sign;
+                CrossSpan = crossSpan; CrossMid = crossMid; AcrossDir = acrossDir;
+            }
+        }
+
+        /// <summary>Every zone's own cross-main placement (change 1) — at the end furthest from that
+        /// zone's own entry, never over the middle. <see cref="MapRuntime.EntryDirection"/> already
+        /// resolves "which way did the player walk in from" per zone; the far end is simply further
+        /// along that same direction, inset from the wall there exactly like every overhead run already
+        /// insets from the wall it hugs. A zone with no resolvable entry (area 1 — entered from outside
+        /// the map, not through any authored gate) has no "far end" to speak of and gets no cross-main;
+        /// nor does one too narrow, across, to carry a main inset on both sides.</summary>
+        private static List<CrossMainTarget> ResolveCrossMainTargets(MapData map)
+        {
+            var result = new List<CrossMainTarget>();
+            if (map.zones == null || map.wallHeight < 2.2f) return result;
 
             foreach (MapZone zone in map.zones)
             {
@@ -293,19 +331,65 @@ namespace MaxWorlds.Arena
                 float sign = alongX
                     ? (entryDir.x > 0f ? -1f : 1f)
                     : (entryDir.z > 0f ? -1f : 1f);
-                float lineCoord = farLine + sign * StormdrainKit.OverheadMainInset;
 
-                float crossSpan = (alongX ? r.height : r.width) - StormdrainKit.OverheadMainInset * 2f;
+                // MV-819: retreats each end by inset+clearance, not inset alone — the perpendicular
+                // (end) wall's OWN hugging main sits exactly OverheadMainInset off that same wall, so a
+                // plain -inset retreat put the cross-main's own tip at THE SAME coordinate as that main's
+                // line, guaranteeing an intersection wherever the cross-main's run crosses it (confirmed
+                // empirically: AC1's change-2 check failed with the cross-main's bounds intersecting a
+                // perpendicular wall's main at exactly that shared coordinate). The extra
+                // OverheadCrossClearance matches the gap already proven to clear two parallel mains'
+                // AABBs (see that constant's own doc).
+                float endInset = StormdrainKit.OverheadMainInset + StormdrainKit.OverheadCrossClearance;
+                float crossSpan = (alongX ? r.height : r.width) - endInset * 2f;
                 if (crossSpan < 1.2f) continue;
 
                 float crossMid = alongX ? r.center.y : r.center.x;
-                Vector3 center = alongX
-                    ? new Vector3(lineCoord, StormdrainKit.OverheadCrossY, crossMid)
-                    : new Vector3(crossMid, StormdrainKit.OverheadCrossY, lineCoord);
                 Vector3 acrossDir = alongX ? Vector3.forward : Vector3.right;
 
-                StormdrainKit.BuildOverheadCrossMain(overhead, center, crossSpan, acrossDir);
+                result.Add(new CrossMainTarget(alongX, farLine, sign, crossSpan, crossMid, acrossDir));
             }
+            return result;
+        }
+
+        private static void DressOverheadCrossMains(Transform overhead, List<CrossMainTarget> targets)
+        {
+            foreach (CrossMainTarget t in targets)
+            {
+                float lineCoord = t.FarLine + t.Sign * (StormdrainKit.OverheadMainInset + StormdrainKit.OverheadCrossClearance);
+                Vector3 center = t.AlongX
+                    ? new Vector3(lineCoord, StormdrainKit.OverheadCrossY, t.CrossMid)
+                    : new Vector3(t.CrossMid, StormdrainKit.OverheadCrossY, lineCoord);
+
+                StormdrainKit.BuildOverheadCrossMain(overhead, center, t.CrossSpan, t.AcrossDir);
+            }
+        }
+
+        /// <summary>MV-819: true if <paramref name="face"/> IS (or closely parallels) the wall a
+        /// cross-main insets from. Found by comparing axes: a cross-main built off an alongX target runs
+        /// along Z, parallel to any X-normal wall face at the same X coordinate as that target's own
+        /// <see cref="CrossMainTarget.FarLine"/> — which is exactly the far wall itself, since that is
+        /// where <see cref="CrossMainTarget.FarLine"/> comes from. Building this face's OWN hugging main
+        /// too put a second, separately-inset pipe running the full length of the same wall only
+        /// <see cref="StormdrainKit.OverheadCrossClearance"/> away from the cross-main's own line —
+        /// visually indistinguishable from the gameplay camera for nearly the run's whole length
+        /// (confirmed empirically: a real far-wall main scored 0% visible under the AC1 sweep, occluded
+        /// almost entirely by its own zone's cross-main). The cross-main alone already reads as "pipe
+        /// along this wall"; skipping the wall's own separate main here is what removes the duplicate,
+        /// not a threshold tweak on either one — the two mains simply cannot both exist this close
+        /// together and still both read as visible pipes.</summary>
+        private static bool FaceIsCrossMainWall(WallFace face, List<CrossMainTarget> targets, float wallThickness)
+        {
+            float epsilon = JunctionEpsilon(wallThickness);
+            bool faceIsXNormal = Mathf.Abs(face.Out.x) > Mathf.Abs(face.Out.y);
+            float faceCoord = faceIsXNormal ? face.A.x : face.A.y;
+
+            foreach (CrossMainTarget t in targets)
+            {
+                if (t.AlongX != faceIsXNormal) continue;
+                if (Mathf.Abs(faceCoord - t.FarLine) < epsilon) return true;
+            }
+            return false;
         }
 
         /// <summary>MV-791: <c>MapGeometry.Floor</c>'s single "Map Floor" slab and this kit's cast bays

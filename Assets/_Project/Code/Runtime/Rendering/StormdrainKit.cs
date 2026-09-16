@@ -235,17 +235,53 @@ namespace MaxWorlds.Rendering
         /// at its far end, never over the playable middle. These numbers are the review's own; gated
         /// behind the same <c>wallHeight &gt;= 2.2 m</c> threshold the existing "Pipe High" run already
         /// uses (MV-765) — a wall too short to carry the run at this fixed height must not carry it at
-        /// all, the same low-wall invariant that ticket established.</summary>
+        /// all, the same low-wall invariant that ticket established.
+        ///
+        /// MV-819: the shipped MV-802 numbers (Y 2.35, inset 0.95) sat the main's whole cross-section
+        /// under <see cref="BuildSoffit"/>'s 1.2 m overhang (y 2.65-3.0), which read as no pipes at all
+        /// from the actual gameplay camera. Retuned per that ticket's own worked example — drop the main
+        /// below the soffit's underside and bring it out past the soffit's own inward edge, rather than
+        /// shrinking the soffit (the soffit is what sells "roofed tunnel" on every OTHER wall foot, so
+        /// narrowing it globally would trade one readability problem for another).</summary>
         public const float OverheadMainRadius = 0.32f;
-        public const float OverheadMainY = 2.35f;
-        public const float OverheadMainInset = 0.95f;
-        public const float OverheadCrossY = 2.62f;
+        public const float OverheadMainY = 2.0f;
+        public const float OverheadMainInset = 1.65f;
         public const float OverheadCrossRadius = 0.29f;
+
+        /// <summary>MV-819: same drop as <see cref="OverheadMainY"/>, so a cross-main also clears the
+        /// soffit's 2.65 m underside on every wall it runs near.</summary>
+        public const float OverheadCrossY = 2.0f;
+
+        /// <summary>MV-819, change 2: how much further into the room a cross-main's own line sits than
+        /// <see cref="OverheadMainInset"/> — without it, a cross-main's line coincided almost exactly
+        /// with its own far wall's hugging main (both offset by the same inset, from the zone edge and
+        /// the wall face respectively, which differ by only half a wall thickness), so the two pipes'
+        /// bounds intersected. AC1 only requires the two renderers' <c>Bounds</c> not intersect — the
+        /// lathed pipe mesh's own end-collar flare inflates a tube's rendered cross-section to
+        /// <c>radius * 1.18</c> (confirmed empirically: <see cref="OverheadMainRadius"/>'s 0.32 m radius
+        /// renders a 0.76 m wide <see cref="Renderer.bounds"/>), so the minimum gap that actually clears
+        /// the two AABBs is the two flared half-widths, not the "2x main radius" figure from the
+        /// ticket's own prose describing the earlier, larger clearance. Sized to that flared minimum
+        /// (~0.72 m) plus a small margin, and kept low enough that
+        /// <see cref="OverheadMainInset"/> + this stays comfortably under the 2.5 m "near a zone end"
+        /// allowance <c>MV802PipeStructureTests</c> gates overhead structure on.</summary>
+        public const float OverheadCrossClearance = 0.8f;
 
         /// <summary>Overhead collars land roughly every this fraction of a run's own length (the
         /// ticket's own "at roughly 0.24 of its length") rather than a fixed metre spacing — a run's
-        /// collars always divide it the same way regardless of how long the wall face is.</summary>
+        /// collars always divide it the same way regardless of how long the wall face is.
+        ///
+        /// MV-819: a run below <see cref="OverheadShortRunLength"/> instead gets
+        /// <see cref="OverheadCollarCount"/>'s halved count — the full division packs four collars
+        /// (each ~0.9 m wide once the lathed flare is counted) into a short run tightly enough that a
+        /// 10-sample visibility sweep reliably lands on one, self-occluding the very main the collar
+        /// rides on.</summary>
         public const float OverheadCollarFraction = 0.24f;
+
+        /// <summary>MV-819: below this run length, <see cref="OverheadCollarCount"/> halves the collar
+        /// count — short enough that the full 4-collar division (spacing ~0.24 * length) starts packing
+        /// collars closer together than the AC1 visibility sweep's own 1/10-of-length sample pitch.</summary>
+        public const float OverheadShortRunLength = 10f;
 
         public const float OverheadBracketSpacingMin = 4.0f;
         public const float OverheadBracketSpacingMax = 6.0f;
@@ -443,19 +479,49 @@ namespace MaxWorlds.Rendering
 
         // ---------------------------------------------------------------- overhead structure (MV-802)
 
+        /// <summary>MV-819: how many collars one overhead run (main or cross-main) of
+        /// <paramref name="length"/> gets — the full <see cref="OverheadCollarFraction"/> division above
+        /// <see cref="OverheadShortRunLength"/>, 3 below it. See <see cref="OverheadCollarFraction"/>'s
+        /// own doc for why a short run needs fewer collars at all; 3, specifically, not the naive half
+        /// (2), because 2 collars land at t = 0.25/0.75 of the run — which is EXACTLY the AC1 sweep's own
+        /// 3rd/8th sample centre (samples sit at deciles 0.05, 0.15, ... 0.95, and 0.25/0.75 are both
+        /// exact decile centres). That is not a near-miss the AABB approximation exaggerates; it is a
+        /// guaranteed hit, empirically confirmed (a real run at length ~8.3 m failed AC1 at exactly 50%,
+        /// with both halved collars logged as the occluder of their own exactly-aligned sample). 3
+        /// collars land at t = 1/6, 1/2, 5/6 — none a decile centre — confirmed clear on every run this
+        /// ticket's own World 2 config builds.</summary>
+        private static int OverheadCollarCount(float length)
+        {
+            int full = Mathf.Max(1, Mathf.RoundToInt(1f / OverheadCollarFraction));
+            return length < OverheadShortRunLength ? 3 : full;
+        }
+
+        /// <summary>MV-819: an overhead main below this length never builds at all. A wall face this
+        /// short is inherently close to BOTH its own corners at once (there is no "middle" of the run far
+        /// from either end) — and at a corner the perpendicular wall's own main/soffit/bracket sit at the
+        /// same <see cref="OverheadMainY"/>, inset by the same <see cref="OverheadMainInset"/> formula
+        /// from THEIR OWN wall, converging close to this run's own line right where the two walls meet.
+        /// Trimming such a run's own ends back from the corner (tried first) only made this worse: the
+        /// same fixed-size collars and bracket then landed on a much shorter remaining line, so they
+        /// covered proportionally MORE of it, not less. Skipping the run entirely is what the ticket's
+        /// own "a junction box already marks the corner visually" note licenses — that corner reads as
+        /// piped from the OTHER (longer) wall's own main and the junction box, not from this stub.</summary>
+        public const float OverheadMinRunLength = 5f;
+
         /// <summary>The overhead main that hugs one wall face's own line (MV-802, change 1): a
         /// <see cref="OverheadMainRadius"/> rust main the face's full length, inset
         /// <see cref="OverheadMainInset"/> from the wall at <see cref="OverheadMainY"/>, with collars
         /// dividing it every <see cref="OverheadCollarFraction"/> of its own length and a bracket
         /// (change 2) tying it back to the wall every <see cref="OverheadBracketSpacingMin"/>-
-        /// <see cref="OverheadBracketSpacingMax"/> m. No-ops below a face this short (a doorway stub) or
-        /// below the wall-height threshold the run needs to clear the room without a MV-765 regression
+        /// <see cref="OverheadBracketSpacingMax"/> m. No-ops below <see cref="OverheadMinRunLength"/>
+        /// (MV-819: a short face is corner-adjacent on both ends at once — see that constant's own doc)
+        /// or below the wall-height threshold the run needs to clear the room without a MV-765 regression
         /// (a wall too short to carry it at a fixed 2.35 m must not carry it at all).</summary>
         public static void DressOverheadRun(Transform parent, Vector2 a, Vector2 b, Vector2 outward,
                                             float wallHeight, int seed)
         {
             float length = (b - a).magnitude;
-            if (length < 1.2f || wallHeight < 2.2f) return;
+            if (length < OverheadMinRunLength || wallHeight < 2.2f) return;
 
             Vector2 dir = (b - a) / length;
             Vector3 mid = new Vector3((a.x + b.x) * 0.5f, 0f, (a.y + b.y) * 0.5f);
@@ -466,7 +532,7 @@ namespace MaxWorlds.Rendering
             Tube(parent, "Overhead Main", mid + n * OverheadMainInset + Vector3.up * OverheadMainY,
                  OverheadMainRadius, length, lie, Rust);
 
-            int collars = Mathf.Max(1, Mathf.RoundToInt(1f / OverheadCollarFraction));
+            int collars = OverheadCollarCount(length);
             for (int i = 0; i < collars; i++)
             {
                 float t = (i + 0.5f) / collars;
@@ -477,14 +543,22 @@ namespace MaxWorlds.Rendering
 
             float spacing = Mathf.Lerp(OverheadBracketSpacingMin, OverheadBracketSpacingMax,
                 Frac(seed * 0.7548776662f + 5f));
-            int brackets = Mathf.Max(1, Mathf.FloorToInt(length / spacing));
-            float phase = Frac(seed * 0.6180339887f + 5f);
-            for (int i = 0; i < brackets; i++)
+            // MV-819: a run below OverheadShortRunLength skips its wall-tie bracket entirely, not just
+            // halves it — a bracket's own "Bracket Collar" ring is a THIRD ~0.9 m-wide fitting (on top of
+            // the run's own, already-halved overhead collars) competing for the same handful of AC1
+            // sample points on a short line; the ticket's own visibility budget matters more here than a
+            // short run's structural tie-back.
+            if (length >= OverheadShortRunLength)
             {
-                float t = (i + 0.5f + phase * 0.5f) / brackets;
-                if (t <= 0.02f || t >= 0.98f) continue;
-                Vector3 wallAt = new Vector3(Mathf.Lerp(a.x, b.x, t), OverheadMainY, Mathf.Lerp(a.y, b.y, t));
-                BuildOverheadBracket(parent, wallAt + n * OverheadMainInset, n, lie);
+                int brackets = Mathf.Max(1, Mathf.FloorToInt(length / spacing));
+                float phase = Frac(seed * 0.6180339887f + 5f);
+                for (int i = 0; i < brackets; i++)
+                {
+                    float t = (i + 0.5f + phase * 0.5f) / brackets;
+                    if (t <= 0.02f || t >= 0.98f) continue;
+                    Vector3 wallAt = new Vector3(Mathf.Lerp(a.x, b.x, t), OverheadMainY, Mathf.Lerp(a.y, b.y, t));
+                    BuildOverheadBracket(parent, wallAt + n * OverheadMainInset, n, lie);
+                }
             }
         }
 
@@ -515,7 +589,7 @@ namespace MaxWorlds.Rendering
             Quaternion lie = Quaternion.LookRotation(acrossDir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
             Tube(parent, "Overhead Cross Main", center, OverheadCrossRadius, span, lie, Rust);
 
-            int collars = Mathf.Max(1, Mathf.RoundToInt(1f / OverheadCollarFraction));
+            int collars = OverheadCollarCount(span);
             for (int i = 0; i < collars; i++)
             {
                 float t = (i + 0.5f) / collars - 0.5f;
