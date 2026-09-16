@@ -240,12 +240,37 @@ namespace MaxWorlds.Arena
         /// <see cref="SludgeColor"/>.</summary>
         private static readonly Color DeckGrateColor = new Color(0.42f, 0.44f, 0.47f);
 
-        /// <summary>Hazard-yellow kerb rail (MV-692).</summary>
-        private static readonly Color DeckRailColor = new Color(0.85f, 0.65f, 0.15f);
-
         private const float SludgeThickness = 0.05f;
-        private const float DeckRailHeight = 1.5f;
-        private const float DeckRailThickness = 0.08f;
+
+        /// <summary>MV-821: the rail's replacement — a flat hazard edge at most this tall above the
+        /// deck top (the ticket's own cap: "nothing on an edge may stand taller than 0.10 m"), striped
+        /// with the approved <see cref="StormdrainKit.BuildHazardBanding"/> banding so the edge reads
+        /// as a painted hazard line rather than a barrier.</summary>
+        private const float DeckEdgeBandHeight = 0.10f;
+
+        /// <summary>The ticket's own "0.12 m-wide painted stripe" figure — the banding plate's depth
+        /// across the deck's outer edge.</summary>
+        private const float DeckEdgeBandWidth = 0.12f;
+
+        /// <summary>A visible structural beam under each deck edge (MV-821 change 2), built entirely
+        /// OUTSIDE the deck's own footprint (hung off the outer face) so it never counts as infill under
+        /// the walkway.</summary>
+        private const float DeckEdgeBeamDepth = 0.15f;
+        private const float DeckEdgeBeamThickness = 0.10f;
+
+        /// <summary>Support posts (MV-821 change 2): 0.2 m square, floor to slab underside, at every
+        /// corner and at no more than this spacing along each edge — the only thing allowed to occupy
+        /// the open space under a deck.</summary>
+        private const float DeckPostSize = 0.2f;
+        private const float DeckPostSpacing = 4.0f;
+
+        /// <summary>The ground shadow band under a deck's footprint (MV-821 change 3) — a flush decal,
+        /// proud of the floor by a hair (same idiom as <see cref="StormdrainKit.HazardStripeProud"/>),
+        /// so it reads as covered floor rather than as an obstruction under the walkway.</summary>
+        private const float DeckShadowThickness = 0.02f;
+        private const float DeckShadowProud = 0.01f;
+        private const float DeckShadowDarken = 0.30f;
+
         private const float RampThickness = 0.15f;
 
         /// <summary>Roughly one bubble emitter's worth of bubbles per this many square metres of sludge
@@ -293,10 +318,13 @@ namespace MaxWorlds.Arena
             return Color.Lerp(SludgeColor, SludgeTealColor, t);
         }
 
-        /// <summary>A deck's walkable top slab plus its kerb rails (MV-692) — the rail on whichever
-        /// edge a ramp actually climbs into is skipped, so the mouth stays open. Carries
-        /// <see cref="DeckVisibility"/> so the grate/rails fade out from directly under Max
-        /// (readability rule, change item 5).</summary>
+        /// <summary>A deck's walkable top slab, built as an open raised walkway rather than a walled
+        /// block (MV-821): a flat hazard edge (skipped on whichever wall a ramp/bridge actually climbs
+        /// into, so the mouth stays open, same as the rails it replaces), a structural edge beam and
+        /// corner/spacing posts holding it up with the floor beneath left visibly open, and a darker
+        /// ground shadow so that open floor still reads as covered space Max can walk into. Carries
+        /// <see cref="DeckVisibility"/> so the grate still fades out from directly under Max (readability
+        /// rule, change item 5) — it now has no rails to hide.</summary>
         private static void BuildDeck(MapData map, Transform root, MapEntity e)
         {
             DeckSlab slab = default;
@@ -311,15 +339,19 @@ namespace MaxWorlds.Arena
             body.isStatic = false; // MV-692: DeckVisibility repaints it every frame it's near Max
 
             HashSet<Wall> mouths = DeckMouthWalls(map, e);
-            var rails = new List<GameObject>(4);
             foreach (Wall wall in AllWalls)
             {
                 if (mouths.Contains(wall)) continue;
-                rails.Add(BuildDeckRail(root, e, wall, slab.TopY));
+                BuildDeckEdgeBand(root, e, wall, slab.TopY);
+                BuildDeckEdgeBeam(root, e, wall, slab.TopY);
             }
 
+            BuildDeckPosts(root, e, slab.TopY);
+            BuildDeckGroundShadow(root, e);
+
             var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
-            body.AddComponent<DeckVisibility>().Configure(body.GetComponent<Renderer>(), rails.ToArray(), footprint, slab.TopY);
+            body.AddComponent<DeckVisibility>().Configure(
+                body.GetComponent<Renderer>(), System.Array.Empty<GameObject>(), footprint, slab.TopY);
         }
 
         private static readonly Wall[] AllWalls = { Wall.N, Wall.E, Wall.S, Wall.W };
@@ -351,36 +383,143 @@ namespace MaxWorlds.Arena
             return mouths;
         }
 
-        private static GameObject BuildDeckRail(Transform root, MapEntity deck, Wall wall, float topY)
+        /// <summary>The flat hazard edge that replaces the old 1.5 m rail (MV-821 change 1): the
+        /// approved <see cref="StormdrainKit.BuildHazardBanding"/> banding, capped at
+        /// <see cref="DeckEdgeBandHeight"/> and rising from the deck top rather than blocking the view
+        /// down onto (or off) the walkway. Positioned exactly on the deck's outer edge, same convention
+        /// the rail it replaces used.</summary>
+        private static void BuildDeckEdgeBand(Transform root, MapEntity deck, Wall wall, float topY)
         {
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float bandCenterY = topY + DeckEdgeBandHeight * 0.5f;
+            Vector3 centre;
+            float length;
+            bool alongX;
+            switch (wall)
+            {
+                case Wall.N:
+                    centre = new Vector3(deck.x, bandCenterY, deck.z + halfD);
+                    length = deck.width; alongX = true;
+                    break;
+                case Wall.S:
+                    centre = new Vector3(deck.x, bandCenterY, deck.z - halfD);
+                    length = deck.width; alongX = true;
+                    break;
+                case Wall.E:
+                    centre = new Vector3(deck.x + halfW, bandCenterY, deck.z);
+                    length = deck.depth; alongX = false;
+                    break;
+                default: // Wall.W
+                    centre = new Vector3(deck.x - halfW, bandCenterY, deck.z);
+                    length = deck.depth; alongX = false;
+                    break;
+            }
+
+            GameObject band = StormdrainKit.BuildHazardBanding(root, centre, length, DeckEdgeBandHeight, alongX, DeckEdgeBandWidth);
+            band.name = $"{deck.id}_edge_{wall}";
+        }
+
+        /// <summary>A visible structural beam hung off each deck edge (MV-821 change 2) — built entirely
+        /// outside the deck's own horizontal footprint (pushed outward by half its own thickness), so it
+        /// reads as a beam bolted to the walkway's edge rather than as infill closing the open space
+        /// underneath.</summary>
+        private static void BuildDeckEdgeBeam(Transform root, MapEntity deck, Wall wall, float topY)
+        {
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float underside = topY - MapGeometry.DeckThickness;
+            float beamCenterY = underside - DeckEdgeBeamDepth * 0.5f;
+            float outward = DeckEdgeBeamThickness * 0.5f;
             Vector3 center;
             Vector3 size;
             switch (wall)
             {
                 case Wall.N:
-                    center = new Vector3(deck.x, topY + DeckRailHeight * 0.5f, deck.z + halfD);
-                    size = new Vector3(deck.width, DeckRailHeight, DeckRailThickness);
+                    center = new Vector3(deck.x, beamCenterY, deck.z + halfD + outward);
+                    size = new Vector3(deck.width, DeckEdgeBeamDepth, DeckEdgeBeamThickness);
                     break;
                 case Wall.S:
-                    center = new Vector3(deck.x, topY + DeckRailHeight * 0.5f, deck.z - halfD);
-                    size = new Vector3(deck.width, DeckRailHeight, DeckRailThickness);
+                    center = new Vector3(deck.x, beamCenterY, deck.z - halfD - outward);
+                    size = new Vector3(deck.width, DeckEdgeBeamDepth, DeckEdgeBeamThickness);
                     break;
                 case Wall.E:
-                    center = new Vector3(deck.x + halfW, topY + DeckRailHeight * 0.5f, deck.z);
-                    size = new Vector3(DeckRailThickness, DeckRailHeight, deck.depth);
+                    center = new Vector3(deck.x + halfW + outward, beamCenterY, deck.z);
+                    size = new Vector3(DeckEdgeBeamThickness, DeckEdgeBeamDepth, deck.depth);
                     break;
                 default: // Wall.W
-                    center = new Vector3(deck.x - halfW, topY + DeckRailHeight * 0.5f, deck.z);
-                    size = new Vector3(DeckRailThickness, DeckRailHeight, deck.depth);
+                    center = new Vector3(deck.x - halfW - outward, beamCenterY, deck.z);
+                    size = new Vector3(DeckEdgeBeamThickness, DeckEdgeBeamDepth, deck.depth);
                     break;
             }
 
-            GameObject rail = Spawn(root, $"{deck.id}_rail_{wall}", PrimitiveType.Cube, center, size);
-            StripCollider(rail); // MV-692: visual only, never a collider
-            Tint(rail, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckRailColor));
-            rail.isStatic = true;
-            return rail;
+            StormdrainKit.Box(root, $"{deck.id}_beam_{wall}", center, size, DeckGrateColor, SurfaceKind.Metal);
+        }
+
+        /// <summary>Support posts at every corner and at no more than <see cref="DeckPostSpacing"/>
+        /// along each edge (MV-821 change 2), floor to slab underside — the only thing built in the open
+        /// space under a deck, so that space still reads as visibly open between them. Corners are added
+        /// once each (two edges would otherwise both claim the same corner point).</summary>
+        private static void BuildDeckPosts(Transform root, MapEntity deck, float topY)
+        {
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float underside = topY - MapGeometry.DeckThickness;
+            float postHeight = Mathf.Max(0.01f, underside);
+            float postCenterY = postHeight * 0.5f;
+
+            var seen = new HashSet<Vector2Int>();
+            var posts = new List<Vector2>();
+
+            void Add(float x, float z)
+            {
+                var key = new Vector2Int(Mathf.RoundToInt(x * 100f), Mathf.RoundToInt(z * 100f));
+                if (seen.Add(key)) posts.Add(new Vector2(x, z));
+            }
+
+            Add(deck.x - halfW, deck.z - halfD);
+            Add(deck.x + halfW, deck.z - halfD);
+            Add(deck.x + halfW, deck.z + halfD);
+            Add(deck.x - halfW, deck.z + halfD);
+
+            AddEdgePosts(Add, deck.x - halfW, deck.x + halfW, deck.z - halfD, alongX: true);
+            AddEdgePosts(Add, deck.x - halfW, deck.x + halfW, deck.z + halfD, alongX: true);
+            AddEdgePosts(Add, deck.z - halfD, deck.z + halfD, deck.x - halfW, alongX: false);
+            AddEdgePosts(Add, deck.z - halfD, deck.z + halfD, deck.x + halfW, alongX: false);
+
+            for (int i = 0; i < posts.Count; i++)
+            {
+                Vector3 center = new Vector3(posts[i].x, postCenterY, posts[i].y);
+                StormdrainKit.Box(root, $"{deck.id}_post{i}", center,
+                    new Vector3(DeckPostSize, postHeight, DeckPostSize), DeckGrateColor, SurfaceKind.Metal);
+            }
+        }
+
+        /// <summary>Interior posts along one edge, spaced no more than <see cref="DeckPostSpacing"/>
+        /// apart — the corners themselves are added separately by the caller.</summary>
+        private static void AddEdgePosts(System.Action<float, float> add, float from, float to, float fixedCoord, bool alongX)
+        {
+            float length = to - from;
+            int intervals = Mathf.Max(1, Mathf.CeilToInt(length / DeckPostSpacing));
+            for (int i = 1; i < intervals; i++)
+            {
+                float t = from + length * i / (float)intervals;
+                if (alongX) add(t, fixedCoord); else add(fixedCoord, t);
+            }
+        }
+
+        /// <summary>The ground under a deck's footprint reads as covered floor, not empty space (MV-821
+        /// change 3): a thin decal, proud of the floor by a hair, tinted <see cref="DeckShadowDarken"/>
+        /// darker than this world's own resolved ground tone.</summary>
+        private static void BuildDeckGroundShadow(Transform root, MapEntity deck)
+        {
+            Color ground = MaterialLibrary.Palette.GroundBase;
+            Color tone = new Color(ground.r * (1f - DeckShadowDarken), ground.g * (1f - DeckShadowDarken),
+                                    ground.b * (1f - DeckShadowDarken), 1f);
+
+            float centerY = DeckShadowProud + DeckShadowThickness * 0.5f;
+            GameObject shadow = Spawn(root, $"{deck.id}_ground_shadow", PrimitiveType.Cube,
+                new Vector3(deck.x, centerY, deck.z), new Vector3(deck.width, DeckShadowThickness, deck.depth));
+            StripCollider(shadow);
+            Tint(shadow, MaterialLibrary.Tinted(SurfaceKind.Ground, tone));
+            shadow.isStatic = true;
         }
 
         /// <summary>A ramp's walkable slope (MV-692) — one box, tilted so its top face runs continuously
