@@ -41,6 +41,11 @@ namespace MaxWorlds.VFX
         /// follows it, not a second, competing colour language.</summary>
         private static readonly Color ForkFlashColor = new Color(1.75f, 0.85f, 0.20f, 1f);
 
+        /// <summary>MV-825 item 7: the added hit-streak burst's own tail colour — the sparks fade from
+        /// <see cref="SparkColor"/> into this, so they read as an extension of the bolt's own white-hot
+        /// core landing, not a third unrelated colour.</summary>
+        private static readonly Color BoltStreakColor = new Color(1.35f, 1.05f, 0.85f, 1f);
+
         private VfxBurst _muzzleFlash;
         private VfxBurst _impactFlash;
         private VfxBurst _impactSparks;
@@ -48,6 +53,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _shockSparks;
         private VfxBurst _windupRing;
         private VfxBurst _forkFlash;
+        private VfxBurst _boltStreaks;
         private bool _initialized;
 
         /// <summary>How many muzzle flashes this instance has ever emitted — the resolved count a
@@ -78,6 +84,10 @@ namespace MaxWorlds.VFX
             // MV-814: its own burst — FORK's flash must never share _impactFlash, or a fork release
             // landing back-to-back with an ordinary impact would silently swallow one of the two beats.
             _forkFlash = new VfxBurst("LppeForkFlash", additive, 24, 0f, perFrameCap: 4);
+
+            // MV-825 item 7: its own burst — layered on top of whichever impact beat above just
+            // played, never replacing it, so it must never share either sparks burst.
+            _boltStreaks = new VfxBurst("LppeBoltStreaks", additive, 60, 0.6f, perFrameCap: 4, stretched: true);
         }
 
         /// <summary>The muzzle punctuation (spec item 1) — a short, hard flash at the emitter, along
@@ -109,6 +119,16 @@ namespace MaxWorlds.VFX
                 Emit(_shockFlash, _shockSparks, point, CombatVfxTuning.LppeShockImpact(), ShockFlashColor, ShockSparkColor);
             else
                 Emit(_impactFlash, _impactSparks, point, CombatVfxTuning.LppeImpact(damage), ImpactColor, SparkColor);
+
+            // MV-825 item 7: "a spark burst of 8 short streaks ... plus the existing impact" — always
+            // on top of whichever beat above just played, shock or not.
+            CombatVfxTuning.LppeBoltStreakTuning streaks = CombatVfxTuning.LppeBoltImpactStreaks();
+            _boltStreaks.Emit(point, streaks.Count,
+                axis: Vector3.up, spreadDegrees: streaks.SpreadDegrees,
+                speedMin: streaks.SpeedMin, speedMax: streaks.SpeedMax,
+                sizeMin: streaks.SizeMin, sizeMax: streaks.SizeMax,
+                lifeMin: streaks.Lifetime, lifeMax: streaks.Lifetime,
+                colorA: SparkColor, colorB: BoltStreakColor);
         }
 
         /// <summary>The pre-Shock tell (spec part 2, item 1): a bright ring collapsing into the muzzle
@@ -168,14 +188,14 @@ namespace MaxWorlds.VFX
             if (!_initialized) return;
             _muzzleFlash.EndFrame(); _impactFlash.EndFrame(); _impactSparks.EndFrame();
             _shockFlash.EndFrame(); _shockSparks.EndFrame(); _windupRing.EndFrame();
-            _forkFlash.EndFrame();
+            _forkFlash.EndFrame(); _boltStreaks.EndFrame();
         }
 
         private void OnDestroy()
         {
             Dispose(_muzzleFlash); Dispose(_impactFlash); Dispose(_impactSparks);
             Dispose(_shockFlash); Dispose(_shockSparks); Dispose(_windupRing);
-            Dispose(_forkFlash);
+            Dispose(_forkFlash); Dispose(_boltStreaks);
         }
 
         private static void Dispose(VfxBurst b)

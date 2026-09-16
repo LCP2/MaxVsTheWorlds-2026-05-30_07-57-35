@@ -21,6 +21,12 @@ namespace MaxWorlds.Tests.EditMode
     /// -- so the two kinds no longer share ONE mesh between them; each kind now shares its own. This
     /// test's own "no per-shot rebuild" story is otherwise unchanged and still holds for both.
     ///
+    /// MV-825 update: Max's own bolt is no longer one mesh -- it's a core plus a sheath. The
+    /// per-axis-length numeric checks this test used to make against the crescent's own chord (an
+    /// authored constant that no longer exists in this shape) are now MV-825's own AC1(a), asserted in
+    /// <c>MV825LaserBoltTests</c> instead; what's left here is the general "no per-shot rebuild" cache
+    /// story, extended to both of Max's own meshes.
+    ///
     /// Fails on base commit 9751529: firing a second LPPE pulse builds a distinct Mesh object from
     /// the first (no cache), and the Sentinel's own bolt is a different mesh entirely (a capsule
     /// primitive, not the lathe).
@@ -28,9 +34,10 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class MV810BoltMeshCacheTests
     {
         [Test]
-        public void TwentyPulsesShareOneCachedMesh_AndSoDoTwoSentinelBolts_ButTheTwoKindsDiffer()
+        public void TwentyPulsesShareOneCoreAndOneSheathMesh_AndSoDoTwoSentinelBolts_ButTheKindsDiffer()
         {
-            var distinctMeshes = new HashSet<Mesh>();
+            var distinctCoreMeshes = new HashSet<Mesh>();
+            var distinctSheathMeshes = new HashSet<Mesh>();
             Mesh firstMesh = null;
 
             for (int i = 0; i < 20; i++)
@@ -45,13 +52,22 @@ namespace MaxWorlds.Tests.EditMode
                 Mesh mesh = boltTransform.GetComponent<MeshFilter>().sharedMesh;
                 Assert.IsNotNull(mesh, "test precondition: the bolt must carry a mesh");
                 if (firstMesh == null) firstMesh = mesh;
-                distinctMeshes.Add(mesh);
+                distinctCoreMeshes.Add(mesh);
+
+                Transform sheathTransform = pulse.transform.Find("Sheath");
+                Assert.IsNotNull(sheathTransform,
+                    "test precondition: SeekerPulse must build a child named 'Sheath'");
+                distinctSheathMeshes.Add(sheathTransform.GetComponent<MeshFilter>().sharedMesh);
 
                 pulse.Tick(1f); // dt > lifetime -- forces Retire(), destroying bolt+trail+glow
 
-                Assert.AreEqual(1, distinctMeshes.Count,
-                    $"pulse #{i + 1}'s bolt raised the count of distinct sharedMesh instances -- " +
-                    "SeekerPulse's own crescent builder runs fresh per shot instead of reusing one " +
+                Assert.AreEqual(1, distinctCoreMeshes.Count,
+                    $"pulse #{i + 1}'s core raised the count of distinct sharedMesh instances -- " +
+                    "SeekerPulse's own core builder runs fresh per shot instead of reusing one cached " +
+                    "instance");
+                Assert.AreEqual(1, distinctSheathMeshes.Count,
+                    $"pulse #{i + 1}'s sheath raised the count of distinct sharedMesh instances -- " +
+                    "SeekerPulse's own sheath builder runs fresh per shot instead of reusing one " +
                     "cached instance");
             }
 
@@ -82,16 +98,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(firstSentinelMesh.vertexCount, 0,
                 "the cached Sentinel mesh has no vertices -- the cache must not be satisfiable by an empty stand-in");
 
-            // MV-815: Max's own bolt's chord now spans local X (across the travel axis), not Z -- see
-            // SeekerPulse.BuildCrescentBoltMesh's own doc comment. The Sentinel's own bolt is unchanged
-            // (still a lathe of revolution along local Y).
-            float expectedLength = CombatVfxTuning.LppeBolt().Length;
-            Assert.That(firstMesh.bounds.size.x, Is.EqualTo(expectedLength).Within(0.03f),
-                $"cached LPPE mesh bounds along the chord ({firstMesh.bounds.size.x:0.000}m) don't " +
-                $"match BoltTuning.Length ({expectedLength:0.000}m)");
-            Assert.That(firstSentinelMesh.bounds.size.y, Is.EqualTo(expectedLength).Within(0.02f),
+            // MV-825: Max's own core is now built straight along local Z (the travel axis) -- its own
+            // exact length is asserted in MV825LaserBoltTests (AC1a); here it's enough that the cache
+            // holds a real mesh. The Sentinel's own bolt is still a lathe of revolution along local Y,
+            // still sized directly off Max's own tuning (MV-806's "can never drift bigger than Max's
+            // own when his is retuned" coupling) -- now CoreLength rather than the old Length, and the
+            // MESH ITSELF is built at that same full, UNSCALED length; the 0.7x SizeScale is applied
+            // separately via Transform.localScale in SentinelBolt.BuildVisual, so it shows up in a
+            // renderer's world bounds (MV806SentinelBoltTests) but not in the shared Mesh's own bounds.
+            float sentinelExpectedLength = CombatVfxTuning.LppeBolt().CoreLength;
+            Assert.That(firstSentinelMesh.bounds.size.y, Is.EqualTo(sentinelExpectedLength).Within(0.02f),
                 $"cached Sentinel mesh bounds along the travel axis ({firstSentinelMesh.bounds.size.y:0.000}m) " +
-                $"don't match BoltTuning.Length ({expectedLength:0.000}m)");
+                $"don't match LppeBolt().CoreLength ({sentinelExpectedLength:0.000}m)");
         }
     }
 }

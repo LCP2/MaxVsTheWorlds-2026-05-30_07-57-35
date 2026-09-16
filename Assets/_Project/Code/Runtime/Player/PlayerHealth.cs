@@ -102,10 +102,12 @@ namespace MaxWorlds.Player
         /// <summary>The RCDA's own case of <see cref="PrimaryGaugeColor"/> — water blue (#33A0EB).</summary>
         private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f);
 
-        /// <summary>MV-805: matches <see cref="MaxWorlds.Weapons.SeekerPulse"/>'s own bolt colour
-        /// exactly — the gauge reads the primary's tank, so it must move with whatever that primary
-        /// actually fires. Was a cool cyan-white (MV-760) that read as water, Lee's own report.</summary>
-        private static readonly Color LppeGaugeColor = new Color(1.00f, 0.52f, 0.12f);
+        /// <summary>MV-825: matches the LPPE bolt's own glow sheath colour exactly — the gauge reads
+        /// the primary's tank, so it must move with whatever that primary actually fires. MV-805 keyed
+        /// this to the bolt itself when the whole bolt was one orange tint; MV-825 split the bolt into
+        /// a white-hot core plus this orange sheath, and the sheath is the one that carries the
+        /// weapon's own "identity" colour now (see <c>SeekerPulse.SheathTintOpaque</c>).</summary>
+        private static readonly Color LppeGaugeColor = new Color(1.00f, 0.45f, 0.10f);
 
         /// <summary>MV-760: which tank the gauge above Max's head reads from, switched on the equipped
         /// primary rather than hard-wired to the RCDA — so a World 4 primary is one further case here,

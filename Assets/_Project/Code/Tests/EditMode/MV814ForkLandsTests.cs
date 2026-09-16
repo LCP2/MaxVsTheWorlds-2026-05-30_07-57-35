@@ -136,11 +136,11 @@ namespace MaxWorlds.Tests.EditMode
                 // their resolved MeshRenderer bounds are directly comparable per-axis), it must read at
                 // least 1.2x wider across its cross-section (spec: 1.25x).
                 //
-                // MV-815: measured along Y, not X. Max's bolt is now a crescent whose chord (an
-                // authored, fork-invariant span) runs along local X -- comparing X would compare the
-                // chord's own fixed width, not the cross-section FORK actually widens. Y carries only
-                // the cross-section's own radius (the spine never leaves Y=0), so it isolates exactly
-                // the dimension FORK's own wider mesh (see SeekerPulse.GetBoltMesh) changes.
+                // MV-825: measured along Y on the SHEATH specifically (BoltRendererForTests now
+                // resolves "Sheath", not whichever renderer happened to build first) -- FORK's own
+                // wider cross-section (see SeekerPulse.GetSheathMesh) scales the sheath, not the core,
+                // which only changes colour (item 8). Y isolates the cross-section's own radius on a
+                // circular tube built straight along local Z, same as X would.
                 SeekerPulse ordinary = SeekerPulse.Fire(Vector3.zero, Vector3.forward, PulseLaser.DefaultPulseSpeed,
                     PulseLaser.DefaultPulseTurnRateDegPerSec, PulseLaser.DefaultPulseLifetime, dmg, laser.LockRange,
                     PulseLaser.DefaultLockHalfAngle, canFork: false);

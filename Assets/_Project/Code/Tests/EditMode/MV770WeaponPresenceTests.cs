@@ -80,19 +80,25 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Transform bolt = pulse.transform.Find("Bolt");
                 Assert.IsNotNull(bolt, "test precondition: SeekerPulse must build a child named 'Bolt'");
+                Transform sheath = pulse.transform.Find("Sheath");
+                Assert.IsNotNull(sheath, "test precondition: SeekerPulse must build a child named 'Sheath'");
 
                 MeshRenderer renderer = bolt.GetComponent<MeshRenderer>();
-                Bounds bounds = renderer.bounds;
 
-                // MV-815: Max's bolt became a bowed crescent -- its chord (the old "length") now runs
-                // along local X, across the travel axis, and its cross-section (the old "width") is
-                // isolated on local Y, since the spine itself never leaves Y=0. See
-                // SeekerPulse.BuildCrescentBoltMesh's own doc comment.
-                Assert.That(bounds.size.y, Is.GreaterThanOrEqualTo(0.24f),
-                    $"the LPPE bolt's resolved cross-section must be at least 0.24m across (was " +
-                    $"{bounds.size.y:0.000}m) — the old 0.08m sliver read as 3.8px at the play camera");
-                Assert.That(bounds.size.x, Is.GreaterThanOrEqualTo(0.85f),
-                    $"the LPPE bolt's resolved chord must be at least 0.85m (was {bounds.size.x:0.000}m)");
+                // MV-825: the old single crescent mesh (whose combined silhouette this check used to
+                // measure) split into a thin core plus a glow sheath around it -- the sheath is what
+                // now carries the "reads at a glance" width MV-770 required, so the combined bolt
+                // footprint (core + sheath) is what's checked here, not the core alone (AC1(a) in
+                // MV825LaserBoltTests asserts the core's own tight 0.05m diameter directly).
+                Bounds combined = renderer.bounds;
+                combined.Encapsulate(sheath.GetComponent<MeshRenderer>().bounds);
+
+                Assert.That(Mathf.Max(combined.size.x, combined.size.y), Is.GreaterThanOrEqualTo(0.15f),
+                    $"the LPPE bolt's resolved cross-section must be at least 0.15m across (was " +
+                    $"{Mathf.Max(combined.size.x, combined.size.y):0.000}m) — the old 0.08m sliver read " +
+                    "as 3.8px at the play camera");
+                Assert.That(combined.size.z, Is.GreaterThanOrEqualTo(0.85f),
+                    $"the LPPE bolt's resolved length must be at least 0.85m (was {combined.size.z:0.000}m)");
 
                 Assert.AreNotEqual(MaterialLibrary.SurfaceShader, renderer.sharedMaterial.shader,
                     "the bolt must not use the lit surface shader — a weapon bolt in a world made " +

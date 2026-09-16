@@ -26,20 +26,23 @@ namespace MaxWorlds.Weapons
         /// every renderer <see cref="BuildVisual"/> builds sizes off this same struct.</summary>
         private static readonly CombatVfxTuning.LppeBoltTuning BoltTuning = CombatVfxTuning.LppeBolt();
 
-        /// <summary>MV-805: fire orange, not the cold cyan-white it shipped with -- the LPPE read as
-        /// water (Lee, 2026-09-15) because this colour was identical to <c>WaterBlaster</c>'s own.</summary>
-        private static readonly Color BoltColor = new Color(1.00f, 0.52f, 0.12f);
+        /// <summary>MV-825: the core reads white-hot, not orange -- Lee: "make this look like a laser.
+        /// Make it sleek, bright, crackling." The orange family (MV-805) now lives on the glow sheath
+        /// around the core (<see cref="SheathTintOpaque"/>), which is what keeps the weapon's overall
+        /// silhouette reading orange at a glance.</summary>
+        private static readonly Color CoreColor = new Color(1.00f, 0.97f, 0.90f);
 
-        /// <summary>MV-814: the same fire-orange family pushed past 1.0 headroom (same idiom
-        /// <c>LppeVfx.MuzzleColor</c>/<c>WindupColor</c> already use) so a fork's own bolt+trail reads
-        /// as a visibly brighter event than an ordinary pulse, not just one more identical bolt.</summary>
-        private static readonly Color ForkBoltColor = new Color(1.55f, 0.75f, 0.16f);
+        /// <summary>MV-825 item 8: a forked bolt's own tell -- electric blue-white, not a brighter
+        /// version of the same orange family (MV-814's old approach) -- "so a fork is recognisable".</summary>
+        private static readonly Color ForkCoreColor = new Color(0.75f, 0.95f, 1.00f);
 
-        /// <summary>MV-814: how much wider than an ordinary pulse's a forked bolt's cross-section is
-        /// (spec: "1.25x cross-section") -- scales only <see cref="Transform.localScale"/>'s X/Z, which
-        /// the lathed mesh's authored Y-axis length ignores (scale is applied in the mesh's own local
-        /// axes before <see cref="BuildVisual"/>'s 90-degree rotation swings Y to the travel axis).</summary>
-        private const float ForkCrossSectionScale = 1.25f;
+        /// <summary>The sheath's own baked colour before alpha (spec: "1.00 0.45 0.10 at 0.55 alpha").
+        /// Also doubles as the weapon's own "identity" orange -- the ground glow and ticket item 5's
+        /// trail fade both key off this, not the white-hot core.</summary>
+        private static readonly Color SheathTintOpaque = new Color(1.00f, 0.45f, 0.10f);
+
+        /// <summary>MV-825 item 4: the crackle filaments' own colour.</summary>
+        private static readonly Color CrackleColor = new Color(1.00f, 0.80f, 0.45f);
 
         /// <summary>MV-814: a pulse whose hit didn't kill but left its target under this fraction of
         /// max health also releases a FORK, widening the old kill-only trigger -- against World 2's
@@ -60,9 +63,20 @@ namespace MaxWorlds.Weapons
         private bool _spent;
         private GroundRing _groundGlow;
 
+        // MV-825: the crackle filaments and the sheath's own flicker, both re-randomised on their own
+        // timers (items 4/6) rather than every frame -- see RandomizeCrackle/FlickerSheath.
+        private LineRenderer[] _crackleFilaments;
+        private float _crackleTimer;
+        private MeshRenderer _sheathRenderer;
+        private MaterialPropertyBlock _sheathMpb;
+        private Color _sheathBaseColor;
+        private float _flickerTimer;
+
         /// <summary>Alpha the ground glow renders at — dim enough it reads as a light spilling onto
-        /// the floor under the bolt, not a second bolt lying flat (MV-770).</summary>
-        private static readonly Color GroundGlowColor = new Color(BoltColor.r, BoltColor.g, BoltColor.b, 0.5f);
+        /// the floor under the bolt, not a second bolt lying flat (MV-770). MV-825: keyed off the
+        /// sheath's own orange, the bolt's "identity" colour now that the core itself is white-hot.</summary>
+        private static readonly Color GroundGlowColor =
+            new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b, 0.5f);
 
         // Reused every tick so the per-frame obstruction check (below) allocates nothing, the same
         // idiom WaterBlaster.FireTick's static s_buffer/s_hits use.
@@ -72,10 +86,12 @@ namespace MaxWorlds.Weapons
         /// resolved value MV-708 AC1 asserts against.</summary>
         public RobotEnemy Target => _target;
 
-        /// <summary>MV-814: the resolved bolt renderer, for a test to compare cross-section bounds
-        /// between an ordinary pulse and a forked one — same "public accessor for a test" idiom as
-        /// <see cref="PulseLaser.LastForkedPulseForTests"/>.</summary>
-        public MeshRenderer BoltRendererForTests => GetComponentInChildren<MeshRenderer>();
+        /// <summary>MV-814/825: the resolved SHEATH renderer, for a test to compare cross-section
+        /// bounds between an ordinary pulse and a forked one — same "public accessor for a test" idiom
+        /// as <see cref="PulseLaser.LastForkedPulseForTests"/>. MV-825: FORK's own wider cross-section
+        /// now scales the sheath, not the core (the core only changes colour, item 8), so this must
+        /// resolve the sheath specifically rather than whichever renderer happens to build first.</summary>
+        public MeshRenderer BoltRendererForTests => transform.Find("Sheath")?.GetComponent<MeshRenderer>();
 
         /// <summary>True once this pulse has hit its target, been blocked, or expired — it takes no
         /// further action after this, so a test can keep ticking it without double-applying damage.</summary>
@@ -176,6 +192,17 @@ namespace MaxWorlds.Weapons
             _onHit = onHit;
             _onKill = onKill;
             _canFork = canFork;
+
+            // MV-825: hierarchy already built by BuildVisual (called from Fire before AddComponent),
+            // so every child this reaches for already exists.
+            _crackleFilaments = GetComponentsInChildren<LineRenderer>();
+            RandomizeCrackle();
+
+            Transform sheath = transform.Find("Sheath");
+            _sheathRenderer = sheath != null ? sheath.GetComponent<MeshRenderer>() : null;
+            _sheathMpb = new MaterialPropertyBlock();
+            _sheathBaseColor = new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b,
+                BoltTuning.SheathAlpha);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -187,6 +214,22 @@ namespace MaxWorlds.Weapons
         {
             if (_spent) return;
             _age += dt;
+
+            // MV-825 items 4/6: the crackle filaments and the sheath's own flicker each re-randomise
+            // on their own short timer rather than every frame -- cheap, and reads as an electrical
+            // stutter rather than a smooth animation.
+            _crackleTimer += dt;
+            if (_crackleTimer >= BoltTuning.CrackleRerandomizeInterval)
+            {
+                _crackleTimer = 0f;
+                RandomizeCrackle();
+            }
+            _flickerTimer += dt;
+            if (_flickerTimer >= BoltTuning.FlickerInterval)
+            {
+                _flickerTimer = 0f;
+                FlickerSheath();
+            }
 
             bool targetLive = _target != null && _target.IsAlive;
             if (targetLive)
@@ -305,6 +348,55 @@ namespace MaxWorlds.Weapons
             Retire();
         }
 
+        /// <summary>MV-825 item 4: re-rolls each crackle filament's own 7 vertices, called both once at
+        /// spawn (from <see cref="Init"/>) and every <see cref="CombatVfxTuning.LppeBoltTuning.CrackleRerandomizeInterval"/>
+        /// thereafter. Each filament keeps its OWN fixed spoke direction (120 degrees apart, spread
+        /// evenly around the core) with only a small angular jitter -- a vertex offset drawn from the
+        /// full circle instead would let a single filament's own bounding box swing across the core's
+        /// entire diameter, which is what AC1(b)'s 0.12m-per-renderer ceiling exists to catch.
+        /// SetPosition per vertex, no array allocation, matching the ticket's own "reuse the
+        /// LineRenderers... no per-frame allocation" rule.</summary>
+        private void RandomizeCrackle()
+        {
+            if (_crackleFilaments == null || _crackleFilaments.Length == 0) return;
+            float length = BoltTuning.CoreLength;
+            int vertexCount = BoltTuning.CrackleVertexCount;
+
+            for (int k = 0; k < _crackleFilaments.Length; k++)
+            {
+                LineRenderer lr = _crackleFilaments[k];
+                if (lr == null) continue;
+                float baseAngle = 360f / _crackleFilaments.Length * k;
+
+                for (int i = 0; i < vertexCount; i++)
+                {
+                    float s = vertexCount <= 1 ? 0f : (float)i / (vertexCount - 1);
+                    float z = -s * length;   // nose (0) to tail (-length), same span as the core
+                    float angleDeg = baseAngle + UnityEngine.Random.Range(-10f, 10f);
+                    float radius = UnityEngine.Random.Range(0f, BoltTuning.CrackleMaxOffset);
+                    float rad = angleDeg * Mathf.Deg2Rad;
+                    Vector3 offset = new Vector3(Mathf.Cos(rad) * radius, Mathf.Sin(rad) * radius, 0f);
+                    lr.SetPosition(i, new Vector3(0f, 0f, z) + offset);
+                }
+            }
+        }
+
+        /// <summary>MV-825 item 6: the sheath's alpha flickers +/-20% at random each
+        /// <see cref="CombatVfxTuning.LppeBoltTuning.FlickerInterval"/> -- the core never flickers, so
+        /// this only ever touches the sheath's own <see cref="MaterialPropertyBlock"/>, never the
+        /// shared cached material every sheath of this kind uses (mutating that would flicker every
+        /// LPPE bolt in the scene in lock-step and leave the material at a stale alpha for whichever
+        /// bolt spawns next).</summary>
+        private void FlickerSheath()
+        {
+            if (_sheathRenderer == null) return;
+            float mult = 1f + UnityEngine.Random.Range(-BoltTuning.FlickerAmount, BoltTuning.FlickerAmount);
+            Color c = _sheathBaseColor;
+            c.a = Mathf.Clamp01(_sheathBaseColor.a * mult);
+            _sheathMpb.SetColor("_BaseColor", c);
+            _sheathRenderer.SetPropertyBlock(_sheathMpb);
+        }
+
         private void Retire()
         {
             if (_spent) return;
@@ -321,50 +413,99 @@ namespace MaxWorlds.Weapons
             else DestroyImmediate(gameObject);
         }
 
-        /// <summary>A bolt with weight and a short trail (MV-770: rescaled from a 0.35m/0.08m sliver
-        /// to <see cref="BoltTuning"/>'s own numbers, and switched from a LIT surface material to an
-        /// unlit additive one — a weapon bolt in a world this dark has to be its own light source, not
-        /// a dimly-shaded sliver of metal). Same build idiom as <see cref="HomingMissile.BuildVisual"/>.
-        /// MV-814: <paramref name="isFork"/> gives a FORK-released bolt its own tell — the same
-        /// fire-orange family pushed brighter (<see cref="ForkBoltColor"/>) on both the bolt and its
-        /// trail, plus a <see cref="ForkCrossSectionScale"/>-wider cross-section — so one extra bolt
-        /// appearing out of a kill reads as deliberate, not as another identical pulse.</summary>
+        /// <summary>MV-825: the whole laser -- a white-hot core (drawn twice for intensity, item 2), a
+        /// soft additive glow sheath around it (item 3), three crackling filaments (item 4), and a
+        /// trail now emitted from the bolt's own TAIL (item 5), not its middle. Everything is built
+        /// directly along local Z -- the parent's own forward, set to the travel direction once at
+        /// <see cref="Fire"/> and re-applied every <see cref="Tick"/> by steering -- with local z=0 at
+        /// the NOSE (the leading point <see cref="Tick"/> advances and tests collision against) and
+        /// z=-<see cref="CombatVfxTuning.LppeBoltTuning.CoreLength"/> at the tail. <paramref name="isFork"/>
+        /// gives a FORK-released bolt its own tell (item 8): an electric blue-white core colour and a
+        /// 1.25x-wider sheath, so one extra bolt appearing out of a kill reads as deliberate.</summary>
         private static void BuildVisual(Transform parent, bool isFork)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Color color = isFork ? ForkBoltColor : BoltColor;
-            Material boltMat = VfxMaterials.AdditiveTinted(color);
+            Color coreColor = isFork ? ForkCoreColor : CoreColor;
+            Material coreMat = VfxMaterials.AdditiveTinted(coreColor);
+            Mesh coreMesh = GetCoreMesh();
 
-            var trail = parent.gameObject.AddComponent<TrailRenderer>();
-            // MV-770: a taut, fast taper (0.12s) rather than MV-758's 0.16s — the bolt itself is now
-            // wide enough to read on its own, so the trail's job is a short streak behind it, not
-            // carrying the bolt's own visibility.
+            // Item 2: "drawn twice for intensity" -- two renderers sharing the SAME cached mesh, not a
+            // second Mesh instance, so this never trips AC1(e)'s no-new-mesh-after-first check.
+            BuildBoltPart(parent, "Bolt", coreMesh, coreMat);
+            BuildBoltPart(parent, "BoltGlow", coreMesh, coreMat);
+
+            // Item 3: the sheath's own material is plain white+additive, not AdditiveTinted -- its
+            // colour and alpha (including item 6's flicker) come entirely from a MaterialPropertyBlock
+            // set below and refreshed by FlickerSheath, never from a shared cached material every
+            // sheath of this kind would otherwise fight over.
+            Mesh sheathMesh = GetSheathMesh(isFork);
+            Material sheathMat = VfxMaterials.Additive(VfxMaterials.Solid());
+            GameObject sheathGo = BuildBoltPart(parent, "Sheath", sheathMesh, sheathMat);
+            var sheathMpb = new MaterialPropertyBlock();
+            sheathMpb.SetColor("_BaseColor",
+                new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b, BoltTuning.SheathAlpha));
+            sheathGo.GetComponent<MeshRenderer>().SetPropertyBlock(sheathMpb);
+
+            BuildCrackleFilaments(parent);
+
+            // Item 5: a child anchored at the bolt's own TAIL, not this object's own transform (the
+            // NOSE) -- so the trail streams from behind the core, the way a laser's own afterglow
+            // would, instead of the old crescent's trail spilling out of its chord's midpoint (MV-815's
+            // own "reads as an arrow's shaft" bug).
+            var trailAnchor = new GameObject("TrailAnchor");
+            trailAnchor.transform.SetParent(parent, false);
+            trailAnchor.transform.localPosition = new Vector3(0f, 0f, -BoltTuning.CoreLength);
+
+            var trail = trailAnchor.AddComponent<TrailRenderer>();
             trail.time = BoltTuning.TrailLifetime;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
             trail.widthMultiplier = BoltTuning.TrailWidth;
             trail.minVertexDistance = 0.02f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
-            trail.sharedMaterial = boltMat;
+            trail.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Solid());
+            // Item 5: "core colour fading to the sheath colour" -- a plain white material (above) so
+            // the gradient's own colours show through unmodified rather than being multiplied by a
+            // second baked tint.
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(coreColor, 0f), new GradientColorKey(SheathTintOpaque, 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
             trail.Clear();
+        }
 
-            var bolt = new GameObject("Bolt");
-            bolt.transform.SetParent(parent, false);
-            // Same local rotation the old capsule used: the lathe's revolve axis (Y) is the mesh's own
-            // long axis, so this still points the bolt down the travel axis.
-            bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            // MV-815: the crescent is built directly in this object's own local axes (chord across
-            // local X, sagitta along local Z, cross-section in Y/outward) -- no rotation needed to
-            // point it down the travel axis, unlike the old lathed ogive. FORK's own wider
-            // cross-section (MV-814) is now baked into a second cached mesh (see GetBoltMesh) rather
-            // than a non-uniform Transform scale: the crescent's spine occupies two local axes at once
-            // (X and Z), so scaling only X/Z (the old trick) would widen the chord itself, not just
-            // the cross-section.
-            bolt.transform.localRotation = Quaternion.identity;
-            bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh(isFork);
-            var meshRenderer = bolt.AddComponent<MeshRenderer>();
-            if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
+        private static GameObject BuildBoltPart(Transform parent, string name, Mesh mesh, Material material)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var meshRenderer = go.AddComponent<MeshRenderer>();
+            if (material != null) meshRenderer.sharedMaterial = material;
+            return go;
+        }
+
+        /// <summary>Item 4: builds the 3 filament <see cref="LineRenderer"/>s (positions set later, by
+        /// <see cref="RandomizeCrackle"/>) -- unparented from any specific angle here since that's
+        /// re-rolled on every randomise pass.</summary>
+        private static void BuildCrackleFilaments(Transform parent)
+        {
+            Material lineMat = VfxMaterials.Additive(VfxMaterials.Glow());
+            for (int k = 0; k < BoltTuning.CrackleFilamentCount; k++)
+            {
+                var go = new GameObject($"Crackle{k}");
+                go.transform.SetParent(parent, false);
+                var lr = go.AddComponent<LineRenderer>();
+                lr.positionCount = BoltTuning.CrackleVertexCount;
+                lr.widthMultiplier = BoltTuning.CrackleWidth;
+                lr.useWorldSpace = false;
+                lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                lr.receiveShadows = false;
+                lr.sharedMaterial = lineMat;
+                lr.startColor = CrackleColor;
+                lr.endColor = CrackleColor;
+            }
         }
 
         // MV-805: sampled resolution for the Sentinel's own straight lathed bolt -- see
@@ -373,38 +514,42 @@ namespace MaxWorlds.Weapons
         private const int BoltRadialSegments = 16;
         private const float BoltPeakFractionFromNose = 0.45f;
 
-        // MV-815: sampled resolution for Max's own crescent -- see BuildCrescentBoltMesh's own doc
-        // comment. Spec: "16 samples along the spine, 10 around the cross-section (~160 vertices)".
-        private const int CrescentSpineSamples = 16;
-        private const int CrescentCrossSectionSegments = 10;
+        // MV-825: sampled resolution for Max's own core/sheath tubes.
+        private const int CoreRadialSegments = 8;
+        private const int SheathSpineSamples = 12;
+        private const int SheathRadialSegments = 10;
 
-        /// <summary>MV-815: the sagitta (the belly's own lead ahead of the tip-to-tip chord, along the
-        /// travel axis) -- spec: "sagitta 0.20 m".</summary>
-        private const float CrescentSagitta = 0.20f;
+        /// <summary>The one instance every ordinary bolt's core shares -- fork-invariant (item 8 only
+        /// changes the core's COLOUR, not its size), so unlike the sheath there is no separate forked
+        /// version of this mesh.</summary>
+        private static Mesh s_coreMesh;
 
-        /// <summary>MV-810/815: the one instance every ordinary bolt shares -- see <see cref="GetBoltMesh"/>.</summary>
-        private static Mesh s_boltMesh;
+        private static Mesh s_sheathMesh;
 
-        /// <summary>MV-814/815: the one instance every FORK-released bolt shares -- a separate cached
-        /// mesh (wider cross-section baked in) rather than a runtime Transform scale, see
-        /// <see cref="BuildVisual"/>'s own doc comment for why the scale trick stopped working once
-        /// the bolt became a crescent.</summary>
-        private static Mesh s_forkBoltMesh;
+        /// <summary>The one instance every FORK-released bolt's sheath shares -- its own cached mesh
+        /// (1.25x the diameter baked in, item 8) rather than a runtime Transform scale.</summary>
+        private static Mesh s_forkSheathMesh;
 
-        /// <summary>MV-810: the single cached bolt mesh for the given fork-ness, built lazily on first
-        /// use and shared by every LPPE pulse of that kind -- never rebuilt per shot. MV-815: this is
-        /// now Max's own crescent; the Sentinel's matching straight bolt is
-        /// <see cref="MaxWorlds.Arena.SentinelBolt.GetBoltMesh"/>'s own separate cache, not this one.</summary>
-        public static Mesh GetBoltMesh(bool isFork = false)
+        /// <summary>MV-810: the single cached core mesh, built lazily on first use and shared by every
+        /// LPPE pulse -- never rebuilt per shot.</summary>
+        public static Mesh GetCoreMesh()
+        {
+            if (s_coreMesh == null) s_coreMesh = BuildCoreMesh(BoltTuning.CoreDiameter);
+            return s_coreMesh;
+        }
+
+        /// <summary>MV-810: the single cached sheath mesh for the given fork-ness, built lazily on
+        /// first use and shared by every LPPE pulse of that kind -- never rebuilt per shot.</summary>
+        public static Mesh GetSheathMesh(bool isFork = false)
         {
             if (!isFork)
             {
-                if (s_boltMesh == null) s_boltMesh = BuildCrescentBoltMesh(BoltTuning.CrossSection * 0.5f);
-                return s_boltMesh;
+                if (s_sheathMesh == null) s_sheathMesh = BuildSheathMesh(BoltTuning.SheathDiameter);
+                return s_sheathMesh;
             }
-            if (s_forkBoltMesh == null)
-                s_forkBoltMesh = BuildCrescentBoltMesh(BoltTuning.CrossSection * 0.5f * ForkCrossSectionScale);
-            return s_forkBoltMesh;
+            if (s_forkSheathMesh == null)
+                s_forkSheathMesh = BuildSheathMesh(BoltTuning.SheathDiameter * BoltTuning.ForkSheathScale);
+            return s_forkSheathMesh;
         }
 
         /// <summary>Drop this class's own reference to the cached bolt meshes -- same idiom as
@@ -412,112 +557,40 @@ namespace MaxWorlds.Weapons
         /// test run never holds a pointer to a mesh a previous run already destroyed.</summary>
         public static void ResetForTests()
         {
-            s_boltMesh = null;
-            s_forkBoltMesh = null;
+            s_coreMesh = null;
+            s_sheathMesh = null;
+            s_forkSheathMesh = null;
         }
 
-        /// <summary>A point on the crescent's own spine at <paramref name="s"/> (0 at one tip, 1 at
-        /// the other): the chord (tip-to-tip) runs along local X, and the sagitta -- the belly's own
-        /// lead ahead of that chord, along local Z, the direction of travel -- eases in and back out
-        /// with the same <see cref="Mathf.SmoothStep"/> shape <see cref="BuildCrescentBoltMesh"/> uses
-        /// for the cross-section radius, so the curve is flat (zero slope) at every sample rather than
-        /// only at the two ends -- the spine's own resolved deviation profile stays smooth
-        /// sample-to-sample everywhere, not only near the tips, which a plain circular arc would not
-        /// (its slope is steepest right where 16 samples are sparsest, next to the tips).</summary>
-        private static Vector3 CrescentSpinePoint(float s, float chord, float sagitta)
+        /// <summary>Item 2: a plain constant-radius tube along local Z, nose at z=0 down to the tail at
+        /// z=-length -- "nothing wider than 0.12m across the travel direction except the glow sheath",
+        /// so unlike the sheath this never tapers.</summary>
+        private static Mesh BuildCoreMesh(float diameter)
         {
-            float x = Mathf.Lerp(-chord * 0.5f, chord * 0.5f, s);
-            float z = s <= 0.5f
-                ? Mathf.SmoothStep(0f, sagitta, s * 2f)
-                : Mathf.SmoothStep(sagitta, 0f, (s - 0.5f) * 2f);
-            return new Vector3(x, 0f, z);
-        }
+            float radius = diameter * 0.5f;
+            float length = BoltTuning.CoreLength;
 
-        /// <summary>Newton's method inverse of the 3t^2-2t^3 Hermite ease <see cref="Mathf.SmoothStep"/>
-        /// itself uses: given the eased fraction <paramref name="y"/> in [0,1], finds t such that
-        /// SmoothStep(0,1,t) == y. Only used to choose sample placement, see
-        /// <see cref="CrescentSampleParameter"/>.</summary>
-        private static float InverseSmoothStep01(float y)
-        {
-            if (y <= 0f) return 0f;
-            if (y >= 1f) return 1f;
-            float t = y;
-            for (int i = 0; i < 20; i++)
+            var verts = new List<Vector3>((CoreRadialSegments + 1) * 2);
+            for (int ring = 0; ring < 2; ring++)
             {
-                float f = 3f * t * t - 2f * t * t * t - y;
-                float fp = 6f * t - 6f * t * t;
-                if (Mathf.Abs(fp) < 1e-6f) break;
-                t = Mathf.Clamp01(t - f / fp);
+                float z = ring == 0 ? 0f : -length;
+                for (int j = 0; j <= CoreRadialSegments; j++)
+                {
+                    float phi = (float)j / CoreRadialSegments * Mathf.PI * 2f;
+                    verts.Add(new Vector3(Mathf.Cos(phi) * radius, Mathf.Sin(phi) * radius, z));
+                }
             }
-            return t;
-        }
 
-        /// <summary>Where to place the <paramref name="i"/>'th of <see cref="CrescentSpineSamples"/>
-        /// spine samples along the spine's own [0,1] parameter -- NOT i/(N-1) (evenly spaced in the raw
-        /// parameter), which crowds most of the curve's actual bend into the handful of samples nearest
-        /// each quarter-point (where <see cref="Mathf.SmoothStep"/> is steepest) and leaves the rest
-        /// nearly flat: with only 16 samples, that concentration alone pushes the worst adjacent step
-        /// just past the ticket's own 20%-of-peak ceiling. Placing samples evenly spaced in the
-        /// resulting DEVIATION instead (via <see cref="InverseSmoothStep01"/>) keeps the exact same
-        /// smooth curve -- flat at both tips and flat at the midpoint, the shape that avoids a visible
-        /// crease at the bolt's own thickest point -- while keeping every step well under that
-        /// ceiling.</summary>
-        private static float CrescentSampleParameter(int i)
-        {
-            float mid = (CrescentSpineSamples - 1) * 0.5f;
-            float y = 1f - Mathf.Abs(i - mid) / mid;
-            float t = InverseSmoothStep01(y);
-            return i <= (CrescentSpineSamples - 1) / 2 ? t * 0.5f : 1f - t * 0.5f;
-        }
-
-        /// <summary>MV-815: a crescent swept along a bowed spine, replacing the ogive of revolution
-        /// Lee rejected -- "the LPPE bolt is literally arched, bowed like a drawn bow, curved across
-        /// its travel axis. Not a straight needle, not a flat blade." The spine
-        /// (<see cref="CrescentSpinePoint"/>) lies flat in this object's own local XZ plane (the
-        /// ground plane the angled play camera actually reads), tips trailing and the midpoint
-        /// leading. The cross-section is a circle swept perpendicular to the spine's own tangent at
-        /// each sample, radius 0 at both tips and peaking at <paramref name="peakRadius"/> at the
-        /// midpoint, eased both directions so the silhouette is one continuous curve with no crease
-        /// anywhere -- the crease that was wrong with the old capsule and must not come back. Built
-        /// once per <paramref name="peakRadius"/> (see <see cref="GetBoltMesh"/>), never per shot.</summary>
-        private static Mesh BuildCrescentBoltMesh(float peakRadius)
-        {
-            float chord = BoltTuning.Length;
-            float sagitta = CrescentSagitta;
-            const float tangentEps = 0.001f;
-
-            var verts = new List<Vector3>(CrescentSpineSamples * (CrescentCrossSectionSegments + 1));
             var tris = new List<int>();
-
-            for (int i = 0; i < CrescentSpineSamples; i++)
+            int w = CoreRadialSegments + 1;
+            for (int j = 0; j < CoreRadialSegments; j++)
             {
-                float s = CrescentSampleParameter(i);
-                Vector3 spine = CrescentSpinePoint(s, chord, sagitta);
-                Vector3 tangent = (CrescentSpinePoint(Mathf.Min(1f, s + tangentEps), chord, sagitta)
-                                  - CrescentSpinePoint(Mathf.Max(0f, s - tangentEps), chord, sagitta)).normalized;
-                Vector3 outward = new Vector3(-tangent.z, 0f, tangent.x);
-
-                float radius = s <= 0.5f
-                    ? Mathf.SmoothStep(0f, peakRadius, s * 2f)
-                    : Mathf.SmoothStep(peakRadius, 0f, (s - 0.5f) * 2f);
-
-                for (int j = 0; j <= CrescentCrossSectionSegments; j++)
-                {
-                    float phi = (float)j / CrescentCrossSectionSegments * Mathf.PI * 2f;
-                    verts.Add(spine + radius * (Mathf.Cos(phi) * Vector3.up + Mathf.Sin(phi) * outward));
-                }
+                int a = j, b = a + 1, c = a + w, d = c + 1;
+                tris.Add(a); tris.Add(c); tris.Add(b);
+                tris.Add(b); tris.Add(c); tris.Add(d);
             }
 
-            int w = CrescentCrossSectionSegments + 1;
-            for (int i = 0; i < CrescentSpineSamples - 1; i++)
-                for (int j = 0; j < CrescentCrossSectionSegments; j++)
-                {
-                    int a = i * w + j, b = a + 1, c = a + w, d = c + 1;
-                    tris.Add(a); tris.Add(c); tris.Add(b);
-                    tris.Add(b); tris.Add(c); tris.Add(d);
-                }
-
-            var mesh = new Mesh { name = "SeekerPulseCrescentBolt" };
+            var mesh = new Mesh { name = "SeekerPulseCore" };
             mesh.SetVertices(verts);
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
@@ -525,18 +598,64 @@ namespace MaxWorlds.Weapons
             return mesh;
         }
 
-        /// <summary>MV-806/815: the Sentinel's own straight bolt -- the same ogive of revolution
-        /// (<see cref="CharacterMeshes.Lathe"/>) Max's own bolt used before this ticket, kept
-        /// unchanged and now exclusively the Sentinel's: MV-806 made the Sentinel's bolt small, red
-        /// and straight-line-only precisely so it cannot be confused with Max's, and Max's own bolt
-        /// becoming a crescent must not undo that. Internal (not private) so
-        /// <see cref="MaxWorlds.Arena.SentinelBolt"/>'s own cache can call it -- see that type's
-        /// <c>GetBoltMesh</c>.</summary>
-        internal static Mesh BuildStraightBoltMesh()
+        /// <summary>Item 3: a tube along the SAME straight local-Z spine as the core, extending
+        /// <see cref="CombatVfxTuning.LppeBoltTuning.SheathExtension"/> past the core at both ends and
+        /// tapering (by radius, the same "peaks at the midpoint, vanishes at both tips" technique
+        /// MV-815's crescent used for its own cross-section) to read as a soft glow with no hard
+        /// edge, rather than a second solid tube.</summary>
+        private static Mesh BuildSheathMesh(float diameter)
         {
-            float length = BoltTuning.Length;
-            float peakRadius = BoltTuning.CrossSection * 0.5f;
+            float peakRadius = diameter * 0.5f;
+            float noseZ = BoltTuning.SheathExtension;
+            float tailZ = -(BoltTuning.CoreLength + BoltTuning.SheathExtension);
 
+            var verts = new List<Vector3>(SheathSpineSamples * (SheathRadialSegments + 1));
+            var tris = new List<int>();
+
+            for (int i = 0; i < SheathSpineSamples; i++)
+            {
+                float s = (float)i / (SheathSpineSamples - 1);   // 0 nose .. 1 tail
+                float z = Mathf.Lerp(noseZ, tailZ, s);
+                float radius = s <= 0.5f
+                    ? Mathf.SmoothStep(0f, peakRadius, s * 2f)
+                    : Mathf.SmoothStep(peakRadius, 0f, (s - 0.5f) * 2f);
+
+                for (int j = 0; j <= SheathRadialSegments; j++)
+                {
+                    float phi = (float)j / SheathRadialSegments * Mathf.PI * 2f;
+                    verts.Add(new Vector3(Mathf.Cos(phi) * radius, Mathf.Sin(phi) * radius, z));
+                }
+            }
+
+            int w = SheathRadialSegments + 1;
+            for (int i = 0; i < SheathSpineSamples - 1; i++)
+                for (int j = 0; j < SheathRadialSegments; j++)
+                {
+                    int a = i * w + j, b = a + 1, c = a + w, d = c + 1;
+                    tris.Add(a); tris.Add(c); tris.Add(b);
+                    tris.Add(b); tris.Add(c); tris.Add(d);
+                }
+
+            var mesh = new Mesh { name = "SeekerPulseSheath" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>MV-806: the Sentinel's own straight bolt -- an ogive of revolution
+        /// (<see cref="CharacterMeshes.Lathe"/>), small, red and straight-line-only precisely so it
+        /// cannot be confused with Max's own. Takes <paramref name="length"/>/<paramref name="peakRadius"/>
+        /// as explicit parameters (MV-825: sized by <see cref="MaxWorlds.Arena.SentinelBolt"/> off
+        /// Max's own new <c>CoreLength</c>/<c>CoreDiameter</c>, at full scale -- the 0.7x
+        /// "slightly smaller than Max's" coupling MV-806 established is applied separately via
+        /// Transform.localScale, not baked into this mesh) rather than reading them off
+        /// <see cref="CombatVfxTuning.LppeBolt"/> directly, since Max's own bolt is no longer a single
+        /// capsule at all. Internal (not private) so <see cref="MaxWorlds.Arena.SentinelBolt"/>'s own
+        /// cache can call it -- see that type's <c>GetBoltMesh</c>.</summary>
+        internal static Mesh BuildStraightBoltMesh(float length, float peakRadius)
+        {
             var profile = new Vector2[BoltProfilePoints];
             for (int i = 0; i < BoltProfilePoints; i++)
             {

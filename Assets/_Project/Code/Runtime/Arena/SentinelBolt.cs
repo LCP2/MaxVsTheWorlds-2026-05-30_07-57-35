@@ -107,19 +107,26 @@ namespace MaxWorlds.Arena
             else DestroyImmediate(gameObject);
         }
 
-        /// <summary>MV-815: this bolt's own cached straight mesh -- no longer <see cref="SeekerPulse.GetBoltMesh"/>,
-        /// which now hands out Max's own bowed crescent. MV-806 made this bolt small, red and
-        /// straight-line-only precisely so it cannot be confused with Max's; sharing his new crescent
-        /// mesh would undo that. Built once, lazily, from the same straight ogive profile
-        /// (<see cref="SeekerPulse.BuildStraightBoltMesh"/>) Max's own bolt used before MV-815 -- never
-        /// rebuilt per shot (MV-810).</summary>
+        /// <summary>MV-815/825: this bolt's own cached straight mesh -- never Max's own (MV-806 made
+        /// this bolt small, red and straight-line-only precisely so it cannot be confused with his;
+        /// sharing his own mesh would undo that). Built once, lazily, from the same straight ogive
+        /// profile (<see cref="SeekerPulse.BuildStraightBoltMesh"/>) Max's own bolt used before MV-815
+        /// -- never rebuilt per shot (MV-810).</summary>
         private static Mesh s_boltMesh;
 
         /// <summary>The single cached straight bolt mesh, built lazily on first use and shared by
-        /// every Sentinel bolt.</summary>
+        /// every Sentinel bolt. MV-825: sized off Max's own new core length/diameter
+        /// (<see cref="CombatVfxTuning.LppeBolt"/>'s <c>CoreLength</c>/<c>CoreDiameter</c>) scaled by
+        /// <see cref="SizeScale"/> -- same "can never drift bigger than Max's own when his is retuned"
+        /// coupling MV-806 established, just re-pointed at the core dimensions now that Max's own bolt
+        /// is no longer a single capsule (see MV806SentinelBoltTests' own 0.6x-0.8x ratio check).</summary>
         public static Mesh GetBoltMesh()
         {
-            if (s_boltMesh == null) s_boltMesh = SeekerPulse.BuildStraightBoltMesh();
+            if (s_boltMesh == null)
+            {
+                CombatVfxTuning.LppeBoltTuning shape = CombatVfxTuning.LppeBolt();
+                s_boltMesh = SeekerPulse.BuildStraightBoltMesh(shape.CoreLength, shape.CoreDiameter * 0.5f);
+            }
             return s_boltMesh;
         }
 
