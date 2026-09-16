@@ -603,6 +603,32 @@ namespace MaxWorlds.Rendering
 
         // ---------------------------------------------------------------- cover reskins
 
+        /// <summary>MV-818: the fraction of a cover collider's own XZ footprint every dressing form's
+        /// combined renderer bounds must fill. The ticket's own rule is "at least 90%, never more than
+        /// 0.15 m of overrun" — targeting a footprint slightly INSIDE the collider (93%) satisfies both
+        /// halves at once (0 overrun, comfortably above the 90% floor) regardless of the collider's own
+        /// absolute size, rather than computing a per-piece margin.</summary>
+        public const float CoverFootprintCoverage = 0.93f;
+
+        /// <summary>MV-818, change 4: every dressing form's combined renderer bounds must stand at
+        /// least this tall — the collider itself is 1.6 m and blocks shots, so anything shorter reads
+        /// as something Max could shoot over that he actually can't.</summary>
+        public const float CoverMinVisibleHeight = 1.0f;
+
+        /// <summary>MV-818, change 3: at and above this long/short aspect ratio, a cover piece's own
+        /// whole-object yaw (<c>StormdrainDressing.DeterministicYaw</c>) must never be applied — a wide
+        /// yaw swings a long piece's own ends outside its collider footprint (the ticket's own observed
+        /// failure, up to ~1.1 m on <see cref="BuildBurstMain"/>).</summary>
+        public const float NoYawAspectThreshold = 1.5f;
+
+        /// <summary>MV-818, change 2: at and above this long/short aspect ratio, a cover piece must be
+        /// built as a repeated run of modules along its own long axis rather than one scaled prop.</summary>
+        public const float ModularRunAspectThreshold = 2.0f;
+
+        /// <summary>MV-818, change 3: the maximum per-module yaw jitter a modular run may still apply —
+        /// small enough that a jittered module never pushes outside the footprint rule above.</summary>
+        public const float ModuleJitterMaxDeg = 5f;
+
         /// <summary>Standpipe cluster — replaces a Tree (MV-786). Five lathed pipes of varied radius
         /// and height, jittered on a ring across the cover's own footprint, each collared at
         /// mid-height, rising off one shared lathed base plate. Deterministic from world position —
@@ -661,35 +687,48 @@ namespace MaxWorlds.Rendering
             float span = alongX ? size.x : size.z;
             float crossSpan = Mathf.Max(0.5f, alongX ? size.z : size.x);
             const float pitchDeg = 22f;
+
+            // MV-818: rails/bars used to always lie along local Z/X regardless of alongX — an X-long
+            // hedge's rails ran ACROSS its own length, not along it (every one of World 2's four
+            // hedges is X-long). spanDir/crossDir make both the geometry and the pitch rotation's own
+            // axis (which must be the rails' own axis, or a Z-long piece never tilts at all) follow
+            // the piece's own long axis instead of assuming one.
+            Vector3 spanDir = alongX ? Vector3.right : Vector3.forward;
+            Vector3 crossDir = alongX ? Vector3.forward : Vector3.right;
             float lift = crossSpan * 0.5f * Mathf.Sin(pitchDeg * Mathf.Deg2Rad) + 0.04f;
 
-            // Pitched about the rails' OWN long axis (local Z), not across it — a 16 m hedge run's
-            // rails must tilt as one rigid, uniformly-raised plane, never stretch into a ramp along
-            // their own length the way rotating about local X would.
+            // Pitched about the rails' OWN long axis, not across it — a 16 m hedge run's rails must
+            // tilt as one rigid, uniformly-raised plane, never stretch into a ramp along their own
+            // length the way rotating about the cross axis would.
             var panel = new GameObject("Panel").transform;
             panel.SetParent(root.transform, false);
             panel.localPosition = Vector3.up * lift;
-            panel.localRotation = Quaternion.Euler(0f, 0f, pitchDeg);
+            panel.localRotation = Quaternion.AngleAxis(pitchDeg, spanDir);
 
             for (int i = 0; i < 2; i++)
             {
                 float t = i == 0 ? -0.5f : 0.5f;
                 var rail = AddMeshPart(panel, $"Rail{i}", CharacterMeshes.Beam(span, 0.045f, 0.045f),
-                    new Vector3(t * crossSpan * 0.88f, 0f, 0f), SurfaceKind.Metal, RustDark);
-                rail.transform.localRotation = Quaternion.FromToRotation(Vector3.up, Vector3.forward);
+                    crossDir * (t * crossSpan * 0.88f), SurfaceKind.Metal, RustDark);
+                rail.transform.localRotation = Quaternion.FromToRotation(Vector3.up, spanDir);
             }
 
             for (int i = 0; i < 9; i++)
             {
                 float t = (i + 0.5f) / 9f - 0.5f;
                 var bar = AddMeshPart(panel, $"Bar{i}", CharacterMeshes.Beam(crossSpan * 0.9f, 0.03f, 0.03f),
-                    new Vector3(0f, 0f, t * span), SurfaceKind.Metal, RustDark);
-                bar.transform.localRotation = Quaternion.FromToRotation(Vector3.up, Vector3.right);
+                    spanDir * (t * span), SurfaceKind.Metal, RustDark);
+                bar.transform.localRotation = Quaternion.FromToRotation(Vector3.up, crossDir);
             }
 
-            Vector3 cornerLocal = new Vector3(crossSpan * 0.42f, 0f, span * 0.42f);
-            AddMeshPart(root.transform, "Prop Stub", CharacterMeshes.Prism(6, 0.06f, 0.05f, lift),
-                cornerLocal + Vector3.up * (lift * 0.5f), SurfaceKind.Metal, RustDark);
+            // MV-818, change 4: the pitched panel alone tops out well under 1 m once crossSpan (the
+            // hedge's own short side) is narrow — a 1 m-deep hedge only lifts ~0.4 m. One corner still
+            // stands, propped near-vertical against whatever the grate fell from, so the COMBINED
+            // bounds clear the collider's own 1.6 m even though most of the grate reads as fallen flat.
+            float postHeight = Mathf.Max(lift * 2f, CoverMinVisibleHeight * 1.08f);
+            Vector3 cornerLocal = crossDir * (crossSpan * 0.42f) + spanDir * (span * 0.42f);
+            AddMeshPart(root.transform, "Prop Stub", CharacterMeshes.Prism(6, 0.07f, 0.055f, postHeight),
+                cornerLocal + Vector3.up * (postHeight * 0.5f), SurfaceKind.Metal, RustDark);
 
             return root;
         }

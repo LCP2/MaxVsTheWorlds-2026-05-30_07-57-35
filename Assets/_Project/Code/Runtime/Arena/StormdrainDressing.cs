@@ -707,34 +707,166 @@ namespace MaxWorlds.Arena
             Vector3 at = new Vector3(c.CenterXz.x, 0f, c.CenterXz.y);
             Vector3 size = c.Size;
 
-            switch (c.Dressing)
+            // MV-818: a cover collider's own w/d ratio decides HOW it gets dressed — a near-square
+            // piece stays one prop (change 2 explicitly allows that below aspect 2); a long one is a
+            // repeated run of modules instead of one prop stretched into a sliver. Hedge is the one
+            // dressing that never repeats (its single panel already spans its own long axis once the
+            // spanDir/crossDir fix above is in) but still gets the same no-yaw and fit treatment.
+            float aspect = Aspect(size);
+
+            if (c.Dressing != CoverDressing.Hedge && aspect >= StormdrainKit.ModularRunAspectThreshold)
+            {
+                BuildModularRun(parent, at, size, c.Dressing);
+                return true;
+            }
+
+            GameObject built = BuildSingleDressing(parent, at, size, c.Dressing);
+
+            // MV-818, change 3: a wide yaw on a long piece swings its own ends outside its collider —
+            // never rotate a piece at or above the no-yaw aspect. Shed/Machinery/Pipe never yawed at
+            // all, aspect or not — pre-dates this ticket (they are "structure, not loose debris", the
+            // same reasoning BuildPumpHousing's and BuildPipeMain's own doc comments already give). The
+            // yaw is set BEFORE the fit below measures anything — see that method's own comment for why
+            // the order matters.
+            bool structureType = c.Dressing == CoverDressing.Shed || c.Dressing == CoverDressing.Machinery
+                                  || c.Dressing == CoverDressing.Pipe;
+            if (!structureType && aspect < StormdrainKit.NoYawAspectThreshold)
+                built.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
+
+            FitFootprintAndHeight(built, size, parent, at);
+            return true;
+        }
+
+        /// <summary>The one-prop-per-piece dispatch <see cref="BuildFor"/> used before MV-818, unchanged
+        /// in what it builds — only the caller now also fits the result to its collider and gates the
+        /// yaw, instead of doing both inline per case.</summary>
+        private static GameObject BuildSingleDressing(Transform parent, Vector3 at, Vector3 size, CoverDressing dressing)
+        {
+            switch (dressing)
             {
                 case CoverDressing.Tree:
-                    GameObject standpipe = StormdrainKit.BuildStandpipe(parent, at, size);
-                    standpipe.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
-                    return true;
+                    return StormdrainKit.BuildStandpipe(parent, at, size);
                 case CoverDressing.Hedge:
-                    GameObject grating = StormdrainKit.BuildCollapsedGrating(parent, at, size);
-                    grating.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
-                    return true;
+                    return StormdrainKit.BuildCollapsedGrating(parent, at, size);
                 case CoverDressing.Planter:
-                    GameObject hopper = StormdrainKit.BuildSiltHopper(parent, at, size);
-                    hopper.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
-                    return true;
+                    return StormdrainKit.BuildSiltHopper(parent, at, size);
                 case CoverDressing.Shed:
                 case CoverDressing.Machinery:
                     // Heavy fixed machinery, not loose debris — stays square.
-                    StormdrainKit.BuildPumpHousing(parent, at, size);
-                    return true;
+                    return StormdrainKit.BuildPumpHousing(parent, at, size);
                 case CoverDressing.Pipe:
                     // MV-802, change 3: structure, not loose debris — stays square, same reasoning as
                     // Shed/Machinery above, so it keeps lying exactly along its own footprint's axis.
-                    StormdrainKit.BuildPipeMain(parent, at, size);
-                    return true;
+                    return StormdrainKit.BuildPipeMain(parent, at, size);
                 default:
-                    GameObject burstMain = StormdrainKit.BuildBurstMain(parent, at, size);
-                    burstMain.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
-                    return true;
+                    return StormdrainKit.BuildBurstMain(parent, at, size);
+            }
+        }
+
+        /// <summary>MV-818, change 2: a long piece (aspect &gt;= <see cref="StormdrainKit.ModularRunAspectThreshold"/>)
+        /// built as a repeated run of the SAME single-prop form along its own long axis — a trough of
+        /// hoppers, a row of standpipes, a line of pump housings joined by a pipe — rather than one prop
+        /// stretched into a sliver. Each module gets its own square-ish <paramref name="size"/> slice
+        /// (its short side) fitted to that slice exactly the way a non-modular piece fits its own full
+        /// collider, plus a small (&lt;= <see cref="StormdrainKit.ModuleJitterMaxDeg"/>) deterministic
+        /// yaw jitter — the run's own axis never rotates as a whole (change 3).</summary>
+        private static void BuildModularRun(Transform parent, Vector3 at, Vector3 size, CoverDressing dressing)
+        {
+            bool alongX = size.x >= size.z;
+            float longDim = alongX ? size.x : size.z;
+            float shortDim = alongX ? size.z : size.x;
+            Vector3 along = alongX ? Vector3.right : Vector3.forward;
+
+            // The two extreme module CENTRES sit this far apart; each module then fits itself to a
+            // shortDim*coverage slice, so the outermost extent (centreSpan + one module width) lands
+            // exactly on the ticket's own coverage target of the full collider length — not that plus
+            // a whole module's overrun.
+            float moduleWidth = shortDim * StormdrainKit.CoverFootprintCoverage;
+            float centreSpan = Mathf.Max(0f, StormdrainKit.CoverFootprintCoverage * longDim - moduleWidth);
+
+            int count = Mathf.Max(2, Mathf.RoundToInt(centreSpan / Mathf.Max(0.01f, shortDim * 1.8f)) + 1);
+
+            var run = new GameObject($"{dressing} Run").transform;
+            run.SetParent(parent, false);
+            run.position = at;
+
+            Vector3 moduleSize = new Vector3(shortDim, size.y, shortDim);
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = count > 1 ? (i / (float)(count - 1)) - 0.5f : 0f;
+                Vector3 moduleAt = at + along * (t * centreSpan);
+
+                GameObject module = BuildSingleDressing(run, moduleAt, moduleSize, dressing);
+
+                float jitterHash = Frac(HashSeed(moduleAt), i);
+                float jitterDeg = (jitterHash - 0.5f) * 2f * StormdrainKit.ModuleJitterMaxDeg;
+                module.transform.rotation = Quaternion.Euler(0f, jitterDeg, 0f);
+
+                FitFootprintAndHeight(module, moduleSize, run, moduleAt);
+            }
+
+            // A connecting member along the run so the gaps between modules never read as open floor —
+            // "a line of pump housings joined by a pipe", the ticket's own example.
+            float connectorY = dressing == CoverDressing.Planter ? size.y * 0.22f
+                              : dressing == CoverDressing.Shed || dressing == CoverDressing.Machinery ? size.y * 0.55f
+                              : size.y * 0.30f;
+            float connectorRadius = Mathf.Min(shortDim * 0.12f, 0.18f);
+            Quaternion lie = Quaternion.LookRotation(along, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+            // Tube() takes a position LOCAL to its parent (unlike the BuildXxx forms above, which take
+            // a world "at" and set .position directly) — run is already sitting at the piece's own
+            // world "at", so this only needs the small vertical offset, not "at" added a second time.
+            StormdrainKit.Tube(run, "Run Connector", Vector3.up * connectorY, connectorRadius,
+                centreSpan, lie, StormdrainKit.Rust);
+        }
+
+        /// <summary>MV-818, change 1: stretches a just-built dressing's own combined renderer bounds
+        /// (never its collider) so its XZ footprint fills <see cref="StormdrainKit.CoverFootprintCoverage"/>
+        /// of <paramref name="colliderSize"/>'s own w/d, and its height clears
+        /// <see cref="StormdrainKit.CoverMinVisibleHeight"/>. Must run AFTER any yaw is set on
+        /// <paramref name="built"/> — a <c>Transform</c> always composes as rotate(scale(vertex)), so a
+        /// non-uniform scale set on the SAME transform that also carries a rotation would apply in the
+        /// object's own pre-rotation axes and then get carried along by that rotation, which is not the
+        /// axis-aligned fit this needs. Measuring bounds after rotation and pushing the scale onto a
+        /// fresh, never-rotated WRAPPER instead scales the already-rotated world-space shape directly,
+        /// so the result hits the target exactly regardless of what <paramref name="built"/>'s own
+        /// rotation is.</summary>
+        private static void FitFootprintAndHeight(GameObject built, Vector3 colliderSize, Transform parent, Vector3 at)
+        {
+            Renderer[] renderers = built.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            if (b.size.x < 0.001f || b.size.y < 0.001f || b.size.z < 0.001f) return;
+
+            float scaleX = colliderSize.x * StormdrainKit.CoverFootprintCoverage / b.size.x;
+            float scaleZ = colliderSize.z * StormdrainKit.CoverFootprintCoverage / b.size.z;
+            float scaleY = Mathf.Max(1f, StormdrainKit.CoverMinVisibleHeight / b.size.y);
+
+            var wrapper = new GameObject(built.name + " Fit").transform;
+            wrapper.SetParent(parent, false);
+            wrapper.position = at;
+            built.transform.SetParent(wrapper, true);
+            wrapper.localScale = new Vector3(scaleX, scaleY, scaleZ);
+        }
+
+        /// <summary>Long/short aspect ratio of a cover collider's own XZ footprint (MV-818) — &gt;= 1 by
+        /// construction, so both the modular-run and no-yaw thresholds read as plain lower bounds.</summary>
+        private static float Aspect(Vector3 size) =>
+            Mathf.Max(size.x, size.z) / Mathf.Max(0.01f, Mathf.Min(size.x, size.z));
+
+        /// <summary>A deterministic non-negative integer hash of a world XZ position (MV-818) — the
+        /// same "position, not <see cref="UnityEngine.Random"/>" contract <see cref="DeterministicYaw"/>
+        /// already keeps, exposed separately so a module's per-index jitter (<see cref="Frac(int,int)"/>)
+        /// can salt off it without colliding with that formula's own output range.</summary>
+        private static int HashSeed(Vector3 at)
+        {
+            unchecked
+            {
+                int h = Mathf.RoundToInt(at.x * 100f) * 374761393 + Mathf.RoundToInt(at.z * 100f) * 668265263;
+                h = (h ^ (h >> 13)) * 1274126177;
+                return (h ^ (h >> 16)) & 0x7fffffff;
             }
         }
 

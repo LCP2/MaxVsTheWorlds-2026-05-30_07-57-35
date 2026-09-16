@@ -327,6 +327,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv770RocketSalvo());
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
+            Add(BuildMv818CoverCheck());
             return d;
         }
 
@@ -2172,6 +2173,63 @@ namespace MaxWorlds.Dev
                     if (replicatorGo != null) Destroy(replicatorGo);
                     if (rusherGo != null) Destroy(rusherGo);
                 },
+            };
+        }
+
+        // ---- Mv818CoverCheck (MV-818 AC4) -----------------------------------------------------
+
+        /// <summary>MV-818's own AC4 evidence: World 2's real shipped a3, both 10 m cover strips
+        /// (<c>a3_cover3</c>, the planter trough, and <c>a3_cover4</c>, the pump line — both authored
+        /// at x=67, z=120/101 in <c>world2_config.json</c>) in one frame, so the fix reads against the
+        /// design sheet's own row of cells rather than the single-hopper regression it replaces. Framed
+        /// by hand at the fixed rig's own pitch, pulled back from the default 26.02 m so a 19 m gap
+        /// between the two strips' centres both fit with margin — not the player's own spawn framing
+        /// every earlier World 2 capture preset uses, since a3 is not where Max starts.</summary>
+        private static CapturePreset BuildMv818CoverCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            // The two strips' own authored centres (world2_config.json: a3_cover3 x=67 z=120,
+            // a3_cover4 x=67 z=101) — hand-picked rather than looked up by id, since this is a one-off
+            // evidence shot, not a general-purpose "find area a3" capture other tickets would reuse.
+            var stripMidpoint = new Vector3(67f, 0f, 110.5f);
+            const float distance = 44f;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+
+                Vector3 focus = stripMidpoint + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv818cover",
+                LogTag = "[MV818Capture]",
+                Flag = "-mv818shot",
+                ArmFile = "Temp/mv818.arm",
+                HeadlessMarker = "Temp/mv818.headless",
+                DoneFileName = "_mv818_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-818", NoSetup) },
             };
         }
     }

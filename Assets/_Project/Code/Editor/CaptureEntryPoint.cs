@@ -85,6 +85,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv773GrateLurker() => RunFromMenu(CapturePresets.All["mv773gratelurker"]);
         public static void CaptureMv773GrateLurker() => Run(CapturePresets.All["mv773gratelurker"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Cover Strips a3 (MV-818)")]
+        public static void MenuMv818Cover() => RunFromMenu(CapturePresets.All["mv818cover"]);
+        public static void CaptureMv818Cover() => Run(CapturePresets.All["mv818cover"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
