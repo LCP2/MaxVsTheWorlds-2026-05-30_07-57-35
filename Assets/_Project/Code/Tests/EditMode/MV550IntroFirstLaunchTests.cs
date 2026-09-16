@@ -7,10 +7,13 @@ using MaxWorlds.UI;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-550: the intro cinematic's derived first-launch gate, <see cref="HomeScreen.ShouldPlayIntroOnFirstLaunch"/>
-    /// — true only when every save slot is empty and no capture director is armed. Never persisted:
-    /// read straight off <see cref="SaveSystem"/>'s live slot state on every call, per the ticket's
-    /// explicit "no <c>SeenIntro</c> flag" rule.
+    /// MV-826's per-slot intro gate, <see cref="HomeScreen.ShouldPlayIntroForSlot"/> — true whenever
+    /// PLAY is about to start a run on a slot holding no data (a never-used slot, or one just RESET)
+    /// and no capture director is armed. Supersedes MV-550's whole-device
+    /// <c>ShouldPlayIntroOnFirstLaunch</c>, whose global "every slot empty" semantics never allowed a
+    /// single RESET to replay the film. Never persisted: read straight off <see cref="SaveSystem"/>'s
+    /// live slot state on every call, per MV-550's original "no <c>SeenIntro</c> flag" rule, which
+    /// still holds under the new per-slot shape.
     /// </summary>
     public sealed class MV550IntroFirstLaunchTests
     {
@@ -52,99 +55,97 @@ namespace MaxWorlds.Tests.EditMode
                 if (File.Exists(path)) File.Delete(path);
         }
 
-        // ------------------------------------------------------------------ AC1: the save-data half
+        // ------------------------------------------------------------------ MV-826 AC2: per-slot, not whole-device
 
+        // On base 302e10e, the gate in use (HomeScreen.ShouldPlayIntroOnFirstLaunch()) returns false
+        // here — slot 0 having data fails the "every slot empty" check even though slot 1 itself is
+        // untouched. This is the one new test (Rule 1) proving MV-826's fix: the gate must be asked
+        // per-slot, so a played slot 0 can never block an empty (or just-RESET) slot 1's film.
         [Test]
-        public void TrueWhenEverySlotIsEmpty()
+        public void GateIsPerSlot_OccupiedSlotDoesNotBlockAnEmptySlot()
         {
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.True,
-                "an untouched device (every slot empty) is exactly what 'true first launch' means");
-        }
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
 
-        [Test]
-        public void FalseWhenAnySingleSlotHasData()
-        {
-            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
-
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.False,
-                "one played slot is enough to prove this device is not a true first launch, " +
-                "even though slots 0 and 2 are still empty");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(1), Is.True,
+                "slot 1 has no data — its own gate must be true regardless of slot 0's state");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.False,
+                "slot 0 already has data — PLAY on it must not replay the film");
         }
 
         [Test]
         public void ReactsLiveToSaveSystemState_NotACachedLocalBool()
         {
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.True, "starts empty");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.True, "starts empty");
 
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "MAX" });
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.False,
-                "must flip the moment SaveSystem reports data — it is derived, not cached");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.False,
+                "must flip the moment SaveSystem reports data for this slot — it is derived, not cached");
 
             SaveSystem.Delete(0);
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.True,
-                "wiping every slot again must read as first-launch again (deliberate — no SeenIntro flag)");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.True,
+                "a RESET slot must read as intro-eligible again (Lee's decision — no SeenIntro flag)");
         }
 
-        // ------------------------------------------------------------------ AC2: capture directors win
+        // ------------------------------------------------------------------ AC2 (MV-550, retained): capture directors win
 
         [Test]
-        public void FalseWhenPressKitIsArmed_EvenWithAllSlotsEmpty()
+        public void FalseWhenPressKitIsArmed_EvenOnAnEmptySlot()
         {
             Directory.CreateDirectory("Temp");
             File.WriteAllText(Path.Combine("Temp", "presskit.arm"), "");
 
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.False,
-                "a press-kit filming run has nothing to click 'skip' with — the 25s cinematic must never gate it");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.False,
+                "a press-kit filming run has nothing to click 'skip' with — the film must never gate it");
         }
 
         [Test]
-        public void FalseWhenUiScreensIsArmed_EvenWithAllSlotsEmpty()
+        public void FalseWhenUiScreensIsArmed_EvenOnAnEmptySlot()
         {
             Directory.CreateDirectory("Temp");
             File.WriteAllText(Path.Combine("Temp", "uiscreens.arm"), "");
 
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.False,
-                "a fixed-state UI capture run would hang behind the cinematic if this gate ignored it");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.False,
+                "a fixed-state UI capture run would hang behind the film if this gate ignored it");
         }
 
         [Test]
-        public void FalseWhenPerfCaptureIsArmed_EvenWithAllSlotsEmpty()
+        public void FalseWhenPerfCaptureIsArmed_EvenOnAnEmptySlot()
         {
             Directory.CreateDirectory("Temp");
             File.WriteAllText(Path.Combine("Temp", "ccperf.arm"), "");
 
-            Assert.That(HomeScreen.ShouldPlayIntroOnFirstLaunch(), Is.False,
-                "a 25s cinematic in front of a frame-time sample destroys the very measurement it exists to take");
+            Assert.That(HomeScreen.ShouldPlayIntroForSlot(0), Is.False,
+                "a film in front of a frame-time sample destroys the very measurement it exists to take");
         }
 
-        // ------------------------------------------------------------------ AC4: the returning-player path
+        // ------------------------------------------------------------------ AC3 (MV-550, retained): the returning-player path
 
         [Test]
         public void ReturningPlayer_TheComposedPlayIntroDecisionIsFalse()
         {
             // The exact boolean HomeScreen.OnPlay computes: IntroCinematic.Enabled is off by default, so
-            // once any slot has data this must be false — StartSlot then never calls IntroCinematic.TryPlay,
-            // and HomeScreen.Close() marks BootTiming's "controllable" synchronously, in the same frame as
-            // PLAY, instead of ~25s later at IntroCinematic's handoff.
+            // a slot that already has data must be false — StartSlot then never calls
+            // IntroCinematic.TryPlay, and HomeScreen.Close() marks BootTiming's "controllable"
+            // synchronously, in the same frame as PLAY, instead of ~15s later at the film's handoff.
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
 
-            bool playIntro = IntroCinematic.Enabled || HomeScreen.ShouldPlayIntroOnFirstLaunch();
+            bool playIntro = IntroCinematic.Enabled || HomeScreen.ShouldPlayIntroForSlot(0);
 
             Assert.That(playIntro, Is.False,
-                "a returning player (slot 0 already has data) must never trigger the cinematic");
+                "a returning player (slot 0 already has data) must never trigger the film");
         }
 
         [Test]
         public void EnabledOverridesTheGateEvenForAReturningPlayer()
         {
-            // AC3: IntroCinematic.Enabled stays a manual/test override on top of the derived gate.
+            // IntroCinematic.Enabled stays a manual/test override on top of the derived gate.
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
             IntroCinematic.Enabled = true;
 
-            bool playIntro = IntroCinematic.Enabled || HomeScreen.ShouldPlayIntroOnFirstLaunch();
+            bool playIntro = IntroCinematic.Enabled || HomeScreen.ShouldPlayIntroForSlot(0);
 
             Assert.That(playIntro, Is.True,
-                "flipping Enabled back on must still force the cinematic, even on a device with saves");
+                "flipping Enabled back on must still force the film, even on a slot with saves");
         }
     }
 }

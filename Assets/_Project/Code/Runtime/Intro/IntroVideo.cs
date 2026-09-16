@@ -52,23 +52,26 @@ namespace MaxWorlds.Intro
         }
 
         /// <summary>
-        /// Source resolution as a pure static function so it is testable without a live player: off
-        /// WebGL prefers a <see cref="VideoClip"/> resource, on WebGL a streamed URL (the only source a
-        /// WebGL <see cref="VideoPlayer"/> can use), and reports <see cref="IntroVideoSourceKind.None"/>
-        /// when the platform's asset isn't present.
+        /// Source resolution as a pure static function so it is testable without a live player: on
+        /// WebGL a streamed URL is the only source a <see cref="VideoPlayer"/> can use there, and
+        /// existence can't be confirmed synchronously over HTTP (MV-826), so it is always chosen
+        /// unconditionally. Off WebGL, a streaming file (if committed) wins over the Resources
+        /// <see cref="VideoClip"/> — both resolve on local disk there, and the streamed path is the one
+        /// that actually ships (MV-826) — and reports <see cref="IntroVideoSourceKind.None"/> when
+        /// neither asset is present.
         /// </summary>
         public static IntroVideoSourceKind ResolveSourceKind(bool isWebGl, Func<bool> hasClip, Func<bool> hasStreamingFile)
         {
-            if (isWebGl) return hasStreamingFile() ? IntroVideoSourceKind.Url : IntroVideoSourceKind.None;
+            if (isWebGl) return IntroVideoSourceKind.Url;
+            if (hasStreamingFile()) return IntroVideoSourceKind.Url;
             return hasClip() ? IntroVideoSourceKind.Clip : IntroVideoSourceKind.None;
         }
 
         private static bool ClipExists() => Resources.Load<VideoClip>(ClipResourcePath) != null;
 
-        // WebGL serves StreamingAssets over HTTP, not a local disk — this check only resolves correctly
-        // in the Editor and Windows standalone (what cc-verify builds). A real WebGL deploy can't confirm
-        // the file synchronously, so until a follow-up ticket adds a real streamed-existence check it
-        // resolves to None there and the box timeline keeps covering that build target.
+        // WebGL serves StreamingAssets over HTTP, not a local disk, so this check only ever resolves
+        // correctly in the Editor and Windows standalone (what cc-verify builds) — ResolveSourceKind
+        // never calls it on WebGL (MV-826), it always resolves Url unconditionally there instead.
         private static bool StreamingFileExists() => File.Exists(Path.Combine(Application.streamingAssetsPath, StreamingRelativePath));
 
         private void Build(Camera introCam, Transform parent)
@@ -81,7 +84,11 @@ namespace MaxWorlds.Intro
             Player.renderMode = VideoRenderMode.CameraNearPlane;   // a full-screen surface owned by the intro camera
             Player.targetCamera = introCam;
             Player.aspectRatio = VideoAspectRatio.FitOutside;
+            Player.audioOutputMode = VideoAudioOutputMode.None;   // the film ships with no audio track
             Player.loopPointReached += _ => IsComplete = true;
+            // A missing or unplayable stream (e.g. a 404 on the WebGL host) must hand over to gameplay,
+            // never leave a black screen behind (MV-826).
+            Player.errorReceived += (_, __) => IsComplete = true;
 
             if (SourceKind == IntroVideoSourceKind.Clip)
             {
@@ -93,8 +100,12 @@ namespace MaxWorlds.Intro
             }
             else
             {
-                string path = Path.Combine(Application.streamingAssetsPath, StreamingRelativePath);
-                if (!File.Exists(path)) return;
+                // Forward slash, no Path.Combine (MV-826): this is a URL, not a local disk path — WebGL
+                // serves StreamingAssets over HTTP, where a backslash would break the request.
+                string path = Application.streamingAssetsPath + "/" + StreamingRelativePath;
+                // The File.Exists guard only resolves correctly off WebGL (see StreamingFileExists) — on
+                // WebGL, ResolveSourceKind already chose Url unconditionally, so this must not veto it.
+                if (Application.platform != RuntimePlatform.WebGLPlayer && !File.Exists(path)) return;
                 Player.source = VideoSource.Url;
                 Player.url = path;
                 Player.Play();

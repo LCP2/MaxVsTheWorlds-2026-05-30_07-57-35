@@ -24,27 +24,31 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------ AC3: source resolution
 
         [Test]
-        public void ResolvesUrlKindOnWebGLWhenTheStreamingFileExists()
+        public void ResolvesUrlKindOnWebGLUnconditionally()
         {
-            var kind = IntroVideo.ResolveSourceKind(isWebGl: true, hasClip: () => true, hasStreamingFile: () => true);
-            Assert.AreEqual(IntroVideoSourceKind.Url, kind,
-                "a WebGL build target must resolve to a streamed URL, never a VideoClip.");
-        }
-
-        [Test]
-        public void ResolvesClipKindOffWebGLWhenTheClipExists()
-        {
-            var kind = IntroVideo.ResolveSourceKind(isWebGl: false, hasClip: () => true, hasStreamingFile: () => true);
-            Assert.AreEqual(IntroVideoSourceKind.Clip, kind,
-                "off WebGL must resolve to the Resources VideoClip, never a streamed URL.");
-        }
-
-        [Test]
-        public void ResolvesNoneOnWebGLWhenNeitherAssetIsPresent()
-        {
+            // MV-826: existence can't be confirmed synchronously over HTTP, so WebGL always resolves
+            // Url — even when both callbacks report nothing present.
             var kind = IntroVideo.ResolveSourceKind(isWebGl: true, hasClip: () => false, hasStreamingFile: () => false);
-            Assert.AreEqual(IntroVideoSourceKind.None, kind,
-                "with no streaming file, a WebGL target must report no source, not a broken URL.");
+            Assert.AreEqual(IntroVideoSourceKind.Url, kind,
+                "a WebGL build target must resolve to a streamed URL unconditionally, never None or a VideoClip.");
+        }
+
+        [Test]
+        public void ResolvesUrlKindOffWebGLWhenStreamingFileWinsOverClip()
+        {
+            // MV-826: off WebGL, a present streaming file wins over a present Resources clip — the
+            // streamed asset is the one that actually ships.
+            var kind = IntroVideo.ResolveSourceKind(isWebGl: false, hasClip: () => true, hasStreamingFile: () => true);
+            Assert.AreEqual(IntroVideoSourceKind.Url, kind,
+                "off WebGL, a present streaming file must win over a present VideoClip resource.");
+        }
+
+        [Test]
+        public void ResolvesClipKindOffWebGLWhenOnlyTheClipExists()
+        {
+            var kind = IntroVideo.ResolveSourceKind(isWebGl: false, hasClip: () => true, hasStreamingFile: () => false);
+            Assert.AreEqual(IntroVideoSourceKind.Clip, kind,
+                "off WebGL with no streaming file, the Resources VideoClip must still be the fallback.");
         }
 
         [Test]
@@ -92,7 +96,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FallbackBeatTimelineRunsWhenNoVideoSourceResolves()
         {
-            // No committed video asset exists yet, so this is the real, unforced resolution.
+            // MV-826 committed the real intro.mp4 under StreamingAssets, so forcing None here is what
+            // keeps this deterministic — otherwise it would resolve Url off the file that's now
+            // actually on disk instead of exercising the true "nothing resolved" fallback.
+            IntroVideo.OverrideKindForTests = IntroVideoSourceKind.None;
             var intro = Build();
 
             Assert.IsFalse(intro.UsingVideo,
@@ -122,6 +129,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SkipRestoresHudFogAndPlayerControl_OnTheBeatPath()
         {
+            IntroVideo.OverrideKindForTests = IntroVideoSourceKind.None;   // MV-826: force the beat path despite the real committed asset
             var playerGo = new GameObject("Player");
             var player = playerGo.AddComponent<PlayerController>();
             var hudGo = new GameObject("Hud");
@@ -192,6 +200,7 @@ namespace MaxWorlds.Tests.EditMode
             // got caught by the same sweep, being tagged MainCamera itself) so it is the only one left.
             Camera[] suppressed = CameraTestUtil.SuppressAmbientMainCameras();
             _camGo.SetActive(true);
+            IntroVideo.OverrideKindForTests = IntroVideoSourceKind.None;   // MV-826: force the beat path despite the real committed asset
 
             var rigGo = new GameObject("Rig");
             var playerGo = new GameObject("Player");
