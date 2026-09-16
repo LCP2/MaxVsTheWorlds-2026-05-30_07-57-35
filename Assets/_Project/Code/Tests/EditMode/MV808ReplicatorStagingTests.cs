@@ -130,55 +130,55 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, rusher.Current,
                 "within lure radius, capacity > 0, clear of Max's melee exclusion — this Rusher must be lured");
 
-            // --- Move it to its queue slot and drive the Intake beat in 10 steps, sampling the ascent. ---
+            // --- Move it to its queue slot and drive the Intake beat in small steps, sampling the
+            // ascent, until it despawns. MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence
+            // (walk to the hatch, then pass through and shrink) rather than a flat IntakeSeconds lerp,
+            // so this polls to the despawn rather than assuming a fixed duration. ---
             rusher.transform.position = rusher.ReplicatorSeekTarget;
 
-            var ys = new float[10];
-            var positions = new Vector3[10];
-            for (int i = 0; i < 9; i++)
+            var ys = new System.Collections.Generic.List<float>();
+            int guard = 0;
+            while (rusher.IsAlive && guard++ < 300)
             {
-                replicator.TickConsumption(0.03f); // 9 x 0.03 = 0.27 s — stays short of IntakeSeconds (0.35)
+                replicator.TickConsumption(0.02f);
                 LateUpdateMethod.Invoke(replicator, null);
-                positions[i] = rusher.transform.position;
-                ys[i] = positions[i].y;
-                AssertLed(led, ledMpb, red, $"mid-ascent (sample {i}), the LED must read red");
+                ys.Add(rusher.transform.position.y);
+                AssertLed(led, ledMpb, red, $"mid-ascent (sample {ys.Count - 1}), the LED must read red");
             }
-            // Sample 10: enough to complete the Intake beat (0.27 + 0.15 = 0.42, past IntakeSeconds
-            // 0.35) without this same call's dt also seeding the pending-Cycle timer (see below) past
-            // CycleSeconds — a bigger overshoot here would fire the first emission inside this same call.
-            replicator.TickConsumption(0.15f);
-            LateUpdateMethod.Invoke(replicator, null);
-            positions[9] = rusher.transform.position;
-            ys[9] = positions[9].y;
+            Assert.IsFalse(rusher.IsAlive, "fully drawn in, the Rusher must be despawned into the Cycle beat");
             AssertLed(led, ledMpb, red, "the instant Intake completes (still mid-Cycle), the LED must read red");
 
-            for (int i = 1; i < ys.Length; i++)
+            for (int i = 1; i < ys.Count; i++)
                 Assert.GreaterOrEqual(ys[i], ys[i - 1] - 0.0001f,
-                    $"the intake robot's Y must rise monotonically across the ascent — sample {i} " +
-                    $"({ys[i]:F3}) fell below sample {i - 1} ({ys[i - 1]:F3})");
-            Assert.Greater(ys[9], ys[0] + 0.05f,
+                    $"the intake robot's Y must rise (or hold, once past the hatch) monotonically across " +
+                    $"the ascent — sample {i} ({ys[i]:F3}) fell below sample {i - 1} ({ys[i - 1]:F3})");
+            Assert.Greater(ys[ys.Count - 1], ys[0] + 0.05f,
                 "the ascent from ground level to the hatch lip must be a real rise, not a flat line within noise");
-
-            Assert.IsFalse(rusher.IsAlive, "fully drawn in, the Rusher must be despawned into the Cycle beat");
-            Assert.LessOrEqual(Vector3.Distance(positions[9], replicator.HatchPosition), 0.05f,
-                "the intake robot's final resolved position must be the hatch mouth within 0.05 m");
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
             Assert.AreEqual(0, spawner.LiveCountOf(EnemyKind.Rusher),
-                "the Cycle beat (3 s) hasn't elapsed yet — nothing should have emerged");
+                "the Cycle beat hasn't elapsed yet — nothing should have emerged");
 
             // --- Cross CycleSeconds only (never CycleSeconds + EmitStaggerSeconds in the same call) —
-            // pending.Timer is 0.15 after the sampling loop above (the completing call's own dt), so
-            // +0.85 lands at 1.00: past CycleSeconds (0.9), short of +EmitStaggerSeconds (1.1). ---
-            replicator.TickConsumption(0.85f);
-            LateUpdateMethod.Invoke(replicator, null);
+            // polled rather than a hand-computed dt sum, since MV-823 changed CycleSeconds 0.9 -> 2.0
+            // and a fixed-jump sum tied to the old value is exactly what broke this test on that change. ---
+            guard = 0;
+            while (spawner.LiveCountOf(EnemyKind.Rusher) < 1 && guard++ < 300)
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Assert.AreEqual(1, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the FIRST of the doubled pair must emerge once the Cycle beat completes");
             AssertLed(led, ledMpb, red, "between the first and second emission, the LED must still read red");
 
-            // --- Cross CycleSeconds + EmitStaggerSeconds: 1.00 + 0.2 = 1.20. ---
-            replicator.TickConsumption(0.2f);
-            LateUpdateMethod.Invoke(replicator, null);
+            // --- Cross CycleSeconds + EmitStaggerSeconds too. ---
+            guard = 0;
+            while (spawner.LiveCountOf(EnemyKind.Rusher) < 2 && guard++ < 300)
+            {
+                replicator.TickConsumption(0.02f);
+                LateUpdateMethod.Invoke(replicator, null);
+            }
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
             Assert.AreEqual(1, replicator.Capacity, "one doubling must spend exactly one of the two starting capacity");

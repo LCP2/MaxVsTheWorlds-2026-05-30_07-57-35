@@ -115,7 +115,10 @@ namespace MaxWorlds.Tests.EditMode
             // MV775ReplicatorStagingTests make.
             robot.transform.position = robot.ReplicatorSeekTarget;
 
-            replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
+            // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat
+            // IntakeSeconds lerp, so this polls to the despawn rather than assuming a fixed duration.
+            int guard = 0;
+            while (robot.IsAlive && guard++ < 300) replicator.TickConsumption(0.02f);
             Assert.IsFalse(robot.IsAlive, "setup failure: the robot must be despawned into the Cycle beat by now");
             // MV-809: Despawn()'s SetActive(false) doesn't synchronously fire OnDisable in EditMode
             // (the same quirk this suite already works around for OnEnable) — invoke it directly so
@@ -123,22 +126,24 @@ namespace MaxWorlds.Tests.EditMode
             // Play mode, which is what the reservation math under test actually depends on.
             OnDisableMethod.Invoke(robot, null);
 
-            // Same staged dt sequence as MV775ReplicatorStagingTests: the Intake-completing call above
-            // already ticks the freshly-added PendingEmission's own timer by its own dt (TickConsumption
-            // runs the Intake beat and the pending-emission loop off the SAME dt in one call), so the
-            // first Cycle-beat tick below lands just past CycleSeconds without also overshooting
-            // CycleSeconds + EmitStaggerSeconds in the same call. MV-812 cut CycleSeconds/
-            // EmitStaggerSeconds 3.0/0.4 -> 0.9/0.2, so these jumps are scaled down to match.
-            replicator.TickConsumption(0.59f); // cumulative ~0.95s: past CycleSeconds - first emission fires
+            // Polled rather than a hand-computed dt sum — MV-823 changed CycleSeconds 0.9 -> 2.0, and a
+            // fixed-jump sum tied to the old value is exactly what broke this test on that change.
+            guard = 0;
+            while (spawner.LiveCountOf(robot.Kind) < 1 && guard++ < 300) replicator.TickConsumption(0.02f);
             // MV-809: sync BETWEEN the two emissions, not just once at the end — in Play mode the
             // first emitted robot's OnEnable fires synchronously, so the second emission's own
             // GlobalHasRoom check already sees it. Syncing only after both would let the second
             // emission see room the first one had already spent, which is the same population error
             // this fix exists to close, just relocated into the test harness instead of the game.
             SyncNewlyLiveRobots(spawner);
-            replicator.TickConsumption(0.20f); // cumulative ~1.15s: past CycleSeconds + EmitStaggerSeconds - second emission attempt
-
-            SyncNewlyLiveRobots(spawner);
+            // Unconditional (not polled to a count) — at the global-budget ceiling the second twin must
+            // NOT emerge at all (see the "at ceiling" assertion below), so this only needs to run well
+            // past CycleSeconds + EmitStaggerSeconds once, not wait for a count that may never arrive.
+            for (int i = 0; i < 30; i++) // 30 x 0.1 s = 3 s, comfortably past CycleSeconds(2.0) + EmitStaggerSeconds(0.2)
+            {
+                replicator.TickConsumption(0.1f);
+                SyncNewlyLiveRobots(spawner);
+            }
         }
 
         [Test]
