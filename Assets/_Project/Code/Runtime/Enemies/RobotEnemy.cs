@@ -163,22 +163,6 @@ namespace MaxWorlds.Enemies
         /// <summary>How many robots are switched on right now, field-wide (not per-factory).</summary>
         public static int ActiveCount => _active.Count;
 
-        /// <summary>MV-811: how many robots, field-wide, are currently <see cref="State.ReplicatorSeeking"/>
-        /// — what <see cref="MaxWorlds.Factories.Replicator.TickLure"/> checks against its own
-        /// <see cref="MaxWorlds.Factories.Replicator.MaxSeekingFraction"/> ceiling before adding another.
-        /// Computed from the live registry rather than tracked incrementally, so it can never drift from
-        /// what <see cref="Current"/> actually says.</summary>
-        public static int ReplicatorSeekingCount
-        {
-            get
-            {
-                int count = 0;
-                for (int i = 0; i < _active.Count; i++)
-                    if (_active[i] != null && _active[i].Current == State.ReplicatorSeeking) count++;
-                return count;
-            }
-        }
-
         /// <summary>Empties the registry. Called when a level starts building, alongside
         /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
         /// whose OnDisable hasn't run yet when the next level (or test) starts counting.</summary>
@@ -294,6 +278,7 @@ namespace MaxWorlds.Enemies
             // places this robot next calls SetLevel/SetDeckFootprint again.
             Level = 0;
             _deckRects = null;
+            AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             ResetState();
         }
 
@@ -348,6 +333,14 @@ namespace MaxWorlds.Enemies
         /// by <see cref="MaxWorlds.Factories.Replicator.TickLure"/>'s own test.</summary>
         public Vector3 ReplicatorSeekTarget { get; private set; }
 
+        /// <summary>MV-820: which 1-based area this robot was placed into — stamped once by whoever
+        /// spawned it (<see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>'s Spawn/SeedGarrison/
+        /// PlacePendingGarrison, the same "known before anything reads it" ordering <see cref="SetLevel"/>
+        /// already gets), not re-derived live from position. 0 until stamped.</summary>
+        public int AreaIndex { get; private set; }
+
+        public void SetAreaIndex(int area) => AreaIndex = area;
+
         private bool _noReplicate;
         private bool _noReplicatePermanent;
         private float _noReplicateTimer;
@@ -370,14 +363,32 @@ namespace MaxWorlds.Enemies
         /// <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>). One-way — nothing ever clears this.</summary>
         public void TagNoReplicatePermanent() => _noReplicatePermanent = true;
 
-        /// <summary>Sets this robot lured toward a Replicator's hatch instead of Max (MV-706). A no-op
-        /// for a robot that isn't actually awake and fighting — Dead/Dormant robots are never lured, and
-        /// the Replicator's own <c>TickLure</c> already screens for "awake"; this is belt-and-braces
-        /// against being called some other way. Safe to call again on an already-seeking robot (the
-        /// Replicator re-scans on its own cadence) — it just refreshes the target point.</summary>
+        /// <summary>MV-820: true while this robot is spoken for by a Replicator — either actually
+        /// seeking one (queued or mid-Intake, <see cref="State.ReplicatorSeeking"/>) or mid-attack and
+        /// tagged to seek one the instant that attack finishes (<see cref="_hasPendingReplicatorSeek"/>).
+        /// What a box's own eligibility scan reads to make sure two boxes never claim the same robot.</summary>
+        public bool IsAssignedToReplicator => Current == State.ReplicatorSeeking || _hasPendingReplicatorSeek;
+
+        private bool _hasPendingReplicatorSeek;
+        private Vector3 _pendingReplicatorSeekTarget;
+
+        /// <summary>Sets this robot lured toward a Replicator's hatch instead of Max (MV-706). Dead is
+        /// the only outright no-op — MV-820 Change 1 lets a Dormant robot be woken by being assigned
+        /// (no Alert beat: it's being physically pulled, not spotting Max on its own) and a robot
+        /// mid-Telegraph/Lunge finish its committed attack first: this only TAGS the hand-off
+        /// (<see cref="_hasPendingReplicatorSeek"/>) rather than yanking it out of the wind-up/strike —
+        /// <see cref="TickRecover"/> is what actually starts the seek once that attack's own EnterRecover
+        /// runs on its own schedule. Safe to call again on an already-seeking robot (a box's own refill
+        /// re-targets a promoted queue slot this way) — it just refreshes the target point.</summary>
         public void SeekReplicator(Vector3 hatchPosition)
         {
-            if (!IsAlive || Current == State.Dormant) return;
+            if (!IsAlive) return;
+            if (Current == State.Telegraph || Current == State.Lunge)
+            {
+                _hasPendingReplicatorSeek = true;
+                _pendingReplicatorSeekTarget = hatchPosition;
+                return;
+            }
             if (Current != State.ReplicatorSeeking)
             {
                 Current = State.ReplicatorSeeking;
@@ -389,11 +400,14 @@ namespace MaxWorlds.Enemies
             ReplicatorSeekTarget = hatchPosition;
         }
 
-        /// <summary>Break off a lure and resume the ordinary chase (MV-706) — called by a Replicator
-        /// that is destroyed while still owed a robot that hasn't reached its hatch yet. A no-op unless
-        /// this robot is actually mid-lure.</summary>
+        /// <summary>Break off a lure and resume the ordinary chase (MV-820 R2/R3) — called when this
+        /// robot's box dies, empties (capacity hits 0), or Max leaves its area. Also drops a not-yet-
+        /// started pending hand-off (a robot still mid-Telegraph/Lunge when its box goes away), which a
+        /// bare <see cref="Current"/> check would otherwise miss since that robot never actually reached
+        /// <see cref="State.ReplicatorSeeking"/>.</summary>
         public void CancelReplicatorSeeking()
         {
+            _hasPendingReplicatorSeek = false;
             if (Current != State.ReplicatorSeeking) return;
             Current = State.Chase;
             _stateTimer = 0f;
@@ -411,21 +425,6 @@ namespace MaxWorlds.Enemies
         /// no-op call site guard belongs to the caller (<see cref="MaxWorlds.Factories.Replicator"/>
         /// only calls this once, right as it removes the robot from its own seeking list).</summary>
         public void BeginReplicatorIntake() => IsBeingDrawnIn = true;
-
-        /// <summary>MV-816: "is this robot fighting <paramref name="targetTransform"/> right now" —
-        /// within <see cref="Replicator.MaxMeleeExclusionRadius"/> of it, OR has sight and is within
-        /// its own <see cref="lungeRange"/>. The single predicate <see cref="Replicator.TickLure"/>'s
-        /// selection screen and <see cref="TickReplicatorSeeking"/>'s per-tick cancel both call, so the
-        /// two can never disagree about who counts as already engaged (the root cause of Chargers never
-        /// charging: the lure used only the 7 m radius while the seek-cancel used only lungeRange, and a
-        /// Charger's 12 m lungeRange sat outside the 7 m the lure screened on).</summary>
-        public bool IsEngagingTarget(Transform targetTransform)
-        {
-            if (targetTransform == null) return false;
-            float dist = Vector3.Distance(transform.position, targetTransform.position);
-            if (dist <= Replicator.MaxMeleeExclusionRadius) return true;
-            return _sight.HasSight && dist <= lungeRange;
-        }
 
         /// <summary>MV-812: seconds of no real progress toward <see cref="ReplicatorSeekTarget"/> before
         /// <see cref="TickReplicatorSeeking"/> stops trusting <see cref="CharacterControllerMotion.SafeMove"/>
@@ -456,32 +455,24 @@ namespace MaxWorlds.Enemies
         {
             if (IsBeingDrawnIn) return; // MV-775: the Replicator now moves this robot directly
 
-            // MV-811 change 1 / MV-816: re-checked every tick, not just at selection, via the same
-            // IsEngagingTarget predicate TickLure's own selection screen uses — a robot that starts
-            // (or resumes) fighting Max WHILE walking to a hatch is pulled back the instant that's
-            // true, not left to keep walking to a box it no longer needs.
-            if (IsEngagingTarget(target))
-            {
-                CancelReplicatorSeeking();
-                return;
-            }
-
-            // MV-811 change 3: nobody waits forever — a robot that can't physically reach its slot
-            // within LureTimeoutSeconds gives up, resumes chasing, and refuses to immediately re-queue
-            // at the same box.
-            if (_stateTimer >= Replicator.LureTimeoutSeconds)
-            {
-                CancelReplicatorSeeking();
-                TagNoReplicate(Replicator.LureTimeoutNoReplicateSeconds);
-                return;
-            }
+            // MV-820 R3 (commitment): an assigned robot never cancels for proximity to Max, sight of
+            // him, or taking damage, and never times out — it stops only via CancelReplicatorSeeking
+            // (it dies, its box dies/empties, or Max leaves the area), called externally by the box.
 
             Vector3 to = ReplicatorSeekTarget - transform.position;
             to.y = 0f;
             float dist = to.magnitude;
             if (dist <= 0.001f) return;
             Vector3 dir = to / dist;
-            float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
+
+            // MV-820 R4: seeking speed is the speed this kind attacks at, not its ordinary chase speed
+            // — the Charger's own committed charge lungeSpeed in a straight line, every other kind its
+            // chase-with-sight EffectiveMoveSpeed. Sludge slow (a world rule) still applies to the
+            // Charger's own number, which EffectiveMoveSpeed doesn't read.
+            float speed = Kind == EnemyKind.Charger
+                ? lungeSpeed * MapSlowZones.Instance.SpeedMultiplierAt(transform.position)
+                : EffectiveMoveSpeed;
+            float step = Mathf.Min(speed * dt, dist);
 
             // MV-816 change 4: face the slot it's actually walking to, not whatever it was last facing
             // before the lure took over — same capped-rate turn FaceAndMove already uses elsewhere, so
@@ -1123,6 +1114,8 @@ namespace MaxWorlds.Enemies
             // forward — SeekReplicator/BeginReplicatorIntake re-stamp it fresh each time a Replicator
             // actually captures this body.
             IsBeingDrawnIn = false;
+            // MV-820: a pooled robot must not carry the last life's mid-attack hand-off forward either.
+            _hasPendingReplicatorSeek = false;
             // MV-688: a pooled Lurker must not carry the last life's cycle progress/wake latch forward —
             // BeginSubmerged() (called right after this by whoever placed it) re-stamps these anyway, but
             // a plain pooled reuse that skips BeginDormant/BeginSubmerged must never inherit them either.
@@ -2152,6 +2145,21 @@ namespace MaxWorlds.Enemies
         {
             if (_stateTimer >= recoverTime)
             {
+                // MV-820 Change 1: a robot that was assigned to a Replicator mid-Telegraph/Lunge
+                // finishes that attack first (this Recover beat is the tail of it) — now that it's
+                // over, hand off into the seek it was tagged for instead of resuming Chase.
+                if (_hasPendingReplicatorSeek)
+                {
+                    _hasPendingReplicatorSeek = false;
+                    Vector3 target = _pendingReplicatorSeekTarget;
+                    Current = State.ReplicatorSeeking;
+                    _stateTimer = 0f;
+                    _seekStallTimer = 0f;
+                    _seekLastProgressDist = -1f;
+                    _bar?.SetReplicatorMarker(true);
+                    ReplicatorSeekTarget = target;
+                    return;
+                }
                 Current = State.Chase;
                 _stateTimer = 0f;
             }

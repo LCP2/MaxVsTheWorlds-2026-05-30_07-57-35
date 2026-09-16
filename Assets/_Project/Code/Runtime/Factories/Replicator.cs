@@ -34,17 +34,6 @@ namespace MaxWorlds.Factories
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
         private const float ReplicatorHealth = 474.75f;
 
-        /// <summary>How far a live-capacity Replicator can pull an eligible robot off Max (MV-706).
-        /// 16 m (MV-798, up from the original 8 m) — sized against the authored World 2 area
-        /// footprints so a box's disc reaches across a whole area rather than a corner of it; see
-        /// MV-798's own area-coverage figures for why 8 m left most robots never lured at all.</summary>
-        public const float LureRadius = 16f;
-
-        /// <summary>A robot within this of Max is never pulled off him, whatever else is true. 7 m
-        /// (MV-798, up from 4 m) — moved with <see cref="LureRadius"/> so the wider lure still can't
-        /// pull a robot out of a fight it's already in; 4 m was sized against the old 8 m lure.</summary>
-        public const float MaxMeleeExclusionRadius = 7f;
-
         /// <summary>How close a lured robot's surface must get to the hatch it's walking to before the
         /// Intake beat takes over (MV-756 original fix, MV-775 scoped to the hatch face specifically —
         /// see <see cref="DistanceToHatchFace"/>): the seeking robot's own
@@ -68,28 +57,6 @@ namespace MaxWorlds.Factories
         /// and between the hatch itself and slot 0. Lee's own "queue 2 deep" is a line, not a pile —
         /// this is what keeps two queued robots from ever being steered at the same point.</summary>
         public const float QueueSlotSpacing = 1.2f;
-
-        /// <summary>MV-811: longest a lured robot may spend walking to its slot before it gives up —
-        /// the release valve for one that can't physically reach it (a jam, a wall, a route dead-end).
-        /// Checked by <see cref="RobotEnemy"/>'s own seeking tick, not here — this box only cares that
-        /// a robot which times out gets dropped from its queue on the next <see cref="TickConsumption"/>
-        /// pass, same as any other robot that's stopped seeking.</summary>
-        public const float LureTimeoutSeconds = 6f;
-
-        /// <summary>MV-811: how long a robot that timed out waiting refuses to immediately re-queue at
-        /// the same box. Same number as <see cref="TwinNoReplicateSeconds"/>, kept as its own named
-        /// constant since the two are conceptually different triggers that just happen to share a
-        /// duration.</summary>
-        public const float LureTimeoutNoReplicateSeconds = 8f;
-
-        /// <summary>MV-811: at most this fraction of the currently live robots, field-wide, may be in
-        /// <see cref="RobotEnemy.State.ReplicatorSeeking"/> at once — see
-        /// <see cref="RobotEnemy.ReplicatorSeekingCount"/> and <see cref="TickLure"/>'s own ceiling
-        /// check. Without this, MV-798's wider 16 m lure radius plus every box on a world authoring its
-        /// own two-deep queue could park most of the field's population out of the fight at once (up to
-        /// 22 of 24 on Lee's own build) — Change 1/2 (below) fix the immediate freeze; this is what
-        /// stops the same shape re-appearing at a bigger scale.</summary>
-        public const float MaxSeekingFraction = 0.25f;
 
         /// <summary>MV-775 Intake beat: seconds a consumed robot spends being drawn from its arrival
         /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
@@ -140,7 +107,6 @@ namespace MaxWorlds.Factories
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
-        private Transform _target; // Max
         private Renderer _led;
         private MaterialPropertyBlock _ledMpb;
         /// <summary>MV-813: the top-face beacon — big enough to read at the play camera, taking the
@@ -159,6 +125,11 @@ namespace MaxWorlds.Factories
         /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
+
+        /// <summary>MV-820: found once in <see cref="Start"/> (never by an EditMode test — see that
+        /// method's own doc comment) so this box can unsubscribe from
+        /// <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> in <see cref="OnDestroy"/>.</summary>
+        private AreaAccumulationDirector _areaDirector;
 
         /// <summary>MV-775: the hatch this box actually draws a consumed robot into — the Lure/Intake
         /// beats' steering target and arrive gate, and the swing-open transform LateUpdate drives.</summary>
@@ -209,6 +180,16 @@ namespace MaxWorlds.Factories
         /// destructible target.</summary>
         public int Capacity => capacity;
 
+        /// <summary>MV-820: which 1-based area (<see cref="AreaAccumulationDirector.AreaIndexOf"/>)
+        /// this box was authored into — stamped once by <see cref="MaxWorlds.Arena.WorldRunner"/> right
+        /// after it builds this box, the same "known before anything reads it" ordering
+        /// <see cref="FactoryCensus.RegisterReplicator"/> already gets. 0 until stamped.</summary>
+        public int AreaIndex { get; private set; }
+
+        /// <summary>Public so an EditMode test can drive area membership directly, same reasoning as
+        /// every other post-build configure call in this file.</summary>
+        public void SetAreaIndex(int area) => AreaIndex = area;
+
         /// <summary>Stamp this box's authored doubling budget (MV-706), from
         /// <see cref="MaxWorlds.Arena.Map.WorldReplicator.capacity"/> / <see cref="MaxWorlds.Arena.Map.MapEntity.capacity"/>.
         /// Called by <see cref="MaxWorlds.Arena.Map.MapRuntime"/> right after <c>AddComponent&lt;Replicator&gt;</c>,
@@ -220,8 +201,23 @@ namespace MaxWorlds.Factories
 
         /// <summary>Same "count it in Start" reasoning as <see cref="MowerHutch.Start"/> — by the time
         /// anything's Start runs (the HUD's), every Replicator built into the level has already run its
-        /// own Awake, so <see cref="MaxWorlds.UI.HudModel.RegisterFactory"/>'s count can be trusted.</summary>
-        private void Start() => HudSignals.EmitFactoryRegistered();
+        /// own Awake, so <see cref="MaxWorlds.UI.HudModel.RegisterFactory"/>'s count can be trusted.
+        ///
+        /// MV-820: also where this box wires itself to the area-entry signal — never called by an
+        /// EditMode test (which drives <see cref="OnAreaEntered"/> directly, same "public so a test can
+        /// call it" convention as every other Tick* method here), so the FindFirstObjectByType lookup
+        /// never runs there either.</summary>
+        private void Start()
+        {
+            HudSignals.EmitFactoryRegistered();
+            _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea += OnAreaEntered;
+        }
+
+        private void OnDestroy()
+        {
+            if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnAreaEntered;
+        }
 
         /// <summary>Construct the health model, stop the attached spawner's own cadence, and build the
         /// greybox body. Exposed publicly, same reasoning as <see cref="MowerHutch.Build"/> — Awake never
@@ -379,86 +375,74 @@ namespace MaxWorlds.Factories
             _health.TakeDamage(info.Amount);
         }
 
-        /// <summary>Every 0.5 s (MV-706 change 3): pull an eligible awake robot off Max toward this
-        /// box's hatch. Public and un-timer-gated by design, same "an EditMode test can drive it
-        /// directly" reasoning as <see cref="MowerHutch.TickMobility"/> — a caller (<see cref="Update"/>
-        /// in the shipped game, a test directly) decides the cadence; this call is one evaluation.</summary>
+        /// <summary>MV-820 R1/R2: assigns up to <see cref="MaxQueueSlots"/> nearest eligible robots in
+        /// this box's own area to its queue. Public and un-timer-gated by design, same "an EditMode
+        /// test can drive it directly" reasoning as <see cref="MowerHutch.TickMobility"/> — but nothing
+        /// calls this on a timer any more: R1 (area entry, see <see cref="OnAreaEntered"/>) and R2
+        /// (an instant refill the moment a slot frees, see <see cref="TickConsumption"/>) are the only
+        /// two callers in shipped gameplay.
+        ///
+        /// No radius, no state screen, no field-wide ceiling, no timeout — Lee's rules removed all four
+        /// (MV-820): an eligible robot's distance and area membership are the only things that matter.</summary>
         public void TickLure()
         {
             if (!IsAlive || capacity <= 0) return;
-            if (_queue.Count >= MaxQueueSlots) return; // MV-807: a full queue lures nobody
 
-            // MV-816 change 3: a box that couldn't actually take a robot right now lures nobody — the
-            // old behaviour lured one anyway, walked it to slot 0, and left it standing there until
-            // LureTimeoutSeconds gave up, then repeated with the next robot. Room is re-checked on
-            // every tick, same cadence as everything else here, so lure resumes the instant it frees.
-            if (!EnemySpawner.HasRoomForReplicatorIntake()) return;
-
-            // MV-811 change 5: a field-wide ceiling — at most MaxSeekingFraction of the currently live
-            // robots may be seeking at once. Max(1, ...) rather than a bare fraction: with only a
-            // handful of robots alive, a strict 25% floors to 0 and would forbid luring anyone at all —
-            // this ceiling exists to stop a large field from being parked wholesale, not to block the
-            // ordinary single-robot case a small population is.
-            int seekingCeiling = Mathf.Max(1, Mathf.FloorToInt(RobotEnemy.ActiveCount * MaxSeekingFraction));
-            if (RobotEnemy.ReplicatorSeekingCount >= seekingCeiling) return; // would cross the ceiling — lure nobody this tick
-
-            // MV-811 change 4: an empty box lures one robot, not two — slot 1 only opens once slot 0 is
-            // occupied by a robot that has actually arrived there, so a box never commits to serving a
-            // second robot it can't get to soon.
-            int queueCap = MaxQueueSlots;
-            if (_queue.Count == 0)
+            while (_queue.Count < MaxQueueSlots)
             {
-                queueCap = 1;
+                RobotEnemy nearest = NearestEligible();
+                if (nearest == null) break; // nobody left in this area to assign
+                _queue.Add(nearest);
+                nearest.SeekReplicator(QueueSlotPosition(_queue.Count - 1));
             }
-            else if (_queue.Count == 1)
-            {
-                bool slot0Arrived = HorizontalDistance(_queue[0].transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
-                queueCap = slot0Arrived ? MaxQueueSlots : _queue.Count;
-            }
+        }
 
-            if (_target == null)
-            {
-                var p = GameObject.FindGameObjectWithTag("Player");
-                if (p != null) _target = p.transform;
-            }
-
+        /// <summary>MV-820 Change 1: the nearest-by-straight-line-distance robot that is alive, not a
+        /// Lurker/Turret (they cannot walk to a box — kept, MV-688/MV-691), not tagged NoReplicate, not
+        /// already assigned to this or any other box (<see cref="RobotEnemy.IsAssignedToReplicator"/>),
+        /// and physically in THIS box's own area (<see cref="AreaIndex"/>). Null if nobody qualifies.</summary>
+        private RobotEnemy NearestEligible()
+        {
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count && _queue.Count < queueCap; i++)
+            RobotEnemy nearest = null;
+            float nearestDist = float.MaxValue;
+            for (int i = 0; i < active.Count; i++)
             {
                 RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive || r.IsDormant) continue;
-                if (r.NoReplicate) continue;
-                // MV-688: a Grate Lurker is never Dormant (it lives in its own State.Submerged cycle),
-                // so the IsDormant screen above lets it through — luring one off its grate would freeze
-                // LurkerCycle mid-cycle with no way back. Excluded outright, same as an already-seeking
-                // robot below.
-                if (r.Kind == EnemyKind.Lurker) continue;
-                // MV-691: a Pipe Turret is wall-mounted and never moves (MoveSpeed 0) — luring one
-                // toward a hatch would either do nothing (correct, but pointless bookkeeping) or, if a
-                // dev-tuning override ever forces a global move speed onto every robot, visibly slide a
-                // "static" turret across the yard. Excluded outright, same reasoning as Lurker above.
-                if (r.Kind == EnemyKind.Turret) continue;
-                // MV-816 change 2: only Chase or Search may be lured — this single gate covers
-                // Telegraph, Lunge, Recover, Emerging, Teleport, Alert, Submerged AND ReplicatorSeeking
-                // (already lured, by this box or another) in one place, rather than naming each one.
-                if (r.Current != RobotEnemy.State.Chase && r.Current != RobotEnemy.State.Search) continue;
+                if (r == null || !r.IsAlive) continue;
+                if (r.Kind == EnemyKind.Lurker || r.Kind == EnemyKind.Turret) continue;
+                if (r.NoReplicate || r.IsAssignedToReplicator) continue;
+                if (r.AreaIndex != AreaIndex) continue;
 
-                float distToMe = Vector3.Distance(r.transform.position, transform.position);
-                if (distToMe > LureRadius) continue;
-
-                // MV-816 change 1: the same IsEngagingTarget predicate TickReplicatorSeeking's own
-                // per-tick cancel now uses — a robot already fighting Max (within the 7 m exclusion, OR
-                // in sight and within its own lungeRange) is never pulled off. MV-811: this is still
-                // only the SELECTION screen — RobotEnemy's own seeking tick re-checks the identical
-                // predicate every tick afterward, so a robot that starts fighting Max mid-walk-to-the-
-                // hatch is pulled back too, not just one that was already engaging here.
-                if (r.IsEngagingTarget(_target)) continue;
-
-                // MV-807: the steering target is this robot's own queue slot, never the hatch itself —
-                // two robots must never be steered at the same point (that was the jam Lee reported).
-                _queue.Add(r);
-                r.SeekReplicator(QueueSlotPosition(_queue.Count - 1));
+                float dist = Vector3.Distance(r.transform.position, transform.position);
+                if (dist < nearestDist) { nearestDist = dist; nearest = r; }
             }
+            return nearest;
+        }
+
+        /// <summary>MV-820 R1/R3: the area-entry signal (<see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/>,
+        /// wired in <see cref="Start"/>; public so an EditMode test can drive it directly). Fills this
+        /// box's queue the instant Max physically crosses into its own area; releases every current
+        /// assignee back to ordinary attack AI the instant he crosses into any OTHER area — the tracker
+        /// only ever advances, so "any other" always means "moved on".</summary>
+        public void OnAreaEntered(int enteredArea)
+        {
+            if (!IsAlive) return;
+            if (enteredArea == AreaIndex) TickLure();
+            else ReleaseAllAssignees();
+        }
+
+        /// <summary>MV-820 Change 2/3: every currently queued assignee resumes ordinary Chase/attack AI
+        /// — capacity just hit 0, the box died, or Max moved on to another area. A robot mid-Intake is
+        /// handled separately by <see cref="OnDestroyed"/>'s own comment on that case.</summary>
+        private void ReleaseAllAssignees()
+        {
+            for (int i = 0; i < _queue.Count; i++)
+            {
+                RobotEnemy r = _queue[i];
+                if (r != null && r.IsAlive) r.CancelReplicatorSeeking();
+            }
+            _queue.Clear();
         }
 
         /// <summary>Watches every robot this box has lured, draws the one at the hatch through the
@@ -485,7 +469,14 @@ namespace MaxWorlds.Factories
                     queueClosedUp = true;
                 }
             }
-            if (queueClosedUp) RetargetQueue();
+            if (queueClosedUp)
+            {
+                RetargetQueue();
+                // MV-820 R2: a slot just closed up (a queued robot died or dropped out) — refill it
+                // immediately rather than waiting for the next area-entry event. A no-op if capacity is
+                // spent or nobody eligible remains in this box's area.
+                TickLure();
+            }
 
             // MV-807: only the robot at slot 0 — nearest the hatch — is ever eligible for Intake. The
             // rest of the queue is still walking toward its own slot further back.
@@ -498,10 +489,10 @@ namespace MaxWorlds.Factories
                 // vertical gap ArriveTolerance was never sized to cover; TickReplicatorSeeking's own
                 // steering already ignores Y for the same reason.
                 bool atSlot = HorizontalDistance(head.transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
-                // MV-809: never consume a robot this box can't at least give back — see
-                // EnemySpawner.HasRoomForReplicatorIntake's reservation contract. The robot stays right
-                // where it arrived (still queued at slot 0) until room frees up.
-                if (atSlot && EnemySpawner.HasRoomForReplicatorIntake())
+                // MV-820 Change 6: intake is never gated on room any more — consuming this robot and
+                // owing back at least the guaranteed first twin (which now ignores the global budget
+                // too, see below) is net zero.
+                if (atSlot)
                 {
                     // At its slot: hand its position over to the Intake beat rather than despawning it
                     // here outright — TickIntake is what actually draws it in and despawns it. Slot 1
@@ -512,6 +503,9 @@ namespace MaxWorlds.Factories
                     _intakeStartPos = head.transform.position;
                     _intakeTimer = 0f;
                     head.BeginReplicatorIntake();
+                    // MV-820 R2: the instant Intake takes the head, the next nearest eligible robot is
+                    // assigned to the slot that just freed, same tick.
+                    TickLure();
                 }
             }
 
@@ -525,36 +519,20 @@ namespace MaxWorlds.Factories
 
                 if (!firstEmitted && timer >= CycleSeconds)
                 {
-                    // MV-809: spend the held reservation FIRST so this guaranteed replacement's own
-                    // room check (inside SpawnExact) sees the slot as free rather than double-counting
-                    // it against itself. HasRoomForReplicatorIntake already proved this always fits.
+                    // MV-809: release the held reservation — bookkeeping only now (MV-820 Change 6
+                    // means this spawn no longer needs the freed slot to look free to itself; it's
+                    // guaranteed regardless). MV-817: ignorePerFactoryCap true — a Replicator's own
+                    // EnemySpawner authors maxLiveEnemies/startingRobots defaults meant for an ordinary
+                    // factory stream, and EffectiveMaxLiveEnemies ramps from 0 early in a run. MV-820:
+                    // ignoreGlobalRoom true — consuming the robot that produced this twin already freed
+                    // the field-wide budget by exactly one, so this call can never come back short.
                     EnemySpawner.ReleaseReplicatorReservation();
-                    // MV-817: ignorePerFactoryCap true — a Replicator's own EnemySpawner authors
-                    // maxLiveEnemies/startingRobots defaults meant for an ordinary factory stream, and
-                    // EffectiveMaxLiveEnemies ramps from 0 early in a run. Gating a doubled twin on that
-                    // silently ate every replication before the Invasion Level cleared ~6% (MV-817's own
-                    // root cause) — GlobalHasRoom (and the MV-809 reservation just released above) is
-                    // still the real gate.
-                    List<RobotEnemy> firstSpawn = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
-                    if (firstSpawn.Count > 0)
-                    {
-                        // MV-808: place the twin at the out-ramp foot itself — the spawner's own
-                        // door/mouth placement is for the ordinary emergence walk, not this box's own
-                        // theatre.
-                        PlaceAtOutRamp(firstSpawn, twinIndex: 0);
-                        firstEmitted = true;
-                    }
-                    else
-                    {
-                        // MV-817 change 2: the first twin is guaranteed and must never be dropped. The
-                        // global budget was genuinely full despite the reservation (e.g. it was spent
-                        // elsewhere) — reclaim the slot so nothing else can take it either, and retry on
-                        // every subsequent tick (timer stays >= CycleSeconds, so this branch re-runs next
-                        // frame) until room actually frees. firstEmitted stays false, so the pending
-                        // entry is kept (box stays busy — see LateUpdate's own busy check) instead of
-                        // being removed below.
-                        EnemySpawner.ReserveReplicatorSlot();
-                    }
+                    List<RobotEnemy> firstSpawn = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds,
+                        ignorePerFactoryCap: true, ignoreGlobalRoom: true);
+                    // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
+                    // placement is for the ordinary emergence walk, not this box's own theatre.
+                    PlaceAtOutRamp(firstSpawn, twinIndex: 0);
+                    firstEmitted = true;
                 }
 
                 if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
@@ -573,6 +551,8 @@ namespace MaxWorlds.Factories
                         // cycle that could only manage the guaranteed replacement must not burn it.
                         capacity = Mathf.Max(0, capacity - 1);
                         _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
+                        // MV-820 Change 2: spent — release whatever's still queued to ordinary attack AI.
+                        if (capacity == 0) ReleaseAllAssignees();
                     }
                     _pending.RemoveAt(i);
                     continue;
@@ -648,17 +628,10 @@ namespace MaxWorlds.Factories
             // ever reached this box, so it reads as powered before the player touches it.
             if (_fan != null) _fan.Rotate(Vector3.up, FanIdleSpeedDegPerSec * Time.deltaTime, Space.Self);
 
-            _lureTimer += Time.deltaTime;
-            if (_lureTimer >= LureIntervalSeconds)
-            {
-                _lureTimer = 0f;
-                TickLure();
-            }
+            // MV-820: no periodic lure tick any more — R1 (area entry) and R2 (instant refill) are the
+            // only two triggers, both already reached from OnAreaEntered/TickConsumption.
             TickConsumption(Time.deltaTime);
         }
-
-        private const float LureIntervalSeconds = 0.5f;
-        private float _lureTimer;
 
         private void OnDestroyed()
         {
@@ -671,13 +644,8 @@ namespace MaxWorlds.Factories
             _pending.Clear();
 
             // A robot still walking toward a box that no longer exists resumes chasing Max instead of
-            // beelining for a dead wreck's position forever.
-            for (int i = 0; i < _queue.Count; i++)
-            {
-                RobotEnemy r = _queue[i];
-                if (r != null && r.IsAlive) r.CancelReplicatorSeeking();
-            }
-            _queue.Clear();
+            // beelining for a dead wreck's position forever (MV-820 Change 2/3).
+            ReleaseAllAssignees();
 
             // MV-775: a robot mid-Intake (already through the arrive gate, not yet despawned) resumes
             // chasing Max too, same as one still walking in from further out — the box dying mid-draw-in
