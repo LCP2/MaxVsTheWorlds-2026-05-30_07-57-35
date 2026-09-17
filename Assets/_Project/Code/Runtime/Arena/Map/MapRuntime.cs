@@ -71,6 +71,10 @@ namespace MaxWorlds.Arena
             RetireSceneFactories();
             FactoryCensus.Reset();
 
+            // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
+            // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
+            AreaVisitCensus.Reset();
+
             // MV-561: the scene's hand-placed Big Bermuda (Stage27BossScaffold) stands down the same
             // way the hutch does above — the map builds its own boss(es) now, so a scene copy is not a
             // spare, it is an extra boss standing in the wrong place with no area of its own.
@@ -200,7 +204,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Hatch:
-                        BuildHatch(e, root, built);
+                        BuildHatch(map, e, root, built);
                         break;
 
                     case EntityKind.Grate:
@@ -551,25 +555,36 @@ namespace MaxWorlds.Arena
             body.isStatic = true;
         }
 
-        /// <summary>A hatch's flat panel thickness (MV-697) — thicker than a deck's own 0.15 m grate
-        /// slab so it reads as a solid, lockable plate rather than more grating.</summary>
-        private const float HatchThickness = 0.3f;
-
-        /// <summary>A locked deck-cell opening (MV-697): an <see cref="AreaGate"/> exactly like a wall
-        /// gate mechanically (its own HP, breakable by sustained primary fire, opens on destruction) but
-        /// built lying flat at the deck's own resolved height instead of upright in a wall — the entity's
-        /// <see cref="MapEntity.height"/> IS that resolved Y (<see cref="WorldMapLoader"/>'s doc comment
-        /// on the field). MV-703's condition engine (<c>replicators-destroyed:</c>) does not exist yet,
-        /// so every hatch is left unlocked regardless of its authored <c>opensWith</c> — see
-        /// <see cref="WorldHatch"/>'s own doc comment.</summary>
-        private static void BuildHatch(MapEntity e, Transform root, MapBuild built)
+        /// <summary>MV-829: a locked hatch is a barrier standing across the ramp head it guards, not a
+        /// flat panel lying on the deck — the old 0.3 m-thick slab a locked <see cref="AreaGate"/> still
+        /// left walkable, the bug this ticket's own observation names. Built exactly like a wall gate
+        /// mechanically (<see cref="BuildAreaGate"/>: its own HP, breakable by sustained primary fire,
+        /// opens on destruction, <see cref="AreaGate.ForceOpen"/> for a condition), standing on TOP of
+        /// the deck surface (<see cref="MapEntity.height"/> is that resolved Y — <see cref="WorldMapLoader"/>'s
+        /// own doc comment on the field) instead of upright in a floor wall, at the map's own
+        /// <see cref="MapData.wallHeight"/> so <c>WorldRunner.RefreshGateLocks</c>'s hatch loop and every
+        /// wall gate agree on how tall "blocks Max" is.
+        ///
+        /// <see cref="AreaGate.StartHingeSwing"/> always pivots on local X — exactly like
+        /// <see cref="BuildAreaGate"/>'s E/W-wall case, a hatch whose authored SPAN runs along Z (its
+        /// depth bigger than its width — every hatch but a6's two) has to be built rotated 90° so the
+        /// hinge pivots on the real span, not the 1 m-deep approach edge.</summary>
+        private static void BuildHatch(MapData map, MapEntity e, Transform root, MapBuild built)
         {
-            GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
-                new Vector3(e.x, e.height, e.z), new Vector3(e.width, HatchThickness, e.depth));
-            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
+            bool spansAlongX = e.width >= e.depth;
+            float span = spansAlongX ? e.width : e.depth;
+            float thickness = spansAlongX ? e.depth : e.width;
 
+            float baseY = e.height; // the deck's own resolved surface height, not a size — see doc above
+            var center = new Vector3(e.x, baseY + map.wallHeight * 0.5f, e.z);
+
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, center,
+                new Vector3(span, map.wallHeight, thickness));
+            if (!spansAlongX) body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
+            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             MarkDiscoverable(body);
-            body.AddComponent<AreaGate>(); // Locked defaults false — unlocked until MV-703 exists to read a real condition
+            body.AddComponent<AreaGate>(); // Locked defaults false — WorldRunner.RefreshGateLocks sets it from opensWith
 
             built.Actors[e.id] = body;
         }

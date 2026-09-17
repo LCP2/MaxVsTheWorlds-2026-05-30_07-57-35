@@ -845,14 +845,16 @@
      "x": 8,
      "z": 6,
      "w": 1,
-     "d": 3
+     "d": 3,
+     "opensWith": "area-entered:a19"
     },
     {
      "id": "a3_hatch2",
-     "x": 25,
+     "x": 27,
      "z": 21,
      "w": 1,
-     "d": 3
+     "d": 3,
+     "opensWith": "area-entered:a19"
     }
    ],
    "grates": [
@@ -1344,14 +1346,16 @@
      "x": 0,
      "z": 20,
      "w": 3,
-     "d": 1
+     "d": 1,
+     "opensWith": "area-entered:a15"
     },
     {
      "id": "a6_hatch2",
      "x": 27,
      "z": 3,
      "w": 1,
-     "d": 3
+     "d": 3,
+     "opensWith": "area-entered:a15"
     }
    ],
    "grates": [
@@ -2221,14 +2225,16 @@
      "x": 0,
      "z": 12,
      "w": 3,
-     "d": 1
+     "d": 1,
+     "opensWith": "area-entered:a13"
     },
     {
      "id": "a11_hatch2",
      "x": 19,
      "z": 14,
      "w": 3,
-     "d": 1
+     "d": 1,
+     "opensWith": "area-entered:a13"
     }
    ],
    "grates": [],
@@ -2411,7 +2417,8 @@
      "x": 3,
      "z": 17,
      "w": 1,
-     "d": 3
+     "d": 3,
+     "opensWith": "replicators-destroyed:a12"
     }
    ],
    "grates": [

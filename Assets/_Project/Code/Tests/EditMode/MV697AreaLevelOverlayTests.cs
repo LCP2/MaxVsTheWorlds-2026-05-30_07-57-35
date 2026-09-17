@@ -101,7 +101,13 @@ namespace MaxWorlds.Tests.EditMode
                 MapBuild built = MapRuntime.Build(map, root.transform);
                 Assert.IsTrue(built.Actors.TryGetValue("hatch1", out GameObject hatch), "the map built no hatch1 actor at all");
                 Assert.IsNotNull(hatch.GetComponent<AreaGate>(), "a hatch must be an AreaGate instance");
-                Assert.AreEqual(2.5f, hatch.transform.position.y, 0.01f, "the hatch should sit at its deck's resolved height");
+                // MV-829: a hatch is now an upright barrier standing ON the deck, not a flat panel
+                // lying AT the deck's height — its BASE, not its centre, is the resolved value that
+                // proves it sits on the right deck. Renderer.bounds, not Collider.bounds, which can lag
+                // a manual transform change under -batchmode -nographics (no physics sync tick).
+                Renderer barrierRenderer = hatch.GetComponent<Renderer>();
+                Assert.IsNotNull(barrierRenderer, "the hatch built no renderer");
+                Assert.AreEqual(2.5f, barrierRenderer.bounds.min.y, 0.01f, "the hatch should stand on its deck's resolved height");
             }
             finally
             {
