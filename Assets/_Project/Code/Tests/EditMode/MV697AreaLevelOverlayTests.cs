@@ -90,10 +90,14 @@ namespace MaxWorlds.Tests.EditMode
             WorldConfig cfg = OverlayWorld();
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-            // aX and aY share the exact same footprint — only a probe's height should tell them apart.
-            float cx = cfg.Area("aX").CenterXz.x, cz = cfg.Area("aX").CenterXz.y;
-            Assert.AreEqual("aX", map.ZoneAt(cx, 0f, cz)?.id, "a floor-height probe should resolve to the floor area");
-            Assert.AreEqual("aY", map.ZoneAt(cx, 2.5f, cz)?.id, "a deck-height probe should resolve to the overlay area");
+            // aX and aY share the exact same footprint. MV-833: a deck-height probe only resolves to
+            // the overlay area when it is ALSO standing over an authored deck cell — not anywhere in
+            // the shared footprint merely because it cleared the height bar (that was the bug: a ramp
+            // reaches deck height well before it reaches the deck). Both probes below sit on deck1's
+            // own rect (world x 8-11, z 5-17), so only the height differs between them.
+            const float deckProbeX = 9.5f, deckProbeZ = 10f;
+            Assert.AreEqual("aX", map.ZoneAt(deckProbeX, 0f, deckProbeZ)?.id, "a floor-height probe should resolve to the floor area");
+            Assert.AreEqual("aY", map.ZoneAt(deckProbeX, 2.5f, deckProbeZ)?.id, "a deck-height probe over the deck cell should resolve to the overlay area");
 
             var root = new GameObject("MV697 Hatch Probe Root");
             try

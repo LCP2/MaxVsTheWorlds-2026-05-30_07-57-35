@@ -308,8 +308,13 @@ namespace MaxWorlds.Arena
 
         /// <summary>The zone a 3D position falls in, level-aware (MV-697): a footprint an overlay
         /// shares with the zone it overlays resolves to the deck zone once <paramref name="py"/> reads
-        /// as "on the deck" (within <see cref="deckHeight"/> minus half a metre of it), and to the
-        /// floor zone otherwise — the same rule <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>
+        /// as "on the deck" (within <see cref="deckHeight"/> minus half a metre of it) AND the XZ point
+        /// is actually standing on one of that zone's own <see cref="EntityKind.Deck"/>/
+        /// <see cref="EntityKind.Hatch"/> rects (MV-833) — and to the floor zone otherwise. The rect
+        /// check is what a bare height threshold on its own got wrong: a ramp climbs to full deck height
+        /// well before it reaches the deck it serves, so a position partway up a ramp used to read as
+        /// "on the deck" the moment it cleared the height bar, even though it was still standing over
+        /// the ramp's own rect. This is the same rule <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>
         /// and <see cref="MaxWorlds.Enemies.RobotEnemy"/> use to resolve which area a live position
         /// (Max's, a robot's) is actually standing in. Degrades to the plain floor match for any map
         /// with no overlay zones at all (every <see cref="MapZone.level"/> is 0), so this is a safe
@@ -325,11 +330,55 @@ namespace MaxWorlds.Arena
             foreach (MapZone z in zones)
             {
                 if (z == null || !z.Contains(px, pz)) continue;
-                if (onDeck && z.level > 0) return z;
+                if (onDeck && z.level > 0 && IsOverDeckSurface(px, pz)) return z;
                 if (z.level == 0) floorMatch = z;
             }
 
             return floorMatch;
+        }
+
+        /// <summary>True if (<paramref name="px"/>, <paramref name="pz"/>) sits over an authored deck or
+        /// hatch rect anywhere in the map (MV-833) — never a ramp rect, which is the whole point: a ramp
+        /// carries a mover up to deck height without ever counting as the deck itself. A point can only
+        /// ever fall inside a deck/hatch belonging to the same footprint <see cref="ZoneAt(float, float, float)"/>
+        /// is already testing (no two areas' footprints overlap in XZ except a level-0/level&gt;0 overlay
+        /// pair, which share theirs by definition), so this needs no separate zone-to-entity lookup.</summary>
+        private bool IsOverDeckSurface(float px, float pz)
+        {
+            if (entities == null) return false;
+
+            foreach (MapEntity e in entities)
+            {
+                if (e == null) continue;
+                EntityKind kind = e.Kind;
+                if (kind != EntityKind.Deck && kind != EntityKind.Hatch) continue;
+
+                float halfW = e.width * 0.5f, halfD = e.depth * 0.5f;
+                if (px >= e.x - halfW && px <= e.x + halfW && pz >= e.z - halfD && pz <= e.z + halfD)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>True if two zone ids are joined by an authored <see cref="MapLink"/>, in either
+        /// direction (MV-833) — a corridor works both ways even though a link's own from/to only records
+        /// one gate's authoring order. <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> uses this
+        /// to refuse an area-tracker advance that isn't a step through an actual doorway (a gate, or a
+        /// deck gate) into the area Max is currently in — the guard against skipping straight from a
+        /// floor into a same-footprint deck the height check alone used to let through.</summary>
+        public bool AreLinked(string zoneIdA, string zoneIdB)
+        {
+            if (links == null || string.IsNullOrEmpty(zoneIdA) || string.IsNullOrEmpty(zoneIdB)) return false;
+
+            foreach (MapLink link in links)
+            {
+                if (link == null) continue;
+                if ((link.from == zoneIdA && link.to == zoneIdB) || (link.from == zoneIdB && link.to == zoneIdA))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>Bounding box of every room, in XZ. The floor is cut to this.</summary>

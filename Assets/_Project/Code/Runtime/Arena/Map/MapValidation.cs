@@ -1208,6 +1208,16 @@ namespace MaxWorlds.Arena
                 return false;
             }
 
+            // MV-833: "never" is a hatch-only condition — a wall gate authored "never" could never be
+            // walked through at all, which is always a content bug (a level's own critical path running
+            // through a door that can never open), whereas a hatch is a REVISIT-only shortcut back into
+            // an already-cleared floor, where "never" is exactly the intended, permanent lock.
+            if (condition.Kind == GateConditionKind.Never && entityKind != "hatch")
+            {
+                reason = $"{entityKind} '{entityId}' opens on 'never', which only a hatch may do";
+                return false;
+            }
+
             reason = null;
             return true;
         }

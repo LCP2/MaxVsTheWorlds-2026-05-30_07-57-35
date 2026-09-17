@@ -16,6 +16,7 @@ namespace MaxWorlds.Arena
         AllShedsDestroyed,
         ReplicatorsDestroyed,
         AreaEntered,
+        Never,
     }
 
     /// <summary>
@@ -23,9 +24,11 @@ namespace MaxWorlds.Arena
     /// <see cref="GateConditionKind.Start"/>/<see cref="GateConditionKind.Primary"/>/
     /// <see cref="GateConditionKind.Sluice"/> open on combat alone — <see cref="IsConditionGated"/> is
     /// false for all three, so <see cref="WorldRunner"/> never locks a gate carrying one of them (a
-    /// "sluice" is only a taller-HP combat gate, same as "primary"). The other four kinds — including
-    /// <see cref="GateConditionKind.AreaEntered"/> (MV-829, hatches) — are condition-gated: the gate is
+    /// "sluice" is only a taller-HP combat gate, same as "primary"). The other five kinds — including
+    /// <see cref="GateConditionKind.AreaEntered"/> (MV-829, hatches) and <see cref="GateConditionKind.Never"/>
+    /// (MV-833, a hatch that must never open from below) — are condition-gated: the gate is
     /// held <see cref="AreaGate.Locked"/> until <see cref="IsSatisfied"/> turns true, then force-opened.
+    /// <see cref="GateConditionKind.Never"/>'s <see cref="IsSatisfied"/> never turns true, by design.
     ///
     /// World 1 authors only "start" and "primary" today (no gate carries a condition string), so this
     /// parser and every lock/unlock decision it drives are inert there by construction.
@@ -67,7 +70,8 @@ namespace MaxWorlds.Arena
             Kind == GateConditionKind.ShedsDestroyedBefore ||
             Kind == GateConditionKind.AllShedsDestroyed ||
             Kind == GateConditionKind.ReplicatorsDestroyed ||
-            Kind == GateConditionKind.AreaEntered;
+            Kind == GateConditionKind.AreaEntered ||
+            Kind == GateConditionKind.Never;
 
         /// <summary>Parse an authored <c>opensWith</c> string. Strips a trailing
         /// <see cref="WorldMapLoader.DeckGateSuffix"/> itself — <see cref="WorldMapLoader.TryLoad"/> only
@@ -109,6 +113,10 @@ namespace MaxWorlds.Arena
                     return true;
                 case "all-sheds-destroyed":
                     condition = new GateCondition(GateConditionKind.AllShedsDestroyed, false, null);
+                    reason = null;
+                    return true;
+                case "never":
+                    condition = new GateCondition(GateConditionKind.Never, false, null);
                     reason = null;
                     return true;
             }
@@ -172,6 +180,8 @@ namespace MaxWorlds.Arena
                         : FactoryCensus.ReplicatorsDestroyedInAreas(ReplicatorAreaIds);
                 case GateConditionKind.AreaEntered:
                     return AreaVisitCensus.HasEntered(AreaEnteredId);
+                case GateConditionKind.Never:
+                    return false;
                 default:
                     return true; // Start/Primary/Sluice: combat-gated, never locked by this engine.
             }
