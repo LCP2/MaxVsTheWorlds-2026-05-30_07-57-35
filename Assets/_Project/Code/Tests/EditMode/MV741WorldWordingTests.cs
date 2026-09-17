@@ -60,12 +60,17 @@ namespace MaxWorlds.Tests.EditMode
                     $"'{arenaLabel2.text}' is wider ({arenaLabel2.preferredWidth:F1}px) than its box " +
                     $"({arenaLabel2.rectTransform.rect.width:F1}px) and would overflow past it");
 
+                // MV-836: the flood switched off with no replacement pressure mechanic, so World 2 now
+                // authors an empty noun/caption (same as world2_config.json's own "" — see that ticket)
+                // and the whole Invasion Dial must be hidden rather than falling back to World 1's own
+                // INVASION/INFESTATION/DOMINATION cycle. Superseded assertions ("FLOOD" / "THE STORMDRAIN
+                // IS FILLING") removed — that wording no longer exists anywhere in a built HUD.
                 DifficultyDirector.Tick(DifficultyDirector.RunLengthSeconds + 100f); // push into the top band
                 InvokeUpdateInvasionDial(hud2, 0f);
-                Assert.That(GetPrivateText(hud2, "_dialStageLabel").text, Is.Not.EqualTo("DOMINATION"),
-                    "World 2's progress banner must not still speak World 1's framing");
-                Assert.That(GetPrivateText(hud2, "_dialStageLabel").text, Is.EqualTo("FLOOD"));
-                Assert.That(GetPrivateText(hud2, "_dialCaption").text, Is.EqualTo("THE STORMDRAIN IS FILLING"));
+                Assert.IsFalse(GetPrivateRectTransform(hud2, "_invasionDialRoot").gameObject.activeSelf,
+                    "MV-836: World 2 authors no pressure wording — the Invasion Dial must be hidden entirely");
+                Assert.IsFalse(GetPrivateText(hud2, "_dialCaption").gameObject.activeSelf,
+                    "MV-836: World 2's now-empty caption must not show either");
 
                 InvokeLifecycle(hud2, "OnDisable");
                 Object.DestroyImmediate(hudGo2); hudGo2 = null;
@@ -93,6 +98,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(GetPrivateText(hud1, "_dialStageLabel").text, Is.EqualTo("DOMINATION"),
                     "World 1 authors no pressure wording of its own — the default band name must still show");
                 Assert.That(GetPrivateText(hud1, "_dialCaption").text, Is.EqualTo("ROBOTS GET FASTER & TOUGHER"));
+                // MV-836: World 1 has no Replicators, so its own empty noun must still mean "use the
+                // default cycle", never "hide the dial" — that reading is World 2-only.
+                Assert.IsTrue(GetPrivateRectTransform(hud1, "_invasionDialRoot").gameObject.activeSelf,
+                    "MV-836: World 1's Invasion Dial must stay visible — it has no Replicators to trigger the hide");
             }
             finally
             {
@@ -106,6 +115,9 @@ namespace MaxWorlds.Tests.EditMode
 
         private static Text GetPrivateText(HudController hud, string fieldName) =>
             (Text)typeof(HudController).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(hud);
+
+        private static RectTransform GetPrivateRectTransform(HudController hud, string fieldName) =>
+            (RectTransform)typeof(HudController).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(hud);
 
         private static void InvokeLifecycle(Object component, string methodName) =>
             component.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(component, null);

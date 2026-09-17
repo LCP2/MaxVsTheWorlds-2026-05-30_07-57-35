@@ -10,8 +10,9 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-696 (the ticket's own AC1): a Sludgequeen at 100% HP in a synthetic 44x44 arena floods only
     /// the south half (z &lt; 22); once damaged to 49% and the 3 s phase-2 tell elapses, the whole floor
-    /// floods except the map-authored dry zones (deck islands / centre block); and standing on flooded
-    /// floor for 1 s costs exactly <see cref="SludgequeenTuning.FloodDamagePerSecond"/> (4) damage.
+    /// floods except the map-authored dry zones (deck islands / centre block). The flood's own
+    /// damage-over-time was this file's third assertion until MV-836 switched it off entirely — see
+    /// <c>MV836FloodOffTests</c> for that behaviour now.
     ///
     /// Fails on the MV-705 merge commit (91e2160), the base commit MV-696 depends on: at that commit
     /// <c>SludgequeenBoss</c>/<c>SludgequeenTuning</c> do not exist, so this file fails to COMPILE
@@ -27,20 +28,6 @@ namespace MaxWorlds.Tests.EditMode
     {
         private GameObject _playerGo;
         private GameObject _bossGo;
-
-        private sealed class FakeReceiver : MonoBehaviour, IDamageable
-        {
-            public float Health = 200f;
-            public float TotalDamageTaken;
-            public bool IsAlive => Health > 0f;
-            public Team Team => Team.Player;
-            public void TakeDamage(in DamageInfo info)
-            {
-                if (!DamageRules.Applies(info.Attacker, Team)) return;
-                TotalDamageTaken += info.Amount;
-                Health -= info.Amount;
-            }
-        }
 
         [SetUp]
         public void SetUp()
@@ -113,19 +100,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(boss.IsDry(islandCentre), "a deck island must stay dry even under phase 2's full flood");
             Assert.IsFalse(boss.IsDry(floorPoint), "plain floor must be wet under phase 2's full flood");
 
-            // A 1 s probe on the (wet) floor must take exactly 4 flood damage.
-            var receiverGo = new GameObject("FloodProbe");
-            try
-            {
-                var receiver = receiverGo.AddComponent<FakeReceiver>();
-                boss.TickFloodDamage(1f, floorPoint, receiver);
-                Assert.AreEqual(SludgequeenTuning.FloodDamagePerSecond, receiver.TotalDamageTaken, 0.001f,
-                    "a probe standing on flooded floor for 1 s must record exactly the flood's per-second damage");
-            }
-            finally
-            {
-                Object.DestroyImmediate(receiverGo);
-            }
+            // MV-836: the flood's damage-over-time was switched off entirely ("no flood concept") —
+            // TickFloodDamage on wet floor now deals 0, covered fresh by MV836FloodOffTests. The
+            // FloodRect/IsDry geometry above is untouched by that switch and stays covered here.
         }
     }
 }

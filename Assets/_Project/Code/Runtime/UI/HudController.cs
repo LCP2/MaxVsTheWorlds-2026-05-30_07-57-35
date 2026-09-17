@@ -207,11 +207,19 @@ namespace MaxWorlds.UI
         // The Invasion Dial (YT-197): a fill meter across the three escalation bands, so the whole
         // DifficultyDirector curve reads as a shape at a glance instead of a clock the player has
         // to interpret.
+        private RectTransform _invasionDialRoot;
         private Image _dialFill;
         private Text _dialStageLabel;
         private Text _dialCaption;
         private DifficultyDirector.Stage? _shownStage;
         private float _dialStageFlash;
+
+        /// <summary>MV-836: true for a world that authors no pressure wording of its own AND has no
+        /// sheds (today, that's World 2 alone — the flood switched off with no replacement mechanic).
+        /// Distinguishes World 2's "authored empty, hide entirely" from World 1's "never authored,
+        /// fall back to the default INVASION/INFESTATION/DOMINATION cycle" — both read <c>_pressureNoun
+        /// == ""</c> alike, so the noun string alone can't tell them apart.</summary>
+        private bool _pressureUiHidden;
 
         /// <summary>MV-741: this world's fixed pressure noun (e.g. World 2's "FLOOD"), or empty to use
         /// the default INVASION/INFESTATION/DOMINATION cycle — set by <see cref="OnPressureWording"/>.</summary>
@@ -574,10 +582,25 @@ namespace MaxWorlds.UI
         private void OnPressureWording(string noun, string caption)
         {
             _pressureNoun = noun ?? "";
+
+            // MV-836: World 2 now authors an empty noun/caption too (the flood switched off, no
+            // replacement pressure mechanic) — indistinguishable from World 1's own "never authored"
+            // empty string by the noun alone, so this also keys off whether the world's factories are
+            // Replicators (today, only World 2's — see OnWorldFactoryWording, which always fires first).
+            // Hide the whole dial rather than falling back to World 1's INVASION/INFESTATION/DOMINATION cycle.
+            _pressureUiHidden = string.IsNullOrEmpty(_pressureNoun) && _model.Arena.IsReplicatorWorld;
+            if (_invasionDialRoot != null) _invasionDialRoot.gameObject.SetActive(!_pressureUiHidden);
+
             if (_dialCaption != null)
+            {
+                _dialCaption.gameObject.SetActive(!_pressureUiHidden);
                 _dialCaption.text = string.IsNullOrEmpty(caption) ? DefaultPressureCaption : caption;
-            if (_dialStageLabel != null && _shownStage.HasValue)
-                _dialStageLabel.text = StageLabel(_shownStage.Value);
+            }
+            if (_dialStageLabel != null)
+            {
+                _dialStageLabel.gameObject.SetActive(!_pressureUiHidden);
+                if (_shownStage.HasValue) _dialStageLabel.text = StageLabel(_shownStage.Value);
+            }
         }
 
         private void OnFactoryDestroyed(Vector3 pos)
@@ -1847,6 +1870,7 @@ namespace MaxWorlds.UI
         private void BuildInvasionDial()
         {
             var root = NewRect("Invasion Dial", Root);
+            _invasionDialRoot = root;
             Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             root.sizeDelta = new Vector2(220f, 18f);
             root.anchoredPosition = new Vector2(0f, 104f); // just above the arena indicator
@@ -1895,7 +1919,7 @@ namespace MaxWorlds.UI
 
         private void UpdateInvasionDial(float dt)
         {
-            if (_dialFill == null) return;
+            if (_dialFill == null || _pressureUiHidden) return;
 
             // MV-774: World 2's FLOOD bar now reads the real StormdrainFlood clock instead of a
             // re-skinned Invasion Level — the bug this ticket fixes ("fills across the run and nothing
