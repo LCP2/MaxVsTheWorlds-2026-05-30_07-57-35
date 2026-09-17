@@ -238,6 +238,28 @@ namespace MaxWorlds.Enemies
             return int.TryParse(zoneId.Substring(4), out int n) ? n : 0;
         }
 
+        /// <summary>True if <paramref name="to"/> is reachable from <paramref name="from"/> by an
+        /// authored <see cref="MapLink"/> (MV-833) — area 0 (standing in the void, or an unrecognised
+        /// zone) is never linked to anything, so a jump out of nothing is always refused rather than
+        /// resolved by an empty-id link match.</summary>
+        private bool IsLinkedArea(int from, int to)
+        {
+            if (from <= 0 || to <= 0 || _map == null) return false;
+            return _map.AreLinked($"area{from}", $"area{to}");
+        }
+
+        /// <summary>The last blocked area-tracker jump this director warned about (MV-833) — logged once
+        /// per distinct (from, to) pair rather than every frame the player stands in the disallowed spot.</summary>
+        private (int from, int to) _lastBlockedAreaJump;
+
+        private void LogBlockedAreaJump(int from, int to)
+        {
+            if (_lastBlockedAreaJump.from == from && _lastBlockedAreaJump.to == to) return;
+            _lastBlockedAreaJump = (from, to);
+            Debug.LogWarning($"[AreaAccumulationDirector] blocked an area-tracker jump from area{from} to " +
+                              $"area{to} — no MapLink joins them, so the tracker held at area{from}.");
+        }
+
         /// <summary>Wipe <paramref name="areaIndex"/>'s live/queued robots and re-solve a fresh
         /// instance of its authored composition (MV-427: the arena Max died in fully resets). Every
         /// robot currently standing inside the area's zone bounds is <see cref="RobotEnemy.Despawn"/>'d
@@ -308,19 +330,36 @@ namespace MaxWorlds.Enemies
 
             // The real, physical area-crossing signal (MV-396) — advances only off Max's own position,
             // never off a gate merely breaking. Sentinel.DestroyAllActive hangs off this, not EnterArea
-            // below, so a deployed sentinel survives an open-but-uncrossed gate.
+            // below, so a deployed sentinel survives an open-but-uncrossed gate. MV-833: also refuses to
+            // advance to an area that isn't actually linked (by a gate or deck gate) to the one Max is
+            // physically in — the guard against a stray zone-resolution jump (or an as-yet-unbuilt map)
+            // silently skipping the areas in between.
             if (area > _physicalArea)
             {
-                _physicalArea = area;
-                PlayerCrossedIntoArea?.Invoke(area);
+                if (IsLinkedArea(_physicalArea, area))
+                {
+                    _physicalArea = area;
+                    PlayerCrossedIntoArea?.Invoke(area);
+                }
+                else
+                {
+                    LogBlockedAreaJump(_physicalArea, area);
+                }
             }
 
             // Fallback only — the real trigger is EnterArea, fired off the gate that guards this zone.
             // Kept for area 1 (nothing gates it) and as a safety net should a gate event ever be missed.
             if (area > CurrentArea)
             {
-                CurrentArea = area;
-                FillArea(area);
+                if (IsLinkedArea(CurrentArea, area))
+                {
+                    CurrentArea = area;
+                    FillArea(area);
+                }
+                else
+                {
+                    LogBlockedAreaJump(CurrentArea, area);
+                }
             }
 
             // Overflow only, by now — FillArea already released everything a fresh room could fit
