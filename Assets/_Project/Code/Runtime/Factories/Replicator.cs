@@ -69,6 +69,13 @@ namespace MaxWorlds.Factories
         /// at this so a slow archetype's walk-in never reads as a crawl.</summary>
         public const float MinIntakeWalkSpeed = 1.5f;
 
+        /// <summary>MV-828 D2: entry (<see cref="OnAreaEntered"/>) and slot-close (<see cref="TickConsumption"/>'s
+        /// own queueClosedUp/Intake branches) are not the only assignment triggers — a robot released
+        /// into this box's own area after Max already crossed in (nobody eligible at entry) must still
+        /// get taken. While Max is standing in this box's area, it has capacity, and a slot is empty,
+        /// assignment is re-tried on this cadence.</summary>
+        public const float LureRetryIntervalSeconds = 0.5f;
+
         /// <summary>MV-823 change 1: seconds the hatch takes to swing fully open, authored as its own
         /// <see cref="AnimSequence"/> step (OutQuad) rather than the pre-Intake MoveTowards creep
         /// <see cref="LateUpdate"/> still uses while a robot is merely queued.</summary>
@@ -244,6 +251,15 @@ namespace MaxWorlds.Factories
         private bool _replicationLightOn;
         private float _replicationLingerTimer;
         private float _beaconStrobeTime;
+
+        /// <summary>MV-828 D2: true from the real area-entry signal for this box's own area until Max
+        /// crosses into a different one — what gates the periodic <see cref="LureRetryIntervalSeconds"/>
+        /// re-check in <see cref="TickConsumption"/>.</summary>
+        private bool _playerInArea;
+
+        /// <summary>MV-828 D2: counts down to the next periodic lure retry — 0 so the very first tick
+        /// after a slot opens (or Max enters) tries immediately rather than waiting a full interval.</summary>
+        private float _lureRetryTimer;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -445,6 +461,10 @@ namespace MaxWorlds.Factories
             e.transform.position = TwinPlacement(twinIndex);
             Vector3 face = OutputOutwardNormal;
             if (face.sqrMagnitude > 0.0001f) e.transform.rotation = Quaternion.LookRotation(face, Vector3.up);
+            // MV-828 D3: Apply() reset the twin's AreaIndex to 0 (SpawnKind -> Take -> Apply) — a twin
+            // belongs to the box that made it, or it can never be re-assigned once its own
+            // TwinNoReplicateSeconds window lapses.
+            e.SetAreaIndex(AreaIndex);
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -508,7 +528,8 @@ namespace MaxWorlds.Factories
         public void OnAreaEntered(int enteredArea)
         {
             if (!IsAlive) return;
-            if (enteredArea == AreaIndex) TickLure();
+            _playerInArea = enteredArea == AreaIndex;
+            if (_playerInArea) TickLure();
             else ReleaseAllAssignees();
         }
 
@@ -539,11 +560,16 @@ namespace MaxWorlds.Factories
 
             // MV-807: a queued robot that died, got converted, or is otherwise no longer eligible is
             // dropped and every remaining slot behind it closes up — re-targeted onto its new slot.
+            // MV-828 D1: IsAssignedToReplicator (not a bare Current check) is what "still belongs to
+            // this queue" means — a robot tagged mid-Telegraph/Lunge (SeekReplicator's own pending
+            // hand-off) hasn't reached ReplicatorSeeking yet but is still this box's, and the OLD
+            // Current-only check dropped it here on the very next tick, refilling its slot out from
+            // under it and leaving it to seek a slot it no longer owned once Recover finally ran.
             bool queueClosedUp = false;
             for (int i = _queue.Count - 1; i >= 0; i--)
             {
                 RobotEnemy r = _queue[i];
-                if (r == null || !r.IsAlive || r.Current != RobotEnemy.State.ReplicatorSeeking)
+                if (r == null || !r.IsAlive || !r.IsAssignedToReplicator)
                 {
                     _queue.RemoveAt(i);
                     queueClosedUp = true;
@@ -587,7 +613,10 @@ namespace MaxWorlds.Factories
                     // than a Rusher's rather than both sharing one flat duration.
                     _intakeRampFoot = _intakeStartPos; _intakeRampFoot.y = GroundY;
                     float walkDistance = Vector3.Distance(_intakeRampFoot, HatchPosition);
-                    float walkSpeed = Mathf.Max(EnemyArchetype.Of(head.Kind).MoveSpeed, MinIntakeWalkSpeed);
+                    // MV-828 change 5: the robot's own LIVE speed (world overrides included, e.g. the
+                    // World 2 Rusher's 2.4) — EnemyArchetype.Of(head.Kind) is the base table, which
+                    // never reflects a per-world restat and made every intake walk read at the wrong pace.
+                    float walkSpeed = Mathf.Max(head.EffectiveMoveSpeed, MinIntakeWalkSpeed);
                     float walkSeconds = walkDistance / walkSpeed;
                     _intakeSeq = new AnimSequence(new[]
                     {
@@ -668,6 +697,26 @@ namespace MaxWorlds.Factories
             if (pendingActive) _replicationLingerTimer = ReplicationLightLingerSeconds;
             else if (_replicationLingerTimer > 0f) _replicationLingerTimer = Mathf.Max(0f, _replicationLingerTimer - dt);
             _replicationLightOn = pendingActive || _replicationLingerTimer > 0f;
+
+            // MV-828 D2: entry and slot-close are not the only assignment triggers — while Max is
+            // standing in this box's own area, has capacity, and a slot sits empty, re-run assignment
+            // on LureRetryIntervalSeconds regardless of what triggered the last one. Reset (not merely
+            // left to drift) the instant the condition stops holding, so it always fires promptly again
+            // the next time a slot actually opens rather than however much of a stale interval happens
+            // to be left over.
+            if (_playerInArea && capacity > 0 && _queue.Count < MaxQueueSlots)
+            {
+                _lureRetryTimer -= dt;
+                if (_lureRetryTimer <= 0f)
+                {
+                    TickLure();
+                    _lureRetryTimer = LureRetryIntervalSeconds;
+                }
+            }
+            else
+            {
+                _lureRetryTimer = 0f;
+            }
 
             _beaconStrobeTime += dt;
             UpdateReplicationLight();

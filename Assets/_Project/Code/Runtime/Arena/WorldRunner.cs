@@ -153,7 +153,17 @@ namespace MaxWorlds.Arena
                     }
 
                     FactoryCensus.RegisterReplicator(replicator, area.id);
-                    replicator.SetAreaIndex(AreaAccumulationDirector.AreaIndexOf(area.id)); // MV-820
+                    // MV-828: area.id is the raw config id (e.g. "a3"), which AreaIndexOf can never
+                    // parse (it only recognises the "area<N>" string WorldMapLoader translates zone ids
+                    // to) — every World 2 Replicator stamped AreaIndex 0 this way, so NearestEligible
+                    // matched no robot. area.index is the same 1-based number the zones and robots
+                    // already key off (WorldMapLoader.TryLoad, AreaAccumulationDirector.SetAreaIndex).
+                    int replicatorArea = area.index;
+                    if (replicatorArea <= 0)
+                        Debug.LogError($"[WorldRunner] Replicator '{replicatorId}' resolved AreaIndex " +
+                                       $"{replicatorArea} from area '{area.id}' — a combat-area Replicator " +
+                                       "must belong to a real (>=1) area index.");
+                    replicator.SetAreaIndex(replicatorArea);
                     _replicators.Add(replicator);
                 }
             }

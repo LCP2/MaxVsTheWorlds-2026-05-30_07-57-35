@@ -903,6 +903,20 @@ namespace MaxWorlds.Arena
 
                 if (a.size == null || a.size.w <= 0f || a.size.d <= 0f)
                 { reason = $"area '{a.id}' has no area ({a.size?.w ?? 0f}×{a.size?.d ?? 0f})"; return false; }
+
+                // MV-828: WorldRunner stamps every Replicator's AreaIndex from its own area's
+                // area.index (the same number zones/robots key off) — an area authoring a replicator
+                // outside 1..areaCount would resolve to a Replicator no robot could ever match.
+                if (a.replicators != null && a.replicators.Length > 0)
+                {
+                    int areaCount = cfg.dials?.areaCount ?? 0;
+                    if (a.index < 1 || a.index > areaCount)
+                    {
+                        reason = $"area '{a.id}' authors a replicator but its index {a.index} is not a " +
+                                 $"combat area (1..{areaCount})";
+                        return false;
+                    }
+                }
             }
 
             // MV-697: an overlays area must name a real target, and if it authors its own origin/size
