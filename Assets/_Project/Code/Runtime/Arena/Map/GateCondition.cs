@@ -15,6 +15,7 @@ namespace MaxWorlds.Arena
         ShedsDestroyedBefore,
         AllShedsDestroyed,
         ReplicatorsDestroyed,
+        AreaEntered,
     }
 
     /// <summary>
@@ -22,9 +23,9 @@ namespace MaxWorlds.Arena
     /// <see cref="GateConditionKind.Start"/>/<see cref="GateConditionKind.Primary"/>/
     /// <see cref="GateConditionKind.Sluice"/> open on combat alone — <see cref="IsConditionGated"/> is
     /// false for all three, so <see cref="WorldRunner"/> never locks a gate carrying one of them (a
-    /// "sluice" is only a taller-HP combat gate, same as "primary"). The other three kinds are
-    /// condition-gated: the gate is held <see cref="AreaGate.Locked"/> until <see cref="IsSatisfied"/>
-    /// turns true, then force-opened.
+    /// "sluice" is only a taller-HP combat gate, same as "primary"). The other four kinds — including
+    /// <see cref="GateConditionKind.AreaEntered"/> (MV-829, hatches) — are condition-gated: the gate is
+    /// held <see cref="AreaGate.Locked"/> until <see cref="IsSatisfied"/> turns true, then force-opened.
     ///
     /// World 1 authors only "start" and "primary" today (no gate carries a condition string), so this
     /// parser and every lock/unlock decision it drives are inert there by construction.
@@ -32,6 +33,7 @@ namespace MaxWorlds.Arena
     public readonly struct GateCondition
     {
         public const string ReplicatorsDestroyedPrefix = "replicators-destroyed:";
+        public const string AreaEnteredPrefix = "area-entered:";
         private const string AllToken = "all";
 
         public readonly GateConditionKind Kind;
@@ -45,11 +47,17 @@ namespace MaxWorlds.Arena
         /// Empty (never null) for every other kind, and for the "all" form.</summary>
         public readonly IReadOnlyList<string> ReplicatorAreaIds;
 
-        private GateCondition(GateConditionKind kind, bool replicatorsAll, IReadOnlyList<string> replicatorAreaIds)
+        /// <summary>Only meaningful for <see cref="GateConditionKind.AreaEntered"/> — the single area id
+        /// (MV-829) an <c>"area-entered:&lt;id&gt;"</c> string names. Null for every other kind.</summary>
+        public readonly string AreaEnteredId;
+
+        private GateCondition(GateConditionKind kind, bool replicatorsAll, IReadOnlyList<string> replicatorAreaIds,
+                               string areaEnteredId = null)
         {
             Kind = kind;
             ReplicatorsAll = replicatorsAll;
             ReplicatorAreaIds = replicatorAreaIds ?? Array.Empty<string>();
+            AreaEnteredId = areaEnteredId;
         }
 
         /// <summary>True for every kind that holds a gate <see cref="AreaGate.Locked"/> until
@@ -58,7 +66,8 @@ namespace MaxWorlds.Arena
         public bool IsConditionGated =>
             Kind == GateConditionKind.ShedsDestroyedBefore ||
             Kind == GateConditionKind.AllShedsDestroyed ||
-            Kind == GateConditionKind.ReplicatorsDestroyed;
+            Kind == GateConditionKind.ReplicatorsDestroyed ||
+            Kind == GateConditionKind.AreaEntered;
 
         /// <summary>Parse an authored <c>opensWith</c> string. Strips a trailing
         /// <see cref="WorldMapLoader.DeckGateSuffix"/> itself — <see cref="WorldMapLoader.TryLoad"/> only
@@ -127,6 +136,20 @@ namespace MaxWorlds.Arena
                 return true;
             }
 
+            if (token.StartsWith(AreaEnteredPrefix, StringComparison.Ordinal))
+            {
+                string id = token.Substring(AreaEnteredPrefix.Length).Trim();
+                if (id.Length == 0)
+                {
+                    reason = $"opensWith '{opensWith}' names no area";
+                    return false;
+                }
+
+                condition = new GateCondition(GateConditionKind.AreaEntered, false, null, id);
+                reason = null;
+                return true;
+            }
+
             reason = $"opensWith '{opensWith}' is not a recognised gate condition";
             return false;
         }
@@ -147,6 +170,8 @@ namespace MaxWorlds.Arena
                     return ReplicatorsAll
                         ? FactoryCensus.AllReplicatorsDestroyed
                         : FactoryCensus.ReplicatorsDestroyedInAreas(ReplicatorAreaIds);
+                case GateConditionKind.AreaEntered:
+                    return AreaVisitCensus.HasEntered(AreaEnteredId);
                 default:
                     return true; // Start/Primary/Sluice: combat-gated, never locked by this engine.
             }

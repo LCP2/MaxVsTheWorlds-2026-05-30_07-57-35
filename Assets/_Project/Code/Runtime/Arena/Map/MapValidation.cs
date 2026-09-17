@@ -635,6 +635,7 @@ namespace MaxWorlds.Arena
                     { reason = $"area '{a.id}': sludge '{s.id}' rect falls outside the area floor"; return false; }
                 }
 
+                var rampRects = new List<(string id, Rect rect)>();
                 foreach (WorldRamp r in a.ramps ?? Array.Empty<WorldRamp>())
                 {
                     if (r == null) { reason = $"area '{a.id}' has a null ramp"; return false; }
@@ -651,6 +652,8 @@ namespace MaxWorlds.Arena
                         reason = $"area '{a.id}': ramp '{r.id}' must touch exactly one deck — touches {touches}";
                         return false;
                     }
+
+                    rampRects.Add((r.id, rect));
                 }
 
                 // MV-697: a hatch is a locked opening ON a deck cell, not free-floating geometry — it
@@ -671,12 +674,78 @@ namespace MaxWorlds.Arena
                     if (!onDeck)
                     { reason = $"area '{a.id}': hatch '{h.id}' does not sit on any of the area's deck cells"; return false; }
 
+                    // MV-829: overlapping SOME deck cell is not enough — a3_hatch2 shipped on its
+                    // deck's west edge while a3_ramp2 climbed to the east edge, so the flat panel sat
+                    // over the wrong side and never blocked the actual approach. A hatch guards a given
+                    // ramp only if it (a) actually reaches the same deck-boundary line the ramp touches
+                    // — not merely overlapping the deck somewhere else on it, which is all a3_hatch2's
+                    // bug ever did — and (b) its span along that boundary overlaps the ramp's own span,
+                    // so it blocks the ramp's actual mouth rather than some unrelated stretch of the
+                    // same edge. Deliberately NOT "hatch touches exactly one edge": a6/a11's hatches
+                    // span their deck's full (3 m) width, so they legitimately touch BOTH side edges at
+                    // once — only the edge-reach + span-overlap pair distinguishes a real guard from a
+                    // hatch parked on the wrong side.
+                    bool sitsAtRampEdge = false;
+                    var nearbyRamps = new List<string>();
+                    foreach (Rect deckRect in deckRects)
+                    {
+                        if (!deckRect.Overlaps(rect)) continue;
+
+                        foreach (var (rampId, rampRect) in rampRects)
+                        {
+                            if (!TryOuterEdge(rampRect, deckRect, out EdgeSide rampSide)) continue;
+                            nearbyRamps.Add(rampId);
+
+                            bool guardsThisRamp = rampSide switch
+                            {
+                                EdgeSide.West => Geo.Same(rect.xMin, deckRect.xMin) &&
+                                                  RangesOverlap(rect.yMin, rect.yMax, rampRect.yMin, rampRect.yMax),
+                                EdgeSide.East => Geo.Same(rect.xMax, deckRect.xMax) &&
+                                                  RangesOverlap(rect.yMin, rect.yMax, rampRect.yMin, rampRect.yMax),
+                                EdgeSide.South => Geo.Same(rect.yMin, deckRect.yMin) &&
+                                                   RangesOverlap(rect.xMin, rect.xMax, rampRect.xMin, rampRect.xMax),
+                                EdgeSide.North => Geo.Same(rect.yMax, deckRect.yMax) &&
+                                                   RangesOverlap(rect.xMin, rect.xMax, rampRect.xMin, rampRect.xMax),
+                                _ => false,
+                            };
+                            if (guardsThisRamp) sitsAtRampEdge = true;
+                        }
+                    }
+
+                    if (!sitsAtRampEdge)
+                    {
+                        string ramps = nearbyRamps.Count > 0 ? string.Join(", ", nearbyRamps) : "no ramp reaching its deck";
+                        reason = $"area '{a.id}': hatch '{h.id}' sits on the wrong edge of its deck — " +
+                                 $"it must sit where ramp {ramps} arrives, not the opposite side";
+                        return false;
+                    }
+
                     if (!ValidateOpensWith(cfg, "hatch", h.id, h.opensWith, out reason)) return false;
                 }
             }
 
             reason = null;
             return true;
+        }
+
+        private enum EdgeSide { North, South, East, West }
+
+        /// <summary>Which edge of <paramref name="deck"/> does <paramref name="rect"/> touch from
+        /// OUTSIDE it (a ramp arriving at a deck) — mirrors <see cref="TouchesEdge"/>'s own adjacency
+        /// test but names WHICH of the four edges matched, since <see cref="WorldVerticality"/>'s new
+        /// hatch rule (MV-829) needs to check a hatch reaches that SAME boundary line.</summary>
+        private static bool TryOuterEdge(Rect rect, Rect deck, out EdgeSide side)
+        {
+            if (Geo.Same(rect.xMax, deck.xMin) && RangesOverlap(rect.yMin, rect.yMax, deck.yMin, deck.yMax))
+            { side = EdgeSide.West; return true; }
+            if (Geo.Same(rect.xMin, deck.xMax) && RangesOverlap(rect.yMin, rect.yMax, deck.yMin, deck.yMax))
+            { side = EdgeSide.East; return true; }
+            if (Geo.Same(rect.yMax, deck.yMin) && RangesOverlap(rect.xMin, rect.xMax, deck.xMin, deck.xMax))
+            { side = EdgeSide.South; return true; }
+            if (Geo.Same(rect.yMin, deck.yMax) && RangesOverlap(rect.xMin, rect.xMax, deck.xMin, deck.xMax))
+            { side = EdgeSide.North; return true; }
+            side = default;
+            return false;
         }
 
         private static bool RectInsideArea(Rect rect, WorldArea a) =>
@@ -1127,6 +1196,16 @@ namespace MaxWorlds.Arena
                         return false;
                     }
                 }
+            }
+
+            // MV-829: an area-entered:<id> hatch condition must name a real area, the same "typo'd
+            // area is a content bug, not a runtime maybe" guard the replicators-destroyed list gets
+            // above.
+            if (condition.Kind == GateConditionKind.AreaEntered && cfg.Area(condition.AreaEnteredId) == null)
+            {
+                reason = $"{entityKind} '{entityId}' opens on area-entered:{condition.AreaEnteredId}, " +
+                         $"but area '{condition.AreaEnteredId}' does not exist";
+                return false;
             }
 
             reason = null;

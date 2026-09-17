@@ -96,6 +96,15 @@ namespace MaxWorlds.Arena
         /// a respawn lands behind.</summary>
         private readonly Dictionary<int, AreaGate> _gateIntoArea = new Dictionary<int, AreaGate>();
 
+        /// <summary>Every built hatch (MV-829), paired with its own parsed <see cref="GateCondition"/>
+        /// and its own area's 1-based index — keyed by the hatch itself rather than by "the area's
+        /// incoming gate" (<see cref="_gateConditionIntoArea"/>'s shape) because an area can carry more
+        /// than one hatch (World 2's a3/a6/a11 each author two). <see cref="RefreshGateLocks"/> resolves
+        /// each one exactly like a wall gate's condition; a "primary"/"start"/"sluice" hatch (not
+        /// <see cref="GateCondition.IsConditionGated"/>) is skipped there, same as a combat wall gate.</summary>
+        private readonly List<(AreaGate gate, GateCondition condition, int areaIndex)> _hatchGates =
+            new List<(AreaGate, GateCondition, int)>(4);
+
         public void Configure(WorldConfig cfg, MapData map, MapBuild build, AreaAccumulationDirector areaDirector)
         {
             _cfg = cfg;
@@ -169,10 +178,54 @@ namespace MaxWorlds.Arena
             }
 
             BuildGateIntoAreaMap(build);
+            BuildHatchGateList(build);
             RefreshGateLocks(); // initial lock state before the first Update tick
 
             _playerHealth = FindFirstObjectByType<PlayerHealth>();
             if (_playerHealth != null) _playerHealth.Died += OnPlayerDied;
+
+            // MV-829: an area-entered:<id> hatch condition needs to know when Max's own position has
+            // ever crossed into that area — the real physical-crossing signal, not the population
+            // head-start EnterArea fires ahead of the player (see AreaAccumulationDirector's own doc
+            // comment on the difference). Fired once immediately for whatever area Max starts in too,
+            // since PlayerCrossedIntoArea only fires on a later CROSSING, never the starting area.
+            if (_areaDirector != null)
+            {
+                _areaDirector.PlayerCrossedIntoArea += OnPlayerCrossedIntoArea;
+                MarkAreaEntered(_areaDirector.CurrentArea);
+            }
+        }
+
+        private void MarkAreaEntered(int areaIndex)
+        {
+            WorldArea area = _cfg?.AreaByIndex(areaIndex);
+            if (area != null) AreaVisitCensus.MarkEntered(area.id);
+        }
+
+        private void OnPlayerCrossedIntoArea(int areaIndex) => MarkAreaEntered(areaIndex);
+
+        /// <summary>Every hatch this world authors (MV-829), paired with its own parsed condition and
+        /// its own area's index — built once, alongside <see cref="BuildGateIntoAreaMap"/>, from the
+        /// same <paramref name="build"/> a hatch's id is a key into.</summary>
+        private void BuildHatchGateList(MapBuild build)
+        {
+            _hatchGates.Clear();
+            if (_cfg?.areas == null) return;
+
+            foreach (WorldArea area in _cfg.areas)
+            {
+                foreach (WorldHatch h in area.hatches ?? Array.Empty<WorldHatch>())
+                {
+                    if (h == null) continue;
+                    if (!build.Actors.TryGetValue(h.id, out GameObject hatchGo) || hatchGo == null) continue;
+
+                    AreaGate gate = hatchGo.GetComponent<AreaGate>();
+                    if (gate == null) continue;
+
+                    if (GateCondition.TryParse(h.opensWith, out GateCondition condition, out _))
+                        _hatchGates.Add((gate, condition, area.index));
+                }
+            }
         }
 
         private void BuildGateIntoAreaMap(MapBuild build)
@@ -213,6 +266,7 @@ namespace MaxWorlds.Arena
         private void OnDestroy()
         {
             if (_playerHealth != null) _playerHealth.Died -= OnPlayerDied;
+            if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnPlayerCrossedIntoArea;
         }
 
         /// <summary>MV-524 part 2: iOS can suspend-then-terminate a backgrounded app with no further
@@ -309,7 +363,8 @@ namespace MaxWorlds.Arena
         /// replacement for the role-driven lock this runner had before MV-665 stripped it, now keyed off
         /// the gate's own parsed <see cref="GateCondition"/> instead of the area's role. A gate whose
         /// condition is Start/Primary/Sluice is skipped entirely (<see cref="GateCondition.IsConditionGated"/>
-        /// false) — exactly every World 1 gate today, so this is a no-op there.</summary>
+        /// false) — exactly every World 1 gate today, so this is a no-op there. MV-829: every built
+        /// hatch (<see cref="_hatchGates"/>) resolves through this exact same loop, right after.</summary>
         private void RefreshGateLocks()
         {
             if (_supply == null) return;
@@ -335,6 +390,25 @@ namespace MaxWorlds.Arena
                 }
 
                 if (condition.IsSatisfied(_supply, kv.Key))
+                {
+                    bool wasLocked = gate.Locked;
+                    gate.Locked = false;
+                    if (wasLocked) gate.ForceOpen();
+                }
+                else
+                {
+                    gate.Locked = true;
+                }
+            }
+
+            // MV-829: every hatch resolves through the exact same engine, one at a time rather than
+            // one per area — see _hatchGates' own doc comment for why a single area-keyed dictionary
+            // (the wall-gate shape above) doesn't fit a hatch.
+            foreach (var (gate, condition, areaIndex) in _hatchGates)
+            {
+                if (!condition.IsConditionGated) continue;
+
+                if (condition.IsSatisfied(_supply, areaIndex))
                 {
                     bool wasLocked = gate.Locked;
                     gate.Locked = false;
