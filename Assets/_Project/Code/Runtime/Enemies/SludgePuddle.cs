@@ -263,10 +263,19 @@ namespace MaxWorlds.Enemies
 
         /// <summary>The slowest multiplier among every live puddle containing <paramref name="worldPosition"/>
         /// (1 = unaffected) — consulted by <see cref="MaxWorlds.Arena.MapSlowZones.SpeedMultiplierAt"/>
-        /// alongside the map's own static sludge zones.</summary>
+        /// alongside the map's own static sludge zones.
+        ///
+        /// MV-837: a puddle is floor-level too, so it gets the same "never slows a mover standing on a
+        /// deck above it" rule as a map-authored sludge rect — same threshold
+        /// <see cref="MaxWorlds.Arena.MapData.ZoneAt(float, float, float)"/> uses. No loaded map (a
+        /// test fixture with no level) means no deck to be above, so the gate is skipped entirely rather
+        /// than guessed at.</summary>
         public static float SpeedMultiplierAt(Vector3 worldPosition)
         {
             float best = 1f;
+            MapData map = EnemyNavigation.Map;
+            if (map != null && worldPosition.y >= map.deckHeight - 0.5f) return best;
+
             for (int i = 0; i < _active.Count; i++)
             {
                 SludgePuddle puddle = _active[i];
