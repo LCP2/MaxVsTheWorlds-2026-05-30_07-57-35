@@ -49,6 +49,7 @@ namespace MaxWorlds.Arena
         [SerializeField] private string worldKey = string.Empty;
 
         private static readonly List<CoverPiece> NoCover = new List<CoverPiece>(0);
+        private static readonly Dictionary<string, GameObject> NoActors = new Dictionary<string, GameObject>(0);
 
         private MapData _map;
         private MapBuild _build;
@@ -74,6 +75,13 @@ namespace MaxWorlds.Arena
         /// The dressing layer reads this rather than the authored set, so it can never plant a tree
         /// where no cover was placed.</summary>
         public IReadOnlyList<CoverPiece> CoverPieces => _build?.Cover ?? (IReadOnlyList<CoverPiece>)NoCover;
+
+        /// <summary>Every built actor's GameObject, by its authored entity id (MV-830) — the same
+        /// lookup <see cref="MapRuntime"/> keeps for itself, exposed so a caller (the map screen,
+        /// resolving a Replicator's live/destroyed state) can find the live instance behind a
+        /// <see cref="MapEntity"/> without threading the whole <see cref="MapBuild"/> through. Empty,
+        /// never null, if the map failed to load.</summary>
+        public IReadOnlyDictionary<string, GameObject> Actors => _build?.Actors ?? (IReadOnlyDictionary<string, GameObject>)NoActors;
 
         /// <summary>The world index this instance's <see cref="Awake"/> actually resolved (MV-766)
         /// — read by the world probe instead of calling <see cref="ActiveWorldIndex"/> a second

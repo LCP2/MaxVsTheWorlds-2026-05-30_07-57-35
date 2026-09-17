@@ -6,6 +6,7 @@ using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.UI
@@ -238,6 +239,8 @@ namespace MaxWorlds.UI
                 ("Cover", HudTextures.RoundedBox(12, 0.2f), MapScreenDesign.Cover, null, default),
                 ("Static shed", HudTextures.Disc(24), MapScreenDesign.ShedStatic, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
                 ("Mobile shed", HudTextures.Disc(24), MapScreenDesign.ShedMobile, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
+                ("Replicator", HudTextures.RoundedBox(16, 0.15f), MapScreenDesign.Replicator, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorOutline),
+                ("Replicator (destroyed)", HudTextures.RoundedBox(16, 0.15f), Color.clear, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorDestroyed),
                 ("Gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.Gate, null, default),
                 ("Boss gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.BossGate, null, default),
                 ("Boss", HudTextures.Disc(24), MapScreenDesign.Boss, HudTextures.Ring(24, 2f), MapScreenDesign.BossOutline),
@@ -290,7 +293,17 @@ namespace MaxWorlds.UI
         /// non-gated test scene) leaves the content empty rather than throwing.</summary>
         private void RebuildContent()
         {
-            foreach (Transform child in _content) Destroy(child.gameObject);
+            // MV-830: a bare Destroy() never resolves inside a synchronous EditMode test (no next
+            // frame ever runs to flush it) — same Application.isPlaying/DestroyImmediate split every
+            // other teardown in this codebase already uses (e.g. MowerHutch's own collider strip).
+            // Walked backwards by index, not foreach: DestroyImmediate removes the child on the spot,
+            // and a forward enumerator over a shrinking Transform silently skips every other entry.
+            for (int i = _content.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = _content.GetChild(i).gameObject;
+                if (Application.isPlaying) Destroy(child);
+                else DestroyImmediate(child);
+            }
             _areaImages.Clear();
             _areaIndexByImage.Clear();
             _areaIsBoss.Clear();
@@ -380,12 +393,15 @@ namespace MaxWorlds.UI
                 }
             }
 
-            // Sheds (item 6), then bosses (item 7) — two passes over the same flat list rather than one
-            // switch, so a shed can never end up drawn after a boss just because it happened to be
-            // authored later in the map file.
+            // Sheds (item 6), Replicators (item 6b, MV-830 — same pass order as sheds: above cover and
+            // gates, below labels), then bosses (item 7) — three passes over the same flat list rather
+            // than one switch, so none of them can end up drawn out of order just because they happened
+            // to be authored in a different sequence in the map file.
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Factory && entity.Dressing == CoverDressing.Shed)
                     AddShedMarker(entity);
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.Replicator) AddReplicatorMarker(entity);
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Boss) AddBossMarker(entity);
 
@@ -491,6 +507,45 @@ namespace MaxWorlds.UI
             var outline = AddImage(marker.rectTransform, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline, "Outline");
             Stretch(outline.rectTransform);
             outline.raycastTarget = false;
+        }
+
+        /// <summary>A Replicator (MV-830) — every one in the map, from the first frame, ignoring
+        /// <see cref="Discoverable.Found"/> (Lee's decision: the point is locating the ones not yet
+        /// destroyed). Alive reads as a filled red square with a light outline; once destroyed the fill
+        /// drops to nothing (alpha 0) and the outline turns grey, same size and position — resolved off
+        /// the actual built <see cref="Replicator"/> every time this rebuilds, so a box killed since the
+        /// map was last open flips the instant it reopens (item 2 of the ticket).</summary>
+        private void AddReplicatorMarker(MapEntity entity)
+        {
+            bool alive = ReplicatorIsAlive(entity);
+            Color fill = alive ? MapScreenDesign.Replicator : Color.clear;
+            Color outlineColor = alive ? MapScreenDesign.ReplicatorOutline : MapScreenDesign.ReplicatorDestroyed;
+
+            var marker = AddImage(_content, HudTextures.RoundedBox(16, 0.15f), fill, "Replicator");
+            Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+            marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
+            marker.rectTransform.sizeDelta = new Vector2(MapScreenDesign.ReplicatorSize, MapScreenDesign.ReplicatorSize);
+            marker.type = Image.Type.Sliced;
+            marker.raycastTarget = false;
+
+            var outline = AddImage(marker.rectTransform,
+                HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), outlineColor, "Outline");
+            Stretch(outline.rectTransform);
+            outline.type = Image.Type.Sliced;
+            outline.raycastTarget = false;
+        }
+
+        /// <summary>Resolves a Replicator entity's live/destroyed state off the actual built
+        /// <see cref="Replicator"/> component for its id, via <see cref="BackyardPath.Actors"/> — never
+        /// a static map fact, since the whole point is showing a box that died since the map last
+        /// opened. Defaults alive when nothing is built for this id (no <see cref="_backyardPath"/>, or
+        /// a fixture map), so a missing lookup never misrenders as a false "destroyed".</summary>
+        private bool ReplicatorIsAlive(MapEntity entity)
+        {
+            if (_backyardPath == null) return true;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
+            var replicator = go.GetComponent<Replicator>();
+            return replicator == null || replicator.IsAlive;
         }
 
         /// <summary>A boss "dominates its arena" (AC 2/6) — a soft halo behind a bright disc, both sized

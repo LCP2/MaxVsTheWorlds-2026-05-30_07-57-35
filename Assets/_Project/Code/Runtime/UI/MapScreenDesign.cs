@@ -50,8 +50,19 @@ namespace MaxWorlds.UI
         public static readonly Color BossGate     = new Color32(0xFF, 0x80, 0x80, 0xFF);
         public static readonly Color Player       = new Color32(0x4A, 0xA3, 0xFF, 0xFF);
 
+        /// <summary>MV-830: alive-Replicator fill and its light outline.</summary>
+        public static readonly Color Replicator          = new Color32(0xC0, 0x00, 0x00, 0xFF);
+        public static readonly Color ReplicatorOutline    = new Color32(0xFF, 0x9C, 0x9C, 0xFF);
+        /// <summary>MV-830: a destroyed Replicator's outline — its fill drops to nothing (alpha 0),
+        /// this is the only colour left on the marker.</summary>
+        public static readonly Color ReplicatorDestroyed = new Color32(0x8C, 0x8C, 0x8C, 0xFF);
+
         /// <summary>World metres. A shed's footprint on the map — matches the 3 x 3 m factory body.</summary>
         public const float ShedSize = 3f;
+        /// <summary>World metres. A Replicator's footprint on the map — matches its 2 x 2 m body.</summary>
+        public const float ReplicatorSize = 2f;
+        /// <summary>World metres. Stroke width for the Replicator marker's outline.</summary>
+        public const float ReplicatorOutlineWidth = 0.3f;
         /// <summary>World metres, radius. A boss dominates its arena; this is deliberately larger than
         /// the 6 x 6 m boss body so three bosses in a30 read as three at full zoom-out.</summary>
         public const float BossRadius = 3.2f;
@@ -95,6 +106,7 @@ namespace MaxWorlds.UI
         //   4. cover
         //   5. gates                   (on the wall line, so they sit over the border)
         //   6. sheds
+        //   6b. Replicators             (MV-830: same pass order as sheds)
         //   7. bosses
         //   8. area index + name labels
         //   9. player dot
