@@ -1,11 +1,8 @@
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
-using MaxWorlds.Enemies;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -18,8 +15,16 @@ namespace MaxWorlds.Tests.EditMode
     /// collider made it an obstacle to everything else while leaving it immune to obstacles itself. The
     /// fix routes all three movement paths (sidestep, standoff-follow, MV-615 separation) through a new
     /// <see cref="CharacterController"/> via <see cref="CharacterControllerMotion.SafeMove"/>, the same
-    /// swept-move helper <see cref="MaxWorlds.Player.PlayerController"/> already uses (MV-386), while the
-    /// firing/targeting path stays exactly as it was — range-only, no visibility test of any kind.
+    /// swept-move helper <see cref="MaxWorlds.Player.PlayerController"/> already uses (MV-386).
+    ///
+    /// MV-832 (Lee, World 2, 17 Sep 2026) REVERSES the one line above about firing: "fires through
+    /// walls, into other areas, and sometimes not at all" is now the defect, not the retained ability —
+    /// <see cref="Sentinel"/>'s targeting is a real <see cref="LineOfSight"/> check (see
+    /// <c>MV832SentinelTargetingTests</c>), not the range-only rule this class's own AC5
+    /// (<c>FiringStillIgnoresWallsCompletely</c>) used to pin. That test and its companion source-shape
+    /// guard (<c>SentinelCsHasNoLineOfSightCallAnywhereInIt</c>) are removed here — not culled for
+    /// redundancy, but because their premise is now false. Every OTHER AC below (movement collision,
+    /// unchanged by MV-832) still holds.
     ///
     /// EditMode only, reflection-driven for <see cref="Sentinel"/>'s private <c>Update</c>/<c>TickMovement</c>
     /// — same idiom <see cref="SentinelBodyTests"/> and <see cref="GunnerSentinelBeamTests"/> already use.
@@ -62,9 +67,6 @@ namespace MaxWorlds.Tests.EditMode
         private static void TickMovement(Sentinel sentinel, float dt) =>
             typeof(Sentinel).GetMethod("TickMovement", NonPublicInstance).Invoke(sentinel, new object[] { dt });
 
-        private static void InvokeUpdate(Sentinel sentinel) =>
-            typeof(Sentinel).GetMethod("Update", NonPublicInstance).Invoke(sentinel, null);
-
         private static Vector3? SidestepTarget(Sentinel sentinel) =>
             (Vector3?)typeof(Sentinel).GetField("_sidestepTarget", NonPublicInstance).GetValue(sentinel);
 
@@ -86,16 +88,6 @@ namespace MaxWorlds.Tests.EditMode
             go.transform.position = position;
             go.transform.localScale = scale;
             return go;
-        }
-
-        private static RobotEnemy NewTargetRobot(Vector3 position)
-        {
-            var go = new GameObject("Target Robot");
-            go.transform.position = position;
-            go.AddComponent<CharacterController>();
-            var e = go.AddComponent<RobotEnemy>();
-            e.ResetState(); // EditMode has no Awake/OnEnable lifecycle — init explicitly
-            return e;
         }
 
         // ---------------------------------------------------------------------------- AC1
@@ -252,64 +244,12 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // ---------------------------------------------------------------------------- AC5
-
-        [Test]
-        public void FiringStillIgnoresWallsCompletely()
-        {
-            var sentinelGo = new GameObject("Sentinel");
-            RobotEnemy target = null;
-            GameObject wallGo = null;
-            try
-            {
-                var sentinel = NewSentinel(sentinelGo, Origin,
-                    moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null, range: 7f);
-                target = NewTargetRobot(Origin + new Vector3(3f, 0f, 0f)); // inside SentinelRange (7)
-                wallGo = NewBox("Wall", Origin + new Vector3(1.5f, 1.5f, 0f), new Vector3(WallThickness, 3f, 6f));
-                Physics.SyncTransforms();
-
-                float healthBefore = target.HealthCurrent;
-                InvokeUpdate(sentinel); // fireCooldown starts at 0 -- fires on the very first tick
-
-                Assert.That(target.HealthCurrent, Is.LessThan(healthBefore),
-                    "a wall fully between the sentinel and an in-range robot must not block the shot -- " +
-                    "Lee's explicit ask ('I want to retain that ability')");
-            }
-            finally
-            {
-                // MV-805: InvokeUpdate above fires a SentinelBolt -- its own top-level GameObject, not
-                // a child of sentinelGo, and nothing else in this suite tracks it -- so it must be
-                // found and destroyed here or it leaks into every test that runs after this one for
-                // the rest of the EditMode run. This exact leak is what made MV806SentinelBoltTests'
-                // own FindAnyObjectByType<SentinelBolt>() pick up a stray bolt at the wrong position
-                // once MV-805 added a new test file and shifted execution order enough to expose it.
-                var strayBolt = Object.FindAnyObjectByType<SentinelBolt>();
-                if (strayBolt != null) Object.DestroyImmediate(strayBolt.gameObject);
-                Object.DestroyImmediate(sentinelGo);
-                if (target != null) Object.DestroyImmediate(target.gameObject);
-                if (wallGo != null) Object.DestroyImmediate(wallGo);
-            }
-        }
-
-        /// <summary>Source-shape guard, not a behavioural one (same idiom as <c>SentinelBodyTests</c>'
-        /// AC1) -- the half of AC5 "most likely to get broken by accident" per the ticket, so it is
-        /// pinned by inspection as well as by the behavioural test above.</summary>
-        [Test]
-        public void SentinelCsHasNoLineOfSightCallAnywhereInIt()
-        {
-            string path = Path.Combine(Application.dataPath, "_Project", "Code", "Runtime", "Arena", "Sentinel.cs");
-            Assert.IsTrue(File.Exists(path), $"Sentinel.cs not found at {path}");
-
-            string code = string.Join("\n", File.ReadAllLines(path).Select(StripLineComment));
-            Assert.IsFalse(code.Contains("Physics.Raycast"), "Sentinel.cs must never gain a raycast line-of-sight check");
-            Assert.IsFalse(code.Contains("Physics.Linecast"), "Sentinel.cs must never gain a linecast line-of-sight check");
-            Assert.IsFalse(code.Contains("Physics.SphereCast"), "Sentinel.cs must never gain a spherecast line-of-sight check");
-        }
-
-        private static string StripLineComment(string line)
-        {
-            int i = line.IndexOf("//", System.StringComparison.Ordinal);
-            return i < 0 ? line : line.Substring(0, i);
-        }
+        //
+        // MV-624's own AC5 (FiringStillIgnoresWallsCompletely) and its companion source-shape guard
+        // (SentinelCsHasNoLineOfSightCallAnywhereInIt) lived here — removed by MV-832, which reverses
+        // this exact decision ("I want to retain that ability" no longer holds; see this class's own
+        // doc comment). Firing-through-walls behaviour is now covered, correctly, by
+        // MV832SentinelTargetingTests instead.
 
         // ---------------------------------------------------------------------------- AC6
 
