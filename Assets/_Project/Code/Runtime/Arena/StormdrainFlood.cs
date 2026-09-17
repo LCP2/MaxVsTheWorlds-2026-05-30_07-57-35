@@ -22,6 +22,14 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class StormdrainFlood
     {
+        /// <summary>MV-836 (Lee, 2026-09-17): "Comment this all out for now. No flood concept. Max and
+        /// robots are not hurt or slowed down." False by design, not a bug — every real entry point
+        /// below (<see cref="SpeedMultiplierAt"/>, <see cref="StormdrainFloodRunner.TickFlood"/>,
+        /// <see cref="MaxWorlds.Bosses.SludgequeenBoss.TickFloodDamage"/>/<see cref="MaxWorlds.Bosses.SludgequeenBoss.FloodSpeedMultiplierAt"/>)
+        /// gates on this switch so the mechanism stays parked, not deleted, for a future ticket to flip
+        /// back on without re-deriving anything.</summary>
+        public const bool FloodEnabled = false;
+
         /// <summary>First surge: the lowest band (closest to the Wet Well) floods.</summary>
         public const float Band1Threshold = 0.25f;
 
@@ -218,7 +226,7 @@ namespace MaxWorlds.Arena
         /// the world position to a zone/area the same way <see cref="MaxWorlds.Bosses.SludgequeenBoss.FloodSpeedMultiplierAt"/>
         /// and <see cref="MaxWorlds.Bosses.BigBermudaBoss"/> already do.</summary>
         public static float SpeedMultiplierAt(Vector3 worldPosition) =>
-            IsFlooded(worldPosition) ? SpeedMultiplier : 1f;
+            FloodEnabled && IsFlooded(worldPosition) ? SpeedMultiplier : 1f;
 
         /// <summary>True if <paramref name="worldPosition"/> falls inside a currently-flooded area.</summary>
         public static bool IsFlooded(Vector3 worldPosition)

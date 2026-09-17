@@ -38,6 +38,9 @@ namespace MaxWorlds.Arena
         /// already use.</summary>
         public void TickFlood(float dt)
         {
+            // MV-836: FloodEnabled is off by design — never ticks the flood, never damages anyone.
+            if (!StormdrainFlood.FloodEnabled) return;
+
             StormdrainFlood.Tick(dt, FactoryCensus.ReplicatorsAlive, StormdrainDressing.PumpHousingsAlive);
 
             if (_target == null)
