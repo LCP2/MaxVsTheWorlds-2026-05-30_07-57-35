@@ -109,13 +109,11 @@ namespace MaxWorlds.Factories
         public const float BeaconStrobeMin = 0.6f;
         public const float BeaconStrobeMax = 1.0f;
 
-        /// <summary>MV-823 change 2: the floor pool's strength — unmistakably brighter than an ordinary
-        /// wall-lamp pool's 0.17 (<see cref="MaxWorlds.Rendering.StormdrainLightKit.PoolStrength"/>).</summary>
-        public const float ReplicationPoolStrength = 0.60f;
-
-        /// <summary>MV-823 change 2: Lee's own "a CLEAR BRIGHT LIGHT" — warm white, shared by the
-        /// beacon, the floor pool, and the status ring while a replication is running.</summary>
-        public static readonly Color ReplicationLightColor = new Color(1.00f, 0.85f, 0.45f);
+        /// <summary>MV-834: Lee's own "a big green light on the replicator" — green, shared by the
+        /// beacon, the hatch glow, and the status ring while a replication is running. Replaces MV-823's
+        /// warm-white (1.00, 0.85, 0.45), which Lee rejected as "illogical" together with the floor pool
+        /// it lit.</summary>
+        public static readonly Color ReplicationLightColor = new Color(0.20f, 1.00f, 0.35f);
 
         /// <summary>MV-775 Cycle beat: seconds from a robot being despawned into the box to the FIRST
         /// of its doubled pair emerging. MV-812: cut 3.0 -> 0.9 — one robot's total occupancy (Intake +
@@ -152,7 +150,9 @@ namespace MaxWorlds.Factories
 
         // MV-808: the LED now signals BUSY (a robot mid-Intake or mid-Cycle/Output), not just capacity
         // remaining — see LateUpdate. ledSpentColor is unchanged and still wins once capacity hits 0.
-        [SerializeField] private Color ledIdleColor = new Color(0.30f, 0.95f, 0.35f);    // green: idle, can take a robot
+        // MV-834: idle was green (0.30, 0.95, 0.35) — Lee's own "green only ever means replicating" now
+        // that the replication beacon/status-ring/hatch-glow are green, so idle drops to a dim amber.
+        [SerializeField] private Color ledIdleColor = new Color(0.60f, 0.45f, 0.15f);    // amber: idle, can take a robot
         [SerializeField] private Color ledBusyColor = new Color(1.00f, 0.18f, 0.14f);    // red: consuming/cycling a robot
         [SerializeField] private Color ledSpentColor = new Color(0.9f, 0.15f, 0.1f);     // red: spent, still a target
 
@@ -173,13 +173,12 @@ namespace MaxWorlds.Factories
         private Renderer _emitFlash;
         private MaterialPropertyBlock _emitFlashMpb;
         private float _emitFlashTimer;
-        /// <summary>MV-823: the roof beacon dome and floor pool — Lee's own "a CLEAR BRIGHT LIGHT",
+        /// <summary>MV-834: the roof beacon dome — Lee's own "a big green light on the replicator",
         /// driven directly by <see cref="TickConsumption"/> (never <see cref="LateUpdate"/>) so an
-        /// EditMode test can read their resolved active state back off a synthetic dt.</summary>
+        /// EditMode test can read its resolved active state back off a synthetic dt. MV-823's floor
+        /// pool is gone; this is the only replication tell mounted on the box itself.</summary>
         private Renderer _replicationBeacon;
         private MaterialPropertyBlock _replicationBeaconMpb;
-        private Renderer _replicationPool;
-        private MaterialPropertyBlock _replicationPoolMpb;
         /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
@@ -245,9 +244,9 @@ namespace MaxWorlds.Factories
 
         /// <summary>MV-823 change 2: true from the instant a robot is fully drawn in (added to
         /// <see cref="_pending"/>) until the second twin has emitted and <see cref="ReplicationLightLingerSeconds"/>
-        /// has elapsed since. Read by <see cref="LateUpdate"/> for the status ring's own warm-white
-        /// override and set every tick in <see cref="TickConsumption"/> so it's true test-drivable with a
-        /// synthetic dt, same as every other beat in this file.</summary>
+        /// has elapsed since. Read by <see cref="LateUpdate"/> for the status ring's and hatch glow's own
+        /// green override (MV-834) and set every tick in <see cref="TickConsumption"/> so it's true
+        /// test-drivable with a synthetic dt, same as every other beat in this file.</summary>
         private bool _replicationLightOn;
         private float _replicationLingerTimer;
         private float _beaconStrobeTime;
@@ -351,12 +350,10 @@ namespace MaxWorlds.Factories
             _emitFlash = parts.EmitFlash;
             _emitFlashMpb = new MaterialPropertyBlock();
 
-            // MV-823: the replication tells, both built inactive — TickConsumption switches them on
-            // for exactly the "robot fully inside" to "second twin emitted + linger" window.
+            // MV-834: the replication beacon, built inactive — TickConsumption switches it on for
+            // exactly the "robot fully inside" to "second twin emitted + linger" window.
             _replicationBeacon = parts.ReplicationBeacon;
             _replicationBeaconMpb = new MaterialPropertyBlock();
-            _replicationPool = parts.ReplicationPool;
-            _replicationPoolMpb = new MaterialPropertyBlock();
 
             // The status LED — green idle / red busy while it can still double a robot (MV-808), red
             // (spent) once capacity hits 0, off once destroyed (OnDestroyed hides it).
@@ -722,10 +719,9 @@ namespace MaxWorlds.Factories
             UpdateReplicationLight();
         }
 
-        /// <summary>MV-823: paints/toggles <see cref="_replicationBeacon"/> and <see cref="_replicationPool"/>
-        /// off <see cref="_replicationLightOn"/> — both fully inactive when off ("the difference must be
-        /// unmistakable", the ticket's own words), the beacon strobing 60%-100% at <see cref="BeaconStrobeHz"/>
-        /// and the pool steady at <see cref="ReplicationPoolStrength"/> when on.</summary>
+        /// <summary>MV-834: paints/toggles <see cref="_replicationBeacon"/> off <see cref="_replicationLightOn"/>
+        /// — fully inactive when off ("the difference must be unmistakable", MV-823's own words, still
+        /// true here), strobing 60%-100% at <see cref="BeaconStrobeHz"/> when on.</summary>
         private void UpdateReplicationLight()
         {
             if (_replicationBeacon != null)
@@ -740,19 +736,6 @@ namespace MaxWorlds.Factories
                     _replicationBeaconMpb.SetColor("_BaseColor", c);
                     _replicationBeaconMpb.SetColor("_EmissionColor", c * 2f);
                     _replicationBeacon.SetPropertyBlock(_replicationBeaconMpb);
-                }
-            }
-
-            if (_replicationPool != null)
-            {
-                _replicationPool.gameObject.SetActive(_replicationLightOn);
-                if (_replicationLightOn)
-                {
-                    Color c = ReplicationLightColor * ReplicationPoolStrength;
-                    _replicationPool.GetPropertyBlock(_replicationPoolMpb);
-                    _replicationPoolMpb.SetColor("_BaseColor", c);
-                    _replicationPoolMpb.SetColor("_Color", c);
-                    _replicationPool.SetPropertyBlock(_replicationPoolMpb);
                 }
             }
         }
@@ -925,9 +908,9 @@ namespace MaxWorlds.Factories
             // MV-813: the top-face beacon takes the exact same resolved colour as _led — Change 3's
             // own "never disagree" rule — and additionally pulses its emissive strength 1.0x-2.2x at
             // StatusRingPulseHz while busy; steady (1x) idle or spent, per the ticket's own Change 4.
-            // MV-823 change 2: overridden to steady warm white at full strength while a replication is
-            // actually running (_replicationLightOn, set by TickConsumption) — Lee's own "the existing
-            // status ring switches to the same warm white" bullet.
+            // MV-834 change 3: overridden to steady green at full strength while a replication is
+            // actually running (_replicationLightOn, set by TickConsumption) — Lee's own "the roof
+            // status ring is the same green" bullet (was warm white under MV-823).
             if (_statusRing != null)
             {
                 Color ringColor;
@@ -957,11 +940,13 @@ namespace MaxWorlds.Factories
             // could never happen (MV-756 Cause 2); this is the one that isn't. MV-775 adds
             // _intakeRobot: a robot mid-Intake has already left _queue but the hatch is still open
             // on it. MV-813 change 3: tinted from the same resolved colour the ring/LED take, rather
-            // than a fixed amber, so the box can never show a green ring over a red-lit hatch.
+            // than a fixed amber, so the box can never show a green ring over a differently-lit hatch.
+            // MV-834 change 3: overridden to the same green as the status ring while a replication is
+            // actually running — Lee's own "the whole box reads as lit green".
             bool hatchWanted = _pending.Count > 0 || _queue.Count > 0 || _intakeRobot != null;
             if (_hatchGlow != null)
             {
-                Color glow = hatchWanted ? c : Color.clear;
+                Color glow = _replicationLightOn ? ReplicationLightColor : (hatchWanted ? c : Color.clear);
                 _hatchGlow.GetPropertyBlock(_hatchGlowMpb);
                 _hatchGlowMpb.SetColor("_BaseColor", glow);
                 _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
