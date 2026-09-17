@@ -910,6 +910,46 @@ namespace MaxWorlds.Enemies
         /// <summary>The grate this Lurker currently stands on/in.</summary>
         private Vector3 _grateHome;
 
+        /// <summary>MV-831: this Lurker's own spawned <see cref="CharacterController.radius"/>, cached
+        /// the first time its collision solidity is toggled — restored whenever it becomes EMERGED
+        /// again, so shrinking it while concealed can never leak into the radius a fresh spawn was
+        /// actually given.</summary>
+        private float _lurkerSolidRadius = -1f;
+
+        /// <summary>MV-831: while SUBMERGED/RATTLE the grate itself is this Lurker's visible body (see
+        /// <see cref="SetBodyVisible"/>) but its <see cref="CharacterController"/> stayed full-sized and
+        /// enabled regardless — an invisible wall Max could walk into. Shrinking the radius to near-zero
+        /// rather than disabling the controller outright keeps <see cref="ApplyGravity"/>/
+        /// <see cref="ApplyKnockback(float)"/>'s unconditional per-frame <c>SafeMove</c> calls working
+        /// normally for every state, Lurker included.</summary>
+        private const float LurkerHiddenRadius = 0.02f;
+
+        /// <summary>Ties this Lurker's collision footprint to the same visible/concealed split
+        /// <see cref="SetBodyVisible"/> already draws — solid exactly when EMERGED/SUBMERGING (a robot
+        /// you can see), non-blocking exactly when SUBMERGED/RATTLE (a robot under a grate must not stop
+        /// Max walking over the grate). Also disables every OTHER enabled <see cref="Collider"/> on this
+        /// body while non-solid — <see cref="MaxWorlds.VFX.RobotRig.EnsureBuilt"/>'s own doc comment
+        /// notes "its colliders stay" when the greybox stand-in <c>GameObject.CreatePrimitive</c> built
+        /// is torn down, but that stand-in's own auto-attached Collider (a plain CapsuleCollider/
+        /// BoxCollider, never destroyed, sitting right alongside the <see cref="CharacterController"/>
+        /// this class actually moves with) ignores the radius shrink above entirely — a second, full-
+        /// sized invisible wall of its own that survived every prior fix aimed only at <c>_cc</c>.</summary>
+        private void SetLurkerCollisionSolid(bool solid)
+        {
+            // BeginSubmerged() (unlike OnLurkerPhaseChanged) runs at placement, before Awake() is
+            // guaranteed to have resolved _cc yet (an EditMode-built garrison never runs a player loop
+            // to force it) — same lazy-resolve idiom already used for _lurkerSolidRadius below.
+            if (_cc == null) _cc = GetComponent<CharacterController>();
+            if (_lurkerSolidRadius < 0f) _lurkerSolidRadius = _cc.radius;
+            _cc.radius = solid ? _lurkerSolidRadius : LurkerHiddenRadius;
+
+            foreach (Collider c in GetComponents<Collider>())
+            {
+                if (c is CharacterController) continue;
+                c.enabled = solid;
+            }
+        }
+
         /// <summary>Every grate in this Lurker's own area (including its own) — <see cref="LurkerCycle.PickReappearGrate"/>
         /// picks the next one to warp to on re-submerge.</summary>
         private IReadOnlyList<Vector3> _areaGrates = Array.Empty<Vector3>();
@@ -1420,6 +1460,7 @@ namespace MaxWorlds.Enemies
             _lurkerHitsThisEmergence = 0;
             _lurkerAwake = false;
             SetBodyVisible(false);
+            SetLurkerCollisionSolid(false);
             _bar?.SetForceHidden(true);   // MV-757: nothing built the bar's own submerged term until now
         }
 
@@ -1576,6 +1617,7 @@ namespace MaxWorlds.Enemies
 
                 case LurkerCycle.Phase.Emerged:
                     SetBodyVisible(true);
+                    SetLurkerCollisionSolid(true);
                     _lurkerHitsThisEmergence = 0;
                     SetTell(idleTell);
                     break;
@@ -1589,6 +1631,7 @@ namespace MaxWorlds.Enemies
                     _cc.enabled = true;
                     _grateHome = transform.position;
                     SetBodyVisible(false);
+                    SetLurkerCollisionSolid(false);
                     _lurkerHitsThisEmergence = 0;
                     break;
             }
