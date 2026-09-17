@@ -98,13 +98,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0f, ramp.BottomCenter.y, 0.01f, "a ramp's bottom must sit on the floor");
             Assert.AreEqual(2.5f, ramp.TopCenter.y, 0.01f, "a ramp's top must reach the deck it climbs to");
 
-            // A point inside the authored sludge rect (world x:[12,22], z:[0,4]).
-            float insideSludge = MapGeometry.SpeedMultiplierAt(map, 17f, 2f);
+            // A point inside the authored sludge rect (world x:[12,22], z:[0,4]), at floor level.
+            float insideSludge = MapGeometry.SpeedMultiplierAt(map, 17f, 0f, 2f);
             Assert.AreEqual(0.6f, insideSludge, 0.001f,
                 "a point sampled inside the sludge rect should report the world's sludge speed multiplier");
 
             // A point outside every sludge rect must report no slow at all.
-            float outsideSludge = MapGeometry.SpeedMultiplierAt(map, 1f, 1f);
+            float outsideSludge = MapGeometry.SpeedMultiplierAt(map, 1f, 0f, 1f);
             Assert.AreEqual(1f, outsideSludge, 0.001f, "a point outside every sludge rect should report no slow");
         }
     }

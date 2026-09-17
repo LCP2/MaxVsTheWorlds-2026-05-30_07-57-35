@@ -300,14 +300,23 @@ namespace MaxWorlds.Arena
         /// falls inside a sludge rect, in which case the SLOWEST rect covering the point wins. Null
         /// <paramref name="map"/> (no level loaded) reads as 1 — a missing map must never stop a mover.
         ///
+        /// MV-837: sludge only ever slows FLOOR-level movers — <paramref name="y"/> is checked against
+        /// the same "on the deck" threshold <see cref="MapData.ZoneAt(float, float, float)"/> uses
+        /// (<see cref="MapData.deckHeight"/> minus half a metre), so anyone standing on a deck built
+        /// above a sludge rect (a14's bridge, a19's decks over a3's channel) reads full speed instead of
+        /// the rect's XZ footprint alone deciding it. A mover partway up a ramp keeps slowing until its
+        /// own Y clears that same bar, which falls out of this being a plain Y compare rather than a
+        /// separate ramp case.
+        ///
         /// Walks <c>map.entities</c> directly rather than through <see cref="SlowZones"/> — every mover
         /// samples this once a frame (<see cref="MapSlowZones"/>), and <see cref="SlowZones"/>'s List
         /// allocation on every one of those calls is exactly the per-frame GC cost this codebase has
         /// spent several tickets (MV-611 among them) removing from a robot's hot path.</summary>
-        public static float SpeedMultiplierAt(MapData map, float x, float z)
+        public static float SpeedMultiplierAt(MapData map, float x, float y, float z)
         {
             float multiplier = 1f;
             if (map?.entities == null) return multiplier;
+            if (y >= map.deckHeight - 0.5f) return multiplier;
 
             foreach (MapEntity e in map.entities)
             {
