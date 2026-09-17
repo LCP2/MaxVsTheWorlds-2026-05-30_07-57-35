@@ -62,6 +62,21 @@ namespace MaxWorlds.Arena
         public bool Contains(float px, float pz) =>
             px >= XMin && px <= XMax && pz >= ZMin && pz <= ZMax;
 
+        /// <summary>True if <paramref name="a"/> and <paramref name="b"/> occupy the same physical
+        /// footprint (MV-832) — the same room, or a level-0 floor and its level&gt;0 deck overlay
+        /// (MV-697, e.g. World 2's a3/a19, a6/a15, a11/a13). An overlay's origin/size is copied
+        /// verbatim from the zone it overlays at load time (<see cref="WorldMapLoader.TryLoad"/>), so
+        /// rect equality is exactly this fact — no separate id-based lookup table to keep in sync with
+        /// the JSON's own <see cref="WorldArea.overlays"/> links.</summary>
+        public static bool ShareFootprint(MapZone a, MapZone b)
+        {
+            if (a == null || b == null) return false;
+            if (ReferenceEquals(a, b)) return true;
+            const float epsilon = 0.01f;
+            return Mathf.Abs(a.x - b.x) < epsilon && Mathf.Abs(a.z - b.z) < epsilon &&
+                   Mathf.Abs(a.width - b.width) < epsilon && Mathf.Abs(a.depth - b.depth) < epsilon;
+        }
+
         /// <summary>Largest circle that fits in the room — the circle-strafe loop the player gets to
         /// use. A fight room with a small number here is a corridor wearing a room's name.</summary>
         public float InscribedRadius => Mathf.Min(width, depth) * 0.5f;

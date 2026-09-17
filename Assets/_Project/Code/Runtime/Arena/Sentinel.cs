@@ -182,16 +182,25 @@ namespace MaxWorlds.Arena
         private Transform _model;
         private Material[] _ownedMaterials;
 
-        private static readonly Collider[] s_hits = new Collider[16];
-
-        /// <summary>Scratch buffers for <see cref="NearestRobotInRangeAttackMode"/> — cleared and
-        /// refilled every fire-eligible frame rather than allocated fresh, same idiom as <see cref="s_hits"/>.</summary>
+        /// <summary>Scratch buffers for <see cref="NearestRobotInRange"/> — cleared and refilled every
+        /// fire-eligible frame rather than allocated fresh, same idiom as <see cref="s_otherSentinelPositions"/>.
+        /// MV-832: replaced the old <c>Physics.OverlapSphereNonAlloc</c> buffer — candidates now come from
+        /// <see cref="RobotEnemy.Active"/>, filtered live, never from an all-layers physics query that a
+        /// roomful of non-robot colliders could fill before a single robot was ever returned.</summary>
         private static readonly List<RobotEnemy> s_candidateRobots = new List<RobotEnemy>(16);
         private static readonly List<Vector3> s_candidatePositions = new List<Vector3>(16);
 
         /// <summary>Scratch buffer for <see cref="SeparateFromOtherSentinels"/> — cleared and refilled
-        /// every Update rather than allocated fresh, same idiom as <see cref="s_hits"/>.</summary>
+        /// every Update rather than allocated fresh, same idiom as <see cref="s_candidateRobots"/>.</summary>
         private static readonly List<Vector3> s_otherSentinelPositions = new List<Vector3>(8);
+
+        /// <summary>MV-832: the robot currently chosen to fire on, kept even when a nearer/more
+        /// cone-favoured candidate appears, as long as it still qualifies (see
+        /// <see cref="NearestRobotInRange"/>'s stickiness rule) — without this, a target one XZ unit
+        /// closer than the current one every other frame made the turret visibly flicker between two
+        /// robots instead of committing to one. Null whenever nothing has been chosen (or the last
+        /// choice stopped qualifying) — <see cref="NearestRobotInRange"/> re-picks in that case.</summary>
+        private RobotEnemy _currentTarget;
 
         // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
         // turret to its target. MV-616 fixed that with a bare LineRenderer, then reused the SAME water
@@ -655,44 +664,107 @@ namespace MaxWorlds.Arena
             SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed);
         }
 
+        /// <summary>MV-832: the fix for Sentinels shooting through walls, into a neighbouring area, or
+        /// not firing at all. Candidates now come from <see cref="RobotEnemy.Active"/> — never a
+        /// <c>Physics.OverlapSphereNonAlloc</c> against every layer, which a room full of walls/cover/
+        /// deck slabs could fill before a single robot was ever returned (the "never fires" bug). A
+        /// robot is a candidate only if it is alive, not <see cref="RobotEnemy.IsDormant"/>,
+        /// <see cref="RobotEnemy.IsDamageable"/>, within <see cref="_range"/> measured flat (XZ), and
+        /// has a clear <see cref="LineOfSight"/> from the muzzle — so a wall or solid cover now actually
+        /// stops the turret choosing a target it can't shoot. If any candidate stands in Max's own
+        /// zone (or a zone that shares its footprint — MV-697's floor/deck overlay pairs), the pool
+        /// narrows to those; otherwise every candidate is eligible. <see cref="_currentTarget"/> is kept
+        /// as long as it is still in the (possibly narrowed) pool — re-picked only once it drops out.</summary>
         private RobotEnemy NearestRobotInRange()
         {
-            int count = Physics.OverlapSphereNonAlloc(
-                transform.position, _range, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
+            float rangeSq = _range * _range;
 
-            if (AttackModeEnabled && _followTarget != null) return NearestRobotInRangeAttackMode(count);
+            MapData map = EnemyNavigation.Map;
+            MapZone maxZone = (map != null && _followTarget != null)
+                ? map.ZoneAt(_followTarget.position.x, _followTarget.position.y, _followTarget.position.z)
+                : null;
 
-            RobotEnemy best = null;
-            float bestSq = float.MaxValue;
-            for (int i = 0; i < count; i++)
-            {
-                if (s_hits[i] == null) continue;
-                if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot) || !robot.IsAlive) continue;
-                float d = (robot.transform.position - transform.position).sqrMagnitude;
-                if (d < bestSq) { bestSq = d; best = robot; }
-            }
-            return best;
-        }
-
-        /// <summary>MV-636 Attack Mode: prioritises the nearest robot within Max's forward cone over the
-        /// globally-nearest one, wrapping <see cref="SentinelTargeting.SelectAttackModeTargetIndex"/>'s
-        /// pure priority rule around the live <see cref="s_hits"/> query <see cref="NearestRobotInRange"/>
-        /// already ran.</summary>
-        private RobotEnemy NearestRobotInRangeAttackMode(int hitCount)
-        {
             s_candidateRobots.Clear();
             s_candidatePositions.Clear();
-            for (int i = 0; i < hitCount; i++)
+            bool anyInMaxZone = false;
+
+            var active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
             {
-                if (s_hits[i] == null) continue;
-                if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot) || !robot.IsAlive) continue;
+                RobotEnemy robot = active[i];
+                if (robot == null || !IsEligibleTarget(robot, muzzle, rangeSq)) continue;
+
+                Vector3 pos = robot.transform.position;
                 s_candidateRobots.Add(robot);
-                s_candidatePositions.Add(robot.transform.position);
+                s_candidatePositions.Add(pos);
+                if (maxZone != null && InZone(map, maxZone, pos)) anyInMaxZone = true;
             }
 
-            int index = SentinelTargeting.SelectAttackModeTargetIndex(transform.position, s_candidatePositions,
-                _followTarget.position, _followTarget.forward, SentinelTargeting.AttackModeForwardConeHalfAngleDegrees);
-            return index >= 0 ? s_candidateRobots[index] : null;
+            if (anyInMaxZone)
+            {
+                for (int i = s_candidateRobots.Count - 1; i >= 0; i--)
+                {
+                    if (!InZone(map, maxZone, s_candidatePositions[i]))
+                    {
+                        s_candidateRobots.RemoveAt(i);
+                        s_candidatePositions.RemoveAt(i);
+                    }
+                }
+            }
+
+            if (_currentTarget != null && s_candidateRobots.Contains(_currentTarget)) return _currentTarget;
+
+            RobotEnemy chosen;
+            if (AttackModeEnabled && _followTarget != null)
+            {
+                int index = SentinelTargeting.SelectAttackModeTargetIndex(transform.position, s_candidatePositions,
+                    _followTarget.position, _followTarget.forward, SentinelTargeting.AttackModeForwardConeHalfAngleDegrees);
+                chosen = index >= 0 ? s_candidateRobots[index] : null;
+            }
+            else
+            {
+                chosen = NearestOf(s_candidateRobots, s_candidatePositions, transform.position);
+            }
+
+            _currentTarget = chosen;
+            return chosen;
+        }
+
+        /// <summary>Alive, awake (not <see cref="RobotEnemy.IsDormant"/>), able to take damage right
+        /// now (<see cref="RobotEnemy.IsDamageable"/> — false for a Grate Lurker outside its Emerged
+        /// beat), within <paramref name="rangeSq"/> measured flat (XZ, ignoring elevation so a deck
+        /// doesn't itself extend a Sentinel's reach), and has a clear <see cref="LineOfSight"/> from
+        /// <paramref name="muzzle"/>.</summary>
+        private bool IsEligibleTarget(RobotEnemy robot, Vector3 muzzle, float rangeSq)
+        {
+            if (!robot.IsAlive || robot.IsDormant || !robot.IsDamageable) return false;
+
+            Vector3 rp = robot.transform.position;
+            Vector3 flat = new Vector3(rp.x - transform.position.x, 0f, rp.z - transform.position.z);
+            if (flat.sqrMagnitude > rangeSq) return false;
+
+            return LineOfSight.Clear(muzzle, rp, robot.transform);
+        }
+
+        /// <summary>True if <paramref name="position"/> resolves (level-aware, MV-697) to
+        /// <paramref name="zone"/> itself or to a zone that shares its footprint (MV-832).</summary>
+        private static bool InZone(MapData map, MapZone zone, Vector3 position)
+        {
+            MapZone at = map.ZoneAt(position.x, position.y, position.z);
+            return at != null && (at == zone || MapZone.ShareFootprint(at, zone));
+        }
+
+        private static RobotEnemy NearestOf(List<RobotEnemy> robots, List<Vector3> positions, Vector3 from)
+        {
+            RobotEnemy best = null;
+            float bestSq = float.MaxValue;
+            for (int i = 0; i < robots.Count; i++)
+            {
+                float d = (positions[i] - from).sqrMagnitude;
+                if (d < bestSq) { bestSq = d; best = robots[i]; }
+            }
+            return best;
         }
 
         private void Die()

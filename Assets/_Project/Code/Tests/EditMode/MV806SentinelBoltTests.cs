@@ -35,13 +35,19 @@ namespace MaxWorlds.Tests.EditMode
                 .Invoke(sentinel, null);
         }
 
+        private static readonly MethodInfo RobotOnEnableMethod =
+            typeof(RobotEnemy).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance);
+
         private static RobotEnemy NewTarget(Vector3 position)
         {
             var go = new GameObject("Target Robot");
             go.transform.position = position;
             go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
-            e.ResetState(); // EditMode has no Awake/OnEnable lifecycle — init explicitly
+            // MV-832: NearestRobotInRange now reads RobotEnemy.Active, not a physics query — OnEnable
+            // (not just ResetState) is what registers a robot into that list, same idiom
+            // MV795FloodRobotImmunityTests already uses.
+            RobotOnEnableMethod.Invoke(e, null);
             return e;
         }
 
