@@ -56,9 +56,11 @@ namespace MaxWorlds.Enemies
         /// <summary>
         /// Chase speed after any dev override (YT-105). Read at the point of movement rather than
         /// stamped in <see cref="Apply"/>, so dragging the slider retimes the robots already on the
-        /// field — the ones you're watching — instead of only the next wave.
+        /// field — the ones you're watching — instead of only the next wave. Public so
+        /// <see cref="MaxWorlds.Factories.Replicator"/>'s Intake walk (MV-828) can read this robot's own
+        /// live speed (world overrides included) instead of the base archetype table.
         /// </summary>
-        private float EffectiveMoveSpeed =>
+        public float EffectiveMoveSpeed =>
             DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed) *
             // MV-705: a Sludge Drone is immune to sludge slow — its own map-authored puddles AND its
             // own death puddle (SludgePuddle) both flow through MapSlowZones, so exempting it here

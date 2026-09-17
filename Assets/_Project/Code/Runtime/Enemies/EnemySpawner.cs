@@ -405,7 +405,10 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < count && (ignorePerFactoryCap || _live.Count < EffectiveMaxLiveEnemies)
                              && (ignoreGlobalRoom || GlobalHasRoom); i++)
             {
-                RobotEnemy e = SpawnKind(kind);
+                // MV-828 D3: SpawnExact is exclusively how a Replicator emits its doubled twins — they
+                // must land awake and attacking, never through the ordinary emergence walk into Dormant
+                // (see SpawnKind's own asTwin branch).
+                RobotEnemy e = SpawnKind(kind, asTwin: true);
                 if (noReplicateSeconds > 0f) e.TagNoReplicate(noReplicateSeconds);
                 spawned.Add(e);
             }
@@ -458,8 +461,12 @@ namespace MaxWorlds.Enemies
         /// <summary>The shared spawn machinery: builds/pools, doors it out the mouth, and starts the
         /// emergence walk for one robot of the given <paramref name="kind"/>. <see cref="SpawnOne"/> is
         /// the timer-driven path (asks the mix what's next); <see cref="SpawnSurge"/> is the
-        /// death-throes burst (picks the kind itself, so it can force in an elite).</summary>
-        private RobotEnemy SpawnKind(EnemyKind kind)
+        /// death-throes burst (picks the kind itself, so it can force in an elite). <paramref name="asTwin"/>
+        /// (MV-828 D3): true only from <see cref="SpawnExact"/> — a Replicator's doubled twin skips the
+        /// door/mouth emergence walk (and the Dormant beat it hands off into) entirely, landing awake
+        /// and attacking exactly where <see cref="MaxWorlds.Factories.Replicator.PlaceAtOutRamp"/> puts
+        /// it, never wandering off toward a doorway that isn't even where it emerged.</summary>
+        private RobotEnemy SpawnKind(EnemyKind kind, bool asTwin = false)
         {
             // Toughened by the Invasion Level (YT-181): read live, so a robot spawned late in a run
             // is tankier and hits harder than the one that came out at the opening bell — the swarm
@@ -497,8 +504,10 @@ namespace MaxWorlds.Enemies
 
             // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
             // Told to emerge first, it would be told to chase a frame later and step out of the door
-            // by beelining at Max instead.
-            e.BeginEmergence(exit);
+            // by beelining at Max instead. MV-828 D3: a twin skips this altogether — it is already in
+            // Chase from ResetState, and PlaceAtOutRamp overrides this door position a moment later
+            // anyway, so there is nothing here for it to walk out of.
+            if (!asTwin) e.BeginEmergence(exit);
 
             // Re-applied on every spawn, not just on creation: Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death (YT-74).
