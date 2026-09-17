@@ -109,7 +109,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var replicator = _replicatorGo.AddComponent<Replicator>();
             replicator.Build(); // AddComponent's own Awake never runs outside Play mode
-            replicator.Configure(2); // capacity 2, so one full cycle leaves it > 0 (idle-green, not spent)
+            replicator.Configure(2); // capacity 2, so one full cycle leaves it > 0 (idle-amber, not spent)
             Set(_replicatorGo.GetComponent<EnemySpawner>(), "startingRobots", 6);
 
             int collidersAfter = _replicatorGo.GetComponentsInChildren<Collider>(true).Length;
@@ -119,11 +119,11 @@ namespace MaxWorlds.Tests.EditMode
 
             var led = (Renderer)LedField.GetValue(replicator);
             var ledMpb = new MaterialPropertyBlock();
-            Color green = new Color(0.30f, 0.95f, 0.35f);
+            Color amber = new Color(0.60f, 0.45f, 0.15f); // MV-834: idle was green, now amber
             Color red = new Color(1.00f, 0.18f, 0.14f);
 
             LateUpdateMethod.Invoke(replicator, null);
-            AssertLed(led, ledMpb, green, "idle, before anything is lured, the LED must read green");
+            AssertLed(led, ledMpb, amber, "idle, before anything is lured, the LED must read amber");
 
             RobotEnemy rusher = NewRusher(RigOrigin + new Vector3(5f, 0f, 0f)); // 5 m from the box
             replicator.TickLure();
@@ -182,7 +182,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
             Assert.AreEqual(1, replicator.Capacity, "one doubling must spend exactly one of the two starting capacity");
-            AssertLed(led, ledMpb, green, "once both twins have emerged, with capacity still > 0, the LED must read green again");
+            AssertLed(led, ledMpb, amber, "once both twins have emerged, with capacity still > 0, the LED must read amber again");
 
             // --- Both twins must be at the out-ramp foot, not wherever the ordinary emergence path
             // (EnemySpawner.SpawnKind's own door/mouth placement) would otherwise have put them. ---

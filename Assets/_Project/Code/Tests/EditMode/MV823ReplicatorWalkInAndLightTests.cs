@@ -15,9 +15,16 @@ namespace MaxWorlds.Tests.EditMode
     /// resolved to the face NORMAL (the door spun in its own plane, never actually opening — see
     /// <c>Replicator.LateUpdate</c>'s old <c>Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg,
     /// Vector3.up)</c>), a consumed robot was lerped straight to the hatch face and despawned there
-    /// (never continuing through, never shrinking), and there was no roof beacon or floor pool field to
-    /// find at all. Tier 2 (resolved values): every assertion below reads a resolved transform/renderer
-    /// state after driving the beat with a synthetic dt, never an authored constant.
+    /// (never continuing through, never shrinking), and there was no roof beacon field to find at all.
+    /// Tier 2 (resolved values): every assertion below reads a resolved transform/renderer state after
+    /// driving the beat with a synthetic dt, never an authored constant.
+    ///
+    /// MV-834: the floor-pool assertions this test originally carried (a resolved "ReplicationPool"
+    /// renderer's active window and colour) are culled — Lee rejected the pool outright ("a stupid,
+    /// basic big yellow circle around it that is illogical") and MV-834 deletes it from
+    /// <c>FactoryBodies.BuildReplicator</c> entirely, so a test asserting its resolved state would now
+    /// be asserting a part that no longer exists. The beacon's own window/colour assertions are kept,
+    /// updated for the beacon's new green (was warm-white).
     /// </summary>
     public sealed class MV823ReplicatorWalkInAndLightTests
     {
@@ -71,10 +78,9 @@ namespace MaxWorlds.Tests.EditMode
         {
             public readonly float Elapsed;
             public readonly bool BeaconActive;
-            public readonly bool PoolActive;
-            public Sample(float elapsed, bool beaconActive, bool poolActive)
+            public Sample(float elapsed, bool beaconActive)
             {
-                Elapsed = elapsed; BeaconActive = beaconActive; PoolActive = poolActive;
+                Elapsed = elapsed; BeaconActive = beaconActive;
             }
         }
 
@@ -99,13 +105,10 @@ namespace MaxWorlds.Tests.EditMode
 
             Transform hatch = Get<Transform>(replicator, "_hatch");
             Renderer beacon = Get<Renderer>(replicator, "_replicationBeacon");
-            Renderer pool = Get<Renderer>(replicator, "_replicationPool");
             Assert.IsNotNull(hatch, "FactoryBodies.BuildReplicator must produce a Hatch transform");
             Assert.IsNotNull(beacon, "FactoryBodies.BuildReplicator must produce a replication beacon renderer (MV-823)");
-            Assert.IsNotNull(pool, "FactoryBodies.BuildReplicator must produce a replication floor-pool renderer (MV-823)");
 
             Assert.IsFalse(beacon.gameObject.activeSelf, "the beacon must start OFF — dark until a replication actually runs");
-            Assert.IsFalse(pool.gameObject.activeSelf, "the floor pool must start OFF — no pool until a replication actually runs");
 
             Quaternion closedWorldRotation = hatch.rotation;
             Vector3 hullFaceNormal = Vector3.forward; // the box is authored unrotated; hatch sits on the -Z face
@@ -119,7 +122,7 @@ namespace MaxWorlds.Tests.EditMode
             float rampSurfaceFloor = RigOrigin.y - 0.75f; // GroundY: box centre Y minus half the authored 1.5 m height
             float intakeCompleteElapsed = -1f;
             float secondTwinElapsed = -1f;
-            Color? capturedPoolColor = null;
+            Color? capturedBeaconColor = null;
 
             const float dt = 0.02f;
             float elapsed = 0f;
@@ -153,13 +156,13 @@ namespace MaxWorlds.Tests.EditMode
                 if (secondTwinElapsed < 0f && spawner.LiveCountOf(EnemyKind.Rusher) >= 2)
                     secondTwinElapsed = elapsed;
 
-                samples.Add(new Sample(elapsed, beacon.gameObject.activeSelf, pool.gameObject.activeSelf));
+                samples.Add(new Sample(elapsed, beacon.gameObject.activeSelf));
 
-                if (capturedPoolColor == null && pool.gameObject.activeSelf)
+                if (capturedBeaconColor == null && beacon.gameObject.activeSelf)
                 {
                     var mpb = new MaterialPropertyBlock();
-                    pool.GetPropertyBlock(mpb);
-                    capturedPoolColor = mpb.GetColor("_BaseColor");
+                    beacon.GetPropertyBlock(mpb);
+                    capturedBeaconColor = mpb.GetColor("_BaseColor");
                 }
 
                 // Once the second twin has emitted, keep sampling only far enough to also cover the
@@ -192,24 +195,22 @@ namespace MaxWorlds.Tests.EditMode
                 if (s.Elapsed < intakeCompleteElapsed - 0.001f)
                 {
                     Assert.IsFalse(s.BeaconActive, $"beacon must be OFF before intake completes (t={s.Elapsed:F2})");
-                    Assert.IsFalse(s.PoolActive, $"pool must be OFF before intake completes (t={s.Elapsed:F2})");
                 }
                 else if (s.Elapsed <= windowEnd - 0.03f)
                 {
                     Assert.IsTrue(s.BeaconActive, $"beacon must be ON between intake completion and second-twin + 0.4s (t={s.Elapsed:F2})");
-                    Assert.IsTrue(s.PoolActive, $"pool must be ON between intake completion and second-twin + 0.4s (t={s.Elapsed:F2})");
                 }
                 else if (s.Elapsed >= windowEnd + 0.5f)
                 {
                     Assert.IsFalse(s.BeaconActive, $"beacon must be OFF 0.5s after the second-twin + 0.4s window closes (t={s.Elapsed:F2})");
-                    Assert.IsFalse(s.PoolActive, $"pool must be OFF 0.5s after the second-twin + 0.4s window closes (t={s.Elapsed:F2})");
                 }
             }
 
-            // (e) the pool's resolved colour x strength must read as unmistakably bright, not a token tint.
-            Assert.IsTrue(capturedPoolColor.HasValue, "the pool must have been active at least once to sample its colour");
-            Assert.GreaterOrEqual(capturedPoolColor.Value.maxColorComponent, 0.6f - 0.001f,
-                "the pool's resolved colour must carry at least the ticket's own 0.60 strength");
+            // (e) MV-834: the beacon's resolved colour must read green, not MV-823's warm-white —
+            // Lee's own "the light is green, not white or yellow".
+            Assert.IsTrue(capturedBeaconColor.HasValue, "the beacon must have been active at least once to sample its colour");
+            Assert.Greater(capturedBeaconColor.Value.g, capturedBeaconColor.Value.r * 2f,
+                "the beacon's resolved colour must be green-dominant (g > 2x r) while a replication is running");
         }
     }
 }

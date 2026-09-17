@@ -46,22 +46,20 @@ namespace MaxWorlds.VFX
             /// already carries, just legible at the play camera's scale. See <see cref="Replicator"/>'s
             /// own LateUpdate for what drives it.</summary>
             public readonly MeshRenderer StatusRing;
-            /// <summary>MV-823: the roof beacon dome — dark/inactive except for the window from a robot
-            /// being fully inside the box until the second twin has emitted (plus a 0.4 s linger). See
-            /// <see cref="Replicator.TickConsumption"/>.</summary>
+            /// <summary>MV-834: the big green roof beacon, mounted ON the box — dark/inactive except for
+            /// the window from a robot being fully inside the box until the second twin has emitted (plus
+            /// a 0.4 s linger). See <see cref="Replicator.TickConsumption"/>. MV-823's own floor pool
+            /// (<c>ReplicationPool</c>) is deleted outright — Lee: "a stupid, basic big yellow circle
+            /// around it that is illogical". No floor pool of any colour replaces it.</summary>
             public readonly MeshRenderer ReplicationBeacon;
-            /// <summary>MV-823: the wide additive floor pool that switches on for the same window as
-            /// <see cref="ReplicationBeacon"/> — unmistakably brighter (strength 0.60) than any ordinary
-            /// wall-lamp pool (<see cref="MaxWorlds.Rendering.StormdrainLightKit.PoolStrength"/> 0.17).</summary>
-            public readonly MeshRenderer ReplicationPool;
 
             public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
                                    Transform fan, Transform outputLip, MeshRenderer statusRing,
-                                   MeshRenderer replicationBeacon, MeshRenderer replicationPool)
+                                   MeshRenderer replicationBeacon)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
                 OutputLip = outputLip; StatusRing = statusRing;
-                ReplicationBeacon = replicationBeacon; ReplicationPool = replicationPool;
+                ReplicationBeacon = replicationBeacon;
             }
         }
 
@@ -189,49 +187,26 @@ namespace MaxWorlds.VFX
             }
 
             // MV-813: the status ring — centred on the top face, unlit additive so it reads as its own
-            // light source (StormdrainLightKit's own fitting material family), seeded green (idle);
+            // light source (StormdrainLightKit's own fitting material family), seeded amber (idle, MV-834);
             // Replicator.LateUpdate repaints and pulses it every frame off the same colour the small
             // LED above already takes.
             MeshRenderer statusRing = StormdrainLightKit.BuildStatusRing(root, "StatusRing",
-                new Vector3(0f, hh + 0.01f, 0f), new Color(0.30f, 0.95f, 0.35f));
+                new Vector3(0f, hh + 0.01f, 0f), new Color(0.60f, 0.45f, 0.15f));
 
-            // MV-823: the replication tells — off by default, switched on by Replicator.TickConsumption
-            // for exactly the window Lee asked for ("a CLEAR BRIGHT LIGHT switch on when a replication
-            // is occurring"). The beacon is a lens (same additive-glow material family HatchGlow/EmitFlash
-            // already use, driven the same MaterialPropertyBlock way); the pool is a StormdrainLightKit
-            // additive disc, same fitting family every other World 2 floor pool already uses.
+            // MV-834: the replication tell — a big green lamp mounted on the box's own roof, off by
+            // default, switched on by Replicator.TickConsumption for exactly the window Lee asked for
+            // ("a big green light on the replicator" while it replicates). A lens (same additive-glow
+            // material family HatchGlow/EmitFlash already use, driven the same MaterialPropertyBlock
+            // way). MV-823's own floor pool is gone outright — Lee rejected it as "a stupid, basic big
+            // yellow circle ... illogical"; there is no floor pool of any colour on a Replicator any more.
             const float beaconDiameter = 1.2f;
             MeshRenderer replicationBeacon = CharacterPart.AddLens(root, CharacterMeshes.Sphere(16),
                 new Vector3(0f, hh + beaconDiameter * 0.2f, 0f), Quaternion.identity, Vector3.one * beaconDiameter);
             replicationBeacon.gameObject.name = "ReplicationBeacon";
             replicationBeacon.gameObject.SetActive(false);
 
-            const float replicationPoolRadius = 4.0f;
-            MeshRenderer replicationPool = AddFloorPool(root, new Vector3(0f, -hh + 0.014f, 0f),
-                replicationPoolRadius, new Color(1.00f, 0.85f, 0.45f), "ReplicationPool");
-
             return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
-                outputLipGo.transform, statusRing, replicationBeacon, replicationPool);
-        }
-
-        /// <summary>MV-823: a flat additive disc lying in local XZ — the same two-point-Lathe-profile
-        /// technique <see cref="StormdrainLightKit"/>'s own (private) AddAdditiveDisc uses, duplicated
-        /// here rather than exposed there since a Replicator's pool is driven per-frame by
-        /// <see cref="Replicator"/> itself (colour/strength change with the replication state), not
-        /// seeded once like an ordinary fitting's pool.</summary>
-        private static MeshRenderer AddFloorPool(Transform root, Vector3 localPos, float radius, Color tone, string name)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(root, worldPositionStays: false);
-            go.transform.localPosition = localPos;
-            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Lathe(
-                new[] { new Vector2(0f, 0f), new Vector2(radius, 0f) }, 28);
-            var rend = go.AddComponent<MeshRenderer>();
-            rend.sharedMaterial = StormdrainLightKit.AdditiveUnlit(tone, name);
-            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            rend.receiveShadows = false;
-            go.SetActive(false);
-            return rend;
+                outputLipGo.transform, statusRing, replicationBeacon);
         }
 
         /// <summary>MV-808: one sloped deck plus a handful of cross-slats between <paramref name="footLocal"/>

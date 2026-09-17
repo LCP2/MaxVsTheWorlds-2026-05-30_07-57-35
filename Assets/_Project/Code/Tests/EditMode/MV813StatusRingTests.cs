@@ -19,9 +19,12 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) asserting RESOLVED state only (Rule 2,
     /// Tier 2): the ring's resolved renderer bounds and world position, its resolved
-    /// MaterialPropertyBlock colour across one full lure/intake/cycle/output loop (green, red x3,
-    /// green), and its resolved emissive strength sampled 10 times across 1 second both busy and idle
-    /// — never an authored constant asserted back at itself, never a mere presence check.
+    /// MaterialPropertyBlock colour across one full lure/intake/cycle/output loop (amber, red x1,
+    /// green x2, amber), and its resolved emissive strength sampled 10 times across 1 second both
+    /// busy and idle — never an authored constant asserted back at itself, never a mere presence check.
+    /// MV-834: idle recoloured green -> amber and the replication override recoloured warm-white ->
+    /// green (Lee: "green only ever means replicating"); the colour families below were updated to
+    /// match, the loop structure and every timing assertion are unchanged.
     /// </summary>
     public sealed class MV813StatusRingTests
     {
@@ -101,7 +104,7 @@ namespace MaxWorlds.Tests.EditMode
             var replicator = _replicatorGo.AddComponent<Replicator>();
             replicator.Build(); // AddComponent's own Awake never runs outside Play mode
             // Capacity 3: one cycle for the red/green loop below, a second for the pulse/steadiness
-            // sampling, and still > 0 (idle green, never spent) after both.
+            // sampling, and still > 0 (idle amber, never spent) after both.
             replicator.Configure(3);
             Set(_replicatorGo.GetComponent<EnemySpawner>(), "startingRobots", 8);
 
@@ -120,14 +123,15 @@ namespace MaxWorlds.Tests.EditMode
                 "the ring's centre must sit at or above the Replicator body's own top face");
 
             var mpb = new MaterialPropertyBlock();
-            Color green = new Color(0.30f, 0.95f, 0.35f);
+            Color amber = new Color(0.60f, 0.45f, 0.15f);
 
-            // --- Green before an intake ---
+            // --- Amber before an intake (MV-834: idle dropped from green so green only ever means
+            // "replicating") ---
             LateUpdateMethod.Invoke(replicator, null);
             Color before = SampleRing(ring, mpb);
-            Assert.AreEqual(green.r, before.r, 0.01f, "before any intake, the ring must read the idle green (r)");
-            Assert.AreEqual(green.g, before.g, 0.01f, "before any intake, the ring must read the idle green (g)");
-            Assert.AreEqual(green.b, before.b, 0.01f, "before any intake, the ring must read the idle green (b)");
+            Assert.AreEqual(amber.r, before.r, 0.01f, "before any intake, the ring must read the idle amber (r)");
+            Assert.AreEqual(amber.g, before.g, 0.01f, "before any intake, the ring must read the idle amber (g)");
+            Assert.AreEqual(amber.b, before.b, 0.01f, "before any intake, the ring must read the idle amber (b)");
 
             // --- Lure and drive the first robot to its queue slot ---
             RobotEnemy rusher = NewRusher(ref _rusherGo, "Rusher1", RigOrigin + new Vector3(5f, 0f, 0f));
@@ -136,12 +140,12 @@ namespace MaxWorlds.Tests.EditMode
                 "within lure radius, capacity > 0, clear of Max's melee exclusion — this Rusher must be lured");
             rusher.transform.position = rusher.ReplicatorSeekTarget;
 
-            // --- Red at one sample while still walking in, then MV-823's own warm-white replication
-            // override for two samples once the robot is fully inside. Polled rather than fixed offsets
+            // --- Red at one sample while still walking in, then the replication override (MV-834:
+            // green) for two samples once the robot is fully inside. Polled rather than fixed offsets
             // — MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence (not a flat IntakeSeconds
-            // lerp), changed CycleSeconds 0.9 -> 2.0, and (change 2) overrides the ring to warm white for
-            // as long as a replication is actually running — fixed offsets and a red-only expectation
-            // tied to the old behaviour are exactly what broke this test on that change. ---
+            // lerp), changed CycleSeconds 0.9 -> 2.0, and (change 2) overrides the ring for as long as a
+            // replication is actually running — fixed offsets and a red-only expectation tied to the old
+            // behaviour are exactly what broke this test on that change. ---
             replicator.TickConsumption(0.1f); // a small step in: still mid-walk, definitely busy
             LateUpdateMethod.Invoke(replicator, null);
             Color redSample1 = SampleRing(ring, mpb);
@@ -160,8 +164,8 @@ namespace MaxWorlds.Tests.EditMode
             Color replicatingSample3 = SampleRing(ring, mpb);
 
             AssertRedFamily(redSample1, "1 (still walking in — not yet a replication)");
-            AssertWarmWhiteReplicationFamily(replicatingSample2, "2 (fully inside — MV-823's own replication light)");
-            AssertWarmWhiteReplicationFamily(replicatingSample3, "3 (mid-Cycle — still replicating)");
+            AssertGreenReplicationFamily(replicatingSample2, "2 (fully inside — the replication light)");
+            AssertGreenReplicationFamily(replicatingSample3, "3 (mid-Cycle — still replicating)");
 
             // --- Finish the cycle: second twin emits, capacity drops from 3 to 2 (still > 0) ---
             guard = 0;
@@ -172,16 +176,16 @@ namespace MaxWorlds.Tests.EditMode
             }
             Assert.AreEqual(2, replicator.Capacity, "one doubling must spend exactly one of the three starting capacity");
 
-            // --- Green again, once MV-823's own 0.4 s replication-light linger has also cleared. ---
+            // --- Amber again, once MV-823's own 0.4 s replication-light linger has also cleared. ---
             for (int i = 0; i < 30; i++) // 30 x 0.02 s = 0.6 s, comfortably past the 0.4 s linger
             {
                 replicator.TickConsumption(0.02f);
                 LateUpdateMethod.Invoke(replicator, null);
             }
             Color after = SampleRing(ring, mpb);
-            Assert.AreEqual(green.r, after.r, 0.01f, "once both twins have emerged, with capacity still > 0, the ring must read idle green again (r)");
-            Assert.AreEqual(green.g, after.g, 0.01f, "...idle green again (g)");
-            Assert.AreEqual(green.b, after.b, 0.01f, "...idle green again (b)");
+            Assert.AreEqual(amber.r, after.r, 0.01f, "once both twins have emerged, with capacity still > 0, the ring must read idle amber again (r)");
+            Assert.AreEqual(amber.g, after.g, 0.01f, "...idle amber again (g)");
+            Assert.AreEqual(amber.b, after.b, 0.01f, "...idle amber again (b)");
 
             // --- Pulsing while busy: 10 samples across 1 s, drawn from a second full cycle. ---
             RobotEnemy rusher2 = NewRusher(ref _rusher2Go, "Rusher2", RigOrigin + new Vector3(5f, 0f, 0f));
@@ -205,7 +209,7 @@ namespace MaxWorlds.Tests.EditMode
                 $"while busy, the ring's emissive strength must swing at least 1.8x peak-to-trough over 1 s " +
                 $"(max {busyMax:F3}, min {busyMin:F3}) — it must visibly pulse, not sit still");
 
-            // --- Finish this second cycle: capacity 2 -> 1 (still > 0, idle green, never spent). Polled
+            // --- Finish this second cycle: capacity 2 -> 1 (still > 0, idle amber, never spent). Polled
             // rather than a fixed jump — MV-823 changed CycleSeconds 0.9 -> 2.0. ---
             guard = 0;
             while (replicator.Capacity >= 2 && guard++ < 300)
@@ -220,7 +224,7 @@ namespace MaxWorlds.Tests.EditMode
                 LateUpdateMethod.Invoke(replicator, null);
             }
             Color idleCheck = SampleRing(ring, mpb);
-            Assert.AreEqual(green.r, idleCheck.r, 0.01f, "the ring must be back to idle green before the steadiness sampling");
+            Assert.AreEqual(amber.r, idleCheck.r, 0.01f, "the ring must be back to idle amber before the steadiness sampling");
 
             // --- Steady while idle: 10 samples across 1 s, under 5% variation. ---
             var idleSamples = new float[10];
@@ -228,7 +232,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 replicator.TickConsumption(0.1f);
                 LateUpdateMethod.Invoke(replicator, null);
-                idleSamples[i] = SampleRing(ring, mpb).g; // idle green's dominant, nonzero channel (base 0.95)
+                idleSamples[i] = SampleRing(ring, mpb).r; // idle amber's dominant, nonzero channel (base 0.60)
             }
             float idleMax = Mathf.Max(idleSamples);
             float idleMin = Mathf.Min(idleSamples);
@@ -238,18 +242,14 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>The pulse multiplier changes overall brightness but never the hue — a red sample
         /// must stay red-dominant (r much greater than g) at every point across the 1.0x-2.2x swing,
-        /// never drift toward the idle green.</summary>
+        /// never drift toward the idle amber or the replication green.</summary>
         private static void AssertRedFamily(Color sample, string label) =>
-            Assert.Greater(sample.r, sample.g * 2f, $"sample '{label}' must be red-dominant (r >> g), not the idle green");
+            Assert.Greater(sample.r, sample.g * 2f, $"sample '{label}' must be red-dominant (r >> g), not idle or replicating");
 
-        /// <summary>MV-823 change 2: while a replication is actually running, the ring takes the same
-        /// warm-white <see cref="Replicator.ReplicationLightColor"/> the beacon/pool do (r &gt; g &gt; b,
-        /// unlike busy red's r &gt;&gt; g&#x2248;0 or idle green's g &gt;&gt; r&#x2248;0).</summary>
-        private static void AssertWarmWhiteReplicationFamily(Color sample, string label)
-        {
-            Assert.Greater(sample.r, sample.g, $"sample '{label}' must be warm white (r > g), not idle green");
-            Assert.Greater(sample.g, sample.b, $"sample '{label}' must be warm white (g > b)");
-            Assert.Greater(sample.g, sample.r * 0.5f, $"sample '{label}' must be warm white (g not red-dominant like busy)");
-        }
+        /// <summary>MV-834 change 3: while a replication is actually running, the ring takes the same
+        /// green <see cref="Replicator.ReplicationLightColor"/> the beacon and hatch glow do (g much
+        /// greater than r, unlike busy red's r &gt;&gt; g&#x2248;0 or idle amber's r &gt; g &gt; b).</summary>
+        private static void AssertGreenReplicationFamily(Color sample, string label) =>
+            Assert.Greater(sample.g, sample.r * 2f, $"sample '{label}' must be green-dominant (g >> r), not idle amber or busy red");
     }
 }
