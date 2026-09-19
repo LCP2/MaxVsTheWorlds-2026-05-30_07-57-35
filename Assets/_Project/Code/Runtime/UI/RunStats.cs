@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace MaxWorlds.UI
@@ -52,6 +53,18 @@ namespace MaxWorlds.UI
         {
             if (IsOver) return;
             Elapsed += Mathf.Max(0f, dt);
+        }
+
+        /// <summary>Seed <see cref="Elapsed"/>/<see cref="Kills"/> from a captured checkpoint
+        /// (MV-841) — same "overwrite, not add" contract as
+        /// <c>MaxWorlds.Arena.DeathRunState.RestoreDeathsTaken</c>. What a freshly constructed
+        /// instance calls to pick up a whole world's tally-so-far, whether that's a brand new
+        /// <c>RunTracker</c> seeding itself at creation or a live one reacting to a RESUME that never
+        /// reloaded the scene.</summary>
+        public void Restore(float elapsed, int kills)
+        {
+            Elapsed = Mathf.Max(0f, elapsed);
+            Kills = Math.Max(0, kills);
         }
 
         /// <summary>Record a fresh reading of the Invasion Level's Normalized value; only the peak

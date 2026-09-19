@@ -57,24 +57,24 @@ namespace MaxWorlds.UI
 
             // MV-427: the only outcome that ever reaches this screen now is Victory — death respawns
             // Max instead of ending the run, so there is no DEFEAT banner/near-miss/REPLAY branch left.
+            // MV-841: the banner itself now says which world was saved (Lee: "needs to say 'World
+            // [name] Saved'") rather than a bare "VICTORY" plus a separate "{map} cleared" subtitle.
             var title = AddText(panel.rectTransform, 78f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             Top(title.rectTransform, 0f, -60f, 680f, 90f);
-            title.text = stats.Title;
-
-            var sub = AddText(panel.rectTransform, 26f, Bone, TextAnchor.MiddleCenter, FontStyle.Normal);
-            Top(sub.rectTransform, 0f, -140f, 680f, 40f);
             // MV-687: reads the loaded world's own name, not a "Backyard"-literal — a Victory in
             // World 2 (or beyond) must not still read as if it happened in the Backyard.
             var backyardPath = FindFirstObjectByType<BackyardPath>();
             string worldName = backyardPath != null && backyardPath.Map != null ? backyardPath.Map.name : "World";
-            sub.text = $"{worldName} cleared";
+            title.text = $"WORLD {worldName.ToUpperInvariant()} SAVED";
 
-            // Stat rows.
-            float y = -210f;
+            // Stat rows — the whole world's tally from its first entry to this victory, across any
+            // deaths along the way (MV-841: RunProgressState/DeathRunState both checkpoint and
+            // restore across a resume, so these never silently reset to zero mid-world).
+            float y = -170f;
             AddStatRow(panel.rectTransform, "TIME", RunStats.FormatTime(stats.Elapsed), ref y);
+            AddStatRow(panel.rectTransform, "DEATHS", DeathRunState.DeathsTaken.ToString(), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
             AddStatRow(panel.rectTransform, "FACTORIES DESTROYED", stats.FactoriesDestroyed.ToString(), ref y);
-            AddStatRow(panel.rectTransform, "DIFFICULTY", "NORMAL", ref y);
 
             // One CTA now that REPLAY is gone (MV-427) — centred on the panel rather than the old
             // two-button RightButtonX slot. MV-687: live once this Victory actually advanced the

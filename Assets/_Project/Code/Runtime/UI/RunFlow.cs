@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MaxWorlds.Arena;
 using MaxWorlds.Intro;
 using MaxWorlds.Save;
 
@@ -38,6 +39,9 @@ namespace MaxWorlds.UI
         public static void StartNextWorld()
         {
             Time.timeScale = 1f;
+            // MV-841: the Result screen's clock/kill count cover one world each — the next world
+            // starts its own tally, not a carry from the one just cleared.
+            RunProgressState.Reset();
             if (LeavingWorldOneForTwo() && WorldTransitionCinematic.TryPlay(ReloadActiveScene)) return;
             ReloadActiveScene();
         }

@@ -205,6 +205,9 @@ namespace MaxWorlds.UI
             // otherwise a profile that died in Area 3 last run would find Area 3's part permanently
             // ungrantable on its next, unrelated run.
             MaxWorlds.Arena.DeathRunState.Reset();
+            // MV-841: same reasoning for the Result screen's whole-world clock/kill count — a fresh
+            // run must not inherit a previous slot's tally left over in this same process.
+            MaxWorlds.Arena.RunProgressState.Reset();
         }
 
         /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity

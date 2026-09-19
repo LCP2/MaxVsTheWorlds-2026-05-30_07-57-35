@@ -80,5 +80,14 @@ namespace MaxWorlds.Save
         /// <summary><c>DeathRunState.DeathsTaken</c> at the checkpoint — deaths persist across a resume
         /// by design (MV-524), so this is restored, not zeroed.</summary>
         public int CheckpointDeathsTaken;
+
+        /// <summary><c>RunProgressState.Elapsed</c> at the checkpoint (MV-841) — restored the same
+        /// way <see cref="CheckpointDeathsTaken"/> is, so a resumed run's whole-world clock doesn't
+        /// silently reset to zero.</summary>
+        public float CheckpointElapsedSeconds;
+
+        /// <summary><c>RunProgressState.Kills</c> at the checkpoint (MV-841), same contract as
+        /// <see cref="CheckpointElapsedSeconds"/>.</summary>
+        public int CheckpointKills;
     }
 }

@@ -155,6 +155,8 @@ namespace MaxWorlds.Save
             data.CheckpointPowerCells = PickupWallet.PowerCells;
             data.CheckpointPowerCellsSecondary = PickupWallet.PowerCellsSecondary;
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
+            data.CheckpointElapsedSeconds = RunProgressState.Elapsed;
+            data.CheckpointKills = RunProgressState.Kills;
             data.HasRunInProgress = true;
 
             Save(slot, data);
@@ -177,6 +179,7 @@ namespace MaxWorlds.Save
             PickupWallet.SetPowerCells(data.CheckpointPowerCells);
             PickupWallet.SetPowerCellSecondary(data.CheckpointPowerCellsSecondary);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
+            RunProgressState.Restore(data.CheckpointElapsedSeconds, data.CheckpointKills);
             return true;
         }
 
@@ -210,6 +213,8 @@ namespace MaxWorlds.Save
             data.CheckpointPowerCells = 0;
             data.CheckpointPowerCellsSecondary = 0;
             data.CheckpointDeathsTaken = 0;
+            data.CheckpointElapsedSeconds = 0f;
+            data.CheckpointKills = 0;
             Save(slot, data);
         }
 
