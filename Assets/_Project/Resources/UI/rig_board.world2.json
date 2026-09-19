@@ -336,11 +336,25 @@
       "x": 1050,
       "y": 580,
       "icon": "mag",
-      "label": "MAGNETO",
+      "label": "PART MAGNETO",
       "maxLevel": 5,
       "kind": "cap",
       "parent": "e_cel",
-      "startLevel": 0
+      "startLevel": 0,
+      "$comment": "MV-848, Lee: 'Magneto -- change to Part Magneto and add Cell Magneto.' Renamed only -- pull behaviour (PowerCell/PARTS, radius 3-11m over 5 levels) is unchanged."
+    },
+    {
+      "id": "e_cmg",
+      "category": "ENERGY",
+      "x": 1050,
+      "y": 740,
+      "icon": "mag",
+      "label": "CELL MAGNETO",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "e_mag",
+      "startLevel": 0,
+      "$comment": "MV-848: pulls PickupKind.PowerCellSecondary (the MV-672 'Power Cells' rocket currency) with the same radius curve/speed as Part Magneto (AbilityTuning.MagnetoPullRadius). Nothing pulls Part Magneto's own PowerCell (PARTS)."
     },
     {
       "id": "m_spd",

@@ -484,6 +484,10 @@ namespace MaxWorlds.Pickups
                 MaxWorlds.Weapons.RigState.Level("e_mag"),
                 MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
                 MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
+            float cellMagnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
+                MaxWorlds.Weapons.RigState.Level("e_cmg"),
+                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
+                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
 
             for (int i = _live.Count - 1; i >= 0; i--)
             {
@@ -494,11 +498,11 @@ namespace MaxWorlds.Pickups
                 if (d2 <= r2) { Collect(i, p); continue; }
                 _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
-                // Magneto (MV-422, e_mag): a caught power cell flies to Max from range instead of
-                // waiting for a manual walk-over. Only power cells — parts/devices stay a deliberate
-                // walk-over pickup. MV-439: never pulls once the reserve is full — an owned ability
-                // must not actively destroy the player's resources.
-                if (MagnetoShouldPull(p.Kind, magnetoRadius, d2))
+                // Part Magneto (MV-422, e_mag) / Cell Magneto (MV-848, e_cmg): a caught pickup flies to
+                // Max from range instead of waiting for a manual walk-over. Only power cells — devices
+                // stay a deliberate walk-over pickup. MV-439: Part Magneto never pulls once the PARTS
+                // reserve is full — an owned ability must not actively destroy the player's resources.
+                if (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2))
                 {
                     Vector3 pos = p.transform.position;
                     Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
@@ -509,13 +513,23 @@ namespace MaxWorlds.Pickups
             }
         }
 
-        /// <summary>Whether Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled out
-        /// as a pure function so the reserve-full guard is testable without a live scene. Public: the
+        /// <summary>Whether Part Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled
+        /// out as a pure function so the reserve-full guard is testable without a live scene. Public: the
         /// EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.</summary>
         public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
             kind == PickupKind.PowerCell && magnetoRadius > 0f
             && squaredDistance <= magnetoRadius * magnetoRadius
             && PickupWallet.PowerCells < PickupWallet.Capacity;
+
+        /// <summary>Whether Cell Magneto (MV-848, e_cmg) should reel this pickup in this frame — same
+        /// shape as <see cref="MagnetoShouldPull"/> but for <see cref="PickupKind.PowerCellSecondary"/>
+        /// (the MV-672 "Power Cells" rocket currency). No reserve-full guard: unlike the PARTS wallet
+        /// <see cref="PickupWallet.PowerCellsSecondary"/> carries no authored capacity yet (see that
+        /// field's own doc comment), so there is no cap to gate against — an unbounded reserve is always
+        /// "below its cap".</summary>
+        public static bool CellMagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
+            kind == PickupKind.PowerCellSecondary && magnetoRadius > 0f
+            && squaredDistance <= magnetoRadius * magnetoRadius;
 
         private void Collect(int index, Pickup p)
         {
