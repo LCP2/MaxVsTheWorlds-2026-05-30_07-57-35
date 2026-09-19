@@ -23,12 +23,15 @@ namespace MaxWorlds.Tests.EditMode
     /// — see the fix comment for the captured failure output.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) over a real World 2 area (a3) and gate
-    /// (g3), asserting five RESOLVED values (Rule 2, Tier 2), never an authored constant and never a
+    /// (g4), asserting five RESOLVED values (Rule 2, Tier 2), never an authored constant and never a
     /// rendered pixel (Rule 3): (a) a3_sludge1's own MapRuntime slab renderer is not active; (b) a3's
-    /// channel hazard stripes are active and nothing else active covers their XZ from above; (c) g3's
+    /// channel hazard stripes are active and nothing else active covers their XZ from above; (c) g4's
     /// hazard stripe renderer is active while <see cref="AreaGate.Locked"/> is false; (d) a pump
     /// housing's own hazard band resolves an inner edge at or beyond the housing's own radius; (e) a
     /// Replicator's own base bands resolve at least 0.42 m tall and never intersect its own RampIn.
+    ///
+    /// Retargeted from g3 to g4 by MV-852 (World 2 re-layout), which removed g3 (a3 E -> a4) along with
+    /// every other gate touching a3's old east/deck connections; g4 (a3 S -> a5 N) is untouched.
     /// </summary>
     public sealed class MV822HazardBandingVisibilityTests
     {
@@ -111,17 +114,17 @@ namespace MaxWorlds.Tests.EditMode
                     }
                 }
 
-                // ---- (c) g3's hazard stripe is active while unlocked ----
-                AreaGate g3 = host.GetComponentsInChildren<AreaGate>(true).First(g => g.name == "g3");
-                g3.Locked = false;
-                g3.ApplyStormdrainGateSkin();
+                // ---- (c) g4's hazard stripe is active while unlocked ----
+                AreaGate g4 = host.GetComponentsInChildren<AreaGate>(true).First(g => g.name == "g4");
+                g4.Locked = false;
+                g4.ApplyStormdrainGateSkin();
                 Transform gateDressing = host.GetComponentsInChildren<Transform>(true)
-                    .FirstOrDefault(t => t.name == "g3 (Stormdrain Gate Dressing)");
-                Assert.IsNotNull(gateDressing, "g3 never built its Stormdrain gate dressing");
+                    .FirstOrDefault(t => t.name == "g4 (Stormdrain Gate Dressing)");
+                Assert.IsNotNull(gateDressing, "g4 never built its Stormdrain gate dressing");
                 Transform gateBand = gateDressing.Find("Hazard Banding");
-                Assert.IsNotNull(gateBand, "g3 never built its hazard banding");
+                Assert.IsNotNull(gateBand, "g4 never built its hazard banding");
                 Assert.IsTrue(gateBand.gameObject.activeSelf,
-                    "g3's hazard banding must be active while the gate is unlocked");
+                    "g4's hazard banding must be active while the gate is unlocked");
 
                 // ---- (d) a pump housing's own hazard band clears its own radius ----
                 var pumpHost = new GameObject("MV822 pump host").transform;

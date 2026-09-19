@@ -54,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
         public void SludgeDamagesMaxAtFloorLevel_SkipsWithForceFieldUp_NeverTouchesADeckOrARobot()
         {
             // Same BuildBody collider-strip [Error] every full-World2-build EditMode test in this suite
-            // carries once Build() actually runs — see MV829HatchLockTests' own note.
+            // carries once Build() actually runs — see other World2 EditMode tests' own note.
             LogAssert.ignoreFailingMessages = true;
 
             GameObject pathGo = null, playerGo = null, runnerGo = null, rusherGo = null;

@@ -10,31 +10,33 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-833 — walking up a3's ramp used to count as entering a19: <see cref="MapData.ZoneAt(float, float, float)"/>
     /// returned the deck zone the instant a position cleared deck height ANYWHERE inside the shared
-    /// a3/a19 footprint, including partway up <c>a3_ramp1</c>, well before Max ever reached the (then
-    /// unlocked) hatch at the top. That opened <c>a3_hatch1</c> instantly and jumped
+    /// a3/a19 footprint, including partway up the ramp that used to be <c>a3_ramp1</c>, well before Max
+    /// ever reached the (then unlocked) hatch at the top. That opened the hatch instantly and jumped
     /// <see cref="AreaAccumulationDirector.CurrentArea"/> straight from 3 to 19, silently skipping areas
     /// 4-18's population.
     ///
-    /// Fails on base commit 52b3cf2 (before this ticket): a probe at the top of <c>a3_ramp1</c> (still
-    /// on the ramp, not through the hatch) resolves to zone "area19" instead of "area3", and the same
-    /// probe height over the bare a3/a19 footprint away from any deck rect still reads as "on the deck".
+    /// Retargeted by MV-852 (World 2 re-layout), which removed every ramp/hatch from every floor+deck
+    /// overlay pair in World 2 (a3/a19, a6/a15) — the only way up is now the new Replicator door into
+    /// a12 and the deck-gate chain above it. The original AC1 ("a ramp-top probe still resolves to the
+    /// floor area") has no scenario left to test against real content: no overlay-pair floor area
+    /// authors a ramp of its own anywhere in the shipped game any more. AC2-4 still have real,
+    /// unrelated content to prove against and are kept, ported from a3/a19/g19 onto a6/a15/g32:
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) loading the real, shipped World 2 config
     /// through <see cref="WorldMapLoader"/>/<see cref="MapRuntime"/>/<see cref="WorldRunner"/>/
     /// <see cref="AreaAccumulationDirector"/> — no hand-set zone/gate state anywhere in this file —
-    /// asserting four RESOLVED values (Rule 2, Tier 2), matching the ticket's own AC1-4: (1) a ramp-top
-    /// probe resolves to a3, leaves CurrentArea at 3, and a3_hatch1 stays Locked; (2) standing on
-    /// a19_deck1 while CurrentArea is 3 does not advance it, since a3 and a19 share no MapLink; (3) from
-    /// CurrentArea 17, stepping through gate g19 onto a19_deck1 DOES advance CurrentArea to 19; (4)
-    /// MapValidation rejects a 'never' condition on a wall gate but accepts the shipped config.
+    /// asserting three RESOLVED values (Rule 2, Tier 2): (1) standing on a15_deck1 while CurrentArea is
+    /// 6 does not advance it, since a6 and a15 share a footprint but no MapLink; (2) from CurrentArea
+    /// 12, stepping through gate g32 onto that same a15_deck1 position DOES advance CurrentArea to 15;
+    /// (3) MapValidation rejects a 'never' condition on a wall gate but accepts the shipped config.
     /// </summary>
     public sealed class MV833RampZoneTests
     {
         [Test]
-        public void RampNeverReadsAsTheDeck_AndTheAreaTrackerNeverSkipsAnUnlinkedArea()
+        public void UnlinkedOverlayNeverAdvancesArea_AndARealDeckGateDoes()
         {
             // Same BuildBody collider-strip [Error] every full-World2-build EditMode test in this suite
-            // carries (see MV829HatchLockTests' own note).
+            // carries (see other World2 EditMode tests' own note).
             LogAssert.ignoreFailingMessages = true;
 
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
@@ -59,35 +61,23 @@ namespace MaxWorlds.Tests.EditMode
 
                 playerGo = new GameObject("Player") { tag = "Player" };
 
-                // === AC1: the top of a3_ramp1 (local x 7.5, z 7.5, y 2.4) resolves to a3, not a19 ===
-                director.EnterArea(3);
-                WorldArea a3 = cfg.Area("a3");
-                playerGo.transform.position = new Vector3(a3.XMin + 7.5f, 2.4f, a3.ZMin + 7.5f);
-                InvokeDirectorUpdate(director);
-
-                MapZone atRampTop = map.ZoneAt(playerGo.transform.position.x, playerGo.transform.position.y, playerGo.transform.position.z);
-                Assert.AreEqual("area3", atRampTop?.id, "MV-833 AC1: a probe at the top of the ramp must still resolve to the floor area");
-                Assert.AreEqual(3, director.CurrentArea, "MV-833 AC1: CurrentArea must not have jumped off a ramp-top probe");
-
-                AreaGate a3Hatch = build.Actors["a3_hatch1"].GetComponent<AreaGate>();
-                Assert.IsTrue(a3Hatch.Locked, "MV-833 AC1: a3_hatch1 must stay Locked — it opens on 'never'");
-
-                // === AC2: standing on the middle of a19_deck1 while CurrentArea is 3 must not advance it —
-                // a3 and a19 share a footprint but no MapLink ===
-                WorldArea a19 = cfg.Area("a19");
-                playerGo.transform.position = new Vector3(a19.XMin + 9.5f, 2.5f, a19.ZMin + 15f);
+                // === AC1: standing on the middle of a15_deck1 while CurrentArea is 6 must not advance
+                // it — a6 and a15 share a footprint but no MapLink ===
+                director.EnterArea(6);
+                WorldArea a15 = cfg.Area("a15");
+                playerGo.transform.position = new Vector3(a15.XMin + 15f, 2.5f, a15.ZMin + 24.5f);
                 InvokeDirectorUpdate(director);
 
                 MapZone atDeck = map.ZoneAt(playerGo.transform.position.x, playerGo.transform.position.y, playerGo.transform.position.z);
-                Assert.AreEqual("area19", atDeck?.id, "setup failure: this probe must actually sit on a19's own deck rect");
-                Assert.AreEqual(3, director.CurrentArea, "MV-833 AC2: CurrentArea must not skip from 3 straight to 19 — no MapLink joins them");
+                Assert.AreEqual("area15", atDeck?.id, "setup failure: this probe must actually sit on a15's own deck rect");
+                Assert.AreEqual(6, director.CurrentArea, "MV-833 AC1: CurrentArea must not skip from 6 straight to 15 — no MapLink joins them");
 
-                // === AC3: from CurrentArea 17, stepping through gate g19 onto a19_deck1 DOES advance
-                // CurrentArea to 19 — a17 and a19 ARE joined by g19's own MapLink ===
-                director.EnterArea(17);
-                InvokeDirectorUpdate(director); // re-assert the same a19_deck1 position now that we're coming from 17
+                // === AC2: from CurrentArea 12, stepping through gate g32 onto a15_deck1 DOES advance
+                // CurrentArea to 15 — a12 and a15 ARE joined by g32's own MapLink ===
+                director.EnterArea(12);
+                InvokeDirectorUpdate(director); // re-assert the same a15_deck1 position now that we're coming from 12
 
-                Assert.AreEqual(19, director.CurrentArea, "MV-833 AC3: CurrentArea must advance through the real g19 link");
+                Assert.AreEqual(15, director.CurrentArea, "MV-833 AC2: CurrentArea must advance through the real g32 link");
             }
             finally
             {
@@ -107,16 +97,16 @@ namespace MaxWorlds.Tests.EditMode
                 CameraTestUtil.RestoreAmbientMainCameras(suppressedCameras);
             }
 
-            // === AC4: MapValidation rejects 'never' on a wall gate, and passes the shipped config ===
+            // === AC3: MapValidation rejects 'never' on a wall gate, and passes the shipped config ===
             Assert.IsTrue(MapValidation.ValidateWorldConfig(cfg, out string shippedReason),
-                $"MV-833 AC4: the shipped World 2 config must pass validation: {shippedReason}");
+                $"MV-833 AC3: the shipped World 2 config must pass validation: {shippedReason}");
 
             WorldConfig broken = WorldLibrary.Load(WorldLibrary.World2);
             WorldGate wallGate = broken.gates.First(g => g.id == "g1");
             wallGate.opensWith = "never";
 
             Assert.IsFalse(MapValidation.ValidateWorldConfig(broken, out string brokenReason),
-                "MV-833 AC4: a wall gate authored 'never' must fail validation");
+                "MV-833 AC3: a wall gate authored 'never' must fail validation");
             StringAssert.Contains("g1", brokenReason);
         }
 

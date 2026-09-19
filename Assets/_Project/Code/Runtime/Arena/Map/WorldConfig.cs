@@ -223,6 +223,11 @@ namespace MaxWorlds.Arena
         public float w;
         public float d;
         public float height;
+
+        /// <summary>MV-852: this deck's non-mouth edges get a solid, collider-bearing parapet (blocks
+        /// Max/robots, projectiles pass over) instead of the ordinary collider-free MV-821 edge band.
+        /// Defaults false for every deck authored before this field existed.</summary>
+        public bool walled;
     }
 
     /// <summary>A ramp rect joining the floor to an adjacent deck cell (MV-692) — same area-local

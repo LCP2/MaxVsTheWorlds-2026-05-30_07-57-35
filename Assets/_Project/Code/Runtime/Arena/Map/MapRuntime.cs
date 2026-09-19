@@ -275,6 +275,19 @@ namespace MaxWorlds.Arena
         private const float DeckShadowProud = 0.01f;
         private const float DeckShadowDarken = 0.30f;
 
+        /// <summary>MV-852 — a walled deck's parapet: 1.0 m tall, built in the same
+        /// <see cref="StormdrainKit.BuildHazardBanding"/> look as the ordinary MV-821 edge band, but
+        /// with a real, non-stripped collider (a plain invisible box coincident with the visual) that
+        /// blocks Max/robots. Projectiles pass through untouched with no extra work: every raycast this
+        /// game's weapons run against world geometry (<see cref="MaxWorlds.Weapons.HomingSteering.BlockedByGeometry"/>)
+        /// is restricted to <see cref="CoverLayer"/>, which this parapet is never assigned to.</summary>
+        private const float DeckParapetHeight = 1.0f;
+
+        /// <summary>The parapet's own collision-only box thickness across the deck's outer edge — same
+        /// figure as <see cref="DeckEdgeBandWidth"/>, just given its own name since the two no longer
+        /// always share a wall (a walled deck skips the ordinary band/beam entirely).</summary>
+        private const float DeckParapetThickness = 0.12f;
+
         private const float RampThickness = 0.15f;
 
         /// <summary>Roughly one bubble emitter's worth of bubbles per this many square metres of sludge
@@ -346,6 +359,7 @@ namespace MaxWorlds.Arena
             foreach (Wall wall in AllWalls)
             {
                 if (mouths.Contains(wall)) continue;
+                if (e.walled) { BuildDeckParapet(root, e, wall, slab.TopY); continue; }
                 BuildDeckEdgeBand(root, e, wall, slab.TopY);
                 BuildDeckEdgeBeam(root, e, wall, slab.TopY);
             }
@@ -421,6 +435,50 @@ namespace MaxWorlds.Arena
 
             GameObject band = StormdrainKit.BuildHazardBanding(root, centre, length, DeckEdgeBandHeight, alongX, DeckEdgeBandWidth);
             band.name = $"{deck.id}_edge_{wall}";
+        }
+
+        /// <summary>MV-852 — a walled deck's parapet, replacing the ordinary open edge band/beam on
+        /// every non-mouth wall: the SAME <see cref="StormdrainKit.BuildHazardBanding"/> visual, just
+        /// <see cref="DeckParapetHeight"/> tall instead of <see cref="DeckEdgeBandHeight"/>, plus a
+        /// separate, coincident, invisible box that keeps its default (non-stripped) collider — the one
+        /// thing every other deck-edge primitive in this file deliberately strips. Never assigned to
+        /// <see cref="CoverLayer"/>, so it blocks Max/robots (ordinary <c>CharacterController.Move</c>
+        /// collision, layer-agnostic) while every projectile in the game passes straight through it.</summary>
+        private static void BuildDeckParapet(Transform root, MapEntity deck, Wall wall, float topY)
+        {
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float centerY = topY + DeckParapetHeight * 0.5f;
+            Vector3 centre;
+            float length;
+            bool alongX;
+            switch (wall)
+            {
+                case Wall.N:
+                    centre = new Vector3(deck.x, centerY, deck.z + halfD);
+                    length = deck.width; alongX = true;
+                    break;
+                case Wall.S:
+                    centre = new Vector3(deck.x, centerY, deck.z - halfD);
+                    length = deck.width; alongX = true;
+                    break;
+                case Wall.E:
+                    centre = new Vector3(deck.x + halfW, centerY, deck.z);
+                    length = deck.depth; alongX = false;
+                    break;
+                default: // Wall.W
+                    centre = new Vector3(deck.x - halfW, centerY, deck.z);
+                    length = deck.depth; alongX = false;
+                    break;
+            }
+
+            GameObject visual = StormdrainKit.BuildHazardBanding(root, centre, length, DeckParapetHeight, alongX, DeckParapetThickness);
+            visual.name = $"{deck.id}_parapet_{wall}";
+
+            Vector3 blockerSize = alongX
+                ? new Vector3(length, DeckParapetHeight, DeckParapetThickness)
+                : new Vector3(DeckParapetThickness, DeckParapetHeight, length);
+            GameObject blocker = Spawn(root, $"{deck.id}_parapet_{wall}_collider", PrimitiveType.Cube, centre, blockerSize);
+            foreach (Renderer r in blocker.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
         }
 
         /// <summary>A visible structural beam hung off each deck edge (MV-821 change 2) — built entirely

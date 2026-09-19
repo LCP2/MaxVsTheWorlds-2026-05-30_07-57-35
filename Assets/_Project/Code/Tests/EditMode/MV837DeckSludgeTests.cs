@@ -10,8 +10,7 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-837: <see cref="MapGeometry.SpeedMultiplierAt"/> tested only X/Z and ignored Y, so anyone
-    /// standing on a deck built ABOVE a sludge rect read the sludge slow anyway — a14 Gantry Run's
-    /// sludge rect covers its whole 44x12 floor, under the bridge deck, and a19's decks cross a3's
+    /// standing on a deck built ABOVE a sludge rect read the sludge slow anyway — a19's decks cross a3's
     /// sludge channel (a19 overlays a3's footprint). Fails on 98f55d0 (the commit before this ticket):
     /// <c>MapGeometry.SpeedMultiplierAt</c> there takes exactly two float args (x, z), so this file does
     /// not compile (CS1501 "no overload for method 'SpeedMultiplierAt' takes 3 arguments") before a
@@ -20,6 +19,13 @@ namespace MaxWorlds.Tests.EditMode
     /// Loads the real, shipped World 2 config through <see cref="WorldLibrary"/>/<see cref="WorldMapLoader"/>
     /// (no hand-authored fixture) and reads RESOLVED <see cref="MapSlowZones.Instance"/> values at each
     /// deck's own rect centre, never an authored constant.
+    ///
+    /// Retargeted by MV-852 (World 2 re-layout): a14 Gantry Run's deck (<c>a14_deck1</c>, local z9-12)
+    /// no longer sits above its own sludge channel (<c>a14_sludge1</c>, local z2-6 — the ticket's own
+    /// numbers put them on separate bands of the same floor, not stacked) — so a14 no longer has a
+    /// scenario to prove "deck above sludge reads full speed, floor below still slows" against. It's
+    /// kept only for "the sludge channel itself still slows on the floor" and a19/a3 (untouched by this
+    /// ticket) keeps carrying the actual deck-shields-sludge proof.
     /// </summary>
     public sealed class MV837DeckSludgeTests
     {
@@ -56,19 +62,26 @@ namespace MaxWorlds.Tests.EditMode
                 var path = pathGo.AddComponent<BackyardPath>();
                 BackyardPathMapField.SetValue(path, map);
 
-                // === a14 Gantry Run: one sludge rect covers the whole floor, under the bridge deck. ===
+                // === a14 Gantry Run (MV-852 re-layout): the deck and the sludge channel now sit on
+                // separate bands of the same floor, not stacked — the deck itself reads full speed, and
+                // the sludge channel (elsewhere on that same floor) still slows on its own. ===
                 WorldArea a14 = cfg.Area("a14");
                 Assert.IsNotNull(a14, "setup failure: World 2 must author area 'a14'");
                 WorldDeck a14Deck1 = Array.Find(a14.decks, d => d.id == "a14_deck1");
+                WorldSludge a14Sludge1 = Array.Find(a14.sludge, s => s.id == "a14_sludge1");
                 Assert.IsNotNull(a14Deck1, "setup failure: a14 must author deck 'a14_deck1'");
+                Assert.IsNotNull(a14Sludge1, "setup failure: a14 must author sludge 'a14_sludge1'");
                 Rect a14DeckRect = a14.WorldRectOf(a14Deck1.x, a14Deck1.z, a14Deck1.w, a14Deck1.d);
+                Rect a14SludgeRect = a14.WorldRectOf(a14Sludge1.x, a14Sludge1.z, a14Sludge1.w, a14Sludge1.d);
+                Assert.IsFalse(a14DeckRect.Overlaps(a14SludgeRect),
+                    "setup failure: a14's deck and sludge must NOT overlap post-MV-852, or this proves nothing new");
 
                 Assert.AreEqual(1f,
                     MapSlowZones.Instance.SpeedMultiplierAt(new Vector3(a14DeckRect.center.x, map.deckHeight, a14DeckRect.center.y)),
-                    0.001f, "MV-837: standing on a14_deck1 must read full speed, not the sludge rect beneath it");
+                    0.001f, "MV-837: standing on a14_deck1 must read full speed");
                 Assert.AreEqual(0.6f,
-                    MapSlowZones.Instance.SpeedMultiplierAt(new Vector3(a14DeckRect.center.x, 0f, a14DeckRect.center.y)),
-                    0.001f, "MV-837: the same XZ at floor level must still slow — sludge still works at floor level");
+                    MapSlowZones.Instance.SpeedMultiplierAt(new Vector3(a14SludgeRect.center.x, 0f, a14SludgeRect.center.y)),
+                    0.001f, "MV-837: a14's sludge channel must still slow on the floor");
 
                 // === a19's decks cross a3's sludge channel (a19 is a3's deck-level overlay). ===
                 WorldArea a3 = cfg.Area("a3");
