@@ -183,11 +183,12 @@
       "x": 250,
       "y": 420,
       "icon": "dmg",
-      "label": "DAMAGE",
-      "maxLevel": 4,
+      "label": "POWER",
+      "maxLevel": 8,
       "kind": "cap",
       "parent": null,
-      "startLevel": 1
+      "startLevel": 1,
+      "$comment": "MV-844: DAMAGE -> POWER, 4 -> 8 levels (World 1's rig_board.json p_dmg is untouched, still DAMAGE/4). Damage keeps its existing 20%/level step past L4 (9 * (1 + 0.2*(L-1))): L5 16.2, L6 18.0, L7 19.8, L8 21.6. The LPPE bolt's own sheath/core/trail size and colour now scale with this level (PulseLaser.PowerVisualStrength)."
     },
     {
       "id": "p_rng",

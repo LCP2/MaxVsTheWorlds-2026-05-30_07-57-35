@@ -198,16 +198,25 @@ namespace MaxWorlds.VFX
             }
         }
 
-        public static LppeBoltTuning LppeBolt() =>
-            new LppeBoltTuning(
-                coreLength: 1.4f, coreDiameter: 0.05f,
-                sheathDiameter: 0.20f, sheathExtension: 0.1f, sheathAlpha: 0.55f,
-                trailWidth: 0.08f, trailLifetime: 0.10f,
+        /// <summary>MV-844: <paramref name="powerLevelFraction"/> (0 at World 2's POWER/<c>p_dmg</c>
+        /// L1, 1 at its L8 cap — <see cref="MaxWorlds.Weapons.PulseLaser.PowerVisualStrength"/>) scales
+        /// the core/sheath/trail wider as POWER levels up: sheath 0.20 -&gt; 0.44m, core 0.05 -&gt; 0.11m,
+        /// trail 0.08 -&gt; 0.18m, all linear in the fraction. Defaults to 0 so every existing caller
+        /// (<see cref="MaxWorlds.Arena.SentinelBolt"/>, the tests) that never passes it keeps today's L1
+        /// look unchanged.</summary>
+        public static LppeBoltTuning LppeBolt(float powerLevelFraction = 0f)
+        {
+            float s = Mathf.Clamp01(powerLevelFraction);
+            return new LppeBoltTuning(
+                coreLength: 1.4f, coreDiameter: Mathf.Lerp(0.05f, 0.11f, s),
+                sheathDiameter: Mathf.Lerp(0.20f, 0.44f, s), sheathExtension: 0.1f, sheathAlpha: 0.55f,
+                trailWidth: Mathf.Lerp(0.08f, 0.18f, s), trailLifetime: 0.10f,
                 groundGlowDiameter: 0.9f,
                 crackleFilamentCount: 3, crackleVertexCount: 7, crackleWidth: 0.025f,
                 crackleMaxOffset: 0.09f, crackleRerandomizeInterval: 0.04f,
                 flickerInterval: 0.03f, flickerAmount: 0.2f,
                 forkSheathScale: 1.25f);
+        }
 
 
         /// <summary>The Rack rocket body — was a 0.16m capsule (7.7px, roughly a third the bolt's own
