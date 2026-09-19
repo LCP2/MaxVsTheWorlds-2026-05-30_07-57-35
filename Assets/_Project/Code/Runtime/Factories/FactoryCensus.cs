@@ -106,6 +106,20 @@ namespace MaxWorlds.Factories
             ReplicatorsStanding.Remove(replicator);
         }
 
+        /// <summary>Every Replicator registered this run, standing or destroyed (MV-855) — what a
+        /// <c>replicators-destroyed:all</c> gate's own "counts every Replicator" rule actually means:
+        /// whichever ones THIS run registered, not every area a design file happens to author one into
+        /// (a fixture/test census that only registers a subset must resolve "all" against that same
+        /// subset, or a partial-census test could never isolate one gate's condition from another's).</summary>
+        public static IReadOnlyList<Replicator> RegisteredReplicators => ReplicatorsRegistered;
+
+        /// <summary>The area id <paramref name="replicator"/> was registered into (MV-855) — the same id
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/> passed to <see cref="RegisterReplicator"/>, exposed
+        /// so a caller (the map screen, resolving a marker's blink state) can ask "which area is this
+        /// live Replicator in" without re-deriving it from the entity id string. Null if never registered.</summary>
+        public static string AreaIdOf(Replicator replicator) =>
+            replicator != null && ReplicatorArea.TryGetValue(replicator, out string areaId) ? areaId : null;
+
         /// <summary>How many Replicators are standing right now (MV-774) — what
         /// <see cref="MaxWorlds.Arena.StormdrainFlood"/>'s own "every live Replicator adds to the rate"
         /// rule reads, so the "REPLICATORS n/25" counter finally means something beyond a label.</summary>

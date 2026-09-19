@@ -76,6 +76,14 @@ namespace MaxWorlds.UI
         private readonly List<bool> _areaIsShed = new List<bool>();
         private readonly List<Image> _areaBorderImages = new List<Image>();
 
+        // Replicator blink (MV-855): which fill Images are currently "required and alive", and the set
+        // of area ids that state was resolved against — recomputed once per RebuildContent, since the
+        // game is paused (Time.timeScale = 0) for the whole time the map is open, so nothing that would
+        // change either can happen while it's up.
+        private readonly List<Image> _replicatorFillImages = new List<Image>();
+        private readonly List<bool> _replicatorBlinking = new List<bool>();
+        private HashSet<string> _requiredReplicatorAreaIds = new HashSet<string>();
+
         private readonly Dictionary<int, Vector2> _lastPointers = new Dictionary<int, Vector2>();
 
         /// <summary>Is the map currently up (and the game paused)? Test-only, same idiom as
@@ -145,6 +153,7 @@ namespace MaxWorlds.UI
             HandleGesture();
             UpdateCurrentArea();
             UpdatePlayerMarker();
+            UpdateReplicatorBlink();
         }
 
         // ------------------------------------------------------------------ build
@@ -309,6 +318,8 @@ namespace MaxWorlds.UI
             _areaIsBoss.Clear();
             _areaIsShed.Clear();
             _areaBorderImages.Clear();
+            _replicatorFillImages.Clear();
+            _replicatorBlinking.Clear();
             _playerMarker = null;
             _shownCurrentArea = -1;
 
@@ -400,6 +411,9 @@ namespace MaxWorlds.UI
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Factory && entity.Dressing == CoverDressing.Shed)
                     AddShedMarker(entity);
+            // MV-855: which areas are still required to open a locked replicators-destroyed gate,
+            // resolved once here (not per-marker) off the world config this level actually loaded.
+            _requiredReplicatorAreaIds = ReplicatorMapModel.RequiredAreaIds(_backyardPath != null ? _backyardPath.Cfg : null);
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Replicator) AddReplicatorMarker(entity);
             foreach (MapEntity entity in _map.entities)
@@ -511,15 +525,20 @@ namespace MaxWorlds.UI
 
         /// <summary>A Replicator (MV-830) — every one in the map, from the first frame, ignoring
         /// <see cref="Discoverable.Found"/> (Lee's decision: the point is locating the ones not yet
-        /// destroyed). Alive reads as a filled red square with a light outline; once destroyed the fill
-        /// drops to nothing (alpha 0) and the outline turns grey, same size and position — resolved off
-        /// the actual built <see cref="Replicator"/> every time this rebuilds, so a box killed since the
-        /// map was last open flips the instant it reopens (item 2 of the ticket).</summary>
+        /// destroyed). Destroyed reads as a grey outline with no fill; alive reads red, either steady or
+        /// blinking (MV-855) depending on whether <see cref="ReplicatorMapModel"/> says this area is still
+        /// required to open a locked gate — resolved off the actual built <see cref="Replicator"/> every
+        /// time this rebuilds, so a box killed since the map was last open flips the instant it reopens
+        /// (item 2 of the ticket).</summary>
         private void AddReplicatorMarker(MapEntity entity)
         {
             bool alive = ReplicatorIsAlive(entity);
-            Color fill = alive ? MapScreenDesign.Replicator : Color.clear;
-            Color outlineColor = alive ? MapScreenDesign.ReplicatorOutline : MapScreenDesign.ReplicatorDestroyed;
+            string areaId = ReplicatorAreaId(entity);
+            ReplicatorMarkerState state = ReplicatorMapModel.Resolve(areaId, alive, _requiredReplicatorAreaIds);
+
+            bool destroyed = state == ReplicatorMarkerState.DestroyedOutline;
+            Color fill = destroyed ? Color.clear : MapScreenDesign.Replicator;
+            Color outlineColor = destroyed ? MapScreenDesign.ReplicatorDestroyed : MapScreenDesign.ReplicatorOutline;
 
             var marker = AddImage(_content, HudTextures.RoundedBox(16, 0.15f), fill, "Replicator");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
@@ -527,6 +546,8 @@ namespace MaxWorlds.UI
             marker.rectTransform.sizeDelta = new Vector2(MapScreenDesign.ReplicatorSize, MapScreenDesign.ReplicatorSize);
             marker.type = Image.Type.Sliced;
             marker.raycastTarget = false;
+            _replicatorFillImages.Add(marker);
+            _replicatorBlinking.Add(state == ReplicatorMarkerState.Blinking);
 
             var outline = AddImage(marker.rectTransform,
                 HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), outlineColor, "Outline");
@@ -546,6 +567,37 @@ namespace MaxWorlds.UI
             if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
             var replicator = go.GetComponent<Replicator>();
             return replicator == null || replicator.IsAlive;
+        }
+
+        /// <summary>The area id a Replicator entity was authored into (MV-855), via the live built
+        /// <see cref="Replicator"/> and <see cref="FactoryCensus.AreaIdOf"/> — the exact id
+        /// <see cref="WorldRunner"/> registered it under, never re-derived from the entity's own id
+        /// string. Null when nothing is built for this id (no <see cref="_backyardPath"/>, or a fixture
+        /// map), which <see cref="ReplicatorMapModel.Resolve"/> reads as "not required" rather than a
+        /// false Blinking.</summary>
+        private string ReplicatorAreaId(MapEntity entity)
+        {
+            if (_backyardPath == null) return null;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return null;
+            var replicator = go.GetComponent<Replicator>();
+            return replicator != null ? FactoryCensus.AreaIdOf(replicator) : null;
+        }
+
+        /// <summary>MV-855: a required-and-alive Replicator's fill blinks 1 Hz in realtime while the map
+        /// is open — full alpha for the first half of every second, 25% for the second half. Driven by
+        /// <see cref="Time.unscaledTime"/>, not <see cref="Time.time"/>: the game itself is paused
+        /// (<c>Time.timeScale = 0</c>) for as long as the map is up, so the scaled clock never advances.</summary>
+        private void UpdateReplicatorBlink()
+        {
+            if (_replicatorFillImages.Count == 0) return;
+            float phase = Time.unscaledTime % 1f;
+            float alpha = phase < 0.5f ? 1f : 0.25f;
+            Color baseColor = MapScreenDesign.Replicator;
+            for (int i = 0; i < _replicatorFillImages.Count; i++)
+            {
+                if (!_replicatorBlinking[i]) continue;
+                _replicatorFillImages[i].color = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+            }
         }
 
         /// <summary>A boss "dominates its arena" (AC 2/6) — a soft halo behind a bright disc, both sized
