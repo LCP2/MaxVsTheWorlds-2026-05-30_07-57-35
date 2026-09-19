@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Video;
+using MaxWorlds.Intro;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.EditMode
@@ -88,6 +90,42 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(artGo);
                 Object.DestroyImmediate(frameGo);
+            }
+        }
+
+        /// <summary>
+        /// MV-843 AC2 — the boot sequence must play the animated title reveal instead of jumping
+        /// straight to the still. Proven to fail on the base commit: that <c>SplashScreen</c> has no
+        /// video path at all (no <c>Initialize</c>/<c>Video</c>/<c>UsingVideo</c> members, and no
+        /// committed <c>Video/title.mp4</c>), so this doesn't compile there, let alone pass. Built via
+        /// <see cref="SplashScreen.Initialize"/> rather than <c>AddComponent</c> + a frame wait — same
+        /// rationale as <see cref="IntroCinematic.Initialize"/>: <c>Start</c> never fires outside Play
+        /// Mode, which this EditMode suite never enters (MV-299/311/330).
+        /// </summary>
+        [Test]
+        public void ResolvesTheTitleVideoViaRenderTexture()
+        {
+            // Forced rather than left to resolve off the real committed file, same idiom as
+            // IntroVideoTests — deterministic regardless of incidental StreamingAssets/LFS-checkout state.
+            IntroVideo.OverrideKindForTests = IntroVideoSourceKind.Url;
+            IntroVideo.SuppressPlaybackForTests = true;   // MV-827: CI's Linux runner can't decode the committed film
+            var go = new GameObject("SplashScreen");
+            try
+            {
+                var splash = go.AddComponent<SplashScreen>();
+                splash.Initialize();
+
+                Assert.IsTrue(splash.UsingVideo, "the boot splash did not resolve a video source for the title reveal.");
+                StringAssert.EndsWith("Video/title.mp4", splash.Video.Player.url,
+                    "the resolved video URL must point at the committed title reveal.");
+                Assert.AreEqual(VideoRenderMode.RenderTexture, splash.Video.Player.renderMode,
+                    "the title reveal must render into a texture, same as the intro film (MV-835) — not the near-plane mode that drew nothing under URP on WebGL.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                IntroVideo.OverrideKindForTests = null;
+                IntroVideo.SuppressPlaybackForTests = false;
             }
         }
     }
