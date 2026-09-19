@@ -23,10 +23,18 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="PlayerAbilities.TryTeleport"/> directly — not <c>CanWarpAcrossAreas</c>, which
     /// <see cref="TeleportAreaWarpTests"/> already covers and this ticket leaves untouched — against
     /// a hedge/pot-shaped collider left OFF <see cref="CoverLayer"/> (MV-400/MV-613's exact
-    /// convention) and, separately, against a wall-shaped collider left ON it (<c>MapRuntime</c>'s
-    /// convention for every real solid: walls, gates, the Mower Hutch, non-hedge cover). Fails on
-    /// the pre-fix base commit — the hedge/pot scenario's assertion that Max actually reaches the
-    /// aimed target.
+    /// convention), midway along the path, and separately against a wall-shaped collider left ON it
+    /// (<c>MapRuntime</c>'s convention for every real solid: walls, gates, the Mower Hutch, non-hedge
+    /// cover). Fails on the pre-fix base commit — the hedge/pot scenario's assertion that Max
+    /// actually reaches the aimed target.
+    ///
+    /// MV-847 (Lee): "a teleport is a dematerialise/materialise — it's irrelevant what's between the
+    /// start and end point", so a genuine wall sitting only MIDWAY along the path (as this test's wall
+    /// scenario originally placed it) no longer clamps Max short of it either — same as the hedge/pot.
+    /// The wall obstacle now sits directly ON the aimed destination instead, so the scenario still
+    /// exercises a real, still-true invariant: solid geometry that the circle itself lands on redirects
+    /// Max to the nearest point that fits, searched back toward him. Do not re-raise "a wall midway in
+    /// the path should still stop the blink" — MV-847 explicitly overturned it.
     /// </summary>
     public sealed class MV670TeleportPassesDecorativeCollidersTests
     {
@@ -69,13 +77,12 @@ namespace MaxWorlds.Tests.EditMode
             return (max, abilities);
         }
 
-        // Squarely between from (RigOrigin) and target (RigOrigin + (0,0,4)) — anything blocking must
-        // be hit head-on.
-        private static GameObject SpawnObstacle(bool onCoverLayer)
+        // Positioned along Z between from (RigOrigin) and target (RigOrigin + (0,0,4)).
+        private static GameObject SpawnObstacle(bool onCoverLayer, float z)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = onCoverLayer ? "MV-670 Wall" : "MV-670 Hedge";
-            go.transform.position = RigOrigin + new Vector3(0f, 1f, 2f);
+            go.transform.position = RigOrigin + new Vector3(0f, 1f, z);
             go.transform.localScale = new Vector3(4f, 2f, 0.5f);
             if (onCoverLayer) CoverLayer.Assign(go);
             // autoSyncTransforms is off project-wide (DynamicsManager.asset) — make the freshly
@@ -88,7 +95,7 @@ namespace MaxWorlds.Tests.EditMode
         public void LandsPastAHedgeOrPot_ButStillClampsAtAGenuineWall()
         {
             (GameObject max, PlayerAbilities abilities) = BuildMax();
-            GameObject hedge = SpawnObstacle(onCoverLayer: false);
+            GameObject hedge = SpawnObstacle(onCoverLayer: false, z: 2f);
             try
             {
                 bool blinked = abilities.TryTeleport(Vector3.forward);
@@ -106,15 +113,22 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             (max, abilities) = BuildMax();
-            GameObject wall = SpawnObstacle(onCoverLayer: true);
+            // MV-847: the wall now sits ON the aimed destination (z=4), not midway (z=2) — a wall
+            // merely in the path no longer matters (see the hedge scenario above, which already
+            // proves that); only a wall the circle itself lands on should redirect Max.
+            GameObject wall = SpawnObstacle(onCoverLayer: true, z: 4f);
             try
             {
                 bool blinked = abilities.TryTeleport(Vector3.forward);
 
+                // MV-847: nearest-fit search steps back from the destination (z=4) in 0.25m increments
+                // against a wall spanning z=3.75..4.25 (radius 0.4 capsule clears once its centre drops
+                // below z=3.35) — the third probe, z=3.25, is the first that fits.
                 Assert.That(blinked, Is.True, "precondition: an acquired, off-cooldown Teleport must fire");
-                Assert.That(max.transform.position.z, Is.LessThan(RigOrigin.z + 1.5f),
-                    "MV-670 AC2: a genuine wall/building collider must still stop a same-room blink short " +
-                    "of it, not let Max pass through the way a hedge/pot now does");
+                Assert.That(Vector3.Distance(max.transform.position, RigOrigin + new Vector3(0f, 0f, 3.25f)),
+                    Is.LessThan(0.05f),
+                    "MV-847: a genuine wall/building collider the circle lands ON must redirect Max to " +
+                    "the nearest point that actually fits, not let him clip through it");
             }
             finally
             {
