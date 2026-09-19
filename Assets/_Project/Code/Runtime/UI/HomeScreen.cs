@@ -243,9 +243,9 @@ namespace MaxWorlds.UI
         /// owned-but-unupgraded floor, SECONDARY mystery-locked untouched, exactly as a player who
         /// cleared World 1 would arrive.</item>
         /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
-        /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>, plus
-        /// every FORGE fusion forged (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content,
-        /// not to make the tester grind a rig first.</item>
+        /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>
+        /// (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content, not to make the tester
+        /// grind a rig first. FORGE itself stays untouched (MV-850: World 1 only until redesigned).</item>
         /// </list>
         /// <see cref="StartSlotWorld2"/> is a one-line call onto this with the original MV-726 shape
         /// (world 1, maxRig: false) so the two paths can never drift (MV-726 AC4).</summary>
@@ -284,12 +284,18 @@ namespace MaxWorlds.UI
         /// every node id <see cref="RigBoard.AllIds"/> lists raised to its own
         /// <see cref="RigBoard.MaxLevel"/>, through <see cref="RigState.RestoreSnapshot"/> (the same
         /// shape a mid-run checkpoint restore already uses, so this needs no parallel state-setting
-        /// path), then every FORGE fusion forged through <see cref="RigFusionState.TryForge"/> (both
-        /// parent categories are lit by construction once every node is owned). The id/fusion lists are
-        /// read from the loaded board each time, never hard-coded, so this keeps working unmodified if
-        /// a node or fusion is ever added to the board. Maxing <c>s_rkt</c> here also clears
-        /// <see cref="RigState.SecondaryLocked"/> on its own (that flag is just "mystery armed AND
-        /// s_rkt owned") — no special case needed.</summary>
+        /// path), then an attempt at every FORGE fusion through <see cref="RigFusionState.TryForge"/>
+        /// (both parent categories are lit by construction once every node is owned). The id/fusion
+        /// lists are read from the loaded board each time, never hard-coded, so this keeps working
+        /// unmodified if a node or fusion is ever added to the board. Maxing <c>s_rkt</c> here also
+        /// clears <see cref="RigState.SecondaryLocked"/> on its own (that flag is just "mystery armed
+        /// AND s_rkt owned") — no special case needed.
+        ///
+        /// MV-850: for World 2+ (every world this method's own caller can reach — see
+        /// <see cref="StartSlotWorld"/>'s <c>worldIndex &gt;= 2</c> WORLD 3 button), the
+        /// <see cref="RigFusionState.TryForge"/> calls below are a no-op — FORGE is World 1 only until
+        /// the four fusions are redesigned for World 2's kit, so a "fully maxed" World 3 rig correctly
+        /// leaves FORGE untouched rather than forging fusions the board no longer even shows.</summary>
         private static void MaxOutRig()
         {
             var levels = new Dictionary<string, int>();

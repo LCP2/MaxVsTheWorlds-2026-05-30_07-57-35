@@ -13,12 +13,18 @@ namespace MaxWorlds.Tests.EditMode
     /// <c>maxRig: true</c> path (the plain, EditMode-testable method behind the WORLD 3 button) drops
     /// the tester in with a completely maxed rig on World 2's board (the board World 3 also loads,
     /// <see cref="RigBoardLibrary.ForWorld"/>'s own rule): every node at its own board-authored
-    /// <see cref="RigBoard.MaxLevel"/>, every category unlocked, SECONDARY's mystery flag cleared by
-    /// <c>s_rkt</c> being owned rather than a special case, and every FORGE fusion forged.
+    /// <see cref="RigBoard.MaxLevel"/>, every category unlocked, and SECONDARY's mystery flag cleared by
+    /// <c>s_rkt</c> being owned rather than a special case.
     ///
     /// Fails on base commit 16005b0: <c>HomeScreen.StartSlotWorld</c> does not exist there (only the
     /// single-world <c>StartSlotWorld2</c>) — this does not compile against that commit (quoted in the
     /// fix comment).
+    ///
+    /// AC4 (originally "every FORGE fusion forged") updated by MV-850: FORGE is World 1 only now (the
+    /// four fusions are broken against World 2's kit until redesigned), so <c>RigFusionState.IsForged</c>
+    /// reads false here regardless of what <see cref="HomeScreen.MaxOutRig"/> attempts — this is the
+    /// masking <see cref="MV850ForgeHiddenInWorld2Tests"/> covers directly; this file only needed its own
+    /// assertion flipped to stop asserting the now-retired behaviour.
     /// </summary>
     public sealed class MV736World3MaxRigTests
     {
@@ -84,9 +90,11 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(RigState.IsCategoryUnlocked(category), $"{category} must be unlocked");
             Assert.IsFalse(RigState.SecondaryLocked, "SECONDARY must no longer read as mystery-locked");
 
-            // AC4: all four fusions forged.
+            // AC4 (MV-850): FORGE is World 1 only now — a "fully maxed" World 3 rig must NOT read any
+            // fusion as forged, even though MaxOutRig still attempts every TryForge (a no-op outside
+            // World 1).
             foreach (string fusionId in new[] { "f_del", "f_bgd", "f_ovc", "f_skr" })
-                Assert.IsTrue(RigFusionState.IsForged(fusionId), $"{fusionId} must be forged");
+                Assert.IsFalse(RigFusionState.IsForged(fusionId), $"{fusionId} must not be forged — FORGE is World 1 only (MV-850)");
         }
     }
 }

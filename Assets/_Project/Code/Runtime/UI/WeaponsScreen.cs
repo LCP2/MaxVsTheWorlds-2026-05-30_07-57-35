@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -685,7 +686,13 @@ namespace MaxWorlds.UI
 
         private IReadOnlyList<RigCategoryLayout> Categories => _phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
         private IReadOnlyList<RigAbilityLayout> Abilities => _phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
-        private IReadOnlyList<RigFusionLayout> Fusions => _phoneMode ? RigBoardLayout.PhoneFusions : RigBoardLayout.Fusions;
+        /// <summary>MV-850: empty in World 2+ — FORGE is World 1 only until the four fusions are
+        /// redesigned for the LPPE/Shoulder Rack kit. Every reader of this property (node building,
+        /// connector building, live refresh) goes through it rather than <see cref="RigBoardLayout"/>
+        /// directly, so gating it here is the one switch that hides the whole row.</summary>
+        private IReadOnlyList<RigFusionLayout> Fusions =>
+            !RigFusionState.EnabledInWorld(RigBoard.ActiveWorldIndex) ? Array.Empty<RigFusionLayout>() :
+            _phoneMode ? RigBoardLayout.PhoneFusions : RigBoardLayout.Fusions;
         private float RadiusCategory => _phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
         private float RadiusAbility => _phoneMode ? RigBoardLayout.RadiusAbilityPhone : RigBoardLayout.RadiusAbility;
         private float RadiusFusion => _phoneMode ? RigBoardLayout.RadiusFusionPhone : RigBoardLayout.RadiusFusion;
@@ -2240,6 +2247,11 @@ namespace MaxWorlds.UI
         /// from.</summary>
         private void BuildForgeSection(RectTransform boardRoot)
         {
+            // MV-850: no divider, no "FORGE" label, no caption, no diamonds — the whole row is gone in
+            // World 2+, not just the un-buildable nodes (Fusions is already empty there, but the header
+            // furniture above it isn't gated by that property).
+            if (!RigFusionState.EnabledInWorld(RigBoard.ActiveWorldIndex)) return;
+
             float dividerY = ForgeDividerY;
             var divider = AddImage(boardRoot, HudTextures.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
             Anchor(divider.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
