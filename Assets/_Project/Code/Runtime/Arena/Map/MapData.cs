@@ -170,6 +170,11 @@ namespace MaxWorlds.Arena
         /// perform, resolved from <see cref="WorldReplicator.capacity"/>. 0 for every other kind.</summary>
         public int capacity;
 
+        /// <summary>Deck only (MV-852) — resolved from <see cref="WorldDeck.walled"/>: every non-mouth
+        /// edge gets a solid, collider-bearing parapet instead of the ordinary open MV-821 edge band.
+        /// False for every other kind.</summary>
+        public bool walled;
+
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means
         /// the gate never opens, which validation rejects: a locked door with no key is a bug every

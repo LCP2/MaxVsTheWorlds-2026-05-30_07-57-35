@@ -7,21 +7,24 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-792: every one of World 2's 20 sludge rects steered its flow direction by looking up an
+    /// MV-792: every one of World 2's sludge rects steered its flow direction by looking up an
     /// entity id, "outfall", that no map authors — <c>MapRuntime.cs</c> says so in its own words:
     /// "today's placeholder World 2 config, which authors no outfall gate yet". The lookup always
     /// returned null, so <see cref="StormdrainDressing"/> fell back to <c>Vector3.forward</c> for every
-    /// rect regardless of its own shape. Every one of the 20 authored rects is wider along X than deep
-    /// along Z (a1 is 22x4, a3 is 36x5, ...), so the fallback was wrong for all twenty. Fails on base
+    /// rect regardless of its own shape. Every one of the authored rects is wider along X than deep
+    /// along Z (a1 is 22x4, a3 is 36x5, ...), so the fallback was wrong for all of them. Fails on base
     /// commit edd9c3c: <c>StormdrainDressing.SludgeFlowDirection</c> does not exist there (this test
     /// fails to COMPILE), and the equivalent inline lookup in <c>DressSludge</c> resolves
     /// <c>Vector3.forward</c> (a Z-axis direction) for a 22x4 rect, which is wide along X.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1), asserting RESOLVED values only (Rule 2,
     /// Tier 2): the direction a synthetic rect on each axis actually resolves; the direction every one
-    /// of World 2's 20 shipped sludge rects actually resolves; the longest bounding axis a built tile's
+    /// of World 2's shipped sludge rects actually resolves; the longest bounding axis a built tile's
     /// two lip children actually carry; how far a built tile's rig actually ticks a band in 1.0s; and
     /// the direction resolved when a map DOES author an "outfall" entity.
+    ///
+    /// Count updated by MV-852 (World 2 re-layout): a7 and a13 were deleted outright along with their
+    /// sludge rects, dropping the count from 20 to 18.
     /// </summary>
     public sealed class MV792SludgeFlowAxisTests
     {
@@ -66,7 +69,7 @@ namespace MaxWorlds.Tests.EditMode
                     $"sludge rect '{e.id}' ({e.width}x{e.depth}) must resolve a flow axis parallel to its own " +
                     $"long axis ({(expectAxisX ? "X" : "Z")}), resolved {flow}");
             }
-            Assert.AreEqual(20, sludgeCount, "World 2 must still author all 20 sludge rects this ticket counted");
+            Assert.AreEqual(18, sludgeCount, "World 2 must still author all 18 sludge rects (MV-852 deleted a7/a13's)");
 
             // ---- AC3: a built tile's two lip children run along its own long side ----
             var lipHost = new GameObject("MV792 lip host").transform;

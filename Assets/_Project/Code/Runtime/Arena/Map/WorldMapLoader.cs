@@ -357,6 +357,7 @@ namespace MaxWorlds.Arena
                         width = rect.width,
                         depth = rect.height,
                         height = height,
+                        walled = d.walled,
                     });
                 }
 

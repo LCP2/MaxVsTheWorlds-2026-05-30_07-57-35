@@ -13,7 +13,7 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-836 (Lee, 2026-09-17): "Comment this all out for now. No flood concept. Max and robots are
     /// not hurt or slowed down." Fails on the pre-ticket base commit (52b3cf2): <c>StormdrainFlood</c>
-    /// has no <c>FloodEnabled</c> switch, so the runner ticks the real flood — after 600 s with all 25
+    /// has no <c>FloodEnabled</c> switch, so the runner ticks the real flood — after 600 s with all
     /// World 2 Replicators alive, Max (parked on <c>a20</c>, a non-sludge point banded to flood by
     /// MV-774's own "last third of the route" rule) takes real damage and
     /// <see cref="MapSlowZones"/> reads 0.6 there instead of 1.0; the Sludgequeen's own flood similarly
@@ -67,13 +67,13 @@ namespace MaxWorlds.Tests.EditMode
         public void FloodSwitchedOff_NoDamage_NoSlow_AndTheBossFloodIsInert()
         {
             // Same BuildBody collider-strip [Error] every full-World2-build EditMode test in this suite
-            // carries once Build() actually runs — see MV829HatchLockTests' own note.
+            // carries once Build() actually runs — see other World2 EditMode tests' own note.
             LogAssert.ignoreFailingMessages = true;
 
             GameObject root = null, pathGo = null, playerGo = null, floodRunnerGo = null, bossGo = null, bossReceiverGo = null;
             try
             {
-                // === AC1: the real World 2 loader, 600 simulated seconds with all 25 Replicators alive
+                // === AC1: the real World 2 loader, 600 simulated seconds with all Replicators alive
                 // === — Max takes no flood damage, and a20 (banded to flood, no sludge of its own) reads
                 // === full speed. ===
                 WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
@@ -98,8 +98,8 @@ namespace MaxWorlds.Tests.EditMode
                 var runner = root.AddComponent<WorldRunner>();
                 runner.Configure(cfg, map, build, null); // no AreaAccumulationDirector needed for this AC
 
-                Assert.AreEqual(25, FactoryCensus.ReplicatorsAlive,
-                    "setup failure: World 2's own 25 Replicators must all be standing for 'all Replicators alive' to mean anything");
+                Assert.AreEqual(23, FactoryCensus.ReplicatorsAlive,
+                    "setup failure: World 2's own 23 Replicators (MV-852: a7/a13 deleted, dropping the MV-700 count of 25) must all be standing for 'all Replicators alive' to mean anything");
 
                 WorldArea a20 = cfg.Area("a20");
                 Assert.IsNotNull(a20, "setup failure: World 2 must author area 'a20'");

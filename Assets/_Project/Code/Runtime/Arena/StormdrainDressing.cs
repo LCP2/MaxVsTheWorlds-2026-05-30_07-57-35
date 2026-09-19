@@ -183,7 +183,7 @@ namespace MaxWorlds.Arena
                 if (map.wallHeight >= 2.2f) overheadFaces.Add(face);
             }
 
-            DressOverheadJunctions(overhead, overheadFaces, map.wallThickness);
+            DressOverheadJunctions(overhead, overheadFaces, map.wallThickness, map);
             DressOverheadCrossMains(overhead, crossMainTargets);
 
             DressWallPanels(root, host, map);
@@ -247,8 +247,19 @@ namespace MaxWorlds.Arena
         /// <summary>One junction box per corner where two of this ticket's own overhead runs meet
         /// (change 4) — found by pairing up the wall faces that actually got a run (already filtered to
         /// <c>wallHeight &gt;= 2.2 m</c> by the caller) and looking for a shared endpoint, deduplicated so
-        /// three-plus faces meeting at one point (an L or a T) still get exactly one box.</summary>
-        private static void DressOverheadJunctions(Transform overhead, List<WallFace> faces, float wallThickness)
+        /// three-plus faces meeting at one point (an L or a T) still get exactly one box.
+        ///
+        /// MV-852: at a T-junction (one area's wall ending exactly where a second, unrelated area's wall
+        /// begins — World 2's a10/a11-vs-a18 step, where a18 sits flush with a10's own north wall but a11
+        /// doesn't reach that far west) <see cref="JunctionEpsilon"/>'s tolerance can bridge a face to the
+        /// WRONG neighbour: the nearby wall's far-side surface (a DIFFERENT room's own wall, not the true
+        /// corner partner), landing the box's own LED-panel light pool nowhere near either room's walls —
+        /// exactly the "crossing the playable middle" MV-802 guards against, just from a junction rather
+        /// than a hugging main. <see cref="FacesShareZone"/> rejects a pair whose two faces don't actually
+        /// bound the SAME room WITHOUT claiming <paramref name="faces"/>' corner key, so the genuine
+        /// partner — tried later in the same double loop, since every (i, j) pair is visited exactly
+        /// once — still gets to build the box.</summary>
+        private static void DressOverheadJunctions(Transform overhead, List<WallFace> faces, float wallThickness, MapData map)
         {
             float epsilon = JunctionEpsilon(wallThickness);
             var seen = new HashSet<Vector2Int>();
@@ -259,6 +270,13 @@ namespace MaxWorlds.Arena
                 {
                     if (!SharedEndpoint(faces[i], faces[j], epsilon, out Vector2 corner, out Vector2 outSum)) continue;
                     if (outSum.sqrMagnitude < 0.0001f) continue;
+                    // MV-852: a real corner turns — its two faces' Out vectors are roughly perpendicular.
+                    // Two collinear segments of the SAME wall line, independently capped where a third
+                    // area's boundary splits them (World 2's a10/a11 wall, fragmented exactly where a18
+                    // begins), share an Out direction and can still land within epsilon of each other;
+                    // without this they read as a false "corner" and build a junction mid-wall.
+                    if (Mathf.Abs(Vector2.Dot(faces[i].Out, faces[j].Out)) > 0.1f) continue;
+                    if (!FacesShareZone(faces[i], faces[j], corner, map)) continue;
 
                     var key = new Vector2Int(Mathf.RoundToInt(corner.x * 2f), Mathf.RoundToInt(corner.y * 2f));
                     if (!seen.Add(key)) continue;
@@ -270,6 +288,42 @@ namespace MaxWorlds.Arena
                     StormdrainKit.BuildOverheadJunctionBox(overhead, at);
                 }
             }
+        }
+
+        /// <summary>True if <paramref name="f1"/> and <paramref name="f2"/> both actually bound the SAME
+        /// room — the real distinguishing fact a shared endpoint alone can't tell apart at a T-junction
+        /// (see <see cref="DressOverheadJunctions"/>'s own MV-852 note): two DIFFERENT rooms' walls can
+        /// end up with endpoints within <see cref="JunctionEpsilon"/> of each other purely because a
+        /// third room's corner happens to sit nearby, with no shared corner between the two at all.
+        /// Resolved by sampling a point just inside each face's OWN room (a short step in from
+        /// <paramref name="corner"/> along the face's own run, then <see cref="WallFace.Out"/>'s own
+        /// direction) and checking they land in the same <see cref="MapZone"/> — ambiguous right at
+        /// <paramref name="corner"/> itself, unambiguous a metre in from it.</summary>
+        private static bool FacesShareZone(WallFace f1, WallFace f2, Vector2 corner, MapData map)
+        {
+            MapZone z1 = ZoneContainingPoint(map, SampleInsideOwnRoom(f1, corner));
+            MapZone z2 = ZoneContainingPoint(map, SampleInsideOwnRoom(f2, corner));
+            return z1 != null && ReferenceEquals(z1, z2);
+        }
+
+        private static Vector2 SampleInsideOwnRoom(WallFace f, Vector2 corner)
+        {
+            Vector2 near = Vector2.Distance(f.A, corner) <= Vector2.Distance(f.B, corner) ? f.A : f.B;
+            Vector2 far = near == f.A ? f.B : f.A;
+            float inset = Mathf.Min(1f, f.Length * 0.4f);
+            Vector2 alongFace = (far - near).normalized;
+            return near + alongFace * inset + f.Out * 0.5f;
+        }
+
+        /// <summary>The first floor-level (<c>level == 0</c>) zone whose footprint contains
+        /// <paramref name="p"/> — restricted to level 0 so a deck overlay sharing a floor zone's own
+        /// footprint (MV-697, e.g. a3/a19) never reads as a "different room" from that floor.</summary>
+        private static MapZone ZoneContainingPoint(MapData map, Vector2 p)
+        {
+            if (map?.zones == null) return null;
+            foreach (MapZone zone in map.zones)
+                if (zone != null && zone.level == 0 && zone.Contains(p.x, p.y)) return zone;
+            return null;
         }
 
         private static bool SharedEndpoint(WallFace f1, WallFace f2, float epsilon, out Vector2 corner, out Vector2 outSum)
