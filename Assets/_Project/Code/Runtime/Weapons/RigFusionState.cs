@@ -23,7 +23,18 @@ namespace MaxWorlds.Weapons
         /// <summary>Fired whenever a fusion is forged, or the state is reset.</summary>
         public static event Action Changed;
 
-        public static bool IsForged(string id) => s_forged.Contains(id);
+        /// <summary>Whether FORGE is playable in <paramref name="worldIndex"/>'s world (MV-850) — World 1
+        /// only, until the four fusions are redesigned for World 2's LPPE/Shoulder Rack kit (today
+        /// they're broken there: DELUGE only touches World 1 weapons, "SLOT B/U" has no caller,
+        /// OVERCHARGE never spends a cell, SKIRMISH lost half its effect to MV-579). The one switch the
+        /// eventual redesign ticket flips.</summary>
+        public static bool EnabledInWorld(int worldIndex) => worldIndex < 1;
+
+        /// <summary>False for every fusion once <see cref="RigBoard.ActiveWorldIndex"/> leaves World 1
+        /// (MV-850), regardless of what was forged back in World 1 — a fusion forged there has no effect
+        /// in World 2+ (no BLINKGUARD bubble, no SKIRMISH snap, no OVERCHARGE rate). The underlying forge
+        /// itself is never cleared, only masked, so it reads true again on returning to World 1.</summary>
+        public static bool IsForged(string id) => EnabledInWorld(RigBoard.ActiveWorldIndex) && s_forged.Contains(id);
 
         /// <summary>Both parent categories have at least one owned ability — the board's "ready"
         /// (amber) vs "not ready" (faint, <c>? ? ?</c>) rule, independent of parts currently banked.</summary>
@@ -47,11 +58,14 @@ namespace MaxWorlds.Weapons
         /// <summary>Forges <paramref name="id"/> if it exists, isn't already forged, and is eligible.
         /// Does not touch <see cref="MaxWorlds.Pickups.PickupWallet"/> — the caller
         /// (<see cref="PartSpend.TrySpendOnFusion"/>) only actually spends parts once this returns
-        /// true, same pattern every other RIG spend in this file's sibling classes follows.</summary>
+        /// true, same pattern every other RIG spend in this file's sibling classes follows. Refuses
+        /// outright outside World 1 (MV-850) — "nothing in it can be bought" holds even if something
+        /// ever calls this without going through the (already forge-less) World 2+ board UI.</summary>
         public static bool TryForge(string id)
         {
+            if (!EnabledInWorld(RigBoard.ActiveWorldIndex)) return false;
             if (!RigBoard.FusionExists(id)) return false;
-            if (IsForged(id)) return false;
+            if (s_forged.Contains(id)) return false;
             if (!IsEligible(id)) return false;
             s_forged.Add(id);
             Changed?.Invoke();
