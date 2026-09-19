@@ -99,6 +99,13 @@ namespace MaxWorlds.Combat
         /// the RCDA's per-tick cost is.</summary>
         public float EnergyPerPulse => DefaultEnergyPerPulse;
 
+        /// <summary>MV-846 CAPACITY (<c>p_cap</c>): the tank's own max right now — 140 at level 0,
+        /// rising to 315 at the track's level-5 cap. Distinct from World 1's <c>p_flw</c>, which cuts
+        /// the RCDA's drain and never touches a tank's max at all.</summary>
+        public float EffectiveMaxEnergy => WeaponCatalog.EffectiveMaxEnergy(
+            BlasterTuning.MaxEnergy, WeaponSystemState.LppeTrackLevel(LppeTrackKind.Capacity),
+            WeaponCatalog.DefaultLppeCapacityPerLevel);
+
         private float _tickTimer;
         private bool _lastEmitting;
         private bool _depleted;
@@ -123,7 +130,7 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
-            _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+            _tank = new EnergyPool(EffectiveMaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
 
             // MV-758: same "resolve-or-attach, then Init explicitly" shape as WaterBlaster/WaterVfx —
             // neither Awake nor OnEnable reliably run for AddComponent outside Play mode.
@@ -142,6 +149,12 @@ namespace MaxWorlds.Combat
         private void Update()
         {
             float dt = Time.deltaTime;
+            // MV-846: buying a CAPACITY level must raise the tank's max immediately and hand the
+            // difference straight to the current charge (EnergyPool.Retune's own "a bigger tank you
+            // have to earn back is a worse upgrade than one that just tops you up" rule) — checked
+            // every frame rather than on a WeaponSystemState.Changed subscription since Retune is
+            // already a no-op once the max stops moving.
+            _tank.Retune(EffectiveMaxEnergy);
             _tank.Tick(dt);
             TickHitStreaks(dt);
 

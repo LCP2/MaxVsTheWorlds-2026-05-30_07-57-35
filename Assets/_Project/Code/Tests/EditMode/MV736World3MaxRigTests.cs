@@ -62,13 +62,14 @@ namespace MaxWorlds.Tests.EditMode
             SaveSlotData after = SaveSystem.Load(0);
             Assert.AreEqual(2, after.WorldIndex, "WORLD 3 must seed WorldIndex = 2");
 
-            // AC2: every node on the board (21 ids) sits at its own authored maxLevel — assert the
-            // sum (88: the ticket's original 77, plus MV-840's +2 on e_ff and +5 on u_dmg, plus
-            // MV-844's own +4 on p_dmg's 4 -> 8 level cap) plus one named node from each of the five
-            // categories, read live from RigBoard rather than hard-coded per-node.
+            // AC2: every node on the board (22 ids) sits at its own authored maxLevel — assert the
+            // sum (93: the ticket's original 77, plus MV-840's +2 on e_ff and +5 on u_dmg, plus
+            // MV-844's own +4 on p_dmg's 4 -> 8 level cap, plus MV-846's own new p_cap node at a
+            // 5-level cap) plus one named node from each of the five categories, read live from
+            // RigBoard rather than hard-coded per-node.
             int sum = 0;
             foreach (var kv in RigState.SnapshotLevels()) sum += kv.Value;
-            Assert.AreEqual(88, sum, "every node on the board must be maxed, summing to 88");
+            Assert.AreEqual(93, sum, "every node on the board must be maxed, summing to 93");
 
             Assert.AreEqual(RigBoard.MaxLevel("p_dmg"), RigState.Level("p_dmg"), "p_dmg (PRIMARY) must be maxed");
             Assert.AreEqual(RigBoard.MaxLevel("s_rkt"), RigState.Level("s_rkt"), "s_rkt (SECONDARY) must be maxed");

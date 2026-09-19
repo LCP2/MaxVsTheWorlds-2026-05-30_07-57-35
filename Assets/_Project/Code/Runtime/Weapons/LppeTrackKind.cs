@@ -13,5 +13,10 @@ namespace MaxWorlds.Weapons
         /// <summary>FORK (<c>p_frk</c>): a killing pulse releases one further pulse at the next target.
         /// One level, no chaining.</summary>
         Fork,
+
+        /// <summary>CAPACITY (<c>p_cap</c>, MV-846): enlarges the LPPE's own energy tank max, 140 -&gt;
+        /// 315 over 5 levels. Distinct from World 1's <c>p_flw</c> (which cuts the RCDA's drain and has
+        /// no LPPE consumer at all) — do not conflate the two, their levels mean different things.</summary>
+        Capacity,
     }
 }

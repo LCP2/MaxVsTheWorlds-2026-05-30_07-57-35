@@ -262,9 +262,15 @@ namespace MaxWorlds.Weapons
         /// and Reload cap at 3 (same shape as the Water Balloon's own three tracks).</summary>
         public static int MaxLevel(ShoulderRackTrackKind kind) => kind == ShoulderRackTrackKind.RocketDamage ? 4 : 3;
 
-        /// <summary>The level cap for a LPPE-only track (MV-768), matching <c>rig_board.world2.json</c>'s
-        /// own per-node <c>maxLevel</c> — RATE caps at 4, FORK at 1.</summary>
-        public static int MaxLevel(LppeTrackKind kind) => kind == LppeTrackKind.Rate ? 4 : 1;
+        /// <summary>The level cap for a LPPE-only track (MV-768, MV-846), matching
+        /// <c>rig_board.world2.json</c>'s own per-node <c>maxLevel</c> — RATE caps at 4, CAPACITY at 5,
+        /// FORK at 1.</summary>
+        public static int MaxLevel(LppeTrackKind kind) => kind switch
+        {
+            LppeTrackKind.Rate => 4,
+            LppeTrackKind.Capacity => 5,
+            _ => 1,
+        };
 
         /// <summary>The LPPE's fire interval at a given RATE (<c>p_rof</c>) level, seconds (MV-768,
         /// board comment: "fire rate 0.22s -&gt; 0.16s over these 4 levels") — linearly interpolated from
@@ -276,6 +282,19 @@ namespace MaxWorlds.Weapons
         public static float EffectivePulseInterval(float baseInterval, int rateLevel, float floorInterval, int maxLevel) =>
             Mathf.Lerp(baseInterval, floorInterval,
                 Mathf.Clamp01((float)Mathf.Max(0, rateLevel) / Mathf.Max(1, maxLevel)));
+
+        /// <summary>Fraction each CAPACITY (<c>p_cap</c>) track level ADDS to the LPPE's tank max
+        /// (MV-846, Lee: "add capacity — I run out of weapon too often and this needs to be
+        /// upgradable") — 140 * (1 + 0.25*L): 140/175/210/245/280/315 over 5 levels.</summary>
+        public const float DefaultLppeCapacityPerLevel = 0.25f;
+
+        /// <summary>The LPPE's tank max at a given CAPACITY level (MV-846). Like RATE
+        /// (<see cref="EffectivePulseInterval"/>), CAPACITY starts UNOWNED at level 0 and that level-0
+        /// reading IS the base, so this scales the raw level directly rather than the usual
+        /// (level - 1) every level-1-starts-owned track (<see cref="EffectiveDamagePerTick"/> etc.)
+        /// uses.</summary>
+        public static float EffectiveMaxEnergy(float baseMax, int capacityLevel, float perLevel) =>
+            baseMax * (1f + perLevel * Mathf.Max(0, capacityLevel));
 
         /// <summary>Base cooldown, seconds. Teleport is the only remaining AbilityKind with an
         /// on-screen control (spec §6a) and a real cooldown — Water Balloon's own base cooldown moved

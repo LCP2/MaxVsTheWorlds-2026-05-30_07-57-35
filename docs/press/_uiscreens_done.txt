@@ -4,7 +4,7 @@ probe6 (outside-background==composited-base): PASS — expected #000000, got #00
 -- conformance: rig-16x9 (1920x1080) --
 PASS node-position: 26/26 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.167 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.168 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor
@@ -43,13 +43,13 @@ MV-538-progress.png (1920x1080)
 MV-605.png (1920x1080)
 rig-world2-16x9.png (1920x1080)
 -- conformance: rig-world2-16x9 (1920x1080) --
-PASS node-position: 26/26 nodes present at their json coordinate
+PASS node-position: 27/27 nodes present at their json coordinate
 PASS hex-orientation: 4/4 nodes at width/height ratio 0.866 +/-0.05 (1 locked, skipped — no glow to ray-march)
-PASS family-contrast: lit=0.146 unlit=0.031 ratio=4.727 (need >=1.5)
+PASS family-contrast: lit=0.147 unlit=0.034 ratio=4.35 (need >=1.5)
 PASS glow-containment: 8/8 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor
-PASS y-bounds-containment: 30/30 nodes within [0,1080] visible frame
+PASS y-bounds-containment: 31/31 nodes within [0,1080] visible frame
 weapons-button-idle.png (1920x1080)
 weapons-button-parts.png (1920x1080)
 weapons-button-module.png (1920x1080)

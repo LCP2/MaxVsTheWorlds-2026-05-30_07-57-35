@@ -22,7 +22,11 @@ namespace MaxWorlds.Tests.EditMode
     /// keeping the same 50-cells-a-level cost this ticket's own table already charges it (ticket's own
     /// "existing formula... Keep") -- 4 extra levels at 50 cells each add exactly 200 to the total this
     /// test measures (711 -&gt; 911), so the asserted range widens by that same 200 rather than the old
-    /// 690-730 band.</summary>
+    /// 690-730 band.
+    ///
+    /// MV-846 adds World 2's own new <c>p_cap</c> node (5 levels, standard unlock/upgrade costs, no
+    /// per-node override) -- its unlock plus 4 upgrades scaled by the same 2.5x World2PrimarySecondary
+    /// multiplier add ~150 cells (911 -&gt; 1061), so the range widens by that amount again.</summary>
     public sealed class MV767WorldTwoEconomyTests
     {
         [TearDown]
@@ -32,10 +36,10 @@ namespace MaxWorlds.Tests.EditMode
         public void World2Economy_MatchesTheMV767Rebalance()
         {
             int world2Total = TotalPrimarySecondaryCost(worldIndex: 1);
-            Assert.That(world2Total, Is.InRange(890, 930),
+            Assert.That(world2Total, Is.InRange(1041, 1081),
                 $"World 2's PRIMARY+SECONDARY total must land near parity with its (reduced) Parts " +
-                $"supply after MV-767's 2.5x multiplier and MV-844's own +200 (4 more p_dmg levels at " +
-                $"50 cells each), got {world2Total}");
+                $"supply after MV-767's 2.5x multiplier, MV-844's own +200 (4 more p_dmg levels at 50 " +
+                $"cells each) and MV-846's own new p_cap node (~150 more), got {world2Total}");
 
             int world1Total = TotalPrimarySecondaryCost(worldIndex: 0);
             Assert.That(world1Total, Is.EqualTo(365),
