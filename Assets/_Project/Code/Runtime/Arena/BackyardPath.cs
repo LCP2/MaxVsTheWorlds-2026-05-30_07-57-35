@@ -52,6 +52,7 @@ namespace MaxWorlds.Arena
         private static readonly Dictionary<string, GameObject> NoActors = new Dictionary<string, GameObject>(0);
 
         private MapData _map;
+        private WorldConfig _cfg;
         private MapBuild _build;
         private BackyardPathLayout _layout = BackyardPathLayout.Default;
         private AreaAccumulationDirector _areaDirector;
@@ -59,6 +60,12 @@ namespace MaxWorlds.Arena
 
         /// <summary>The map this level was built from. Null if it failed to load.</summary>
         public MapData Map => _map;
+
+        /// <summary>The world config this level was built from (MV-855) — the same instance
+        /// <see cref="WorldRunner"/> parses its gate conditions off of, exposed so a caller (the map
+        /// screen, resolving which Replicators still gate a locked door) can read gate conditions without
+        /// reloading or re-deriving them. Null if the map failed to load.</summary>
+        public WorldConfig Cfg => _cfg;
 
         /// <summary>Drives the gated arena's ambient population (v0.5 recut spec §2, MV-242). Null if
         /// the map failed to load — there is no run to populate.</summary>
@@ -99,11 +106,13 @@ namespace MaxWorlds.Arena
 
             WorldConfig cfg = WorldLibrary.Load(key);
             if (cfg == null) return;   // WorldLibrary has already said why
+            _cfg = cfg;
 
             if (!WorldMapLoader.TryLoad(cfg, out _map, out string reason))
             {
                 Debug.LogError($"[BackyardPath] world '{key}' is not playable: {reason}");
                 _map = null;
+                _cfg = null;
                 return;
             }
 
