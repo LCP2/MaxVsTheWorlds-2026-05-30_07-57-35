@@ -30,7 +30,7 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class MV804MaxLeanTests
     {
-        private const float LeanAngle = 9f;
+        private const float LeanAngle = 6f;   // MaxRig.leanAngle (private) — MV-851: was 9
         private const float ShockLeanAngle = 6f;
         private const float ShockSequenceDuration = 0.15f; // 0.03s kick + 0.12s return
 

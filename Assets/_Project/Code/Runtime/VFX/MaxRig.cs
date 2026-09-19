@@ -19,20 +19,19 @@ namespace MaxWorlds.VFX
     /// rusher is a capsule because it is quick, the bruiser is a box because it is a fridge, the boss
     /// is a mower (YT-90). The one thing on screen the player is actually looking at was a blob.
     ///
-    /// He is a kid in a red hoodie now, built to be read from thirty metres up at 72° — which, per the
+    /// MV-851 redraws him to match the title-reveal hero art: a dark-blue sleeveless tunic and shorts,
+    /// bare arms and shins, slim dark boots, dark gloves and a static hair cap — replacing the earlier
+    /// MV-669 red hoodie/goggles body, built to be read from thirty metres up at 72° — which, per the
     /// art bible, is the only angle anybody will ever see him from. That angle decides everything below:
     ///
-    ///   * THE HOOD. Down at the shoulders, behind the neck. From almost overhead you cannot see a
-    ///     face, a chest or a logo — you see the top of a head and the tops of two shoulders. A hood
-    ///     lying across them is the one shape that says "kid in a hoodie" in plan view, and it is why
-    ///     the hood is a piece of geometry and not a texture.
-    ///   * THE BACKPACK, and the messy hair, and the wrench through the tool-belt. Three lumps that
-    ///     break an otherwise symmetrical blob. A silhouette you can read is a silhouette with corners
-    ///     on it; a capsule has none, which is exactly why the capsule failed.
-    ///   * THE GOGGLES, pushed up on his forehead (GDD §9). They are the only thing on Max that is
-    ///     bright and small, and the forehead is the one part of a face a top-down camera can see. They
-    ///     are his eyes, as far as this game is concerned, so they are lit rather than painted — the
-    ///     same trick the boss's lamps use.
+    ///   * THE KNEE. The old body was a rigid pole from the hip, so the walk cycle's own bob (1.7 px)
+    ///     was invisible. A real knee joint (<see cref="MaxBody.MaxBodyResult.Knees"/>) flexing on top
+    ///     of the hip's thigh swing is what makes a step read as a step from a 60° camera.
+    ///   * THE EYES. Two white spheres with dark pupils, canted up toward the camera, replace the old
+    ///     goggle lenses — the goggle geometry that used to read as "his eyes" is gone outright (MV-851).
+    ///   * THE HAIR CAP AND TUNIC SILHOUETTE, and the tool-belt's one pouch. Corners that break an
+    ///     otherwise symmetrical blob. A silhouette you can read is a silhouette with corners on it; a
+    ///     capsule has none, which is exactly why the capsule failed.
     ///
     /// ---------------------------------------------------------------------------------------------
     /// HE CARRIES THE GADGET, AND HE RAISES IT TO AIM
@@ -58,7 +57,7 @@ namespace MaxWorlds.VFX
     ///     <see cref="IDamageable"/> and repaints it flat orange in LateUpdate. Max IS an IDamageable
     ///     (<see cref="PlayerHealth"/>). So if this rig were parented to him — the obvious thing to do —
     ///     every part of it would be claimed and every colour below would be overwritten. His hair, his
-    ///     jeans, his skin, the water in the tank: all flat hoodie-red, one frame later. The rig is
+    ///     tunic, his skin, the water in the tank: all flat player-orange, one frame later. The rig is
     ///     therefore a scene-root object that FOLLOWS Max (see <see cref="Follow"/>) and is under no
     ///     damageable at all. <see cref="KeepsOwnMaterial"/> does NOT save you here — the director does
     ///     not honour it.
@@ -91,46 +90,38 @@ namespace MaxWorlds.VFX
         // split is the whole figure-ground plan, so nothing on this body is allowed to be cool except
         // the steel of the gadget and the water inside it — and those are 10 cm of him.
 
-        /// <summary>The hoodie. Straight from <see cref="CharacterSkin"/>: Max's colour is decided in
-        /// ONE place, and a second hot orange-red living here would drift away from it the first time
-        /// anyone tuned either. It is also the colour of his ground ring (YT-85) and his damage
-        /// numbers — "you" is one colour, everywhere.</summary>
-        private static Color Hoodie => CharacterSkin.BaseColorFor(CharacterRole.Player);
+        /// <summary>MV-851: the tunic and shorts, dark blue — off the hot player-orange
+        /// <see cref="CharacterSkin"/> gives every other actor keyed to <c>CharacterRole.Player</c> (the
+        /// ground ring, YT-85, and the damage numbers still read that colour; only Max's own body paint
+        /// moved). Straight from the approved prototype's <c>buildNew()</c>.</summary>
+        private static readonly Color Tunic = new Color(0.13f, 0.19f, 0.33f);
 
-        /// <summary>
-        /// The hood and the sleeves. The same red, a step down in value.
-        ///
-        /// A step, and not a plunge. The first cut of this was 0.62 and it was wrong for a reason worth
-        /// writing down: from overhead the hood is a big shape sitting right where the camera is looking,
-        /// and at 0.62 it stopped reading as RED and started reading as a dark lump behind his head —
-        /// which spends Max's contrast budget on making him look like he is carrying something. It is
-        /// folded cloth, so it is darker than the stretched cloth over his chest; it is still his jumper,
-        /// so it is still obviously his jumper.
-        ///
-        /// The sleeves take the same tone, and for a different reason: in the hip carry his left arm
-        /// crosses his own chest, and an arm the exact colour of the chest behind it is not an arm, it
-        /// is a stripe.
-        /// </summary>
-        private static Color HoodieShade => Hoodie * 0.80f;
-
-        /// <summary>Cargo trousers. Dark, and almost colourless on purpose.
-        ///
-        /// The legs are a third of him and they are the third nobody needs to read. Anything saturated
-        /// down here competes with the hoodie for the eye, and anything olive or brown would put his
-        /// legs in the same family as the lawn and the timber he is standing on. A dark cool neutral
-        /// does neither: it recedes, and it makes the red above it louder by contrast.</summary>
-        private static readonly Color Trousers = new Color(0.20f, 0.21f, 0.25f);
+        /// <summary>The collar and the shorts hem — a step down in value from <see cref="Tunic"/>, the
+        /// same "folded cloth reads darker than stretched cloth" logic the old hood used to lean on.</summary>
+        private static readonly Color TunicDark = new Color(0.10f, 0.14f, 0.25f);
 
         private static readonly Color Skin = new Color(0.87f, 0.63f, 0.46f);
 
-        /// <summary>Messy brown hair. The single biggest thing a 72° camera sees of him.</summary>
-        private static readonly Color Hair = new Color(0.33f, 0.20f, 0.12f);
+        /// <summary>MV-851: dark brown, off the old hoodie-era hair — the single biggest thing a 72°
+        /// camera sees of him is now a low cap rather than two bunches (see <see cref="MaxBody"/>).</summary>
+        private static readonly Color Hair = new Color(0.19f, 0.11f, 0.06f);
 
-        private static readonly Color Rubber = new Color(0.13f, 0.13f, 0.15f);
+        /// <summary>The boots. Near-black, distinct from <see cref="Dark"/> (the gadget/rack housing
+        /// colour) so a design-fidelity pass can tell the two apart in a screenshot.</summary>
+        private static readonly Color Boot = new Color(0.12f, 0.11f, 0.12f);
 
-        /// <summary>The soles of the high-tops. The only near-white on him, and it is at his feet —
-        /// which is where the eye already goes, because that is where the ground ring is.</summary>
-        private static readonly Color Bone = new Color(0.87f, 0.85f, 0.79f);
+        /// <summary>The soles. MV-851 drops the old near-white "Bone" sole — visible boot soles are no
+        /// longer the only near-white on him now that the eyes are visible too (see <see cref="Eye"/>),
+        /// so there is no readability reason left to keep them bright.</summary>
+        private static readonly Color Sole = new Color(0.20f, 0.17f, 0.16f);
+
+        /// <summary>The cuff and glove riding on each hand grip — distinct from both <see cref="Boot"/>
+        /// and the gadget's own <see cref="Dark"/> housing colour, per the approved prototype.</summary>
+        private static readonly Color Glove = new Color(0.16f, 0.13f, 0.12f);
+
+        /// <summary>The gadget/rack housing colour, unchanged by MV-851 — still the "a tool is not part
+        /// of a person" dark neutral the RCDA/LPPE and Shoulder Rack tubes have always used.</summary>
+        private static readonly Color Dark = new Color(0.13f, 0.13f, 0.15f);
 
         /// <summary>The gadget. Cold, pale steel — the same family as the blades on the boss's reel and
         /// deliberately NOT the family of anything else on Max. A tool is not part of a person.</summary>
@@ -141,19 +132,24 @@ namespace MaxWorlds.VFX
         /// of it. Get this wrong and the tank is just a blue block.</summary>
         private static readonly Color Water = new Color(0.31f, 0.76f, 0.97f);
 
-        /// <summary>MV-669 approved geometry: the goggle lenses moved off amber to a pale blue-white.
-        /// Amber competed with the hoodie for the eye; the pale lens is what makes the raised lens cups
-        /// read as two bright discs from the 60-degree camera, which is the whole point of the new
-        /// goggle geometry. Public: <see cref="MaxPortraitStage"/>'s separate primitive bust reads this
-        /// too (MV-669 rev.3, R6), rather than carrying its own copy of the number that could drift.</summary>
+        /// <summary>MV-851: the goggle geometry that used to wear this colour is gone (AC2), but the
+        /// "pale blue-white" family it established stays — the LPPE's lens and the Shoulder Rack's tubes
+        /// below both still read this way, and both still need one shared cool colour to lerp toward as
+        /// they reload. Public: <see cref="MaxPortraitStage"/>'s separate primitive bust reads this too,
+        /// rather than carrying its own copy of the number that could drift.</summary>
         public static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
 
-        /// <summary>The utility belt band — MV-669's one new silhouette-breaker, giving the torso a
-        /// middle where the old body had none.</summary>
-        private static readonly Color Belt = new Color(0.29f, 0.25f, 0.22f);
+        /// <summary>MV-851: the belt band and its one pouch, both this colour per the approved
+        /// prototype — a warm brown leather rather than the old MV-669 belt's dark neutral.</summary>
+        private static readonly Color Belt = new Color(0.47f, 0.31f, 0.18f);
 
-        /// <summary>The pouches riding on the belt. A shade darker than the band itself.</summary>
-        private static readonly Color Pouch = new Color(0.23f, 0.20f, 0.17f);
+        /// <summary>The eye whites — visible for the first time under MV-851; the old body's goggle
+        /// lenses stood in for "his eyes" instead. <see cref="Pupil"/> sits in front of this.</summary>
+        private static readonly Color Eye = new Color(0.96f, 0.95f, 0.92f);
+
+        /// <summary>The pupils. Close to but distinct from the gadget's own <see cref="Dark"/> — the
+        /// approved prototype gives the pupil its own slightly bluer near-black.</summary>
+        private static readonly Color Pupil = new Color(0.08f, 0.08f, 0.10f);
 
         /// <summary>MV-702: the LPPE's own cyan-white lens — <see cref="LensGlass"/>, to the digit, so
         /// the gadget's glow reads as the same "pale blue-white" family the goggles already established,
@@ -184,13 +180,22 @@ namespace MaxWorlds.VFX
 
         private const float HipY = 0.74f;         // the waist: legs below, everything else above
         private const float HipX = 0.155f;
-        private const float ShoulderY = 0.505f;   // in TORSO space, so it bobs with him
-        private const float ShoulderX = 0.30f;
-        private const float SleeveWidth = 0.155f;
 
-        /// <summary>MV-717: how far a relaxed arm hangs down from the shoulder while not aiming —
-        /// roughly to hip height. See <see cref="PoseArms"/> for why this has to be nonzero.</summary>
-        private const float ArmHangDrop = 0.45f;
+        /// <summary>MV-851: shoulder pivots move to (±0.25, 1.36) per the approved prototype —
+        /// <see cref="ShoulderY"/> is that 1.36 expressed in TORSO space (torso sits at <see
+        /// cref="HipY"/> above ground: 1.36 - 0.74 = 0.62), so it still bobs with him.</summary>
+        private const float ShoulderY = 0.62f;
+        private const float ShoulderX = 0.25f;
+
+        /// <summary>MV-851: the bare arm's own beam is 0.048 m → 0.04 m radius (<c>Beam(1,.5,.4,6)</c>'s
+        /// unit profile scaled uniformly) — 0.5 * 0.096 = 0.048 at the shoulder end, 0.4 * 0.096 = 0.0384
+        /// at the hand end, matching the approved prototype to within half a centimetre.</summary>
+        private const float SleeveWidth = 0.096f;
+
+        /// <summary>MV-851: how far a relaxed arm hangs down from the shoulder while not aiming — the
+        /// approved prototype's own 0.44 m bare-arm length. See <see cref="PoseArms"/> for why this has
+        /// to be nonzero.</summary>
+        private const float ArmHangDrop = 0.44f;
 
         /// <summary>
         /// MV-669 (Lee: "10% bigger"), then reverted: applied uniformly at <see cref="_body"/> — the
@@ -280,21 +285,47 @@ namespace MaxWorlds.VFX
 
         // ---------------------------------------------------------------- tuning
 
-        [Header("Run cycle")]
+        [Header("Run cycle (MV-851)")]
         [Tooltip("Strides per second at full stick. The legs swing at this rate and he bobs twice per " +
-                 "stride, which is what a step is.")]
-        [SerializeField] private float strideRate = 1.85f;   // MV-678: was 2.15 (Lee: "slightly reduce")
+                 "stride, which is what a step is. MV-851: 1.75 Hz, the approved prototype's own number.")]
+        [SerializeField] private float strideRate = 1.75f;   // MV-851: was 1.85 (MV-678's own tune, now superseded)
 
-        [Tooltip("How far the legs swing, in degrees, at full stick.")]
-        [SerializeField] private float legSwing = 26f;   // MV-678: was 32 (Lee: "slightly reduce the length")
+        [Tooltip("How far the THIGH swings at the hip, in degrees, at full stick. MV-851: the approved " +
+                 "prototype's own 28°.")]
+        [SerializeField] private float legSwing = 28f;   // MV-851: was 26 (MV-678's own tune, now superseded)
 
-        [Tooltip("How far he bobs, in metres, at full stick. Small. A bob you can measure is a bob " +
-                 "that makes the whole character look like it is on a spring.")]
-        [SerializeField] private float bob = 0.035f;
+        [Tooltip("How far the shin flexes at the knee, in degrees, at full stick, on top of the " +
+                 "resting kneeFlexBase — MV-851's new knee joint. Formula: max(0, cos(phase)) * " +
+                 "kneeFlexRange + kneeFlexBase, so the leg is nearly straight mid-swing and bends hard " +
+                 "as the foot plants.")]
+        [SerializeField] private float kneeFlexRange = 58f;
+
+        [Tooltip("The knee's resting flex, in degrees, even at the straightest point of the stride — a " +
+                 "real knee is never perfectly locked.")]
+        [SerializeField] private float kneeFlexBase = 6f;
+
+        [Tooltip("How far he bobs, in metres, peak-to-peak at full stick — MV-851's own formula: " +
+                 "(1 - |sin(phase)|) * bobAmplitude - bobOffset, so he rises as his legs pass under him " +
+                 "and dips at each footfall (the inverse timing of the pre-MV-851 body's bob).")]
+        [SerializeField] private float bobAmplitude = 0.06f;
+
+        [Tooltip("MV-851: how far bobAmplitude's own zero point sits below the waist, in metres — " +
+                 "centres the bob so it dips as well as rises rather than only ever adding height.")]
+        [SerializeField] private float bobOffset = 0.03f;
 
         [Tooltip("Degrees he leans INTO the direction he is travelling. Not the direction he is " +
-                 "facing — he can strafe, and a kid running sideways leans sideways.")]
-        [SerializeField] private float leanAngle = 9f;
+                 "facing — he can strafe, and a kid running sideways leans sideways. MV-851: 6°, the " +
+                 "approved prototype's own forward-lean number.")]
+        [SerializeField] private float leanAngle = 6f;   // MV-851: was 9 (MV-669-era tune, now superseded)
+
+        [Tooltip("MV-851: how far the torso yaws on the stride, in degrees at full stick — the approved " +
+                 "prototype's own 7°.")]
+        [SerializeField] private float torsoYawAngle = 7f;
+
+        [Tooltip("MV-851: how far the head counter-yaws against the torso's own stride yaw, in degrees " +
+                 "at full stick — the approved prototype's own 6°. Composes with (does not replace) the " +
+                 "turning head-lag TickHeadLag already drives.")]
+        [SerializeField] private float headStrideYawAngle = 6f;
 
         [Header("Secondary motion")]
         [Tooltip("How hard the hair and the charms whip when he changes direction. The GDD asks for " +
@@ -347,8 +378,11 @@ namespace MaxWorlds.VFX
 
         [Header("Arms (MV-717)")]
         [Tooltip("How far the arms swing opposite the legs while not aiming, in metres at the hand. " +
-                 "Smaller than the legs' own swing — this is a kid's arm, not a sprinter's.")]
-        [SerializeField] private float armSwingAmplitude = 0.10f;
+                 "MV-851: 0.196 m ≈ ArmHangDrop * tan(24°) — the approved prototype specifies the swing " +
+                 "as an angle (±24°) but this rig reaches for a hand TARGET POSITION rather than driving " +
+                 "a shoulder rotation directly, so the amplitude is the metre offset that produces the " +
+                 "same 24° swing at the current arm length.")]
+        [SerializeField] private float armSwingAmplitude = 0.196f;   // MV-851: was 0.10 (MV-717's own tune, now superseded)
 
         [Tooltip("MV-730: how far the SHOULDER itself travels through the same swing, in metres. " +
                  "Without this the shoulder end of PoseArm's sleeve never moves while running (only the " +
@@ -357,11 +391,12 @@ namespace MaxWorlds.VFX
 
         [Header("Idle (MV-717)")]
         [Tooltip("How fast he breathes while standing still and not aiming, in Hz. He must never be " +
-                 "perfectly frozen.")]
-        [SerializeField] private float idleBobRate = 0.4f;
+                 "perfectly frozen. MV-851: 0.35 Hz, the approved prototype's own number.")]
+        [SerializeField] private float idleBobRate = 0.35f;   // MV-851: was 0.4
 
-        [Tooltip("How far he bobs while breathing, in metres.")]
-        [SerializeField] private float idleBobAmount = 0.005f;
+        [Tooltip("How far he bobs while breathing, in metres. MV-851: 0.012 m, the approved prototype's " +
+                 "own number.")]
+        [SerializeField] private float idleBobAmount = 0.012f;   // MV-851: was 0.005
 
         [Tooltip("How fast his head catches up after his body turns, in Hz-like terms — higher is " +
                  "snappier. Picked so the catch-up reads as roughly 0.12 s.")]
@@ -391,6 +426,15 @@ namespace MaxWorlds.VFX
         private Transform _handL, _handR;
         private Transform _head;
         private readonly Transform[] _hips = new Transform[2];
+
+        /// <summary>MV-851: one knee pivot per leg, child of the matching <see cref="_hips"/> entry —
+        /// see <see cref="MaxBody.MaxBodyResult.Knees"/> for why the old body never had one.</summary>
+        private readonly Transform[] _knees = new Transform[2];
+
+        /// <summary>MV-851: the head's own stride-synced counter-yaw (±<see
+        /// cref="headStrideYawAngle"/>), computed in <see cref="TickRun"/> and composed with the
+        /// turning head-lag <see cref="TickHeadLag"/> already drives, rather than replacing it.</summary>
+        private float _headStrideYaw;
 
         /// <summary>MV-717: decays from 1 to 0 over <see cref="anticipationDuration"/> once the aim
         /// stick is pushed — see <see cref="TickGadget"/>.</summary>
@@ -433,8 +477,8 @@ namespace MaxWorlds.VFX
         /// once and returning.</summary>
         private Quaternion _moveLean = Quaternion.identity;
 
-        private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
-                         _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat, _beltMat, _pouchMat;
+        private Material _skinMat, _hairMat, _tunicMat, _tunicDarkMat, _beltMat, _bootMat,
+                         _soleMat, _gloveMat, _eyeMat, _pupilMat, _darkMat, _metalMat;
         private MaterialPropertyBlock _lensMpb;
 
         private float _stride;
@@ -541,38 +585,33 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Thirteen materials, all OURS (MV-669 added Belt and Pouch to the original eleven).
+        /// Twelve materials, all OURS. MV-851 replaces the MV-669 hoodie/goggles set (thirteen
+        /// materials: Jacket, Hood, Fabric, Goggle and Pouch are gone; Tunic, TunicDark, Glove and Pupil
+        /// are new) — the goggles are removed outright (AC2), and the belt's one pouch now shares the
+        /// belt's own material rather than carrying a separate one.
         ///
         /// Instances of <see cref="MaterialLibrary.Character()"/> — never that material itself, which
         /// is worn by every robot in the yard and by the boss, and tinting it to give Max brown hair
         /// would give the entire cast brown hair.
         ///
-        /// Instances rather than one material and thirteen MaterialPropertyBlocks, for the same reason
+        /// Instances rather than one material and twelve MaterialPropertyBlocks, for the same reason
         /// the boss's rig does it: a property block is what BREAKS SRP batching, and a shared material
-        /// instance is what keeps it. Thirteen materials on one shader batch; thirteen blocks do not.
+        /// instance is what keeps it. Twelve materials on one shader batch; twelve blocks do not.
         /// </summary>
         private void BuildMaterials()
         {
             _skinMat = CharacterMaterial("Max_Skin", Skin);
             _hairMat = CharacterMaterial("Max_Hair", Hair);
-            _jacketMat = CharacterMaterial("Max_Jacket", Hoodie);
-            _hoodMat = CharacterMaterial("Max_Hood", HoodieShade);
-            _fabricMat = CharacterMaterial("Max_Fabric", Trousers);
-            _darkMat = CharacterMaterial("Max_Dark", Rubber);
-            _bootMat = CharacterMaterial("Max_Boot", Rubber);
-            _soleMat = CharacterMaterial("Max_Sole", Bone);
-            _metalMat = CharacterMaterial("Max_Metal", Steel);
-            _eyeMat = CharacterMaterial("Max_Eye", Rubber);
-
-            // MV-669's hero detail: the goggles are LIT, not painted — the one small, warm, specific
-            // thing that catches the eye at gameplay zoom (this class's own doc has asked for this
-            // since YT-95: "they are lit rather than painted... the same trick the boss's lamps use").
-            // A flat _EmissionColor on the shared character shader (StylizedCharacter.shader adds it
-            // unconditionally, no keyword needed — the same channel CharacterSkin drives per-frame for
-            // the hit flash) is enough; no new geometry, so MaxBody.cs's generated mesh is untouched.
-            _goggleMat = CharacterMaterial("Max_Goggle", LensGlass, emission: LensGlass * 0.6f);
+            _tunicMat = CharacterMaterial("Max_Tunic", Tunic);
+            _tunicDarkMat = CharacterMaterial("Max_TunicDark", TunicDark);
             _beltMat = CharacterMaterial("Max_Belt", Belt);
-            _pouchMat = CharacterMaterial("Max_Pouch", Pouch);
+            _bootMat = CharacterMaterial("Max_Boot", Boot);
+            _soleMat = CharacterMaterial("Max_Sole", Sole);
+            _gloveMat = CharacterMaterial("Max_Glove", Glove);
+            _eyeMat = CharacterMaterial("Max_Eye", Eye);
+            _pupilMat = CharacterMaterial("Max_Pupil", Pupil);
+            _darkMat = CharacterMaterial("Max_Dark", Dark);
+            _metalMat = CharacterMaterial("Max_Metal", Steel);
         }
 
         /// <summary>
@@ -651,13 +690,15 @@ namespace MaxWorlds.VFX
             _torso = Pivot("Torso", _body, new Vector3(0f, HipY, 0f)); // bobs, at the waist
 
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
-            var palette = new MaxPalette(_skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat,
-                                         _darkMat, _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat,
-                                         _beltMat, _pouchMat);
+            var palette = new MaxPalette(_skinMat, _hairMat, _tunicMat, _tunicDarkMat, _beltMat,
+                                         _bootMat, _soleMat, _gloveMat, _eyeMat, _pupilMat,
+                                         _darkMat, _metalMat);
             var body = MaxBody.Build(feet, palette, HipY);
             _gadgetGlow = body.GadgetGlow;
             _hips[0] = body.Hips[0];
             _hips[1] = body.Hips[1];
+            _knees[0] = body.Knees[0];
+            _knees[1] = body.Knees[1];
 
             _rcdaGadget = body.RcdaGadget;
             _lppeGadget = body.LppeGadget;
@@ -843,9 +884,22 @@ namespace MaxWorlds.VFX
             if (_hips[0] != null) _hips[0].localRotation = Quaternion.Euler(swing, 0f, 0f);
             if (_hips[1] != null) _hips[1].localRotation = Quaternion.Euler(-swing, 0f, 0f);
 
-            // Two bobs per stride — one per foot landing. Abs(), not Sin(), or he floats up on one
-            // step and sinks through the lawn on the other.
-            float bounce = Mathf.Abs(Mathf.Sin(_stride)) * bob * speed01;
+            // MV-851: the knee, flexing on top of the hip's own thigh swing. Each leg reads a phase
+            // half a cycle apart from the other (leg 0 at _stride, leg 1 at _stride + PI — the same
+            // "legs[i] at q = p + i*PI" the approved prototype drives), so cos(q) peaks to 1 (fully
+            // flexed, 64° at full speed) right as that leg's own thigh swing passes through zero — the
+            // moment a real knee bends hardest is the moment the foot is lifting off the ground, not
+            // the moment it's planted. max(0, cos(q)) keeps the OTHER half of the cycle (the leg
+            // swinging back to plant) nearly straight at kneeFlexBase.
+            float kneeL = (Mathf.Max(0f, Mathf.Cos(_stride)) * kneeFlexRange + kneeFlexBase) * speed01;
+            float kneeR = (Mathf.Max(0f, Mathf.Cos(_stride + Mathf.PI)) * kneeFlexRange + kneeFlexBase) * speed01;
+            if (_knees[0] != null) _knees[0].localRotation = Quaternion.Euler(kneeL, 0f, 0f);
+            if (_knees[1] != null) _knees[1].localRotation = Quaternion.Euler(kneeR, 0f, 0f);
+
+            // MV-851: (1 - |sin(phase)|) * bobAmplitude - bobOffset, the approved prototype's own
+            // formula — he rises as his legs pass under him (sin ≈ 0) and dips at each footfall
+            // (|sin| ≈ 1), the inverse timing of the pre-MV-851 body's Abs(Sin) bob.
+            float bounce = (1f - Mathf.Abs(Mathf.Sin(_stride))) * bobAmplitude * speed01 - bobOffset * speed01;
 
             // MV-717: the breathing idle. The phase always advances — he must never be perfectly
             // frozen — but the amplitude fades to nothing once he is actually moving or presenting the
@@ -858,12 +912,16 @@ namespace MaxWorlds.VFX
             float weightShift = -Mathf.Sin(_stride) * weightShiftAngle * speed01;
 
             // Shoulders counter-rotate against the hips. This is what stops a run cycle from reading as
-            // a puppet on a stick — raised from 0.14 (MV-717, Lee: from a 60-degree camera the old
-            // factor was a couple of degrees of yaw and invisible; yaw is the rotation a top-down
-            // camera reads best). The gadget is parented to the torso, so it swings with him — which is
-            // what a thing held in two hands does.
+            // a puppet on a stick. The gadget is parented to the torso, so it swings with him — which
+            // is what a thing held in two hands does.
+            //
+            // MV-851: the torso yaw is now the approved prototype's own dedicated ±torsoYawAngle on the
+            // stride phase (was swing * 0.35, a fraction of the thigh-swing angle) — <see
+            // cref="_headStrideYaw"/> is the mirrored counter-yaw TickHeadLag composes onto the head.
+            float torsoYaw = Mathf.Sin(_stride) * torsoYawAngle * speed01;
+            _headStrideYaw = -Mathf.Sin(_stride) * headStrideYawAngle * speed01;
             _torso.localPosition = new Vector3(0f, HipY + bounce + idleBounce, 0f);
-            _torso.localRotation = Quaternion.Euler(0f, -swing * 0.35f, weightShift);
+            _torso.localRotation = Quaternion.Euler(0f, torsoYaw, weightShift);
 
             _moveLean = Quaternion.Slerp(
                 _moveLean,
@@ -906,7 +964,10 @@ namespace MaxWorlds.VFX
         /// The rig root snaps to Max's yaw exactly (see <see cref="Follow"/>), so to make the head
         /// APPEAR to lag, its LOCAL yaw is set to the difference between that instant facing and a
         /// smoothed copy of it — the head's world yaw is then the smoothed value, which catches up to
-        /// the real one as the smoothing converges.
+        /// the real one as the smoothing converges. MV-851 composes <see cref="_headStrideYaw"/> (the
+        /// stride-synced counter-yaw <c>TickRun</c> computes) on top of that turning lag, rather than
+        /// replacing it — the two cues answer different questions ("which way is he turning" vs. "which
+        /// leg is forward") and both read at once on a real stride.
         /// </summary>
         private void TickHeadLag(float dt)
         {
@@ -914,7 +975,7 @@ namespace MaxWorlds.VFX
             _laggedFacingYaw = Mathf.LerpAngle(_laggedFacingYaw, facingYaw, 1f - Mathf.Exp(-headCatchUp * dt));
 
             if (_head != null)
-                _head.localRotation = Quaternion.Euler(0f, Mathf.DeltaAngle(facingYaw, _laggedFacingYaw), 0f);
+                _head.localRotation = Quaternion.Euler(0f, Mathf.DeltaAngle(facingYaw, _laggedFacingYaw) + _headStrideYaw, 0f);
         }
 
         /// <summary>
@@ -1138,9 +1199,9 @@ namespace MaxWorlds.VFX
             HudSignals.ShockPulseLanded -= OnShockPulseLanded;
 
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
-            Kill(_skinMat); Kill(_hairMat); Kill(_jacketMat); Kill(_hoodMat); Kill(_fabricMat);
-            Kill(_darkMat); Kill(_bootMat); Kill(_soleMat); Kill(_metalMat); Kill(_eyeMat); Kill(_goggleMat);
-            Kill(_beltMat); Kill(_pouchMat);
+            Kill(_skinMat); Kill(_hairMat); Kill(_tunicMat); Kill(_tunicDarkMat); Kill(_beltMat);
+            Kill(_bootMat); Kill(_soleMat); Kill(_gloveMat); Kill(_eyeMat); Kill(_pupilMat);
+            Kill(_darkMat); Kill(_metalMat);
         }
 
         private static void Kill(Material m)

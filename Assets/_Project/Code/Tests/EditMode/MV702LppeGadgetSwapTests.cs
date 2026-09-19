@@ -25,7 +25,7 @@ namespace MaxWorlds.Tests.EditMode
             var root = new GameObject("MV702TestRoot");
             try
             {
-                var palette = new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null, null);
+                var palette = new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null);
                 MaxBodyResult body = MaxBody.Build(root.transform, palette, hipY: 0.74f);
 
                 // Built with the RCDA showing and the LPPE hidden (RCDA is Max's run-start primary).
