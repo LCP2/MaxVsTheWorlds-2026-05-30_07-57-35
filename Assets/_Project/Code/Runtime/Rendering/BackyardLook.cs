@@ -299,5 +299,62 @@ namespace MaxWorlds.Rendering
         /// world's own ticket, not this one's.</summary>
         public static BackyardLook ForWorld(int worldIndex)
             => worldIndex == 1 ? Stormdrain : Default;
+
+        /// <summary>Blend every field of two looks (MV-849 — the World 1 -> World 2 joining
+        /// corridor). Every <c>Color</c>/<c>float</c>/<c>Vector3</c> field gets a plain
+        /// linear interpolation; nothing here is hand-picked, because a field this struct grows
+        /// later should blend for free rather than silently staying at <paramref name="a"/>'s
+        /// value until someone remembers to add it here too.</summary>
+        public static BackyardLook Lerp(BackyardLook a, BackyardLook b, float t) => new BackyardLook
+        {
+            KeyColor = Color.Lerp(a.KeyColor, b.KeyColor, t),
+            KeyIntensity = Mathf.Lerp(a.KeyIntensity, b.KeyIntensity, t),
+            KeyEuler = Vector3.Lerp(a.KeyEuler, b.KeyEuler, t),
+            ShadowStrength = Mathf.Lerp(a.ShadowStrength, b.ShadowStrength, t),
+
+            FillColor = Color.Lerp(a.FillColor, b.FillColor, t),
+            FillIntensity = Mathf.Lerp(a.FillIntensity, b.FillIntensity, t),
+            FillEuler = Vector3.Lerp(a.FillEuler, b.FillEuler, t),
+
+            RimColor = Color.Lerp(a.RimColor, b.RimColor, t),
+            RimIntensity = Mathf.Lerp(a.RimIntensity, b.RimIntensity, t),
+            RimEuler = Vector3.Lerp(a.RimEuler, b.RimEuler, t),
+
+            AmbientSky = Color.Lerp(a.AmbientSky, b.AmbientSky, t),
+            AmbientEquator = Color.Lerp(a.AmbientEquator, b.AmbientEquator, t),
+            AmbientGround = Color.Lerp(a.AmbientGround, b.AmbientGround, t),
+
+            FogColor = Color.Lerp(a.FogColor, b.FogColor, t),
+            FogDensity = Mathf.Lerp(a.FogDensity, b.FogDensity, t),
+
+            SkyZenith = Color.Lerp(a.SkyZenith, b.SkyZenith, t),
+            SkyHorizon = Color.Lerp(a.SkyHorizon, b.SkyHorizon, t),
+            SkyGroundHaze = Color.Lerp(a.SkyGroundHaze, b.SkyGroundHaze, t),
+            SkySun = Color.Lerp(a.SkySun, b.SkySun, t),
+            SkyCloud = Color.Lerp(a.SkyCloud, b.SkyCloud, t),
+            SkySunGlow = Mathf.Lerp(a.SkySunGlow, b.SkySunGlow, t),
+            SkySunIntensity = Mathf.Lerp(a.SkySunIntensity, b.SkySunIntensity, t),
+            SkyCloudAmount = Mathf.Lerp(a.SkyCloudAmount, b.SkyCloudAmount, t),
+            SkyCloudScale = Mathf.Lerp(a.SkyCloudScale, b.SkyCloudScale, t),
+
+            AoIntensity = Mathf.Lerp(a.AoIntensity, b.AoIntensity, t),
+            AoRadius = Mathf.Lerp(a.AoRadius, b.AoRadius, t),
+
+            PostExposure = Mathf.Lerp(a.PostExposure, b.PostExposure, t),
+            Contrast = Mathf.Lerp(a.Contrast, b.Contrast, t),
+            Saturation = Mathf.Lerp(a.Saturation, b.Saturation, t),
+            ColorFilter = Color.Lerp(a.ColorFilter, b.ColorFilter, t),
+            ShadowTint = Color.Lerp(a.ShadowTint, b.ShadowTint, t),
+            HighlightTint = Color.Lerp(a.HighlightTint, b.HighlightTint, t),
+
+            BloomThreshold = Mathf.Lerp(a.BloomThreshold, b.BloomThreshold, t),
+            BloomIntensity = Mathf.Lerp(a.BloomIntensity, b.BloomIntensity, t),
+            BloomScatter = Mathf.Lerp(a.BloomScatter, b.BloomScatter, t),
+            BloomTint = Color.Lerp(a.BloomTint, b.BloomTint, t),
+
+            VignetteIntensity = Mathf.Lerp(a.VignetteIntensity, b.VignetteIntensity, t),
+            VignetteSmoothness = Mathf.Lerp(a.VignetteSmoothness, b.VignetteSmoothness, t),
+            FilmGrain = Mathf.Lerp(a.FilmGrain, b.FilmGrain, t),
+        };
     }
 }
