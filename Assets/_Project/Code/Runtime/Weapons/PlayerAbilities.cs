@@ -40,9 +40,9 @@ namespace MaxWorlds.Weapons
                  "visual; this is what times the landing.")]
         [SerializeField] private float waterBalloonFlightSpeed = 9f;
 
-        // MV-670: how far short of a genuine solid (wall/building/gate) a clamped same-room blink
-        // lands — enough to keep Max's own CharacterController from immediately re-penetrating it.
-        private const float TeleportLandingClearance = 0.1f;
+        // MV-847: when the aimed destination itself doesn't fit (the circle is on a crate/wall), how
+        // far back toward Max each landing-search probe steps before trying again.
+        private const float TeleportLandingSearchStep = 0.25f;
 
         private CharacterController _cc;
         private WaterBalloonSplashVfx _splashVfx;
@@ -262,10 +262,10 @@ namespace MaxWorlds.Weapons
         /// collision) whenever <see cref="CanWarpAcrossAreas"/> says the destination area is reachable
         /// through gates that are already open, exactly as Lee asked ("teleport over walls... any arena
         /// in range where there's an open gate"). A blink that stays within Max's own current room, or
-        /// whose destination area is NOT reachable that way (a still-shut/locked gate in between), keeps
-        /// the old <see cref="CharacterController.Move"/> behaviour — a physics sweep that stops at
-        /// whatever solid geometry is actually in the way, so an ineligible destination clamps at the
-        /// boundary rather than clipping through a gate that hasn't been earned yet.</summary>
+        /// whose destination area is NOT reachable that way (a still-shut/locked gate in between), goes
+        /// through <see cref="ResolveSameRoomLanding"/> instead: MV-847 — a teleport is a dematerialise/
+        /// materialise, so nothing between Max and the destination matters, only whether Max's capsule
+        /// actually fits AT the destination once he gets there.</summary>
         public bool TryTeleport(Vector3 aimDirection)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
@@ -332,37 +332,48 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
-        /// <summary>MV-670: where a same-room blink actually lands. A capsule cast shaped to Max's own
-        /// <see cref="CharacterController"/> runs from <paramref name="from"/> toward <paramref
-        /// name="target"/> against <see cref="CoverLayer.Mask"/> — the same layer that already
-        /// separates "real" solid geometry (walls, gates, the Mower Hutch, non-hedge cover, all
-        /// explicitly put on it by <c>MapRuntime</c>) from decorative dressing for sight-blocking
-        /// purposes. Hedges (MV-400) and pots (MV-613) are both deliberately left off that layer, so
-        /// the same partition happens to be exactly what a teleport clearance check needs too: the cast
-        /// passes through them, but a genuine wall/building/gate still reports a hit. A clear cast lands
-        /// Max at the aimed <paramref name="target"/>; a blocked one clamps him just short of the hit
-        /// point instead of leaving him wherever the old <see cref="CharacterController.Move"/> sweep
-        /// happened to stop.</summary>
+        /// <summary>MV-847: where a same-room blink actually lands. A teleport is a dematerialise/
+        /// materialise, so whatever sits BETWEEN <paramref name="from"/> and <paramref name="target"/>
+        /// (a crate, a wall, the Mower Hutch — anything on <see cref="CoverLayer.Mask"/>) is irrelevant;
+        /// only the destination itself is tested. Max lands exactly at <paramref name="target"/> if his
+        /// capsule fits there (<see cref="CapsuleFitsAt"/>). If it doesn't — the circle was drawn on top
+        /// of solid geometry — this steps back toward <paramref name="from"/> in
+        /// <see cref="TeleportLandingSearchStep"/> increments looking for the nearest point that does
+        /// fit, falling back to <paramref name="from"/> itself (which must already fit — Max is
+        /// standing there) if nothing along the way does either.
+        ///
+        /// This supersedes MV-670's path <c>CapsuleCast</c> (a genuine wall used to clamp Max just short
+        /// of it even when the aimed destination itself was clear well past it) per Lee's direct
+        /// instruction — do not re-raise "a wall in the path should still stop the blink".</summary>
         private Vector3 ResolveSameRoomLanding(Vector3 from, Vector3 target)
         {
+            if (!CoverLayer.Exists) return target;
+            if (CapsuleFitsAt(target)) return target;
+
             Vector3 offset = target - from;
             float distance = offset.magnitude;
-            if (distance <= 1e-4f || !CoverLayer.Exists) return target;
+            if (distance <= 1e-4f) return from;
             Vector3 dir = offset / distance;
 
-            Vector3 center = from + _cc.center;
+            for (float back = TeleportLandingSearchStep; back < distance; back += TeleportLandingSearchStep)
+            {
+                Vector3 candidate = target - dir * back;
+                if (CapsuleFitsAt(candidate)) return candidate;
+            }
+
+            return from;
+        }
+
+        /// <summary>True if Max's own <see cref="CharacterController"/> capsule, placed at
+        /// <paramref name="position"/>, doesn't overlap anything on <see cref="CoverLayer.Mask"/>.</summary>
+        private bool CapsuleFitsAt(Vector3 position)
+        {
+            Vector3 center = position + _cc.center;
             float halfHeight = Mathf.Max(0f, _cc.height * 0.5f - _cc.radius);
             Vector3 top = center + Vector3.up * halfHeight;
             Vector3 bottom = center - Vector3.up * halfHeight;
 
-            if (Physics.CapsuleCast(bottom, top, _cc.radius, dir, out RaycastHit hit, distance,
-                    CoverLayer.Mask, QueryTriggerInteraction.Ignore))
-            {
-                float safeDistance = Mathf.Max(0f, hit.distance - TeleportLandingClearance);
-                return from + dir * safeDistance;
-            }
-
-            return target;
+            return !Physics.CheckCapsule(bottom, top, _cc.radius, CoverLayer.Mask, QueryTriggerInteraction.Ignore);
         }
 
         private static Sentinel NearestSentinel(Vector3 from)
