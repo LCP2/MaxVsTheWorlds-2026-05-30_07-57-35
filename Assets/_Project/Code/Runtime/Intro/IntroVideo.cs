@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.Video;
 
 namespace MaxWorlds.Intro
@@ -24,6 +25,11 @@ namespace MaxWorlds.Intro
         /// stream from a URL — this is the file's path under <c>StreamingAssets</c>.</summary>
         public const string StreamingRelativePath = "Video/intro.mp4";
 
+        /// <summary>MV-835: the render texture's size until <see cref="VideoPlayer.width"/>/<see
+        /// cref="VideoPlayer.height"/> report the real clip resolution (1280x714) via <c>prepareCompleted</c>.</summary>
+        private const int DefaultTextureWidth = 1280;
+        private const int DefaultTextureHeight = 714;
+
         /// <summary>Test-only: force which source kind <see cref="IntroVideo(Camera, Transform)"/> resolves
         /// to, bypassing the real Resources/StreamingAssets lookup — there is no committed video asset for
         /// a live test to exercise. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
@@ -34,8 +40,9 @@ namespace MaxWorlds.Intro
         /// makes the player start opening/decoding it; the CI Linux runner can't decode that container and
         /// logs an error that fails the EditMode run (MV-827). Everything else in <c>Build</c> — the
         /// GameObject, the <see cref="VideoPlayer"/> component, <see cref="Player"/>, <see cref="SourceKind"/>,
-        /// <see cref="HasSource"/> — still runs, so <see cref="IntroCinematic"/>'s routing and skip/restore
-        /// behaviour on the video path stay fully exercised. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
+        /// <see cref="HasSource"/>, the render texture and overlay — still runs, so <see cref="IntroCinematic"/>'s
+        /// routing and skip/restore behaviour on the video path stay fully exercised. Cleared by
+        /// <see cref="IntroCinematic.ResetForTests"/>.</summary>
         public static bool SuppressPlaybackForTests;
 
         public IntroVideoSourceKind SourceKind { get; }
@@ -44,6 +51,17 @@ namespace MaxWorlds.Intro
         public bool HasSource => SourceKind != IntroVideoSourceKind.None;
 
         public VideoPlayer Player { get; private set; }
+
+        /// <summary>MV-835: the full-screen overlay the film renders into — a <see cref="RenderTexture"/>
+        /// shown on a <see cref="RawImage"/>, since the film's previous camera-near-plane surface produced
+        /// no visible output under URP on WebGL (the reported black screen + static green band). Null
+        /// whenever no source resolved (<see cref="HasSource"/> false).</summary>
+        public Canvas Overlay { get; private set; }
+
+        private RenderTexture _texture;
+        private RawImage _rawImage;
+        private AspectRatioFitter _fitter;
+        private bool _frameShown;
 
         /// <summary>Playback position in seconds; 0 while nothing has resolved or started.</summary>
         public double Position => Player != null ? Player.time : 0d;
@@ -90,14 +108,24 @@ namespace MaxWorlds.Intro
             Player = go.AddComponent<VideoPlayer>();
             Player.playOnAwake = false;
             Player.isLooping = false;
-            Player.renderMode = VideoRenderMode.CameraNearPlane;   // a full-screen surface owned by the intro camera
-            Player.targetCamera = introCam;
-            Player.aspectRatio = VideoAspectRatio.FitOutside;
             Player.audioOutputMode = VideoAudioOutputMode.None;   // the film ships with no audio track
             Player.loopPointReached += _ => IsComplete = true;
             // A missing or unplayable stream (e.g. a 404 on the WebGL host) must hand over to gameplay,
             // never leave a black screen behind (MV-826).
             Player.errorReceived += (_, __) => IsComplete = true;
+
+            // MV-835: the old camera-near-plane surface produced no visible output under URP on WebGL — render into a
+            // texture instead and show it on a full-screen overlay (BuildOverlay below). introCam is no
+            // longer the film's surface; IntroCinematic blanks it (cullingMask = 0) on this path so it
+            // only ever contributes its solid clear behind the overlay.
+            _texture = new RenderTexture(DefaultTextureWidth, DefaultTextureHeight, 0) { name = "IntroVideoRT" };
+            Player.renderMode = VideoRenderMode.RenderTexture;
+            Player.targetTexture = _texture;
+            Player.sendFrameReadyEvents = true;
+            Player.frameReady += OnFrameReady;
+            Player.prepareCompleted += OnPrepareCompleted;
+
+            BuildOverlay(go.transform);
 
             if (SourceKind == IntroVideoSourceKind.Clip)
             {
@@ -118,6 +146,107 @@ namespace MaxWorlds.Intro
                 Player.source = VideoSource.Url;
                 Player.url = path;
                 if (!SuppressPlaybackForTests) Player.Play();
+            }
+        }
+
+        /// <summary>The full-screen surface: a solid black backing (so the screen stays black before the
+        /// first frame, and behind the crop on whichever axis the film's aspect doesn't fill), and a
+        /// <see cref="RawImage"/> on top sized by an <see cref="AspectRatioFitter"/> in
+        /// <see cref="AspectRatioFitter.AspectMode.EnvelopeParent"/> mode — the film fills the screen and
+        /// crops rather than ever being letterboxed or squashed.</summary>
+        private void BuildOverlay(Transform parent)
+        {
+            var canvasGo = new GameObject("IntroVideoOverlay");
+            canvasGo.transform.SetParent(parent, worldPositionStays: false);
+            Overlay = canvasGo.AddComponent<Canvas>();
+            Overlay.renderMode = RenderMode.ScreenSpaceOverlay;
+            Overlay.sortingOrder = 32000;
+            canvasGo.AddComponent<CanvasScaler>();
+
+            var backingGo = new GameObject("Backing");
+            backingGo.transform.SetParent(canvasGo.transform, worldPositionStays: false);
+            var backingRect = backingGo.AddComponent<RectTransform>();
+            backingRect.anchorMin = Vector2.zero;
+            backingRect.anchorMax = Vector2.one;
+            backingRect.offsetMin = Vector2.zero;
+            backingRect.offsetMax = Vector2.zero;
+            var backing = backingGo.AddComponent<Image>();
+            backing.color = Color.black;
+            backing.raycastTarget = false;
+
+            var rawGo = new GameObject("Film");
+            rawGo.transform.SetParent(canvasGo.transform, worldPositionStays: false);
+            var rawRect = rawGo.AddComponent<RectTransform>();
+            rawRect.anchorMin = Vector2.zero;
+            rawRect.anchorMax = Vector2.one;
+            rawRect.pivot = new Vector2(0.5f, 0.5f);
+            rawRect.anchoredPosition = Vector2.zero;
+            _rawImage = rawGo.AddComponent<RawImage>();
+            _rawImage.texture = _texture;
+            _rawImage.raycastTarget = false;
+            _rawImage.enabled = false;   // hidden until OnFrameReady — the black backing shows until then
+            _fitter = rawGo.AddComponent<AspectRatioFitter>();
+            _fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            _fitter.aspectRatio = (float)DefaultTextureWidth / DefaultTextureHeight;
+        }
+
+        /// <summary>Resize the render texture (and the fitter's aspect) once the player reports the
+        /// clip's real dimensions, if they differ from the placeholder 1280x714.</summary>
+        private void OnPrepareCompleted(VideoPlayer player)
+        {
+            int w = (int)player.width, h = (int)player.height;
+            if (w <= 0 || h <= 0 || (_texture != null && w == _texture.width && h == _texture.height)) return;
+
+            var resized = new RenderTexture(w, h, 0) { name = "IntroVideoRT" };
+            player.targetTexture = resized;
+            if (_rawImage != null) _rawImage.texture = resized;
+            if (_fitter != null) _fitter.aspectRatio = (float)w / h;
+
+            var old = _texture;
+            _texture = resized;
+            if (old != null)
+            {
+                old.Release();
+                UnityEngine.Object.Destroy(old);
+            }
+        }
+
+        /// <summary>Reveal the overlay on the first real decoded frame — before this, the render texture
+        /// is empty and showing it would draw garbage instead of solid black.</summary>
+        private void OnFrameReady(VideoPlayer player, long frame)
+        {
+            if (_frameShown || frame <= 0) return;
+            _frameShown = true;
+            if (_rawImage != null) _rawImage.enabled = true;
+        }
+
+        /// <summary>MV-835: tear the overlay and release the render texture — called once the intro hands
+        /// over or is skipped (<see cref="IntroCinematic.Handoff"/>), never left running past the
+        /// cinematic's own lifetime. Idempotent.</summary>
+        public void Dispose()
+        {
+            if (Player != null)
+            {
+                Player.frameReady -= OnFrameReady;
+                Player.prepareCompleted -= OnPrepareCompleted;
+            }
+
+            if (Overlay != null)
+            {
+                var go = Overlay.gameObject;
+                if (Application.isPlaying) UnityEngine.Object.Destroy(go);
+                else UnityEngine.Object.DestroyImmediate(go);
+                Overlay = null;
+                _rawImage = null;
+                _fitter = null;
+            }
+
+            if (_texture != null)
+            {
+                _texture.Release();
+                if (Application.isPlaying) UnityEngine.Object.Destroy(_texture);
+                else UnityEngine.Object.DestroyImmediate(_texture);
+                _texture = null;
             }
         }
     }
