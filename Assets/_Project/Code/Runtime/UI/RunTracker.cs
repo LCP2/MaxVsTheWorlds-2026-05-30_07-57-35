@@ -60,6 +60,12 @@ namespace MaxWorlds.UI
 
         private void OnEnable()
         {
+            // MV-841: seed from whatever the checkpoint bridge already holds — 0 for a genuinely
+            // fresh world/run, or a resumed session's whole-world tally-so-far if this RunTracker was
+            // (re)created after a checkpoint had already been restored (e.g. a scene reload).
+            _stats.Restore(RunProgressState.Elapsed, RunProgressState.Kills);
+            RunProgressState.Restored += OnProgressRestored;
+
             HudSignals.EnemyKilled += OnKill;
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossPayoffFinished += OnBossPayoffFinished;
@@ -70,6 +76,8 @@ namespace MaxWorlds.UI
 
         private void OnDisable()
         {
+            RunProgressState.Restored -= OnProgressRestored;
+
             HudSignals.EnemyKilled -= OnKill;
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossPayoffFinished -= OnBossPayoffFinished;
@@ -78,11 +86,17 @@ namespace MaxWorlds.UI
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
         }
 
+        // MV-841: a checkpoint restore landed while this RunTracker was already alive — a RESUME tap
+        // never reloads the scene, so nothing else would otherwise carry the restored elapsed
+        // time/kill count back into this instance's own RunStats.
+        private void OnProgressRestored(float elapsed, int kills) => _stats.Restore(elapsed, kills);
+
         private void Update()
         {
             if (_sealed) return;
 
             _stats.Tick(Time.deltaTime);
+            RunProgressState.Sync(_stats.Elapsed, _stats.Kills);
             _stats.RecordDifficultyPeak(DifficultyDirector.Normalized);
 
             // Backstop: unscaled, because the world is still live at timeScale 1 until the card lands,
@@ -105,7 +119,11 @@ namespace MaxWorlds.UI
             }
         }
 
-        private void OnKill(Vector3 _) => _stats.AddKill();
+        private void OnKill(Vector3 _)
+        {
+            _stats.AddKill();
+            RunProgressState.Sync(_stats.Elapsed, _stats.Kills);
+        }
         private void OnFactory(Vector3 _) => _stats.MarkFactoryDestroyed();
 
         // MV-698: a Weapon Core landed on the ground — Victory must wait for it (walk-over or the
