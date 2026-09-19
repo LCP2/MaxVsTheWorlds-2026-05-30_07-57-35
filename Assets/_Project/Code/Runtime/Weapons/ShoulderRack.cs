@@ -38,6 +38,13 @@ namespace MaxWorlds.Weapons
         private const float RangeMeters = 12f;
         private const float RocketSpeed = 14f;
 
+        /// <summary>MV-842: the fallback muzzle offset off Max's root — "the rack's tube tips on Max
+        /// ... if a tip transform is not available, use Max's root + 0.5m to his right + 0.6m up."
+        /// <see cref="MaxWorlds.VFX.MaxRig"/> doesn't expose its rack mesh's own tube-tip transforms, so
+        /// this is the documented substitute rather than new plumbing across the Weapons/VFX seam.</summary>
+        private const float MuzzleRightOffset = 0.5f;
+        private const float MuzzleUpOffset = 0.6f;
+
         private static readonly Collider[] s_hits = new Collider[16];
 
         // Starts at the base reload so the very first salvo waits a full reload window rather than
@@ -74,6 +81,11 @@ namespace MaxWorlds.Weapons
             public float Damage;
             public float Splash;
             public bool Cluster;
+
+            /// <summary>MV-842: alternates right/left per rocket in the salvo (see
+            /// <see cref="QueueSalvo"/>) so successive rockets fan out on opposite sides of the aim
+            /// line instead of all leaving on the same offset arc.</summary>
+            public bool LaunchRight;
         }
 
         private readonly List<PendingLaunch> _pending = new List<PendingLaunch>();
@@ -135,12 +147,18 @@ namespace MaxWorlds.Weapons
                 }
 
                 _pending.RemoveAt(i);
-                PlayerRocket.Fire(transform.position, p.Target, RocketSpeed, p.Damage, p.Splash, p.Cluster);
+                Vector3 origin = MuzzleOrigin();
+                PlayerRocket.Fire(origin, p.Target, RocketSpeed, p.Damage, p.Splash, p.Cluster, p.LaunchRight);
 
-                Vector3 aim = p.Target != null ? p.Target.position - transform.position : transform.forward;
-                HudSignals.EmitRocketMuzzle(transform.position, aim);   // MV-770: one flash per rocket
+                Vector3 aim = p.Target != null ? p.Target.position - origin : transform.forward;
+                HudSignals.EmitRocketMuzzle(origin, aim);   // MV-770: one flash per rocket
             }
         }
+
+        /// <summary>MV-842 item 1: the rack's tube tips on Max, not his root — see the fallback offset's
+        /// own doc comment above for why this is a fixed offset rather than a rig-sourced transform.</summary>
+        private Vector3 MuzzleOrigin() =>
+            transform.position + transform.right * MuzzleRightOffset + transform.up * MuzzleUpOffset;
 
         private static float ReloadSecondsNow(int rocketLevel) => AbilityTuning.ShoulderRackReloadSeconds(
             WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.Reload),
@@ -204,6 +222,7 @@ namespace MaxWorlds.Weapons
                     Damage = damage,
                     Splash = splash,
                     Cluster = cluster,
+                    LaunchRight = i % 2 == 0,   // MV-842: alternates right/left across the salvo
                 });
             }
         }
