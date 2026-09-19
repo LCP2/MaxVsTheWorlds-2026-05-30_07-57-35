@@ -161,6 +161,10 @@ namespace MaxWorlds.Intro
         /// asset is present, which is every build until one ships.</summary>
         public bool UsingVideo => _video != null && _video.HasSource;
 
+        /// <summary>MV-835: the video path's player + overlay, for tests to assert the resolved render
+        /// state on. Null whenever no video source resolved.</summary>
+        public IntroVideo Video => _video;
+
         /// <summary>True while the intro is holding the player's control (disabled for the cinematic).
         /// A test reads this to prove control is suspended during, and returned after, the sequence.</summary>
         public bool PlayerControlSuspended => _suspendedPlayer != null && !_suspendedPlayer.enabled;
@@ -194,7 +198,15 @@ namespace MaxWorlds.Intro
         {
             TakeOverScreen();
             _video = new IntroVideo(_cam, transform);   // MV-710 — resolved before the box set so Tick() can route on it
+            if (UsingVideo)
+            {
+                // MV-835: the film now draws via IntroVideo's own RenderTexture overlay, not a
+                // camera-near-plane surface — _cam has nothing left to render on this path, so blank it
+                // rather than let it show whatever the box set's geometry looks like edge-on.
+                _cam.cullingMask = 0;
+            }
             BuildSet();
+            if (UsingVideo) _root.gameObject.SetActive(false);   // never built as geometry _cam can see
             BuildBeats();
         }
 
@@ -667,6 +679,7 @@ namespace MaxWorlds.Intro
             if (_done) return;
             _done = true;
             _crossFading = false;
+            _video?.Dispose();   // MV-835: the overlay/render texture must be gone before Restore() reveals gameplay
             RestoreGameplayCamera();
             Restore();
             // Same guard as IntroBuild.Strip: Destroy is deferred to end-of-frame and only valid while

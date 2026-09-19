@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.Video;
 using MaxWorlds.Arena;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Intro;
@@ -124,6 +126,36 @@ namespace MaxWorlds.Tests.EditMode
             intro.Tick(0.1f);
             Assert.AreEqual(-1, intro.BeatIndex,
                 "the box beat timeline advanced even though a video source resolved — it must not scrub.");
+        }
+
+        // ------------------------------------------------------------------ MV-835: render-texture overlay
+
+        /// <summary>
+        /// MV-835 AC1 — the video path's film was reported invisible in the live WebGL build (a black
+        /// screen with a static green band) because <c>VideoRenderMode.CameraNearPlane</c> draws nothing
+        /// under URP on WebGL. Proves the fix directly: the player renders into a texture, the intro
+        /// camera is blanked rather than showing the box set edge-on, and the overlay that displays the
+        /// texture actually covers the screen (the Tier 2 resolved value — not just that it exists).
+        /// </summary>
+        [Test]
+        public void VideoPathRendersViaRenderTextureOverlayAndBlanksTheIntroCamera()
+        {
+            IntroVideo.OverrideKindForTests = IntroVideoSourceKind.Url;
+            var intro = Build();
+            Canvas.ForceUpdateCanvases();
+
+            Assert.IsTrue(intro.UsingVideo, "sanity: this exercises the video path.");
+            Assert.AreEqual(VideoRenderMode.RenderTexture, intro.Video.Player.renderMode,
+                "the film must render into a texture, not the near-plane surface that drew nothing under URP on WebGL.");
+            Assert.AreEqual(0, intro.IntroCamera.cullingMask,
+                "the intro camera must be blanked on the video path — it has nothing of its own left to draw.");
+
+            var overlayRect = intro.Video.Overlay.GetComponent<RectTransform>();
+            var filmRect = intro.Video.Overlay.transform.Find("Film").GetComponent<RectTransform>();
+            Assert.GreaterOrEqual(filmRect.rect.width, overlayRect.rect.width - 0.01f,
+                "the film's overlay does not fill the canvas's width — it would letterbox or leave a gap.");
+            Assert.GreaterOrEqual(filmRect.rect.height, overlayRect.rect.height - 0.01f,
+                "the film's overlay does not fill the canvas's height — it would letterbox or leave a gap.");
         }
 
         // ------------------------------------------------------------------ AC5: skip restores state on BOTH paths
