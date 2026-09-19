@@ -17,7 +17,8 @@ namespace MaxWorlds.Tests.EditMode
     /// Extended for the approved-geometry follow-up (Lee's second comment on the ticket, 2026-09-05):
     /// <see cref="GadgetGlowSurvivesTheRebuild"/> (A2), <see
     /// cref="BuiltPartCountIsTheApprovedThirtyTwoPlusThePortedGadget"/> (A3) and <see
-    /// cref="MaxPaletteGainsExactlyBeltAndPouch"/> (A4). A1 (the hip pivots survive) is already
+    /// cref="MaxPaletteCarriesExactlyTheTitleRevealBodysTwelveMaterialSlots"/> (A4, re-pointed at the
+    /// MV-851 title-reveal palette — see that test's own doc). A1 (the hip pivots survive) is already
     /// covered by <see cref="MV474MaxWalkTests"/>, which asserts the same claim against whatever
     /// geometry <c>MaxBody.Build</c> currently produces.
     ///
@@ -44,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
         private const float HipY = 0.74f; // MaxRig.HipY (private) — the waist height the rig builds at.
 
         private static MaxPalette NullPalette() =>
-            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null, null);
+            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null);
 
         /// <summary>
         /// Builds Max's body under a "Body" pivot scaled by <paramref name="bodyScale"/>, mirroring
@@ -193,15 +194,14 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>A3 (approved-geometry follow-up): the approved block is 32 parts; the gadget ported
-        /// across from the pre-MV-669 body adds 9 more (7 solid parts plus the 2 glow lenses), for 41
-        /// renderers total.
-        ///
-        /// MV-717 moves this count: the old static sleeve+forearm+glove (6 parts) are gone, replaced by
-        /// one dynamic beam per arm (2) plus a small knuckle-ball glove on each of the gun's two hand
-        /// grips (2) — net -2, landing on 39. This is exactly the "a ticket's own changes make an
-        /// existing count stale" case the culling policy allows for; the count itself is still a
-        /// resolved value read off real renderers, not an authored constant.</summary>
+        /// <summary>A3 (approved-geometry follow-up), superseded by MV-851: the title-reveal body
+        /// builds 37 renderers — legs (5 per leg: thigh, shorts hem, shin, sole, boot × 2 = 10), torso
+        /// (tunic, collar, belt, one pouch, neck = 5), head (skin + per-side eye/pupil/brow × 2 + hair
+        /// cap + back-of-head mass = 9), arms (one bare-skin beam each = 2) and the unchanged RCDA
+        /// gadget (7 solid parts + 2 glow lenses = 9) plus its two hand-grip knuckle balls (2). This is
+        /// exactly the "a ticket's own changes make an existing count stale" case the culling policy
+        /// allows for; the count itself is still a resolved value read off real renderers, not an
+        /// authored constant.</summary>
         [Test]
         public void BuiltPartCountIsTheApprovedThirtyTwoPlusThePortedGadget()
         {
@@ -210,10 +210,10 @@ namespace MaxWorlds.Tests.EditMode
             {
                 MaxBody.Build(root, NullPalette(), HipY);
                 var renderers = root.GetComponentsInChildren<MeshRenderer>();
-                Assert.That(renderers.Length, Is.EqualTo(39),
-                    $"Built {renderers.Length} renderers, not the post-MV-717 39 (32 approved-block " +
-                    "parts - 6 old static arm parts + 2 dynamic arm beams + 9 ported gadget parts + 2 " +
-                    "hand-grip knuckle balls).");
+                Assert.That(renderers.Length, Is.EqualTo(37),
+                    $"Built {renderers.Length} renderers, not the MV-851 title-reveal body's 37 (10 leg " +
+                    "parts + 5 torso parts + 9 head parts + 2 arm beams + 9 gadget parts + 2 hand-grip " +
+                    "knuckle balls).");
             }
             finally
             {
@@ -221,24 +221,32 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>A4 (approved-geometry follow-up): <c>MaxPalette</c> gains exactly <c>Belt</c> and
-        /// <c>Pouch</c> — every pre-MV-669 field must still be there, under the same name.</summary>
+        /// <summary>A4 (approved-geometry follow-up), superseded by MV-851: <c>MaxPalette</c> now
+        /// carries exactly the title-reveal body's twelve material slots — <c>Jacket</c>, <c>Hood</c>,
+        /// <c>Fabric</c>, <c>Goggle</c> and <c>Pouch</c> are gone (no hood, no goggles, and the one
+        /// pouch now shares the belt's own material); <c>Tunic</c>, <c>TunicDark</c>, <c>Glove</c> and
+        /// <c>Pupil</c> are new.</summary>
         [Test]
-        public void MaxPaletteGainsExactlyBeltAndPouch()
+        public void MaxPaletteCarriesExactlyTheTitleRevealBodysTwelveMaterialSlots()
         {
             var fields = typeof(MaxPalette).GetFields(
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
             var names = new System.Collections.Generic.HashSet<string>();
             foreach (var f in fields) names.Add(f.Name);
 
-            Assert.That(fields.Length, Is.EqualTo(13),
-                $"MaxPalette has {fields.Length} public fields, not the 11 pre-MV-669 fields plus " +
-                "exactly two new ones (Belt, Pouch).");
+            Assert.That(fields.Length, Is.EqualTo(12),
+                $"MaxPalette has {fields.Length} public fields, not the MV-851 title-reveal body's 12.");
 
-            foreach (var expected in new[] { "Skin", "Hair", "Jacket", "Hood", "Fabric", "Dark", "Boot",
-                                             "Sole", "Metal", "Eye", "Goggle", "Belt", "Pouch" })
+            foreach (var expected in new[] { "Skin", "Hair", "Tunic", "TunicDark", "Belt", "Boot",
+                                             "Sole", "Glove", "Eye", "Pupil", "Dark", "Metal" })
             {
                 Assert.That(names, Does.Contain(expected), $"MaxPalette lost or renamed its '{expected}' field.");
+            }
+
+            foreach (var retired in new[] { "Jacket", "Hood", "Fabric", "Goggle", "Pouch" })
+            {
+                Assert.That(names, Does.Not.Contain(retired),
+                    $"MaxPalette still carries the retired '{retired}' field — MV-851 removed it.");
             }
         }
     }

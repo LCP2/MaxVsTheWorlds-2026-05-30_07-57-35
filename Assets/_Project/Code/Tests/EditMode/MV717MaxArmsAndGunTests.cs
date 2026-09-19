@@ -77,7 +77,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var palette = new MaxPalette(null, null, null, null, null, null, null, null, null, null,
-                                             null, null, null);
+                                             null, null);
                 var body = MaxBody.Build(root, palette, 0.74f);
 
                 Assert.That(body.Gun, Is.Not.Null,
