@@ -118,9 +118,15 @@ namespace MaxWorlds.Tests.EditMode
         {
             PlayerRocket.DestroyAllActive();
             PlayerRocket rocket = PlayerRocket.Fire(Vector3.zero, target: null, speed: 14f, damage: 30f,
-                splashRadius: 2f, cluster: false);
+                splashRadius: 2f, cluster: false, launchYawRight: true);
             try
             {
+                // MV-842: Fire() now tilts the rocket onto its own pitched/yawed launch arc even with
+                // no target, so the world-space bounds below are measured with the rotation reset to
+                // identity first — this assertion is about the model's own physical length, not
+                // whichever direction it happened to launch in.
+                rocket.transform.rotation = Quaternion.identity;
+
                 Renderer[] renderers = rocket.GetComponentsInChildren<Renderer>();
                 Assert.That(renderers.Length, Is.GreaterThan(0),
                     "test precondition: the rocket must have at least one renderer");

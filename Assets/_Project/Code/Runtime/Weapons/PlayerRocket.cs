@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -17,15 +18,56 @@ namespace MaxWorlds.Weapons
     /// receiver type.
     ///
     /// Free-flying and not pooled, same lifetime shape as <see cref="MaxWorlds.Enemies.HomingMissile"/>:
-    /// short-lived, self-destroys on impact/timeout. Flight/detonation timing runs on
-    /// <c>Time.deltaTime</c> inside <see cref="Update"/> and isn't covered by an EditMode test — per the
-    /// project's standing PlayMode-is-CI's-problem rule — <see cref="ShoulderRack"/>'s own test only
-    /// exercises the firing/targeting decision that calls <see cref="Fire"/>.
+    /// short-lived, self-destroys on impact/timeout. <see cref="Update"/> just forwards
+    /// <c>Time.deltaTime</c> into the public <see cref="Tick"/> (MV-842) — the same explicit-dt split
+    /// <see cref="ShoulderRack.Tick"/> and <see cref="SeekerPulse.Tick"/> already use — so an EditMode
+    /// test can drive the homing flight to detonation deterministically without a live PlayerLoop.
     /// </summary>
     public sealed class PlayerRocket : MonoBehaviour
     {
-        private const float TurnRateDegPerSec = 120f;
-        private const float ContactRadius = 0.4f;
+        /// <summary>MV-842: how long a rocket flies its fixed launch arc — pitched up, yawed off the
+        /// aim line — before it starts homing. It must never travel along the bolt line, so this phase
+        /// ignores the target entirely; see <see cref="Fire"/> for the arc itself.</summary>
+        private const float LaunchDurationSeconds = 0.25f;
+        private const float LaunchPitchDegrees = 35f;
+        private const float LaunchYawDegrees = 30f;
+
+        /// <summary>MV-842: was 120 deg/s (min turn radius 14 m/s / 120 deg/s ~ 6.7m) — too wide to
+        /// ever close inside the old 0.4m ContactRadius, so the rocket circled until fuel-out instead
+        /// of striking its target.
+        ///
+        /// The fix spec's own proposed 300 deg/s (radius ~2.7m) still measurably orbits: a rocket fired
+        /// 90 degrees off Max's facing at a stationary target 5m out settled into a stable ~2-3m loop
+        /// around it and never once closed inside the new 0.8m ContactRadius before the 4s fuel budget
+        /// (confirmed by ticking <c>MV842RocketHomingTests</c>'s own scenario out to fuel-out — pure
+        /// "always turn toward the target's current bearing" steering can lock into a limit-cycle
+        /// orbit whenever the target ends up inside the turn circle, independent of turn rate, as long
+        /// as that circle's radius exceeds the contact radius). 720 deg/s (~1.1m radius) is still above
+        /// 0.8m in theory but was swept across angle (0/45/90/179 degrees) and range (5/8/12m) without
+        /// producing an orbit in any of them, converging inside 0.9s in the worst case (12m, near the
+        /// rack's own max engagement range) — see the fix comment for the swept numbers.</summary>
+        private const float TurnRateDegPerSec = 720f;
+
+        /// <summary>MV-842: was a 3D distance of 0.4m against the target's own transform, which a level
+        /// flight path at spawn height could never reach. Horizontal-only now (see <see cref="IsCloseToTarget"/>),
+        /// the same shape <see cref="SeekerPulse"/>'s own contact test already uses.</summary>
+        private const float ContactRadius = 0.8f;
+
+        /// <summary>MV-842: how fast the rocket's altitude eases toward its target's centre height once
+        /// it starts homing — an ease, not a snap, so the transition out of the launch arc reads as a
+        /// dive/climb rather than the rocket teleporting onto the target's exact height.</summary>
+        private const float HeightEaseRate = 6f;
+
+        /// <summary>MV-842: if the locked target dies or goes dormant mid-flight, retarget the nearest
+        /// live awake robot within this range of the rocket's own current position — the same range
+        /// <see cref="ShoulderRack"/> itself fires within.</summary>
+        private const float RetargetRangeMeters = 12f;
+
+        /// <summary>MV-842: "or on touching the target's collider — whichever first" — a small
+        /// tolerance around <see cref="Collider.ClosestPoint"/>, which returns the query point itself
+        /// once that point is already inside the collider (distance 0).</summary>
+        private const float ColliderTouchDistance = 0.15f;
+
         private const float FuelBudgetSeconds = 4f;
 
         private const int ClusterBombletCount = 3;
@@ -43,6 +85,8 @@ namespace MaxWorlds.Weapons
         public static IReadOnlyList<PlayerRocket> Active => s_active;
 
         private Transform _target;
+        private RobotEnemy _targetRobot;
+        private Collider _targetCollider;
         private float _speed;
         private float _damage;
         private float _splashRadius;
@@ -55,9 +99,14 @@ namespace MaxWorlds.Weapons
         public Transform TargetForTests => _target;
 
         /// <summary>Launch one rocket from <paramref name="origin"/> toward <paramref name="target"/>.
-        /// Mirrors <see cref="MaxWorlds.Enemies.HomingMissile.Fire"/>'s static-builder shape.</summary>
+        /// Mirrors <see cref="MaxWorlds.Enemies.HomingMissile.Fire"/>'s static-builder shape.
+        ///
+        /// MV-842: leaves pitched up <see cref="LaunchPitchDegrees"/> and yawed
+        /// <see cref="LaunchYawDegrees"/> outward from the aim line (<paramref name="launchYawRight"/>
+        /// picks which side — <see cref="ShoulderRack"/> alternates this per rocket in a salvo) rather
+        /// than aimed flat down the same line the primary weapon fires on.</summary>
         public static PlayerRocket Fire(Vector3 origin, Transform target, float speed, float damage,
-            float splashRadius, bool cluster)
+            float splashRadius, bool cluster, bool launchYawRight)
         {
             var go = new GameObject("PlayerRocket (stand-in)");
             go.transform.position = origin;
@@ -65,7 +114,11 @@ namespace MaxWorlds.Weapons
             Vector3 aim = target != null ? target.position - origin : Vector3.forward;
             aim.y = 0f;
             if (aim.sqrMagnitude < 1e-4f) aim = Vector3.forward;
-            go.transform.rotation = Quaternion.LookRotation(aim.normalized, Vector3.up);
+            Quaternion aimRot = Quaternion.LookRotation(aim.normalized, Vector3.up);
+
+            float yawSign = launchYawRight ? 1f : -1f;
+            Quaternion launchOffset = Quaternion.Euler(-LaunchPitchDegrees, LaunchYawDegrees * yawSign, 0f);
+            go.transform.rotation = aimRot * launchOffset;
 
             BuildVisual(go.transform);
 
@@ -202,26 +255,46 @@ namespace MaxWorlds.Weapons
         private void Init(Transform target, float speed, float damage, float splashRadius, bool cluster)
         {
             _target = target;
+            _targetRobot = target != null ? target.GetComponent<RobotEnemy>() : null;
+            _targetCollider = target != null ? target.GetComponent<Collider>() : null;
             _speed = speed;
             _damage = damage;
             _splashRadius = splashRadius;
             _cluster = cluster;
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>Advance one step. Public so an EditMode test can drive the flight deterministically
+        /// without a live PlayerLoop — the same reason <see cref="ShoulderRack.Tick"/> and
+        /// <see cref="SeekerPulse.Tick"/> are public.</summary>
+        public void Tick(float dt)
         {
             if (_detonated) return;
-            float dt = Time.deltaTime;
             _age += dt;
 
-            if (_target != null)
+            bool launching = _age < LaunchDurationSeconds;
+            if (!launching)
             {
-                transform.rotation = HomingSteering.TurnToward(transform.rotation, transform.position,
-                    _target.position, TurnRateDegPerSec, dt);
+                RetargetIfLost();
+
+                if (_target != null)
+                {
+                    transform.rotation = HomingSteering.TurnToward(transform.rotation, transform.position,
+                        _target.position, TurnRateDegPerSec, dt);
+                }
             }
 
             Vector3 from = transform.position;
             Vector3 next = from + transform.forward * (_speed * dt);
+
+            // MV-842 item 3: height eases toward the target's centre height once homing starts, rather
+            // than however the launch pitch happened to leave it — an ease on top of the forward-driven
+            // move above, not a replacement for it.
+            if (!launching && _target != null)
+            {
+                next.y = Mathf.Lerp(next.y, _target.position.y, 1f - Mathf.Exp(-HeightEaseRate * dt));
+            }
 
             if (HomingSteering.BlockedByGeometry(from, next, out RaycastHit hit))
             {
@@ -232,9 +305,55 @@ namespace MaxWorlds.Weapons
 
             transform.position = next;
 
-            bool closeEnough = _target != null &&
-                (transform.position - _target.position).sqrMagnitude <= ContactRadius * ContactRadius;
+            bool closeEnough = !launching && IsCloseToTarget();
             if (closeEnough || _age >= FuelBudgetSeconds) Detonate();
+        }
+
+        /// <summary>MV-842 item 4: "detonate when horizontal (x/z) distance to the target is <= 0.8m,
+        /// or on touching the target's collider — whichever first." The collider check is a fallback
+        /// for a target whose collider extends past the horizontal radius — see
+        /// <see cref="ColliderTouchDistance"/>.</summary>
+        private bool IsCloseToTarget()
+        {
+            if (_target == null) return false;
+
+            Vector3 toTarget = _target.position - transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= ContactRadius * ContactRadius) return true;
+
+            if (_targetCollider != null)
+            {
+                Vector3 closest = _targetCollider.ClosestPoint(transform.position);
+                if ((closest - transform.position).sqrMagnitude <= ColliderTouchDistance * ColliderTouchDistance)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>MV-842 item 5: "if the target dies or goes dormant mid-flight, re-target the
+        /// nearest live, awake robot within 12m of the rocket; if none, fly straight and detonate at
+        /// fuel-out." Reads <see cref="RobotEnemy.Active"/> directly — the same static-registry idiom
+        /// this class's own <see cref="Active"/> and <see cref="ShoulderRack"/>'s in-range scan use —
+        /// rather than a physics query, since every live robot is already in that list.</summary>
+        private void RetargetIfLost()
+        {
+            if (_target != null && _targetRobot != null && _targetRobot.IsAlive && !_targetRobot.IsDormant) return;
+
+            RobotEnemy replacement = null;
+            float bestSq = RetargetRangeMeters * RetargetRangeMeters;
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy r = active[i];
+                if (r == null || !r.IsAlive || r.IsDormant) continue;
+                float d = (r.transform.position - transform.position).sqrMagnitude;
+                if (d <= bestSq) { bestSq = d; replacement = r; }
+            }
+
+            _targetRobot = replacement;
+            _target = replacement != null ? replacement.transform : null;
+            _targetCollider = replacement != null ? replacement.GetComponent<Collider>() : null;
         }
 
         private void Detonate()
@@ -250,7 +369,12 @@ namespace MaxWorlds.Weapons
             // same "either way" bus idiom HomingMissile.Detonate uses for HudSignals.MissileImpact.
             HudSignals.EmitRocketImpact(transform.position, _damage);
 
-            Destroy(gameObject);
+            // MV-842: an EditMode test now ticks a rocket to detonation directly (see
+            // MV842RocketHomingTests) — Destroy() only defers to end-of-frame in Play mode, and edit
+            // mode has no such frame to defer to, so it must be immediate here, same branch Strip()
+            // already uses below for the same reason.
+            if (Application.isPlaying) Destroy(gameObject);
+            else Object.DestroyImmediate(gameObject);
         }
 
         /// <summary>One AOE damage query — reused for both the rocket's own splash and each cluster
