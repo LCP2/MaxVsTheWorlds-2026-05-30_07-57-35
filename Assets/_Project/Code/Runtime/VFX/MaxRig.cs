@@ -389,6 +389,15 @@ namespace MaxWorlds.VFX
                  "hand end does), which reads as the top of the arm being welded to the torso.")]
         [SerializeField] private float shoulderSwingAmplitude = 0.035f;
 
+        [Header("Hair (MV-854)")]
+        [Tooltip("How hard the wind blows the hair while he stands still — the approved prototype's " +
+                 "own 0.55. No scene-wide wind vector exists to read instead (see MaxHair.WindDirWorld's " +
+                 "doc): the foliage/lawn shaders only ever carry a bend AMPLITUDE, never a direction.")]
+        [SerializeField] private float hairWindStrength = MaxHair.WindStrengthDefault;
+
+        [Tooltip("World-space direction the hair streams in — the approved prototype's own (1, 0, 0.35).")]
+        [SerializeField] private Vector3 hairWindDirection = new Vector3(1f, 0f, 0.35f);
+
         [Header("Idle (MV-717)")]
         [Tooltip("How fast he breathes while standing still and not aiming, in Hz. He must never be " +
                  "perfectly frozen. MV-851: 0.35 Hz, the approved prototype's own number.")]
@@ -477,9 +486,13 @@ namespace MaxWorlds.VFX
         /// once and returning.</summary>
         private Quaternion _moveLean = Quaternion.identity;
 
-        private Material _skinMat, _hairMat, _tunicMat, _tunicDarkMat, _beltMat, _bootMat,
+        private Material _skinMat, _hairMat, _hairRibbonMat, _tunicMat, _tunicDarkMat, _beltMat, _bootMat,
                          _soleMat, _gloveMat, _eyeMat, _pupilMat, _darkMat, _metalMat;
         private MaterialPropertyBlock _lensMpb;
+
+        /// <summary>MV-854: the 31 flowing locks — owns their own merged dynamic mesh; see that
+        /// class's doc for why the spring maths itself lives in the separate, pure <see cref="MaxHair"/>.</summary>
+        private MaxHairRig _hairLocks;
 
         private float _stride;
 
@@ -602,6 +615,12 @@ namespace MaxWorlds.VFX
         {
             _skinMat = CharacterMaterial("Max_Skin", Skin);
             _hairMat = CharacterMaterial("Max_Hair", Hair);
+            // MV-854: no outline — a screen-space hull on a strand this thin is exactly the "charm"
+            // trap the class doc's outline section warns about (smaller than its own line, so the hull
+            // just buries it in black). Double-sidedness is handled at the mesh level instead (see
+            // MaxHairRig.BuildIndices) rather than by a material-level Cull toggle, since this shared
+            // character shader hard-codes Cull Back in its main pass.
+            _hairRibbonMat = CharacterMaterial("Max_HairRibbon", Hair, outline: false);
             _tunicMat = CharacterMaterial("Max_Tunic", Tunic);
             _tunicDarkMat = CharacterMaterial("Max_TunicDark", TunicDark);
             _beltMat = CharacterMaterial("Max_Belt", Belt);
@@ -745,6 +764,10 @@ namespace MaxWorlds.VFX
             _head = body.Head;
             _head.SetParent(_torso, worldPositionStays: true);
 
+            // MV-854: the 31 flowing locks, built once here (like everything else in this method) and
+            // driven every LateUpdate from TickHair below.
+            _hairLocks = new MaxHairRig(_head, _hairRibbonMat);
+
             // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
             // (see the class doc). Coloured once here, the same way the old goggle lenses were.
             if (_lensMpb == null) _lensMpb = new MaterialPropertyBlock();
@@ -820,6 +843,7 @@ namespace MaxWorlds.VFX
             TickShoulderRackMount();
             TickSecondary(dt);
             TickHeadLag(dt);
+            TickHair(dt);
 
             // The sleeves go LAST. They are stretched between the shoulders and the hands, and both of
             // those have just moved.
@@ -976,6 +1000,28 @@ namespace MaxWorlds.VFX
 
             if (_head != null)
                 _head.localRotation = Quaternion.Euler(0f, Mathf.DeltaAngle(facingYaw, _laggedFacingYaw) + _headStrideYaw, 0f);
+        }
+
+        /// <summary>
+        /// MV-854: his hair — the head's own facing (post head-lag, so the ribbons answer the same
+        /// "which way is he actually looking" question the head-lag cue just resolved) plus the wind
+        /// pushes every lock's spring target; see <see cref="MaxHair.Tick"/> for the maths itself.
+        /// </summary>
+        private void TickHair(float dt)
+        {
+            if (_hairLocks == null || _head == null) return;
+
+            float speed01 = Mathf.Clamp01(_max.MoveInput.magnitude);
+
+            Vector3 facing = _head.forward;
+            facing.y = 0f;
+            facing = facing.sqrMagnitude > 1e-6f ? facing.normalized : Vector3.forward;
+
+            Vector3 windDir = hairWindDirection.sqrMagnitude > 1e-6f
+                ? hairWindDirection.normalized
+                : MaxHair.WindDirWorld;
+
+            _hairLocks.Tick(dt, facing, speed01, _stride, Time.time, hairWindStrength, windDir);
         }
 
         /// <summary>
@@ -1199,9 +1245,13 @@ namespace MaxWorlds.VFX
             HudSignals.ShockPulseLanded -= OnShockPulseLanded;
 
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
-            Kill(_skinMat); Kill(_hairMat); Kill(_tunicMat); Kill(_tunicDarkMat); Kill(_beltMat);
-            Kill(_bootMat); Kill(_soleMat); Kill(_gloveMat); Kill(_eyeMat); Kill(_pupilMat);
-            Kill(_darkMat); Kill(_metalMat);
+            Kill(_skinMat); Kill(_hairMat); Kill(_hairRibbonMat); Kill(_tunicMat); Kill(_tunicDarkMat);
+            Kill(_beltMat); Kill(_bootMat); Kill(_soleMat); Kill(_gloveMat); Kill(_eyeMat);
+            Kill(_pupilMat); Kill(_darkMat); Kill(_metalMat);
+
+            // MV-854: the merged hair mesh is a runtime instance too — nothing else destroys it when
+            // the GameObject that renders it goes down with the rest of this rig.
+            _hairLocks?.DestroyResources();
         }
 
         private static void Kill(Material m)

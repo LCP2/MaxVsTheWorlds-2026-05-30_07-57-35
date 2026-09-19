@@ -121,8 +121,9 @@ namespace MaxWorlds.VFX
     ///     real knee joint (the old body had none), and both pivots are still hinges <c>TickRun</c>
     ///     swings/flexes (MV-474, MV-851) rather than drawn parts.
     ///
-    /// Hair is a static cap + back-of-head mass only (buildNew()'s flowing locks are the follow-up
-    /// ticket, MV-854) — see the head section below.
+    /// Hair below is a static cap + back-of-head mass only — buildNew()'s own flowing locks are
+    /// ported separately, in <see cref="MaxHair"/>/<see cref="MaxHairRig"/> (MV-854), because they are
+    /// rebuilt every frame rather than built once here like the rest of this class.
     /// </summary>
     public static class MaxBody
     {
@@ -174,7 +175,8 @@ namespace MaxWorlds.VFX
             // The goggles, the goggle strap and the two hair bunches are GONE (MV-851 AC2) — visible
             // eyes (white sphere + dark pupil, canted up toward the camera) and heavy brows take their
             // place, and the hair is a low cap + back-of-head mass rather than a lathe-plus-two-bunches.
-            // buildNew()'s flowing locks are deliberately not ported here — hair movement is MV-854.
+            // buildNew()'s flowing locks are not built here — MaxRig grows them separately, under this
+            // very Head pivot, once it is built (MV-854's MaxHairRig).
             var headGroup = new GameObject("Head");
             headGroup.transform.SetParent(root, worldPositionStays: false);
             var head = headGroup.transform;
