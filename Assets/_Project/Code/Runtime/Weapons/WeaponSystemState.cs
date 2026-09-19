@@ -100,6 +100,7 @@ namespace MaxWorlds.Weapons
         {
             LppeTrackKind.Rate => "p_rof",
             LppeTrackKind.Fork => "p_frk",
+            LppeTrackKind.Capacity => "p_cap",
             _ => null,
         };
 

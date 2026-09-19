@@ -229,6 +229,19 @@
       "$comment": "MV-689: a pulse that kills its target releases a second pulse at the next target. One level."
     },
     {
+      "id": "p_cap",
+      "category": "PRIMARY",
+      "x": 515,
+      "y": 580,
+      "icon": "flw",
+      "label": "CAPACITY",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "p_dmg",
+      "startLevel": 0,
+      "$comment": "MV-846, Lee: 'add capacity -- I run out of weapon too often and this needs to be upgradable.' Enlarges the LPPE's own energy tank max, 140 -> 315 over 5 levels (140*(1+0.25*L)): 140/175/210/245/280/315. Reuses the 'flw' tank icon World 1's p_flw already uses -- do NOT reuse the id p_flw itself, its levels cut RCDA drain, a different system the LPPE never reads."
+    },
+    {
       "id": "s_rkt",
       "category": "SECONDARY",
       "x": 610,
