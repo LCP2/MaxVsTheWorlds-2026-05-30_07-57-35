@@ -32,14 +32,15 @@ namespace MaxWorlds.Intro
     /// inspector wiring, and a Timeline asset's track bindings are exactly that hand-wiring. So the
     /// "Timeline" is a committed C# sequence — same shape as the boss abilities (YT-157).
     ///
-    ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process (the New Game). YT-151's Home
-    ///    screen calls it from its New Game button (never from Continue, and never on a Replay-triggered
-    ///    scene reload — <see cref="MaxWorlds.Save.SaveSystem.ActiveSlot"/> being already set is what
-    ///    skips the Home screen, and with it this call, on those loads). Gated on
-    ///    <see cref="Enabled"/> (YT-216, default OFF) unless the caller passes <c>force: true</c> —
-    ///    MV-550's Home screen does that on a derived true-first-launch (no save slot has data), so the
-    ///    sequence plays without the authored flag being flipped; <see cref="Enabled"/> stays a
-    ///    manual/test override for every other caller.
+    ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process on its unforced/<see cref="Enabled"/>
+    ///    path (test/manual callers). YT-151's Home screen calls it from PLAY (never from Continue, and
+    ///    never on a Replay-triggered scene reload — <see cref="MaxWorlds.Save.SaveSystem.ActiveSlot"/>
+    ///    being already set is what skips the Home screen, and with it this call, on those loads), always
+    ///    with <c>force: true</c> — MV-826's per-slot save-state gate
+    ///    (<see cref="MaxWorlds.UI.HomeScreen.ShouldPlayIntroForSlot"/>) decides whether to call it at
+    ///    all, so <c>force</c> must bypass the once-per-process gate too (MV-839): QUIT TO MENU → RESET
+    ///    is a same-process scene reload, and a RESET slot must replay the film even though a prior
+    ///    forced play already ran this process.
     ///  * SKIP — a tap, click, or any key ends it immediately and drops straight into gameplay
     ///    (<see cref="Skip"/>, driven from <see cref="LateUpdate"/>; a "Tap to skip" prompt shows while
     ///    it runs).
@@ -69,14 +70,22 @@ namespace MaxWorlds.Intro
 
         /// <summary>
         /// Start the opening cinematic — the New-Game trigger, called by the Home screen (YT-151). Plays
-        /// once per process (never on a Replay-triggered scene reload, and never on Continue), only when
-        /// <paramref name="force"/> or <see cref="Enabled"/>, and only when there is a <c>Camera.main</c>
-        /// to take over and hand back to. Returns true if it started.
+        /// once per process (never on a Replay-triggered scene reload, and never on Continue) for the
+        /// unforced/<see cref="Enabled"/> path, only when there is a <c>Camera.main</c> to take over and
+        /// hand back to. Returns true if it started.
+        ///
+        /// MV-839: <paramref name="force"/> bypasses <see cref="s_consumed"/> entirely rather than
+        /// merely overriding <see cref="Enabled"/>. The Home screen's forced call is per-slot
+        /// (<see cref="MaxWorlds.UI.HomeScreen.ShouldPlayIntroForSlot"/> derives it fresh from save
+        /// state), so QUIT TO MENU → RESET → PLAY on the same slot — a scene reload in the same
+        /// process, per <see cref="MaxWorlds.UI.RunFlow.QuitToMenu"/> — must play the film again even
+        /// though a prior forced play already set the static this process. The once-per-process gate
+        /// still applies to any unforced/<see cref="Enabled"/> caller (tests, manual override).
         /// </summary>
         public static bool TryPlay(bool force = false)
         {
             if (!force && !Enabled) return false;                // YT-216 — off by default, instant play
-            if (s_consumed) return false;                        // once per process — not on Replay
+            if (!force && s_consumed) return false;              // once per process — not on Replay
             if (FindFirstObjectByType<IntroCinematic>() != null) return false;
             if (Camera.main == null) return false;              // nothing to take over / hand back to
             s_consumed = true;
