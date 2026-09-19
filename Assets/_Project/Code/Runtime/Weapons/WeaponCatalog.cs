@@ -240,17 +240,15 @@ namespace MaxWorlds.Weapons
         /// Teleport 4. Water Balloon, Auto-fire (MV-380) and Sentinels (MV-362) are boolean unlocks —
         /// cap 1, the default — since their own magnitudes live on
         /// <see cref="WaterBalloonTrackKind"/> or THE RIG's own child nodes, not a leveled ability.
-        /// Force Field's cap rose to 5 with MV-422's RIG restructure (<c>e_ff</c>'s own
-        /// <c>maxLevel</c>) — kept as a literal here, not read from <see cref="RigBoard"/> directly,
-        /// since only this one value actually diverges from its pre-MV-422 number; change the two
-        /// together if <c>rig_board.json</c>'s <c>e_ff.maxLevel</c> is ever retuned.</summary>
+        /// Force Field's cap read straight off <c>e_ff</c>'s own board <c>maxLevel</c> (MV-840: World 2's
+        /// board diverges from World 1's, 7 vs. 5, so a literal here can no longer serve both).</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
             {
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Teleport: return 4;
-                case AbilityKind.ForceField: return 5;
+                case AbilityKind.ForceField: return RigBoard.MaxLevel("e_ff");
                 default: return 1;
             }
         }
