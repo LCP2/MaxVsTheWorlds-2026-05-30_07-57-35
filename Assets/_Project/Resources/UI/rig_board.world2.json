@@ -299,7 +299,7 @@
       "y": 420,
       "icon": "ff",
       "label": "FORCE FIELD",
-      "maxLevel": 5,
+      "maxLevel": 7,
       "kind": "cap",
       "parent": null,
       "startLevel": 0
@@ -371,7 +371,7 @@
       "y": 580,
       "icon": "sdmg",
       "label": "DAMAGE",
-      "maxLevel": 5,
+      "maxLevel": 10,
       "kind": "cap",
       "parent": "u_sen",
       "startLevel": 0
