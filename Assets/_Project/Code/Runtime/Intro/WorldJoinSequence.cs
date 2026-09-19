@@ -53,6 +53,20 @@ namespace MaxWorlds.Intro
 
         private const float ArrivalEpsilon = 0.2f;
 
+        /// <summary>MV-849: t = 0 at this world x, ramping to 1 at <see cref="BlendEndX"/> — the
+        /// ticket's own two numbers, not derived from the door, so x = 351 (the AC1 test point)
+        /// lands exactly on t = 0.5.</summary>
+        private const float BlendStartX = 340f;
+        private const float BlendEndX = 362f;
+
+        /// <summary>"a hard material swap at the midpoint is acceptable" (MV-849) — colours stay
+        /// continuous across it because the property block keeps driving them regardless of which
+        /// material is underneath.</summary>
+        private const float MaterialSwapT = 0.5f;
+
+        /// <summary>"At t = 1 hold 0.3 s, then the existing fade" (MV-849).</summary>
+        private const float BlendHoldSeconds = 0.3f;
+
         /// <summary>Matches <see cref="PlayerController"/>'s own turn rate so the scripted walk turns
         /// exactly as fast as ordinary player-driven movement does.</summary>
         private const float RotationSpeedDegPerSec = 720f;
@@ -119,6 +133,20 @@ namespace MaxWorlds.Intro
         private MaterialPropertyBlock _fadeMpb;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
+        // --- MV-849: corridor -> World 2 blend ---
+        private Renderer _corridorFloorRenderer;
+        private Renderer _corridorWallSRenderer;
+        private Renderer _corridorWallNRenderer;
+        private Renderer _corridorEndCapRenderer;
+        private MaterialPropertyBlock _corridorMpb;
+        private BackyardLighting _lighting;
+        private bool _corridorMaterialsSwapped;
+        private float _blendHoldElapsed;
+
+        /// <summary>The corridor floor's renderer, exposed so a test can read back its resolved
+        /// property-block colour (AC1) without re-deriving it from the private build.</summary>
+        public Renderer CorridorFloorRenderer => _corridorFloorRenderer;
+
         /// <summary>Running until it hands off. A test reads this to prove it reaches the end.</summary>
         public bool IsPlaying => _phase != Phase.Done;
 
@@ -155,6 +183,10 @@ namespace MaxWorlds.Intro
 
             _fadeStartX = _doorX + FadeStartOffset;
             _corridorEndX = _doorX + CorridorLength;
+
+            _corridorMpb = new MaterialPropertyBlock();
+            _lighting = FindFirstObjectByType<BackyardLighting>();
+            if (_lighting == null) _lighting = new GameObject("BackyardLighting").AddComponent<BackyardLighting>();
 
             SuspendGameplay();
             OpenDoor(wallHeight, wallThickness);
@@ -296,17 +328,21 @@ namespace MaxWorlds.Intro
             float length = _corridorEndX - _doorX;
             float fullWidth = CorridorHalfWidth * 2f;
 
-            SolidBox(root, "Corridor Floor",
-                new Vector3(midX, -0.05f, _doorZ), new Vector3(length, 0.1f, fullWidth), floorMat);
-            SolidBox(root, "Corridor Wall S",
+            _corridorFloorRenderer = SolidBox(root, "Corridor Floor",
+                new Vector3(midX, -0.05f, _doorZ), new Vector3(length, 0.1f, fullWidth), floorMat)
+                .GetComponent<Renderer>();
+            _corridorWallSRenderer = SolidBox(root, "Corridor Wall S",
                 new Vector3(midX, wallHeight * 0.5f, _doorZ - CorridorHalfWidth - wallThickness * 0.5f),
-                new Vector3(length, wallHeight, wallThickness), wallMat);
-            SolidBox(root, "Corridor Wall N",
+                new Vector3(length, wallHeight, wallThickness), wallMat)
+                .GetComponent<Renderer>();
+            _corridorWallNRenderer = SolidBox(root, "Corridor Wall N",
                 new Vector3(midX, wallHeight * 0.5f, _doorZ + CorridorHalfWidth + wallThickness * 0.5f),
-                new Vector3(length, wallHeight, wallThickness), wallMat);
-            SolidBox(root, "Corridor End Cap",
+                new Vector3(length, wallHeight, wallThickness), wallMat)
+                .GetComponent<Renderer>();
+            _corridorEndCapRenderer = SolidBox(root, "Corridor End Cap",
                 new Vector3(_corridorEndX + wallThickness * 0.5f, wallHeight * 0.5f, _doorZ),
-                new Vector3(wallThickness, wallHeight, fullWidth + wallThickness * 2f), wallMat);
+                new Vector3(wallThickness, wallHeight, fullWidth + wallThickness * 2f), wallMat)
+                .GetComponent<Renderer>();
         }
 
         private static GameObject SolidBox(Transform parent, string name, Vector3 worldCenter, Vector3 size, Material mat)
@@ -427,6 +463,18 @@ namespace MaxWorlds.Intro
 
         private void TickWalkCorridor(float dt)
         {
+            ApplyCorridorBlend(_playerT.position.x);
+
+            // MV-849: once the blend is fully done, hold here for a beat before cutting to the
+            // fade -- an instant cut the moment the colours finish lerping reads as the corridor
+            // FINISHING, not as a scene the player is standing inside.
+            if (BlendT(_playerT.position.x) >= 1f)
+            {
+                _blendHoldElapsed += dt;
+                if (_blendHoldElapsed >= BlendHoldSeconds) EnterFade();
+                return;
+            }
+
             _phaseElapsed += dt;
             var target = new Vector3(_fadeStartX, _playerT.position.y, _doorZ);
 
@@ -440,6 +488,57 @@ namespace MaxWorlds.Intro
             if (StepToward(target, dt)) EnterFade();
         }
 
+        /// <summary>0 at <see cref="BlendStartX"/>, 1 at <see cref="BlendEndX"/> (MV-849).</summary>
+        private static float BlendT(float playerX)
+            => Mathf.Clamp01((playerX - BlendStartX) / (BlendEndX - BlendStartX));
+
+        /// <summary>Blend the corridor's own surfaces and the whole scene's lighting from Backyard
+        /// toward Stormdrain as Max crosses the corridor (MV-849). Lighting is global (fog/ambient
+        /// have no per-region variant in this rig), which is deliberate — it's what changes Max's
+        /// own shading, per the ticket, since he carries no per-world skin of his own.</summary>
+        private void ApplyCorridorBlend(float playerX)
+        {
+            float t = BlendT(playerX);
+            BiomePalette backyard = BiomePalette.Backyard;
+            BiomePalette stormdrain = BiomePalette.Stormdrain;
+
+            Color floorColor = Color.Lerp(backyard.ColorFor(SurfaceKind.Ground), stormdrain.ColorFor(SurfaceKind.Ground), t);
+            Color wallColor = Color.Lerp(backyard.ColorFor(SurfaceKind.Wall), stormdrain.ColorFor(SurfaceKind.Wall), t);
+
+            SetPropertyColor(_corridorFloorRenderer, floorColor);
+            SetPropertyColor(_corridorWallSRenderer, wallColor);
+            SetPropertyColor(_corridorWallNRenderer, wallColor);
+            SetPropertyColor(_corridorEndCapRenderer, wallColor);
+
+            if (t >= MaterialSwapT && !_corridorMaterialsSwapped)
+            {
+                _corridorMaterialsSwapped = true;
+                Material floorMat = IntroBuild.Lit("join_corridor_floor_w2", stormdrain.ColorFor(SurfaceKind.Ground));
+                Material wallMat = IntroBuild.Lit("join_corridor_wall_w2", stormdrain.ColorFor(SurfaceKind.Wall));
+                SetSharedMaterial(_corridorFloorRenderer, floorMat);
+                SetSharedMaterial(_corridorWallSRenderer, wallMat);
+                SetSharedMaterial(_corridorWallNRenderer, wallMat);
+                SetSharedMaterial(_corridorEndCapRenderer, wallMat);
+            }
+
+            if (_lighting != null)
+                _lighting.Apply(BackyardLook.Lerp(BackyardLook.Default, BackyardLook.Stormdrain, t));
+        }
+
+        private void SetPropertyColor(Renderer r, Color c)
+        {
+            if (r == null) return;
+            r.GetPropertyBlock(_corridorMpb);
+            _corridorMpb.SetColor(BaseColorId, c);
+            r.SetPropertyBlock(_corridorMpb);
+        }
+
+        private static void SetSharedMaterial(Renderer r, Material m)
+        {
+            if (r == null || m == null) return;
+            r.sharedMaterial = m;
+        }
+
         private void TickFade(float dt)
         {
             _phaseElapsed += dt;
@@ -448,7 +547,7 @@ namespace MaxWorlds.Intro
             if (alpha >= 1f) Finish();
         }
 
-        private void EnterCorridor() { _phase = Phase.WalkCorridor; _phaseElapsed = 0f; }
+        private void EnterCorridor() { _phase = Phase.WalkCorridor; _phaseElapsed = 0f; _blendHoldElapsed = 0f; }
         private void EnterFade() { _phase = Phase.Fade; _phaseElapsed = 0f; }
 
         /// <summary>Steps Max toward <paramref name="target"/> at his normal walk speed via his own
