@@ -30,9 +30,9 @@ namespace MaxWorlds.Intro
         private const int DefaultTextureWidth = 1280;
         private const int DefaultTextureHeight = 714;
 
-        /// <summary>Test-only: force which source kind <see cref="IntroVideo(Camera, Transform)"/> resolves
-        /// to, bypassing the real Resources/StreamingAssets lookup — there is no committed video asset for
-        /// a live test to exercise. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
+        /// <summary>Test-only: force which source kind the constructor resolves to, bypassing the real
+        /// Resources/StreamingAssets lookup — there is no committed video asset for a live test to
+        /// exercise. Cleared by <see cref="IntroCinematic.ResetForTests"/>.</summary>
         public static IntroVideoSourceKind? OverrideKindForTests;
 
         /// <summary>Test-only: skip the actual <see cref="VideoPlayer.Play"/> call in <see cref="Build"/>.
@@ -50,6 +50,18 @@ namespace MaxWorlds.Intro
         /// <summary>True once a source resolved — the harness plays this instead of the box timeline.</summary>
         public bool HasSource => SourceKind != IntroVideoSourceKind.None;
 
+        /// <summary>MV-843: true once <see cref="VideoPlayer.errorReceived"/> has fired — distinct from
+        /// <see cref="IsComplete"/> (which an error also sets, so an error still ends any playback loop
+        /// keyed on completion) so a caller that needs a different outcome for "played to the end" versus
+        /// "never played at all" — e.g. the boot splash falling back to its still image — can tell them
+        /// apart.</summary>
+        public bool Errored { get; private set; }
+
+        /// <summary>MV-843: true once the first decoded frame has been revealed on <see cref="Overlay"/>
+        /// — the resolved signal a caller polls to detect a stalled stream (a source that resolved but
+        /// never actually produces a frame) rather than guessing from <see cref="Position"/>.</summary>
+        public bool HasShownFrame => _frameShown;
+
         public VideoPlayer Player { get; private set; }
 
         /// <summary>MV-835: the full-screen overlay the film renders into — a <see cref="RenderTexture"/>
@@ -63,16 +75,34 @@ namespace MaxWorlds.Intro
         private AspectRatioFitter _fitter;
         private bool _frameShown;
 
+        private readonly string _clipResourcePath;
+        private readonly string _streamingRelativePath;
+        private readonly int _textureWidth;
+        private readonly int _textureHeight;
+
         /// <summary>Playback position in seconds; 0 while nothing has resolved or started.</summary>
         public double Position => Player != null ? Player.time : 0d;
 
         /// <summary>True once the clip has played through to its end (<see cref="VideoPlayer.loopPointReached"/>).</summary>
         public bool IsComplete { get; private set; }
 
-        public IntroVideo(Camera introCam, Transform parent)
+        /// <summary>MV-843: <paramref name="clipResourcePath"/>/<paramref name="streamingRelativePath"/>/
+        /// <paramref name="textureWidth"/>/<paramref name="textureHeight"/> default to the opening
+        /// cinematic's film so <see cref="IntroCinematic"/>'s call site is unchanged; the boot splash
+        /// (<see cref="MaxWorlds.UI.SplashScreen"/>) passes its own title-reveal path/size instead of a
+        /// second RenderTexture+RawImage renderer being written for it.</summary>
+        public IntroVideo(Camera introCam, Transform parent,
+            string clipResourcePath = ClipResourcePath, string streamingRelativePath = StreamingRelativePath,
+            int textureWidth = DefaultTextureWidth, int textureHeight = DefaultTextureHeight)
         {
+            _clipResourcePath = clipResourcePath;
+            _streamingRelativePath = streamingRelativePath;
+            _textureWidth = textureWidth;
+            _textureHeight = textureHeight;
+
             SourceKind = OverrideKindForTests ?? ResolveSourceKind(
-                Application.platform == RuntimePlatform.WebGLPlayer, ClipExists, StreamingFileExists);
+                Application.platform == RuntimePlatform.WebGLPlayer,
+                () => ClipExists(_clipResourcePath), () => StreamingFileExists(_streamingRelativePath));
 
             if (SourceKind == IntroVideoSourceKind.None) return;
             Build(introCam, parent);
@@ -94,12 +124,12 @@ namespace MaxWorlds.Intro
             return hasClip() ? IntroVideoSourceKind.Clip : IntroVideoSourceKind.None;
         }
 
-        private static bool ClipExists() => Resources.Load<VideoClip>(ClipResourcePath) != null;
+        private static bool ClipExists(string path) => Resources.Load<VideoClip>(path) != null;
 
         // WebGL serves StreamingAssets over HTTP, not a local disk, so this check only ever resolves
         // correctly in the Editor and Windows standalone (what cc-verify builds) — ResolveSourceKind
         // never calls it on WebGL (MV-826), it always resolves Url unconditionally there instead.
-        private static bool StreamingFileExists() => File.Exists(Path.Combine(Application.streamingAssetsPath, StreamingRelativePath));
+        private static bool StreamingFileExists(string relativePath) => File.Exists(Path.Combine(Application.streamingAssetsPath, relativePath));
 
         private void Build(Camera introCam, Transform parent)
         {
@@ -112,13 +142,13 @@ namespace MaxWorlds.Intro
             Player.loopPointReached += _ => IsComplete = true;
             // A missing or unplayable stream (e.g. a 404 on the WebGL host) must hand over to gameplay,
             // never leave a black screen behind (MV-826).
-            Player.errorReceived += (_, __) => IsComplete = true;
+            Player.errorReceived += (_, __) => { IsComplete = true; Errored = true; };
 
             // MV-835: the old camera-near-plane surface produced no visible output under URP on WebGL — render into a
             // texture instead and show it on a full-screen overlay (BuildOverlay below). introCam is no
             // longer the film's surface; IntroCinematic blanks it (cullingMask = 0) on this path so it
             // only ever contributes its solid clear behind the overlay.
-            _texture = new RenderTexture(DefaultTextureWidth, DefaultTextureHeight, 0) { name = "IntroVideoRT" };
+            _texture = new RenderTexture(_textureWidth, _textureHeight, 0) { name = "IntroVideoRT" };
             Player.renderMode = VideoRenderMode.RenderTexture;
             Player.targetTexture = _texture;
             Player.sendFrameReadyEvents = true;
@@ -129,7 +159,7 @@ namespace MaxWorlds.Intro
 
             if (SourceKind == IntroVideoSourceKind.Clip)
             {
-                var clip = Resources.Load<VideoClip>(ClipResourcePath);
+                var clip = Resources.Load<VideoClip>(_clipResourcePath);
                 if (clip == null) return;   // a test-forced kind with no real asset behind it — no-op surface
                 Player.source = VideoSource.VideoClip;
                 Player.clip = clip;
@@ -139,7 +169,7 @@ namespace MaxWorlds.Intro
             {
                 // Forward slash, no Path.Combine (MV-826): this is a URL, not a local disk path — WebGL
                 // serves StreamingAssets over HTTP, where a backslash would break the request.
-                string path = Application.streamingAssetsPath + "/" + StreamingRelativePath;
+                string path = Application.streamingAssetsPath + "/" + _streamingRelativePath;
                 // The File.Exists guard only resolves correctly off WebGL (see StreamingFileExists) — on
                 // WebGL, ResolveSourceKind already chose Url unconditionally, so this must not veto it.
                 if (Application.platform != RuntimePlatform.WebGLPlayer && !File.Exists(path)) return;
@@ -187,7 +217,7 @@ namespace MaxWorlds.Intro
             _rawImage.enabled = false;   // hidden until OnFrameReady — the black backing shows until then
             _fitter = rawGo.AddComponent<AspectRatioFitter>();
             _fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-            _fitter.aspectRatio = (float)DefaultTextureWidth / DefaultTextureHeight;
+            _fitter.aspectRatio = (float)_textureWidth / _textureHeight;
         }
 
         /// <summary>Resize the render texture (and the fitter's aspect) once the player reports the
