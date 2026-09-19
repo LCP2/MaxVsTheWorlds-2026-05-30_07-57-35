@@ -16,8 +16,13 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Proven to fail on 1536764a483e70256b8d59e84ccf105e3451a9e0 (pre-fix): World 2's PRIMARY+SECONDARY
     /// total there is 348 cells (<see cref="CellSpend"/>'s multiplier was still 1.25x), so the first
-    /// assertion below (690-730) fails with "Expected: greater than or equal to 690 ... But was: 348".
-    /// </summary>
+    /// assertion below fails with "Expected: greater than or equal to 690 ... But was: 348".
+    ///
+    /// MV-844 (Lee: "make damage 8 levels") raised World 2's <c>p_dmg</c> from a 4- to an 8-level cap,
+    /// keeping the same 50-cells-a-level cost this ticket's own table already charges it (ticket's own
+    /// "existing formula... Keep") -- 4 extra levels at 50 cells each add exactly 200 to the total this
+    /// test measures (711 -&gt; 911), so the asserted range widens by that same 200 rather than the old
+    /// 690-730 band.</summary>
     public sealed class MV767WorldTwoEconomyTests
     {
         [TearDown]
@@ -27,9 +32,10 @@ namespace MaxWorlds.Tests.EditMode
         public void World2Economy_MatchesTheMV767Rebalance()
         {
             int world2Total = TotalPrimarySecondaryCost(worldIndex: 1);
-            Assert.That(world2Total, Is.InRange(690, 730),
+            Assert.That(world2Total, Is.InRange(890, 930),
                 $"World 2's PRIMARY+SECONDARY total must land near parity with its (reduced) Parts " +
-                $"supply after MV-767's 2.5x multiplier, got {world2Total}");
+                $"supply after MV-767's 2.5x multiplier and MV-844's own +200 (4 more p_dmg levels at " +
+                $"50 cells each), got {world2Total}");
 
             int world1Total = TotalPrimarySecondaryCost(worldIndex: 0);
             Assert.That(world1Total, Is.EqualTo(365),

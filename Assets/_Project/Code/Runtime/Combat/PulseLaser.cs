@@ -78,6 +78,15 @@ namespace MaxWorlds.Combat
         public float EffectiveDamagePerPulse => WeaponCatalog.EffectiveDamagePerTick(
             damagePerPulse, WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), WeaponCatalog.DefaultRcdaDamagePerLevel);
 
+        /// <summary>MV-844: POWER's (<c>p_dmg</c>'s) own visual-strength fraction — 0 at L1 (today's
+        /// bolt, unchanged) rising to 1 at World 2's own cap. Reads <see cref="RigBoard.MaxLevel"/> live
+        /// rather than <see cref="WeaponCatalog.MaxLevel(WeaponTrackKind)"/>'s hardcoded 4, since that
+        /// cap stays World 1 (RCDA)-only while World 2's <c>p_dmg</c> now diverges to 8 — same
+        /// live-read-over-literal shape <see cref="WeaponCatalog.MaxLevel(AbilityKind)"/> uses for Force
+        /// Field's own per-world cap (MV-840).</summary>
+        public float PowerVisualStrength => WeaponCatalog.VisualStrengthFraction(
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), RigBoard.MaxLevel("p_dmg"));
+
         /// <summary>The interval between pulses right now — scaled by RATE (<c>p_rof</c>, MV-768),
         /// exactly as <see cref="EffectiveDamagePerPulse"/>/<see cref="LockRange"/> are scaled by
         /// Damage/Range. Routed through <see cref="WeaponSystemState"/>, never <see cref="RigState"/>
@@ -228,7 +237,7 @@ namespace MaxWorlds.Combat
 
             SeekerPulse pulse = SeekerPulse.Fire(origin, dir, DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec,
                 DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
-                onKill: RegisterKill);
+                onKill: RegisterKill, powerLevelFraction: PowerVisualStrength);
             LastSpawnedPulseForTests = pulse;
 
             // MV-758: the muzzle punctuation — one per shot, under 0.22s cadence so it can't smear.
@@ -292,7 +301,7 @@ namespace MaxWorlds.Combat
             LastForkedPulseForTests = SeekerPulse.Fire(point, next.transform.position - point,
                 DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec, DefaultPulseLifetime,
                 EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
-                forcedTarget: next, canFork: false, isFork: true);
+                forcedTarget: next, canFork: false, isFork: true, powerLevelFraction: PowerVisualStrength);
         }
 
         /// <summary>The nearest alive, awake robot other than <paramref name="exclude"/> within

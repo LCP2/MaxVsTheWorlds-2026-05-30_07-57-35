@@ -22,27 +22,59 @@ namespace MaxWorlds.Weapons
         private const float ContactRadius = 0.5f;
 
         /// <summary>The bolt's own resolved shape (MV-770) — was a 0.35m/0.08m-wide bolt, 3.8px across
-        /// at the play camera and thinner than the nameplate text above the robot it hits. Read once;
-        /// every renderer <see cref="BuildVisual"/> builds sizes off this same struct.</summary>
-        private static readonly CombatVfxTuning.LppeBoltTuning BoltTuning = CombatVfxTuning.LppeBolt();
+        /// at the play camera and thinner than the nameplate text above the robot it hits. MV-844: no
+        /// longer one shared struct — <see cref="CombatVfxTuning.LppeBolt"/> now takes POWER's own
+        /// visual-strength fraction, so each pulse resolves and carries its own instance
+        /// (<see cref="_tuning"/>), read once at <see cref="Fire"/> time.</summary>
+        private CombatVfxTuning.LppeBoltTuning _tuning;
+
+        /// <summary>MV-844: POWER's visual-strength fraction this pulse was fired at (0 at L1, 1 at
+        /// World 2's cap) — stored so <see cref="Tick"/>'s own ground-glow refresh can keep reading the
+        /// same resolved sheath tint <see cref="Fire"/> built the pulse with.</summary>
+        private float _powerLevelFraction;
 
         /// <summary>MV-825: the core reads white-hot, not orange -- Lee: "make this look like a laser.
         /// Make it sleek, bright, crackling." The orange family (MV-805) now lives on the glow sheath
-        /// around the core (<see cref="SheathTintOpaque"/>), which is what keeps the weapon's overall
-        /// silhouette reading orange at a glance.</summary>
+        /// around the core (<see cref="SheathTintOpaqueBase"/>), which is what keeps the weapon's
+        /// overall silhouette reading orange at a glance.</summary>
         private static readonly Color CoreColor = new Color(1.00f, 0.97f, 0.90f);
 
         /// <summary>MV-825 item 8: a forked bolt's own tell -- electric blue-white, not a brighter
         /// version of the same orange family (MV-814's old approach) -- "so a fork is recognisable".</summary>
         private static readonly Color ForkCoreColor = new Color(0.75f, 0.95f, 1.00f);
 
-        /// <summary>The sheath's own baked colour before alpha (spec: "1.00 0.45 0.10 at 0.55 alpha").
-        /// Also doubles as the weapon's own "identity" orange -- the ground glow and ticket item 5's
-        /// trail fade both key off this, not the white-hot core.</summary>
-        private static readonly Color SheathTintOpaque = new Color(1.00f, 0.45f, 0.10f);
+        /// <summary>The sheath's own baked colour before alpha at POWER L1 (spec: "1.00 0.45 0.10 at
+        /// 0.55 alpha"). Also doubles as the weapon's own "identity" orange -- the ground glow and
+        /// ticket item 5's trail fade both key off this, not the white-hot core.</summary>
+        private static readonly Color SheathTintOpaqueBase = new Color(1.00f, 0.45f, 0.10f);
 
-        /// <summary>MV-825 item 4: the crackle filaments' own colour.</summary>
-        private static readonly Color CrackleColor = new Color(1.00f, 0.80f, 0.45f);
+        /// <summary>MV-844: the sheath's baked colour at POWER's L8 cap -- "more red" as POWER rises,
+        /// <see cref="SheathTintFor"/> lerps between this and <see cref="SheathTintOpaqueBase"/>.</summary>
+        private static readonly Color SheathTintOpaqueMax = new Color(1.00f, 0.08f, 0.04f);
+
+        /// <summary>MV-825 item 4: the crackle filaments' own colour at POWER L1.</summary>
+        private static readonly Color CrackleColorBase = new Color(1.00f, 0.80f, 0.45f);
+
+        /// <summary>MV-844: the crackle filaments' own colour at POWER's L8 cap.</summary>
+        private static readonly Color CrackleColorMax = new Color(1.00f, 0.35f, 0.20f);
+
+        /// <summary>MV-844: the sheath/ground-glow/trail-fade tint at a given POWER visual-strength
+        /// fraction (0 at L1, unchanged from today; 1 at World 2's L8 cap).</summary>
+        private static Color SheathTintFor(float powerLevelFraction) =>
+            Color.Lerp(SheathTintOpaqueBase, SheathTintOpaqueMax, Mathf.Clamp01(powerLevelFraction));
+
+        /// <summary>MV-844: the crackle filaments' colour at a given POWER visual-strength fraction.</summary>
+        private static Color CrackleColorFor(float powerLevelFraction) =>
+            Color.Lerp(CrackleColorBase, CrackleColorMax, Mathf.Clamp01(powerLevelFraction));
+
+        /// <summary>MV-844: the ground glow's colour at a given POWER visual-strength fraction -- keyed
+        /// off the sheath's own tint at that same fraction, same "identity orange" rule
+        /// <see cref="SheathTintOpaqueBase"/> always followed.</summary>
+        private static Color GroundGlowColorFor(float powerLevelFraction)
+        {
+            Color tint = SheathTintFor(powerLevelFraction);
+            return new Color(tint.r, tint.g, tint.b, 0.5f);
+        }
 
         /// <summary>MV-814: a pulse whose hit didn't kill but left its target under this fraction of
         /// max health also releases a FORK, widening the old kill-only trigger -- against World 2's
@@ -71,12 +103,6 @@ namespace MaxWorlds.Weapons
         private MaterialPropertyBlock _sheathMpb;
         private Color _sheathBaseColor;
         private float _flickerTimer;
-
-        /// <summary>Alpha the ground glow renders at — dim enough it reads as a light spilling onto
-        /// the floor under the bolt, not a second bolt lying flat (MV-770). MV-825: keyed off the
-        /// sheath's own orange, the bolt's "identity" colour now that the core itself is white-hot.</summary>
-        private static readonly Color GroundGlowColor =
-            new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b, 0.5f);
 
         // Reused every tick so the per-frame obstruction check (below) allocates nothing, the same
         // idiom WaterBlaster.FireTick's static s_buffer/s_hits use.
@@ -108,21 +134,26 @@ namespace MaxWorlds.Weapons
         /// <paramref name="onHit"/>, the instant a hit this pulse lands actually kills its target — but
         /// only while <paramref name="canFork"/> is true; a pulse fired with it false (a fork's own
         /// release) can still land a kill, it just never reports one, so FORK can never chain off its
-        /// own forked pulse.
+        /// own forked pulse. <paramref name="powerLevelFraction"/> (MV-844, default 0 -- today's L1
+        /// look) is POWER's own resolved visual-strength fraction, passed in by
+        /// <see cref="MaxWorlds.Combat.PulseLaser"/> rather than read from <see cref="RigState"/> here,
+        /// same "caller resolves, projectile just draws" split <paramref name="damage"/> already follows.
         /// </summary>
         public static SeekerPulse Fire(Vector3 origin, Vector3 aimDir, float speed, float turnRateDegPerSec,
             float lifetime, float damage, float lockRange, float lockHalfAngleDeg,
             Action<RobotEnemy, float> onHit = null, RobotEnemy forcedTarget = null, bool canFork = true,
-            Action<RobotEnemy, Vector3> onKill = null, bool isFork = false)
+            Action<RobotEnemy, Vector3> onKill = null, bool isFork = false, float powerLevelFraction = 0f)
         {
             aimDir.y = 0f;
             if (aimDir.sqrMagnitude < 1e-4f) aimDir = Vector3.forward;
             aimDir.Normalize();
 
+            CombatVfxTuning.LppeBoltTuning tuning = CombatVfxTuning.LppeBolt(powerLevelFraction);
+
             var go = new GameObject("SeekerPulse (stand-in)");
             go.transform.position = origin;
             go.transform.rotation = Quaternion.LookRotation(aimDir, Vector3.up);
-            BuildVisual(go.transform, isFork);
+            BuildVisual(go.transform, isFork, tuning, powerLevelFraction);
 
             RobotEnemy target = forcedTarget != null
                 ? forcedTarget
@@ -130,6 +161,8 @@ namespace MaxWorlds.Weapons
             LockBracketVfx.Show(target);   // MV-702: the reticle bracket MV-708 deferred as this ticket's own
 
             var pulse = go.AddComponent<SeekerPulse>();
+            pulse._tuning = tuning;
+            pulse._powerLevelFraction = powerLevelFraction;
             pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit, onKill, canFork);
             pulse.BuildGroundGlow(origin);
             return pulse;
@@ -142,8 +175,8 @@ namespace MaxWorlds.Weapons
         private void BuildGroundGlow(Vector3 origin)
         {
             _groundGlow = GroundRing.Create("SeekerPulseGroundGlow", additive: true);
-            _groundGlow.Show(new Vector3(origin.x, 0f, origin.z), BoltTuning.GroundGlowDiameter * 0.5f,
-                GroundGlowColor);
+            _groundGlow.Show(new Vector3(origin.x, 0f, origin.z), _tuning.GroundGlowDiameter * 0.5f,
+                GroundGlowColorFor(_powerLevelFraction));
         }
 
         /// <summary>Nearest awake, alive robot within range and the lock cone — "awake" excludes a
@@ -201,8 +234,8 @@ namespace MaxWorlds.Weapons
             Transform sheath = transform.Find("Sheath");
             _sheathRenderer = sheath != null ? sheath.GetComponent<MeshRenderer>() : null;
             _sheathMpb = new MaterialPropertyBlock();
-            _sheathBaseColor = new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b,
-                BoltTuning.SheathAlpha);
+            Color sheathTint = SheathTintFor(_powerLevelFraction);
+            _sheathBaseColor = new Color(sheathTint.r, sheathTint.g, sheathTint.b, _tuning.SheathAlpha);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -219,13 +252,13 @@ namespace MaxWorlds.Weapons
             // on their own short timer rather than every frame -- cheap, and reads as an electrical
             // stutter rather than a smooth animation.
             _crackleTimer += dt;
-            if (_crackleTimer >= BoltTuning.CrackleRerandomizeInterval)
+            if (_crackleTimer >= _tuning.CrackleRerandomizeInterval)
             {
                 _crackleTimer = 0f;
                 RandomizeCrackle();
             }
             _flickerTimer += dt;
-            if (_flickerTimer >= BoltTuning.FlickerInterval)
+            if (_flickerTimer >= _tuning.FlickerInterval)
             {
                 _flickerTimer = 0f;
                 FlickerSheath();
@@ -286,7 +319,8 @@ namespace MaxWorlds.Weapons
         {
             if (_groundGlow == null) return;
             Vector3 pos = transform.position;
-            _groundGlow.Show(new Vector3(pos.x, 0f, pos.z), BoltTuning.GroundGlowDiameter * 0.5f, GroundGlowColor);
+            _groundGlow.Show(new Vector3(pos.x, 0f, pos.z), _tuning.GroundGlowDiameter * 0.5f,
+                GroundGlowColorFor(_powerLevelFraction));
         }
 
         /// <summary>
@@ -359,8 +393,8 @@ namespace MaxWorlds.Weapons
         private void RandomizeCrackle()
         {
             if (_crackleFilaments == null || _crackleFilaments.Length == 0) return;
-            float length = BoltTuning.CoreLength;
-            int vertexCount = BoltTuning.CrackleVertexCount;
+            float length = _tuning.CoreLength;
+            int vertexCount = _tuning.CrackleVertexCount;
 
             for (int k = 0; k < _crackleFilaments.Length; k++)
             {
@@ -373,7 +407,7 @@ namespace MaxWorlds.Weapons
                     float s = vertexCount <= 1 ? 0f : (float)i / (vertexCount - 1);
                     float z = -s * length;   // nose (0) to tail (-length), same span as the core
                     float angleDeg = baseAngle + UnityEngine.Random.Range(-10f, 10f);
-                    float radius = UnityEngine.Random.Range(0f, BoltTuning.CrackleMaxOffset);
+                    float radius = UnityEngine.Random.Range(0f, _tuning.CrackleMaxOffset);
                     float rad = angleDeg * Mathf.Deg2Rad;
                     Vector3 offset = new Vector3(Mathf.Cos(rad) * radius, Mathf.Sin(rad) * radius, 0f);
                     lr.SetPosition(i, new Vector3(0f, 0f, z) + offset);
@@ -390,7 +424,7 @@ namespace MaxWorlds.Weapons
         private void FlickerSheath()
         {
             if (_sheathRenderer == null) return;
-            float mult = 1f + UnityEngine.Random.Range(-BoltTuning.FlickerAmount, BoltTuning.FlickerAmount);
+            float mult = 1f + UnityEngine.Random.Range(-_tuning.FlickerAmount, _tuning.FlickerAmount);
             Color c = _sheathBaseColor;
             c.a = Mathf.Clamp01(_sheathBaseColor.a * mult);
             _sheathMpb.SetColor("_BaseColor", c);
@@ -421,14 +455,18 @@ namespace MaxWorlds.Weapons
         /// the NOSE (the leading point <see cref="Tick"/> advances and tests collision against) and
         /// z=-<see cref="CombatVfxTuning.LppeBoltTuning.CoreLength"/> at the tail. <paramref name="isFork"/>
         /// gives a FORK-released bolt its own tell (item 8): an electric blue-white core colour and a
-        /// 1.25x-wider sheath, so one extra bolt appearing out of a kill reads as deliberate.</summary>
-        private static void BuildVisual(Transform parent, bool isFork)
+        /// 1.25x-wider sheath, so one extra bolt appearing out of a kill reads as deliberate.
+        /// <paramref name="tuning"/>/<paramref name="powerLevelFraction"/> (MV-844) are POWER's own
+        /// resolved size/colour ramp for THIS pulse, threaded in from <see cref="Fire"/> rather than
+        /// read off a shared static field.</summary>
+        private static void BuildVisual(Transform parent, bool isFork, CombatVfxTuning.LppeBoltTuning tuning,
+            float powerLevelFraction)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
             Color coreColor = isFork ? ForkCoreColor : CoreColor;
             Material coreMat = VfxMaterials.AdditiveTinted(coreColor);
-            Mesh coreMesh = GetCoreMesh();
+            Mesh coreMesh = GetCoreMesh(tuning);
 
             // Item 2: "drawn twice for intensity" -- two renderers sharing the SAME cached mesh, not a
             // second Mesh instance, so this never trips AC1(e)'s no-new-mesh-after-first check.
@@ -439,15 +477,15 @@ namespace MaxWorlds.Weapons
             // colour and alpha (including item 6's flicker) come entirely from a MaterialPropertyBlock
             // set below and refreshed by FlickerSheath, never from a shared cached material every
             // sheath of this kind would otherwise fight over.
-            Mesh sheathMesh = GetSheathMesh(isFork);
+            Mesh sheathMesh = GetSheathMesh(isFork, tuning);
             Material sheathMat = VfxMaterials.Additive(VfxMaterials.Solid());
             GameObject sheathGo = BuildBoltPart(parent, "Sheath", sheathMesh, sheathMat);
+            Color sheathTint = SheathTintFor(powerLevelFraction);
             var sheathMpb = new MaterialPropertyBlock();
-            sheathMpb.SetColor("_BaseColor",
-                new Color(SheathTintOpaque.r, SheathTintOpaque.g, SheathTintOpaque.b, BoltTuning.SheathAlpha));
+            sheathMpb.SetColor("_BaseColor", new Color(sheathTint.r, sheathTint.g, sheathTint.b, tuning.SheathAlpha));
             sheathGo.GetComponent<MeshRenderer>().SetPropertyBlock(sheathMpb);
 
-            BuildCrackleFilaments(parent);
+            BuildCrackleFilaments(parent, tuning, CrackleColorFor(powerLevelFraction));
 
             // Item 5: a child anchored at the bolt's own TAIL, not this object's own transform (the
             // NOSE) -- so the trail streams from behind the core, the way a laser's own afterglow
@@ -455,12 +493,12 @@ namespace MaxWorlds.Weapons
             // own "reads as an arrow's shaft" bug).
             var trailAnchor = new GameObject("TrailAnchor");
             trailAnchor.transform.SetParent(parent, false);
-            trailAnchor.transform.localPosition = new Vector3(0f, 0f, -BoltTuning.CoreLength);
+            trailAnchor.transform.localPosition = new Vector3(0f, 0f, -tuning.CoreLength);
 
             var trail = trailAnchor.AddComponent<TrailRenderer>();
-            trail.time = BoltTuning.TrailLifetime;
+            trail.time = tuning.TrailLifetime;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
-            trail.widthMultiplier = BoltTuning.TrailWidth;
+            trail.widthMultiplier = tuning.TrailWidth;
             trail.minVertexDistance = 0.02f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
@@ -470,7 +508,7 @@ namespace MaxWorlds.Weapons
             // second baked tint.
             var gradient = new Gradient();
             gradient.SetKeys(
-                new[] { new GradientColorKey(coreColor, 0f), new GradientColorKey(SheathTintOpaque, 1f) },
+                new[] { new GradientColorKey(coreColor, 0f), new GradientColorKey(sheathTint, 1f) },
                 new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
             trail.colorGradient = gradient;
             trail.Clear();
@@ -489,22 +527,23 @@ namespace MaxWorlds.Weapons
         /// <summary>Item 4: builds the 3 filament <see cref="LineRenderer"/>s (positions set later, by
         /// <see cref="RandomizeCrackle"/>) -- unparented from any specific angle here since that's
         /// re-rolled on every randomise pass.</summary>
-        private static void BuildCrackleFilaments(Transform parent)
+        private static void BuildCrackleFilaments(Transform parent, CombatVfxTuning.LppeBoltTuning tuning,
+            Color crackleColor)
         {
             Material lineMat = VfxMaterials.Additive(VfxMaterials.Glow());
-            for (int k = 0; k < BoltTuning.CrackleFilamentCount; k++)
+            for (int k = 0; k < tuning.CrackleFilamentCount; k++)
             {
                 var go = new GameObject($"Crackle{k}");
                 go.transform.SetParent(parent, false);
                 var lr = go.AddComponent<LineRenderer>();
-                lr.positionCount = BoltTuning.CrackleVertexCount;
-                lr.widthMultiplier = BoltTuning.CrackleWidth;
+                lr.positionCount = tuning.CrackleVertexCount;
+                lr.widthMultiplier = tuning.CrackleWidth;
                 lr.useWorldSpace = false;
                 lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 lr.receiveShadows = false;
                 lr.sharedMaterial = lineMat;
-                lr.startColor = CrackleColor;
-                lr.endColor = CrackleColor;
+                lr.startColor = crackleColor;
+                lr.endColor = crackleColor;
             }
         }
 
@@ -516,40 +555,55 @@ namespace MaxWorlds.Weapons
 
         // MV-825: sampled resolution for Max's own core/sheath tubes.
         private const int CoreRadialSegments = 8;
-        private const int SheathSpineSamples = 12;
+
+        /// <summary>MV-844: odd, not 12 -- the taper's own peak sits at s=0.5 (<see cref="BuildSheathMesh"/>),
+        /// and only an odd sample count puts a sample exactly there. At 12 the nearest samples landed
+        /// ~2.3% short of the authored diameter (harmless while every caller only checked an upper
+        /// bound, but this ticket's own test resolves the sheath's rendered bounds against an exact
+        /// authored value).</summary>
+        private const int SheathSpineSamples = 13;
         private const int SheathRadialSegments = 10;
 
-        /// <summary>The one instance every ordinary bolt's core shares -- fork-invariant (item 8 only
-        /// changes the core's COLOUR, not its size), so unlike the sheath there is no separate forked
-        /// version of this mesh.</summary>
-        private static Mesh s_coreMesh;
+        /// <summary>MV-844: every ordinary bolt's core/sheath mesh shared by pulses at the SAME
+        /// resolved diameter -- fork-invariant on the core (item 8 only changes its COLOUR, not its
+        /// size). Keyed by diameter rather than one shared instance now that POWER's own level scales
+        /// core/sheath size (<see cref="CombatVfxTuning.LppeBolt"/>): the same level always resolves the
+        /// same diameter, so this stays "built once per shape, never per shot" (MV-810) with as many
+        /// entries as POWER has distinct levels in play (at most 8).</summary>
+        private static readonly Dictionary<float, Mesh> s_coreMeshByDiameter = new Dictionary<float, Mesh>();
 
-        private static Mesh s_sheathMesh;
+        private static readonly Dictionary<float, Mesh> s_sheathMeshByDiameter = new Dictionary<float, Mesh>();
 
-        /// <summary>The one instance every FORK-released bolt's sheath shares -- its own cached mesh
-        /// (1.25x the diameter baked in, item 8) rather than a runtime Transform scale.</summary>
-        private static Mesh s_forkSheathMesh;
+        /// <summary>The cache every FORK-released bolt's sheath shares -- its own wider diameter (1.25x,
+        /// item 8) baked into the mesh rather than a runtime Transform scale.</summary>
+        private static readonly Dictionary<float, Mesh> s_forkSheathMeshByDiameter = new Dictionary<float, Mesh>();
 
-        /// <summary>MV-810: the single cached core mesh, built lazily on first use and shared by every
-        /// LPPE pulse -- never rebuilt per shot.</summary>
-        public static Mesh GetCoreMesh()
+        /// <summary>MV-810/844: the cached core mesh for <paramref name="tuning"/>'s own resolved
+        /// diameter, built lazily on first use and shared by every LPPE pulse at that diameter -- never
+        /// rebuilt per shot.</summary>
+        public static Mesh GetCoreMesh(CombatVfxTuning.LppeBoltTuning tuning)
         {
-            if (s_coreMesh == null) s_coreMesh = BuildCoreMesh(BoltTuning.CoreDiameter);
-            return s_coreMesh;
+            if (!s_coreMeshByDiameter.TryGetValue(tuning.CoreDiameter, out Mesh mesh))
+            {
+                mesh = BuildCoreMesh(tuning.CoreDiameter, tuning.CoreLength);
+                s_coreMeshByDiameter[tuning.CoreDiameter] = mesh;
+            }
+            return mesh;
         }
 
-        /// <summary>MV-810: the single cached sheath mesh for the given fork-ness, built lazily on
-        /// first use and shared by every LPPE pulse of that kind -- never rebuilt per shot.</summary>
-        public static Mesh GetSheathMesh(bool isFork = false)
+        /// <summary>MV-810/844: the cached sheath mesh for the given fork-ness at <paramref name="tuning"/>'s
+        /// own resolved diameter, built lazily on first use and shared by every LPPE pulse of that kind
+        /// and diameter -- never rebuilt per shot.</summary>
+        public static Mesh GetSheathMesh(bool isFork, CombatVfxTuning.LppeBoltTuning tuning)
         {
-            if (!isFork)
+            float diameter = isFork ? tuning.SheathDiameter * tuning.ForkSheathScale : tuning.SheathDiameter;
+            Dictionary<float, Mesh> cache = isFork ? s_forkSheathMeshByDiameter : s_sheathMeshByDiameter;
+            if (!cache.TryGetValue(diameter, out Mesh mesh))
             {
-                if (s_sheathMesh == null) s_sheathMesh = BuildSheathMesh(BoltTuning.SheathDiameter);
-                return s_sheathMesh;
+                mesh = BuildSheathMesh(diameter, tuning.CoreLength, tuning.SheathExtension);
+                cache[diameter] = mesh;
             }
-            if (s_forkSheathMesh == null)
-                s_forkSheathMesh = BuildSheathMesh(BoltTuning.SheathDiameter * BoltTuning.ForkSheathScale);
-            return s_forkSheathMesh;
+            return mesh;
         }
 
         /// <summary>Drop this class's own reference to the cached bolt meshes -- same idiom as
@@ -557,18 +611,17 @@ namespace MaxWorlds.Weapons
         /// test run never holds a pointer to a mesh a previous run already destroyed.</summary>
         public static void ResetForTests()
         {
-            s_coreMesh = null;
-            s_sheathMesh = null;
-            s_forkSheathMesh = null;
+            s_coreMeshByDiameter.Clear();
+            s_sheathMeshByDiameter.Clear();
+            s_forkSheathMeshByDiameter.Clear();
         }
 
         /// <summary>Item 2: a plain constant-radius tube along local Z, nose at z=0 down to the tail at
         /// z=-length -- "nothing wider than 0.12m across the travel direction except the glow sheath",
         /// so unlike the sheath this never tapers.</summary>
-        private static Mesh BuildCoreMesh(float diameter)
+        private static Mesh BuildCoreMesh(float diameter, float length)
         {
             float radius = diameter * 0.5f;
-            float length = BoltTuning.CoreLength;
 
             var verts = new List<Vector3>((CoreRadialSegments + 1) * 2);
             for (int ring = 0; ring < 2; ring++)
@@ -603,11 +656,11 @@ namespace MaxWorlds.Weapons
         /// tapering (by radius, the same "peaks at the midpoint, vanishes at both tips" technique
         /// MV-815's crescent used for its own cross-section) to read as a soft glow with no hard
         /// edge, rather than a second solid tube.</summary>
-        private static Mesh BuildSheathMesh(float diameter)
+        private static Mesh BuildSheathMesh(float diameter, float coreLength, float sheathExtension)
         {
             float peakRadius = diameter * 0.5f;
-            float noseZ = BoltTuning.SheathExtension;
-            float tailZ = -(BoltTuning.CoreLength + BoltTuning.SheathExtension);
+            float noseZ = sheathExtension;
+            float tailZ = -(coreLength + sheathExtension);
 
             var verts = new List<Vector3>(SheathSpineSamples * (SheathRadialSegments + 1));
             var tris = new List<int>();
