@@ -32,17 +32,19 @@ namespace MaxWorlds.UI
         /// next <c>Awake</c>. Same reload mechanism as <see cref="QuitToMenu"/>, but the active slot is
         /// left set so the reload drops straight into the next run instead of reopening Home.
         ///
-        /// MV-704: a <c>WorldIndex</c> of exactly 1 means the save just advanced OUT of World 1 — the
-        /// one transition with a cinematic — so the reload is deferred to
-        /// <see cref="WorldTransitionCinematic"/>'s hand-off instead of firing immediately. Every other
-        /// advance (2, 3, ...) reloads straight away, same as before this ticket.</summary>
+        /// MV-845: a <c>WorldIndex</c> of exactly 1 means the save just advanced OUT of World 1 — the
+        /// one transition with a joining sequence (a door opens in a30's east fence, Max walks out down
+        /// a corridor) — so the reload is deferred to <see cref="WorldJoinSequence"/>'s hand-off instead
+        /// of firing immediately. Every other advance (2, 3, ...) reloads straight away, same as before
+        /// this ticket. Retires <see cref="WorldTransitionCinematic"/>'s (MV-704) use here; that class
+        /// is left in place for anything else that might want it.</summary>
         public static void StartNextWorld()
         {
             Time.timeScale = 1f;
             // MV-841: the Result screen's clock/kill count cover one world each — the next world
             // starts its own tally, not a carry from the one just cleared.
             RunProgressState.Reset();
-            if (LeavingWorldOneForTwo() && WorldTransitionCinematic.TryPlay(ReloadActiveScene)) return;
+            if (LeavingWorldOneForTwo() && WorldJoinSequence.TryPlay(ReloadActiveScene)) return;
             ReloadActiveScene();
         }
 
