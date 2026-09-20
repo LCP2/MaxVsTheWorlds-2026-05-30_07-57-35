@@ -1281,7 +1281,7 @@ namespace MaxWorlds.Enemies
             // garrison never looked at, stragglers run past) that accumulates as the player advances.
             // Every other state still ticks sight live every frame; cover/chase correctness depends on
             // it being fresh, and only a robot standing still, unaware, and behind is ever this stale.
-            bool skipSightForFarDormant = Current == State.Dormant && IsWellBehindPlayer();
+            bool skipSightForFarDormant = Current == State.Dormant && IsWellBehindPlayer;
             if (target != null && !skipSightForFarDormant)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
@@ -1481,7 +1481,7 @@ namespace MaxWorlds.Enemies
             // MV-611: a robot two or more areas behind the player's own can never be the one the
             // camera falls on (the fixed ~72 degree top-down rig never reaches back that far) — skip
             // the frustum test entirely rather than run it every frame only to read false forever.
-            if (IsWellBehindPlayer()) return;
+            if (IsWellBehindPlayer) return;
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
         }
 
@@ -1496,21 +1496,26 @@ namespace MaxWorlds.Enemies
         /// <c>WorldRunner.ResolveDeathArea</c> uses, since that tracker advances ahead of the player for
         /// population purposes and would gate this off a room the player hasn't actually reached yet.
         /// Fails CLOSED (false) whenever the area can't be resolved — no map, no player, an unrecognised
-        /// zone — so a missing signal never freezes a robot that might otherwise need to wake.</summary>
-        private bool IsWellBehindPlayer()
+        /// zone — so a missing signal never freezes a robot that might otherwise need to wake. Public
+        /// (MV-869) so the population/Replicator probe line's "behind" bucket can read it directly,
+        /// unchanged, off the live <see cref="Active"/> registry.</summary>
+        public bool IsWellBehindPlayer
         {
-            MapData map = EnemyNavigation.Map;
-            if (map == null || _playerTarget == null) return false;
+            get
+            {
+                MapData map = EnemyNavigation.Map;
+                if (map == null || _playerTarget == null) return false;
 
-            MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
-            MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.y, _playerTarget.position.z);
-            if (robotZone == null || playerZone == null) return false;
+                MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
+                MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.y, _playerTarget.position.z);
+                if (robotZone == null || playerZone == null) return false;
 
-            int robotArea = AreaAccumulationDirector.AreaIndexOf(robotZone.id);
-            int playerArea = AreaAccumulationDirector.AreaIndexOf(playerZone.id);
-            if (robotArea <= 0 || playerArea <= 0) return false;
+                int robotArea = AreaAccumulationDirector.AreaIndexOf(robotZone.id);
+                int playerArea = AreaAccumulationDirector.AreaIndexOf(playerZone.id);
+                if (robotArea <= 0 || playerArea <= 0) return false;
 
-            return robotArea <= playerArea - WellBehindAreaSlack;
+                return robotArea <= playerArea - WellBehindAreaSlack;
+            }
         }
 
         /// <summary>Reused every call (MV-527) — <see cref="GeometryUtility.CalculateFrustumPlanes(Camera)"/>
@@ -1578,7 +1583,7 @@ namespace MaxWorlds.Enemies
             {
                 // Same universal "dormant until seen" gate as TickDormant — the grate itself is this
                 // Lurker's visible body while submerged, so seeing the grate is what wakes it.
-                if (IsWellBehindPlayer()) return;
+                if (IsWellBehindPlayer) return;
                 if (!AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) return;
                 _lurkerAwake = true;
             }

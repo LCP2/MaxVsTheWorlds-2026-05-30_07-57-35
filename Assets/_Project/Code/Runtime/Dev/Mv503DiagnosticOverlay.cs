@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Dev
 {
@@ -37,6 +38,7 @@ namespace MaxWorlds.Dev
         private string _buildStamp;
         private string _cachedPerfLine;
         private string _cachedTimingLine;
+        private string _cachedPopulationLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
         public IReadOnlyList<string> Lines => _lines;
@@ -212,6 +214,9 @@ namespace MaxWorlds.Dev
                 var perf = BuildPerfSnapshot(_perfMeter, _buildStamp);
                 _cachedPerfLine = FormatPerfLine(perf, _perfMeter.SnapshotHistoryOldestFirstMs());
                 _cachedTimingLine = FormatTimingLine(BuildTimingSnapshot(_timingProbe));
+                // MV-869: same cadence, same cache — the population/Replicator line under MV-663's
+                // timing line, never rebuilt more often than the perf figures already are.
+                _cachedPopulationLine = PopulationReadout.BuildLine();
                 _perfBuiltAt = now;
             }
 
@@ -219,7 +224,9 @@ namespace MaxWorlds.Dev
                 ? "[MV-503] no diagnostic lines captured yet"
                 : string.Join("\n", _lines);
 
-            string perfBlock = _cachedPerfLine == null ? null : _cachedPerfLine + "\n" + _cachedTimingLine;
+            string perfBlock = _cachedPerfLine == null
+                ? null
+                : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedPopulationLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 
