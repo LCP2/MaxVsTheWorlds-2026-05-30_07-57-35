@@ -849,10 +849,15 @@ namespace MaxWorlds.Arena
             // piece stays one prop (change 2 explicitly allows that below aspect 2); a long one is a
             // repeated run of modules instead of one prop stretched into a sliver. Hedge is the one
             // dressing that never repeats (its single panel already spans its own long axis once the
-            // spanDir/crossDir fix above is in) but still gets the same no-yaw and fit treatment.
+            // spanDir/crossDir fix above is in) but still gets the same no-yaw and fit treatment. Pipe
+            // is the other exception (MV-863): a run of modules is what made a long pipe read as a row
+            // of stubs, the ticket's own reported fault — BuildPipeMain already lathes ONE main along
+            // its full length (with its own support posts, see that method's doc comment), so a pipe
+            // must always take the single-prop path below, at any aspect.
             float aspect = Aspect(size);
 
-            if (c.Dressing != CoverDressing.Hedge && aspect >= StormdrainKit.ModularRunAspectThreshold)
+            bool neverModular = c.Dressing == CoverDressing.Hedge || c.Dressing == CoverDressing.Pipe;
+            if (!neverModular && aspect >= StormdrainKit.ModularRunAspectThreshold)
             {
                 BuildModularRun(parent, at, size, c.Dressing);
                 return true;
