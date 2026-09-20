@@ -123,10 +123,13 @@ namespace MaxWorlds.Combat
         /// shot — the same "public accessor for a test" idiom as <c>HomingMissile.ShaftColorForTests</c>.</summary>
         public SeekerPulse LastSpawnedPulseForTests { get; private set; }
 
-        /// <summary>MV-768 FORK (<c>p_frk</c>): the pulse most recently released by
-        /// <see cref="RegisterKill"/>, or null if none has fired yet — the resolved value the ticket's
-        /// own test asserts against, same idiom as <see cref="LastSpawnedPulseForTests"/>.</summary>
-        public SeekerPulse LastForkedPulseForTests { get; private set; }
+        /// <summary>MV-858 ARC's own range: how far from the hit point the arc reaches, in metres
+        /// (spec: "within 8 m of the hit point").</summary>
+        public const float ArcRange = 8f;
+
+        /// <summary>MV-858 ARC's own damage share: the fraction of the landing pulse's damage the arc
+        /// deals to the robot it reaches (spec: "50% of the pulse's damage").</summary>
+        public const float ArcDamageFraction = 0.5f;
 
         /// <summary>MV-862 FOCUS: how long <see cref="CurrentTarget"/> keeps reporting the last pulse's
         /// lock after <see cref="FireTick"/> stops running — the spec's "while Max is firing or has
@@ -268,7 +271,7 @@ namespace MaxWorlds.Combat
 
             SeekerPulse pulse = SeekerPulse.Fire(origin, dir, DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec,
                 DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
-                onKill: RegisterKill, powerLevelFraction: PowerVisualStrength);
+                powerLevelFraction: PowerVisualStrength);
             LastSpawnedPulseForTests = pulse;
             _lastPulseTarget = pulse.Target;
             _timeSinceLastPulse = 0f;
@@ -308,41 +311,44 @@ namespace MaxWorlds.Combat
             // "pos + Vector3.up * 0.6f" convention) — landing the flash there instead reads as hitting
             // the floor, not the robot.
             if (_vfx != null) _vfx.Impact(target.transform.position + Vector3.up * 0.6f, damage, isShockHit);
+
+            TryArc(target, damage);
         }
 
-        /// <summary>MV-768 FORK (<c>p_frk</c>): a pulse whose damage KILLED its locked target — or (MV-814)
-        /// left it under <see cref="SeekerPulse"/>'s own near-death threshold — releases one further
-        /// pulse at the nearest OTHER valid target within the LPPE's current lock range, fired from the
-        /// kill point. Never chains — <see cref="SeekerPulse.Fire"/> is called with <c>canFork: false</c>,
-        /// so however many targets the forked pulse itself goes on to kill, it can never trigger a
-        /// further fork (the board comment's own "must not chain" rule, enforced by
-        /// <see cref="SeekerPulse.ApplyHit"/> never reporting a kill for a pulse fired that way).
-        ///
-        /// MV-814: measured against a scripted 60s engagement (focus-firing a 55 HP Sludger, FORK at
-        /// level 1, 272 pulses fired) — the kill-only trigger released 38 forks (one per kill, and every
-        /// kill found a second target); widening it to also fire on a near-death hit (see
-        /// <see cref="SeekerPulse"/>'s own doc) raised that to 77 releases over the identical script,
-        /// same kill count. The fix comment quotes both runs in full.</summary>
-        private void RegisterKill(RobotEnemy killedTarget, Vector3 point)
+        /// <summary>MV-858 ARC (<c>p_frk</c>, relabelled from FORK): every pulse hit that lands on a
+        /// robot — kill or not — arcs once to the nearest OTHER alive robot within <see cref="ArcRange"/>
+        /// of the hit point with a clear line of sight from it, dealing <see cref="ArcDamageFraction"/>
+        /// of the landing pulse's own damage. Replaces the old kill/near-death-only trigger (Lee: "it
+        /// works inconsistently (almost never)") — this fires on literally every hit, so a group fight
+        /// reads as constantly arcing rather than the old rare tell. Applied directly (no travelling
+        /// second pulse), so there is nothing left for it to invoke a further arc from — "cannot arc
+        /// again" is true by construction, not by a canFork-style flag.</summary>
+        private void TryArc(RobotEnemy hitTarget, float hitDamage)
         {
-            if (WeaponSystemState.LppeTrackLevel(LppeTrackKind.Fork) < 1) return;
+            if (WeaponSystemState.LppeTrackLevel(LppeTrackKind.Arc) < 1) return;
 
-            RobotEnemy next = NearestOtherAliveRobotInRange(killedTarget, point, LockRange);
+            Vector3 hitPoint = hitTarget.transform.position;
+            RobotEnemy next = NearestOtherAliveRobotWithLineOfSight(hitTarget, hitPoint, ArcRange);
             if (next == null) return;
 
-            if (_vfx != null) _vfx.Fork(point);
-            LastForkedPulseForTests = SeekerPulse.Fire(point, next.transform.position - point,
-                DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec, DefaultPulseLifetime,
-                EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
-                forcedTarget: next, canFork: false, isFork: true, powerLevelFraction: PowerVisualStrength);
+            // MV-858: dormant robots count as valid arc targets, and the arc wakes them (spec) —
+            // unlike the old FORK search, which excluded a dormant candidate outright.
+            if (next.IsDormant) next.Activate();
+
+            Vector3 targetPoint = next.transform.position;
+            next.TakeDamage(new DamageInfo(hitDamage * ArcDamageFraction, targetPoint,
+                (targetPoint - hitPoint).normalized, Team.Player, source: DamageSource.PrimaryWeapon));
+
+            if (_vfx != null) _vfx.Arc(hitPoint, targetPoint);
         }
 
-        /// <summary>The nearest alive, awake robot other than <paramref name="exclude"/> within
-        /// <paramref name="range"/> of <paramref name="from"/> — FORK's own target pick. No lock-cone
-        /// angle check: the cone gates the ORIGINAL shot's acquisition; a fork is a direct release at
-        /// whatever else is nearby, same shape as <see cref="SeekerPulse"/>'s own
-        /// <c>AcquireTarget</c> minus the angle term.</summary>
-        private static RobotEnemy NearestOtherAliveRobotInRange(RobotEnemy exclude, Vector3 from, float range)
+        /// <summary>The nearest alive robot other than <paramref name="exclude"/> within
+        /// <paramref name="range"/> of <paramref name="from"/> with a clear line of sight from it (MV-858
+        /// spec: "with a clear line of sight from it") — ARC's own target pick. Dormant candidates are
+        /// included on purpose (spec: "Dormant robots count"); no lock-cone angle check, same reasoning
+        /// the old FORK search used: the cone gates the ORIGINAL shot's acquisition, an arc is a direct
+        /// release at whatever else is nearby.</summary>
+        private static RobotEnemy NearestOtherAliveRobotWithLineOfSight(RobotEnemy exclude, Vector3 from, float range)
         {
             var active = RobotEnemy.Active;
             RobotEnemy best = null;
@@ -352,10 +358,11 @@ namespace MaxWorlds.Combat
             for (int i = 0; i < active.Count; i++)
             {
                 RobotEnemy candidate = active[i];
-                if (candidate == null || candidate == exclude || !candidate.IsAlive || candidate.IsDormant) continue;
+                if (candidate == null || candidate == exclude || !candidate.IsAlive) continue;
 
                 float distSq = (candidate.transform.position - from).sqrMagnitude;
                 if (distSq > rangeSq) continue;
+                if (HomingSteering.BlockedByGeometry(from, candidate.transform.position, out _)) continue;
                 if (distSq < bestSq) { bestSq = distSq; best = candidate; }
             }
             return best;

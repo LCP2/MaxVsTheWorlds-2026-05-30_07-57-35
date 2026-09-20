@@ -99,21 +99,28 @@ namespace MaxWorlds.VFX
                 sparkSpeedMin: 3.5f, sparkSpeedMax: 7.5f, sparkSizeMin: 0.09f, sparkSizeMax: 0.2f,
                 sparkLifeMin: 0.16f, sparkLifeMax: 0.32f);
 
-        /// <summary>MV-814: FORK's own tell — a short, bright point flash at the fork point, its own
-        /// event distinct from the ordinary <see cref="LppeImpact"/> beat that just landed there.</summary>
-        public readonly struct LppeForkFlashTuning
+        /// <summary>MV-858 ARC's own tell — an instant jagged line from the hit point to the arc target
+        /// (spec: "0.12 m wide, ... visible for 0.12 s") plus a small point flash at the second robot,
+        /// its own event distinct from the ordinary <see cref="LppeImpact"/> beat that just landed on the
+        /// FIRST robot.</summary>
+        public readonly struct LppeArcTuning
         {
+            public readonly float LineWidth;
+            public readonly float LineLifetime;
             public readonly float FlashSize;
             public readonly float FlashLifetime;
 
-            public LppeForkFlashTuning(float flashSize, float flashLifetime)
+            public LppeArcTuning(float lineWidth, float lineLifetime, float flashSize, float flashLifetime)
             {
+                LineWidth = lineWidth;
+                LineLifetime = lineLifetime;
                 FlashSize = flashSize;
                 FlashLifetime = flashLifetime;
             }
         }
 
-        public static LppeForkFlashTuning LppeForkFlash() => new LppeForkFlashTuning(flashSize: 1.6f, flashLifetime: 0.22f);
+        public static LppeArcTuning LppeArc() =>
+            new LppeArcTuning(lineWidth: 0.12f, lineLifetime: 0.12f, flashSize: 1.0f, flashLifetime: 0.12f);
 
         /// <summary>MV-825 item 7: an added spark burst on every hit -- 8 short streaks, layered on
         /// top of whichever flash <see cref="LppeImpact"/>/<see cref="LppeShockImpact"/> just played,
@@ -171,13 +178,12 @@ namespace MaxWorlds.VFX
             public readonly float CrackleRerandomizeInterval;
             public readonly float FlickerInterval;
             public readonly float FlickerAmount;
-            public readonly float ForkSheathScale;
 
             public LppeBoltTuning(float coreLength, float coreDiameter, float sheathDiameter,
                 float sheathExtension, float sheathAlpha, float trailWidth, float trailLifetime,
                 float groundGlowDiameter, int crackleFilamentCount, int crackleVertexCount,
                 float crackleWidth, float crackleMaxOffset, float crackleRerandomizeInterval,
-                float flickerInterval, float flickerAmount, float forkSheathScale)
+                float flickerInterval, float flickerAmount)
             {
                 CoreLength = coreLength;
                 CoreDiameter = coreDiameter;
@@ -194,7 +200,6 @@ namespace MaxWorlds.VFX
                 CrackleRerandomizeInterval = crackleRerandomizeInterval;
                 FlickerInterval = flickerInterval;
                 FlickerAmount = flickerAmount;
-                ForkSheathScale = forkSheathScale;
             }
         }
 
@@ -214,8 +219,7 @@ namespace MaxWorlds.VFX
                 groundGlowDiameter: 0.9f,
                 crackleFilamentCount: 3, crackleVertexCount: 7, crackleWidth: 0.025f,
                 crackleMaxOffset: 0.09f, crackleRerandomizeInterval: 0.04f,
-                flickerInterval: 0.03f, flickerAmount: 0.2f,
-                forkSheathScale: 1.25f);
+                flickerInterval: 0.03f, flickerAmount: 0.2f);
         }
 
 

@@ -97,7 +97,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg is the owned-but-unupgraded floor, same as any fresh weapon");
             Assert.AreEqual(0, RigState.Level("p_rng"), "p_rng (RANGE) must be unbought");
             Assert.AreEqual(0, RigState.Level("p_rof"), "p_rof (RATE) must be unbought");
-            Assert.AreEqual(0, RigState.Level("p_frk"), "p_frk (FORK) must be unbought");
+            Assert.AreEqual(0, RigState.Level("p_frk"), "p_frk (ARC) must be unbought");
 
             // SECONDARY — nothing: mystery-locked, category not unlocked, no node owned.
             Assert.IsFalse(RigState.IsCategoryUnlocked("SECONDARY"), "SECONDARY must not be unlocked");

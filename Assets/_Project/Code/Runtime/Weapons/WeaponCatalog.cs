@@ -264,7 +264,7 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The level cap for a LPPE-only track (MV-768, MV-846), matching
         /// <c>rig_board.world2.json</c>'s own per-node <c>maxLevel</c> — RATE caps at 4, CAPACITY at 5,
-        /// FORK at 1.</summary>
+        /// ARC at 1.</summary>
         public static int MaxLevel(LppeTrackKind kind) => kind switch
         {
             LppeTrackKind.Rate => 4,

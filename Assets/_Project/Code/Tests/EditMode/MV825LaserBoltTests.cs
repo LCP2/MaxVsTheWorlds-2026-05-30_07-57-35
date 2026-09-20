@@ -26,7 +26,7 @@ namespace MaxWorlds.Tests.EditMode
         public void TearDown() => SeekerPulse.ResetForTests();
 
         [Test]
-        public void BoltIsAStraightLaserWithSheathCrackleAndTailTrail_CachedAndForkedBlue()
+        public void BoltIsAStraightLaserWithSheathCrackleAndTailTrail_Cached()
         {
             CombatVfxTuning.LppeBoltTuning tuning = CombatVfxTuning.LppeBolt();
 
@@ -114,26 +114,6 @@ namespace MaxWorlds.Tests.EditMode
 
                 Assert.AreEqual(1, coreMeshes.Count, $"pulse #{i + 1} built a new core Mesh instance -- not cached");
                 Assert.AreEqual(1, sheathMeshes.Count, $"pulse #{i + 1} built a new sheath Mesh instance -- not cached");
-            }
-
-            // --- (f) a forked bolt's core colour is 0.75/0.95/1.00 (electric blue-white) ---
-            SeekerPulse forked = SeekerPulse.Fire(Vector3.zero, Vector3.forward, speed: 18f,
-                turnRateDegPerSec: 360f, lifetime: 0.01f, damage: 9f, lockRange: 14f, lockHalfAngleDeg: 35f,
-                canFork: false, isFork: true);
-            try
-            {
-                Color forkCore = forked.transform.Find("Bolt").GetComponent<MeshRenderer>()
-                    .sharedMaterial.GetColor("_BaseColor");
-                Assert.That(forkCore.r, Is.EqualTo(0.75f).Within(0.02f),
-                    $"forked core red ({forkCore.r:0.000}) is not 0.75");
-                Assert.That(forkCore.g, Is.EqualTo(0.95f).Within(0.02f),
-                    $"forked core green ({forkCore.g:0.000}) is not 0.95");
-                Assert.That(forkCore.b, Is.EqualTo(1.00f).Within(0.02f),
-                    $"forked core blue ({forkCore.b:0.000}) is not 1.00");
-            }
-            finally
-            {
-                forked.Tick(1f);
             }
         }
     }

@@ -39,10 +39,6 @@ namespace MaxWorlds.Weapons
         /// overall silhouette reading orange at a glance.</summary>
         private static readonly Color CoreColor = new Color(1.00f, 0.97f, 0.90f);
 
-        /// <summary>MV-825 item 8: a forked bolt's own tell -- electric blue-white, not a brighter
-        /// version of the same orange family (MV-814's old approach) -- "so a fork is recognisable".</summary>
-        private static readonly Color ForkCoreColor = new Color(0.75f, 0.95f, 1.00f);
-
         /// <summary>The sheath's own baked colour before alpha at POWER L1 (spec: "1.00 0.45 0.10 at
         /// 0.55 alpha"). Also doubles as the weapon's own "identity" orange -- the ground glow and
         /// ticket item 5's trail fade both key off this, not the white-hot core.</summary>
@@ -76,12 +72,6 @@ namespace MaxWorlds.Weapons
             return new Color(tint.r, tint.g, tint.b, 0.5f);
         }
 
-        /// <summary>MV-814: a pulse whose hit didn't kill but left its target under this fraction of
-        /// max health also releases a FORK, widening the old kill-only trigger -- against World 2's
-        /// health pools an outright kill was rare enough that FORK read as doing nothing (measured:
-        /// see PulseLaser.RegisterKill's own doc comment).</summary>
-        private const float NearDeathForkThreshold = 0.15f;
-
         private RobotEnemy _target;
         private IDamageable _targetDamageable;
         private float _speed;
@@ -90,8 +80,6 @@ namespace MaxWorlds.Weapons
         private float _lifetime;
         private float _age;
         private Action<RobotEnemy, float> _onHit;
-        private Action<RobotEnemy, Vector3> _onKill;
-        private bool _canFork;
         private bool _spent;
         private GroundRing _groundGlow;
 
@@ -112,11 +100,8 @@ namespace MaxWorlds.Weapons
         /// resolved value MV-708 AC1 asserts against.</summary>
         public RobotEnemy Target => _target;
 
-        /// <summary>MV-814/825: the resolved SHEATH renderer, for a test to compare cross-section
-        /// bounds between an ordinary pulse and a forked one — same "public accessor for a test" idiom
-        /// as <see cref="PulseLaser.LastForkedPulseForTests"/>. MV-825: FORK's own wider cross-section
-        /// now scales the sheath, not the core (the core only changes colour, item 8), so this must
-        /// resolve the sheath specifically rather than whichever renderer happens to build first.</summary>
+        /// <summary>MV-825: the resolved SHEATH renderer, for a test to compare cross-section bounds —
+        /// resolves the sheath specifically rather than whichever renderer happens to build first.</summary>
         public MeshRenderer BoltRendererForTests => transform.Find("Sheath")?.GetComponent<MeshRenderer>();
 
         /// <summary>True once this pulse has hit its target, been blocked, or expired — it takes no
@@ -126,23 +111,17 @@ namespace MaxWorlds.Weapons
         /// <summary>
         /// Fire one pulse from <paramref name="origin"/> along <paramref name="aimDir"/>. Locks at fire
         /// time onto the nearest awake <see cref="RobotEnemy"/> within <paramref name="lockRange"/> and
-        /// <paramref name="lockHalfAngleDeg"/> of the aim direction (unless <paramref name="forcedTarget"/>
-        /// is given — MV-768 FORK's own release at a specific robot, no cone check); flies straight and
-        /// dies at its lifetime if none qualifies. <paramref name="onHit"/> (optional) lets the weapon
-        /// track its own Shock combo per target without this projectile knowing anything about that
-        /// mechanic. <paramref name="onKill"/> (optional, MV-768 FORK) fires once, in addition to
-        /// <paramref name="onHit"/>, the instant a hit this pulse lands actually kills its target — but
-        /// only while <paramref name="canFork"/> is true; a pulse fired with it false (a fork's own
-        /// release) can still land a kill, it just never reports one, so FORK can never chain off its
-        /// own forked pulse. <paramref name="powerLevelFraction"/> (MV-844, default 0 -- today's L1
-        /// look) is POWER's own resolved visual-strength fraction, passed in by
+        /// <paramref name="lockHalfAngleDeg"/> of the aim direction; flies straight and dies at its
+        /// lifetime if none qualifies. <paramref name="onHit"/> (optional) lets the weapon track its own
+        /// Shock combo (and, MV-858, its own ARC release) per target without this projectile knowing
+        /// anything about either mechanic. <paramref name="powerLevelFraction"/> (MV-844, default 0 --
+        /// today's L1 look) is POWER's own resolved visual-strength fraction, passed in by
         /// <see cref="MaxWorlds.Combat.PulseLaser"/> rather than read from <see cref="RigState"/> here,
         /// same "caller resolves, projectile just draws" split <paramref name="damage"/> already follows.
         /// </summary>
         public static SeekerPulse Fire(Vector3 origin, Vector3 aimDir, float speed, float turnRateDegPerSec,
             float lifetime, float damage, float lockRange, float lockHalfAngleDeg,
-            Action<RobotEnemy, float> onHit = null, RobotEnemy forcedTarget = null, bool canFork = true,
-            Action<RobotEnemy, Vector3> onKill = null, bool isFork = false, float powerLevelFraction = 0f)
+            Action<RobotEnemy, float> onHit = null, float powerLevelFraction = 0f)
         {
             aimDir.y = 0f;
             if (aimDir.sqrMagnitude < 1e-4f) aimDir = Vector3.forward;
@@ -153,17 +132,15 @@ namespace MaxWorlds.Weapons
             var go = new GameObject("SeekerPulse (stand-in)");
             go.transform.position = origin;
             go.transform.rotation = Quaternion.LookRotation(aimDir, Vector3.up);
-            BuildVisual(go.transform, isFork, tuning, powerLevelFraction);
+            BuildVisual(go.transform, tuning, powerLevelFraction);
 
-            RobotEnemy target = forcedTarget != null
-                ? forcedTarget
-                : AcquireTarget(origin, aimDir, lockRange, lockHalfAngleDeg);
+            RobotEnemy target = AcquireTarget(origin, aimDir, lockRange, lockHalfAngleDeg);
             LockBracketVfx.Show(target);   // MV-702: the reticle bracket MV-708 deferred as this ticket's own
 
             var pulse = go.AddComponent<SeekerPulse>();
             pulse._tuning = tuning;
             pulse._powerLevelFraction = powerLevelFraction;
-            pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit, onKill, canFork);
+            pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit);
             pulse.BuildGroundGlow(origin);
             return pulse;
         }
@@ -214,7 +191,7 @@ namespace MaxWorlds.Weapons
         }
 
         private void Init(RobotEnemy target, float speed, float turnRateDegPerSec, float lifetime,
-            float damage, Action<RobotEnemy, float> onHit, Action<RobotEnemy, Vector3> onKill, bool canFork)
+            float damage, Action<RobotEnemy, float> onHit)
         {
             _target = target;
             _targetDamageable = target;
@@ -223,8 +200,6 @@ namespace MaxWorlds.Weapons
             _lifetime = lifetime;
             _damage = damage;
             _onHit = onHit;
-            _onKill = onKill;
-            _canFork = canFork;
 
             // MV-825: hierarchy already built by BuildVisual (called from Fire before AddComponent),
             // so every child this reaches for already exists.
@@ -363,21 +338,13 @@ namespace MaxWorlds.Weapons
         {
             if (_targetDamageable != null && _targetDamageable.IsAlive)
             {
-                RobotEnemy killedTarget = _target;
+                RobotEnemy hitTarget = _target;
                 Vector3 point = transform.position;
                 _targetDamageable.TakeDamage(new DamageInfo(_damage, point, transform.forward,
                     Team.Player, source: DamageSource.PrimaryWeapon));
-                _onHit?.Invoke(killedTarget, _damage);
-
-                // MV-768 FORK: TakeDamage above is synchronous, so a kill is already reflected in
-                // IsAlive by the time we check it here -- see RobotEnemy.TakeDamage/Die. _canFork is
-                // false for a pulse FORK itself released (see Fire's own doc), so a forked pulse's own
-                // kill never reports one -- the "must not chain" rule.
-                // MV-814: widened past kill-only -- a hit that leaves the target under
-                // NearDeathForkThreshold also releases a fork, measured to trigger far more often than
-                // an outright kill against World 2's health pools (see PulseLaser.RegisterKill's doc).
-                bool nearDeath = killedTarget.IsAlive && killedTarget.HealthNormalized < NearDeathForkThreshold;
-                if (_canFork && (!killedTarget.IsAlive || nearDeath)) _onKill?.Invoke(killedTarget, point);
+                // MV-858: onHit fires on every hit, kill or not -- ARC (PulseLaser.TryArc) now reads
+                // this same callback rather than a separate kill/near-death-only one.
+                _onHit?.Invoke(hitTarget, _damage);
             }
             Retire();
         }
@@ -453,19 +420,16 @@ namespace MaxWorlds.Weapons
         /// directly along local Z -- the parent's own forward, set to the travel direction once at
         /// <see cref="Fire"/> and re-applied every <see cref="Tick"/> by steering -- with local z=0 at
         /// the NOSE (the leading point <see cref="Tick"/> advances and tests collision against) and
-        /// z=-<see cref="CombatVfxTuning.LppeBoltTuning.CoreLength"/> at the tail. <paramref name="isFork"/>
-        /// gives a FORK-released bolt its own tell (item 8): an electric blue-white core colour and a
-        /// 1.25x-wider sheath, so one extra bolt appearing out of a kill reads as deliberate.
+        /// z=-<see cref="CombatVfxTuning.LppeBoltTuning.CoreLength"/> at the tail.
         /// <paramref name="tuning"/>/<paramref name="powerLevelFraction"/> (MV-844) are POWER's own
         /// resolved size/colour ramp for THIS pulse, threaded in from <see cref="Fire"/> rather than
         /// read off a shared static field.</summary>
-        private static void BuildVisual(Transform parent, bool isFork, CombatVfxTuning.LppeBoltTuning tuning,
+        private static void BuildVisual(Transform parent, CombatVfxTuning.LppeBoltTuning tuning,
             float powerLevelFraction)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Color coreColor = isFork ? ForkCoreColor : CoreColor;
-            Material coreMat = VfxMaterials.AdditiveTinted(coreColor);
+            Material coreMat = VfxMaterials.AdditiveTinted(CoreColor);
             Mesh coreMesh = GetCoreMesh(tuning);
 
             // Item 2: "drawn twice for intensity" -- two renderers sharing the SAME cached mesh, not a
@@ -477,7 +441,7 @@ namespace MaxWorlds.Weapons
             // colour and alpha (including item 6's flicker) come entirely from a MaterialPropertyBlock
             // set below and refreshed by FlickerSheath, never from a shared cached material every
             // sheath of this kind would otherwise fight over.
-            Mesh sheathMesh = GetSheathMesh(isFork, tuning);
+            Mesh sheathMesh = GetSheathMesh(tuning);
             Material sheathMat = VfxMaterials.Additive(VfxMaterials.Solid());
             GameObject sheathGo = BuildBoltPart(parent, "Sheath", sheathMesh, sheathMat);
             Color sheathTint = SheathTintFor(powerLevelFraction);
@@ -508,7 +472,7 @@ namespace MaxWorlds.Weapons
             // second baked tint.
             var gradient = new Gradient();
             gradient.SetKeys(
-                new[] { new GradientColorKey(coreColor, 0f), new GradientColorKey(sheathTint, 1f) },
+                new[] { new GradientColorKey(CoreColor, 0f), new GradientColorKey(sheathTint, 1f) },
                 new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
             trail.colorGradient = gradient;
             trail.Clear();
@@ -565,18 +529,13 @@ namespace MaxWorlds.Weapons
         private const int SheathRadialSegments = 10;
 
         /// <summary>MV-844: every ordinary bolt's core/sheath mesh shared by pulses at the SAME
-        /// resolved diameter -- fork-invariant on the core (item 8 only changes its COLOUR, not its
-        /// size). Keyed by diameter rather than one shared instance now that POWER's own level scales
-        /// core/sheath size (<see cref="CombatVfxTuning.LppeBolt"/>): the same level always resolves the
-        /// same diameter, so this stays "built once per shape, never per shot" (MV-810) with as many
-        /// entries as POWER has distinct levels in play (at most 8).</summary>
+        /// resolved diameter. Keyed by diameter rather than one shared instance now that POWER's own
+        /// level scales core/sheath size (<see cref="CombatVfxTuning.LppeBolt"/>): the same level always
+        /// resolves the same diameter, so this stays "built once per shape, never per shot" (MV-810)
+        /// with as many entries as POWER has distinct levels in play (at most 8).</summary>
         private static readonly Dictionary<float, Mesh> s_coreMeshByDiameter = new Dictionary<float, Mesh>();
 
         private static readonly Dictionary<float, Mesh> s_sheathMeshByDiameter = new Dictionary<float, Mesh>();
-
-        /// <summary>The cache every FORK-released bolt's sheath shares -- its own wider diameter (1.25x,
-        /// item 8) baked into the mesh rather than a runtime Transform scale.</summary>
-        private static readonly Dictionary<float, Mesh> s_forkSheathMeshByDiameter = new Dictionary<float, Mesh>();
 
         /// <summary>MV-810/844: the cached core mesh for <paramref name="tuning"/>'s own resolved
         /// diameter, built lazily on first use and shared by every LPPE pulse at that diameter -- never
@@ -591,17 +550,15 @@ namespace MaxWorlds.Weapons
             return mesh;
         }
 
-        /// <summary>MV-810/844: the cached sheath mesh for the given fork-ness at <paramref name="tuning"/>'s
-        /// own resolved diameter, built lazily on first use and shared by every LPPE pulse of that kind
-        /// and diameter -- never rebuilt per shot.</summary>
-        public static Mesh GetSheathMesh(bool isFork, CombatVfxTuning.LppeBoltTuning tuning)
+        /// <summary>MV-810/844: the cached sheath mesh for <paramref name="tuning"/>'s own resolved
+        /// diameter, built lazily on first use and shared by every LPPE pulse at that diameter -- never
+        /// rebuilt per shot.</summary>
+        public static Mesh GetSheathMesh(CombatVfxTuning.LppeBoltTuning tuning)
         {
-            float diameter = isFork ? tuning.SheathDiameter * tuning.ForkSheathScale : tuning.SheathDiameter;
-            Dictionary<float, Mesh> cache = isFork ? s_forkSheathMeshByDiameter : s_sheathMeshByDiameter;
-            if (!cache.TryGetValue(diameter, out Mesh mesh))
+            if (!s_sheathMeshByDiameter.TryGetValue(tuning.SheathDiameter, out Mesh mesh))
             {
-                mesh = BuildSheathMesh(diameter, tuning.CoreLength, tuning.SheathExtension);
-                cache[diameter] = mesh;
+                mesh = BuildSheathMesh(tuning.SheathDiameter, tuning.CoreLength, tuning.SheathExtension);
+                s_sheathMeshByDiameter[tuning.SheathDiameter] = mesh;
             }
             return mesh;
         }
@@ -613,7 +570,6 @@ namespace MaxWorlds.Weapons
         {
             s_coreMeshByDiameter.Clear();
             s_sheathMeshByDiameter.Clear();
-            s_forkSheathMeshByDiameter.Clear();
         }
 
         /// <summary>Item 2: a plain constant-radius tube along local Z, nose at z=0 down to the tail at

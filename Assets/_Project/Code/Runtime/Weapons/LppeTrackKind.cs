@@ -10,9 +10,10 @@ namespace MaxWorlds.Weapons
         /// <summary>RATE (<c>p_rof</c>): fire interval 0.22s -&gt; 0.16s over 4 levels.</summary>
         Rate,
 
-        /// <summary>FORK (<c>p_frk</c>): a killing pulse releases one further pulse at the next target.
+        /// <summary>ARC (<c>p_frk</c>, MV-858, relabelled from FORK): every pulse hit that lands on a
+        /// robot arcs 50% of its damage to the nearest other alive robot within 8m with line of sight.
         /// One level, no chaining.</summary>
-        Fork,
+        Arc,
 
         /// <summary>CAPACITY (<c>p_cap</c>, MV-846): enlarges the LPPE's own energy tank max, 140 -&gt;
         /// 315 over 5 levels. Distinct from World 1's <c>p_flw</c> (which cuts the RCDA's drain and has

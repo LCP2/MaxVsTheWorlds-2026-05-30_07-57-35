@@ -99,7 +99,7 @@ namespace MaxWorlds.Weapons
         private static string MapId(LppeTrackKind kind) => kind switch
         {
             LppeTrackKind.Rate => "p_rof",
-            LppeTrackKind.Fork => "p_frk",
+            LppeTrackKind.Arc => "p_frk",
             LppeTrackKind.Capacity => "p_cap",
             _ => null,
         };
@@ -370,7 +370,7 @@ namespace MaxWorlds.Weapons
         /// tree's own reached-ness rules.</summary>
         public static int ShoulderRackTrackLevel(ShoulderRackTrackKind kind) => RigState.Level(MapId(kind));
 
-        /// <summary>MV-768: a LPPE-only track's current level (RATE/FORK, <see cref="LppeTrackKind"/>) —
+        /// <summary>MV-768: a LPPE-only track's current level (RATE/ARC, <see cref="LppeTrackKind"/>) —
         /// routed through here exactly like <see cref="TrackLevel"/> reads <c>p_dmg</c>/<c>p_rng</c>, so
         /// <see cref="MaxWorlds.Combat.PulseLaser"/> never reads <see cref="RigState"/> directly.</summary>
         public static int LppeTrackLevel(LppeTrackKind kind) => RigState.Level(MapId(kind));
