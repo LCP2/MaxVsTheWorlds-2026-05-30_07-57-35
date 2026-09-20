@@ -587,14 +587,20 @@ namespace MaxWorlds.Arena
         /// <summary>MV-624: the sidestep/standoff-follow/separation movement, split out of <see cref="Update"/>
         /// so it can be driven with an explicit <paramref name="dt"/> under test — the same shape
         /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own <c>TickChase</c> already uses, since
-        /// <see cref="Time.deltaTime"/> is not reliably non-zero outside Play mode. Behaviour is
-        /// unchanged from the inline version this replaces.</summary>
+        /// <see cref="Time.deltaTime"/> is not reliably non-zero outside Play mode. MV-864: the
+        /// standoff-follow step below now moves on the flat XZ plane only, never the full 3D vector to
+        /// <see cref="_followTarget"/> — a sentinel standing on the floor while Max stands on a deck
+        /// (or vice versa) used to close a vertical gap that was never there horizontally, drifting
+        /// through the air toward him. Every branch's result is then pinned back onto the walkable
+        /// surface at Max's own level (<see cref="SnapToLevelSurface"/>) so it never steps off a deck
+        /// edge, through a parapet, or over a wall. Otherwise unchanged from the inline version this
+        /// replaces.</summary>
         private void TickMovement(float dt)
         {
             if (_followTarget != null)
             {
                 float reactDistSq = AbilityTuning.DefaultSentinelReactDistance * AbilityTuning.DefaultSentinelReactDistance;
-                if (_sidestepTarget == null && (transform.position - _followTarget.position).sqrMagnitude < reactDistSq)
+                if (_sidestepTarget == null && FlatSqrDistance(transform.position, _followTarget.position) < reactDistSq)
                 {
                     // MV-579: this reaction is independent of the Move (u_mov) axis and of
                     // IgnorePlayerCollision above — Max can never be BLOCKED either way, but a static
@@ -610,6 +616,7 @@ namespace MaxWorlds.Arena
             {
                 Vector3 next2 = Vector3.MoveTowards(transform.position, _sidestepTarget.Value,
                     AbilityTuning.DefaultSentinelSidestepSpeed * dt);
+                next2 = SnapToLevelSurface(next2);
                 // MV-624: SafeMove (a swept, blocking CharacterController.Move), not a direct
                 // transform.position write — that direct write was a teleport with no collision test,
                 // which is exactly how the sentinel walked through walls/pots despite carrying a solid
@@ -628,13 +635,35 @@ namespace MaxWorlds.Arena
                 // MV-862: FOCUS no longer changes where a sentinel HOLDS station — only which robot it
                 // FIRES at (see NearestRobotInRange) — so this is unconditionally the standoff-follow
                 // step, never the old attack-mode 3m-ahead/zero-standoff goal it used to branch to.
-                Vector3 next3 = AbilityTuning.SentinelStandoffStep(
-                    transform.position, _followTarget.position, _standoffDistance, _moveSpeed, dt);
+                Vector3 flatSelf = Flat(transform.position);
+                Vector3 flatTarget = Flat(_followTarget.position);
+                Vector3 flatNext = AbilityTuning.SentinelStandoffStep(flatSelf, flatTarget, _standoffDistance, _moveSpeed, dt);
+                Vector3 next3 = SnapToLevelSurface(new Vector3(flatNext.x, transform.position.y, flatNext.z));
                 Vector3 displacement3 = next3 - transform.position;
                 if (displacement3 != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement3);
             }
 
             SeparateFromOtherSentinels(dt);
+        }
+
+        private static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+
+        private static float FlatSqrDistance(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x, dz = a.z - b.z;
+            return dx * dx + dz * dz;
+        }
+
+        /// <summary>MV-864: pins <paramref name="point"/> onto the walkable surface at
+        /// <see cref="_followTarget"/>'s (Max's own) current level — see
+        /// <see cref="MapData.SnapToWalkableSurface"/>. Degrades to <paramref name="point"/> unchanged
+        /// with no follow target, no level loaded (a bare EditMode test fixture has none — the same
+        /// no-level fallback every other Sentinel/Map lookup in this class already uses), or no map.</summary>
+        private Vector3 SnapToLevelSurface(Vector3 point)
+        {
+            if (_followTarget == null) return point;
+            MapData map = EnemyNavigation.Map;
+            return map != null ? map.SnapToWalkableSurface(_followTarget.position, point, PlayerAbilities.SentinelDeckEdgeMargin) : point;
         }
 
         /// <summary>MV-615: keeps this sentinel at least <see cref="PlayerAbilities.SentinelPlacementClearance"/>
@@ -655,6 +684,7 @@ namespace MaxWorlds.Arena
 
             Vector3 next = AbilityTuning.SentinelSeparationStep(transform.position, s_otherSentinelPositions,
                 PlayerAbilities.SentinelPlacementClearance, AbilityTuning.DefaultSentinelSidestepSpeed, dt);
+            next = SnapToLevelSurface(next);
             // MV-624: SafeMove, not a direct transform.position write — see the note on the sidestep
             // step above; this is the third and last of the sentinel's three direct-write movement paths.
             Vector3 displacement = next - transform.position;

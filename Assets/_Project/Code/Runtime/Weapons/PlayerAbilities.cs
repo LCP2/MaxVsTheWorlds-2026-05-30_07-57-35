@@ -608,6 +608,42 @@ namespace MaxWorlds.Weapons
         /// first place.</summary>
         private const float SentinelWallClearance = 0.6f;
 
+        /// <summary>MV-864: how far in from a deck's own actual edge (its authored Deck/Hatch rect —
+        /// never the full room footprint a deck overlays, since a parapet/mouth can leave that rect
+        /// narrower) a resolved deploy/follow point is pulled back.</summary>
+        public const float SentinelDeckEdgeMargin = 0.5f;
+
+        /// <summary>MV-864: the same margin <see cref="SentinelJoystickControl"/> used to clamp the
+        /// reticle into Max's own room before this ticket (MV-399's <c>ZoneEdgeMargin</c>) — kept
+        /// identical so ordinary floor placement is unchanged; the floor was never the bug this ticket
+        /// fixes.</summary>
+        private const float SentinelFloorEdgeMargin = 1.5f;
+
+        /// <summary>MV-864: how far the nearest point on a deck's own rect may sit from the raw aim
+        /// before "off the walkway" counts as nothing walkable there at all, refusing the deploy —
+        /// matches the downward-probe search radius the ticket's spec describes.</summary>
+        private const float SentinelDeckSearchDistance = 3f;
+
+        /// <summary>MV-864: resolves an aimed point onto the walkable surface at Max's OWN current
+        /// level (<see cref="MapData.ResolveWalkableSurfacePoint"/>) — a deck's own rect (never a ramp)
+        /// when he is standing on one, his current room's floor otherwise — so a Sentinel is never
+        /// deployed hanging in mid-air off a deck's edge or over/in a wall. Degrades to
+        /// <paramref name="aimedPoint"/> unchanged with no level loaded (a bare EditMode test fixture
+        /// has none, the same no-level fallback <see cref="MaxWorlds.UI.SentinelJoystickControl"/>
+        /// already used before this ticket). <paramref name="resolved"/> is only ever
+        /// <paramref name="aimedPoint"/> itself when this returns false, so a caller that ignores the
+        /// bool still gets its old raw aim back rather than a stale/default Vector3.</summary>
+        public bool TryResolveSentinelSurfacePoint(Vector3 aimedPoint, out Vector3 resolved)
+        {
+            MapData map = EnemyNavigation.Map;
+            if (map == null) { resolved = aimedPoint; return true; }
+
+            Vector3? point = map.ResolveWalkableSurfacePoint(
+                transform.position, aimedPoint, SentinelDeckEdgeMargin, SentinelFloorEdgeMargin, SentinelDeckSearchDistance);
+            resolved = point ?? aimedPoint;
+            return point.HasValue;
+        }
+
         /// <summary>Whether an aimed point is clear of every other deployed sentinel and live robot,
         /// AND clear of any wall/gate/doorway-threshold geometry. Room/wall CONTAINMENT is the
         /// joystick reticle's own job (<see cref="MaxWorlds.Arena.MapZone.Clamp"/>, MV-399 AC1: the
@@ -653,8 +689,10 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Deploy the sentinel at an aimed <paramref name="position"/> (MV-399's placement
         /// joystick). Returns false (nothing spent, nothing deployed) if unowned, the bank can't cover
-        /// the cost, or the point is already occupied (<see cref="IsValidSentinelPlacement"/>). Reads
-        /// every RIG axis (Health/Range/Move) fresh at deploy time (MV-422).
+        /// the cost, the aim doesn't resolve onto any walkable surface at Max's own level
+        /// (<see cref="TryResolveSentinelSurfacePoint"/>, MV-864), or the resolved point is already
+        /// occupied (<see cref="IsValidSentinelPlacement"/>). Reads every RIG axis (Health/Range/Move)
+        /// fresh at deploy time (MV-422).
         ///
         /// MV-604 (DECISION, Lee 26 Aug 2026 playtest): deployment is never refused for lack of a
         /// slot any more. At the Slots cap, this recalls whichever deployed sentinel is currently
@@ -664,7 +702,8 @@ namespace MaxWorlds.Weapons
         public bool TryDeploySentinel(Vector3 position)
         {
             if (!SentinelReady) return false;
-            if (!IsValidSentinelPlacement(position)) return false;
+            if (!TryResolveSentinelSurfacePoint(position, out Vector3 surfacePoint)) return false;
+            if (!IsValidSentinelPlacement(surfacePoint)) return false;
             // MV-673: Sentinel deploy spends the Power Cells secondary currency, not Parts.
             if (!PickupWallet.TrySpendPowerCellSecondaries(SentinelCost)) return false;
 
@@ -678,7 +717,7 @@ namespace MaxWorlds.Weapons
                 RigState.Level("u_mov"), AbilityTuning.DefaultSentinelMoveSpeedPerLevel);
 
             var sentinel = new GameObject("Sentinel").AddComponent<Sentinel>();
-            sentinel.Init(position, maxHp, range, AbilityTuning.DefaultSentinelFireInterval,
+            sentinel.Init(surfacePoint, maxHp, range, AbilityTuning.DefaultSentinelFireInterval,
                 moveSpeed, AbilityTuning.DefaultSentinelStandoffDistance, transform);
             return true;
         }

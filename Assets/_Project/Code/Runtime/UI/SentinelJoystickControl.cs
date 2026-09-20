@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
-using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
@@ -16,20 +15,18 @@ namespace MaxWorlds.UI
     /// them anywhere in the current arena." MV-422 deletes the Wall/Gunner split entirely — one
     /// sentinel, one control, no <c>SentinelKind</c> parameter.
     ///
-    /// The reticle is CLAMPED into Max's own current room (<see cref="MapZone.Clamp"/>) as it is
-    /// aimed, not merely tinted a warning colour past the edge — MV-393 flagged exactly that failure
-    /// mode in Teleport ("a selectable-looking circle beyond a wall that then silently fails to be
-    /// honoured reads as broken either way"). What the reticle shows is always where release actually
-    /// lands.
+    /// The reticle is RESOLVED onto Max's own current level (<see cref="PlayerAbilities.TryResolveSentinelSurfacePoint"/>,
+    /// MV-864 — a deck's own rect when he's standing on one, his current room's floor otherwise via
+    /// <see cref="MapZone.Clamp"/>) as it is aimed, not merely tinted a warning colour past the edge —
+    /// MV-393 flagged exactly that failure mode in Teleport ("a selectable-looking circle beyond a wall
+    /// that then silently fails to be honoured reads as broken either way"). What the reticle shows is
+    /// always where release actually lands.
     /// </summary>
     [RequireComponent(typeof(Image))]
     public sealed class SentinelJoystickControl : AbilityJoystickControlBase
     {
         /// <summary>The reticle radius, world metres — roughly the sentinel's own footprint.</summary>
         private const float PlacementRadius = 0.9f;
-
-        /// <summary>Keeps the sentinel's own body clear of whatever it's dropped near.</summary>
-        private const float ZoneEdgeMargin = 1.5f;
 
         private Transform _origin;
         private PlayerAbilities _abilities;
@@ -62,7 +59,7 @@ namespace MaxWorlds.UI
         {
             if (_abilities == null || _origin == null) return;
 
-            Vector3 point = PlacementPoint(direction, PreviewDistance());
+            Vector3 point = PlacementPoint(direction, PreviewDistance(), out _);
             _abilities.TryDeploySentinel(point);
         }
 
@@ -97,16 +94,20 @@ namespace MaxWorlds.UI
             _circleGo.SetActive(false);
         }
 
-        /// <summary>The aimed point at <paramref name="distance"/> from Max, pulled back inside Max's
-        /// own current room if a level is loaded (a bare EditMode test fixture has none — degrades to
-        /// the raw point, same no-level fallback <see cref="EnemyNavigation.Waypoint"/> itself uses).</summary>
-        private Vector3 PlacementPoint(Vector3 direction, float distance)
+        /// <summary>The aimed point at <paramref name="distance"/> from Max, resolved onto the walkable
+        /// surface at Max's own current level (<see cref="PlayerAbilities.TryResolveSentinelSurfacePoint"/>,
+        /// MV-864) — a deck's own rect when he's standing on one, his current room's floor otherwise,
+        /// degrading to the raw point with no level loaded (a bare EditMode test fixture has none) or no
+        /// abilities wired at all. <paramref name="onWalkableSurface"/> is false only when a level IS
+        /// loaded and nothing walkable is close enough to the aim to resolve onto (MV-864's "refused the
+        /// same way an invalid placement already is").</summary>
+        private Vector3 PlacementPoint(Vector3 direction, float distance, out bool onWalkableSurface)
         {
             Vector3 raw = _origin.position + direction * distance;
+            if (_abilities == null) { onWalkableSurface = true; return raw; }
 
-            MapData map = EnemyNavigation.Map;
-            MapZone zone = map != null ? map.ZoneAt(_origin.position.x, _origin.position.z) : null;
-            return zone != null ? zone.Clamp(raw, ZoneEdgeMargin) : raw;
+            onWalkableSurface = _abilities.TryResolveSentinelSurfacePoint(raw, out Vector3 surfacePoint);
+            return surfacePoint;
         }
 
         /// <summary>The aimed point's distance from Max for the CURRENT drag — a fraction of the full
@@ -124,13 +125,13 @@ namespace MaxWorlds.UI
         {
             if (_origin == null || _circleGo == null) return;
 
-            Vector3 point = PlacementPoint(Direction, PreviewDistance());
+            Vector3 point = PlacementPoint(Direction, PreviewDistance(), out bool onWalkableSurface);
 
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(point.x, 0.01f, point.z), Quaternion.identity);
             _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(PlacementRadius);
 
-            bool validSpot = _abilities == null || _abilities.IsValidSentinelPlacement(point);
+            bool validSpot = onWalkableSurface && (_abilities == null || _abilities.IsValidSentinelPlacement(point));
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady && validSpot);
         }
     }
