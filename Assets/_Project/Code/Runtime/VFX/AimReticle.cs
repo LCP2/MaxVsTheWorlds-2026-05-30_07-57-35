@@ -31,9 +31,10 @@ namespace MaxWorlds.VFX
     [DisallowMultipleComponent]
     public sealed class AimReticle : MonoBehaviour
     {
-        /// <summary>Below the contact shadow (0.012), which is below the anchor ring (0.020), which
-        /// is below the danger telegraph (0.030). Bottom of the stack — see the class remarks.</summary>
-        public const float GroundLift = 0.006f;
+        /// <summary>Below the contact shadow, which is below the anchor ring, which is below the
+        /// danger telegraph. Bottom of the gameplay stack — see <see cref="GroundMarkHeights"/>,
+        /// which also sits it clear of World 2's floor dressing (MV-866).</summary>
+        public const float GroundLift = GroundMarkHeights.AimReticleLift;
 
         /// <summary>
         /// Max's colour — taken from his ground anchor rather than chosen, and that is deliberate.

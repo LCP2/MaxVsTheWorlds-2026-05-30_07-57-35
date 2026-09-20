@@ -16,8 +16,9 @@ namespace MaxWorlds.VFX
         /// <summary>Default lift: clear of the ground plane, because co-planar with it, it z-fights.
         /// The danger telegraph keeps this height and therefore always draws OVER the always-on
         /// anchors (YT-85), which sit lower — if a ground anchor could cover a telegraph, the anchor
-        /// would be hiding the one mark the player has to react to.</summary>
-        public const float GroundLift = 0.03f;
+        /// would be hiding the one mark the player has to react to. See
+        /// <see cref="GroundMarkHeights"/> (MV-866) for the full gameplay ladder.</summary>
+        public const float GroundLift = GroundMarkHeights.DangerTelegraphLift;
 
         /// <summary>Height above the ground this ring draws at. Ground marks are coplanar quads, so
         /// what stacks on top of what is decided here and nowhere else.</summary>

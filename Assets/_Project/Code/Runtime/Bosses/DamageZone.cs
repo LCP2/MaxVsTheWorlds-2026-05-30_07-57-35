@@ -49,11 +49,12 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>
-        /// How high the puddle draws. Below the arming telegraph (0.03) so the mark the player has
-        /// to react to always wins, above the always-on ground anchors (0.02) so a boss attack is
-        /// never hidden under a footprint ring.
+        /// How high the puddle draws. Below the arming telegraph so the mark the player has to
+        /// react to always wins, above the always-on ground anchors so a boss attack is never
+        /// hidden under a footprint ring. Keeps its original 0.006 offset above the anchor ring
+        /// after MV-866 moved the whole gameplay ladder clear of World 2's floor dressing.
         /// </summary>
-        public const float ZoneLift = 0.026f;
+        public const float ZoneLift = GroundMarkHeights.AnchorRingLift + 0.006f;
 
         /// <summary>
         /// The mark on the lawn (YT-113).

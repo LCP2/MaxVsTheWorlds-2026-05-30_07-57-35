@@ -89,16 +89,18 @@ namespace MaxWorlds.VFX
         // Ground marks are coplanar quads on a y=0 lawn, so the ONLY thing keeping them from
         // z-fighting each other into a shimmering mess is that each one draws at its own height.
         // The order below is a priority order, and it is the whole reason these are constants in one
-        // place rather than three magic numbers in three files:
+        // place rather than three magic numbers in three files. The actual values live in
+        // GroundMarkHeights (MV-866), which also documents why the gameplay ladder sits where it
+        // does relative to World 2's floor dressing:
         //
-        //   0.012  contact shadow   — furthest down; it is under the actor, so it is under everything
-        //   0.020  anchor ring      — above its own shadow, below anything that demands a reaction
-        //   0.030  danger telegraph — GroundRing.GroundLift, unchanged (YT-53). Always on top: an
-        //                             always-on decoration must never be able to cover the one mark
-        //                             the player has to move away from.
+        //   contact shadow   — furthest down; it is under the actor, so it is under everything
+        //   anchor ring      — above its own shadow, below anything that demands a reaction
+        //   danger telegraph — GroundRing.GroundLift, unchanged (YT-53). Always on top: an
+        //                       always-on decoration must never be able to cover the one mark
+        //                       the player has to move away from.
 
-        public const float ShadowLift = 0.012f;
-        public const float RingLift = 0.020f;
+        public const float ShadowLift = GroundMarkHeights.ContactShadowLift;
+        public const float RingLift = GroundMarkHeights.AnchorRingLift;
 
         /// <summary>The footprint an actor actually occupies, in world metres — read off the
         /// CharacterController that defines it rather than from a table that can drift away from it.
