@@ -74,14 +74,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsEmpty(monotoneAreas,
                 $"areas with 3+ cover pieces must not resolve to a single kind: {string.Join(", ", monotoneAreas)}");
 
-            // Sightline guard: the Hedge set must be exactly the four see-through screen pieces, as an
-            // id-set assertion, not a count.
+            // Sightline guard: the Hedge set must be exactly the sightline screen pieces Lee's sheet
+            // authors, as an id-set assertion, not a count. MV-865's V3 re-author (areas 1-14 rebuilt
+            // from the sheet) authors no Hedge cover anywhere in World 2 — the old a2/a10 sightline
+            // rooms this used to guard (a2_cover3, a10_cover1-3) were dropped along with everything
+            // else in those areas' old content. This still guards against an accidental stray Hedge
+            // piece reappearing unnoticed.
             HashSet<string> hedgeIds = AllCover(world2)
                 .Where(t => MapEnums.Dressing(t.cover.dressing) == CoverDressing.Hedge)
                 .Select(t => t.cover.id)
                 .ToHashSet();
 
-            var expectedHedgeIds = new HashSet<string> { "a2_cover3", "a10_cover1", "a10_cover2", "a10_cover3" };
+            var expectedHedgeIds = new HashSet<string>();
             Assert.AreEqual(expectedHedgeIds, hedgeIds,
                 $"World 2's Hedge (see-through) set must be exactly the sightline rooms, got: {string.Join(", ", hedgeIds)}");
         }

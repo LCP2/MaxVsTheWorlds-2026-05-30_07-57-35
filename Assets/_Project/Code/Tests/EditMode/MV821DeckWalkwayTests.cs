@@ -14,17 +14,19 @@ namespace MaxWorlds.Tests.EditMode
     /// ticket's own 0.10 m cap) and no support-post renderer exists at all.
     ///
     /// One consolidated test (testing policy v2, MV-465), asserting RESOLVED values only (Rule 2,
-    /// Tier 2) against World 2's own shipped a21 (an ordinary, non-walled deck): (a) nothing built for
-    /// a deck edge rises more than 0.10 m above the deck top; (b) every deck has post renderers at each
-    /// corner and at no more than 4 m spacing along each edge; (c) nothing but those posts (and the
-    /// deliberate flush ground-shadow decal) occupies the open volume between the floor and the slab
-    /// underside inside the deck's own footprint; (d) the deck colliders are untouched.
+    /// Tier 2) against World 2's own shipped a19 (an ordinary, non-walled deck; a21 before MV-865
+    /// renumbered World 2's areas in play order): (a) nothing built for a deck edge rises more than
+    /// 0.10 m above the deck top; (b) every deck has post renderers at each corner and at no more than
+    /// 4 m spacing along each edge; (c) nothing but those posts (and the deliberate flush ground-shadow
+    /// decal) occupies the open volume between the floor and the slab underside inside the deck's own
+    /// footprint; (d) the deck colliders are untouched.
     ///
     /// Retargeted by MV-852 (World 2 re-layout): a3 no longer authors any deck at all (its ramps/decks
-    /// were removed so the only way up is the new Replicator door into a12), and every deck this ticket
-    /// touches (a12/a15/a16/a17/a18/a14/a19/a20) is now deliberately `walled` — a real 1.0 m parapet,
-    /// not the open 0.10 m band this test guards. a21 is untouched by MV-852 and stays a plain, unwalled
-    /// deck, so it's still a faithful stand-in for "every deck NOT authored `walled`" everywhere else
+    /// were removed so the only way up is the new Replicator door), and every deck this ticket touches
+    /// — a14/a15/a12/a11/a10/a16/a17/a18 in MV-865's post-renumber ids (a12/a15/a16/a17/a18/a14/a19/a20
+    /// in MV-852's own numbering at the time) — is now deliberately `walled`, a real 1.0 m parapet, not
+    /// the open 0.10 m band this test guards. a19 (was a21) is untouched by MV-852 and stays a plain,
+    /// unwalled deck, so it's still a faithful stand-in for "every deck NOT authored `walled`" elsewhere
     /// in the game.
     /// </summary>
     public sealed class MV821DeckWalkwayTests
@@ -35,14 +37,14 @@ namespace MaxWorlds.Tests.EditMode
         private const float InfillEpsilon = 0.05f; // above this a renderer no longer reads as the flush ground-shadow decal
 
         [Test]
-        public void WorldTwoArea21Decks_ReadAsOpenWalkwaysWithColliderUntouched()
+        public void WorldTwoArea19Decks_ReadAsOpenWalkwaysWithColliderUntouched()
         {
             WorldConfig w2cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(w2cfg, "World 2's own shipped config must load for this test to mean anything");
             Assert.IsTrue(WorldMapLoader.TryLoad(w2cfg, out MapData map, out string reason), reason);
 
-            List<DeckSlab> a21Decks = MapGeometry.Decks(map).Where(d => d.Id.StartsWith("a21_deck")).ToList();
-            Assert.IsNotEmpty(a21Decks, "World 2's a21 must author at least one deck for this test to mean anything");
+            List<DeckSlab> a19Decks = MapGeometry.Decks(map).Where(d => d.Id.StartsWith("a19_deck")).ToList();
+            Assert.IsNotEmpty(a19Decks, "World 2's a19 must author at least one deck for this test to mean anything");
 
             var host = new GameObject("MV821 host").transform;
             try
@@ -52,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
                 var failures = new List<string>();
                 Transform[] allChildren = host.GetComponentsInChildren<Transform>(true);
 
-                foreach (DeckSlab deck in a21Decks)
+                foreach (DeckSlab deck in a19Decks)
                 {
                     // (d) the deck's own top-collider slab is byte-for-byte untouched.
                     Transform body = allChildren.FirstOrDefault(t => t.name == deck.Id);

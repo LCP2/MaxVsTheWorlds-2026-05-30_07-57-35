@@ -23,14 +23,21 @@ namespace MaxWorlds.Tests.EditMode
     /// Proven to fail on d63a61c (pre-fix, World 2 still 63% World 1 roster): the four-kind share assertion
     /// below fails with "Expected: greater than or equal to 0.58 ... But was 0.369811..." (98 of 265
     /// placements were sludger/charger/turret/lurker before this ticket).
+    ///
+    /// MV-865 (World 2 re-author) rebuilt areas 1-14 straight from Lee's sheet — his own drawn cell
+    /// counts, not a re-run of this ticket's conversion table — raising the total to 412 placements and,
+    /// since the sheet freely mixes in plenty of rusher/gunner/blinker/heavy/bruiser/brute/launcher/
+    /// bolter cells on its own authority, settling World 2's own kinds (sludger/charger/turret/lurker)
+    /// at 49.3% (203/412) rather than the narrower 57-64% this ticket's conversion alone produced. The
+    /// floor is widened to comfortably admit that, while staying well clear of the ~37% a genuine
+    /// full-revert-to-World-1 would read at — the actual regression this assertion exists to catch.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
-        // MV-852 (World 2 re-layout) deleted a7/a13's garrison outright (265 -> 247 placements) and
-        // shifted every moved area's own entries by that area's delta, so this hash is recomputed
-        // against the re-laid-out shipped config — still a guard against an UNRELATED x/z drift, not
-        // an authored constant: it is derived from the real config, not hand-picked.
-        private const uint ExpectedCoordinateHash = 2106870607u;
+        // MV-865 (World 2 re-author) re-authored areas 1-14 wholesale from Lee's sheet, moving nearly
+        // every entry's x/z along the way — recomputed against the shipped config, still a guard against
+        // an UNRELATED drift (not an authored constant: derived from the real config, not hand-picked).
+        private const uint ExpectedCoordinateHash = 632569454u;
 
         [Test]
         public void WorldTwoRoster_MatchesTheMV772Conversion()
@@ -54,17 +61,17 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(247, total, "World 2's total garrison placement count (MV-852 deleted a7/a13's own garrison)");
+            Assert.AreEqual(412, total, "World 2's total garrison placement count (MV-865 re-authored areas 1-14 from Lee's sheet)");
 
             int Count(string kind) => counts.TryGetValue(kind, out int n) ? n : 0;
             int worldTwoKinds = Count("sludger") + Count("charger") + Count("turret") + Count("lurker");
             double share = (double)worldTwoKinds / total;
-            // MV-852 deleted a7/a13's garrison outright, and their own kind mix skewed slightly toward
-            // World 2's own kinds — dropping the resolved share from 58-64% to 57.9% (143/247). The floor
-            // is lowered to still comfortably catch the thing this AC actually guards (a reverted
-            // conversion, at ~37%), not loosened to the point of catching nothing.
-            Assert.That(share, Is.InRange(0.57, 0.64),
-                $"World 2's own kinds (sludger/charger/turret/lurker) must land between 57% and 64% of all " +
+            // MV-865 re-authored areas 1-14 straight from Lee's sheet, which freely mixes in plenty of
+            // World 1-shared kinds on its own authority — dropping the resolved share from 57-64% to
+            // 49.3% (203/412). The floor is widened to still comfortably catch the thing this AC actually
+            // guards (a reverted conversion, at ~37%), not loosened to the point of catching nothing.
+            Assert.That(share, Is.InRange(0.45, 0.64),
+                $"World 2's own kinds (sludger/charger/turret/lurker) must land between 45% and 64% of all " +
                 $"placements after the re-authoring, got {share:P1} ({worldTwoKinds}/{total})");
 
             double turretShare = (double)Count("turret") / total;

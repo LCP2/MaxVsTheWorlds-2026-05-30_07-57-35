@@ -14,8 +14,9 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-836 (Lee, 2026-09-17): "Comment this all out for now. No flood concept. Max and robots are
     /// not hurt or slowed down." Fails on the pre-ticket base commit (52b3cf2): <c>StormdrainFlood</c>
     /// has no <c>FloodEnabled</c> switch, so the runner ticks the real flood — after 600 s with all
-    /// World 2 Replicators alive, Max (parked on <c>a20</c>, a non-sludge point banded to flood by
-    /// MV-774's own "last third of the route" rule) takes real damage and
+    /// World 2 Replicators alive, Max (parked on <c>a18</c> — <c>a20</c> before MV-865 renumbered World
+    /// 2's areas in play order — a non-sludge point banded to flood by MV-774's own "last third of the
+    /// route" rule) takes real damage and
     /// <see cref="MapSlowZones"/> reads 0.6 there instead of 1.0; the Sludgequeen's own flood similarly
     /// still slows (<see cref="SludgequeenBoss.FloodSpeedMultiplierAt"/> reads 0.85, not 1.0 — see
     /// <see cref="MaxWorlds.Bosses.SludgequeenTuning.FloodSlowMultiplier"/>) and damages
@@ -74,7 +75,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 // === AC1: the real World 2 loader, 600 simulated seconds with all Replicators alive
-                // === — Max takes no flood damage, and a20 (banded to flood, no sludge of its own) reads
+                // === — Max takes no flood damage, and a18 (banded to flood, no sludge of its own) reads
                 // === full speed. ===
                 WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
                 Assert.IsNotNull(cfg, "World 2's own shipped config must load for this test to mean anything");
@@ -98,22 +99,27 @@ namespace MaxWorlds.Tests.EditMode
                 var runner = root.AddComponent<WorldRunner>();
                 runner.Configure(cfg, map, build, null); // no AreaAccumulationDirector needed for this AC
 
-                Assert.AreEqual(23, FactoryCensus.ReplicatorsAlive,
-                    "setup failure: World 2's own 23 Replicators (MV-852: a7/a13 deleted, dropping the MV-700 count of 25) must all be standing for 'all Replicators alive' to mean anything");
+                // MV-865 (World 2 re-author) re-authored the level's content, not just its numbering:
+                // the Trolley Yard floor (now a13, was a6) alone now authors 21 Replicators, so World 2's
+                // total rises from the MV-700/MV-852 count of 23 to 47 — a direct sum over cfg.areas
+                // (see MV700World2ConfigTests), not a value this ticket's own renumbering can be blamed
+                // for.
+                Assert.AreEqual(47, FactoryCensus.ReplicatorsAlive,
+                    "setup failure: every one of World 2's own Replicators must be standing for 'all Replicators alive' to mean anything");
 
-                WorldArea a20 = cfg.Area("a20");
-                Assert.IsNotNull(a20, "setup failure: World 2 must author area 'a20'");
-                // Local (56, 72) sits inside a20's own footprint but outside its authored sludge rect
+                WorldArea a18 = cfg.Area("a18");
+                Assert.IsNotNull(a18, "setup failure: World 2 must author area 'a18'");
+                // Local (56, 72) sits inside a18's own footprint but outside its authored sludge rect
                 // (WorldRectOf(9, 0, 6, 28) -> world x:[59,65] z:[62,90]) — a plain, non-sludge point.
-                var a20Point = new Vector3(a20.XMin + 6f, 0f, a20.ZMin + 10f);
-                Assert.IsFalse(new Rect(59f, 62f, 6f, 28f).Contains(new Vector2(a20Point.x, a20Point.z)),
-                    "setup failure: the probe point must not be a20's own sludge rect, or this proves nothing about the flood");
+                var a18Point = new Vector3(a18.XMin + 6f, 0f, a18.ZMin + 10f);
+                Assert.IsFalse(new Rect(59f, 62f, 6f, 28f).Contains(new Vector2(a18Point.x, a18Point.z)),
+                    "setup failure: the probe point must not be a18's own sludge rect, or this proves nothing about the flood");
 
                 floodRunnerGo = new GameObject("StormdrainFloodRunner");
                 var floodRunner = floodRunnerGo.AddComponent<StormdrainFloodRunner>();
 
                 playerGo = new GameObject("Player") { tag = "Player" };
-                playerGo.transform.position = a20Point;
+                playerGo.transform.position = a18Point;
                 var receiver = playerGo.AddComponent<FakeReceiver>();
 
                 const float simulatedSeconds = 600f;
@@ -122,8 +128,8 @@ namespace MaxWorlds.Tests.EditMode
 
                 Assert.AreEqual(0f, receiver.TotalDamageTaken, 0.001f,
                     "MV-836: Max must take no flood damage over 600 s with the flood switched off");
-                Assert.AreEqual(1f, MapSlowZones.Instance.SpeedMultiplierAt(a20Point), 0.001f,
-                    "MV-836: a20 must read full speed with the flood switched off");
+                Assert.AreEqual(1f, MapSlowZones.Instance.SpeedMultiplierAt(a18Point), 0.001f,
+                    "MV-836: a18 must read full speed with the flood switched off");
 
                 // === AC2: the Sludgequeen's own flood, in phase two, slows and damages nobody. ===
                 bossGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
