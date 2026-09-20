@@ -289,6 +289,13 @@ namespace MaxWorlds.Rendering
         /// <summary>MV-802, change 3: the floor-level main a "pipe"-dressed cover piece resolves to.</summary>
         public const float FloorMainRadius = 0.40f;
 
+        /// <summary>MV-863: no more than this far apart along a pipe main's own length — the same
+        /// "never more than the limit" spacing rule <c>MapRuntime.DeckPostSpacing</c> already uses for
+        /// deck support posts.</summary>
+        public const float PipeSupportSpacing = 2.0f;
+
+        private const float PipeSupportSize = 0.12f;
+
         /// <summary>MV-801, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 — a channel-eligible
         /// sludge rect's own numbers. The trough floor sits <see cref="ChannelTroughDepth"/> below the
         /// pre-ticket floor (not deeper: 0.62 m was tested and rejected for hiding the ooze at the 60
@@ -952,11 +959,20 @@ namespace MaxWorlds.Rendering
         /// <see cref="CoverDressing.Pipe"/> with a floor-level main, not a freestanding placement: a
         /// single <see cref="FloorMainRadius"/> lathed main lying along the cover piece's own longer XZ
         /// axis, capped at each end by the same <see cref="Tube"/> profile every other pipe in this kit
-        /// already uses. Stays square — this is structure, not loose debris, the same reasoning
+        /// already uses (its collar-ring end profile IS the "end caps" MV-863 asks for — nothing extra
+        /// to build there). Stays square — this is structure, not loose debris, the same reasoning
         /// <see cref="BuildPumpHousing"/>'s own "stays square" already gives Shed/Machinery — so unlike
         /// <see cref="BuildBurstMain"/> it is never yawed by <see cref="MaxWorlds.Arena.StormdrainDressing.BuildFor"/>.
         /// Uses the cover piece's own existing collider and footprint: no collider is added, moved or
-        /// resized here.</summary>
+        /// resized here.
+        ///
+        /// MV-863: a support leg every <see cref="PipeSupportSpacing"/> along the run, floor to the
+        /// pipe's own underside — the fix for the ticket's other reported fault, a long pipe reading as
+        /// a row of stubs (that was actually <c>StormdrainDressing.BuildFor</c> routing anything at
+        /// aspect &gt;= 2 through <see cref="MaxWorlds.Arena.StormdrainDressing"/>'s modular-run split,
+        /// now excluded for Pipe — this ONE main was always continuous). Without a support a long main
+        /// reads as floating; spaced the same "never more than the limit" way
+        /// <c>MapRuntime.AddEdgePosts</c> already spaces deck posts.</summary>
         public static GameObject BuildPipeMain(Transform parent, Vector3 at, Vector3 size)
         {
             var root = new GameObject("Pipe Main");
@@ -969,6 +985,15 @@ namespace MaxWorlds.Rendering
             Quaternion lie = Quaternion.LookRotation(along, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
 
             Tube(root.transform, "Main", Vector3.up * FloorMainRadius, FloorMainRadius, length, lie, Rust);
+
+            int supportCount = Mathf.Max(2, Mathf.CeilToInt(length / PipeSupportSpacing) + 1);
+            for (int i = 0; i < supportCount; i++)
+            {
+                float t = supportCount > 1 ? (i / (float)(supportCount - 1)) - 0.5f : 0f;
+                Vector3 supportAt = along * (t * length) + Vector3.up * (FloorMainRadius * 0.5f);
+                Box(root.transform, $"Support {i}", supportAt,
+                    new Vector3(PipeSupportSize, FloorMainRadius, PipeSupportSize), RustDark);
+            }
 
             return root;
         }
