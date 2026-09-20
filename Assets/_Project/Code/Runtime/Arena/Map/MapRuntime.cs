@@ -359,7 +359,17 @@ namespace MaxWorlds.Arena
             foreach (Wall wall in AllWalls)
             {
                 if (mouths.Contains(wall)) continue;
-                if (e.walled) { BuildDeckParapet(root, e, wall, slab.TopY); continue; }
+                if (e.walled)
+                {
+                    // MV-859: a [DECK] gate's own doorway can meet this exact edge — the parapet must
+                    // split around it (or vanish entirely, if the gate's span covers the whole edge)
+                    // rather than standing across the gate's own mouth the way MV-852 built it blind.
+                    if (TryDeckGateSpan(map, e, wall, out Span gateSpan))
+                        BuildDeckParapetSplit(root, e, wall, slab.TopY, gateSpan);
+                    else
+                        BuildDeckParapet(root, e, wall, slab.TopY);
+                    continue;
+                }
                 BuildDeckEdgeBand(root, e, wall, slab.TopY);
                 BuildDeckEdgeBeam(root, e, wall, slab.TopY);
             }
@@ -478,6 +488,92 @@ namespace MaxWorlds.Arena
                 ? new Vector3(length, DeckParapetHeight, DeckParapetThickness)
                 : new Vector3(DeckParapetThickness, DeckParapetHeight, length);
             GameObject blocker = Spawn(root, $"{deck.id}_parapet_{wall}_collider", PrimitiveType.Cube, centre, blockerSize);
+            foreach (Renderer r in blocker.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+        }
+
+        /// <summary>MV-859: does a <c>[DECK]</c> gate's own doorway meet this deck's edge on
+        /// <paramref name="wall"/>? Resolved the exact same way <see cref="MapGeometry.Walls"/> itself
+        /// cuts the wall for that gate (<see cref="MapGeometry.Doorway"/> on the link naming it), so the
+        /// parapet opening can never disagree with where the wall (and the gate) actually open.</summary>
+        private static bool TryDeckGateSpan(MapData map, MapEntity deck, Wall wall, out Span span)
+        {
+            span = default;
+            if (map.links == null) return false;
+
+            bool wallAlongX = wall == Wall.N || wall == Wall.S;
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float wallCoord = wall switch
+            {
+                Wall.N => deck.z + halfD,
+                Wall.S => deck.z - halfD,
+                Wall.E => deck.x + halfW,
+                _ => deck.x - halfW, // W
+            };
+            float spanMin = wallAlongX ? deck.x - halfW : deck.z - halfD;
+            float spanMax = wallAlongX ? deck.x + halfW : deck.z + halfD;
+
+            foreach (MapLink link in map.links)
+            {
+                if (link == null) continue;
+                MapEntity gate = map.Entity(link.gate);
+                if (gate == null || gate.Kind != EntityKind.AreaGate || gate.level <= 0) continue;
+                if (!MapGeometry.Doorway(map, link, out bool runsAlongX, out float coord, out Span hole)) continue;
+                if (runsAlongX != wallAlongX || Mathf.Abs(coord - wallCoord) > 0.05f) continue;
+
+                // The hole must actually fall along THIS deck's own span on the wall, not some other
+                // gate sharing the same infinite line elsewhere in the level.
+                if (hole.Max <= spanMin + 0.05f || hole.Min >= spanMax - 0.05f) continue;
+
+                span = hole;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>MV-859 change 1 — a <c>[DECK]</c> gate's doorway meets this deck's edge partway
+        /// along it (or exactly matches it end to end, in which case both segments below come out
+        /// empty and no parapet is built at all): the parapet is split around the gate's own span
+        /// instead of standing across its mouth, which is the reported bug — MV-852 built every
+        /// parapet blind to gates.</summary>
+        private static void BuildDeckParapetSplit(Transform root, MapEntity deck, Wall wall, float topY, Span opening)
+        {
+            bool alongX = wall == Wall.N || wall == Wall.S;
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float wallMin = alongX ? deck.x - halfW : deck.z - halfD;
+            float wallMax = alongX ? deck.x + halfW : deck.z + halfD;
+            float fixedCoord = wall switch
+            {
+                Wall.N => deck.z + halfD,
+                Wall.S => deck.z - halfD,
+                Wall.E => deck.x + halfW,
+                _ => deck.x - halfW, // W
+            };
+            float centerY = topY + DeckParapetHeight * 0.5f;
+
+            BuildParapetSpan(root, deck, wall, alongX, fixedCoord, centerY, wallMin, Mathf.Min(opening.Min, wallMax), 1);
+            BuildParapetSpan(root, deck, wall, alongX, fixedCoord, centerY, Mathf.Max(opening.Max, wallMin), wallMax, 2);
+        }
+
+        /// <summary>One stretch of a split parapet (MV-859) — same visual/collider pairing as
+        /// <see cref="BuildDeckParapet"/>'s single continuous one, just clipped to <paramref name="from"/>..
+        /// <paramref name="to"/> instead of the whole edge. A non-positive length means the gate's own
+        /// span reaches (or overruns) this end, so there is nothing left of this stretch to build.</summary>
+        private static void BuildParapetSpan(Transform root, MapEntity deck, Wall wall, bool alongX, float fixedCoord,
+            float centerY, float from, float to, int index)
+        {
+            float length = to - from;
+            if (length <= 0.05f) return;
+
+            float mid = (from + to) * 0.5f;
+            Vector3 centre = alongX ? new Vector3(mid, centerY, fixedCoord) : new Vector3(fixedCoord, centerY, mid);
+
+            GameObject visual = StormdrainKit.BuildHazardBanding(root, centre, length, DeckParapetHeight, alongX, DeckParapetThickness);
+            visual.name = $"{deck.id}_parapet_{wall}_{index}";
+
+            Vector3 blockerSize = alongX
+                ? new Vector3(length, DeckParapetHeight, DeckParapetThickness)
+                : new Vector3(DeckParapetThickness, DeckParapetHeight, length);
+            GameObject blocker = Spawn(root, $"{deck.id}_parapet_{wall}_{index}_collider", PrimitiveType.Cube, centre, blockerSize);
             foreach (Renderer r in blocker.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
         }
 

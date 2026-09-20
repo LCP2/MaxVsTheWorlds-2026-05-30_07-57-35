@@ -384,7 +384,42 @@ namespace MaxWorlds.Arena
                         new Vector3(t, h, run.Span.Length),
                         alongX: false, run.Lower, run.Upper));
 
+            // MV-859: a [DECK] gate's doorway (built at deck height, not the floor — BuildAreaGate)
+            // still cuts a hole through the FULL wall height above, same as any other gate's, which
+            // leaves the stretch below deck height wide open with no leaf ever standing in it. Add
+            // back a plain, solid sill spanning that same hole, floor to deck height only — the gate
+            // (and the ordinary open hole above it) still owns everything from deck height up.
+            if (map.links != null)
+            {
+                foreach (MapLink link in map.links)
+                {
+                    if (link == null) continue;
+                    MapEntity gate = map.Entity(link.gate);
+                    if (gate == null || gate.Kind != EntityKind.AreaGate || gate.level <= 0) continue;
+                    if (!Doorway(map, link, out bool runsAlongX, out float coord, out Span hole)) continue;
+
+                    walls.Add(DeckGateSill(map, gate.id, runsAlongX, coord, hole));
+                }
+            }
+
             return walls;
+        }
+
+        /// <summary>MV-859: the solid stretch that keeps a [DECK] gate's doorway hole closed below
+        /// deck height — see the comment where this is called, above, in <see cref="Walls"/>. Capped at
+        /// <see cref="MapData.wallHeight"/>: a fixture (or a test) can author/force a wall shorter than
+        /// the world's own deck height, and the sill must never stand taller than the wall it patches.</summary>
+        private static WallSegment DeckGateSill(MapData map, string gateId, bool runsAlongX, float coord, Span hole)
+        {
+            float height = Mathf.Min(map.deckHeight, map.wallHeight);
+            float t = map.wallThickness;
+            string name = $"Deck Gate Sill {gateId}";
+
+            return runsAlongX
+                ? new WallSegment(name, new Vector3(hole.Mid, height * 0.5f, coord), new Vector3(hole.Length, height, t),
+                    alongX: true, roomLower: true, roomUpper: true)
+                : new WallSegment(name, new Vector3(coord, height * 0.5f, hole.Mid), new Vector3(t, height, hole.Length),
+                    alongX: false, roomLower: true, roomUpper: true);
         }
 
         /// <summary>Both sides of every wall — the lines the art layer dresses. An inner face

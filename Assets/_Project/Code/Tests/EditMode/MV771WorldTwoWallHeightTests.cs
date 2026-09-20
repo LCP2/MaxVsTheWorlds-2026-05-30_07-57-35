@@ -52,6 +52,13 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotEmpty(walls, "World 2 must build at least one structural wall for this test to mean anything");
                 foreach (StructuralWall w in walls)
                 {
+                    // MV-859: a [DECK] gate's own doorway sill deliberately stands only as tall as
+                    // deckHeight, not the full wallHeight — it patches the floor-level gap under a
+                    // deck gate, while the gate itself (and the ordinary open hole above the sill)
+                    // owns everything from deck height up. Excluded from "every wall is full height"
+                    // by design, not a coverage gap.
+                    if (w.name.StartsWith("Deck Gate Sill")) continue;
+
                     var rend = w.GetComponent<Renderer>();
                     Assert.IsNotNull(rend, $"{w.name} carries no renderer to resolve bounds from");
                     Assert.GreaterOrEqual(rend.bounds.size.y, 2.9f,
