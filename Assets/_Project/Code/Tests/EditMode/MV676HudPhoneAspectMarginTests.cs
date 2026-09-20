@@ -15,7 +15,8 @@ namespace MaxWorlds.Tests.EditMode
     /// landscape aspect (~852x393pt, far more elongated than the 1080p reference) that blend compresses
     /// the effective visible canvas to ~978 reference units tall — HudController has no phone-aspect-
     /// aware repositioning anywhere, so an element placed near the "safe" 1080 ceiling clips on a real
-    /// device (the Attack Mode toggle did, at a resolved top edge of 962). This test replicates
+    /// device (the Sentinel toggle did, at a resolved top edge of 962 — MV-862 later renamed it from
+    /// "Attack Mode" to "Focus", the margin fix and this guard are unaffected). This test replicates
     /// CanvasScaler's own log-blend formula to compute that effective height directly, rather than
     /// assuming the full 1080 is visible, and asserts every element this ticket repositioned clears it
     /// with a 20-unit margin. Sole guard on this fix; do not cull (MV-465).
@@ -34,7 +35,7 @@ namespace MaxWorlds.Tests.EditMode
             RigFusionState.Reset();
             PickupWallet.Reset();
 
-            // Force Field + Water Balloon acquired, u_mov unlocked so the Attack Mode toggle shows.
+            // Force Field + Water Balloon acquired, u_mov unlocked so the Focus toggle shows.
             // RestoreSnapshot bypasses the draft/reach gating RigState.AcquireCap enforces — the same
             // shortcut MV645HudLeftColumnTests uses for its fixture.
             RigState.RestoreSnapshot(new Dictionary<string, int>
@@ -49,8 +50,8 @@ namespace MaxWorlds.Tests.EditMode
             var hud = hudGo.AddComponent<HudController>();
             InvokeLifecycle(hud, "Awake");
             InvokeLifecycle(hud, "OnEnable");
-            // OnEnable just subscribed OnAbilitiesChanged — fire it again so Force Field/the Attack
-            // Mode toggle pick up the snapshot above.
+            // OnEnable just subscribed OnAbilitiesChanged — fire it again so Force Field/the Focus
+            // toggle pick up the snapshot above.
             WeaponSystemState.RebuildAcquiredFromRigState();
 
             var settingsGo = new GameObject("SettingsPanel");
@@ -60,15 +61,15 @@ namespace MaxWorlds.Tests.EditMode
 
             try
             {
-                var attackToggle = FindRect(hudGo, "Sentinel Attack Mode Toggle");
+                var focusToggle = FindRect(hudGo, "Sentinel Focus Toggle");
                 var forceField = FindRect(hudGo, "Force Field Button");
                 var balloon = FindRect(hudGo, "Water Balloon Joystick");
                 var map = FindRect(hudGo, "Map Button");
                 var gear = FindRect(settingsGo, "Gear");
 
-                Assert.That(attackToggle, Is.Not.Null, "fixture: the attack mode toggle must exist");
-                Assert.That(attackToggle.gameObject.activeInHierarchy, Is.True,
-                    "fixture: the attack mode toggle must be visible once u_mov is unlocked");
+                Assert.That(focusToggle, Is.Not.Null, "fixture: the focus toggle must exist");
+                Assert.That(focusToggle.gameObject.activeInHierarchy, Is.True,
+                    "fixture: the focus toggle must be visible once u_mov is unlocked");
                 Assert.That(forceField, Is.Not.Null, "fixture: the force field button must exist");
                 Assert.That(forceField.gameObject.activeInHierarchy, Is.True,
                     "fixture: Force Field must be visible once acquired");
@@ -89,7 +90,7 @@ namespace MaxWorlds.Tests.EditMode
                     hudGo.GetComponentInChildren<CanvasScaler>(), effectiveWidth, effectiveHeight, out RenderTexture hudRt);
                 try
                 {
-                    toggleRect = ScreenRect(attackToggle, hudCam);
+                    toggleRect = ScreenRect(focusToggle, hudCam);
                     ffRect = ScreenRect(forceField, hudCam);
                     balloonRect = ScreenRect(balloon, hudCam);
                     mapRect = ScreenRect(map, hudCam);
@@ -117,7 +118,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 var elements = new (string id, Rect rect)[]
                 {
-                    ("Attack Mode Toggle", toggleRect),
+                    ("Focus Toggle", toggleRect),
                     ("Force Field", ffRect),
                     ("Water Balloon", balloonRect),
                     ("Settings Gear", gearRect),

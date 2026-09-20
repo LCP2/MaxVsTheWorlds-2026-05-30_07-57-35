@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -124,6 +125,13 @@ namespace MaxWorlds.Combat
 
         /// <summary>Is the stream actually coming out this frame? (Firing AND water available.)</summary>
         public bool IsEmitting => _lastEmitting;
+
+        /// <summary>MV-862 FOCUS: the robot the stream is hitting THIS tick, or null. Continuous by
+        /// nature — unlike the LPPE's discrete-pulse <see cref="PulseLaser.CurrentTarget"/>, this needs
+        /// no hold window of its own: it is resolved fresh every <see cref="FireTick"/> and cleared the
+        /// instant the stream stops emitting (see <see cref="Update"/>). The nearest robot the spray
+        /// actually hit, when it hit more than one.</summary>
+        public RobotEnemy CurrentTarget { get; private set; }
 
         /// <summary>The water tank, 0..1 — what the floating gauge above Max reads
         /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-299). 1 before <see cref="Awake"/> has
@@ -323,6 +331,7 @@ namespace MaxWorlds.Combat
             if (!emitting)
             {
                 _tickTimer = 0f;
+                CurrentTarget = null;
                 return;
             }
 
@@ -417,6 +426,21 @@ namespace MaxWorlds.Combat
                     }
                 }
             }
+
+            // MV-862 FOCUS: the nearest RobotEnemy this tick's spray actually hit, for CurrentTarget —
+            // the cone can wash several targets at once, so "the robot it's hitting" (singular) needs a
+            // tie-break, and nearest matches the pick a player aiming AT something specific would mean.
+            RobotEnemy nearestRobotHit = null;
+            float nearestRobotHitDistSq = float.MaxValue;
+            for (int i = 0; i < s_buffer.Count; i++)
+            {
+                if (s_buffer[i] is RobotEnemy robot)
+                {
+                    float distSq = (s_hitPoints[i] - origin).sqrMagnitude;
+                    if (distSq < nearestRobotHitDistSq) { nearestRobotHitDistSq = distSq; nearestRobotHit = robot; }
+                }
+            }
+            CurrentTarget = nearestRobotHit;
 
             bool hitSomething = false;
             for (int i = 0; i < s_buffer.Count; i++)

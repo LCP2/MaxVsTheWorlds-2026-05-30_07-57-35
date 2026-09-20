@@ -162,9 +162,9 @@ namespace MaxWorlds.UI
         private Image _sentinelDeniedIcon;
         private int _sentinelBuiltLevel = -1;
 
-        private RectTransform _attackModeToggleRoot;
-        private Image _attackModeToggleBg;
-        private Text _attackModeToggleLabel;
+        private RectTransform _focusToggleRoot;
+        private Image _focusToggleBg;
+        private Text _focusToggleLabel;
         private float _forceFieldSnapFlash;
 
         // Joysticks
@@ -310,7 +310,7 @@ namespace MaxWorlds.UI
             BuildHydroButton();
             BuildForceFieldButton();
             BuildSentinelJoystick();
-            BuildAttackModeToggle();
+            BuildFocusToggle();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -413,7 +413,7 @@ namespace MaxWorlds.UI
             RebuildTeleportJoystickIfNeeded();
             RebuildSentinelJoystickIfNeeded();
             RefreshWaterBalloonAutoFireToggle();
-            RefreshAttackModeToggle();
+            RefreshFocusToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
             // MV-694: SecondaryKind flipping (MV-689's morph) changes whether an empty bank reads EMPTY
@@ -1441,12 +1441,15 @@ namespace MaxWorlds.UI
             RebuildSentinelJoystick();
         }
 
-        /// <summary>MV-636: a small pill sitting above the Sentinel joystick, reading "ATTACK ON"/
-        /// "ATTACK OFF" — the player's own switch for whether deployed sentinels hold ahead of Max and
-        /// prioritise clearing his path, or keep the existing standoff-follow/nearest-overall behaviour.
-        /// Same shape as <see cref="BuildWaterBalloonAutoFireToggle"/>'s own pill, gated on Move/u_mov
-        /// &gt;= 1 (per the ticket) rather than an <see cref="AbilityKind"/> acquisition. Built once and
-        /// left inactive; <see cref="RefreshAttackModeToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>,
+        /// <summary>MV-636: a small pill sitting above the Sentinel joystick, reading "FOCUS ON"/
+        /// "FOCUS OFF" (MV-862 renamed the toggle and its own two states from the old "Attack Mode"
+        /// wording) — the player's own switch for whether deployed sentinels share Max's own current
+        /// target (see
+        /// <see cref="Sentinel.FocusEnabled"/>/<c>Sentinel.ResolveMaxCurrentTarget</c>) or keep the
+        /// existing standoff-follow/sticky-nearest behaviour. Same shape as
+        /// <see cref="BuildWaterBalloonAutoFireToggle"/>'s own pill, gated on Move/u_mov &gt;= 1 (per
+        /// the ticket) rather than an <see cref="AbilityKind"/> acquisition. Built once and left
+        /// inactive; <see cref="RefreshFocusToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>,
         /// which already fires on a RIG level-up — see <see cref="OnAbilitiesChanged"/>) shows/hides and
         /// relabels it live.</summary>
         // MV-676: was SentinelJoystickRise + 120 (centre 940), only checked against the full 1080
@@ -1455,55 +1458,55 @@ namespace MaxWorlds.UI
         // ~978-unit-tall canvas, and it clipped on real devices. +60 lands the top edge at ~902, the
         // same ~72-76-unit safety margin the MAP button (the column's own topmost element) already
         // carries — see MV676HudPhoneAspectMarginTests.
-        private const float AttackModeToggleRise = 60f;
+        private const float FocusToggleRise = 60f;
 
-        private void BuildAttackModeToggle()
+        private void BuildFocusToggle()
         {
-            var root = NewRect("Sentinel Attack Mode Toggle", Root);
+            var root = NewRect("Sentinel Focus Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             root.sizeDelta = new Vector2(140f, 44f);
-            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + AttackModeToggleRise);
-            _attackModeToggleRoot = root;
+            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + FocusToggleRise);
+            _focusToggleRoot = root;
 
             var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), SentinelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
-            _attackModeToggleBg = bg;
+            _focusToggleBg = bg;
 
             var button = bg.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(OnAttackModeToggleTapped);
+            button.onClick.AddListener(OnFocusToggleTapped);
 
-            _attackModeToggleLabel = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
-            Stretch(_attackModeToggleLabel.rectTransform);
-            _attackModeToggleLabel.fontStyle = FontStyle.Bold;
-            _attackModeToggleLabel.raycastTarget = false;
+            _focusToggleLabel = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(_focusToggleLabel.rectTransform);
+            _focusToggleLabel.fontStyle = FontStyle.Bold;
+            _focusToggleLabel.raycastTarget = false;
 
-            root.gameObject.SetActive(false);   // RefreshAttackModeToggle turns it on once u_mov >= 1
-            RefreshAttackModeToggle();
+            root.gameObject.SetActive(false);   // RefreshFocusToggle turns it on once u_mov >= 1
+            RefreshFocusToggle();
         }
 
-        private void OnAttackModeToggleTapped()
+        private void OnFocusToggleTapped()
         {
-            Sentinel.AttackModeEnabled = !Sentinel.AttackModeEnabled;
-            RefreshAttackModeToggle();
+            Sentinel.FocusEnabled = !Sentinel.FocusEnabled;
+            RefreshFocusToggle();
         }
 
-        private void RefreshAttackModeToggle()
+        private void RefreshFocusToggle()
         {
-            if (_attackModeToggleRoot == null) return;
+            if (_focusToggleRoot == null) return;
 
             bool unlocked = AbilityTuning.SentinelCanMove(RigState.Level("u_mov"));
-            _attackModeToggleRoot.gameObject.SetActive(unlocked);
+            _focusToggleRoot.gameObject.SetActive(unlocked);
             if (!unlocked) return;
 
-            bool on = Sentinel.AttackModeEnabled;
-            if (_attackModeToggleLabel != null) _attackModeToggleLabel.text = on ? "ATTACK ON" : "ATTACK OFF";
-            if (_attackModeToggleBg != null)
+            bool on = Sentinel.FocusEnabled;
+            if (_focusToggleLabel != null) _focusToggleLabel.text = on ? "FOCUS ON" : "FOCUS OFF";
+            if (_focusToggleBg != null)
             {
                 var c = SentinelColor;
                 c.a = on ? 1f : 0.4f;
-                _attackModeToggleBg.color = c;
+                _focusToggleBg.color = c;
             }
         }
 
