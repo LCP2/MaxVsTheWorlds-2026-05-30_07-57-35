@@ -333,6 +333,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv822HazardBandingCheck());
             Add(BuildMv825LppeFire());
             Add(BuildMv824LitGroundCheck());
+            Add(BuildMv857MaxWorld2Colors());
             return d;
         }
 
@@ -2545,6 +2546,71 @@ namespace MaxWorlds.Dev
                 {
                     if (targetGo != null) Destroy(targetGo);
                 },
+            };
+        }
+
+        // ---- MV857MaxWorld2Colors (MV-857 AC3) ------------------------------------------------
+
+        /// <summary>Boots straight into World 2 (same <c>WorldIndex</c> seeding as
+        /// <see cref="BuildMv738SludgeCheck"/>) and frames Max at the same close-up pitch/distance
+        /// <c>MaxDetailDirector</c> (MV-453) already uses in World 1, facing the camera — so this
+        /// shot and a World-1 <c>cc-max-detail.bat</c> shot are directly comparable, pixel region
+        /// for pixel region, for the tunic/hair average-RGB evidence the ticket's fix comment
+        /// quotes.</summary>
+        private static CapturePreset BuildMv857MaxWorld2Colors()
+        {
+            const float pitch = 64.88f;
+            const float distance = 15.81f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\max-detail";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let materials/map/MaxRig settle
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player in the scene");
+                var controller = maxGo.GetComponent<PlayerController>();
+                var facingField = typeof(PlayerController).GetField("_facing",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (controller == null || facingField == null)
+                    throw new CaptureAbortException("PlayerController._facing not found");
+
+                facingField.SetValue(controller, Vector3.forward);
+                maxGo.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+
+                for (int i = 0; i < 6; i++) yield return null;   // let the rig's LateUpdate settle on the facing
+
+                Vector3 focus = maxGo.transform.position + Vector3.up * 0.9f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv857maxworld2",
+                LogTag = "[MV857Capture]",
+                Flag = "-mv857shot",
+                ArmFile = "Temp/mv857.arm",
+                HeadlessMarker = "Temp/mv857.headless",
+                DoneFileName = "_mv857_done.txt",
+                Width = 1920,
+                Height = 1080,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv738SludgeCheck -- lands Max in World 2 on
+                    // the one boot a capture preset gets, rather than a second scene load.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-857-max-world2", NoSetup) },
             };
         }
     }
