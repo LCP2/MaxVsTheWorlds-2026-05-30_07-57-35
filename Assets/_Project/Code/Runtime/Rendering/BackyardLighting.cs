@@ -47,8 +47,10 @@ namespace MaxWorlds.Rendering
 
         /// <summary>0 for the Backyard, 1 for the Stormdrain, 2 for the Reef — read off the palette
         /// rather than the save, so a capture scene or a test that sets a palette directly is lit to
-        /// match it.</summary>
-        private static int WorldIndexFromPalette()
+        /// match it. Public: MV-857's <see cref="MaxWorlds.VFX.MaxRig"/> reads it too, so Max's own
+        /// world-compensation emission resolves the SAME world index this component lights with —
+        /// one rule, not two copies of it drifting apart.</summary>
+        public static int WorldIndexFromPalette()
         {
             if (MaterialLibrary.Palette.Equals(BiomePalette.Reef)) return 2;
             if (MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain)) return 1;

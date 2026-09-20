@@ -165,6 +165,76 @@ namespace MaxWorlds.VFX
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
         private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
+        private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
+        private static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
+
+        // ---------------------------------------------------------------- MV-857: world-independent colour
+        //
+        // Bug (Lee, live build): World 2's Stormdrain look (BackyardLook.Stormdrain) is dim and cool,
+        // so Max's own dark tunic/hair diffuse to near-black under it — and StylizedCharacter.shader's
+        // rim is ADDED, untinted by the surface's own colour (MaterialLibrary.Character's shared
+        // Stylized_Character carries a bright cool-white rim every robot wears). With the diffuse term
+        // gone dark, that untinted rim is most of what's left, and it reads as a wash toward grey
+        // rather than as an edge on a blue tunic. World 1's bright warm key hid this; it was never fixed.
+        //
+        // The fix is two per-material knobs, both computed here rather than off the shared template
+        // (robots must keep the loud cool rim YT-86 tuned for them):
+        //   1. Tint Max's own rim toward his surface's own colour, so the edge reads as an edge ON
+        //      that colour rather than as a wash of someone else's.
+        //   2. Add back, as emission, whatever diffuse illumination the active world's look is short
+        //      of World 1's own — so the FLAT part of the surface reads the same regardless of world.
+
+        /// <summary>MV-857: how far Max's own rim leans toward his surface's own base colour, away
+        /// from the shared roster's cool white. Per the fix spec: 70% of the way there.</summary>
+        private const float RimTintAmount = 0.7f;
+
+        /// <summary>MV-857: Max's own rim strength — down from the shared roster's 1.25, because a
+        /// rim tinted toward the surface's own colour does not need to shout as loud to still read
+        /// as an edge.</summary>
+        private const float MaxRimStrength = 0.6f;
+
+        /// <summary>MV-857: a stand-in for "how lit is an average bit of Max" — a mid-tilt facet
+        /// (ndotl = 0.5) under no shadow. The real answer varies per normal and per pixel; the ticket
+        /// only asks the compensation to land within 15% luminance of World 1, not to match any one
+        /// fragment exactly.</summary>
+        private const float RepresentativeNdotl = 0.5f;
+
+        private static float Luminance(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+        /// <summary>The representative diffuse level (ambient + key*ndotl) a <see cref="BackyardLook"/>
+        /// lights an average facet of Max with — the number <see cref="WorldCompensationK"/> compares
+        /// across worlds. Trilight ambient's three bands are averaged rather than sampled by normal,
+        /// for the same "representative, not exact" reason <see cref="RepresentativeNdotl"/> is a
+        /// constant and not a per-fragment value.</summary>
+        private static float DiffuseLevel(BackyardLook look)
+        {
+            Color ambient = (look.AmbientSky + look.AmbientEquator + look.AmbientGround) / 3f;
+            return Luminance(ambient) + Luminance(look.KeyColor) * look.KeyIntensity * RepresentativeNdotl;
+        }
+
+        /// <summary>
+        /// MV-857 AC1/AC2: how much World 1-equivalent brightness the active <paramref name="look"/>
+        /// is short of — 0 in World 1 itself (nothing to compensate for), positive wherever the world
+        /// is dimmer than World 1, and never negative (a BRIGHTER world must not DARKEN Max — nothing
+        /// in the spec asks for that, and a negative emission is not a thing this shader can render).
+        /// Public and pure so a test can hold it to account without spinning up a scene.
+        /// </summary>
+        public static float WorldCompensationK(BackyardLook look)
+            => Mathf.Max(0f, DiffuseLevel(BackyardLook.Default) - DiffuseLevel(look));
+
+        /// <summary>The emission <see cref="CharacterMaterial"/> sets on a body-colour material under
+        /// <paramref name="look"/> — <paramref name="baseColor"/> scaled by <see cref="WorldCompensationK"/>,
+        /// so it always carries the same hue as the surface it is compensating for. Exposed standalone
+        /// (mirrors <see cref="GadgetPose"/>/<see cref="BarrelHeight"/>'s own pattern) so a test can
+        /// assert the resolved value directly — <see cref="Awake"/> requires a live
+        /// <see cref="Player.PlayerController"/> in the scene, which building one material does not.</summary>
+        public static Color WorldCompensationEmission(Color baseColor, BackyardLook look)
+            => baseColor * WorldCompensationK(look);
+
+        /// <summary>The designed tunic colour (MV-851/854 — see <see cref="Tunic"/>), exposed for the
+        /// MV-857 EditMode test to check the compensation emission's hue against without duplicating
+        /// the number.</summary>
+        public static Color TunicColor => Tunic;
 
         // ---------------------------------------------------------------- the skeleton, in metres
         //
@@ -667,7 +737,7 @@ namespace MaxWorlds.VFX
         /// too small to survive a line goes without one — up close it is a charm, and at gameplay zoom
         /// it is two honest pixels of brass instead of ten dishonest pixels of black.
         /// </summary>
-        private Material CharacterMaterial(string name, Color color, bool outline = true, Color? emission = null)
+        private Material CharacterMaterial(string name, Color color, bool outline = true)
         {
             // No character shader in this build is a look regression, never a magenta one (YT-58): a
             // plain lit material still draws a correctly coloured kid, just without the outline.
@@ -680,8 +750,28 @@ namespace MaxWorlds.VFX
             m.hideFlags = HideFlags.HideAndDontSave;
             if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
-            if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, emission ?? Color.black);
             if (m.HasProperty(OutlineWidthId)) m.SetFloat(OutlineWidthId, outline ? outlineWidth : 0f);
+
+            // MV-857: tint Max's own rim toward his own colour instead of leaving the shared roster's
+            // cool white — read off whatever the cloned template just handed this instance, rather
+            // than reaching into MaterialLibrary's own constants, so a future rim tune there still
+            // flows through here automatically.
+            if (m.HasProperty(RimColorId) && m.HasProperty(RimStrengthId))
+            {
+                Color sharedRim = m.GetColor(RimColorId);
+                m.SetColor(RimColorId, Color.Lerp(sharedRim, color * 2f, RimTintAmount));
+                m.SetFloat(RimStrengthId, MaxRimStrength);
+            }
+
+            // MV-857: fill back in whatever diffuse brightness the active world's look is short of
+            // World 1's own, computed once here at build time from that look's own key/ambient —
+            // never a hard-coded per-world number. Zero in World 1, so his look there is unchanged.
+            if (m.HasProperty(EmissionId))
+            {
+                BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+                m.SetColor(EmissionId, WorldCompensationEmission(color, activeLook));
+            }
+
             return m;
         }
 

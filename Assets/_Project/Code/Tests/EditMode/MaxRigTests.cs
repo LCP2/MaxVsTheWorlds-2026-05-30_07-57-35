@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.EditMode
@@ -97,6 +98,46 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(MaxRig.BarrelHeight(1f), Is.LessThan(EnemyArchetype.PlayerHeight * 0.75f),
                 "The gadget is presented up around Max's face. He is holding it, not looking down it.");
+        }
+
+        /// <summary>
+        /// MV-857: Max in World 2 loses his designed colours — the tunic reads grey, the hair reads
+        /// black — because nothing repaints his materials for the active world (he sits outside every
+        /// <see cref="MaxWorlds.Combat.IDamageable"/>, so <c>WorldMaterials</c>/<c>RuntimeSurfaceDirector</c>/
+        /// <c>CharacterSkinDirector</c> all skip him) and the shared character shader's rim is added,
+        /// untinted, on top of whatever the diffuse term resolves to. World 2's dim, cool
+        /// <c>BackyardLook.Stormdrain</c> drives that diffuse term to near-black, so the untinted rim
+        /// is most of what's left and it washes the tunic toward grey.
+        ///
+        /// Resolved-value (Tier 2), not an authored constant: this asserts what
+        /// <see cref="MaxRig.WorldCompensationEmission"/> actually COMPUTES from
+        /// <see cref="BackyardLook"/>'s own key/ambient fields, not a number either of them was
+        /// authored to equal.
+        /// </summary>
+        [Test]
+        public void MV857_TunicGetsCompensationEmissionInWorld2_NoneInWorld1()
+        {
+            Color tunic = MaxRig.TunicColor;
+
+            // Compared by RGB magnitude, not Color equality: WorldCompensationEmission scales the
+            // tunic's own alpha by k too, so a k of 0 gives RGBA(0,0,0,0) rather than opaque black.
+            // The shader only ever reads _EmissionColor.rgb — alpha is inert — so that is not a bug.
+            Color world1Emission = MaxRig.WorldCompensationEmission(tunic, BackyardLook.Default);
+            Assert.That(world1Emission.maxColorComponent, Is.EqualTo(0f),
+                "World 1 must not gain any compensation glow — his look there is already correct.");
+
+            Color world2Emission = MaxRig.WorldCompensationEmission(tunic, BackyardLook.Stormdrain);
+            Assert.That(world2Emission.maxColorComponent, Is.GreaterThan(0f),
+                "World 2's dim, cool look must add SOME compensation emission back to the tunic, or " +
+                "it stays dependent on the world's own lighting — the exact bug being fixed.");
+
+            Color.RGBToHSV(tunic, out float tunicHue, out _, out _);
+            Color.RGBToHSV(world2Emission, out float emissionHue, out _, out _);
+            float hueDiffDegrees = Mathf.Abs(Mathf.DeltaAngle(tunicHue * 360f, emissionHue * 360f));
+            Assert.That(hueDiffDegrees, Is.LessThan(10f),
+                $"the compensation emission's hue ({emissionHue * 360f:F1}deg) drifted more than 10deg " +
+                $"from the tunic's own designed hue ({tunicHue * 360f:F1}deg) — it must read as MORE of " +
+                "the same colour, not a different one.");
         }
     }
 }

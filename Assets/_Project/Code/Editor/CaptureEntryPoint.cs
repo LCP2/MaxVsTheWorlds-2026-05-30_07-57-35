@@ -109,6 +109,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv824LitGround() => RunFromMenu(CapturePresets.All["mv824litground"]);
         public static void CaptureMv824LitGround() => Run(CapturePresets.All["mv824litground"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Max Colours (MV-857)")]
+        public static void MenuMv857MaxWorld2Colors() => RunFromMenu(CapturePresets.All["mv857maxworld2"]);
+        public static void CaptureMv857MaxWorld2Colors() => Run(CapturePresets.All["mv857maxworld2"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
