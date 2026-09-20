@@ -58,6 +58,8 @@ namespace MaxWorlds.Enemies
         private const float TrailTime = 0.12f;
         private const float TrailWidth = 0.16f;
 
+        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+
         private enum FlightState { Flying, Sputtering, Bouncing, Detonated }
 
         private Transform _target;
@@ -134,10 +136,26 @@ namespace MaxWorlds.Enemies
             // that hit the robots, but on every missile fired rather than only recycled ones. This marks
             // the whole missile as arriving with its materials attached, exactly like imported art.
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
-            BuildTrail(parent);
 
-            Material shaftMat = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
-            Material tipMat = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
+            // MV-861: World 2's Stormdrain look is dim, so a LIT metal material with no emission falls
+            // close to black there — MV-857 hit the same effect on Max. shaftMat/tipMat/trailMat below
+            // are private CLONES of MaterialLibrary.Tinted's shared cache entries (never the cached
+            // instances themselves), or setting emission here would leak onto every other Metal-tinted
+            // prop that happens to share one of these two exact tones.
+            Material shaftBase = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
+            Material tipBase = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
+
+            BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+
+            // Shaft/fins: the same world-compensation emission MV-857 gives Max — zero in World 1 (his
+            // look there is already correct), filled back in wherever the active world is dimmer.
+            Material shaftMat = EmissiveInstance(shaftBase, MaxRig.WorldCompensationEmission(ShaftColor, activeLook));
+
+            // Tip and trail: fully emissive in every world, not just compensated — Lee's spec is that
+            // these read as an unlit threat tell at ~48 px/m, not merely "as lit as World 1".
+            Material tipMat = EmissiveInstance(tipBase, TipColor);
+
+            BuildTrail(parent, EmissiveInstance(shaftBase, ShaftColor));
 
             var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             shaft.name = "Shaft";
@@ -192,10 +210,10 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-508: a fast object with a hard aliased silhouette and nothing connecting one
         /// frame's position to the next reads as strobing rather than motion — this is the standard
         /// fix. Short on purpose (<see cref="TrailTime"/> 0.10-0.15s): a motion smear, not a ribbon.
-        /// Sourced from <see cref="MaterialLibrary"/> like the rest of the missile's own visual, so it
-        /// participates in the same tint/caching rules rather than being a one-off VFX material; the
+        /// <paramref name="trailMat"/> is a per-missile emissive clone (MV-861), not the shared
+        /// <see cref="MaterialLibrary"/> cache entry the rest of the yard's Metal-tinted props use; the
         /// root already carries <see cref="KeepsOwnMaterial"/>, which covers this too.</summary>
-        private static void BuildTrail(Transform parent)
+        private static void BuildTrail(Transform parent, Material trailMat)
         {
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
             trail.time = TrailTime;
@@ -204,7 +222,7 @@ namespace MaxWorlds.Enemies
             trail.minVertexDistance = 0.03f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
-            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
+            trail.sharedMaterial = trailMat;
 
             var gradient = new Gradient();
             gradient.SetKeys(
@@ -213,6 +231,19 @@ namespace MaxWorlds.Enemies
             trail.colorGradient = gradient;
 
             trail.Clear();
+        }
+
+        /// <summary>MV-861: a private per-missile clone of a shared <see cref="MaterialLibrary.Tinted"/>
+        /// instance, carrying its own <paramref name="emission"/>. Never mutate the cached instance
+        /// <paramref name="template"/> itself in place — it's shared with every other Metal-tinted prop
+        /// that happens to land on the same tone, and this missile's emission would leak onto all of
+        /// them.</summary>
+        private static Material EmissiveInstance(Material template, Color emission)
+        {
+            if (template == null) return null;
+            var m = new Material(template) { name = template.name, hideFlags = HideFlags.HideAndDontSave };
+            if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, emission);
+            return m;
         }
 
         private static void Strip(GameObject go)

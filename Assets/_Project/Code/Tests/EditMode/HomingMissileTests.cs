@@ -147,6 +147,60 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ---------------------------------------------------------------- MV-861: world-independent colour
+
+        /// <summary>MV-861 AC1. World 2's dim, cool Stormdrain look drove the shaft's plain LIT metal
+        /// material — no emission — close to black, the same effect MV-857 fixed for Max. Resolved-value
+        /// (Tier 2): reads the actual <c>_EmissionColor</c> Unity resolves on a BUILT missile's shaft
+        /// material, not an authored constant, and holds both worlds in one test rather than splitting
+        /// into two (Rule 1: one new test per ticket).</summary>
+        [Test]
+        public void MV861_ShaftEmissionCompensatesInWorld2_UnchangedInWorld1()
+        {
+            BiomePalette previousPalette = MaterialLibrary.Palette;
+            try
+            {
+                MaterialLibrary.Palette = BiomePalette.Backyard;
+                Color world1Emission = ShaftEmissionOfFreshMissile();
+                Assert.That(world1Emission.maxColorComponent, Is.EqualTo(0f),
+                    "World 1's shaft must resolve the same (zero) emission it has today — his look " +
+                    "there is already correct, so this must not regress it.");
+
+                MaterialLibrary.Palette = BiomePalette.Stormdrain;
+                Color world2Emission = ShaftEmissionOfFreshMissile();
+                Assert.That(world2Emission.maxColorComponent, Is.GreaterThan(0f),
+                    "World 2's dim Stormdrain look must add compensation emission to the shaft, or it " +
+                    "stays dependent on the world's own lighting — the exact bug being fixed.");
+
+                Color.RGBToHSV(HomingMissile.ShaftColorForTests, out float shaftHue, out _, out _);
+                Color.RGBToHSV(world2Emission, out float emissionHue, out _, out _);
+                float hueDiffDegrees = Mathf.Abs(Mathf.DeltaAngle(shaftHue * 360f, emissionHue * 360f));
+                Assert.That(hueDiffDegrees, Is.LessThan(10f),
+                    $"the shaft's World 2 emission hue ({emissionHue * 360f:F1}deg) drifted more than " +
+                    $"10deg from its own World 1 base colour ({shaftHue * 360f:F1}deg) — it must read " +
+                    "as MORE of the same colour, not a different one.");
+            }
+            finally
+            {
+                MaterialLibrary.Palette = previousPalette;
+            }
+        }
+
+        private static Color ShaftEmissionOfFreshMissile()
+        {
+            HomingMissile missile = HomingMissile.Fire(Vector3.zero, null, speed: 1f, damage: 1f,
+                splashRadius: 1f);
+            try
+            {
+                var shaft = missile.transform.Find("Shaft").GetComponent<MeshRenderer>();
+                return shaft.sharedMaterial.GetColor("_EmissionColor");
+            }
+            finally
+            {
+                Object.DestroyImmediate(missile.gameObject);
+            }
+        }
+
         // ---------------------------------------------------------------- MV-432: doubled thickness
 
         /// <summary>AC1/AC2: the shaft and warhead band are doubled in cross-section, and each fin's
