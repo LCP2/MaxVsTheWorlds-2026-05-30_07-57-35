@@ -157,7 +157,7 @@ namespace MaxWorlds.VFX
             if (!_initialized) return;
             CombatVfxTuning.LppeArcTuning t = CombatVfxTuning.LppeArc();
 
-            ArcBoltVfx.Show(from, to, t.LineWidth, t.LineLifetime, ArcColor);
+            ArcBoltVfx.Show(from, to, t, ArcColor);
 
             _arcFlash.Emit(to, 1,
                 axis: Vector3.up, spreadDegrees: 0f,
