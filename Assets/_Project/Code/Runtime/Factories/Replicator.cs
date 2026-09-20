@@ -278,6 +278,34 @@ namespace MaxWorlds.Factories
         /// every other post-build configure call in this file.</summary>
         public void SetAreaIndex(int area) => AreaIndex = area;
 
+        /// <summary>MV-860: rotates this box in a 90° step so its IN face (the hatch, built at local
+        /// -Z) sits on the given compass side ("N"|"S"|"E"|"W", default/unrecognised falls back to "S",
+        /// today's unrotated behaviour) — the OUT face (built at local +Z) always lands on the opposite
+        /// side. Every reader of orientation here (<see cref="HatchOutwardNormal"/>,
+        /// <see cref="OutputOutwardNormal"/>, <see cref="TwinPlacement"/>) already derives its answer
+        /// from <c>transform.forward</c>/<c>transform.right</c> at query time rather than baking in the
+        /// unrotated default, so setting the rotation is the whole change — nothing downstream needs to
+        /// know facing was ever authored. Public, called by <see cref="MaxWorlds.Arena.Map.MapRuntime"/>
+        /// right after <c>Configure</c>, same "an EditMode test can drive it directly" convention as
+        /// every other post-AddComponent configure call in this file.</summary>
+        public void SetFacing(string facing) => transform.rotation = FacingRotation(facing);
+
+        /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — the same compass
+        /// <see cref="MaxWorlds.Arena.Map.MapRuntime"/>'s own deck-wall switches already use. The hatch
+        /// (<see cref="HatchOutwardNormal"/> = <c>-transform.forward</c>) must sit on that world
+        /// direction, so <c>transform.forward</c> is pointed the opposite way.</summary>
+        private static Quaternion FacingRotation(string facing)
+        {
+            Vector3 dir = facing switch
+            {
+                "N" => Vector3.forward,
+                "E" => Vector3.right,
+                "W" => Vector3.left,
+                _ => Vector3.back, // "S", the default, and any unrecognised value
+            };
+            return Quaternion.LookRotation(-dir, Vector3.up);
+        }
+
         /// <summary>Stamp this box's authored doubling budget (MV-706), from
         /// <see cref="MaxWorlds.Arena.Map.WorldReplicator.capacity"/> / <see cref="MaxWorlds.Arena.Map.MapEntity.capacity"/>.
         /// Called by <see cref="MaxWorlds.Arena.Map.MapRuntime"/> right after <c>AddComponent&lt;Replicator&gt;</c>,

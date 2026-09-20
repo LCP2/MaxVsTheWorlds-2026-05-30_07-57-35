@@ -978,6 +978,7 @@ namespace MaxWorlds.Arena
 
             var replicator = body.AddComponent<Replicator>();
             replicator.Configure(e.capacity);
+            replicator.SetFacing(e.facing); // MV-860: which side is the IN face, "S" = today's behaviour
 
             built.Actors[e.id] = body;
             return replicator;

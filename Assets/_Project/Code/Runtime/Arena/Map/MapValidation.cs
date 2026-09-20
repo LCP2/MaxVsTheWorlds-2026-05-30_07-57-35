@@ -300,10 +300,10 @@ namespace MaxWorlds.Arena
         {
             List<MapEntity> cover = Kind(map, EntityKind.Cover);
             List<MapEntity> factories = Kind(map, EntityKind.Factory);
-            // MV-706: a Replicator is "a 2x2 solid entity for overlap/clearance purposes" — the exact
-            // same spawn-ring clearance a shed's Factory entity already gets (SpawnRadius/SpawnClearance
-            // below), so it is folded into the same list rather than duplicating the loop that checks it.
-            factories.AddRange(Kind(map, EntityKind.Replicator));
+            // MV-860: a Replicator no longer shares the shed's blanket all-round spawn ring — Lee's
+            // World 2 v3 lanes pack pipe barriers close enough on the sides that the old 4.3 m circle
+            // could never hold. It keeps its own directional IN-lane/OUT-pad check instead, below.
+            List<MapEntity> replicators = Kind(map, EntityKind.Replicator);
             List<MapEntity> bosses = Kind(map, EntityKind.Boss);
 
             for (int i = 0; i < cover.Count; i++)
@@ -341,6 +341,26 @@ namespace MaxWorlds.Arena
                 {
                     if (body.DistanceTo(f.CenterXz) < SpawnRadius + SpawnClearance)
                     { reason = $"'{c.id}' crowds '{f.id}'s spawn ring — robots would spawn inside it"; return false; }
+                }
+
+                // MV-860: a Replicator's own two rects — the IN-face lane a lured robot actually walks,
+                // and the OUT-face pad its twins emit onto — replace the blanket ring above for this
+                // kind. Solid cover or a move-blocking pipe barrier (built as an ordinary Cover entity,
+                // see WorldReplicator.facing's own doc comment) is not allowed in either.
+                foreach (MapEntity r in replicators)
+                {
+                    if (body.Footprint.Overlaps(ReplicatorInLane(r)))
+                    {
+                        reason = $"'{c.id}' blocks '{r.id}'s IN lane — the queue that walks to its hatch " +
+                                 $"needs a clear {ReplicatorLaneWidth:0.#} x {ReplicatorLaneDepth:0.#} m lane in front of it";
+                        return false;
+                    }
+                    if (body.Footprint.Overlaps(ReplicatorOutPad(r)))
+                    {
+                        reason = $"'{c.id}' blocks '{r.id}'s OUT pad — its twins emit there and need a " +
+                                 $"clear {ReplicatorPadWidth:0.#} x {ReplicatorPadDepth:0.#} m pad in front of it";
+                        return false;
+                    }
                 }
 
                 // A doorway you cannot see through is a doorway you cannot find.
@@ -406,6 +426,53 @@ namespace MaxWorlds.Arena
             }
             return Mathf.Max(widest, max - cursor);
         }
+
+        /// <summary>MV-860: how deep (away from the box) and wide a Replicator's IN-face lane must stay
+        /// clear — the queue a lured robot actually walks in on. Replaces the old blanket
+        /// <see cref="SpawnRadius"/>+<see cref="SpawnClearance"/> ring for this one entity kind, since
+        /// its lure/twin geometry is direction-specific (see <see cref="MaxWorlds.Factories.Replicator"/>).</summary>
+        public const float ReplicatorLaneDepth = 3f;
+        public const float ReplicatorLaneWidth = 2f;
+
+        /// <summary>MV-860: same idea as the lane above, but for the OUT face — twins emit right there,
+        /// not down a walked queue, so it only needs a short pad, not a lane.</summary>
+        public const float ReplicatorPadDepth = 2f;
+        public const float ReplicatorPadWidth = 2f;
+
+        /// <summary>The world-XZ unit vector a Replicator's <see cref="MapEntity.facing"/> names — the
+        /// same N=+Z/E=+X/S=-Z/W=-X compass <see cref="MapRuntime"/>'s own deck-wall code already uses.
+        /// Unrecognised/empty falls back to "S", same default <see cref="WorldReplicator.facing"/> and
+        /// <see cref="MaxWorlds.Factories.Replicator.SetFacing"/> use.</summary>
+        private static Vector2 FacingDirection(string facing) => facing switch
+        {
+            "N" => new Vector2(0f, 1f),
+            "E" => new Vector2(1f, 0f),
+            "W" => new Vector2(-1f, 0f),
+            _ => new Vector2(0f, -1f),
+        };
+
+        /// <summary>A rect starting at the box face <paramref name="boxHalfExtent"/> out from
+        /// <paramref name="boxCenter"/> along <paramref name="dir"/>, running <paramref name="depth"/>
+        /// further out, <paramref name="width"/> wide across the face — <paramref name="dir"/> is always
+        /// axis-aligned (N/E/S/W only, no diagonal facings), so this is always an axis-aligned rect.</summary>
+        private static Rect DirectionalRect(Vector2 boxCenter, float boxHalfExtent, Vector2 dir, float depth, float width)
+        {
+            Vector2 faceCenter = boxCenter + dir * boxHalfExtent;
+            Vector2 farCenter = faceCenter + dir * depth;
+            bool alongZ = Mathf.Abs(dir.y) > 0.5f; // N/S face: depth runs along Z, width across X
+            return alongZ
+                ? new Rect(boxCenter.x - width * 0.5f, Mathf.Min(faceCenter.y, farCenter.y), width, depth)
+                : new Rect(Mathf.Min(faceCenter.x, farCenter.x), boxCenter.y - width * 0.5f, depth, width);
+        }
+
+        /// <summary>MV-860: the lane in front of Replicator <paramref name="r"/>'s own IN face.</summary>
+        private static Rect ReplicatorInLane(MapEntity r) =>
+            DirectionalRect(r.CenterXz, r.width * 0.5f, FacingDirection(r.facing), ReplicatorLaneDepth, ReplicatorLaneWidth);
+
+        /// <summary>MV-860: the pad in front of Replicator <paramref name="r"/>'s own OUT face — the
+        /// opposite side to the IN face.</summary>
+        private static Rect ReplicatorOutPad(MapEntity r) =>
+            DirectionalRect(r.CenterXz, r.width * 0.5f, -FacingDirection(r.facing), ReplicatorPadDepth, ReplicatorPadWidth);
 
         public static List<MapEntity> Kind(MapData map, EntityKind kind)
         {

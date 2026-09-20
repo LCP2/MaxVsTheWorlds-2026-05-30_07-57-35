@@ -278,6 +278,14 @@ namespace MaxWorlds.Arena
         public float x;
         public float z;
         public int capacity;
+
+        /// <summary>MV-860: which side of the box is the IN face — the side robots queue and walk in
+        /// from ("N"|"S"|"E"|"W"). Default "S" is today's behaviour (unrotated: the hatch on the box's
+        /// local -Z face), so every config authored before this field existed loads unchanged. The
+        /// twins' OUT face is always the opposite side. Resolved onto the built <see cref="MapEntity"/>
+        /// by <see cref="WorldMapLoader"/> (reusing its otherwise-ramp-only <see cref="MapEntity.facing"/>
+        /// field) and applied by <see cref="MaxWorlds.Factories.Replicator.SetFacing"/>.</summary>
+        public string facing = "S";
     }
 
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries

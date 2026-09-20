@@ -149,7 +149,8 @@ namespace MaxWorlds.Arena
 
         /// <summary>Ramp only (MV-692) — which wall of THIS rect abuts the deck it climbs to (N/E/S/W,
         /// <see cref="Wall"/>), resolved by <see cref="WorldMapLoader"/> from rect adjacency at load
-        /// time. Empty for every other kind.</summary>
+        /// time. Replicator only (MV-860) — which side is its IN face, resolved from
+        /// <see cref="WorldReplicator.facing"/> ("S" when unauthored). Empty for every other kind.</summary>
         public string facing = "";
 
         /// <summary>Sludge only (MV-692) — the speed multiplier a mover standing inside this rect is
