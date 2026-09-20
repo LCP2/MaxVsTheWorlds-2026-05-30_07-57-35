@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Player;
 
 namespace MaxWorlds.VFX
 {
@@ -60,6 +61,17 @@ namespace MaxWorlds.VFX
     /// constants carry generous headroom over that scale. If a later phase's world genuinely exceeds a
     /// 1 km span or a couple hundred colliders live inside it at once, widen them here rather than
     /// re-adding a scene-wide scan.
+    ///
+    /// MV-871: World 2's standing robot population (194 by a11, 280 by a13, 412 by the boss — nothing
+    /// despawns a robot behind the player) passed both bounds above, because the query was centred on
+    /// the world ORIGIN at the full 1000 m radius — it touched every one of those robots every frame
+    /// regardless of what the fixed camera could show, and the 256-entry buffer then silently
+    /// truncated whichever ones physics happened to report last. The fix centres the query on the
+    /// PLAYER instead, at <see cref="PlayerScanRadius"/> — comfortably past what the 72° fixed camera
+    /// can show, plus margin for an actor walking in from off-screen. The origin/1000 m query is kept
+    /// as the fallback for when there is no player in the scene: <c>GroundAnchorPlayTests</c>'
+    /// <c>FakeActor</c> fixture is wired to nothing and MV-532 forbids touching that test, so it has
+    /// to keep passing through the fallback path rather than the new player-relative one.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GroundAnchorVfx : MonoBehaviour
@@ -71,23 +83,46 @@ namespace MaxWorlds.VFX
             new GameObject("GroundAnchorVFX").AddComponent<GroundAnchorVfx>();
         }
 
-        /// <summary>Comfortably beyond a single Backyard sub-zone path; see the class doc comment.</summary>
+        /// <summary>Comfortably beyond a single Backyard sub-zone path; see the class doc comment.
+        /// Fallback only (MV-871) — used when there is no player in the scene to centre on.</summary>
         private const float ScanRadius = 1000f;
 
+        /// <summary>MV-871: comfortably past what the fixed 72° camera can show, plus margin for an
+        /// actor walking in from off-screen. Centring on the player instead of the world origin is
+        /// what keeps World 2's hundreds of standing robots off a query that used to touch every one
+        /// of them every frame; see the class doc comment.</summary>
+        private const float PlayerScanRadius = 40f;
+
         // Reused every frame, never reallocated — the buffer PlayerAbilities/Sentinel/WaterBlaster
-        // already reuse for the same kind of OverlapSphereNonAlloc call. Sized well past the
-        // documented ~30-actor arena to leave room for walls/cover/props sharing the query.
-        private static readonly Collider[] s_hits = new Collider[256];
+        // already reuse for the same kind of OverlapSphereNonAlloc call. Raised from 256 to 512 by
+        // MV-871: World 2's robot population alone (194-412, each contributing a CharacterController
+        // plus its own body collider) already exceeded 256 before a single wall, pipe, deck slab or
+        // cover piece was counted, so the buffer silently truncated regardless of the query's radius.
+        private static readonly Collider[] s_hits = new Collider[512];
 
         private readonly List<GroundRing> _shadows = new List<GroundRing>(32);
         private readonly List<GroundRing> _rings = new List<GroundRing>(32);
         private int _usedShadows;
         private int _usedRings;
 
+        // Cached, not re-found every frame — same reasoning as HudController/MaxRig. Re-attempted
+        // lazily (Unity's overloaded null check) so a player that spawns after this director installs
+        // is still picked up the first frame it exists.
+        private PlayerController _player;
+
         private void LateUpdate()
         {
             _usedShadows = 0;
             _usedRings = 0;
+
+            if (_player == null) _player = FindFirstObjectByType<PlayerController>();
+
+            // MV-871: bound the query on the player when there is one — the fixed camera can only
+            // ever show a patch around Max, not the whole of World 2. Fall back to the old
+            // origin/1000 m query when there isn't (GroundAnchorPlayTests' FakeActor fixture is wired
+            // to nothing and MV-532 forbids touching that test, so it must keep working unmodified).
+            Vector3 origin = _player != null ? _player.transform.position : Vector3.zero;
+            float radius = _player != null ? PlayerScanRadius : ScanRadius;
 
             // One rule for every actor there is or will be: it has a CharacterController (that's
             // what makes it a thing that walks) and an IDamageable (that's what makes it a fighter).
@@ -95,7 +130,7 @@ namespace MaxWorlds.VFX
             // added and silently ships with no shadow. Team decides the colour, so a new hostile is
             // orange the day it exists, without anyone remembering to come back here.
             int count = Physics.OverlapSphereNonAlloc(
-                Vector3.zero, ScanRadius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+                origin, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
 
             for (int i = 0; i < count; i++)
             {
