@@ -36,6 +36,8 @@ namespace MaxWorlds.Tests.EditMode
             typeof(PulseLaser).GetMethod("Awake", NonPublicInstance);
         private static readonly MethodInfo PulseLaserFireTick =
             typeof(PulseLaser).GetMethod("FireTick", NonPublicInstance);
+        private static readonly FieldInfo LastEmittingField =
+            typeof(PulseLaser).GetField("_lastEmitting", NonPublicInstance);
 
         private readonly List<GameObject> _spawned = new List<GameObject>();
 
@@ -123,6 +125,11 @@ namespace MaxWorlds.Tests.EditMode
             InvokeFireTick(laser);
             Assert.AreSame(robotB, laser.CurrentTarget,
                 "test precondition: PulseLaser.CurrentTarget must resolve to B, the only robot inside Max's own lock cone");
+
+            // MV-867: FOCUS now also gates on Max actually EMITTING this frame - FireTick is invoked
+            // directly above (Update never runs outside Play mode), so _lastEmitting has to be set the
+            // same way CcField/RobotOnEnableMethod stand in for Awake/OnEnable elsewhere in this fixture.
+            LastEmittingField.SetValue(laser, true);
 
             // FOCUS ON: Max's own current target (B) overrides the sticky pick (A).
             Sentinel.FocusEnabled = true;

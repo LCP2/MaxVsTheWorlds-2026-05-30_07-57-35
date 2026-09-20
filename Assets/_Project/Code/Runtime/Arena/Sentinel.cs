@@ -719,16 +719,25 @@ namespace MaxWorlds.Arena
             Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             float rangeSq = _range * _range;
 
-            // MV-862 FOCUS: Max's own current target overrides the sticky pick below whenever there is
-            // one and it's eligible for THIS sentinel (spec: "overrides the sticky _currentTarget").
-            // With no eligible focus target, falls straight through to the normal MV-832 rules.
-            if (FocusEnabled)
+            // MV-867 FOCUS: while Max is actively EMITTING with a locked target, every sentinel fires
+            // at that one robot and reach for this shot is Max's own lock range (MaxLockRangeSq), not
+            // the sentinel's own _range - a target the sentinel's 7m base would otherwise reject is not
+            // a reason to hold fire. If there's no clear line of sight to it, the sentinel holds fire
+            // for the shot instead - it does NOT drop through to the sticky rule below (spec: "silent,
+            // not busy"). FOCUS ON with Max not emitting, or with no current target, falls straight
+            // through to the ordinary MV-832 sticky-nearest rule at the sentinel's own range below,
+            // same as FOCUS off.
+            if (FocusEnabled && IsMaxEmitting())
             {
                 RobotEnemy focusTarget = ResolveMaxCurrentTarget();
-                if (focusTarget != null && IsEligibleTarget(focusTarget, muzzle, rangeSq))
+                if (focusTarget != null)
                 {
-                    _currentTarget = focusTarget;
-                    return focusTarget;
+                    if (IsEligibleTarget(focusTarget, muzzle, MaxLockRangeSq()))
+                    {
+                        _currentTarget = focusTarget;
+                        return focusTarget;
+                    }
+                    return null;
                 }
             }
 
@@ -788,6 +797,39 @@ namespace MaxWorlds.Arena
 
             if (_maxWaterBlaster == null) _maxWaterBlaster = _followTarget.GetComponent<WaterBlaster>();
             return _maxWaterBlaster != null ? _maxWaterBlaster.CurrentTarget : null;
+        }
+
+        /// <summary>MV-867 FOCUS: whether Max's own equipped primary is actually emitting THIS frame -
+        /// the gate that stops a stale <see cref="ResolveMaxCurrentTarget"/> lock (held for the LPPE's
+        /// own <see cref="PulseLaser.CurrentTargetHoldSeconds"/> after his last pulse) from making a
+        /// sentinel keep firing at it once Max has let go of the trigger. Same lazy-resolve-and-cache
+        /// pair <see cref="ResolveMaxCurrentTarget"/> uses.</summary>
+        private bool IsMaxEmitting()
+        {
+            if (_followTarget == null) return false;
+
+            if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe)
+            {
+                if (_maxPulseLaser == null) _maxPulseLaser = _followTarget.GetComponent<PulseLaser>();
+                return _maxPulseLaser != null && _maxPulseLaser.IsEmitting;
+            }
+
+            if (_maxWaterBlaster == null) _maxWaterBlaster = _followTarget.GetComponent<WaterBlaster>();
+            return _maxWaterBlaster != null && _maxWaterBlaster.IsEmitting;
+        }
+
+        /// <summary>MV-867 FOCUS: how far Max's own equipped primary can currently lock, squared - what
+        /// <see cref="NearestRobotInRange"/> substitutes for the sentinel's own <see cref="_range"/>
+        /// while firing at Max's shared target, so a target the sentinel's own base reach would
+        /// otherwise reject is not a reason to hold fire (spec: "Range is NOT a reason to reject it").
+        /// Only meaningful right after <see cref="IsMaxEmitting"/> has already resolved which primary
+        /// component is attached.</summary>
+        private float MaxLockRangeSq()
+        {
+            float lockRange = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe
+                ? (_maxPulseLaser != null ? _maxPulseLaser.LockRange : 0f)
+                : (_maxWaterBlaster != null ? _maxWaterBlaster.Range : 0f);
+            return lockRange * lockRange;
         }
 
         /// <summary>Alive, awake (not <see cref="RobotEnemy.IsDormant"/>), able to take damage right
