@@ -1174,6 +1174,13 @@ namespace MaxWorlds.Enemies
             IsConverted = false;
             _convertedElapsed = 0f;
             _team = Team.Enemy;
+            // MV-870: a pooled robot must not carry the last life's Dormant-far throttle state or
+            // position forward — a stale accumulator/stagger would misfire the very next time this
+            // body goes Dormant-and-far, and a stale _lastTickPosition sits wherever the last life
+            // died, not this life's fresh spawn point.
+            _dormantFarAccumulator = 0f;
+            _dormantFarStaggered = false;
+            _lastTickPosition = transform.position;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -1245,10 +1252,59 @@ namespace MaxWorlds.Enemies
             if (target != null) _sight.Spawn(target.position);
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame body, split out from <see cref="Update"/> (MV-870) so an EditMode
+        /// test can drive an exact, controlled sequence of ticks — the same seam every per-state
+        /// Tick* method below already has.
+        ///
+        /// A robot that is <see cref="State.Dormant"/> AND <see cref="IsWellBehindPlayer"/> can't be
+        /// seen, can't see, and can't change anything the player will ever observe —
+        /// <see cref="TickDormant"/> already returns immediately for it (MV-611), but everything else
+        /// below (the gravity sweep, the deck clamp, the separation-grid write, every timer) used to
+        /// still run every frame regardless, for a population that runs into the hundreds by World 2's
+        /// midgame. This throttles its WHOLE tick to <see cref="DormantFarTickInterval"/> (4 Hz)
+        /// instead: the skipped frames' dt is never dropped, only deferred — it accumulates and is
+        /// handed, in one lump, to everything that runs on the tick that finally fires, so every timer
+        /// below ends up exactly where it would have been ticking every frame. The instant this robot
+        /// stops qualifying — wakes, leaves Dormant, or the player catches up — <c>farDormant</c> below
+        /// reads false and this method runs a full, unthrottled tick that very frame (AC4), folding in
+        /// whatever hadn't reached the threshold yet rather than dropping it.</summary>
+        private void Tick(float dt)
         {
             if (Current == State.Dead) return;
-            float dt = Time.deltaTime;
+
+            bool farDormant = Current == State.Dormant && IsWellBehindPlayer;
+            if (farDormant)
+            {
+                if (!_dormantFarStaggered)
+                {
+                    // A whole garrison can go Dormant-and-far on the same frame -- the player crosses
+                    // one doorway and an entire placed room qualifies at once. Without this they would
+                    // all flush their reduced tick on the same frame forever after, trading "every
+                    // frame" for "every 15th frame" rather than actually smoothing the cost out.
+                    // Bounded to [0, DormantFarTickInterval) so this robot's own first flush lands
+                    // somewhere inside its own first window instead of lining up with every other one.
+                    _dormantFarAccumulator = Mathf.Abs(GetInstanceID() % 1000) / 1000f * DormantFarTickInterval;
+                    _dormantFarStaggered = true;
+                }
+                _dormantFarAccumulator += dt;
+                if (_dormantFarAccumulator < DormantFarTickInterval) return;
+                dt = _dormantFarAccumulator;
+                _dormantFarAccumulator = 0f;
+            }
+            else if (_dormantFarAccumulator > 0f)
+            {
+                // Left Dormant, or the player caught up, with unflushed time still sitting in the
+                // accumulator -- fold it into this full-rate tick rather than dropping it.
+                dt += _dormantFarAccumulator;
+                _dormantFarAccumulator = 0f;
+                _dormantFarStaggered = false;
+            }
+            else
+            {
+                _dormantFarStaggered = false; // re-arm: the NEXT Dormant-far spell gets its own stagger
+            }
 
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
@@ -1313,15 +1369,34 @@ namespace MaxWorlds.Enemies
             }
 
             ApplyKnockback(dt);
-            ApplyGravity(dt);
-            ClampToDeckFootprint(); // MV-697: applied after every state's own movement, regardless of state
 
-            // MV-611: keeps this robot's own entry in the shared neighbour grid current every tick,
-            // REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found by another
-            // robot's separation query exactly as it was when _active was scanned directly; only
-            // TickChase's own QUERY is state-gated (nothing but a chaser needs to ask). O(1) amortized —
-            // see SeparationGrid.UpdatePosition's own doc comment.
-            _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
+            // MV-870: on a reduced Dormant-far tick, this robot's CharacterController still reports
+            // its grounded state as of the last real Move() call even though no Move() happened this
+            // tick -- reading _cc.isGrounded here is exactly "grounded on its last real move" (AC2).
+            // A robot already resting on the floor doesn't need a fresh sweep to prove that again; one
+            // still falling (or on a full-rate tick, farDormant is false and this never skips) keeps
+            // getting one.
+            bool skipGravity = farDormant && _cc.isGrounded;
+            if (!skipGravity) ApplyGravity(dt);
+
+            // MV-697: applied after every state's own movement, regardless of state -- except a
+            // reduced Dormant-far tick where nothing has moved this robot since _lastTickPosition was
+            // last recorded (AC2): the deck clamp and the grid write below would both be no-ops, so
+            // skip re-running either just to confirm that.
+            bool positionUnchangedSinceLastTick =
+                farDormant && (transform.position - _lastTickPosition).sqrMagnitude < 1e-8f;
+            if (!positionUnchangedSinceLastTick)
+            {
+                ClampToDeckFootprint();
+
+                // MV-611: keeps this robot's own entry in the shared neighbour grid current every
+                // tick, REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found
+                // by another robot's separation query exactly as it was when _active was scanned
+                // directly; only TickChase's own QUERY is state-gated (nothing but a chaser needs to
+                // ask). O(1) amortized — see SeparationGrid.UpdatePosition's own doc comment.
+                _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
+            }
+            _lastTickPosition = transform.position;
         }
 
         /// <summary>Spray knockback (YT-64): a shove that decays over ~0.2s. Applied on top of the
@@ -1542,6 +1617,27 @@ namespace MaxWorlds.Enemies
         /// instrumentation (MV-611) proving <see cref="TickDormant"/> skips the frustum test entirely
         /// for a robot well behind the player, rather than merely reading it as false.</summary>
         private int _frustumTestCount;
+
+        /// <summary>How often (seconds) a Dormant robot well behind the player (<see cref="IsWellBehindPlayer"/>)
+        /// gets a full tick (MV-870) — see <see cref="Tick"/>'s own doc comment.</summary>
+        private const float DormantFarTickInterval = 0.25f;
+
+        /// <summary>Seconds accumulated toward this robot's next reduced tick while it is Dormant AND
+        /// well behind the player (MV-870) — read back to 0 the instant a reduced tick fires. Stays 0
+        /// for a robot that has never been in that state, or that left it since its last reduced tick.</summary>
+        private float _dormantFarAccumulator;
+
+        /// <summary>Whether this robot's CURRENT spell of being Dormant-and-far has already had its
+        /// per-robot stagger applied to <see cref="_dormantFarAccumulator"/> (MV-870) — cleared the
+        /// moment it leaves that state, so the NEXT spell gets its own independent stagger rather than
+        /// reusing whatever was left over from the last one.</summary>
+        private bool _dormantFarStaggered;
+
+        /// <summary>This robot's position as of the end of its last tick, whatever rate it ran at
+        /// (MV-870) — lets a reduced Dormant-far tick tell whether ClampToDeckFootprint/
+        /// <see cref="_separationGrid"/>.UpdatePosition would have anything to do, without re-running
+        /// either just to find out.</summary>
+        private Vector3 _lastTickPosition;
 
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
         /// before it joins the chase for real. Idempotent — a robot no longer Dormant ignores a

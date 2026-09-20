@@ -38,12 +38,19 @@ namespace MaxWorlds.Core
         /// that's already at the thin end.</summary>
         public const float MaxSafeStep = 0.2f;
 
+        /// <summary>How many times <see cref="SafeMove"/> has called <c>CharacterController.Move</c>
+        /// (test-only instrumentation, MV-870) — every call counts as 1 regardless of whether it got
+        /// split into several steps, so a test can read the MEASURED number of physics sweeps a caller
+        /// actually triggered rather than inferring it from tick counts.</summary>
+        public static int CallCount;
+
         /// <summary>Moves <paramref name="cc"/> by <paramref name="displacement"/>, splitting it into
         /// <see cref="MaxSafeStep"/>-sized steps when it's larger than that. Each step is its own swept
         /// collision test, so a stall-inflated single-frame displacement can't skip past a thin
         /// collider the way one oversized <c>Move()</c> call can.</summary>
         public static void SafeMove(CharacterController cc, Vector3 displacement)
         {
+            CallCount++;
             float dist = displacement.magnitude;
             if (dist <= MaxSafeStep)
             {
