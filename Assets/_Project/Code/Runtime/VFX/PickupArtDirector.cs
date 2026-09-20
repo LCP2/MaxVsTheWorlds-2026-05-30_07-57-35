@@ -102,8 +102,8 @@ namespace MaxWorlds.VFX
         // Replaces the old CollectibleGlow aura: a flat GroundRing per pickup, tracking the pickup's XZ
         // but pinned to the ground plane (unlike the aura, it must NOT ride the float/bob — a ring that
         // bounced with the prop would read as levitating scenery, not a ground mark). Sits below the
-        // danger telegraph (GroundRing.GroundLift = 0.03) and the always-on actor anchors
-        // (GroundAnchorTuning.RingLift = 0.020) in the ground-mark stacking order, so a telegraph can
+        // danger telegraph (GroundRing.GroundLift) and the always-on actor anchors
+        // (GroundAnchorTuning.RingLift) in the ground-mark stacking order, so a telegraph can
         // never be hidden by a pickup's own "grab me" tell.
         private const string RingName = "GroundRing";
         private const string RingOuterName = "GroundRingOuter";

@@ -26,12 +26,13 @@ namespace MaxWorlds.VFX
     {
         /// <summary>
         /// Height the ground trail (MV-555) draws at. Above <see cref="AimReticle.GroundLift"/>
-        /// (0.006) so the wet fill draws OVER the whisper-level idle wedge, but below
-        /// <see cref="GroundAnchorTuning.ShadowLift"/> (0.012) so it can never cover a contact
-        /// shadow, an anchor ring, or a danger telegraph — one step further down the same stacking
-        /// rule <see cref="AimReticle"/> already documents.
+        /// so the wet fill draws OVER the whisper-level idle wedge, but below
+        /// <see cref="GroundAnchorTuning.ShadowLift"/> so it can never cover a contact shadow, an
+        /// anchor ring, or a danger telegraph — one step further down the same stacking rule
+        /// <see cref="AimReticle"/> already documents. Keeps its original 0.002 offset above the
+        /// reticle after MV-866 moved the whole gameplay ladder clear of World 2's floor dressing.
         /// </summary>
-        public const float GroundTrailLift = 0.008f;
+        public const float GroundTrailLift = GroundMarkHeights.AimReticleLift + 0.002f;
 
         /// <summary>Alpha the ground trail is drawn at. Read against <see cref="waterColor"/> rather
         /// than authored as its own colour, so a future palette tweak to the jet can't leave the
