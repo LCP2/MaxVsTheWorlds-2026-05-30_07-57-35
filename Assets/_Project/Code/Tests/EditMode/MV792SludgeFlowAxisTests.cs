@@ -24,7 +24,10 @@ namespace MaxWorlds.Tests.EditMode
     /// the direction resolved when a map DOES author an "outfall" entity.
     ///
     /// Count updated by MV-852 (World 2 re-layout): a7 and a13 were deleted outright along with their
-    /// sludge rects, dropping the count from 20 to 18.
+    /// sludge rects, dropping the count from 20 to 18. Count updated again by MV-865 (World 2
+    /// re-author): areas 1-14 were rebuilt from Lee's sheet, each now authoring several small sludge
+    /// rects rather than one apiece, raising the total from 18 to 69 — a plain sum read directly off
+    /// the shipped config (see MV700World2ConfigTests' own note on reading counts this way).
     /// </summary>
     public sealed class MV792SludgeFlowAxisTests
     {
@@ -69,7 +72,7 @@ namespace MaxWorlds.Tests.EditMode
                     $"sludge rect '{e.id}' ({e.width}x{e.depth}) must resolve a flow axis parallel to its own " +
                     $"long axis ({(expectAxisX ? "X" : "Z")}), resolved {flow}");
             }
-            Assert.AreEqual(18, sludgeCount, "World 2 must still author all 18 sludge rects (MV-852 deleted a7/a13's)");
+            Assert.AreEqual(69, sludgeCount, "World 2 must author all 69 sludge rects (MV-865 re-authored areas 1-14 from Lee's sheet)");
 
             // ---- AC3: a built tile's two lip children run along its own long side ----
             var lipHost = new GameObject("MV792 lip host").transform;

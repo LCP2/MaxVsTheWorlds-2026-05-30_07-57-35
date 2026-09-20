@@ -12,8 +12,17 @@ namespace MaxWorlds.Tests.EditMode
     /// Well's Sludgequeen. Fails on the MV-696 merge commit (699ee7d) — the placeholder there resolves
     /// 3 areas, 0 replicators, no condition-gated/boss gates, no overlays and boss id "big_bermuda".
     ///
-    /// Counts updated by MV-852 (World 2 re-layout): a7 and a13 were deleted outright (24/25/three
-    /// overlay pairs -> 22/23/two), and the replicator-gated door tested is now g31 (g12 was removed).
+    /// Counts updated by MV-852 (World 2 re-layout): a7 and a13 (that ticket's own numbering) were
+    /// deleted outright (24/25/three overlay pairs -> 22/23/two), and the replicator-gated door tested
+    /// is now g31 (g12 was removed).
+    ///
+    /// Counts updated again by MV-865 (World 2 re-author, renumbered areas in play order): areas.Length
+    /// stays 22 (21 authored areas plus the entry stub) but dials.areaCount realigns to the real 21
+    /// (was 23, already stale before this ticket), and the Replicator total rises 23 -> 47 — the
+    /// Trolley Yard floor (now a13, "The Sump" in MV-852's own numbering) alone authors 21 Replicators
+    /// in the re-authored level. Both are plain sums read directly off the shipped config, not a guess.
+    /// The two overlay pairs (overlay, target) are now (a17, a3) and (a15, a13) — MV-852 called them
+    /// (a19, a3) and (a15, a6).
     /// </summary>
     public sealed class MV700World2ConfigTests
     {
@@ -24,13 +33,15 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(cfg, "world2_config.json failed to load");
 
             // MV-852 deleted a7 (Silt Beds) and a13 (The Weir deck) outright, and their Replicators
-            // with them — 24 areas/25 Replicators (MV-700) drop to 22/23.
+            // with them — 24 areas/25 Replicators (MV-700) drop to 22/23. MV-865 (World 2 re-author) then
+            // realigns dials.areaCount to the real 21 authored areas and re-authors the level's content,
+            // raising the Replicator total to 47 (see the class doc comment for both numbers).
             Assert.AreEqual(22, cfg.areas.Length, "World 2 authors 21 areas plus the entry stub");
-            Assert.AreEqual(23, cfg.dials.areaCount);
+            Assert.AreEqual(21, cfg.dials.areaCount);
 
             int totalReplicators = 0;
             foreach (WorldArea a in cfg.areas) totalReplicators += a.replicators?.Length ?? 0;
-            Assert.AreEqual(23, totalReplicators, "World 2 authors 23 Replicators across its areas");
+            Assert.AreEqual(47, totalReplicators, "World 2 authors 47 Replicators across its areas");
 
             WorldGate g31 = Array.Find(cfg.gates, g => g.id == "g31");
             WorldGate g24 = Array.Find(cfg.gates, g => g.id == "g24");
@@ -39,15 +50,15 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(GateCondition.TryParse(g31.opensWith, out GateCondition g31Condition, out string g31Reason), g31Reason);
             Assert.IsTrue(GateCondition.TryParse(g24.opensWith, out GateCondition g24Condition, out string g24Reason), g24Reason);
             Assert.AreEqual(GateConditionKind.ReplicatorsDestroyed, g31Condition.Kind,
-                "g31 (MV-852's Replicator door into a12) must be gated on replicators-destroyed");
+                "g31 (MV-852's Replicator door, into a14 post-MV-865) must be gated on replicators-destroyed");
             Assert.AreEqual(GateConditionKind.ReplicatorsDestroyed, g24Condition.Kind,
                 "g24 must be gated on replicators-destroyed");
 
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string loadReason), loadReason);
             Assert.IsTrue(MapValidation.Validate(map, out string mapReason), mapReason);
 
-            // MV-852 deleted a13 (the third overlay pair, a13/a11) along with a11's own deck.
-            foreach (var (overlayId, targetId) in new[] { ("a19", "a3"), ("a15", "a6") })
+            // MV-852 deleted a13 (that ticket's own third overlay pair, a13/a11) along with a11's own deck.
+            foreach (var (overlayId, targetId) in new[] { ("a17", "a3"), ("a15", "a13") })
             {
                 WorldArea overlay = cfg.Area(overlayId);
                 WorldArea target = cfg.Area(targetId);
@@ -66,11 +77,12 @@ namespace MaxWorlds.Tests.EditMode
                     $"'{overlayId}' must share its resolved footprint with '{targetId}'");
             }
 
-            WorldArea a23 = cfg.Area("a23");
-            Assert.IsNotNull(a23, "area 'a23' not found");
-            WorldBoss[] bosses = a23.Bosses();
-            Assert.AreEqual(1, bosses.Length, "a23 must author exactly one boss");
-            Assert.AreEqual("sludgequeen", bosses[0].id, "a23's boss must be the Sludgequeen");
+            // a23 before MV-865 renumbered World 2's areas in play order.
+            WorldArea a21 = cfg.Area("a21");
+            Assert.IsNotNull(a21, "area 'a21' not found");
+            WorldBoss[] bosses = a21.Bosses();
+            Assert.AreEqual(1, bosses.Length, "a21 must author exactly one boss");
+            Assert.AreEqual("sludgequeen", bosses[0].id, "a21's boss must be the Sludgequeen");
         }
     }
 }

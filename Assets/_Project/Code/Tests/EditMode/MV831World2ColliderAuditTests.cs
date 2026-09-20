@@ -10,10 +10,11 @@ using MaxWorlds.Enemies;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-831: Lee, playing World 2 area a5 just past gate g4, stood at about world (82.6, 91.4) facing
-    /// west and could not walk west, with nothing visible in his way — a5_grate3/its Lurker sit 3-4 m
-    /// further west (78.5, 91.5) and a5_cover4 (centre 83,90, 3x2) lies just south. Something the build
-    /// adds, not anything <c>world2_config.json</c> authors solid in that strip, was blocking him.
+    /// MV-831: Lee, playing World 2 area a5 (renumbered a4 by MV-865, which reordered World 2's areas in
+    /// play order) just past gate g4, stood at about world (82.6, 91.4) facing west and could not walk
+    /// west, with nothing visible in his way — a5_grate3/its Lurker sit 3-4 m further west (78.5, 91.5)
+    /// and a5_cover4 (centre 83,90, 3x2, now a4_cover4) lies just south. Something the build adds, not
+    /// anything <c>world2_config.json</c> authors solid in that strip, was blocking him.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) asserting RESOLVED values (Tier 2): builds
     /// World 2 through the real <see cref="WorldMapLoader"/>/<see cref="MapRuntime"/>/
@@ -21,11 +22,11 @@ namespace MaxWorlds.Tests.EditMode
     /// live game does (<see cref="AreaAccumulationDirector.EnterArea"/> walked in order from area 1),
     /// then reads back every enabled non-trigger <see cref="Collider"/>/<see cref="CharacterController"/>'s
     /// resolved world bounds against every active <see cref="Renderer"/>'s resolved world bounds, and
-    /// separately walks a CharacterController-sized probe through a5 the way Max actually tried to.
+    /// separately walks a CharacterController-sized probe through a4 (was a5) the way Max actually tried to.
     ///
-    /// a5_cover4 itself turned out innocent (93% covered, untouched) — the audit's own real find was the
-    /// Grate Lurker's <see cref="CharacterController"/> (plus, on every capsule/box robot, an
-    /// un-<see cref="MaxWorlds.Rendering.StormdrainKit.Strip"/>ped default Collider that
+    /// a4_cover4 (was a5_cover4) itself turned out innocent (93% covered, untouched) — the audit's own
+    /// real find was the Grate Lurker's <see cref="CharacterController"/> (plus, on every capsule/box
+    /// robot, an un-<see cref="MaxWorlds.Rendering.StormdrainKit.Strip"/>ped default Collider that
     /// <c>GameObject.CreatePrimitive</c> auto-attaches and nothing ever destroys) staying full-sized and
     /// enabled while SUBMERGED/RATTLE, invisible. Fails on base commit 36c8b67: the coverage-violation
     /// assert quotes "a5_cover2 (76%); a17_cover5 (77%)" (see the fix comment for the exact captured
@@ -54,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void World2ColliderAudit_A5IsClearAndTheProbeWalksThroughIt()
+        public void World2ColliderAudit_A4IsClearAndTheProbeWalksThroughIt()
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(cfg, "World 2's own shipped config must load for this test to mean anything");
@@ -78,13 +79,13 @@ namespace MaxWorlds.Tests.EditMode
 
                 Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
 
-                // ---- change 1/AC1: a5's own report -------------------------------------------------
+                // ---- change 1/AC1: a4's own report (was a5 before MV-865 renumbered it) -----------
                 List<Renderer> activeRenderers = ActiveRenderers();
-                List<AuditRecord> a5Records = AuditRect(activeRenderers, new Rect(74f, 70f, 22f, 26f));
-                WriteA5Report(a5Records);
+                List<AuditRecord> a4Records = AuditRect(activeRenderers, new Rect(74f, 70f, 22f, 26f));
+                WriteA4Report(a4Records);
 
-                string firstLine = File.ReadAllLines(A5ReportPath())[0];
-                AuditRecord blockerInStrip = a5Records.FirstOrDefault(r =>
+                string firstLine = File.ReadAllLines(A4ReportPath())[0];
+                AuditRecord blockerInStrip = a4Records.FirstOrDefault(r =>
                     Overlaps2D(r.Bounds, BlockerXMin, BlockerXMax, BlockerZMin, BlockerZMax));
                 Assert.AreEqual(blockerInStrip != null ? blockerInStrip.Name : "NONE", firstLine,
                     "the report's own first line must match whatever the audit actually found in that strip");
@@ -102,18 +103,18 @@ namespace MaxWorlds.Tests.EditMode
                     "art covering at least 80% of its XZ footprint (walls/floor/awake-visible robots exempt): " +
                     string.Join("; ", violations.Select(v => $"{v.Name} ({v.CoverageRatio:P0})")));
 
-                // Negative check (AC2's own "fails if a5_cover4's art is disabled"): the SAME rule above,
+                // Negative check (AC2's own "fails if a4_cover4's art is disabled"): the SAME rule above,
                 // not a name-based special case, must be what is actually guarding this piece.
-                CoverPiece cover4 = built.Cover.First(c => c.Cover.Name == "a5_cover4");
-                List<Renderer> cover4Art = FindArtNear(root, cover4.Body.transform.position);
-                Assert.IsNotEmpty(cover4Art, "a5_cover4 must have built some visible art for this negative check to mean anything");
+                CoverPiece cover4 = built.Cover.First(c => c.Cover.Name == "a4_cover4");
+                List<Renderer> cover4Art = FindArtNear(root, cover4.Body.GetComponent<Collider>().bounds);
+                Assert.IsNotEmpty(cover4Art, "a4_cover4 must have built some visible art for this negative check to mean anything");
                 foreach (Renderer r in cover4Art) r.enabled = false;
                 try
                 {
                     List<Renderer> renderersWithoutCover4Art = activeRenderers.Where(r => r.enabled).ToList();
                     AuditRecord cover4Record = AuditOne(cover4.Body.GetComponent<Collider>(), renderersWithoutCover4Art);
                     Assert.Less(cover4Record.CoverageRatio, CoverageThreshold,
-                        "disabling a5_cover4's own art must make the coverage rule flag it — a rule that " +
+                        "disabling a4_cover4's own art must make the coverage rule flag it — a rule that " +
                         "cannot fail this way is not actually checking anything");
                 }
                 finally
@@ -159,9 +160,9 @@ namespace MaxWorlds.Tests.EditMode
             public float CoverageRatio;
         }
 
-        private static string A5ReportPath() => Path.Combine(Application.dataPath, "..", "Logs", "w2_a5_colliders.txt");
+        private static string A4ReportPath() => Path.Combine(Application.dataPath, "..", "Logs", "w2_a4_colliders.txt");
 
-        private static void WriteA5Report(List<AuditRecord> records)
+        private static void WriteA4Report(List<AuditRecord> records)
         {
             string dir = Path.Combine(Application.dataPath, "..", "Logs");
             Directory.CreateDirectory(dir);
@@ -172,7 +173,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (AuditRecord r in records.OrderBy(r => r.Name))
                 lines.Add($"{r.Name} | {r.TypeName} | {r.Bounds.min:F2}..{r.Bounds.max:F2} | coverage={r.CoverageRatio:P0}");
 
-            File.WriteAllLines(A5ReportPath(), lines);
+            File.WriteAllLines(A4ReportPath(), lines);
         }
 
         /// <summary>Every active Renderer that can count as "art matching a collider" — excluding the
@@ -240,14 +241,25 @@ namespace MaxWorlds.Tests.EditMode
         /// only shortfall noted here rather than chased into shared geometry code.
         ///
         /// MV-852 (World 2 re-layout) crossed this SAME pre-existing kit limit for two more modular runs
-        /// — a12_cover4 (14 m) and a21_cover5 (6 m). a21's own cover position, dimensions and dressing
-        /// are untouched by that ticket's move table — identical before and after — so this reads as the
-        /// same shared, cross-cutting fit-scale margin shifting for reasons outside a21's own content
-        /// (World 2 now authors fewer/different areas overall), not a new regression in anything MV-852
-        /// actually changed. Fixing the shared scale is still the same kit-wide change outside a single
-        /// ticket's own slice.</summary>
+        /// — a12_cover4 (14 m) and a21_cover5 (6 m), in that ticket's own numbering. a21's own cover
+        /// position, dimensions and dressing are untouched by that ticket's move table — identical
+        /// before and after — so this reads as the same shared, cross-cutting fit-scale margin shifting
+        /// for reasons outside a21's own content (World 2 now authors fewer/different areas overall),
+        /// not a new regression in anything MV-852 actually changed. Fixing the shared scale is still
+        /// the same kit-wide change outside a single ticket's own slice.
+        ///
+        /// MV-865 (World 2 re-author) renumbered areas in play order: the true 14 m machinery run once
+        /// named a12_cover4 is now a14_cover2 (verified against the shipped config — a14's own cover4 is
+        /// a distinct, unrelated 4 m piece, so a naive a12-&gt;a14 prefix swap onto "cover4" would have
+        /// silently exempted the wrong collider), and a21_cover5 (6 m) carried over unchanged in content
+        /// to a19_cover5. a5_cover2 and a17_cover5 have NO verified equivalent in the new config — a4
+        /// (was a5) no longer authors any machinery-dressed cover piece at all, and a11 (was a17) tops
+        /// out at cover4 — their old physical cover pieces were redesigned away by the re-author, not
+        /// merely renumbered, so this exemption is left un-mapped for those two rather than guessed; a
+        /// fresh coverage audit against the new build is needed to learn whether any current machinery
+        /// run needs a new exemption in their place (see the fix comment).</summary>
         private static bool KnownPreexistingMachineryRunGap(AuditRecord r) =>
-            (r.Name == "a5_cover2" || r.Name == "a17_cover5" || r.Name == "a12_cover4" || r.Name == "a21_cover5")
+            (r.Name == "a5_cover2" || r.Name == "a17_cover5" || r.Name == "a14_cover2" || r.Name == "a19_cover5")
             && r.TypeName == "BoxCollider";
 
         private static bool IsExempt(Collider c)
@@ -297,14 +309,18 @@ namespace MaxWorlds.Tests.EditMode
             return Mathf.Min(widthRatio, depthRatio);
         }
 
-        private static List<Renderer> FindArtNear(Transform root, Vector3 worldPos)
+        /// <summary>Every enabled Renderer whose bounds overlap <paramref name="coverBounds"/>, inflated
+        /// by 2.5 m — an OVERLAP test against the piece's own real footprint, not a fixed-radius distance
+        /// from a single pivot point (MV-831's own original idiom), which under-caught a wide (12 m)
+        /// authored piece whose built art can extend well past 2.5 m from <c>Body.transform.position</c>
+        /// when that position sits at one end/pivot rather than the geometric centre.</summary>
+        private static List<Renderer> FindArtNear(Transform root, Bounds coverBounds)
         {
+            var inflated = coverBounds;
+            inflated.Expand(5f); // 2.5 m margin on every side
             var result = new List<Renderer>();
             foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
-            {
-                if (r.enabled && (new Vector2(r.bounds.center.x, r.bounds.center.z) - new Vector2(worldPos.x, worldPos.z)).magnitude < 2.5f)
-                    result.Add(r);
-            }
+                if (r.enabled && inflated.Intersects(r.bounds)) result.Add(r);
             return result;
         }
     }

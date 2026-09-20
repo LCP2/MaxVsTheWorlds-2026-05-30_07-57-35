@@ -24,16 +24,21 @@ namespace MaxWorlds.Tests.EditMode
     /// pure gate-graph BFS matching <see cref="MapValidation"/>'s own <c>WorldReachability</c> shape
     /// (Rule 2, Tier 2 — resolved graph membership, not an authored constant): (a) ground-only
     /// reachability (ignoring every <c>[DECK]</c> gate) from <c>stub</c> is exactly the forced route,
-    /// with a12 added only once the Replicator door is open, and a20 never ground-reachable; (b) every
+    /// with a14 added only once the Replicator door is open, and a18 never ground-reachable; (b) every
     /// area the door's own condition names is inside that ground set; (c) the <c>[DECK]</c>-tagged chain
-    /// from a12 visits exactly a15/a16/a17/a18/a14/a19/a20 in that order, the only ramps across every
-    /// named area are a12_ramp1 and a20_ramp1, and a23 is reachable from stub over every gate.
+    /// from a14 visits exactly a15/a12/a11/a10/a16/a17/a18 in that order, the only ramps across every
+    /// named area are a14_ramp1 and a18_ramp1, and a21 is reachable from stub over every gate.
+    ///
+    /// Retargeted by MV-865 (World 2 re-author, renumbered areas in play order): every "aN" literal
+    /// below is the NEW id for the same physical area/gate this ticket originally proved — e.g. the
+    /// Replicator door (old a6-&gt;a12) is now g31 (a13-&gt;a14), and the deck chain that used to read
+    /// a12/a15/a16/a17/a18/a14/a19/a20 now reads a14/a15/a12/a11/a10/a16/a17/a18 in the same order.
     /// </summary>
     public sealed class MV852WorldLayoutTests
     {
         private static readonly string[] GroundRouteReplicatorAreas =
         {
-            "a2", "a3", "a5", "a8", "a9", "a10", "a11", "a18", "a17", "a16", "a6",
+            "a2", "a3", "a4", "a6", "a7", "a8", "a9", "a10", "a11", "a12", "a13",
         };
 
         [Test]
@@ -45,36 +50,36 @@ namespace MaxWorlds.Tests.EditMode
             // === AC1a: ground-only reachability (ignoring [DECK] gates), Replicator door closed ===
             var expectedClosed = new HashSet<string>
             {
-                "stub", "a1", "a2", "a3", "a5", "a4", "a8", "a9", "a10", "a11", "a18", "a17", "a16", "a6",
+                "stub", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10", "a11", "a12", "a13",
             };
             HashSet<string> groundClosed = GroundReachable(cfg, doorOpen: false);
             CollectionAssert.AreEquivalent(expectedClosed, groundClosed,
                 "MV-852 AC1a: ground-only reachability with the Replicator door closed must be exactly the forced route");
-            Assert.IsFalse(groundClosed.Contains("a20"), "MV-852 AC1a: a20 must never be ground-reachable from a3");
-            Assert.IsFalse(groundClosed.Contains("a12"), "MV-852 AC1a: a12 must not be ground-reachable while the door is closed");
+            Assert.IsFalse(groundClosed.Contains("a18"), "MV-852 AC1a: a18 must never be ground-reachable from a3");
+            Assert.IsFalse(groundClosed.Contains("a14"), "MV-852 AC1a: a14 must not be ground-reachable while the door is closed");
 
-            var expectedOpen = new HashSet<string>(expectedClosed) { "a12" };
+            var expectedOpen = new HashSet<string>(expectedClosed) { "a14" };
             HashSet<string> groundOpen = GroundReachable(cfg, doorOpen: true);
             CollectionAssert.AreEquivalent(expectedOpen, groundOpen,
-                "MV-852 AC1a: opening the Replicator door must add exactly a12 to ground reachability");
+                "MV-852 AC1a: opening the Replicator door must add exactly a14 to ground reachability");
 
             // === AC1b: every Replicator area the door's own condition names is ground-reachable ===
             WorldGate door = cfg.gates.FirstOrDefault(g => IsReplicatorDoor(g));
-            Assert.IsNotNull(door, "setup failure: no gate into a12 gated on replicators-destroyed was found");
+            Assert.IsNotNull(door, "setup failure: no gate into a14 gated on replicators-destroyed was found");
             string[] doorAreas = door.opensWith.Substring("replicators-destroyed:".Length).Split(',');
             CollectionAssert.AreEquivalent(GroundRouteReplicatorAreas, doorAreas,
                 "MV-852 AC1b: the door's condition must name exactly every ground-route Replicator area");
             foreach (string areaId in doorAreas)
                 Assert.IsTrue(groundClosed.Contains(areaId), $"MV-852 AC1b: '{areaId}' named in the door condition must be ground-reachable");
 
-            // === AC1c: the [DECK] chain from a12 visits a15/a16/a17/a18/a14/a19/a20, in that order ===
-            var expectedDeckOrder = new[] { "a12", "a15", "a16", "a17", "a18", "a14", "a19", "a20" };
-            List<string> deckOrder = DeckChainOrder(cfg, "a12");
+            // === AC1c: the [DECK] chain from a14 visits a15/a12/a11/a10/a16/a17/a18, in that order ===
+            var expectedDeckOrder = new[] { "a14", "a15", "a12", "a11", "a10", "a16", "a17", "a18" };
+            List<string> deckOrder = DeckChainOrder(cfg, "a14");
             Assert.AreEqual(expectedDeckOrder, deckOrder.ToArray(),
-                "MV-852 AC1c: the [DECK]-gated chain from a12 must visit exactly this sequence, in order");
+                "MV-852 AC1c: the [DECK]-gated chain from a14 must visit exactly this sequence, in order");
 
-            // Only a12_ramp1 and a20_ramp1 exist among the named areas.
-            string[] rampScopeAreas = { "a3", "a6", "a11", "a12", "a14", "a15", "a16", "a17", "a18", "a19", "a20" };
+            // Only a14_ramp1 and a18_ramp1 exist among the named areas.
+            string[] rampScopeAreas = { "a3", "a13", "a9", "a14", "a16", "a15", "a12", "a11", "a10", "a17", "a18" };
             var allRamps = new List<string>();
             foreach (string areaId in rampScopeAreas)
             {
@@ -82,12 +87,12 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(area, $"setup failure: area '{areaId}' not found");
                 foreach (WorldRamp r in area.ramps ?? Array.Empty<WorldRamp>()) allRamps.Add(r.id);
             }
-            CollectionAssert.AreEquivalent(new[] { "a12_ramp1", "a20_ramp1" }, allRamps,
-                "MV-852 AC1c: the only ramps across a3/a6/a11/a12/a14/a15/a16/a17/a18/a19/a20 must be a12_ramp1 and a20_ramp1");
+            CollectionAssert.AreEquivalent(new[] { "a14_ramp1", "a18_ramp1" }, allRamps,
+                "MV-852 AC1c: the only ramps across a3/a13/a9/a14/a16/a15/a12/a11/a10/a17/a18 must be a14_ramp1 and a18_ramp1");
 
-            // a23 is reachable from stub over ALL gates (ground + deck).
+            // a21 is reachable from stub over ALL gates (ground + deck).
             HashSet<string> everything = AllReachable(cfg);
-            Assert.IsTrue(everything.Contains("a23"), "MV-852 AC1c: a23 must be reachable from stub over all gates");
+            Assert.IsTrue(everything.Contains("a21"), "MV-852 AC1c: a21 must be reachable from stub over all gates");
 
             // === AC2: MapValidation (including WorldReachability) must pass the shipped config ===
             Assert.IsTrue(MapValidation.ValidateWorldConfig(cfg, out string reason), reason);
@@ -96,13 +101,13 @@ namespace MaxWorlds.Tests.EditMode
 
         private static bool IsReplicatorDoor(WorldGate g) =>
             g?.opensWith != null && g.opensWith.StartsWith("replicators-destroyed:") &&
-            (g.from.area == "a12" || g.to.area == "a12") && (g.from.area == "a6" || g.to.area == "a6");
+            (g.from.area == "a14" || g.to.area == "a14") && (g.from.area == "a13" || g.to.area == "a13");
 
         private static bool IsDeckGate(WorldGate g) => g?.opensWith != null && g.opensWith.Contains("[DECK]");
 
         /// <summary>The same bidirectional gate-graph BFS <see cref="MapValidation"/>'s own
         /// <c>WorldReachability</c> runs, restricted to non-<c>[DECK]</c> gates, with the Replicator
-        /// door into a12 included only when <paramref name="doorOpen"/> is true.</summary>
+        /// door into a14 included only when <paramref name="doorOpen"/> is true.</summary>
         private static HashSet<string> GroundReachable(WorldConfig cfg, bool doorOpen)
         {
             var reached = new HashSet<string> { "stub" };

@@ -105,23 +105,24 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(12f, lost, 1.5f,
                     "MV-838: 2s standing in floor-level map sludge with the Force Field down must cost ~12 HP");
 
-                // === AC3: Max on a19_deck1 (y == map.deckHeight), above the same a3 sludge channel,
-                // === 2.0s -> 0 damage. Force Field is still down here. ===
-                WorldArea a19 = cfg.Area("a19");
-                Assert.IsNotNull(a19, "setup failure: World 2 must author area 'a19'");
-                WorldDeck a19Deck1 = Array.Find(a19.decks, d => d.id == "a19_deck1");
-                Assert.IsNotNull(a19Deck1, "setup failure: a19 must author deck 'a19_deck1'");
-                Rect a19DeckRect = a19.WorldRectOf(a19Deck1.x, a19Deck1.z, a19Deck1.w, a19Deck1.d);
-                var overlap = new Vector2(a19DeckRect.center.x, a3SludgeRect.center.y);
+                // === AC3: Max on a17_deck1 (y == map.deckHeight), above the same a3 sludge channel,
+                // === 2.0s -> 0 damage. Force Field is still down here. (a17 was a19 before MV-865
+                // === renumbered World 2's areas in play order; a3 itself is unchanged.) ===
+                WorldArea a17 = cfg.Area("a17");
+                Assert.IsNotNull(a17, "setup failure: World 2 must author area 'a17'");
+                WorldDeck a17Deck1 = Array.Find(a17.decks, d => d.id == "a17_deck1");
+                Assert.IsNotNull(a17Deck1, "setup failure: a17 must author deck 'a17_deck1'");
+                Rect a17DeckRect = a17.WorldRectOf(a17Deck1.x, a17Deck1.z, a17Deck1.w, a17Deck1.d);
+                var overlap = new Vector2(a17DeckRect.center.x, a3SludgeRect.center.y);
                 Assert.IsTrue(a3SludgeRect.Contains(overlap), "setup failure: the probe point must fall inside a3's sludge rect");
-                Assert.IsTrue(a19DeckRect.Contains(overlap), "setup failure: the probe point must fall inside a19's deck rect");
+                Assert.IsTrue(a17DeckRect.Contains(overlap), "setup failure: the probe point must fall inside a17's deck rect");
 
                 health.Revive();
                 playerGo.transform.position = new Vector3(overlap.x, map.deckHeight, overlap.y);
                 float healthOnDeck = health.Current;
                 for (float t = 0f; t < simulatedSeconds; t += step) runner.TickSludgeDamage(step);
                 Assert.AreEqual(healthOnDeck, health.Current, 0.001f,
-                    "MV-838: standing on a19_deck1 above a3's sludge channel must take no sludge damage");
+                    "MV-838: standing on a17_deck1 above a3's sludge channel must take no sludge damage");
 
                 // === AC2: back at floor level, Force Field UP, 2.0s -> both HP and the field's own
                 // === remaining absorb budget are unchanged (it ignores sludge ticks entirely, never
