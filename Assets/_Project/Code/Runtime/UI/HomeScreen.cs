@@ -239,7 +239,9 @@ namespace MaxWorlds.UI
         /// <paramref name="maxRig"/> selects which populated state the button hands the tester:
         /// <list type="bullet">
         /// <item>false (WORLD 2, MV-737): World 1's own EXIT state — ENERGY/MOVE/SUPPORT additionally
-        /// unlocked and maxed (<see cref="UnlockAndMaxCategory"/>), PRIMARY left on the morph's
+        /// unlocked and maxed to World 1's own level caps (<see cref="UnlockAndMaxCategory"/>, capped via
+        /// <see cref="RigBoard.SnapshotMaxLevels"/> — MV-856: never World 2's own higher caps/extra nodes,
+        /// which stay for the player to buy in World 2), PRIMARY left on the morph's
         /// owned-but-unupgraded floor, SECONDARY mystery-locked untouched, exactly as a player who
         /// cleared World 1 would arrive.</item>
         /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
@@ -267,9 +269,14 @@ namespace MaxWorlds.UI
             }
             else
             {
-                UnlockAndMaxCategory("ENERGY");
-                UnlockAndMaxCategory("MOVE");
-                UnlockAndMaxCategory("SUPPORT");
+                // MV-856: cap at World 1's own levels, not whichever board ApplyWeaponCoreMorph just
+                // switched RigBoard onto (World 2's, which is higher from MV-840 and adds nodes World 1
+                // never had, e.g. e_cmg) — a WORLD 2 start must arrive exactly as a player who cleared
+                // World 1 would, with World 2's own additions left for the player to buy in World 2.
+                IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
+                UnlockAndMaxCategory("ENERGY", world1MaxLevels);
+                UnlockAndMaxCategory("MOVE", world1MaxLevels);
+                UnlockAndMaxCategory("SUPPORT", world1MaxLevels);
             }
         }
 
@@ -309,17 +316,28 @@ namespace MaxWorlds.UI
                 RigFusionState.TryForge(fusion.Id);
         }
 
-        /// <summary>MV-737: unlocks <paramref name="category"/> and raises every one of its nodes to its
-        /// own authored <see cref="RigBoard.MaxLevel"/>, through the same public calls a shed
-        /// unlock/Morphing Module draft/part spend makes (<see cref="RigState.UnlockCategory"/>,
+        /// <summary>MV-737: unlocks <paramref name="category"/> and raises every one of its nodes up to
+        /// its own cap in <paramref name="capById"/>, through the same public calls a shed unlock/
+        /// Morphing Module draft/part spend makes (<see cref="RigState.UnlockCategory"/>,
         /// <see cref="WeaponSystemState.AcquireById"/>, <see cref="WeaponSystemState.RaiseLevelById"/>)
         /// — no debug back door, and no direct call into the raw <see cref="RigState"/> grant/raise
         /// primitives outside <see cref="WeaponSystemState"/> itself (MV-435: a raw call silently skips
         /// <see cref="WeaponSystemState.Changed"/> and leaves anything gated on it stale). A child node
         /// only becomes reachable once its parent is owned, so this sweeps the category repeatedly until
         /// a pass makes no further progress, which converges in as many passes as the tree is deep
-        /// regardless of <see cref="RigBoard.AllIds"/>'s own authored order.</summary>
-        private static void UnlockAndMaxCategory(string category)
+        /// regardless of <see cref="RigBoard.AllIds"/>'s own authored order.
+        ///
+        /// MV-856: the cap comes from <paramref name="capById"/>, not <see cref="RigBoard.MaxLevel"/> of
+        /// whichever board is currently active — the WORLD 2 start must stop at World 1's own levels
+        /// even though World 2's board (already switched onto by the caller) allows higher ones. A node
+        /// id absent from <paramref name="capById"/> is left untouched at its current (0) level — it
+        /// doesn't exist on World 1's board, so it stays for the player to unlock in World 2 itself.
+        /// The underlying <see cref="RigBoard.Exists"/>/<see cref="RigBoard.MaxLevel"/> checks
+        /// <see cref="WeaponSystemState.AcquireById"/>/<see cref="RaiseLevelById"/> make themselves still
+        /// read World 2's board (needed for them to succeed at all on a World-2-only id like
+        /// <c>e_cmg</c>'s own eventual player purchase) — this method's own <c>cap</c> check is what
+        /// stops the sweep short of that higher ceiling.</summary>
+        private static void UnlockAndMaxCategory(string category, IReadOnlyDictionary<string, int> capById)
         {
             RigState.UnlockCategory(category);
 
@@ -330,7 +348,8 @@ namespace MaxWorlds.UI
                 foreach (string id in RigBoard.AllIds)
                 {
                     if (RigBoard.Category(id) != category) continue;
-                    if (RigState.Level(id) >= RigBoard.MaxLevel(id)) continue;
+                    if (!capById.TryGetValue(id, out int cap)) continue;
+                    if (RigState.Level(id) >= cap) continue;
 
                     if (RigState.Level(id) == 0)
                         progressed |= WeaponSystemState.AcquireById(id);

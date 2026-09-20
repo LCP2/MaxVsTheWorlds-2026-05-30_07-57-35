@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using MaxWorlds.Pickups;
@@ -12,11 +13,12 @@ namespace MaxWorlds.Tests.EditMode
     /// (<see cref="HomeScreen.StartSlotWorld2"/>, MV-726) must land THE RIG in World 1's own EXIT
     /// state, not a fresh, empty World 1 RIG — a player who reaches World 2 the intended way has
     /// spent a whole World 1 on the board first. Asserts the RESOLVED <see cref="RigState"/> after
-    /// the World 2 start: every ENERGY/MOVE/SUPPORT node at its own board-authored
-    /// <see cref="RigBoard.MaxLevel"/> (read live from <c>rig_board.world2.json</c> via
-    /// <see cref="RigBoard"/>, never a number written into this test), PRIMARY's upgrade tracks
-    /// unbought, SECONDARY entirely mystery-locked with nothing owned, every FORGE fusion unforged,
-    /// and the wallet empty.
+    /// the World 2 start: every ENERGY/MOVE/SUPPORT node at its own board-authored max level on
+    /// <c>rig_board.json</c> — World 1's board, not World 2's (<see cref="RigBoard.SnapshotMaxLevels"/>,
+    /// never a number written into this test; MV-856 tightened this from World 2's own, higher caps,
+    /// which handed out levels/nodes World 1 never offered), PRIMARY's upgrade tracks unbought,
+    /// SECONDARY entirely mystery-locked with nothing owned, every FORGE fusion unforged, and the
+    /// wallet empty.
     ///
     /// PRIMARY's own root node (<c>p_dmg</c>) is asserted at level 1, not 0: that is the same
     /// run-start ownership floor <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already grants
@@ -73,15 +75,19 @@ namespace MaxWorlds.Tests.EditMode
 
             HomeScreen.StartSlotWorld2(0);
 
-            // ENERGY / MOVE / SUPPORT — fully owned: unlocked, every node at its own authored cap.
+            // ENERGY / MOVE / SUPPORT — fully owned up to World 1's own cap: unlocked, every node
+            // World 1's board defines sits at that board's maxLevel; a node only World 2's board
+            // defines (e.g. e_cmg) stays at 0 (MV-856).
+            IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
             foreach (string category in new[] { "ENERGY", "MOVE", "SUPPORT" })
             {
                 Assert.IsTrue(RigState.IsCategoryUnlocked(category), $"{category} must be unlocked");
                 foreach (string id in RigBoard.AllIds)
                 {
                     if (RigBoard.Category(id) != category) continue;
-                    Assert.AreEqual(RigBoard.MaxLevel(id), RigState.Level(id),
-                        $"{id} ({category}) must sit at its own board-authored maxLevel");
+                    int expected = world1MaxLevels.TryGetValue(id, out int cap) ? cap : 0;
+                    Assert.AreEqual(expected, RigState.Level(id),
+                        $"{id} ({category}) must sit at World 1's own board-authored maxLevel (0 if absent from World 1's board)");
                 }
             }
 

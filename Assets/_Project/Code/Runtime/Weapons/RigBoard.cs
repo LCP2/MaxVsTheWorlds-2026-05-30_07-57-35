@@ -247,6 +247,24 @@ namespace MaxWorlds.Weapons
             return s_fusions.TryGetValue(id, out def);
         }
 
+        /// <summary>Every node id mapped to its own max level on <paramref name="worldIndex"/>'s board,
+        /// snapshotted without disturbing whichever board is currently active (<see cref="UseWorld"/>
+        /// switches away and back around the read) — MV-856: the WORLD 2 dev entry point must cap
+        /// ENERGY/MOVE/SUPPORT at World 1's own levels, not World 2's higher ones, so it needs a second
+        /// board's data while World 2's is the one actually loaded. An id absent from
+        /// <paramref name="worldIndex"/>'s board is simply absent from the result (never zero-filled) —
+        /// the caller decides what "not on that board" means.</summary>
+        public static IReadOnlyDictionary<string, int> SnapshotMaxLevels(int worldIndex)
+        {
+            int activeIndex = s_activeWorldIndex;
+            UseWorld(worldIndex);
+            var result = new Dictionary<string, int>();
+            foreach (string id in AllIds)
+                result[id] = MaxLevel(id);
+            UseWorld(activeIndex);
+            return result;
+        }
+
         /// <summary>Reloads from Resources on the next access, back to World 1's board — test isolation
         /// only (a live build never needs this; MV-689 is the only thing that switches boards at
         /// runtime, and always explicitly via <see cref="UseWorld"/>).</summary>
