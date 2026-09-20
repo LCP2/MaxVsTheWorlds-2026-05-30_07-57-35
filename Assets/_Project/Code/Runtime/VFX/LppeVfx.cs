@@ -36,10 +36,10 @@ namespace MaxWorlds.VFX
         // orange family as MuzzleColor above.
         private static readonly Color WindupColor = new Color(2.20f, 1.30f, 0.42f, 1f);
 
-        /// <summary>MV-814: FORK's own flash colour — the same fire-orange family as the forked bolt's
-        /// own brightened trail tint, so the flash reads as the SAME event as the bright bolt that
-        /// follows it, not a second, competing colour language.</summary>
-        private static readonly Color ForkFlashColor = new Color(1.75f, 0.85f, 0.20f, 1f);
+        /// <summary>MV-858 ARC's own tell colour — bright blue-white (spec), pushed past 1.0 the same
+        /// "over-1.0 headroom for bloom" trick <see cref="MuzzleColor"/> uses, deliberately NOT the
+        /// bolt's own fire-orange family so an arc reads as a distinct electrical event.</summary>
+        private static readonly Color ArcColor = new Color(1.4f, 1.7f, 2.2f, 1f);
 
         /// <summary>MV-825 item 7: the added hit-streak burst's own tail colour — the sparks fade from
         /// <see cref="SparkColor"/> into this, so they read as an extension of the bolt's own white-hot
@@ -52,7 +52,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _shockFlash;
         private VfxBurst _shockSparks;
         private VfxBurst _windupRing;
-        private VfxBurst _forkFlash;
+        private VfxBurst _arcFlash;
         private VfxBurst _boltStreaks;
         private bool _initialized;
 
@@ -81,9 +81,9 @@ namespace MaxWorlds.VFX
             // cycle's flashes against the "one FireTick, one muzzle flash" contract (Mv758LppeVfxTests).
             _windupRing = new VfxBurst("LppeWindupRing", VfxMaterials.Additive(VfxMaterials.Ring()), 24, 0f, perFrameCap: 4);
 
-            // MV-814: its own burst — FORK's flash must never share _impactFlash, or a fork release
-            // landing back-to-back with an ordinary impact would silently swallow one of the two beats.
-            _forkFlash = new VfxBurst("LppeForkFlash", additive, 24, 0f, perFrameCap: 4);
+            // MV-858: its own burst — ARC's flash must never share _impactFlash, or an arc landing
+            // back-to-back with an ordinary impact would silently swallow one of the two beats.
+            _arcFlash = new VfxBurst("LppeArcFlash", additive, 24, 0f, perFrameCap: 4);
 
             // MV-825 item 7: its own burst — layered on top of whichever impact beat above just
             // played, never replacing it, so it must never share either sparks burst.
@@ -149,20 +149,22 @@ namespace MaxWorlds.VFX
                 colorA: WindupColor, colorB: WindupColor);
         }
 
-        /// <summary>MV-814: FORK's own tell (spec item 2) — a short bright flash at the point the fork
-        /// released from, so the extra bolt that follows reads as deliberate rather than one more
-        /// identical pulse landing at the same instant.</summary>
-        public void Fork(Vector3 point)
+        /// <summary>MV-858 ARC's own tell (spec item 3) — an instant jagged line from the hit point to
+        /// the arc target plus a small impact flash on the second robot, so the extra damage reads as a
+        /// deliberate arc rather than the target simply losing health for no visible reason.</summary>
+        public void Arc(Vector3 from, Vector3 to)
         {
             if (!_initialized) return;
-            CombatVfxTuning.LppeForkFlashTuning t = CombatVfxTuning.LppeForkFlash();
+            CombatVfxTuning.LppeArcTuning t = CombatVfxTuning.LppeArc();
 
-            _forkFlash.Emit(point, 1,
+            ArcBoltVfx.Show(from, to, t.LineWidth, t.LineLifetime, ArcColor);
+
+            _arcFlash.Emit(to, 1,
                 axis: Vector3.up, spreadDegrees: 0f,
                 speedMin: 0f, speedMax: 0f,
                 sizeMin: t.FlashSize, sizeMax: t.FlashSize,
                 lifeMin: t.FlashLifetime, lifeMax: t.FlashLifetime,
-                colorA: ForkFlashColor, colorB: ForkFlashColor);
+                colorA: ArcColor, colorB: ArcColor);
         }
 
         private static void Emit(VfxBurst flash, VfxBurst sparks, Vector3 point,
@@ -188,14 +190,14 @@ namespace MaxWorlds.VFX
             if (!_initialized) return;
             _muzzleFlash.EndFrame(); _impactFlash.EndFrame(); _impactSparks.EndFrame();
             _shockFlash.EndFrame(); _shockSparks.EndFrame(); _windupRing.EndFrame();
-            _forkFlash.EndFrame(); _boltStreaks.EndFrame();
+            _arcFlash.EndFrame(); _boltStreaks.EndFrame();
         }
 
         private void OnDestroy()
         {
             Dispose(_muzzleFlash); Dispose(_impactFlash); Dispose(_impactSparks);
             Dispose(_shockFlash); Dispose(_shockSparks); Dispose(_windupRing);
-            Dispose(_forkFlash); Dispose(_boltStreaks);
+            Dispose(_arcFlash); Dispose(_boltStreaks);
         }
 
         private static void Dispose(VfxBurst b)

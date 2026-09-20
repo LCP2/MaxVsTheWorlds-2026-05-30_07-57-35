@@ -221,12 +221,12 @@
       "x": 175,
       "y": 740,
       "icon": "spr",
-      "label": "FORK",
+      "label": "ARC",
       "maxLevel": 1,
       "kind": "cap",
       "parent": "p_rng",
       "startLevel": 0,
-      "$comment": "MV-689: a pulse that kills its target releases a second pulse at the next target. One level."
+      "$comment": "MV-858: every pulse hit on a robot arcs 50% damage to the nearest other alive robot within 8m with line of sight. One level."
     },
     {
       "id": "p_cap",

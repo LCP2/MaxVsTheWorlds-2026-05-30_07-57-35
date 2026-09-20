@@ -15,21 +15,25 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-768 — three World 2 weapon nodes cost parts and do nothing: <c>p_rof</c> (RATE) and
-    /// <c>p_frk</c> (FORK) have zero runtime consumers at all, and <c>s_clu</c> (CLUSTER)'s own bomblet
-    /// code exists but was gated on a maxed Salvo track instead of its own dedicated RIG node. This is
-    /// the one new EditMode test the testing policy allows this ticket — every ticket bullet lands in
-    /// one method, all assertions on RESOLVED values (MV-465 Tier 2): <see cref="PulseLaser.PulseInterval"/>
-    /// actually read live, a real <see cref="SeekerPulse"/> fork spawned by a real kill, and actual
-    /// health lost to <see cref="PlayerRocket"/>'s own bomblet splash off a real detonation — plus AC5's
-    /// own guard against the whole class of bug: <c>MV734CooldownRemovalTests</c> already runs this scan
-    /// against World 1's board (<c>rig_board.json</c>); it never checked World 2's board
-    /// (<c>rig_board.world2.json</c>) at all, which is exactly how <c>p_rof</c>/<c>p_frk</c> evaded it.
+    /// <c>p_frk</c> (originally FORK, relabelled ARC by MV-858) have zero runtime consumers at all, and
+    /// <c>s_clu</c> (CLUSTER)'s own bomblet code exists but was gated on a maxed Salvo track instead of
+    /// its own dedicated RIG node. This is the one new EditMode test the testing policy allows this
+    /// ticket — every ticket bullet lands in one method, all assertions on RESOLVED values (MV-465 Tier
+    /// 2): <see cref="PulseLaser.PulseInterval"/> actually read live, a real robot's own measured health
+    /// loss to ARC, and actual health lost to <see cref="PlayerRocket"/>'s own bomblet splash off a real
+    /// detonation — plus AC5's own guard against the whole class of bug: <c>MV734CooldownRemovalTests</c>
+    /// already runs this scan against World 1's board (<c>rig_board.json</c>); it never checked World 2's
+    /// board (<c>rig_board.world2.json</c>) at all, which is exactly how <c>p_rof</c>/<c>p_frk</c> evaded
+    /// it.
     ///
-    /// Fails on 0c0bff2 (main HEAD before this fix):
+    /// AssertFork()'s own body was rewritten by MV-858, which replaced the old kill/near-death-only FORK
+    /// trigger with ARC (fires on every hit, applies damage directly rather than releasing a second
+    /// travelling pulse) — see <c>MV858ArcOnHitTests</c> for that ticket's own proof-of-fix test.
+    ///
+    /// Fails on 0c0bff2 (main HEAD before the MV-768 fix):
     /// - RATE: <c>PulseLaser.PulseInterval</c> is a bare field read, never routed through
     ///   <c>p_rof</c>'s level at all, so it never changes as the track is raised.
-    /// - FORK: <c>PulseLaser</c> has no <c>LastForkedPulseForTests</c> member and no fork mechanism at
-    ///   all — this test does not compile against that commit.
+    /// - FORK/ARC: <c>PulseLaser</c> had no fork/arc mechanism at all on that commit.
     /// - CLUSTER: <c>ShoulderRack.FireSalvo</c> gates the bomblet flag on
     ///   <c>salvoLevel &gt;= WeaponCatalog.MaxLevel(ShoulderRackTrackKind.Salvo)</c>, never on
     ///   <c>s_clu</c>, so raising <c>s_clu</c> to level 1 (Salvo left at its default, unmaxed) changes
@@ -132,14 +136,14 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        // ------------------------------------------------------------ p_frk FORK
+        // ------------------------------------------------------------ p_frk ARC (relabelled from FORK, MV-858)
 
         private static void AssertFork()
         {
             WeaponSystemState.Reset();
             WeaponSystemState.ApplyWeaponCoreMorph(1);
 
-            var go = new GameObject("PulseLaser_ForkTest");
+            var go = new GameObject("PulseLaser_ArcTest");
             go.transform.position = Vector3.zero;
             go.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             PulseLaser laser = go.AddComponent<PulseLaser>();
@@ -149,11 +153,11 @@ namespace MaxWorlds.Tests.EditMode
 
             try
             {
-                // --- p_frk at level 0: a killing pulse must release nothing extra. ---
+                // --- p_frk at level 0: a hit that doesn't kill must arc to nothing. ---
                 RobotEnemy a0 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(0f, 0f, 8f));
-                HealthField.SetValue(a0, 1f);
-                RobotEnemy b0 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(1.5f, 0f, 8f));
-                HealthField.SetValue(b0, 1f);
+                HealthField.SetValue(a0, 1000f);
+                RobotEnemy b0 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(0f, 0f, 12f)); // 4m beyond a0
+                HealthField.SetValue(b0, 1000f);
                 Physics.SyncTransforms();
 
                 try
@@ -163,12 +167,13 @@ namespace MaxWorlds.Tests.EditMode
                     PulseLaserFireTick.Invoke(laser, null);
                     SeekerPulse pulse0 = laser.LastSpawnedPulseForTests;
                     Assert.AreSame(a0, pulse0.Target, "test precondition: the pulse must lock onto a0");
+                    float b0HealthBefore = b0.HealthCurrent;
                     AdvanceUntilSpent(pulse0, step, cap: 1f);
-                    Assert.IsFalse(a0.IsAlive, "test precondition: a0 must die from the killing pulse");
+                    Assert.IsTrue(a0.IsAlive, "test precondition: a0 must survive its own hit");
 
-                    Assert.IsNull(laser.LastForkedPulseForTests,
-                        "p_frk at level 0 must not release any additional pulse from a killing hit " +
-                        "(MV-768's own FORK dead node)");
+                    Assert.AreEqual(0f, b0HealthBefore - b0.HealthCurrent, 0.001f,
+                        "p_frk at level 0 must not arc any damage to a nearby robot on a hit " +
+                        "(MV-768's own dead-node rule, now guarding ARC instead of FORK)");
                 }
                 finally
                 {
@@ -178,50 +183,35 @@ namespace MaxWorlds.Tests.EditMode
 
                 RobotEnemy.ResetRegistry();
 
-                // --- p_frk at level 1: exactly one fork, and it never chains even though it also kills. ---
+                // --- p_frk at level 1: the hit arcs exactly half its damage to the nearest other robot. ---
                 WeaponSystemState.AcquireById("p_rng"); // p_frk's own parent
                 WeaponSystemState.AcquireById("p_frk");
                 Assert.AreEqual(1, RigState.Level("p_frk"), "test precondition: p_frk must reach level 1");
 
                 RobotEnemy a1 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(0f, 0f, 8f));
-                HealthField.SetValue(a1, 1f);
-                RobotEnemy b1 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(1.5f, 0f, 8f));
-                HealthField.SetValue(b1, 1f);
-                RobotEnemy c1 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(3f, 0f, 8f));
-                HealthField.SetValue(c1, 1000f);
+                HealthField.SetValue(a1, 1000f);
+                RobotEnemy b1 = NewRegisteredEnemy(EnemyArchetype.Rusher, new Vector3(0f, 0f, 12f)); // 4m beyond a1
+                HealthField.SetValue(b1, 1000f);
                 Physics.SyncTransforms();
+                float dmg = laser.EffectiveDamagePerPulse;
 
                 try
                 {
                     PulseLaserFireTick.Invoke(laser, null);
                     SeekerPulse pulse1 = laser.LastSpawnedPulseForTests;
                     Assert.AreSame(a1, pulse1.Target, "test precondition: the pulse must lock onto a1");
+                    float b1HealthBefore = b1.HealthCurrent;
                     AdvanceUntilSpent(pulse1, step, cap: 1f);
-                    Assert.IsFalse(a1.IsAlive, "test precondition: a1 must die from the killing pulse");
+                    Assert.IsTrue(a1.IsAlive, "test precondition: a1 must survive its own hit");
 
-                    SeekerPulse forked = laser.LastForkedPulseForTests;
-                    Assert.IsNotNull(forked,
-                        "p_frk at level 1 must release exactly one additional pulse when the original " +
-                        "pulse's hit kills its target");
-                    Assert.AreSame(b1, forked.Target,
-                        "the forked pulse must lock onto the nearest OTHER valid target within lock " +
-                        "range (b1), not some other robot");
-
-                    AdvanceUntilSpent(forked, step, cap: 1f);
-                    Assert.IsFalse(b1.IsAlive, "test precondition: the forked pulse must also kill b1, " +
-                        "to prove the no-chain rule under the harder case");
-
-                    Assert.AreSame(forked, laser.LastForkedPulseForTests,
-                        "a forked pulse must never itself fork, however many kills it lands (MV-768's " +
-                        "own no-chain rule) -- LastForkedPulseForTests changed, meaning a second fork fired");
-                    Assert.AreEqual(1000f, c1.HealthCurrent, 0.01f,
-                        "c1 must take no damage at all -- a chained fork would have targeted it next");
+                    Assert.AreEqual(dmg * 0.5f, b1HealthBefore - b1.HealthCurrent, 0.01f,
+                        "p_frk at level 1 must arc exactly 50% of the pulse's damage to the nearest " +
+                        "other robot within 8m of the hit (MV-858's own ARC dead-node guard)");
                 }
                 finally
                 {
                     Object.DestroyImmediate(a1.gameObject);
                     Object.DestroyImmediate(b1.gameObject);
-                    Object.DestroyImmediate(c1.gameObject);
                 }
             }
             finally
@@ -351,7 +341,7 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>Registers the robot in <see cref="RobotEnemy.Active"/> (invoking <c>OnEnable</c>
         /// directly, since AddComponent doesn't reliably run it outside Play mode) -- needed for
-        /// anything <see cref="SeekerPulse"/>'s target acquisition or FORK's own nearest-other search
+        /// anything <see cref="SeekerPulse"/>'s target acquisition or ARC's own nearest-other search
         /// reads. Same idiom <c>PulseLaserTests</c>/<c>SeekerPulseWorldTargetTests</c> already use.</summary>
         private static RobotEnemy NewRegisteredEnemy(string name, Vector3 position, in EnemyArchetype archetype)
         {
