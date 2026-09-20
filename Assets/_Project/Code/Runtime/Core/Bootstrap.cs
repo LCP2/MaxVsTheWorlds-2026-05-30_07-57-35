@@ -45,6 +45,21 @@ namespace MaxWorlds.Core
         /// value Gameplay pulls out rather than a type Core reaches into.</summary>
         public static Func<string> WorldProbeLineProvider;
 
+        /// <summary>MV-869: the robot-population / Replicator-state diagnostic line, resolved and
+        /// formatted by <c>MaxWorlds.Enemies.PopulationReadout.BuildLine</c>. Same "Core can't see
+        /// Gameplay" wiring as <see cref="WorldProbeLineProvider"/>. Rebuilt on <see cref="PopulationLineRefreshSeconds"/>
+        /// (see <see cref="OnGUI"/>), never once per <c>OnGUI</c> call — the provider walks the live
+        /// robot registry, and this readout must not itself cost a frame.</summary>
+        public static Func<string> PopulationLineProvider;
+
+        /// <summary>MV-869: how often <see cref="PopulationLineProvider"/> is re-invoked — a glance-rate
+        /// readout, not a per-frame one, matching <c>Mv503DiagnosticOverlay.PerfRefreshSeconds</c>'s own
+        /// cached-line cadence.</summary>
+        private const float PopulationLineRefreshSeconds = 0.25f;
+
+        private string _cachedPopulationLine;
+        private float _populationLineBuiltAt = float.NegativeInfinity;
+
         private void Awake()
         {
             // First line in the log, so a browser console immediately answers "which build is this?"
@@ -142,6 +157,21 @@ namespace MaxWorlds.Core
             if (string.IsNullOrEmpty(probeLine)) return;
 
             GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 1.2f), 640f, 60f), probeLine, _fpsStyle);
+
+            // MV-869: a third line, under the same condition as the two above — how many actors are
+            // alive and whether World 2's Replicator chain is actually live. Rebuilt at most every
+            // PopulationLineRefreshSeconds, never once per OnGUI call, so reading it never costs a
+            // frame the way an unbounded per-frame walk of the robot registry would.
+            float now = Time.realtimeSinceStartup;
+            if (PopulationLineProvider != null && now - _populationLineBuiltAt >= PopulationLineRefreshSeconds)
+            {
+                _cachedPopulationLine = PopulationLineProvider.Invoke();
+                _populationLineBuiltAt = now;
+            }
+
+            if (string.IsNullOrEmpty(_cachedPopulationLine)) return;
+
+            GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 2.4f), 900f, 60f), _cachedPopulationLine, _fpsStyle);
         }
     }
 }

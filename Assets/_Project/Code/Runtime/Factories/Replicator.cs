@@ -268,6 +268,19 @@ namespace MaxWorlds.Factories
         /// destructible target.</summary>
         public int Capacity => capacity;
 
+        /// <summary>MV-869: true once <see cref="Start"/> resolved an <see cref="AreaAccumulationDirector"/>
+        /// and subscribed to its <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> — the "sub"
+        /// field of the population/Replicator probe line. False means the resolve returned null and this
+        /// box can never hear a crossing, live subscription being the one link in the chain nothing else
+        /// proves (see this ticket's own investigation).</summary>
+        public bool IsSubscribedToAreaEvents => _areaDirector != null;
+
+        /// <summary>This box's own <see cref="_playerInArea"/> — the probe line's "in" field.</summary>
+        public bool PlayerInArea => _playerInArea;
+
+        /// <summary>How many robots are currently queued for this box — the probe line's "q" field.</summary>
+        public int QueueCount => _queue.Count;
+
         /// <summary>MV-820: which 1-based area (<see cref="AreaAccumulationDirector.AreaIndexOf"/>)
         /// this box was authored into — stamped once by <see cref="MaxWorlds.Arena.WorldRunner"/> right
         /// after it builds this box, the same "known before anything reads it" ordering
@@ -522,10 +535,23 @@ namespace MaxWorlds.Factories
             }
         }
 
-        /// <summary>MV-820 Change 1: the nearest-by-straight-line-distance robot that is alive, not a
-        /// Lurker/Turret (they cannot walk to a box — kept, MV-688/MV-691), not tagged NoReplicate, not
-        /// already assigned to this or any other box (<see cref="RobotEnemy.IsAssignedToReplicator"/>),
-        /// and physically in THIS box's own area (<see cref="AreaIndex"/>). Null if nobody qualifies.</summary>
+        /// <summary>MV-820 Change 1's filter, factored out (MV-869) so the population/Replicator probe
+        /// can fold an eligible-count for a given area into its own single walk of
+        /// <see cref="RobotEnemy.Active"/> instead of re-implementing (and risking drifting from) this
+        /// box's own rule: alive, not a Lurker/Turret (they cannot walk to a box — kept, MV-688/MV-691),
+        /// not tagged NoReplicate, not already assigned to this or any other box
+        /// (<see cref="RobotEnemy.IsAssignedToReplicator"/>), and physically in <paramref name="areaIndex"/>.
+        /// Distance is deliberately not part of this predicate — <see cref="NearestEligible"/> ranks by
+        /// it separately; the probe only needs a count.</summary>
+        public static bool IsEligibleFor(RobotEnemy r, int areaIndex) =>
+            r != null && r.IsAlive
+            && r.Kind != EnemyKind.Lurker && r.Kind != EnemyKind.Turret
+            && !r.NoReplicate && !r.IsAssignedToReplicator
+            && r.AreaIndex == areaIndex;
+
+        /// <summary>MV-820 Change 1: the nearest-by-straight-line-distance robot that passes
+        /// <see cref="IsEligibleFor"/> for THIS box's own area (<see cref="AreaIndex"/>). Null if nobody
+        /// qualifies.</summary>
         private RobotEnemy NearestEligible()
         {
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
@@ -534,10 +560,7 @@ namespace MaxWorlds.Factories
             for (int i = 0; i < active.Count; i++)
             {
                 RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive) continue;
-                if (r.Kind == EnemyKind.Lurker || r.Kind == EnemyKind.Turret) continue;
-                if (r.NoReplicate || r.IsAssignedToReplicator) continue;
-                if (r.AreaIndex != AreaIndex) continue;
+                if (!IsEligibleFor(r, AreaIndex)) continue;
 
                 float dist = Vector3.Distance(r.transform.position, transform.position);
                 if (dist < nearestDist) { nearestDist = dist; nearest = r; }
