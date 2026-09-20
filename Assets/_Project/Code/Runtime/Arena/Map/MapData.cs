@@ -350,9 +350,16 @@ namespace MaxWorlds.Arena
         /// ever fall inside a deck/hatch belonging to the same footprint <see cref="ZoneAt(float, float, float)"/>
         /// is already testing (no two areas' footprints overlap in XZ except a level-0/level&gt;0 overlay
         /// pair, which share theirs by definition), so this needs no separate zone-to-entity lookup.</summary>
-        private bool IsOverDeckSurface(float px, float pz)
+        private bool IsOverDeckSurface(float px, float pz) => DeckEntityAt(px, pz) != null;
+
+        /// <summary>The Deck/Hatch entity (never a ramp — MV-833's own rule) whose rect contains
+        /// (<paramref name="px"/>, <paramref name="pz"/>), or null if none does. Factored out of
+        /// <see cref="IsOverDeckSurface"/> (MV-864) so <see cref="ResolveWalkableSurfacePoint"/> and
+        /// <see cref="SnapToWalkableSurface"/> can clamp a Sentinel's deploy/follow point into the SAME
+        /// rect this already answers yes/no against, rather than a separately-derived one.</summary>
+        private MapEntity DeckEntityAt(float px, float pz)
         {
-            if (entities == null) return false;
+            if (entities == null) return null;
 
             foreach (MapEntity e in entities)
             {
@@ -362,10 +369,80 @@ namespace MaxWorlds.Arena
 
                 float halfW = e.width * 0.5f, halfD = e.depth * 0.5f;
                 if (px >= e.x - halfW && px <= e.x + halfW && pz >= e.z - halfD && pz <= e.z + halfD)
-                    return true;
+                    return e;
             }
 
-            return false;
+            return null;
+        }
+
+        /// <summary>Clamps <paramref name="point"/>'s XZ into <paramref name="deck"/>'s own rect, pulled
+        /// back <paramref name="edgeMargin"/> from its actual edge, and snaps Y to <see cref="deckHeight"/>
+        /// — the one clamp-into-the-deck's-own-footprint shape both
+        /// <see cref="ResolveWalkableSurfacePoint"/> (a fresh deploy) and <see cref="SnapToWalkableSurface"/>
+        /// (a following Sentinel, every tick) need.</summary>
+        private Vector3 ClampIntoDeckRect(MapEntity deck, Vector3 point, float edgeMargin)
+        {
+            float halfW = Mathf.Max(0f, deck.width * 0.5f - edgeMargin);
+            float halfD = Mathf.Max(0f, deck.depth * 0.5f - edgeMargin);
+            float cx = Mathf.Clamp(point.x, deck.x - halfW, deck.x + halfW);
+            float cz = Mathf.Clamp(point.z, deck.z - halfD, deck.z + halfD);
+            return new Vector3(cx, deckHeight, cz);
+        }
+
+        /// <summary>MV-864: resolves an aimed Sentinel deploy point onto the walkable surface at
+        /// <paramref name="fromPosition"/>'s (Max's own) CURRENT level — a deck's own Deck/Hatch rect
+        /// (never a ramp) when he is standing on one, his current room's floor otherwise — so a sentinel
+        /// is never placed hanging in mid-air off a deck's edge or over/in a wall. Floor placement is
+        /// clamped into Max's own zone by <paramref name="floorEdgeMargin"/> exactly as
+        /// <see cref="MaxWorlds.UI.SentinelJoystickControl"/> already did before this ticket (MV-399) —
+        /// unconditionally, never refused, since the floor case was never the bug this ticket fixes. A
+        /// deck placement is refused (null) only when the nearest point on the deck's own (unmargined)
+        /// rect is still further than <paramref name="maxDeckSearchDistance"/> from the raw aim (nothing
+        /// walkable close enough counts as "there") or when a deck-level zone has no matching Deck/Hatch
+        /// rect at all (an authoring gap). Returns <paramref name="aimedPoint"/> unchanged if
+        /// <paramref name="fromPosition"/> is not standing in any authored zone — never refuses on
+        /// incomplete zone data alone.</summary>
+        public Vector3? ResolveWalkableSurfacePoint(
+            Vector3 fromPosition, Vector3 aimedPoint, float deckEdgeMargin, float floorEdgeMargin, float maxDeckSearchDistance)
+        {
+            MapZone maxZone = ZoneAt(fromPosition.x, fromPosition.y, fromPosition.z);
+            if (maxZone == null) return aimedPoint;
+
+            if (maxZone.level == 0)
+            {
+                Vector3 clamped = maxZone.Clamp(aimedPoint, floorEdgeMargin);
+                return new Vector3(clamped.x, fromPosition.y, clamped.z);
+            }
+
+            MapEntity deck = DeckEntityAt(fromPosition.x, fromPosition.z);
+            if (deck == null) return null;
+
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float nearestX = Mathf.Clamp(aimedPoint.x, deck.x - halfW, deck.x + halfW);
+            float nearestZ = Mathf.Clamp(aimedPoint.z, deck.z - halfD, deck.z + halfD);
+            float dx = nearestX - aimedPoint.x, dz = nearestZ - aimedPoint.z;
+            if (dx * dx + dz * dz > maxDeckSearchDistance * maxDeckSearchDistance) return null;
+
+            return ClampIntoDeckRect(deck, aimedPoint, deckEdgeMargin);
+        }
+
+        /// <summary>MV-864: pins a Sentinel's per-frame movement target onto the walkable surface at
+        /// <paramref name="fromPosition"/>'s (Max's own) level — Y snapped to that level's own height,
+        /// XZ clamped into a deck's own rect so a following/sidestepping/separating Sentinel can never
+        /// step off a deck edge, through a parapet, or over a wall. Unlike
+        /// <see cref="ResolveWalkableSurfacePoint"/> this never refuses — a Sentinel already alive on the
+        /// level must always have SOME point to stand at — degrading to <paramref name="point"/>
+        /// unchanged if <paramref name="fromPosition"/> is not standing in any zone, or a deck-level zone
+        /// has no matching Deck/Hatch rect (an authoring gap).</summary>
+        public Vector3 SnapToWalkableSurface(Vector3 fromPosition, Vector3 point, float deckEdgeMargin)
+        {
+            MapZone zone = ZoneAt(fromPosition.x, fromPosition.y, fromPosition.z);
+            if (zone == null) return point;
+
+            if (zone.level == 0) return new Vector3(point.x, fromPosition.y, point.z);
+
+            MapEntity deck = DeckEntityAt(fromPosition.x, fromPosition.z);
+            return deck != null ? ClampIntoDeckRect(deck, point, deckEdgeMargin) : point;
         }
 
         /// <summary>True if two zone ids are joined by an authored <see cref="MapLink"/>, in either
