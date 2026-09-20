@@ -223,6 +223,7 @@ namespace MaxWorlds.Arena
                         height = ReplicatorHeight,
                         depth = ReplicatorFootprint,
                         capacity = r.capacity,
+                        facing = string.IsNullOrEmpty(r.facing) ? "S" : r.facing,  // MV-860
                     });
                 }
             }
