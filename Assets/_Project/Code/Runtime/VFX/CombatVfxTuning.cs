@@ -99,28 +99,43 @@ namespace MaxWorlds.VFX
                 sparkSpeedMin: 3.5f, sparkSpeedMax: 7.5f, sparkSizeMin: 0.09f, sparkSizeMax: 0.2f,
                 sparkLifeMin: 0.16f, sparkLifeMax: 0.32f);
 
-        /// <summary>MV-858 ARC's own tell — an instant jagged line from the hit point to the arc target
-        /// (spec: "0.12 m wide, ... visible for 0.12 s") plus a small point flash at the second robot,
-        /// its own event distinct from the ordinary <see cref="LppeImpact"/> beat that just landed on the
-        /// FIRST robot.</summary>
+        /// <summary>MV-868: ARC's own tell was the faintest, shortest thing in a moment that already
+        /// has two brighter events in it (a single 0.12m/0.12s line). Now two <see cref="LineRenderer"/>s
+        /// on the same jagged path -- a wide additive SLEEVE carrying the bolt's own orange glow tint,
+        /// and the original blue-white CORE inside it (spec: "give it the orange sleeve effect the main
+        /// weapon fire has" while "the CORE stays blue-white; only the sleeve is orange") -- plus a
+        /// bigger, longer flash at the second robot, its own event distinct from the ordinary
+        /// <see cref="LppeImpact"/> beat that just landed on the FIRST robot.</summary>
         public readonly struct LppeArcTuning
         {
-            public readonly float LineWidth;
+            public readonly float SleeveWidth;
+            public readonly Color SleeveColor;
+            public readonly float SleeveAlpha;
+            public readonly float CoreWidth;
             public readonly float LineLifetime;
             public readonly float FlashSize;
             public readonly float FlashLifetime;
 
-            public LppeArcTuning(float lineWidth, float lineLifetime, float flashSize, float flashLifetime)
+            public LppeArcTuning(float sleeveWidth, Color sleeveColor, float sleeveAlpha, float coreWidth,
+                float lineLifetime, float flashSize, float flashLifetime)
             {
-                LineWidth = lineWidth;
+                SleeveWidth = sleeveWidth;
+                SleeveColor = sleeveColor;
+                SleeveAlpha = sleeveAlpha;
+                CoreWidth = coreWidth;
                 LineLifetime = lineLifetime;
                 FlashSize = flashSize;
                 FlashLifetime = flashLifetime;
             }
         }
 
+        // MV-868: sleeve width/colour/alpha and core width are ARC's own copies of the bolt sheath's
+        // magnitudes (SeekerPulse.SheathTintOpaqueBase / LppeBoltTuning.SheathAlpha are private to
+        // SeekerPulse -- ARC authors its own here rather than reaching into them).
         public static LppeArcTuning LppeArc() =>
-            new LppeArcTuning(lineWidth: 0.12f, lineLifetime: 0.12f, flashSize: 1.0f, flashLifetime: 0.12f);
+            new LppeArcTuning(
+                sleeveWidth: 0.34f, sleeveColor: new Color(1.00f, 0.45f, 0.10f), sleeveAlpha: 0.55f,
+                coreWidth: 0.07f, lineLifetime: 0.20f, flashSize: 1.4f, flashLifetime: 0.18f);
 
         /// <summary>MV-825 item 7: an added spark burst on every hit -- 8 short streaks, layered on
         /// top of whichever flash <see cref="LppeImpact"/>/<see cref="LppeShockImpact"/> just played,
