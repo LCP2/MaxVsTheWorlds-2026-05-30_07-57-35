@@ -16,8 +16,7 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="PlayerRocket"/>, <see cref="SecondaryKind"/> or <see cref="ShoulderRackTrackKind"/>
     /// existed yet, and <c>rig_board.json</c> had no <c>s_rkt</c>/<c>s_sal</c> nodes — this test fails to
     /// compile against that commit (CS0246 "The type or namespace name 'ShoulderRack' could not be
-    /// found"), the same class of pre-fix evidence <c>SentinelSystemTests.AttackModeChangesTheFollowPointAndPrioritisesTheForwardCone_MV636</c>
-    /// documents.
+    /// found"), the same class of pre-fix evidence <c>MV862SentinelFocusTests</c> documents.
     /// </summary>
     public sealed class MV694ShoulderRackTests
     {

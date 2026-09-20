@@ -65,15 +65,17 @@ namespace MaxWorlds.Arena
             _splicedLock = null; // MV-716: test isolation — see the field's own doc comment.
         }
 
-        /// <summary>Player-facing toggle for Attack Mode (MV-636 HUD button, gated on Move/u_mov &gt;= 1
-        /// — same visibility gate <see cref="AbilityTuning.SentinelCanMove"/> already answers for the
-        /// Move ability itself). A single flag shared by every deployed sentinel, not per-instance, so a
-        /// multi-sentinel loadout acts in unison — same "one player choice, felt everywhere" shape
+        /// <summary>Player-facing toggle for FOCUS (MV-636 HUD button, renamed from Attack Mode by
+        /// MV-862, gated on Move/u_mov &gt;= 1 — same visibility gate
+        /// <see cref="AbilityTuning.SentinelCanMove"/> already answers for the Move ability itself). A
+        /// single flag shared by every deployed sentinel, not per-instance, so a multi-sentinel loadout
+        /// acts in unison — same "one player choice, felt everywhere" shape
         /// <see cref="MaxWorlds.Weapons.WeaponSystemState.WaterBalloonAutoFireEnabled"/> uses for its own
-        /// toggle. Read every frame by <see cref="Update"/> (movement) and <see cref="NearestRobotInRange"/>
-        /// (fire targeting). Defaults off — the existing standoff-follow/nearest-overall behaviour is
-        /// unchanged until the player actively opts in.</summary>
-        public static bool AttackModeEnabled { get; set; }
+        /// toggle. Read by <see cref="NearestRobotInRange"/> (fire targeting only, MV-862 — sentinel
+        /// MOVEMENT no longer branches on this flag at all, see <see cref="TickMovement"/>). Defaults
+        /// off — the existing standoff-follow/sticky-nearest behaviour is unchanged until the player
+        /// actively opts in.</summary>
+        public static bool FocusEnabled { get; set; }
 
         /// <summary>Destroys every deployed sentinel and empties the registry. Sentinels aren't
         /// pooled (unlike robots), so a full reset has to tear the GameObjects down too, not just
@@ -238,6 +240,13 @@ namespace MaxWorlds.Arena
 
         private DestructibleHealth _health;
         private float _timeSinceDamage;
+
+        /// <summary>MV-862 FOCUS: Max's own equipped-primary components, resolved lazily off
+        /// <see cref="_followTarget"/> and cached — same lazy-resolve-and-cache idiom
+        /// <see cref="MaxWorlds.Player.PlayerHealth.PrimaryEnergyNormalized"/> already uses for this
+        /// exact pair, since whichever primary is attached may not exist yet on the frame this runs.</summary>
+        private PulseLaser _maxPulseLaser;
+        private WaterBlaster _maxWaterBlaster;
 
         public bool IsAlive => _health != null && _health.IsAlive;
 
@@ -616,11 +625,11 @@ namespace MaxWorlds.Arena
             }
             else if (_followTarget != null && _moveSpeed > 0f)
             {
-                (Vector3 goalPoint, float goalStandoff) = AbilityTuning.SentinelFollowGoal(
-                    AttackModeEnabled, _followTarget.position, _followTarget.forward,
-                    _standoffDistance, AbilityTuning.DefaultSentinelAttackModeAheadDistance);
+                // MV-862: FOCUS no longer changes where a sentinel HOLDS station — only which robot it
+                // FIRES at (see NearestRobotInRange) — so this is unconditionally the standoff-follow
+                // step, never the old attack-mode 3m-ahead/zero-standoff goal it used to branch to.
                 Vector3 next3 = AbilityTuning.SentinelStandoffStep(
-                    transform.position, goalPoint, goalStandoff, _moveSpeed, dt);
+                    transform.position, _followTarget.position, _standoffDistance, _moveSpeed, dt);
                 Vector3 displacement3 = next3 - transform.position;
                 if (displacement3 != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement3);
             }
@@ -680,6 +689,19 @@ namespace MaxWorlds.Arena
             Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             float rangeSq = _range * _range;
 
+            // MV-862 FOCUS: Max's own current target overrides the sticky pick below whenever there is
+            // one and it's eligible for THIS sentinel (spec: "overrides the sticky _currentTarget").
+            // With no eligible focus target, falls straight through to the normal MV-832 rules.
+            if (FocusEnabled)
+            {
+                RobotEnemy focusTarget = ResolveMaxCurrentTarget();
+                if (focusTarget != null && IsEligibleTarget(focusTarget, muzzle, rangeSq))
+                {
+                    _currentTarget = focusTarget;
+                    return focusTarget;
+                }
+            }
+
             MapData map = EnemyNavigation.Map;
             MapZone maxZone = (map != null && _followTarget != null)
                 ? map.ZoneAt(_followTarget.position.x, _followTarget.position.y, _followTarget.position.z)
@@ -715,20 +737,27 @@ namespace MaxWorlds.Arena
 
             if (_currentTarget != null && s_candidateRobots.Contains(_currentTarget)) return _currentTarget;
 
-            RobotEnemy chosen;
-            if (AttackModeEnabled && _followTarget != null)
-            {
-                int index = SentinelTargeting.SelectAttackModeTargetIndex(transform.position, s_candidatePositions,
-                    _followTarget.position, _followTarget.forward, SentinelTargeting.AttackModeForwardConeHalfAngleDegrees);
-                chosen = index >= 0 ? s_candidateRobots[index] : null;
-            }
-            else
-            {
-                chosen = NearestOf(s_candidateRobots, s_candidatePositions, transform.position);
-            }
-
+            RobotEnemy chosen = NearestOf(s_candidateRobots, s_candidatePositions, transform.position);
             _currentTarget = chosen;
             return chosen;
+        }
+
+        /// <summary>MV-862 FOCUS: Max's own current combat target — the LPPE's
+        /// <see cref="PulseLaser.CurrentTarget"/> while it's the active primary, the RCDA's
+        /// <see cref="WaterBlaster.CurrentTarget"/> otherwise. Null before <see cref="_followTarget"/>
+        /// resolves (no deployment yet) or if the equipped primary's own component hasn't attached.</summary>
+        private RobotEnemy ResolveMaxCurrentTarget()
+        {
+            if (_followTarget == null) return null;
+
+            if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe)
+            {
+                if (_maxPulseLaser == null) _maxPulseLaser = _followTarget.GetComponent<PulseLaser>();
+                return _maxPulseLaser != null ? _maxPulseLaser.CurrentTarget : null;
+            }
+
+            if (_maxWaterBlaster == null) _maxWaterBlaster = _followTarget.GetComponent<WaterBlaster>();
+            return _maxWaterBlaster != null ? _maxWaterBlaster.CurrentTarget : null;
         }
 
         /// <summary>Alive, awake (not <see cref="RobotEnemy.IsDormant"/>), able to take damage right

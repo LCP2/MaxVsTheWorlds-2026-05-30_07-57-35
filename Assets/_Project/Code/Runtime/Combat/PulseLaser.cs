@@ -128,6 +128,23 @@ namespace MaxWorlds.Combat
         /// own test asserts against, same idiom as <see cref="LastSpawnedPulseForTests"/>.</summary>
         public SeekerPulse LastForkedPulseForTests { get; private set; }
 
+        /// <summary>MV-862 FOCUS: how long <see cref="CurrentTarget"/> keeps reporting the last pulse's
+        /// lock after <see cref="FireTick"/> stops running — the spec's "while Max is firing or has
+        /// fired in the last 0.5s", so a Sentinel with FOCUS on keeps sharing Max's target through the
+        /// gaps between pulses, not just on the exact frame one lands.</summary>
+        public const float CurrentTargetHoldSeconds = 0.5f;
+
+        private RobotEnemy _lastPulseTarget;
+        private float _timeSinceLastPulse = float.MaxValue;
+
+        /// <summary>MV-862 FOCUS: the robot Max's own LPPE most recently locked onto, or null — held
+        /// for <see cref="CurrentTargetHoldSeconds"/> after the pulse that locked it fired, and cleared
+        /// instantly (read live off <see cref="RobotEnemy.IsAlive"/>, never cached) the moment that
+        /// robot dies, even inside the hold window.</summary>
+        public RobotEnemy CurrentTarget =>
+            _lastPulseTarget != null && _lastPulseTarget.IsAlive && _timeSinceLastPulse <= CurrentTargetHoldSeconds
+                ? _lastPulseTarget : null;
+
         private void Awake()
         {
             _tank = new EnergyPool(EffectiveMaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
@@ -157,6 +174,7 @@ namespace MaxWorlds.Combat
             _tank.Retune(EffectiveMaxEnergy);
             _tank.Tick(dt);
             TickHitStreaks(dt);
+            _timeSinceLastPulse += dt;
 
             if (aimSource != null)
             {
@@ -252,6 +270,8 @@ namespace MaxWorlds.Combat
                 DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
                 onKill: RegisterKill, powerLevelFraction: PowerVisualStrength);
             LastSpawnedPulseForTests = pulse;
+            _lastPulseTarget = pulse.Target;
+            _timeSinceLastPulse = 0f;
 
             // MV-758: the muzzle punctuation — one per shot, under 0.22s cadence so it can't smear.
             if (_vfx != null) _vfx.Muzzle(origin, dir);
