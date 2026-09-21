@@ -39,10 +39,6 @@ namespace MaxWorlds.Arena
         /// <summary>How wide a factory's spawn ring is. Matches the EnemySpawner's radius.</summary>
         public const float SpawnRadius = 3.5f;
 
-        /// <summary>Cover must leave the mouth of a doorway clear, or the way through stops reading as
-        /// a way through.</summary>
-        public const float DoorwayClearance = 2f;
-
         /// <summary>Closest two sheds authored in the SAME area may sit, centre to centre (MV-475) —
         /// two <see cref="SpawnRadius"/> 3.5 m rings plus <see cref="SpawnClearance"/> 0.8 m each, plus
         /// a lane between them.</summary>
@@ -360,20 +356,6 @@ namespace MaxWorlds.Arena
                         reason = $"'{c.id}' blocks '{r.id}'s OUT pad — its twins emit there and need a " +
                                  $"clear {ReplicatorPadWidth:0.#} x {ReplicatorPadDepth:0.#} m pad in front of it";
                         return false;
-                    }
-                }
-
-                // A doorway you cannot see through is a doorway you cannot find.
-                if (map.links != null)
-                {
-                    foreach (MapLink link in map.links)
-                    {
-                        if (link == null) continue;
-                        if (!MapGeometry.Doorway(map, link, out bool alongX, out float coord, out Span hole)) continue;
-
-                        var mouth = new Vector2(alongX ? hole.Mid : coord, alongX ? coord : hole.Mid);
-                        if (body.DistanceTo(mouth) < DoorwayClearance)
-                        { reason = $"'{c.id}' blocks the doorway between '{link.from}' and '{link.to}'"; return false; }
                     }
                 }
 

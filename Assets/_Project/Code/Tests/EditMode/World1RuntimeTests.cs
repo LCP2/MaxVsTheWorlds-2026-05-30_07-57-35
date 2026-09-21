@@ -553,25 +553,16 @@ namespace MaxWorlds.Tests.EditMode
                 $"({MapValidation.MinFreeChannel} m)");
         }
 
-        // --- AC9: a2_h1/a3_h2 were both trimmed by one cell (Lee, 2026-08-19) to clear a doorway and --
-        // --- a shed's spawn ring their raw drawing didn't account for. Computed from the shipped ------
-        // --- config/resolved doorway, not hard-coded, so a future redraw that reintroduces either -----
-        // --- violation fails loudly here instead of at map-load. -------------------------------------
+        // --- AC9: a3_h2 was trimmed by one cell (Lee, 2026-08-19) to clear a shed's spawn ring its raw
+        // --- drawing didn't account for. Computed from the shipped config/resolved ring, not
+        // --- hard-coded, so a future redraw that reintroduces the violation fails loudly here instead
+        // --- of at map-load. (a2_h1's own trim cleared a doorway-clearance floor MV-877 deleted — that
+        // --- rule refused readable-but-correct level data and was never validation's job to enforce.)
 
         [Test]
-        public void World1_A2H1ClearsG2SResolvedDoorway_AndA3H2ClearsA3SShedRing()
+        public void World1_A3H2ClearsA3SShedRing()
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
-
-            MapEntity a2h1 = map.Entity("a2_h1");
-            Assert.IsNotNull(a2h1, "world1_config.json has no cover 'a2_h1'");
-            MapEntity g2 = map.Entity("g2");
-            Assert.IsNotNull(g2, "world1_config.json has no gate 'g2'");
-
-            float doorwayGap = a2h1.ToCover().DistanceTo(g2.CenterXz);
-            Assert.GreaterOrEqual(doorwayGap, MapValidation.DoorwayClearance,
-                $"'a2_h1' sits {doorwayGap:0.##} m from g2's resolved doorway mouth — under the " +
-                $"{MapValidation.DoorwayClearance} m DoorwayClearance floor");
 
             MapEntity a3h2 = map.Entity("a3_h2");
             Assert.IsNotNull(a3h2, "world1_config.json has no cover 'a3_h2'");
