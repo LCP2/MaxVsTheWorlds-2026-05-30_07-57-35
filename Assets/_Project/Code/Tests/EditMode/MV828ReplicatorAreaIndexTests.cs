@@ -132,7 +132,11 @@ namespace MaxWorlds.Tests.EditMode
                     },
                     replicators = new[]
                     {
-                        new WorldReplicator { id = "a3_rep1", x = OriginX, z = OriginZ + 38f, capacity = 4 },
+                        // MV-872: capacity 2 (not 4) — the queue is now capped by whichever of
+                        // Replicator.MaxQueueSlots (raised 2 -> 6) and this box's own remaining capacity
+                        // is smaller, so this fixture's own "only the 2 nearest are assigned at once"
+                        // narrative (AC1(b)/(c)/(d) below) now depends on capacity, not on MaxQueueSlots.
+                        new WorldReplicator { id = "a3_rep1", x = OriginX, z = OriginZ + 38f, capacity = 2 },
                     },
                 },
             },
@@ -279,7 +283,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robotB.Current,
                 "MV-828 AC1(b): the second-nearest robot (4 m) must be ReplicatorSeeking after the real area-entry signal");
             Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, robotC.Current,
-                "setup failure: with only 2 queue slots, the 3rd-nearest must not be assigned yet");
+                "setup failure: with this fixture's own capacity of 2 (not Replicator.MaxQueueSlots), " +
+                "the 3rd-nearest must not be assigned yet");
             Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, spare.Current,
                 "setup failure: the spare robot must not be assigned yet");
 
