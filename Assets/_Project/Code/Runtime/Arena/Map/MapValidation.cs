@@ -521,7 +521,8 @@ namespace MaxWorlds.Arena
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldVerticality(cfg, out reason)
-                && WorldBridges(cfg, out reason);
+                && WorldBridges(cfg, out reason)
+                && WorldWalkability(cfg, out reason);
         }
 
         /// <summary>World-level bridges (MV-711): every violation across every bridge is collected and
@@ -1352,6 +1353,294 @@ namespace MaxWorlds.Arena
         {
             foreach (WorldArea a in cfg.areas) if (a.IsEntryRole) return a;
             return null;
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // Floor walkability (MV-874) — proves a body of Max's own width can actually walk each
+        // area's floor, not just that the gate GRAPH between areas connects (WorldReachability
+        // above). World 2's a13 passed WorldReachability clean even though its own exit gate sat
+        // behind a sealed pocket of pipe cover — a graph edge existing says nothing about whether
+        // the room behind it is actually walkable. Runs last: the most expensive check, and the
+        // final "assert the collider, not the graph" belt over every earlier, cheaper rule.
+        // ---------------------------------------------------------------------------------------
+
+        /// <summary>Max's own CharacterController radius (0.5 m; skin width 0.08 m — both authored in
+        /// <c>Backyard_Slice.unity</c>), so he is 1 m wide (MV-874). Every obstacle
+        /// <see cref="WorldWalkability"/> rasterises is inflated by this much — not "does his centre
+        /// point clear it", but "does his BODY clear it". Change this only if the scene's own
+        /// CharacterController radius changes; it must stay in step with that, never with a design
+        /// guess.</summary>
+        public const float PlayerBodyRadius = 0.5f;
+
+        /// <summary>Grid resolution <see cref="WorldWalkability"/> rasterises a floor at (MV-874) — fine
+        /// enough to resolve a 1 m cover grid and a 0.3 m authoring sliver, coarse enough to run at load
+        /// (World 2's largest area, 30x26 m, is 78,000 cells).</summary>
+        private const float WalkabilityRasterCell = 0.1f;
+
+        /// <summary>How deep inward from a wall/box face <see cref="WorldWalkability"/> samples a gate's
+        /// doorway mouth (MV-874) — a BAND across the doorway's full authored width, not one centre
+        /// point, so an obstacle crowding only part of a wide gate does not read as sealing the whole
+        /// thing.</summary>
+        private const float WalkabilityMouthBandDepth = 1f;
+
+        /// <summary>Proves each area's floor is actually walkable by Max's own body (MV-874): rasterises
+        /// it at <see cref="WalkabilityRasterCell"/>, blocks any cell within <see cref="PlayerBodyRadius"/>
+        /// of a cover/shed/replicator footprint or the area's own solid wall (its authored doorways cut
+        /// out of that wall), then floods from every non-deck gate's doorway band and refuses the map if
+        /// any OTHER gate's doorway band, or any Replicator's IN lane, is not reached.</summary>
+        private static bool WorldWalkability(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                // An overlay area (MV-697) shares its target's exact floor footprint — it is walked as
+                // part of that floor's own pass; a second, cover-free rasterisation of the same rectangle
+                // would prove nothing new.
+                if (!string.IsNullOrEmpty(a.overlays)) continue;
+
+                var gates = new List<WorldGate>();
+                foreach (WorldGate g in cfg.gates)
+                {
+                    // A [DECK]-tagged gate is built at deck height IN the wall (WorldMapLoader) — the
+                    // floor-level wall stays solid there, so it is not a floor doorway at all (same
+                    // exclusion MV-852's own ground-route BFS already applies).
+                    if (g != null && EndpointFor(g, a.id) != null &&
+                        (g.opensWith == null || !g.opensWith.Contains(WorldMapLoader.DeckGateSuffix)))
+                        gates.Add(g);
+                }
+
+                if (gates.Count == 0) continue; // nothing to seed a fill from
+
+                List<ArenaCover> obstacles = WalkabilityObstacles(a);
+                Dictionary<Wall, List<Span>> gaps = WalkabilityDoorGaps(gates, a);
+
+                int nx = Mathf.Max(1, Mathf.RoundToInt(a.size.w / WalkabilityRasterCell));
+                int nz = Mathf.Max(1, Mathf.RoundToInt(a.size.d / WalkabilityRasterCell));
+                var blocked = new bool[nx, nz];
+                int freeCount = 0;
+
+                for (int i = 0; i < nx; i++)
+                for (int j = 0; j < nz; j++)
+                {
+                    float x = a.XMin + (i + 0.5f) * WalkabilityRasterCell;
+                    float z = a.ZMin + (j + 0.5f) * WalkabilityRasterCell;
+                    bool cellBlocked = WalkabilityWallBlocks(a, gaps, x, z) || WalkabilityObstacleBlocks(obstacles, x, z);
+                    blocked[i, j] = cellBlocked;
+                    if (!cellBlocked) freeCount++;
+                }
+
+                WorldGate seedGate = gates[0];
+                Rect seedBand = GateMouthBand(a, EndpointFor(seedGate, a.id), seedGate.width);
+                List<(int i, int j)> seedCells = WalkabilityCellsIn(a, nx, nz, seedBand, blocked);
+
+                if (seedCells.Count == 0)
+                {
+                    reason = $"area '{a.id}': gate '{seedGate.id}' opens onto floor blocked all the way across its own doorway";
+                    return false;
+                }
+
+                bool[,] reached = WalkabilityFloodFill(blocked, nx, nz, seedCells);
+                int reachedCount = 0;
+                foreach (bool r in reached) if (r) reachedCount++;
+                float pct = freeCount > 0 ? 100f * reachedCount / freeCount : 0f;
+
+                for (int gi = 1; gi < gates.Count; gi++)
+                {
+                    WorldGate g = gates[gi];
+                    Rect band = GateMouthBand(a, EndpointFor(g, a.id), g.width);
+                    if (!WalkabilityAnyReached(a, nx, nz, band, blocked, reached))
+                    {
+                        reason = $"area '{a.id}': gate '{seedGate.id}' cannot walk to gate '{g.id}' — " +
+                                 $"the flood fill from '{seedGate.id}' only reaches {pct:0}% of '{a.id}'s free floor";
+                        return false;
+                    }
+                }
+
+                foreach (WorldReplicator r in a.replicators ?? Array.Empty<WorldReplicator>())
+                {
+                    Rect lane = DirectionalRect(new Vector2(r.x, r.z), WorldMapLoader.ReplicatorFootprint * 0.5f,
+                        FacingDirection(r.facing), ReplicatorLaneDepth, ReplicatorLaneWidth);
+                    if (!WalkabilityAnyReached(a, nx, nz, lane, blocked, reached))
+                    {
+                        reason = $"area '{a.id}': replicator '{r.id}'s IN lane cannot be walked to from gate " +
+                                 $"'{seedGate.id}' — the flood fill from '{seedGate.id}' only reaches {pct:0}% of '{a.id}'s free floor";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static WorldGateEndpoint EndpointFor(WorldGate g, string areaId) =>
+            g.from != null && g.from.area == areaId ? g.from : (g.to != null && g.to.area == areaId ? g.to : null);
+
+        private static Vector2 WallPoint(WorldArea a, Wall wall, float along) =>
+            a.WallRunsAlongX(wall) ? new Vector2(along, a.WallCoord(wall)) : new Vector2(a.WallCoord(wall), along);
+
+        private static Vector2 WallInwardNormal(Wall wall) => wall switch
+        {
+            Wall.N => new Vector2(0f, -1f),
+            Wall.S => new Vector2(0f, 1f),
+            Wall.E => new Vector2(-1f, 0f),
+            Wall.W => new Vector2(1f, 0f),
+            _ => Vector2.zero,
+        };
+
+        /// <summary>The band <see cref="WorldWalkability"/> samples for one gate endpoint's own doorway —
+        /// the gate's full authored width, running <see cref="WalkabilityMouthBandDepth"/> in from the
+        /// wall. Built with the same <see cref="DirectionalRect"/> a Replicator's own IN/OUT rects use,
+        /// with a zero box half-extent since a doorway (unlike a Replicator box) has no body of its own to
+        /// stand clear of.</summary>
+        private static Rect GateMouthBand(WorldArea a, WorldGateEndpoint ep, float gateWidth)
+        {
+            Wall wall = WallEnums.TryParse(ep.wall, out Wall w) ? w : Wall.N;
+            Span span = a.WallSpan(wall);
+            float along = span.Min + Mathf.Clamp01(ep.pos) * span.Length;
+            Vector2 onWall = WallPoint(a, wall, along);
+            return DirectionalRect(onWall, 0f, WallInwardNormal(wall), WalkabilityMouthBandDepth, gateWidth);
+        }
+
+        private static Dictionary<Wall, List<Span>> WalkabilityDoorGaps(List<WorldGate> gates, WorldArea a)
+        {
+            var gaps = new Dictionary<Wall, List<Span>>
+            {
+                [Wall.N] = new List<Span>(), [Wall.S] = new List<Span>(),
+                [Wall.E] = new List<Span>(), [Wall.W] = new List<Span>(),
+            };
+
+            foreach (WorldGate g in gates)
+            {
+                WorldGateEndpoint ep = EndpointFor(g, a.id);
+                if (ep == null || !WallEnums.TryParse(ep.wall, out Wall wall)) continue;
+
+                Span span = a.WallSpan(wall);
+                float along = span.Min + Mathf.Clamp01(ep.pos) * span.Length;
+                gaps[wall].Add(new Span(along - g.width * 0.5f, along + g.width * 0.5f));
+            }
+
+            return gaps;
+        }
+
+        /// <summary>True if (<paramref name="x"/>, <paramref name="z"/>) lies within
+        /// <see cref="PlayerBodyRadius"/> of one of <paramref name="a"/>'s own SOLID walls — every
+        /// authored doorway (<paramref name="gaps"/>) is cut out of that wall, so a point over one is not
+        /// blocked by it, however close.</summary>
+        private static bool WalkabilityWallBlocks(WorldArea a, Dictionary<Wall, List<Span>> gaps, float x, float z)
+        {
+            if (x - a.XMin < PlayerBodyRadius && !InAnyGap(gaps[Wall.W], z)) return true;
+            if (a.XMax - x < PlayerBodyRadius && !InAnyGap(gaps[Wall.E], z)) return true;
+            if (z - a.ZMin < PlayerBodyRadius && !InAnyGap(gaps[Wall.S], x)) return true;
+            if (a.ZMax - z < PlayerBodyRadius && !InAnyGap(gaps[Wall.N], x)) return true;
+            return false;
+        }
+
+        private static bool InAnyGap(List<Span> gaps, float coord)
+        {
+            foreach (Span s in gaps) if (s.Contains(coord)) return true;
+            return false;
+        }
+
+        /// <summary>Every footprint <see cref="WorldWalkability"/> must keep <see cref="PlayerBodyRadius"/>
+        /// clear of: an area's own authored cover, every shed it carries, and every Replicator box —
+        /// built via <see cref="MapEntity.ToCover"/> so shape (box/cylinder) resolves exactly as it does
+        /// everywhere else cover is reasoned about.</summary>
+        private static List<ArenaCover> WalkabilityObstacles(WorldArea a)
+        {
+            var obstacles = new List<ArenaCover>();
+
+            foreach (WorldCover c in a.cover ?? Array.Empty<WorldCover>())
+            {
+                if (c == null) continue;
+                obstacles.Add(new MapEntity
+                {
+                    x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                }.ToCover());
+            }
+
+            foreach (WorldShed s in a.Sheds())
+                obstacles.Add(new MapEntity
+                {
+                    x = s.x, z = s.z, width = WorldMapLoader.ShedFootprint,
+                    height = WorldMapLoader.ShedHeight, depth = WorldMapLoader.ShedFootprint, shape = "box",
+                }.ToCover());
+
+            foreach (WorldReplicator r in a.replicators ?? Array.Empty<WorldReplicator>())
+                obstacles.Add(new MapEntity
+                {
+                    x = r.x, z = r.z, width = WorldMapLoader.ReplicatorFootprint,
+                    height = 1f, depth = WorldMapLoader.ReplicatorFootprint, shape = "box",
+                }.ToCover());
+
+            return obstacles;
+        }
+
+        private static bool WalkabilityObstacleBlocks(List<ArenaCover> obstacles, float x, float z)
+        {
+            var p = new Vector2(x, z);
+            foreach (ArenaCover o in obstacles)
+                if (o.DistanceTo(p) < PlayerBodyRadius) return true;
+            return false;
+        }
+
+        /// <summary>Every UNBLOCKED raster cell whose centre falls inside <paramref name="rect"/> —
+        /// clamped to the grid, since a mouth band can run slightly past an area's own edge.</summary>
+        private static List<(int i, int j)> WalkabilityCellsIn(WorldArea a, int nx, int nz, Rect rect, bool[,] blocked)
+        {
+            var cells = new List<(int, int)>();
+
+            int iMin = Mathf.Max(0, Mathf.FloorToInt((rect.xMin - a.XMin) / WalkabilityRasterCell));
+            int iMax = Mathf.Min(nx - 1, Mathf.CeilToInt((rect.xMax - a.XMin) / WalkabilityRasterCell));
+            int jMin = Mathf.Max(0, Mathf.FloorToInt((rect.yMin - a.ZMin) / WalkabilityRasterCell));
+            int jMax = Mathf.Min(nz - 1, Mathf.CeilToInt((rect.yMax - a.ZMin) / WalkabilityRasterCell));
+
+            for (int i = iMin; i <= iMax; i++)
+            for (int j = jMin; j <= jMax; j++)
+                if (!blocked[i, j]) cells.Add((i, j));
+
+            return cells;
+        }
+
+        private static bool WalkabilityAnyReached(WorldArea a, int nx, int nz, Rect rect, bool[,] blocked, bool[,] reached)
+        {
+            foreach ((int i, int j) in WalkabilityCellsIn(a, nx, nz, rect, blocked))
+                if (reached[i, j]) return true;
+            return false;
+        }
+
+        /// <summary>8-directional multi-source flood fill — 8-directional so a diagonal squeeze between
+        /// two inflated obstacle corners at this resolution reads the same as it would continuously;
+        /// multi-source so every unblocked cell across a seed gate's whole doorway band counts as a
+        /// starting point, not just one.</summary>
+        private static bool[,] WalkabilityFloodFill(bool[,] blocked, int nx, int nz, List<(int i, int j)> seeds)
+        {
+            var reached = new bool[nx, nz];
+            var queue = new Queue<(int i, int j)>();
+
+            foreach ((int i, int j) in seeds)
+            {
+                if (reached[i, j]) continue;
+                reached[i, j] = true;
+                queue.Enqueue((i, j));
+            }
+
+            int[] di = { 1, -1, 0, 0, 1, 1, -1, -1 };
+            int[] dj = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+            while (queue.Count > 0)
+            {
+                (int ci, int cj) = queue.Dequeue();
+                for (int k = 0; k < 8; k++)
+                {
+                    int ni = ci + di[k], nj = cj + dj[k];
+                    if (ni < 0 || ni >= nx || nj < 0 || nj >= nz) continue;
+                    if (reached[ni, nj] || blocked[ni, nj]) continue;
+                    reached[ni, nj] = true;
+                    queue.Enqueue((ni, nj));
+                }
+            }
+
+            return reached;
         }
     }
 }
