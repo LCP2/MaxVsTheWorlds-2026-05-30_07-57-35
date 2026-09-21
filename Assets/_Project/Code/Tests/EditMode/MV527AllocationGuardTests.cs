@@ -46,23 +46,26 @@ namespace MaxWorlds.Tests.EditMode
         /// a null-check cache" — the two GameFeel/AmbienceVfx entries below are the latter, not a
         /// violation, just outside what a source-shape test can prove on its own.
         ///
-        /// GroundAnchorVfx.cs (MV-527's entry here): its per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c>
-        /// scan was evaluated for MV-527 and reverted after <c>GroundAnchorPlayTests.cs</c> (6 PlayMode
+        /// GroundAnchorVfx.cs: its per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c> scan
+        /// was evaluated for MV-527 and reverted after <c>GroundAnchorPlayTests.cs</c> (6 PlayMode
         /// tests) turned out to pin a load-bearing, documented contract — ANY actor with a
         /// CharacterController + IDamageable gets anchored, with zero per-type wiring, proven against a
         /// synthetic FakeActor type that is neither RobotEnemy, PlayerHealth nor BigBermudaBoss. MV-532
         /// converted it off the per-frame scan — to a reused-buffer <c>Physics.OverlapSphereNonAlloc</c>
         /// query rather than a registry, because a registry needs a component added at every actor's
         /// construction site, which is exactly the per-type wiring FakeActor proves must not be
-        /// required. It no longer calls FindObjectsByType/FindFirstObjectByType in a per-frame path, so
-        /// it no longer needs this exemption; kept off the list.
+        /// required. MV-871 then added a SECOND, unrelated lookup to the same LateUpdate — a cached
+        /// <c>_player</c> reference used to centre that overlap query, re-checked with the same
+        /// <c>if (_field == null) _field = FindFirstObjectByType&lt;T&gt;();</c> idiom as the two entries
+        /// below, so it's back on this list for the same reason they are: a one-time cached lookup, not
+        /// a per-frame scan, that a text scan can't tell apart from one.
         ///
         /// GameFeel.cs / AmbienceVfx.cs: pre-existing (not touched by MV-527), and already the pattern
         /// this ticket asks for — <c>if (_field == null) _field = FindFirstObjectByType&lt;T&gt;();</c>,
         /// a one-time cached singleton lookup, not a per-frame scan. Allowlisted because a text scan
         /// can't see the guard; not a regression to fix.
         /// </summary>
-        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs" };
+        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs", "GroundAnchorVfx.cs" };
 
         /// <summary>
         /// MV-553 — this test intermittently failed in CI (~1 run in 3) with no offender ever seen in
