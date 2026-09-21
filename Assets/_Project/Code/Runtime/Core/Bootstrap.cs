@@ -166,8 +166,15 @@ namespace MaxWorlds.Core
                        : _meter.Fps < 10f ? $"{_meter.Fps:0.0} fps"
                        : $"{_meter.Fps:0} fps";
 
-            GUI.Label(new Rect(12f, 8f, 640f, 60f),
-                $"{fps}   (target {targetFrameRate})   build {Application.version}", _fpsStyle);
+            // MV-881 Requirement A: every row below is drawn by DrawWrappedLine, which advances y by
+            // that row's own measured height (including wrapped rows) instead of a fixed offset — see
+            // its doc comment. labelWidth also caps rows at the visible screen so wrapping (and the
+            // legibility that depends on it) is measured against what a phone can actually show, not a
+            // fixed 900px that could run off a narrower device.
+            float labelWidth = Mathf.Min(900f, Screen.width - 24f);
+            float y = 8f;
+
+            DrawWrappedLine($"{fps}   (target {targetFrameRate})   build {Application.version}", ref y, labelWidth);
 
             // MV-766: a second line, under the same "smoke-verification, not player UI" condition
             // as the stamp above — what actually resolved, read from the live objects, never
@@ -175,7 +182,7 @@ namespace MaxWorlds.Core
             string probeLine = WorldProbeLineProvider?.Invoke();
             if (string.IsNullOrEmpty(probeLine)) return;
 
-            GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 1.2f), 640f, 60f), probeLine, _fpsStyle);
+            DrawWrappedLine(probeLine, ref y, labelWidth);
 
             // MV-869: a third line, under the same condition as the two above — how many actors are
             // alive and whether World 2's Replicator chain is actually live. Rebuilt at most every
@@ -188,24 +195,39 @@ namespace MaxWorlds.Core
                 _populationLineBuiltAt = now;
             }
 
-            if (!string.IsNullOrEmpty(_cachedPopulationLine))
-                GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 2.4f), 900f, 60f), _cachedPopulationLine, _fpsStyle);
+            DrawWrappedLine(_cachedPopulationLine, ref y, labelWidth);
 
-            // MV-876: a fourth line, under the same condition as the three above — the script-time
-            // attribution readout that replaces guessing at World 2's pinned 11 fps with measurement.
-            // Rebuilt at most every FrameCostRefreshSeconds, never once per OnGUI call, matching the
-            // population line's own "must not itself cost a frame" reasoning (FrameCost.FormatLine
-            // allocates; FrameCost.Begin/End/MarkFrameRendered/NotifyFixedUpdate never do).
+            // MV-876: a fourth/fifth line (MV-881 made the readout two lines — see FrameCost.FormatLine),
+            // under the same condition as the ones above — the script-time attribution readout that
+            // replaces guessing at World 2's pinned 11 fps with measurement. Rebuilt at most every
+            // FrameCostRefreshSeconds, never once per OnGUI call, matching the population line's own
+            // "must not itself cost a frame" reasoning (FrameCost.FormatLine allocates;
+            // FrameCost.Begin/End/MarkFrameRendered/NotifyFixedUpdate never do).
             if (now - _frameCostWindowStartAt >= FrameCostRefreshSeconds)
             {
-                double windowTotalMs = (now - _frameCostWindowStartAt) * 1000.0;
-                _cachedFrameCostLine = FrameCost.FormatLine(windowTotalMs);
+                _cachedFrameCostLine = FrameCost.FormatLine();
                 FrameCost.Reset();
                 _frameCostWindowStartAt = now;
             }
 
-            if (!string.IsNullOrEmpty(_cachedFrameCostLine))
-                GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 3.6f), 900f, 60f), _cachedFrameCostLine, _fpsStyle);
+            DrawWrappedLine(_cachedFrameCostLine, ref y, labelWidth);
+        }
+
+        /// <summary>MV-881 Requirement A: a ticket comment caught the population line and the frame-cost
+        /// line physically overlapping — GUI.Label wraps text that doesn't fit <paramref name="width"/>,
+        /// but the readout's rows were spaced at a fixed <c>fontSize * 1.2</c> regardless, so a wrapped
+        /// row bled into the next label's position and cost a digit (misread as "robot 10.6" instead of
+        /// "robot 100.6"). Each line now gets a rect sized to its OWN measured height — including
+        /// embedded "\n"s, which is how a two-line <see cref="FrameCost.FormatLine"/> return draws as
+        /// two rows from one label — and <paramref name="y"/> only advances by that much, so no line can
+        /// ever draw on top of another at any font size or aspect.</summary>
+        private void DrawWrappedLine(string text, ref float y, float width)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            float height = _fpsStyle.CalcHeight(new GUIContent(text), width);
+            GUI.Label(new Rect(12f, y, width, height), text, _fpsStyle);
+            y += height;
         }
     }
 }

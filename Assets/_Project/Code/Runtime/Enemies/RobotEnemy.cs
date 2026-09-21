@@ -1254,7 +1254,10 @@ namespace MaxWorlds.Enemies
 
         private void Update()
         {
-            FrameCost.Begin(FrameCost.Bucket.Robot);
+            // MV-881: awake here matches PopulationReadout.BuildLine's own definition (not Dormant AND
+            // alive) — same threshold used to count "awake" on the population line, so FrameCost's
+            // "robot X.X (awake N)" reads against the same N a QA session already recognises.
+            FrameCost.Begin(FrameCost.Bucket.Robot, IsAlive && !IsDormant);
             Tick(Time.deltaTime);
             FrameCost.End(FrameCost.Bucket.Robot);
         }
