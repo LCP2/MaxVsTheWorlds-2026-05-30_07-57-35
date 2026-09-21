@@ -68,6 +68,19 @@ namespace MaxWorlds.Core
         private static bool s_hasLastFrameTicks;
         private static double s_frameTimeSumMs;
 
+        /// <summary>MV-885: every rendered frame counted unconditionally, including the first call
+        /// after <see cref="Reset"/>. <see cref="s_frameCount"/> deliberately excludes that first call
+        /// (it has no previous timestamp to diff, so it can't measure that frame's own elapsed time —
+        /// see <see cref="MarkFrameRendered"/>), but <see cref="s_fixedUpdateCount"/> has no such gap:
+        /// it accumulates every <see cref="NotifyFixedUpdate"/> call from the moment of Reset, including
+        /// whatever ran before that first mark. Dividing the fixed-update total by <see cref="s_frameCount"/>
+        /// therefore attributed N frames' worth of catch-up to N-1 frames — a reading above the real
+        /// per-frame cap even when no single frame ever exceeded it (proven by
+        /// <c>Mv885FixedPerFrameClampTests</c>, which failed with "fixed 7.5/frame" against a resolved
+        /// cap of 5 before this field existed). This counts every rendered frame, matching what
+        /// <see cref="s_fixedUpdateCount"/> actually spans.</summary>
+        private static int s_renderedFrameCount;
+
         private static int s_robotAwakeThisFrame;
         private static int s_robotAwakeLast;
 
@@ -96,6 +109,8 @@ namespace MaxWorlds.Core
         public static void MarkFrameRendered()
         {
             long now = s_clock.GetTimestamp();
+
+            s_renderedFrameCount++;
 
             if (s_hasLastFrameTicks)
             {
@@ -132,7 +147,12 @@ namespace MaxWorlds.Core
             double sum = 0.0;
             for (int i = 0; i < BucketCount; i++) sum += s_bucketMs[i];
             double residualPerFrame = (s_frameTimeSumMs - sum) / frames;
-            double fixedPerFrame = s_fixedUpdateCount / (double)frames;
+
+            // MV-885: this one divides by every rendered frame (see s_renderedFrameCount doc comment),
+            // NOT by `frames` — frames undercounts by exactly the still-open frame that hasn't been
+            // closed by a subsequent MarkFrameRendered call yet, which inflated this specific figure
+            // past the real per-frame cap while every other line stayed correct.
+            double fixedPerFrame = s_fixedUpdateCount / (double)Math.Max(1, s_renderedFrameCount);
 
             string bucketLine =
                 $"ms robot {s_bucketMs[(int)Bucket.Robot] / frames:0.0} (awake {s_robotAwakeLast}) " +
@@ -150,6 +170,7 @@ namespace MaxWorlds.Core
             for (int i = 0; i < BucketCount; i++) s_bucketMs[i] = 0.0;
             s_fixedUpdateCount = 0;
             s_frameCount = 0;
+            s_renderedFrameCount = 0;
             s_frameTimeSumMs = 0.0;
             s_hasLastFrameTicks = false;
             s_robotAwakeThisFrame = 0;
@@ -177,12 +198,22 @@ namespace MaxWorlds.Core
         private static ProfilerRecorder s_setPassRecorder;
         private static ProfilerRecorder s_trianglesRecorder;
 
-        /// <summary>Idempotent; safe to call every <see cref="Reset"/>. A marker name Unity doesn't
-        /// recognise on this platform/build (the render-stat counters need a development build — see
-        /// the ticket) leaves that recorder's default, invalid state rather than throwing, and
-        /// <see cref="FormatProfilerLine"/> already reports "-" for an invalid recorder rather than a
-        /// false zero — the same "don't print a confident reading from an instrument that hasn't
-        /// measured anything" rule <see cref="FrameTimingProbe.HasReading"/> documents.</summary>
+        /// <summary>Idempotent; safe to call every <see cref="Reset"/>. MV-885: <c>phys</c> and
+        /// <c>scr</c> used dot-separated names ("FixedUpdate.PhysicsFixedUpdate",
+        /// "Update.ScriptRunBehaviourUpdate") that do not exist in this engine build at all — the real
+        /// PlayerLoop-hierarchy marker names use a slash ("FixedUpdate/PhysicsFixedUpdate",
+        /// "Update/ScriptRunBehaviourUpdate"), confirmed by grepping both the nondevelopment and
+        /// development Windows-player <c>UnityPlayer.dll</c> shipped with this project's own
+        /// 6000.4.9f1 Editor install: the slash form is present in BOTH, the dot form in neither. That
+        /// was a naming bug, not a build-type limitation, and is fixed below. <c>cam</c>
+        /// ("Camera.Render"), <c>gc</c> ("GC.Alloc") and <c>batch</c> ("Batches Count") were checked the
+        /// same way and are genuinely absent from the nondevelopment player binary while present in the
+        /// development one — those three require a Development Build and cannot be fixed by a name
+        /// change; see the Jira comment for the full per-counter breakdown (AC3). A marker name Unity
+        /// doesn't recognise on this platform/build leaves that recorder's default, invalid state rather
+        /// than throwing, and <see cref="FormatProfilerLine"/> reports "n/a" for an invalid recorder
+        /// rather than a false zero — the same "don't print a confident reading from an instrument that
+        /// hasn't measured anything" rule <see cref="FrameTimingProbe.HasReading"/> documents.</summary>
         private static void EnsureRecordersStarted()
         {
             if (s_recordersStarted) return;
@@ -192,8 +223,8 @@ namespace MaxWorlds.Core
             {
                 s_playerLoopRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "PlayerLoop");
                 s_cameraRenderRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Camera.Render");
-                s_physicsRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Physics, "FixedUpdate.PhysicsFixedUpdate");
-                s_scriptUpdateRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Update.ScriptRunBehaviourUpdate");
+                s_physicsRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Physics, "FixedUpdate/PhysicsFixedUpdate");
+                s_scriptUpdateRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, "Update/ScriptRunBehaviourUpdate");
                 s_gcAllocRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC.Alloc");
                 s_batchesRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
                 s_setPassRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
@@ -209,16 +240,24 @@ namespace MaxWorlds.Core
         private static string FormatProfilerLine() =>
             $"pl {Ms(s_playerLoopRecorder)} cam {Ms(s_cameraRenderRecorder)} " +
             $"phys {Ms(s_physicsRecorder)} scr {Ms(s_scriptUpdateRecorder)} " +
-            $"gc {Kb(s_gcAllocRecorder)}kb batch {Count(s_batchesRecorder)} " +
+            $"gc {Kb(s_gcAllocRecorder)} batch {Count(s_batchesRecorder)} " +
             $"setp {Count(s_setPassRecorder)} tri {Count(s_trianglesRecorder)}";
 
+        /// <summary>MV-885 point 2: distinguishable from a real zero reading, plus a one-word reason.
+        /// <see cref="ProfilerRecorder"/> exposes no "why" of its own, so the reason is the one thing we
+        /// CAN determine at runtime: <see cref="UnityEngine.Debug.isDebugBuild"/> reflects whether this
+        /// is a Development Build, where every marker this class starts is known to exist (see
+        /// <see cref="EnsureRecordersStarted"/>). A recorder still invalid there means the name itself is
+        /// wrong; a recorder invalid outside one means it needs a Development Build to sample at all.</summary>
+        private static string NotAvailable() => UnityEngine.Debug.isDebugBuild ? "n/a(name)" : "n/a(dev)";
+
         private static string Ms(in ProfilerRecorder rec) =>
-            rec.Valid ? (rec.LastValue / 1e6).ToString("0.0") : "-";
+            rec.Valid ? (rec.LastValue / 1e6).ToString("0.0") : NotAvailable();
 
         private static string Kb(in ProfilerRecorder rec) =>
-            rec.Valid ? (rec.LastValue / 1024.0).ToString("0.0") : "-";
+            rec.Valid ? (rec.LastValue / 1024.0).ToString("0.0") + "kb" : NotAvailable();
 
         private static string Count(in ProfilerRecorder rec) =>
-            rec.Valid ? rec.LastValue.ToString() : "-";
+            rec.Valid ? rec.LastValue.ToString() : NotAvailable();
     }
 }

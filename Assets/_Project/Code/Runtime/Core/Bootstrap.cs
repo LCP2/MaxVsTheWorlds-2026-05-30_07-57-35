@@ -131,7 +131,10 @@ namespace MaxWorlds.Core
 
         /// <summary>MV-876: counts fixed-timestep steps against rendered frames — the other hypothesis
         /// a frame rate pinned across every load reduction (render scale, shadow distance, population)
-        /// points at, alongside a fixed per-frame cost. See <see cref="FrameCost"/>.</summary>
+        /// points at, alongside a fixed per-frame cost. See <see cref="FrameCost"/>. MV-885 confirmed the
+        /// MV-883 clamp (<see cref="Time.maximumDeltaTime"/> above) is applied correctly — the "fixed
+        /// 6.5/frame" reading that looked like it exceeded the clamp was <see cref="FrameCost"/>
+        /// undercounting its own denominator, not this call under-clamping.</summary>
         private void FixedUpdate() => FrameCost.NotifyFixedUpdate();
 
         private void OnDestroy()
