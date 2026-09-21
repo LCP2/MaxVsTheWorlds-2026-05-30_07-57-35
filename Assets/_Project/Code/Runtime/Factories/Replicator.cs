@@ -47,11 +47,14 @@ namespace MaxWorlds.Factories
         /// tight gate bought nothing and cost the whole interaction.</summary>
         public const float ArriveTolerance = 0.9f;
 
-        /// <summary>MV-807: the queue a lured robot actually walks into. Two robots pressed against
-        /// the same hatch point could never both close on it (see <see cref="QueueSlotPosition"/>'s
-        /// own doc), so at most this many are ever steered at once — every other eligible robot goes
-        /// back to chasing Max until a slot frees.</summary>
-        public const int MaxQueueSlots = 2;
+        /// <summary>MV-807: the queue a lured robot actually walks into. Robots pressed against the
+        /// same hatch point could never all close on it (see <see cref="QueueSlotPosition"/>'s own
+        /// doc), so at most this many are ever steered at once — every other eligible robot goes back
+        /// to chasing Max until a slot frees. MV-872: 2 -> 6, so a real line forms at the IN face
+        /// instead of the two-robot cap that made a drawn-up crowd read as broken. The queue is also
+        /// never allowed past the box's own remaining <see cref="capacity"/> — see <see cref="TickLure"/>
+        /// — so this is a ceiling, not a guarantee.</summary>
+        public const int MaxQueueSlots = 6;
 
         /// <summary>MV-807: metres between consecutive queue slots along <see cref="HatchOutwardNormal"/>,
         /// and between the hatch itself and slot 0. Lee's own "queue 2 deep" is a line, not a pile —
@@ -526,7 +529,7 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive || capacity <= 0) return;
 
-            while (_queue.Count < MaxQueueSlots)
+            while (_queue.Count < EffectiveQueueCap)
             {
                 RobotEnemy nearest = NearestEligible();
                 if (nearest == null) break; // nobody left in this area to assign
@@ -534,6 +537,13 @@ namespace MaxWorlds.Factories
                 nearest.SeekReplicator(QueueSlotPosition(_queue.Count - 1));
             }
         }
+
+        /// <summary>MV-872: the queue can never hold more than the box's own remaining
+        /// <see cref="capacity"/> can honour — a robot must never be pulled out of the fight for a
+        /// slot the box can no longer pay off. <see cref="MaxQueueSlots"/> is the separate physical
+        /// ceiling (how many can ever fit in the line at once); this is whichever of the two is
+        /// smaller.</summary>
+        private int EffectiveQueueCap => Mathf.Min(MaxQueueSlots, capacity);
 
         /// <summary>MV-820 Change 1's filter, factored out (MV-869) so the population/Replicator probe
         /// can fold an eligible-count for a given area into its own single walk of
@@ -752,7 +762,7 @@ namespace MaxWorlds.Factories
             // left to drift) the instant the condition stops holding, so it always fires promptly again
             // the next time a slot actually opens rather than however much of a stale interval happens
             // to be left over.
-            if (_playerInArea && capacity > 0 && _queue.Count < MaxQueueSlots)
+            if (_playerInArea && capacity > 0 && _queue.Count < EffectiveQueueCap)
             {
                 _lureRetryTimer -= dt;
                 if (_lureRetryTimer <= 0f)
