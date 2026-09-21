@@ -22,6 +22,12 @@ namespace MaxWorlds.Rendering
     /// <see cref="Apply"/> now clips each piece's leading/trailing edge into the tile's run and scales
     /// it down to fit rather than letting it overhang, so a piece eases out of view as it approaches the
     /// wrap point instead of teleporting through the edge.
+    ///
+    /// MV-873: this rig no longer ticks itself. It registers with <see cref="SludgeFlowDirector"/> on
+    /// enable and unregisters on disable, and the director decides — every frame, for every registered
+    /// rig — whether it is close enough to the player to be worth the per-piece work. <see cref="Tick"/>
+    /// itself is unchanged so the existing EditMode tests still drive it directly with no director and
+    /// no scene running.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class SludgeFlowRig : MonoBehaviour
@@ -32,6 +38,12 @@ namespace MaxWorlds.Rendering
         /// <summary>Foam scrolls slower than the bands (MV-785's own number) — the differential is what
         /// sells the sludge as fluid rather than a conveyor.</summary>
         public const float SlowSpeed = 0.12f;
+
+        /// <summary>MV-873: incremented once per piece inside <see cref="Apply"/>, across every rig —
+        /// the measured signal an EditMode test uses to prove a gated-off rig's pieces truly did no
+        /// work, rather than trusting that skipping <see cref="Tick"/> implies it. Test-only
+        /// instrumentation; production code never reads it.</summary>
+        public static int AppliedPieceCount;
 
         private Vector3 _fastAxis;
         private float _fastRun;
@@ -130,6 +142,7 @@ namespace MaxWorlds.Rendering
             float halfRun = run * 0.5f;
             for (int i = 0; i < transforms.Length; i++)
             {
+                AppliedPieceCount++;
                 float coord = Mathf.Repeat(phase[i] + speed * time, run) - halfRun;
                 float half = halfExtent[i];
 
@@ -160,6 +173,8 @@ namespace MaxWorlds.Rendering
             }
         }
 
-        private void Update() => Tick(Time.deltaTime);
+        private void OnEnable() => SludgeFlowDirector.Register(this);
+
+        private void OnDisable() => SludgeFlowDirector.Unregister(this);
     }
 }
