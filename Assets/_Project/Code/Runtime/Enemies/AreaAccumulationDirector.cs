@@ -148,6 +148,14 @@ namespace MaxWorlds.Enemies
         /// advances from the live <see cref="MapZone"/> under Max's feet in <see cref="Update"/>.</summary>
         private int _physicalArea = 1;
 
+        /// <summary>MV-887: the 1-based area <see cref="_physicalArea"/> currently reads — the area
+        /// renderer gate's own starting point (<see cref="MaxWorlds.Arena.MapStaticBatchRoot"/>),
+        /// read once at its own Start() rather than assuming "area1" the way <see cref="Configure"/>
+        /// itself does, so the gate stays correct even if a future change ever starts Max somewhere
+        /// else. Read-only: only <see cref="Update"/> and <see cref="SetCurrentArea"/> ever advance or
+        /// rewind the physical tracker itself.</summary>
+        public int PhysicalArea => _physicalArea;
+
         /// <summary>Fired the instant Max's actual position crosses into a new area — unlike
         /// <see cref="EnterArea"/> (gate-open-driven, ahead of the player for population purposes), this
         /// reflects where Max physically is right now. What <see cref="MaxWorlds.Arena.Sentinel.DestroyAllActive"/>

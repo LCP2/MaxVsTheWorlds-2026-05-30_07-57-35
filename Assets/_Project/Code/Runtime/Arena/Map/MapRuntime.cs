@@ -50,19 +50,106 @@ namespace MaxWorlds.Arena
     public sealed class MapStaticBatchRoot : MonoBehaviour
     {
         private GameObject[] _statics;
+        private MapData _map;
+        private Dictionary<Renderer, List<string>> _rendererZones;
+        private AreaAccumulationDirector _areaDirector;
 
         /// <summary>Exactly what was handed to <see cref="StaticBatchingUtility.Combine"/> — every
         /// GameObject this build classified as never moving.</summary>
         public IReadOnlyList<GameObject> Statics => _statics;
 
-        public void Configure(GameObject[] statics) => _statics = statics;
+        public void Configure(GameObject[] statics, MapData map, Dictionary<Renderer, List<string>> rendererZones)
+        {
+            _statics = statics;
+            _map = map;
+            _rendererZones = rendererZones;
+        }
 
         private void Start()
         {
             if (_statics != null && _statics.Length > 0)
                 StaticBatchingUtility.Combine(_statics, gameObject);
 
+            // MV-887 change 5: the sludge dressing kit (StormdrainDressing) is a SIBLING of this map's
+            // own root, built later in the same Awake as MapRuntime.Build — by the time Start() fires,
+            // Unity guarantees every Awake this frame has already run (the same guarantee this class's
+            // own doc comment already leans on for the static-batch combine above), so its "Sludge" host
+            // already exists and can be folded into the same per-zone index MapRuntime.Build populated.
+            TagDressingSludge();
+
+            // The area the gate starts with — Max's own physical area at map-build time, read off
+            // AreaAccumulationDirector rather than assumed, so this never has to hard-code "area1"
+            // separately from Configure()'s own convention.
+            _areaDirector = Object.FindFirstObjectByType<AreaAccumulationDirector>();
+            int startArea = _areaDirector != null ? _areaDirector.PhysicalArea : 1;
+            ApplyAreaGate($"area{startArea}");
+
+            // Re-evaluate on area change only (AC4) — never per frame. This is the exact signal
+            // Replicator.OnAreaEntered already consumes for the same reason (see the ticket).
+            if (_areaDirector != null)
+                _areaDirector.PlayerCrossedIntoArea += OnPlayerCrossedIntoArea;
+
             RecordRendererCensus();
+        }
+
+        private void OnDestroy()
+        {
+            if (_areaDirector != null)
+                _areaDirector.PlayerCrossedIntoArea -= OnPlayerCrossedIntoArea;
+        }
+
+        private void OnPlayerCrossedIntoArea(int area) => ApplyAreaGate($"area{area}");
+
+        /// <summary>MV-887: enables every renderer this build tagged as belonging to
+        /// <paramref name="currentZoneId"/> or to one of its gate-connected neighbours (read straight off
+        /// <see cref="MapData.links"/> — the map's own zone/gate graph, not a separately invented
+        /// adjacency source), disables every other tagged one. A renderer this build never tagged (the
+        /// single map-spanning floor slab, and anything gameplay-owned — robots, replicators, factories,
+        /// bosses, area gates, all explicitly out of scope per the ticket's own "renderers only, and not
+        /// gameplay's renderers either" rule) is never touched here and keeps whatever state it already
+        /// had.</summary>
+        public void ApplyAreaGate(string currentZoneId)
+        {
+            if (_rendererZones == null || string.IsNullOrEmpty(currentZoneId)) return;
+
+            var active = new HashSet<string> { currentZoneId };
+            if (_map?.links != null)
+            {
+                foreach (MapLink link in _map.links)
+                {
+                    if (link == null) continue;
+                    if (link.from == currentZoneId) active.Add(link.to);
+                    else if (link.to == currentZoneId) active.Add(link.from);
+                }
+            }
+
+            foreach (KeyValuePair<Renderer, List<string>> pair in _rendererZones)
+            {
+                Renderer r = pair.Key;
+                if (r == null) continue;
+                r.enabled = pair.Value.Exists(active.Contains);
+            }
+        }
+
+        private void TagDressingSludge()
+        {
+            if (_map == null || _rendererZones == null) return;
+
+            Transform areaRoot = transform.parent != null ? transform.parent : transform;
+            Transform dressing = areaRoot.Find("Stormdrain Dressing");
+            Transform sludgeHost = dressing != null ? dressing.Find("Sludge") : null;
+            if (sludgeHost == null) return;
+
+            foreach (Renderer r in sludgeHost.GetComponentsInChildren<Renderer>(true))
+            {
+                Vector3 p = r.transform.position;
+                MapZone zone = _map.ZoneAt(p.x, p.y, p.z);
+                if (zone == null) continue;
+
+                if (!_rendererZones.TryGetValue(r, out List<string> zones))
+                    _rendererZones[r] = zones = new List<string>(1);
+                if (!zones.Contains(zone.id)) zones.Add(zone.id);
+            }
         }
 
         /// <summary>MV-886 item 2: a one-off census of this area's own Renderer population, taken at the
@@ -86,12 +173,16 @@ namespace MaxWorlds.Arena
             Transform dressing = areaRoot.Find("Stormdrain Dressing");
             if (dressing != null) sludgeHost = dressing.Find("Sludge");
 
-            int mapGeometry = 0, replicators = 0, robots = 0, sludge = 0, opaque = 0, transparent = 0;
+            int mapGeometry = 0, replicators = 0, robots = 0, sludge = 0, opaque = 0, transparent = 0, enabledCount = 0;
 
+            // MV-887: counts every renderer regardless of Renderer.enabled now (the area gate disables
+            // most of them outside the current area+neighbours) — the census's own job is to report the
+            // WORLD's total population (AC3), with enabledCount reporting the gate's live effect on top,
+            // not to silently shrink to "whatever happens to be on right now" the way the pre-gate skip
+            // here used to (harmless before this ticket, since nothing but two invisible blockers ever
+            // disabled a renderer).
             foreach (Renderer r in areaRoot.GetComponentsInChildren<Renderer>(false))
             {
-                if (!r.enabled) continue;
-
                 bool isSludge = sludgeHost != null && r.transform.IsChildOf(sludgeHost);
                 bool isRobot = !isSludge && r.GetComponentInParent<RobotEnemy>() != null;
                 bool isReplicator = !isSludge && !isRobot &&
@@ -104,12 +195,14 @@ namespace MaxWorlds.Arena
                 else if (isReplicator) replicators++;
                 else mapGeometry++;
 
+                if (r.enabled) enabledCount++;
+
                 Material mat = r.sharedMaterial;
                 if (mat != null && mat.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.Transparent) transparent++;
                 else opaque++;
             }
 
-            FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent);
+            FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent, enabledCount);
         }
     }
 
@@ -224,9 +317,18 @@ namespace MaxWorlds.Arena
             // every object this method builds keeps the exact same parent it always had.
             var staticGeometry = new List<GameObject>(64);
 
+            // MV-887: every renderer this build tags with the zone(s) it belongs to, so
+            // MapStaticBatchRoot can enable only the ones in Max's current area and its gate-connected
+            // neighbours (see that class's own ApplyAreaGate). A renderer never added here — the single
+            // map-spanning "Map Floor" below, or anything gameplay-owned (robots, replicators, factories,
+            // bosses, area gates) — is never gated and keeps behaving exactly as before.
+            var rendererZones = new Dictionary<Renderer, List<string>>(512);
+
             FloorSlab floor = MapGeometry.Floor(map);
             // blocksSight: false — you cannot hide behind the ground, and a ground collider on the
-            // cover layer would have every sight-line ray graze it.
+            // cover layer would have every sight-line ray graze it. Never tagged (see rendererZones'
+            // own doc above) — one slab spans the whole map, so there is no single zone to gate it by,
+            // and it is cheap enough (one renderer) that leaving it always on costs nothing.
             AddStatic(Box(root, "Map Floor", floor.Center, floor.Size, blocksSight: false, isStatic: true), staticGeometry);
 
             foreach (WallSegment w in MapGeometry.Walls(map))
@@ -238,10 +340,11 @@ namespace MaxWorlds.Arena
                 GameObject wallGo = Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
                 ApplyBevelledBoxMesh(wallGo, w.Size);
                 wallGo.AddComponent<StructuralWall>();
-                AddStatic(wallGo, staticGeometry);
+                TagWallZones(map, wallGo, w, rendererZones);
+                AddStatic(map, wallGo, staticGeometry, rendererZones, autoTag: false);
             }
 
-            BuildProps(map, root, staticGeometry, built);
+            BuildProps(map, root, staticGeometry, built, rendererZones);
             PlaceActors(map, root, built);
             WireGates(map, built);
 
@@ -256,14 +359,79 @@ namespace MaxWorlds.Arena
             // fired the same way and at the same point as the factory wording just above.
             HudSignals.EmitPressureWording(map.pressureNoun, map.pressureCaption);
 
-            root.gameObject.AddComponent<MapStaticBatchRoot>().Configure(staticGeometry.ToArray());
+            root.gameObject.AddComponent<MapStaticBatchRoot>().Configure(staticGeometry.ToArray(), map, rendererZones);
 
             return built;
         }
 
+        /// <summary>MV-887: which zone(s) <paramref name="w"/> actually borders, found by probing just
+        /// inside each side of the wall's own line rather than testing the wall's boundary coordinate
+        /// itself — <see cref="MapZone.Contains"/> is inclusive at both ends, so a point exactly on a
+        /// shared edge would resolve to whichever zone happens to come first in <c>map.zones</c>, not
+        /// necessarily either (or both) of the zones the wall actually separates. Sampled at both ends of
+        /// the run and its middle, not just the centre, because a long merged run (MapGeometry.Walls'
+        /// own <c>Solids</c> pass) can span more than one zone's edge when consecutive rooms share a line
+        /// with no doorway cut between them. A side with no room at all (<see cref="WallSegment.RoomLower"/>/
+        /// <see cref="WallSegment.RoomUpper"/> false, or the map boundary) simply resolves to null and is
+        /// skipped, never invented.</summary>
+        private static void TagWallZones(MapData map, GameObject wallGo, WallSegment w,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            Renderer renderer = wallGo.GetComponent<Renderer>();
+            if (renderer == null) return;
+
+            float length = w.AlongX ? w.Size.x : w.Size.z;
+            float inset = Mathf.Max(map.wallThickness, 0.5f);
+            float halfLength = length * 0.5f - 0.05f;
+            float[] offsets = halfLength > 0f ? new[] { -halfLength, 0f, halfLength } : new[] { 0f };
+
+            foreach (float offset in offsets)
+            {
+                Vector3 along = w.AlongX
+                    ? new Vector3(w.Center.x + offset, w.Center.y, w.Center.z)
+                    : new Vector3(w.Center.x, w.Center.y, w.Center.z + offset);
+
+                Vector3 sideLower = w.AlongX
+                    ? new Vector3(along.x, along.y, along.z - inset)
+                    : new Vector3(along.x - inset, along.y, along.z);
+                Vector3 sideUpper = w.AlongX
+                    ? new Vector3(along.x, along.y, along.z + inset)
+                    : new Vector3(along.x + inset, along.y, along.z);
+
+                TagRendererAt(map, renderer, sideLower, rendererZones);
+                TagRendererAt(map, renderer, sideUpper, rendererZones);
+            }
+        }
+
+        /// <summary>MV-887: resolves the zone at <paramref name="worldPos"/> and, if one exists, records
+        /// <paramref name="renderer"/> as belonging to it — the shared primitive both <see cref="TagWallZones"/>
+        /// and <see cref="TagStatic"/> build on.</summary>
+        private static void TagRendererAt(MapData map, Renderer renderer, Vector3 worldPos,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            MapZone zone = map.ZoneAt(worldPos.x, worldPos.y, worldPos.z);
+            if (zone == null) return;
+
+            if (!rendererZones.TryGetValue(renderer, out List<string> zones))
+                rendererZones[renderer] = zones = new List<string>(2);
+            if (!zones.Contains(zone.id)) zones.Add(zone.id);
+        }
+
+        /// <summary>MV-887: tags every renderer under <paramref name="go"/> by its own resolved position
+        /// — correct for anything that sits comfortably inside one room (cover, props, sludge, a deck's
+        /// own pieces), unlike a wall which sits exactly on a shared boundary and needs <see cref="TagWallZones"/>'s
+        /// two-sided probe instead.</summary>
+        private static void TagStatic(MapData map, GameObject go, Dictionary<Renderer, List<string>> rendererZones)
+        {
+            if (go == null) return;
+            foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
+                TagRendererAt(map, r, r.transform.position, rendererZones);
+        }
+
         /// <summary>Everything the map creates from nothing: cover to fight around, and scenery with a
         /// body.</summary>
-        private static void BuildProps(MapData map, Transform root, List<GameObject> staticGeometry, MapBuild built)
+        private static void BuildProps(MapData map, Transform root, List<GameObject> staticGeometry, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             foreach (MapEntity e in map.entities)
             {
@@ -280,15 +448,18 @@ namespace MaxWorlds.Arena
                         // draw call.
                         CoverPiece piece = BuildCover(root, e);
                         built.Cover.Add(piece);
-                        AddStatic(piece.Body, staticGeometry);
+                        AddStatic(map, piece.Body, staticGeometry, rendererZones);
                         break;
                     }
 
                     case EntityKind.Prop:
+                    {
                         // Scenery with a body: it reads, and it breaks a sight-line, but the fight is
                         // not designed around it (the posts flanking the shed). Never moves — batches.
-                        AddStatic(Box(root, e.id, e.GroundedCenter, e.Size, blocksSight: true, isStatic: true), staticGeometry);
+                        GameObject propGo = Box(root, e.id, e.GroundedCenter, e.Size, blocksSight: true, isStatic: true);
+                        AddStatic(map, propGo, staticGeometry, rendererZones);
                         break;
+                    }
 
                     case EntityKind.Pickup:
                         // MV-644: currently only PowerupCadence.EnsureCoverage's guaranteed parts cache
@@ -299,32 +470,43 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Sludge:
+                    {
                         // MV-882: excluded from the static batch — it flows (SludgeFlow scrolls its
                         // own material's UVs every frame).
-                        BuildSludge(map, root, e);
+                        GameObject sludgeGo = BuildSludge(map, root, e);
+                        TagStatic(map, sludgeGo, rendererZones);
                         break;
+                    }
 
                     case EntityKind.Deck:
-                        BuildDeck(map, root, staticGeometry, e);
+                        BuildDeck(map, root, staticGeometry, e, rendererZones);
                         break;
 
                     case EntityKind.Ramp:
+                    {
                         // MV-882: excluded from the static batch per the ticket's own instruction.
-                        BuildRamp(map, root, e);
+                        GameObject rampGo = BuildRamp(map, root, e);
+                        TagStatic(map, rampGo, rendererZones);
                         break;
+                    }
 
                     case EntityKind.Hatch:
                         // MV-882: excluded from the static batch — a hatch is an AreaGate and opens.
+                        // MV-887: an AreaGate is gameplay (HP, hinge, opens on destruction), so it is
+                        // never tagged/gated here — same exemption as BuildAreaGate below.
                         BuildHatch(map, e, root, built);
                         break;
 
                     case EntityKind.Grate:
+                    {
                         // MV-882: excluded from the static batch — GrateShudder moves each grille bar's
                         // local position when a garrisoned Lurker rises through it (MV-773), so a grate
                         // combined into a static mesh would freeze mid-shudder or shudder in place while
                         // the (baked) visual stayed put.
-                        StormdrainKit.BuildGrate(root, e.id, new Vector2(e.x, e.z));
+                        GameObject grateGo = StormdrainKit.BuildGrate(root, e.id, new Vector2(e.x, e.z));
+                        TagStatic(map, grateGo, rendererZones);
                         break;
+                    }
                 }
             }
         }
@@ -415,7 +597,7 @@ namespace MaxWorlds.Arena
         /// (<see cref="SludgeFlow"/>) and grades its tone toward teal near the outfall. MV-769 adds the
         /// same rising-bubble treatment the Sludge Drone's own puddle now carries, at a low density, so
         /// every body of sludge in the world reads as one living material.</summary>
-        private static void BuildSludge(MapData map, Transform root, MapEntity e)
+        private static GameObject BuildSludge(MapData map, Transform root, MapEntity e)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
                 new Vector3(e.x, SludgeThickness * 0.5f, e.z), new Vector3(e.width, SludgeThickness, e.depth));
@@ -431,6 +613,8 @@ namespace MaxWorlds.Arena
             int bubbleCount = Mathf.Max(1, Mathf.RoundToInt((e.width * e.depth) / SludgeBubbleDensityArea));
             SludgeBubbles.Attach(body.transform, "Bubbles", new Vector2(e.width * 0.5f, e.depth * 0.5f),
                 SludgeThickness * 0.5f, seed, bubbleCount, tone);
+
+            return body;
         }
 
         /// <summary>Plain acid green, graded toward <see cref="SludgeTealColor"/> the closer this tile
@@ -464,7 +648,8 @@ namespace MaxWorlds.Arena
         /// reliably take a material/property-block change after it has been batched. Everything else
         /// this method builds (parapet, edge band, edge beam, posts, ground shadow) never moves or
         /// repaints, so those are added to <paramref name="staticGeometry"/> instead.</summary>
-        private static void BuildDeck(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity e)
+        private static void BuildDeck(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity e,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             DeckSlab slab = default;
             bool found = false;
@@ -476,6 +661,7 @@ namespace MaxWorlds.Arena
             ApplyBevelledBoxMesh(body, slab.Size);
             Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             body.isStatic = false; // MV-692: DeckVisibility repaints it every frame it's near Max
+            TagStatic(map, body, rendererZones); // MV-887: excluded from AddStatic, tagged directly
 
             HashSet<Wall> mouths = DeckMouthWalls(map, e);
             foreach (Wall wall in AllWalls)
@@ -487,17 +673,17 @@ namespace MaxWorlds.Arena
                     // split around it (or vanish entirely, if the gate's span covers the whole edge)
                     // rather than standing across the gate's own mouth the way MV-852 built it blind.
                     if (TryDeckGateSpan(map, e, wall, out Span gateSpan))
-                        BuildDeckParapetSplit(root, staticGeometry, e, wall, slab.TopY, gateSpan);
+                        BuildDeckParapetSplit(map, root, staticGeometry, e, wall, slab.TopY, gateSpan, rendererZones);
                     else
-                        BuildDeckParapet(root, staticGeometry, e, wall, slab.TopY);
+                        BuildDeckParapet(map, root, staticGeometry, e, wall, slab.TopY, rendererZones);
                     continue;
                 }
-                BuildDeckEdgeBand(root, staticGeometry, e, wall, slab.TopY);
-                BuildDeckEdgeBeam(root, staticGeometry, e, wall, slab.TopY);
+                BuildDeckEdgeBand(map, root, staticGeometry, e, wall, slab.TopY, rendererZones);
+                BuildDeckEdgeBeam(map, root, staticGeometry, e, wall, slab.TopY, rendererZones);
             }
 
-            BuildDeckPosts(root, staticGeometry, e, slab.TopY);
-            BuildDeckGroundShadow(root, staticGeometry, e);
+            BuildDeckPosts(map, root, staticGeometry, e, slab.TopY, rendererZones);
+            BuildDeckGroundShadow(map, root, staticGeometry, e, slab.TopY, rendererZones);
 
             var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
             body.AddComponent<DeckVisibility>().Configure(
@@ -538,7 +724,8 @@ namespace MaxWorlds.Arena
         /// <see cref="DeckEdgeBandHeight"/> and rising from the deck top rather than blocking the view
         /// down onto (or off) the walkway. Positioned exactly on the deck's outer edge, same convention
         /// the rail it replaces used.</summary>
-        private static void BuildDeckEdgeBand(Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY)
+        private static void BuildDeckEdgeBand(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
             float bandCenterY = topY + DeckEdgeBandHeight * 0.5f;
@@ -567,7 +754,7 @@ namespace MaxWorlds.Arena
 
             GameObject band = StormdrainKit.BuildHazardBanding(root, centre, length, DeckEdgeBandHeight, alongX, DeckEdgeBandWidth);
             band.name = $"{deck.id}_edge_{wall}";
-            AddStatic(band, staticGeometry);
+            AddStatic(map, band, staticGeometry, rendererZones);
         }
 
         /// <summary>MV-852 — a walled deck's parapet, replacing the ordinary open edge band/beam on
@@ -577,7 +764,8 @@ namespace MaxWorlds.Arena
         /// thing every other deck-edge primitive in this file deliberately strips. Never assigned to
         /// <see cref="CoverLayer"/>, so it blocks Max/robots (ordinary <c>CharacterController.Move</c>
         /// collision, layer-agnostic) while every projectile in the game passes straight through it.</summary>
-        private static void BuildDeckParapet(Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY)
+        private static void BuildDeckParapet(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
             float centerY = topY + DeckParapetHeight * 0.5f;
@@ -606,7 +794,7 @@ namespace MaxWorlds.Arena
 
             GameObject visual = StormdrainKit.BuildHazardBanding(root, centre, length, DeckParapetHeight, alongX, DeckParapetThickness);
             visual.name = $"{deck.id}_parapet_{wall}";
-            AddStatic(visual, staticGeometry);
+            AddStatic(map, visual, staticGeometry, rendererZones);
 
             // The blocker's own renderer is disabled below, so it never submits a draw call whether
             // batched or not — left out of staticGeometry rather than combining dead weight.
@@ -661,7 +849,8 @@ namespace MaxWorlds.Arena
         /// empty and no parapet is built at all): the parapet is split around the gate's own span
         /// instead of standing across its mouth, which is the reported bug — MV-852 built every
         /// parapet blind to gates.</summary>
-        private static void BuildDeckParapetSplit(Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY, Span opening)
+        private static void BuildDeckParapetSplit(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY, Span opening,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             bool alongX = wall == Wall.N || wall == Wall.S;
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
@@ -676,16 +865,16 @@ namespace MaxWorlds.Arena
             };
             float centerY = topY + DeckParapetHeight * 0.5f;
 
-            BuildParapetSpan(root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, wallMin, Mathf.Min(opening.Min, wallMax), 1);
-            BuildParapetSpan(root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, Mathf.Max(opening.Max, wallMin), wallMax, 2);
+            BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, wallMin, Mathf.Min(opening.Min, wallMax), 1, rendererZones);
+            BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, Mathf.Max(opening.Max, wallMin), wallMax, 2, rendererZones);
         }
 
         /// <summary>One stretch of a split parapet (MV-859) — same visual/collider pairing as
         /// <see cref="BuildDeckParapet"/>'s single continuous one, just clipped to <paramref name="from"/>..
         /// <paramref name="to"/> instead of the whole edge. A non-positive length means the gate's own
         /// span reaches (or overruns) this end, so there is nothing left of this stretch to build.</summary>
-        private static void BuildParapetSpan(Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, bool alongX, float fixedCoord,
-            float centerY, float from, float to, int index)
+        private static void BuildParapetSpan(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, bool alongX, float fixedCoord,
+            float centerY, float from, float to, int index, Dictionary<Renderer, List<string>> rendererZones)
         {
             float length = to - from;
             if (length <= 0.05f) return;
@@ -695,7 +884,7 @@ namespace MaxWorlds.Arena
 
             GameObject visual = StormdrainKit.BuildHazardBanding(root, centre, length, DeckParapetHeight, alongX, DeckParapetThickness);
             visual.name = $"{deck.id}_parapet_{wall}_{index}";
-            AddStatic(visual, staticGeometry);
+            AddStatic(map, visual, staticGeometry, rendererZones);
 
             Vector3 blockerSize = alongX
                 ? new Vector3(length, DeckParapetHeight, DeckParapetThickness)
@@ -708,7 +897,8 @@ namespace MaxWorlds.Arena
         /// outside the deck's own horizontal footprint (pushed outward by half its own thickness), so it
         /// reads as a beam bolted to the walkway's edge rather than as infill closing the open space
         /// underneath.</summary>
-        private static void BuildDeckEdgeBeam(Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY)
+        private static void BuildDeckEdgeBeam(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
             float underside = topY - MapGeometry.DeckThickness;
@@ -736,14 +926,15 @@ namespace MaxWorlds.Arena
                     break;
             }
 
-            AddStatic(StormdrainKit.Box(root, $"{deck.id}_beam_{wall}", center, size, DeckGrateColor, SurfaceKind.Metal), staticGeometry);
+            AddStatic(map, StormdrainKit.Box(root, $"{deck.id}_beam_{wall}", center, size, DeckGrateColor, SurfaceKind.Metal), staticGeometry, rendererZones);
         }
 
         /// <summary>Support posts at every corner and at no more than <see cref="DeckPostSpacing"/>
         /// along each edge (MV-821 change 2), floor to slab underside — the only thing built in the open
         /// space under a deck, so that space still reads as visibly open between them. Corners are added
         /// once each (two edges would otherwise both claim the same corner point).</summary>
-        private static void BuildDeckPosts(Transform root, List<GameObject> staticGeometry, MapEntity deck, float topY)
+        private static void BuildDeckPosts(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, float topY,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
             float underside = topY - MapGeometry.DeckThickness;
@@ -772,8 +963,8 @@ namespace MaxWorlds.Arena
             for (int i = 0; i < posts.Count; i++)
             {
                 Vector3 center = new Vector3(posts[i].x, postCenterY, posts[i].y);
-                AddStatic(StormdrainKit.Box(root, $"{deck.id}_post{i}", center,
-                    new Vector3(DeckPostSize, postHeight, DeckPostSize), DeckGrateColor, SurfaceKind.Metal), staticGeometry);
+                AddStatic(map, StormdrainKit.Box(root, $"{deck.id}_post{i}", center,
+                    new Vector3(DeckPostSize, postHeight, DeckPostSize), DeckGrateColor, SurfaceKind.Metal), staticGeometry, rendererZones);
             }
         }
 
@@ -793,7 +984,8 @@ namespace MaxWorlds.Arena
         /// <summary>The ground under a deck's footprint reads as covered floor, not empty space (MV-821
         /// change 3): a thin decal, proud of the floor by a hair, tinted <see cref="DeckShadowDarken"/>
         /// darker than this world's own resolved ground tone.</summary>
-        private static void BuildDeckGroundShadow(Transform root, List<GameObject> staticGeometry, MapEntity deck)
+        private static void BuildDeckGroundShadow(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck,
+            float topY, Dictionary<Renderer, List<string>> rendererZones)
         {
             Color ground = MaterialLibrary.Palette.GroundBase;
             Color tone = new Color(ground.r * (1f - DeckShadowDarken), ground.g * (1f - DeckShadowDarken),
@@ -806,18 +998,25 @@ namespace MaxWorlds.Arena
             Tint(shadow, MaterialLibrary.Tinted(SurfaceKind.Ground, tone));
             shadow.isStatic = true;
             AddStatic(shadow, staticGeometry);
+
+            // MV-887: tagged at the DECK's own height, not the shadow's own near-floor Y — an open
+            // (unwalled) deck lets Max look straight down through its edge at this patch (that is the
+            // whole point of MV-821's open-walkway redesign), so it must gate with the deck above it,
+            // not with whatever floor zone happens to sit underneath.
+            Renderer shadowRenderer = shadow.GetComponent<Renderer>();
+            if (shadowRenderer != null) TagRendererAt(map, shadowRenderer, new Vector3(deck.x, topY, deck.z), rendererZones);
         }
 
         /// <summary>A ramp's walkable slope (MV-692) — one box, tilted so its top face runs continuously
         /// from the floor to the deck it climbs to; Unity's own <c>CharacterController</c> slope-climb
         /// walks it without any code change on either mover's side.</summary>
-        private static void BuildRamp(MapData map, Transform root, MapEntity e)
+        private static GameObject BuildRamp(MapData map, Transform root, MapEntity e)
         {
             RampSlab slab = default;
             bool found = false;
             foreach (RampSlab r in MapGeometry.Ramps(map))
                 if (r.Id == e.id) { slab = r; found = true; break; }
-            if (!found) return; // no recognised facing — MapValidation should never let this through
+            if (!found) return null; // no recognised facing — MapValidation should never let this through
 
             Vector3 bottom = slab.BottomCenter, top = slab.TopCenter;
             Vector3 mid = (bottom + top) * 0.5f;
@@ -835,6 +1034,7 @@ namespace MaxWorlds.Arena
             ApplyBevelledBoxMesh(body, new Vector3(slab.Width, RampThickness, slopeLength));
             Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             body.isStatic = true;
+            return body;
         }
 
         /// <summary>MV-829: a locked hatch is a barrier standing across the ramp head it guards, not a
@@ -1442,6 +1642,18 @@ namespace MaxWorlds.Arena
         {
             foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
                 staticGeometry.Add(r.gameObject);
+        }
+
+        /// <summary>MV-887: same as the two-argument overload, plus tags every one of those renderers by
+        /// its own resolved position (<see cref="TagStatic"/>) — every caller below sits comfortably
+        /// inside one room, unlike a wall (which sits exactly on a shared boundary and tags itself
+        /// separately via <see cref="TagWallZones"/> before calling here with <paramref name="autoTag"/>
+        /// false, so its own multi-probe result is never overwritten by a single ambiguous point).</summary>
+        private static void AddStatic(MapData map, GameObject go, List<GameObject> staticGeometry,
+            Dictionary<Renderer, List<string>> rendererZones, bool autoTag = true)
+        {
+            AddStatic(go, staticGeometry);
+            if (autoTag) TagStatic(map, go, rendererZones);
         }
 
         private static GameObject Box(Transform root, string name, Vector3 center, Vector3 size,
