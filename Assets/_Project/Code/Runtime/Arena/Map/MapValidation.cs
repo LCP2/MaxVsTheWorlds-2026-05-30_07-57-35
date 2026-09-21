@@ -66,8 +66,8 @@ namespace MaxWorlds.Arena
         public const float MinBossCoverClearance = 2f;
 
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
-        /// room.</summary>
-        public const float MinFreeChannel = 3f;
+        /// room. A readability minimum — twice Max's 1.0 m body width — not a physical-fit check.</summary>
+        public const float MinFreeChannel = 2f;
 
         /// <summary>Narrowest gap the under-route beneath a bridge must keep, at floor level, once its
         /// piers are placed (MV-711) — wider than the ordinary <see cref="MinFreeChannel"/> because the
@@ -374,7 +374,7 @@ namespace MaxWorlds.Arena
 
                 for (float depth = z.ZMin; depth <= z.ZMax; depth += 0.5f)
                 {
-                    if (FreeChannelAt(z, cover, depth) < MinFreeChannel)
+                    if (FreeChannelAt(z, cover, depth) < MinFreeChannel - 1e-3f)
                     { reason = $"cover pinches '{z.id}' shut at z={depth:0.#}"; return false; }
                 }
             }
