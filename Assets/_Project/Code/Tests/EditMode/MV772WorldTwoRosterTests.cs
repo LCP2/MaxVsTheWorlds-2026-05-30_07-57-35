@@ -31,13 +31,20 @@ namespace MaxWorlds.Tests.EditMode
     /// at 49.3% (203/412) rather than the narrower 57-64% this ticket's conversion alone produced. The
     /// floor is widened to comfortably admit that, while staying well clear of the ~37% a genuine
     /// full-revert-to-World-1 would read at — the actual regression this assertion exists to catch.
+    ///
+    /// MV-875 (workbook edits + a1-a13 conversion repair) dropped the total to 407 (a9 brute 2→1, a11
+    /// turret 4→3/gunner 25→24/sludger 14→13/launcher 1→0) and moved a13's garrison and 45 other entries
+    /// (a7/a8/a10/a11/a12/a13) by 0.02-0.35 m within their own authored cell for engine-side collider
+    /// clearance (<see cref="MapValidation.WorldGarrison"/>, MV-655) — both expected below are recomputed
+    /// against the new shipped config, not hand-picked.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
-        // MV-865 (World 2 re-author) re-authored areas 1-14 wholesale from Lee's sheet, moving nearly
-        // every entry's x/z along the way — recomputed against the shipped config, still a guard against
-        // an UNRELATED drift (not an authored constant: derived from the real config, not hand-picked).
-        private const uint ExpectedCoordinateHash = 632569454u;
+        // MV-875 re-authored a1-a13's garrison from Lee's re-converted sheet and nudged 45 entries for
+        // engine-side collider clearance, moving nearly every entry's x/z along the way — recomputed
+        // against the shipped config, still a guard against an UNRELATED drift (not an authored constant:
+        // derived from the real config, not hand-picked).
+        private const uint ExpectedCoordinateHash = 4004953417u;
 
         [Test]
         public void WorldTwoRoster_MatchesTheMV772Conversion()
@@ -61,15 +68,16 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(412, total, "World 2's total garrison placement count (MV-865 re-authored areas 1-14 from Lee's sheet)");
+            Assert.AreEqual(407, total, "World 2's total garrison placement count (MV-875 workbook edits + a1-a13 conversion repair)");
 
             int Count(string kind) => counts.TryGetValue(kind, out int n) ? n : 0;
             int worldTwoKinds = Count("sludger") + Count("charger") + Count("turret") + Count("lurker");
             double share = (double)worldTwoKinds / total;
             // MV-865 re-authored areas 1-14 straight from Lee's sheet, which freely mixes in plenty of
             // World 1-shared kinds on its own authority — dropping the resolved share from 57-64% to
-            // 49.3% (203/412). The floor is widened to still comfortably catch the thing this AC actually
-            // guards (a reverted conversion, at ~37%), not loosened to the point of catching nothing.
+            // 49.3% (203/412). MV-875's edits move it again, to 47.7% (194/407). The floor is widened to
+            // still comfortably catch the thing this AC actually guards (a reverted conversion, at ~37%),
+            // not loosened to the point of catching nothing.
             Assert.That(share, Is.InRange(0.45, 0.64),
                 $"World 2's own kinds (sludger/charger/turret/lurker) must land between 45% and 64% of all " +
                 $"placements after the re-authoring, got {share:P1} ({worldTwoKinds}/{total})");
