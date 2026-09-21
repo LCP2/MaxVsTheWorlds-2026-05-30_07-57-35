@@ -85,6 +85,9 @@ namespace MaxWorlds.Core
             FrameCost.Reset();
             _frameCostWindowStartAt = Time.realtimeSinceStartup;
 
+            // MV-886: subscribed once for the process lifetime — see FrameCost's own doc comment.
+            FrameCost.SubscribeRenderEvents();
+
             QualitySettings.vSyncCount = 0;
 
             // MV-883: a floor-guard, not a fix. Without this, a slow rendered frame makes Unity run
@@ -141,6 +144,7 @@ namespace MaxWorlds.Core
         {
             if (ActiveMeter == _meter) ActiveMeter = null;
             if (ActiveTimingProbe == _timingProbe) ActiveTimingProbe = null;
+            FrameCost.UnsubscribeRenderEvents();
         }
 
         /// <summary>Real players only ever see the iOS TestFlight/App Store build — the WebGL Pages
@@ -224,6 +228,12 @@ namespace MaxWorlds.Core
             }
 
             DrawWrappedLine(_cachedFrameCostLine, ref y, labelWidth);
+
+            // MV-886: the one-off renderer census — already formatted and cached by MapRuntime the
+            // moment an area finishes building (see FrameCost.RecordAreaRendererCensus), so reading it
+            // here every OnGUI call costs nothing beyond drawing the string that's already there. Null
+            // until the first area has built, which DrawWrappedLine already treats as "skip this line".
+            DrawWrappedLine(FrameCost.AreaCensusLine(), ref y, labelWidth);
         }
 
         /// <summary>MV-881 Requirement A: a ticket comment caught the population line and the frame-cost

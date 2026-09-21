@@ -61,6 +61,55 @@ namespace MaxWorlds.Arena
         {
             if (_statics != null && _statics.Length > 0)
                 StaticBatchingUtility.Combine(_statics, gameObject);
+
+            RecordRendererCensus();
+        }
+
+        /// <summary>MV-886 item 2: a one-off census of this area's own Renderer population, taken at the
+        /// same "everything this area starts with already exists" point the static-batch combine above
+        /// relies on (see class comment), and handed to <see cref="FrameCost"/> to cache and display —
+        /// never recomputed per frame (AC3). Walks up to this map's own parent (the transform
+        /// <see cref="BackyardPath"/>/each world's own area script builds both the map and, for World 2,
+        /// <c>StormdrainDressing</c>'s "Stormdrain Dressing" root under) rather than just this GameObject's
+        /// own children, because dressing is a SIBLING of the map root, not nested under it — MapRuntime.
+        /// Build and StormdrainDressing.Dress are both called with the same parent transform.
+        ///
+        /// Robots are not built here at all (they spawn later, from a factory/Replicator's own timer),
+        /// so the robots bucket below genuinely reads 0 at this point for a freshly-built area — an
+        /// honest reading of what the AREA itself built, not a claim about the area's live enemy
+        /// population (that is <c>PopulationReadout</c>'s job, already on its own readout line).</summary>
+        private void RecordRendererCensus()
+        {
+            Transform areaRoot = transform.parent != null ? transform.parent : transform;
+
+            Transform sludgeHost = null;
+            Transform dressing = areaRoot.Find("Stormdrain Dressing");
+            if (dressing != null) sludgeHost = dressing.Find("Sludge");
+
+            int mapGeometry = 0, replicators = 0, robots = 0, sludge = 0, opaque = 0, transparent = 0;
+
+            foreach (Renderer r in areaRoot.GetComponentsInChildren<Renderer>(false))
+            {
+                if (!r.enabled) continue;
+
+                bool isSludge = sludgeHost != null && r.transform.IsChildOf(sludgeHost);
+                bool isRobot = !isSludge && r.GetComponentInParent<RobotEnemy>() != null;
+                bool isReplicator = !isSludge && !isRobot &&
+                    (r.GetComponentInParent<Replicator>() != null ||
+                     r.GetComponentInParent<MowerHutch>() != null ||
+                     r.GetComponentInParent<BigBermudaBoss>() != null);
+
+                if (isSludge) sludge++;
+                else if (isRobot) robots++;
+                else if (isReplicator) replicators++;
+                else mapGeometry++;
+
+                Material mat = r.sharedMaterial;
+                if (mat != null && mat.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.Transparent) transparent++;
+                else opaque++;
+            }
+
+            FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent);
         }
     }
 

@@ -68,6 +68,87 @@ namespace MaxWorlds.Core
         private static bool s_hasLastFrameTicks;
         private static double s_frameTimeSumMs;
 
+        // ---------------------------------------------------------------------------------------------
+        // MV-886: the render bucket. URP raises RenderPipelineManager.beginFrameRendering/
+        // endFrameRendering as ordinary C# events in a release player — no Profiler, no Development
+        // Build, no deploy.yml change. Timed on the same IClock seam as the six buckets above (never
+        // Time.realtimeSinceStartup, which a test cannot fake), so a test can drive it directly without
+        // URP ever actually rendering a frame. Per-camera timing is deliberately not added: this
+        // project's camera is a single fixed top-down rig (CLAUDE.md — no free-look, no split-screen),
+        // so "per-camera, if more than one camera renders" never applies here.
+        // ---------------------------------------------------------------------------------------------
+
+        private static bool s_renderEventsSubscribed;
+        private static long s_renderFrameBeginTicks;
+        private static double s_renderFrameTimeSumMs;
+        private static int s_renderFrameSampleCount;
+
+        /// <summary>Idempotent; call once (Bootstrap.Awake). Subscribes for the process lifetime, same
+        /// "never per frame" reasoning as <see cref="EnsureRecordersStarted"/>'s ProfilerRecorders —
+        /// creating/disposing a subscription every frame would itself cost a frame.</summary>
+        public static void SubscribeRenderEvents()
+        {
+            if (s_renderEventsSubscribed) return;
+            s_renderEventsSubscribed = true;
+            UnityEngine.Rendering.RenderPipelineManager.beginFrameRendering += OnBeginFrameRendering;
+            UnityEngine.Rendering.RenderPipelineManager.endFrameRendering += OnEndFrameRendering;
+        }
+
+        /// <summary>Idempotent; call once (Bootstrap.OnDestroy) so a domain reload / scene teardown
+        /// never leaves a stale delegate registered against the render pipeline.</summary>
+        public static void UnsubscribeRenderEvents()
+        {
+            if (!s_renderEventsSubscribed) return;
+            s_renderEventsSubscribed = false;
+            UnityEngine.Rendering.RenderPipelineManager.beginFrameRendering -= OnBeginFrameRendering;
+            UnityEngine.Rendering.RenderPipelineManager.endFrameRendering -= OnEndFrameRendering;
+        }
+
+        private static void OnBeginFrameRendering(UnityEngine.Rendering.ScriptableRenderContext ctx, UnityEngine.Camera[] cameras) =>
+            BeginRenderFrame();
+
+        private static void OnEndFrameRendering(UnityEngine.Rendering.ScriptableRenderContext ctx, UnityEngine.Camera[] cameras) =>
+            EndRenderFrame();
+
+        /// <summary>AC1's test seam: production code reaches this only via <see cref="OnBeginFrameRendering"/>
+        /// above; a test calls it directly, on the same injected <see cref="IClock"/> the six buckets
+        /// use, with no dependency on URP ever actually rendering a frame in EditMode.</summary>
+        public static void BeginRenderFrame() => s_renderFrameBeginTicks = s_clock.GetTimestamp();
+
+        /// <summary>See <see cref="BeginRenderFrame"/>. Averages over its own sample count, not
+        /// <see cref="s_frameCount"/> — the same self-contained reasoning
+        /// <see cref="s_renderedFrameCount"/>'s doc comment gives for <c>fixedPerFrame</c>, so this
+        /// figure can never inherit an off-by-one from a different counter that happens to be tracking a
+        /// different event.</summary>
+        public static void EndRenderFrame()
+        {
+            long elapsedTicks = s_clock.GetTimestamp() - s_renderFrameBeginTicks;
+            s_renderFrameTimeSumMs += elapsedTicks * 1000.0 / Stopwatch.Frequency;
+            s_renderFrameSampleCount++;
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // MV-886: the one-off renderer census. Computed once when an area finishes building (see
+        // MapRuntime.MapStaticBatchRoot.Start) and cached here — never recomputed per frame (AC3).
+        // FrameCost never walks a hierarchy itself (this is Core; Arena/Rendering types are not visible
+        // here) — the caller does the counting and hands over the already-formatted totals, the same
+        // "Core can't see Gameplay" split Bootstrap.WorldProbeLineProvider already uses.
+        // ---------------------------------------------------------------------------------------------
+
+        private static string s_areaCensusLine;
+
+        public static void RecordAreaRendererCensus(int mapGeometry, int replicators, int robots, int sludgeDressing, int opaque, int transparent)
+        {
+            int total = mapGeometry + replicators + robots + sludgeDressing;
+            s_areaCensusLine =
+                $"census renderers {total} (opaque {opaque} transparent {transparent})  " +
+                $"map {mapGeometry} repl {replicators} robots {robots} sludge {sludgeDressing}";
+        }
+
+        /// <summary>Null until the first area finishes building — <see cref="Bootstrap.DrawWrappedLine"/>
+        /// already skips a null/empty line, so nothing draws before then.</summary>
+        public static string AreaCensusLine() => s_areaCensusLine;
+
         /// <summary>MV-885: every rendered frame counted unconditionally, including the first call
         /// after <see cref="Reset"/>. <see cref="s_frameCount"/> deliberately excludes that first call
         /// (it has no previous timestamp to diff, so it can't measure that frame's own elapsed time —
@@ -154,11 +235,16 @@ namespace MaxWorlds.Core
             // past the real per-frame cap while every other line stayed correct.
             double fixedPerFrame = s_fixedUpdateCount / (double)Math.Max(1, s_renderedFrameCount);
 
+            // MV-886: same self-contained-denominator reasoning as fixedPerFrame just above — divides
+            // by its own sample count, never `frames`.
+            double renderPerFrame = s_renderFrameSampleCount > 0 ? s_renderFrameTimeSumMs / s_renderFrameSampleCount : 0.0;
+
             string bucketLine =
                 $"ms robot {s_bucketMs[(int)Bucket.Robot] / frames:0.0} (awake {s_robotAwakeLast}) " +
                 $"repl {s_bucketMs[(int)Bucket.Repl] / frames:0.0} sludge {s_bucketMs[(int)Bucket.Sludge] / frames:0.0} " +
                 $"anch {s_bucketMs[(int)Bucket.Anchor] / frames:0.0} hud {s_bucketMs[(int)Bucket.Hud] / frames:0.0} " +
-                $"vfx {s_bucketMs[(int)Bucket.Vfx] / frames:0.0} other {residualPerFrame:0.0}  fixed {fixedPerFrame:0.0}/frame";
+                $"vfx {s_bucketMs[(int)Bucket.Vfx] / frames:0.0} other {residualPerFrame:0.0} render {renderPerFrame:0.0}  " +
+                $"fixed {fixedPerFrame:0.0}/frame";
 
             return bucketLine + "\n" + FormatProfilerLine();
         }
@@ -175,6 +261,8 @@ namespace MaxWorlds.Core
             s_hasLastFrameTicks = false;
             s_robotAwakeThisFrame = 0;
             s_robotAwakeLast = 0;
+            s_renderFrameTimeSumMs = 0.0;
+            s_renderFrameSampleCount = 0;
 
             EnsureRecordersStarted();
         }
