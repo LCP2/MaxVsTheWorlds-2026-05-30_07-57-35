@@ -60,6 +60,14 @@ namespace MaxWorlds.Core
         private string _cachedPopulationLine;
         private float _populationLineBuiltAt = float.NegativeInfinity;
 
+        /// <summary>MV-876: the script-time attribution line — see <see cref="FrameCost"/>. Same
+        /// refresh-window reasoning as <see cref="PopulationLineRefreshSeconds"/>: the accumulator
+        /// itself costs ticks only every frame, and only this cadence allocates a string from it.</summary>
+        private const float FrameCostRefreshSeconds = 0.25f;
+
+        private string _cachedFrameCostLine;
+        private float _frameCostWindowStartAt = float.NegativeInfinity;
+
         private void Awake()
         {
             // First line in the log, so a browser console immediately answers "which build is this?"
@@ -71,6 +79,11 @@ namespace MaxWorlds.Core
 
             ActiveMeter = _meter;
             ActiveTimingProbe = _timingProbe;
+
+            // MV-876: a clean accumulation window from this boot, not whatever a previous scene load
+            // left behind (the static accumulator survives domain reloads across scene changes).
+            FrameCost.Reset();
+            _frameCostWindowStartAt = Time.realtimeSinceStartup;
 
             QualitySettings.vSyncCount = 0;
 
@@ -92,6 +105,7 @@ namespace MaxWorlds.Core
         private void Update()
         {
             _timingProbe.Tick();
+            FrameCost.MarkFrameRendered();
 
             if (!_meter.Tick(Time.realtimeSinceStartup)) return;
             if (!logFps) return;
@@ -104,6 +118,11 @@ namespace MaxWorlds.Core
             // what tells you whether you're looking at a stall or a throttle.
             Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({_meter.FrameMs:0.0} ms/frame)");
         }
+
+        /// <summary>MV-876: counts fixed-timestep steps against rendered frames — the other hypothesis
+        /// a frame rate pinned across every load reduction (render scale, shadow distance, population)
+        /// points at, alongside a fixed per-frame cost. See <see cref="FrameCost"/>.</summary>
+        private void FixedUpdate() => FrameCost.NotifyFixedUpdate();
 
         private void OnDestroy()
         {
@@ -169,9 +188,24 @@ namespace MaxWorlds.Core
                 _populationLineBuiltAt = now;
             }
 
-            if (string.IsNullOrEmpty(_cachedPopulationLine)) return;
+            if (!string.IsNullOrEmpty(_cachedPopulationLine))
+                GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 2.4f), 900f, 60f), _cachedPopulationLine, _fpsStyle);
 
-            GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 2.4f), 900f, 60f), _cachedPopulationLine, _fpsStyle);
+            // MV-876: a fourth line, under the same condition as the three above — the script-time
+            // attribution readout that replaces guessing at World 2's pinned 11 fps with measurement.
+            // Rebuilt at most every FrameCostRefreshSeconds, never once per OnGUI call, matching the
+            // population line's own "must not itself cost a frame" reasoning (FrameCost.FormatLine
+            // allocates; FrameCost.Begin/End/MarkFrameRendered/NotifyFixedUpdate never do).
+            if (now - _frameCostWindowStartAt >= FrameCostRefreshSeconds)
+            {
+                double windowTotalMs = (now - _frameCostWindowStartAt) * 1000.0;
+                _cachedFrameCostLine = FrameCost.FormatLine(windowTotalMs);
+                FrameCost.Reset();
+                _frameCostWindowStartAt = now;
+            }
+
+            if (!string.IsNullOrEmpty(_cachedFrameCostLine))
+                GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 3.6f), 900f, 60f), _cachedFrameCostLine, _fpsStyle);
         }
     }
 }

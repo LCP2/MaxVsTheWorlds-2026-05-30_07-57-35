@@ -6,6 +6,7 @@ using UnityEngine.InputSystem.UI;
 using MaxWorlds.Player;
 using MaxWorlds.Arena;
 using MaxWorlds.Combat;
+using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Enemies;
 using MaxWorlds.Upgrades;
@@ -667,6 +668,8 @@ namespace MaxWorlds.UI
 
         private void Update()
         {
+            FrameCost.Begin(FrameCost.Bucket.Hud);
+
             float dt = Time.deltaTime;
 
             // Slice ability demos: Bomb auto-cycles its cooldown so the radial wipe reads;
@@ -687,6 +690,8 @@ namespace MaxWorlds.UI
             UpdateWeaponsButton();
             UpdateSupercellFx(Time.unscaledDeltaTime);
             FlushDamageNumbers();
+
+            FrameCost.End(FrameCost.Bucket.Hud);
         }
 
         private void UpdateDrops(float dt)

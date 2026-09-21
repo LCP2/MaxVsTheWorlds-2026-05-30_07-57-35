@@ -894,7 +894,9 @@ namespace MaxWorlds.Factories
 
         private void Update()
         {
-            if (!IsAlive) return;
+            FrameCost.Begin(FrameCost.Bucket.Repl);
+
+            if (!IsAlive) { FrameCost.End(FrameCost.Bucket.Repl); return; }
 
             // MV-775: "the only moving thing in a quiet room" — spins whether or not anything has
             // ever reached this box, so it reads as powered before the player touches it.
@@ -903,6 +905,8 @@ namespace MaxWorlds.Factories
             // MV-820: no periodic lure tick any more — R1 (area entry) and R2 (instant refill) are the
             // only two triggers, both already reached from OnAreaEntered/TickConsumption.
             TickConsumption(Time.deltaTime);
+
+            FrameCost.End(FrameCost.Bucket.Repl);
         }
 
         private void OnDestroyed()
@@ -950,7 +954,9 @@ namespace MaxWorlds.Factories
 
         private void LateUpdate()
         {
-            if (!IsAlive) return;
+            FrameCost.Begin(FrameCost.Bucket.Repl);
+
+            if (!IsAlive) { FrameCost.End(FrameCost.Bucket.Repl); return; }
 
             // MV-808: busy — a robot is mid-Intake or a doubled pair is mid-Cycle/Output — from the
             // instant Intake begins until the second twin emits (removing the pending entry below).
@@ -1040,6 +1046,8 @@ namespace MaxWorlds.Factories
                 _emitFlashMpb.SetColor("_BaseColor", flash);
                 _emitFlash.SetPropertyBlock(_emitFlashMpb);
             }
+
+            FrameCost.End(FrameCost.Bucket.Repl);
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Rendering
 {
@@ -51,6 +52,8 @@ namespace MaxWorlds.Rendering
         /// gated, not just the frame that brought it back in.</summary>
         public static void Tick(float dt, Vector3 playerPosition)
         {
+            FrameCost.Begin(FrameCost.Bucket.Sludge);
+
             float gateSqr = GateRadius * GateRadius;
             for (int i = 0; i < _rigs.Count; i++)
             {
@@ -71,6 +74,8 @@ namespace MaxWorlds.Rendering
                     _pendingDt[i] += dt;
                 }
             }
+
+            FrameCost.End(FrameCost.Bucket.Sludge);
         }
     }
 }

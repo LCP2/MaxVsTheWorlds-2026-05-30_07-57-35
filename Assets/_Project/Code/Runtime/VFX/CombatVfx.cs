@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
@@ -626,6 +627,8 @@ namespace MaxWorlds.VFX
 
         private void LateUpdate()
         {
+            FrameCost.Begin(FrameCost.Bucket.Vfx);
+
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
             _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame();
             _teleportSurge.EndFrame(); _teleportFlash.EndFrame();
@@ -635,6 +638,8 @@ namespace MaxWorlds.VFX
             _sentinelRecall.EndFrame();
             _playerHitSpark.EndFrame(); _playerContactGlow.EndFrame();
             _rocketMuzzle.EndFrame(); _rocketImpactFlash.EndFrame(); _rocketImpactSparks.EndFrame();
+
+            FrameCost.End(FrameCost.Bucket.Vfx);
         }
 
         private static void Dispose(VfxBurst b)

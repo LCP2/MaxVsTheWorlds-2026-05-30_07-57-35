@@ -112,6 +112,8 @@ namespace MaxWorlds.VFX
 
         private void LateUpdate()
         {
+            FrameCost.Begin(FrameCost.Bucket.Anchor);
+
             _usedShadows = 0;
             _usedRings = 0;
 
@@ -157,6 +159,8 @@ namespace MaxWorlds.VFX
             // pool is re-walked from zero every frame rather than tracked per actor.
             for (int i = _usedShadows; i < _shadows.Count; i++) _shadows[i].Hide();
             for (int i = _usedRings; i < _rings.Count; i++) _rings[i].Hide();
+
+            FrameCost.End(FrameCost.Bucket.Anchor);
         }
 
         /// <summary>Flatten to the lawn. Actors' origins sit at different heights — Max's is his

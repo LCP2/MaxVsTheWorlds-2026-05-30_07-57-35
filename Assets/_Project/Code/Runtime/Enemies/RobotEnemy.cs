@@ -1252,7 +1252,12 @@ namespace MaxWorlds.Enemies
             if (target != null) _sight.Spawn(target.position);
         }
 
-        private void Update() => Tick(Time.deltaTime);
+        private void Update()
+        {
+            FrameCost.Begin(FrameCost.Bucket.Robot);
+            Tick(Time.deltaTime);
+            FrameCost.End(FrameCost.Bucket.Robot);
+        }
 
         /// <summary>The per-frame body, split out from <see cref="Update"/> (MV-870) so an EditMode
         /// test can drive an exact, controlled sequence of ticks — the same seam every per-state
