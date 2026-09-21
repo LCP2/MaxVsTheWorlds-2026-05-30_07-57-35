@@ -87,6 +87,16 @@ namespace MaxWorlds.Core
 
             QualitySettings.vSyncCount = 0;
 
+            // MV-883: a floor-guard, not a fix. Without this, a slow rendered frame makes Unity run
+            // the fixed-timestep physics step repeatedly to catch up (measured at 8.5 steps/frame at
+            // 5.3 fps) — more physics work, which makes the next frame slower, a positive feedback
+            // loop that amplifies the frame-rate collapse rather than just riding it out. Clamping the
+            // catch-up window to 0.1s caps that at 5 steps. Below ~10 fps the game now deliberately
+            // runs in slow motion (simulated time falls behind wall time) instead of spending ever
+            // more of the frame catching up — not a regression, since play is already unplayable
+            // there. Does not touch Time.fixedDeltaTime (the 50 Hz tick rate is unchanged — MV-883 AC3).
+            Time.maximumDeltaTime = 0.1f;
+
 #if UNITY_WEBGL && !UNITY_EDITOR
             // On WebGL the browser owns the frame loop — Unity drives itself from
             // requestAnimationFrame. Pinning Application.targetFrameRate makes Unity run its own
