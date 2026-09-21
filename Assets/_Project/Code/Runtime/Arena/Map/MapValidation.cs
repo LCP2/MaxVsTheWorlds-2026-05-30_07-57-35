@@ -11,11 +11,29 @@ namespace MaxWorlds.Arena
     /// so pinched there is nowhere to run. Authoring gets faster only if the feedback is instant, and
     /// this is where "instant" comes from — a bad number fails a test, not a build-and-deploy.
     ///
-    /// <paramref name="reason"/> names the FIRST breach in plain language, because the person reading
-    /// it is mid-edit and wants to know what to drag, not which assertion tripped.
+    /// <paramref name="reason"/> names EVERY breach found in one run, joined "; " (MV-879) — not just
+    /// the first. A round trip that fixes one rule only to discover the next was already sitting there
+    /// is a round trip the sweep should have collected up front; every rule below appends to a shared
+    /// violations list and the sweep moves on to the next candidate rather than stopping.
     /// </summary>
     public static class MapValidation
     {
+        /// <summary>How many violations <see cref="Validate"/>/<see cref="ValidateWorldConfig"/> will
+        /// name before truncating with an "and N more" tail — a badly broken config can otherwise
+        /// produce a wall of text nobody reads.</summary>
+        private const int MaxReportedViolations = 50;
+
+        /// <summary>Joins a phase's collected violations into the single <c>reason</c> string every
+        /// caller already expects, capped at <see cref="MaxReportedViolations"/>. Null (not empty)
+        /// when there is nothing to report, matching the old single-reason convention.</summary>
+        private static string Join(List<string> violations)
+        {
+            if (violations.Count == 0) return null;
+            if (violations.Count <= MaxReportedViolations) return string.Join("; ", violations);
+
+            return string.Join("; ", violations.GetRange(0, MaxReportedViolations)) +
+                   $"; and {violations.Count - MaxReportedViolations} more";
+        }
         /// <summary>Narrowest doorway Max and a chasing swarm both fit through.</summary>
         public const float MinDoorway = 3f;
 
@@ -82,83 +100,87 @@ namespace MaxWorlds.Arena
         {
             if (map == null) { reason = "the map is null"; return false; }
 
-            return Structure(map, out reason)
-                && Links(map, out reason)
-                && Actors(map, out reason)
-                && Reachable(map, out reason)
-                && Cover(map, out reason);
+            var violations = new List<string>();
+            Structure(map, violations);
+            Links(map, violations);
+            Actors(map, violations);
+            Reachable(map, violations);
+            Cover(map, violations);
+
+            reason = Join(violations);
+            return violations.Count == 0;
         }
 
-        private static bool Structure(MapData map, out string reason)
+        private static void Structure(MapData map, List<string> violations)
         {
             if (map.zones == null || map.zones.Length == 0)
-            { reason = "the map has no zones — there is nothing to stand in"; return false; }
+            {
+                violations.Add("the map has no zones — there is nothing to stand in");
+                return; // nothing further to sweep without zones
+            }
 
             if (map.wallHeight < MinWallHeight)
-            { reason = $"wallHeight {map.wallHeight} is too short to read as a wall (min {MinWallHeight})"; return false; }
+                violations.Add($"wallHeight {map.wallHeight} is too short to read as a wall (min {MinWallHeight})");
 
             if (map.wallThickness <= 0f)
-            { reason = "wallThickness must be positive"; return false; }
+                violations.Add("wallThickness must be positive");
 
             var seen = new HashSet<string>();
             foreach (MapZone z in map.zones)
             {
-                if (z == null) { reason = "a zone is null"; return false; }
+                if (z == null) { violations.Add("a zone is null"); continue; }
 
                 if (string.IsNullOrWhiteSpace(z.id))
-                { reason = "a zone has no id — links refer to zones by id"; return false; }
+                { violations.Add("a zone has no id — links refer to zones by id"); continue; }
 
                 if (!seen.Add(z.id))
-                { reason = $"two zones share the id '{z.id}'"; return false; }
+                    violations.Add($"two zones share the id '{z.id}'");
 
                 if (z.width <= 0f || z.depth <= 0f)
-                { reason = $"zone '{z.id}' has no area ({z.width}×{z.depth})"; return false; }
+                { violations.Add($"zone '{z.id}' has no area ({z.width}×{z.depth})"); continue; }
 
                 // A room you are meant to fight in has to be one you can circle in (the lesson of the
                 // 9 m corridor that read as a path and played as a treadmill).
                 bool isFightRoom = z.Kind == ZoneKind.Open || z.Kind == ZoneKind.Dense || z.Kind == ZoneKind.Boss;
                 if (isFightRoom && Mathf.Min(z.width, z.depth) < MinFightRoomWidth)
                 {
-                    reason = $"zone '{z.id}' is a {z.type} room but only {Mathf.Min(z.width, z.depth):0.#} m " +
-                             $"across — under {MinFightRoomWidth} m there is no room to circle-strafe";
-                    return false;
+                    violations.Add($"zone '{z.id}' is a {z.type} room but only {Mathf.Min(z.width, z.depth):0.#} m " +
+                             $"across — under {MinFightRoomWidth} m there is no room to circle-strafe");
                 }
             }
-
-            reason = null;
-            return true;
         }
 
-        private static bool Links(MapData map, out string reason)
+        private static void Links(MapData map, List<string> violations)
         {
             if (map.links != null)
             {
                 foreach (MapLink link in map.links)
                 {
-                    if (link == null) { reason = "a link is null"; return false; }
+                    if (link == null) { violations.Add("a link is null"); continue; }
 
-                    if (map.Zone(link.from) == null)
-                    { reason = $"link references zone '{link.from}', which does not exist"; return false; }
-
-                    if (map.Zone(link.to) == null)
-                    { reason = $"link references zone '{link.to}', which does not exist"; return false; }
+                    bool fromMissing = map.Zone(link.from) == null;
+                    bool toMissing = map.Zone(link.to) == null;
+                    if (fromMissing)
+                        violations.Add($"link references zone '{link.from}', which does not exist");
+                    if (toMissing)
+                        violations.Add($"link references zone '{link.to}', which does not exist");
+                    if (fromMissing || toMissing) continue;
 
                     if (!MapGeometry.Doorway(map, link, out _, out _, out Span hole))
                     {
-                        reason = $"zones '{link.from}' and '{link.to}' are linked but do not share an edge — " +
-                                 "move one so they touch, or the doorway cuts nothing";
-                        return false;
+                        violations.Add($"zones '{link.from}' and '{link.to}' are linked but do not share an edge — " +
+                                 "move one so they touch, or the doorway cuts nothing");
+                        continue;
                     }
 
                     if (hole.Length < MinDoorway - Geo.Epsilon)
                     {
-                        reason = $"the doorway between '{link.from}' and '{link.to}' is {hole.Length:0.#} m — " +
-                                 $"under {MinDoorway} m Max and the swarm cannot both get through";
-                        return false;
+                        violations.Add($"the doorway between '{link.from}' and '{link.to}' is {hole.Length:0.#} m — " +
+                                 $"under {MinDoorway} m Max and the swarm cannot both get through");
                     }
 
                     if (!string.IsNullOrEmpty(link.gate) && map.Entity(link.gate) == null)
-                    { reason = $"link '{link.from}'→'{link.to}' names gate '{link.gate}', which does not exist"; return false; }
+                        violations.Add($"link '{link.from}'→'{link.to}' names gate '{link.gate}', which does not exist");
                 }
             }
 
@@ -167,14 +189,11 @@ namespace MaxWorlds.Arena
             // scene-adopted Gate does, it just opens on its own HP instead of a factory's death.
             foreach (MapEntity e in Kind(map, EntityKind.Gate))
                 if (!FillsADoorway(map, e.id))
-                { reason = $"gate '{e.id}' does not fill any doorway — no link names it"; return false; }
+                    violations.Add($"gate '{e.id}' does not fill any doorway — no link names it");
 
             foreach (MapEntity e in Kind(map, EntityKind.AreaGate))
                 if (!FillsADoorway(map, e.id))
-                { reason = $"area gate '{e.id}' does not fill any doorway — no link names it"; return false; }
-
-            reason = null;
-            return true;
+                    violations.Add($"area gate '{e.id}' does not fill any doorway — no link names it");
         }
 
         private static bool FillsADoorway(MapData map, string entityId)
@@ -185,39 +204,39 @@ namespace MaxWorlds.Arena
             return false;
         }
 
-        private static bool Actors(MapData map, out string reason)
+        private static void Actors(MapData map, List<string> violations)
         {
             if (map.entities != null)
             {
                 foreach (MapEntity e in map.entities)
                 {
-                    if (e == null) { reason = "an entity is null"; return false; }
+                    if (e == null) { violations.Add("an entity is null"); continue; }
 
                     if (string.IsNullOrWhiteSpace(e.id))
-                    { reason = $"a {e.kind} entity has no id"; return false; }
+                    { violations.Add($"a {e.kind} entity has no id"); continue; }
 
                     if (e.Kind == EntityKind.Unknown)
-                    { reason = $"entity '{e.id}' has unknown kind '{e.kind}'"; return false; }
+                    { violations.Add($"entity '{e.id}' has unknown kind '{e.kind}'"); continue; }
 
                     // A gate stands ON a wall line, so it is legitimately outside every room — true of
                     // an area gate (WV-222) exactly as it is the scene-adopted one. Anything else
                     // authored outside a room is standing in the void.
                     if (e.Kind != EntityKind.Gate && e.Kind != EntityKind.AreaGate && map.ZoneAt(e.x, e.z) == null)
-                    { reason = $"'{e.id}' is at ({e.x}, {e.z}), which is not inside any zone"; return false; }
+                        violations.Add($"'{e.id}' is at ({e.x}, {e.z}), which is not inside any zone");
                 }
             }
 
             var spawns = Kind(map, EntityKind.PlayerSpawn);
             if (spawns.Count != 1)
-            { reason = $"the map has {spawns.Count} player spawns — it needs exactly one"; return false; }
+                violations.Add($"the map has {spawns.Count} player spawns — it needs exactly one");
 
             foreach (MapEntity gate in Kind(map, EntityKind.Gate))
             {
                 string[] keys = gate.Keys;
                 if (keys.Length == 0)
                 {
-                    reason = $"gate '{gate.id}' has no opensOn — a locked door with no key is a dead end";
-                    return false;
+                    violations.Add($"gate '{gate.id}' has no opensOn — a locked door with no key is a dead end");
+                    continue;
                 }
 
                 // Every key, not just the first: a gate that names two factories and gets one of the
@@ -229,12 +248,12 @@ namespace MaxWorlds.Arena
                     MapEntity key = map.Entity(id);
                     if (key == null || key.Kind != EntityKind.Factory)
                     {
-                        reason = $"gate '{gate.id}' opens on '{id}', which is not a factory in this map";
-                        return false;
+                        violations.Add($"gate '{gate.id}' opens on '{id}', which is not a factory in this map");
+                        continue;
                     }
 
                     if (!named.Add(id))
-                    { reason = $"gate '{gate.id}' names factory '{id}' twice"; return false; }
+                        violations.Add($"gate '{gate.id}' names factory '{id}' twice");
                 }
             }
 
@@ -242,21 +261,18 @@ namespace MaxWorlds.Arena
             {
                 MapZone zone = map.ZoneAt(boss.x, boss.z);
                 if (zone != null && zone.Kind != ZoneKind.Boss)
-                { reason = $"boss '{boss.id}' stands in '{zone.id}', which is not a boss zone"; return false; }
+                    violations.Add($"boss '{boss.id}' stands in '{zone.id}', which is not a boss zone");
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>Can Max actually walk from where he spawns to the boss? Gates do not block this —
         /// they open. A map that fails here is one where the run cannot be finished, which is the one
         /// bug a layout must never ship with.</summary>
-        private static bool Reachable(MapData map, out string reason)
+        private static void Reachable(MapData map, List<string> violations)
         {
             MapEntity spawn = map.First(EntityKind.PlayerSpawn);
             MapZone from = spawn == null ? null : map.ZoneAt(spawn.x, spawn.z);
-            if (from == null) { reason = "the player spawn is not inside a zone"; return false; }
+            if (from == null) { violations.Add("the player spawn is not inside a zone"); return; }
 
             var reached = new HashSet<string> { from.id };
             var queue = new Queue<string>();
@@ -282,17 +298,13 @@ namespace MaxWorlds.Arena
             {
                 if (z != null && z.Kind == ZoneKind.Boss && !reached.Contains(z.id))
                 {
-                    reason = $"the boss zone '{z.id}' cannot be walked to from the player spawn — " +
-                             "no chain of links reaches it";
-                    return false;
+                    violations.Add($"the boss zone '{z.id}' cannot be walked to from the player spawn — " +
+                             "no chain of links reaches it");
                 }
             }
-
-            reason = null;
-            return true;
         }
 
-        private static bool Cover(MapData map, out string reason)
+        private static void Cover(MapData map, List<string> violations)
         {
             List<MapEntity> cover = Kind(map, EntityKind.Cover);
             List<MapEntity> factories = Kind(map, EntityKind.Factory);
@@ -308,7 +320,7 @@ namespace MaxWorlds.Arena
                 ArenaCover body = c.ToCover();
 
                 if (c.height < 1f)
-                { reason = $"'{c.id}' is {c.height} m tall — too short to break a chase"; return false; }
+                    violations.Add($"'{c.id}' is {c.height} m tall — too short to break a chase (min 1 m)");
 
                 MapZone zone = map.ZoneAt(c.x, c.z);
                 if (zone != null && zone.Kind == ZoneKind.Boss)
@@ -316,19 +328,19 @@ namespace MaxWorlds.Arena
                     List<MapEntity> zoneBosses = bosses.FindAll(b => map.ZoneAt(b.x, b.z) == zone);
                     if (zoneBosses.Count == 0)
                     {
-                        reason = $"'{c.id}' is cover in the boss arena '{zone.id}' — the boss fight is " +
-                                 "readability-first and stays open";
-                        return false;
+                        violations.Add($"'{c.id}' is cover in the boss arena '{zone.id}' — the boss fight is " +
+                                 "readability-first and stays open");
                     }
-
-                    foreach (MapEntity boss in zoneBosses)
+                    else
                     {
-                        float dist = body.DistanceTo(boss.ToCover());
-                        if (dist < MinBossCoverClearance)
+                        foreach (MapEntity boss in zoneBosses)
                         {
-                            reason = $"'{c.id}' is {dist:0.#} m from boss '{boss.id}' — a boss arena needs " +
-                                     $"{MinBossCoverClearance:0.#} m of clear ground round every boss";
-                            return false;
+                            float dist = body.DistanceTo(boss.ToCover());
+                            if (dist < MinBossCoverClearance)
+                            {
+                                violations.Add($"'{c.id}' is {dist:0.#} m from boss '{boss.id}' — a boss arena needs " +
+                                         $"{MinBossCoverClearance:0.#} m of clear ground round every boss");
+                            }
                         }
                     }
                 }
@@ -336,7 +348,7 @@ namespace MaxWorlds.Arena
                 foreach (MapEntity f in factories)
                 {
                     if (body.DistanceTo(f.CenterXz) < SpawnRadius + SpawnClearance)
-                    { reason = $"'{c.id}' crowds '{f.id}'s spawn ring — robots would spawn inside it"; return false; }
+                        violations.Add($"'{c.id}' crowds '{f.id}'s spawn ring — robots would spawn inside it");
                 }
 
                 // MV-860: a Replicator's own two rects — the IN-face lane a lured robot actually walks,
@@ -347,40 +359,41 @@ namespace MaxWorlds.Arena
                 {
                     if (body.Footprint.Overlaps(ReplicatorInLane(r)))
                     {
-                        reason = $"'{c.id}' blocks '{r.id}'s IN lane — the queue that walks to its hatch " +
-                                 $"needs a clear {ReplicatorLaneWidth:0.#} x {ReplicatorLaneDepth:0.#} m lane in front of it";
-                        return false;
+                        violations.Add($"'{c.id}' blocks '{r.id}'s IN lane — the queue that walks to its hatch " +
+                                 $"needs a clear {ReplicatorLaneWidth:0.#} x {ReplicatorLaneDepth:0.#} m lane in front of it");
                     }
                     if (body.Footprint.Overlaps(ReplicatorOutPad(r)))
                     {
-                        reason = $"'{c.id}' blocks '{r.id}'s OUT pad — its twins emit there and need a " +
-                                 $"clear {ReplicatorPadWidth:0.#} x {ReplicatorPadDepth:0.#} m pad in front of it";
-                        return false;
+                        violations.Add($"'{c.id}' blocks '{r.id}'s OUT pad — its twins emit there and need a " +
+                                 $"clear {ReplicatorPadWidth:0.#} x {ReplicatorPadDepth:0.#} m pad in front of it");
                     }
                 }
 
                 for (int j = i + 1; j < cover.Count; j++)
                 {
                     if (body.Overlaps(cover[j].ToCover()))
-                    { reason = $"'{c.id}' overlaps '{cover[j].id}'"; return false; }
+                        violations.Add($"'{c.id}' overlaps '{cover[j].id}'");
                 }
             }
 
             // Sweep every room: at no depth may cover pinch it shut. The player must always have
-            // somewhere to run.
+            // somewhere to run. One reported violation per zone (not one per 0.5 m step) — the same
+            // pinch would otherwise repeat dozens of times and flood the report.
             foreach (MapZone z in map.zones)
             {
                 if (z == null || z.width < MinFreeChannel) continue;
 
                 for (float depth = z.ZMin; depth <= z.ZMax; depth += 0.5f)
                 {
-                    if (FreeChannelAt(z, cover, depth) < MinFreeChannel - 1e-3f)
-                    { reason = $"cover pinches '{z.id}' shut at z={depth:0.#}"; return false; }
+                    float widest = FreeChannelAt(z, cover, depth);
+                    if (widest < MinFreeChannel - 1e-3f)
+                    {
+                        violations.Add($"cover pinches '{z.id}' shut at z={depth:0.#} " +
+                                 $"(widest crossing {widest:0.#} m, floor {MinFreeChannel:0.#} m)");
+                        break;
+                    }
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>Widest continuous gap a player can run through at depth <paramref name="z"/>,
@@ -495,25 +508,26 @@ namespace MaxWorlds.Arena
         {
             if (cfg == null) { reason = "the world config is null"; return false; }
 
-            return WorldAreas(cfg, out reason)
-                && WorldSheds(cfg, out reason)
-                && WorldBosses(cfg, out reason)
-                && WorldGarrison(cfg, out reason)
-                && WorldLurkerGrates(cfg, out reason)
-                && WorldGates(cfg, out reason)
-                && WorldReachability(cfg, out reason)
-                && WorldVerticality(cfg, out reason)
-                && WorldBridges(cfg, out reason);
+            var violations = new List<string>();
+            WorldAreas(cfg, violations);
+            WorldSheds(cfg, violations);
+            WorldBosses(cfg, violations);
+            WorldGarrison(cfg, violations);
+            WorldLurkerGrates(cfg, violations);
+            WorldGates(cfg, violations);
+            WorldReachability(cfg, violations);
+            WorldVerticality(cfg, violations);
+            WorldBridges(cfg, violations);
+
+            reason = Join(violations);
+            return violations.Count == 0;
         }
 
         /// <summary>World-level bridges (MV-711): every violation across every bridge is collected and
-        /// reported TOGETHER, unlike <see cref="Cover"/> above (which this ticket's own spec calls out by
-        /// name as the shape NOT to copy) — a designer fixing a bridge pass should not have to re-run
-        /// validation once per mistake.</summary>
-        private static bool WorldBridges(WorldConfig cfg, out string reason)
+        /// reported together — the same collector shape every other rule in this file now uses
+        /// (MV-879).</summary>
+        private static void WorldBridges(WorldConfig cfg, List<string> violations)
         {
-            var violations = new List<string>();
-
             var deckRects = new List<Rect>();
             foreach (WorldArea a in cfg.areas)
                 foreach (WorldDeck d in a.decks ?? Array.Empty<WorldDeck>())
@@ -575,10 +589,6 @@ namespace MaxWorlds.Arena
             for (int j = i + 1; j < bridgeRects.Count; j++)
                 if (bridgeRects[i].rect.Overlaps(bridgeRects[j].rect))
                     violations.Add($"bridge '{bridgeRects[i].id}' overlaps bridge '{bridgeRects[j].id}'");
-
-            if (violations.Count > 0) { reason = string.Join("; ", violations); return false; }
-            reason = null;
-            return true;
         }
 
         private static WorldArea AreaAt(WorldConfig cfg, float x, float z)
@@ -622,7 +632,7 @@ namespace MaxWorlds.Arena
         /// A deck with no ramp reaching it is deliberately NOT checked here — until deck gates ship
         /// (MV-697) that is a validation WARNING (logged by <see cref="WorldMapLoader"/> at load time),
         /// not a reason to refuse the whole config.</summary>
-        private static bool WorldVerticality(WorldConfig cfg, out string reason)
+        private static void WorldVerticality(WorldConfig cfg, List<string> violations)
         {
             foreach (WorldArea a in cfg.areas)
             {
@@ -630,11 +640,11 @@ namespace MaxWorlds.Arena
 
                 foreach (WorldDeck deck in a.decks ?? Array.Empty<WorldDeck>())
                 {
-                    if (deck == null) { reason = $"area '{a.id}' has a null deck"; return false; }
+                    if (deck == null) { violations.Add($"area '{a.id}' has a null deck"); continue; }
 
                     Rect rect = a.WorldRectOf(deck.x, deck.z, deck.w, deck.d);
                     if (!RectInsideArea(rect, a))
-                    { reason = $"area '{a.id}': deck '{deck.id}' rect falls outside the area floor"; return false; }
+                    { violations.Add($"area '{a.id}': deck '{deck.id}' rect falls outside the area floor"); continue; }
 
                     deckRects.Add(rect);
                     float deckHeight = deck.height > 0f ? deck.height : (cfg.dials?.deckHeight ?? 2.5f);
@@ -645,9 +655,8 @@ namespace MaxWorlds.Arena
                         var coverRect = new Rect(c.x - c.width * 0.5f, c.z - c.depth * 0.5f, c.width, c.depth);
                         if (rect.Overlaps(coverRect) && c.height >= deckHeight)
                         {
-                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps " +
-                                     $"cover '{c.id}', which stands {c.height:0.#} m tall — too tall to sit under it";
-                            return false;
+                            violations.Add($"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps " +
+                                     $"cover '{c.id}', which stands {c.height:0.#} m tall — too tall to sit under it");
                         }
                     }
 
@@ -657,9 +666,8 @@ namespace MaxWorlds.Arena
                             s.z - WorldMapLoader.ShedFootprint * 0.5f, WorldMapLoader.ShedFootprint, WorldMapLoader.ShedFootprint);
                         if (rect.Overlaps(shedRect) && WorldMapLoader.ShedHeight >= deckHeight)
                         {
-                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps a shed " +
-                                     $"— too tall to sit under it";
-                            return false;
+                            violations.Add($"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps a shed " +
+                                     $"— too tall to sit under it");
                         }
                     }
 
@@ -669,28 +677,27 @@ namespace MaxWorlds.Arena
                         var bossRect = new Rect(b.x - bw * 0.5f, b.z - bd * 0.5f, bw, bd);
                         if (rect.Overlaps(bossRect) && WorldMapLoader.BossHeight >= deckHeight)
                         {
-                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps boss " +
-                                     $"'{b.id}' — too tall to sit under it";
-                            return false;
+                            violations.Add($"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps boss " +
+                                     $"'{b.id}' — too tall to sit under it");
                         }
                     }
                 }
 
                 foreach (WorldSludge s in a.sludge ?? Array.Empty<WorldSludge>())
                 {
-                    if (s == null) { reason = $"area '{a.id}' has a null sludge rect"; return false; }
+                    if (s == null) { violations.Add($"area '{a.id}' has a null sludge rect"); continue; }
                     Rect rect = a.WorldRectOf(s.x, s.z, s.w, s.d);
                     if (!RectInsideArea(rect, a))
-                    { reason = $"area '{a.id}': sludge '{s.id}' rect falls outside the area floor"; return false; }
+                        violations.Add($"area '{a.id}': sludge '{s.id}' rect falls outside the area floor");
                 }
 
                 var rampRects = new List<(string id, Rect rect)>();
                 foreach (WorldRamp r in a.ramps ?? Array.Empty<WorldRamp>())
                 {
-                    if (r == null) { reason = $"area '{a.id}' has a null ramp"; return false; }
+                    if (r == null) { violations.Add($"area '{a.id}' has a null ramp"); continue; }
                     Rect rect = a.WorldRectOf(r.x, r.z, r.w, r.d);
                     if (!RectInsideArea(rect, a))
-                    { reason = $"area '{a.id}': ramp '{r.id}' rect falls outside the area floor"; return false; }
+                    { violations.Add($"area '{a.id}': ramp '{r.id}' rect falls outside the area floor"); continue; }
 
                     int touches = 0;
                     foreach (Rect deckRect in deckRects)
@@ -698,8 +705,8 @@ namespace MaxWorlds.Arena
 
                     if (touches != 1)
                     {
-                        reason = $"area '{a.id}': ramp '{r.id}' must touch exactly one deck — touches {touches}";
-                        return false;
+                        violations.Add($"area '{a.id}': ramp '{r.id}' must touch exactly one deck — touches {touches}");
+                        continue;
                     }
 
                     rampRects.Add((r.id, rect));
@@ -710,18 +717,18 @@ namespace MaxWorlds.Arena
                 // or there is no deck for WorldMapLoader to resolve its built height from.
                 foreach (WorldHatch h in a.hatches ?? Array.Empty<WorldHatch>())
                 {
-                    if (h == null) { reason = $"area '{a.id}' has a null hatch"; return false; }
+                    if (h == null) { violations.Add($"area '{a.id}' has a null hatch"); continue; }
 
                     Rect rect = a.WorldRectOf(h.x, h.z, h.w, h.d);
                     if (!RectInsideArea(rect, a))
-                    { reason = $"area '{a.id}': hatch '{h.id}' rect falls outside the area floor"; return false; }
+                    { violations.Add($"area '{a.id}': hatch '{h.id}' rect falls outside the area floor"); continue; }
 
                     bool onDeck = false;
                     foreach (Rect deckRect in deckRects)
                         if (deckRect.Overlaps(rect)) { onDeck = true; break; }
 
                     if (!onDeck)
-                    { reason = $"area '{a.id}': hatch '{h.id}' does not sit on any of the area's deck cells"; return false; }
+                    { violations.Add($"area '{a.id}': hatch '{h.id}' does not sit on any of the area's deck cells"); continue; }
 
                     // MV-829: overlapping SOME deck cell is not enough — a3_hatch2 shipped on its
                     // deck's west edge while a3_ramp2 climbed to the east edge, so the flat panel sat
@@ -764,17 +771,15 @@ namespace MaxWorlds.Arena
                     if (!sitsAtRampEdge)
                     {
                         string ramps = nearbyRamps.Count > 0 ? string.Join(", ", nearbyRamps) : "no ramp reaching its deck";
-                        reason = $"area '{a.id}': hatch '{h.id}' sits on the wrong edge of its deck — " +
-                                 $"it must sit where ramp {ramps} arrives, not the opposite side";
-                        return false;
+                        violations.Add($"area '{a.id}': hatch '{h.id}' sits on the wrong edge of its deck — " +
+                                 $"it must sit where ramp {ramps} arrives, not the opposite side");
+                        continue;
                     }
 
-                    if (!ValidateOpensWith(cfg, "hatch", h.id, h.opensWith, out reason)) return false;
+                    if (!ValidateOpensWith(cfg, "hatch", h.id, h.opensWith, out string opensReason))
+                        violations.Add(opensReason);
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         private enum EdgeSide { North, South, East, West }
@@ -824,7 +829,7 @@ namespace MaxWorlds.Arena
         /// "behaves exactly as it does today" (AC3) — world1's compost clearing predates this rule and
         /// was never authored against it, so gating on count is what keeps it valid rather than
         /// retroactively breaking already-shipped content.</summary>
-        private static bool WorldBosses(WorldConfig cfg, out string reason)
+        private static void WorldBosses(WorldConfig cfg, List<string> violations)
         {
             foreach (WorldArea a in cfg.areas)
             {
@@ -836,9 +841,8 @@ namespace MaxWorlds.Arena
                     if (b.x - a.XMin < MinBossWallMargin || a.XMax - b.x < MinBossWallMargin ||
                         b.z - a.ZMin < MinBossWallMargin || a.ZMax - b.z < MinBossWallMargin)
                     {
-                        reason = $"a boss in area '{a.id}' at ({b.x:0.#}, {b.z:0.#}) is within " +
-                                 $"{MinBossWallMargin} m of its area's walls";
-                        return false;
+                        violations.Add($"a boss in area '{a.id}' at ({b.x:0.#}, {b.z:0.#}) is within " +
+                                 $"{MinBossWallMargin} m of its area's walls");
                     }
                 }
 
@@ -848,15 +852,11 @@ namespace MaxWorlds.Arena
                     float dist = Vector2.Distance(new Vector2(bosses[i].x, bosses[i].z), new Vector2(bosses[j].x, bosses[j].z));
                     if (dist < MinBossSeparation)
                     {
-                        reason = $"area '{a.id}' has two bosses {dist:0.#} m apart — under the " +
-                                 $"{MinBossSeparation} m minimum boss separation";
-                        return false;
+                        violations.Add($"area '{a.id}' has two bosses {dist:0.#} m apart — under the " +
+                                 $"{MinBossSeparation} m minimum boss separation");
                     }
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>Every authored garrison entry (MV-559, <see cref="WorldArea.garrison"/>) must sit
@@ -865,7 +865,7 @@ namespace MaxWorlds.Arena
         /// neighbours, extended to a designer's own placed robots — and an area must not author more of
         /// a kind than its solved composition actually has, or a garrison slot would have nothing to
         /// draw from.</summary>
-        private static bool WorldGarrison(WorldConfig cfg, out string reason)
+        private static void WorldGarrison(WorldConfig cfg, List<string> violations)
         {
             foreach (WorldArea a in cfg.areas)
             {
@@ -876,20 +876,20 @@ namespace MaxWorlds.Arena
 
                 foreach (WorldGarrisonEntry entry in garrison)
                 {
-                    if (entry == null) { reason = $"area '{a.id}' has a null garrison entry"; return false; }
+                    if (entry == null) { violations.Add($"area '{a.id}' has a null garrison entry"); continue; }
 
                     var point = new Vector2(entry.x, entry.z);
 
                     if (!a.Footprint.Contains(point))
                     {
-                        reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is outside the area";
-                        return false;
+                        violations.Add($"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is outside the area");
+                        continue;
                     }
 
                     if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind))
                     {
-                        reason = $"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'";
-                        return false;
+                        violations.Add($"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'");
+                        continue;
                     }
 
                     float requiredGap = MinGarrisonCoverGap(kind);
@@ -905,9 +905,8 @@ namespace MaxWorlds.Arena
                         float gap = body.DistanceTo(point);
                         if (gap < requiredGap)
                         {
-                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is {gap:0.#} m " +
-                                     $"from cover '{c.id}' — a {kind} needs {requiredGap:0.#} m clearance";
-                            return false;
+                            violations.Add($"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is {gap:0.#} m " +
+                                     $"from cover '{c.id}' — a {kind} needs {requiredGap:0.#} m clearance");
                         }
                     }
 
@@ -916,9 +915,8 @@ namespace MaxWorlds.Arena
                         float toShed = Vector2.Distance(point, new Vector2(s.x, s.z));
                         if (toShed < SpawnRadius + SpawnClearance)
                         {
-                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
-                                     $"{SpawnRadius + SpawnClearance:0.#} m of a shed";
-                            return false;
+                            violations.Add($"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
+                                     $"{SpawnRadius + SpawnClearance:0.#} m of a shed");
                         }
                     }
 
@@ -930,15 +928,9 @@ namespace MaxWorlds.Arena
                 {
                     int authoredCount = CompositionCount(solved, kv.Key);
                     if (kv.Value > authoredCount)
-                    {
-                        reason = $"area '{a.id}': garrison authors {kv.Value} {kv.Key}(s) but composition only has {authoredCount}";
-                        return false;
-                    }
+                        violations.Add($"area '{a.id}': garrison authors {kv.Value} {kv.Key}(s) but composition only has {authoredCount}");
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>Every garrisoned Grate Lurker (MV-688, AC2; containment rule MV-724) must sit
@@ -948,7 +940,7 @@ namespace MaxWorlds.Arena
         /// that tile actually occupies the whole 1x1 square, so anywhere within it (inclusive of the
         /// edges) counts, not just the corner itself. Names the area and the entry's index in the
         /// failure reason, per the ticket's own AC2 wording.</summary>
-        private static bool WorldLurkerGrates(WorldConfig cfg, out string reason)
+        private static void WorldLurkerGrates(WorldConfig cfg, List<string> violations)
         {
             foreach (WorldArea a in cfg.areas)
             {
@@ -972,15 +964,11 @@ namespace MaxWorlds.Arena
 
                     if (!onGrate)
                     {
-                        reason = $"area '{a.id}': garrison entry {i} is a lurker at ({entry.x:0.#}, {entry.z:0.#}) " +
-                                 "but no grate sits there — a Lurker must be authored exactly on a grate";
-                        return false;
+                        violations.Add($"area '{a.id}': garrison entry {i} is a lurker at ({entry.x:0.#}, {entry.z:0.#}) " +
+                                 "but no grate sits there — a Lurker must be authored exactly on a grate");
                     }
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         private static int CompositionCount(DifficultyEngine.Composition c, EnemyKind kind) => kind switch
@@ -1000,27 +988,30 @@ namespace MaxWorlds.Arena
             _ => 0,
         };
 
-        private static bool WorldAreas(WorldConfig cfg, out string reason)
+        private static void WorldAreas(WorldConfig cfg, List<string> violations)
         {
             if (cfg.areas == null || cfg.areas.Length == 0)
-            { reason = "the world config has no areas"; return false; }
+            {
+                violations.Add("the world config has no areas");
+                return; // nothing further to sweep without areas
+            }
 
             var seen = new HashSet<string>();
             foreach (WorldArea a in cfg.areas)
             {
-                if (a == null) { reason = "an area is null"; return false; }
+                if (a == null) { violations.Add("an area is null"); continue; }
 
                 if (string.IsNullOrWhiteSpace(a.id))
-                { reason = "an area has no id — gates refer to areas by id"; return false; }
+                { violations.Add("an area has no id — gates refer to areas by id"); continue; }
 
                 if (!seen.Add(a.id))
-                { reason = $"two areas share the id '{a.id}'"; return false; }
+                    violations.Add($"two areas share the id '{a.id}'");
 
                 if (a.origin == null)
-                { reason = $"area '{a.id}' has no origin"; return false; }
+                { violations.Add($"area '{a.id}' has no origin"); continue; }
 
                 if (a.size == null || a.size.w <= 0f || a.size.d <= 0f)
-                { reason = $"area '{a.id}' has no area ({a.size?.w ?? 0f}×{a.size?.d ?? 0f})"; return false; }
+                { violations.Add($"area '{a.id}' has no area ({a.size?.w ?? 0f}×{a.size?.d ?? 0f})"); continue; }
 
                 // MV-828: WorldRunner stamps every Replicator's AreaIndex from its own area's
                 // area.index (the same number zones/robots key off) — an area authoring a replicator
@@ -1030,9 +1021,8 @@ namespace MaxWorlds.Arena
                     int areaCount = cfg.dials?.areaCount ?? 0;
                     if (a.index < 1 || a.index > areaCount)
                     {
-                        reason = $"area '{a.id}' authors a replicator but its index {a.index} is not a " +
-                                 $"combat area (1..{areaCount})";
-                        return false;
+                        violations.Add($"area '{a.id}' authors a replicator but its index {a.index} is not a " +
+                                 $"combat area (1..{areaCount})");
                     }
                 }
             }
@@ -1043,45 +1033,39 @@ namespace MaxWorlds.Arena
             // instead of being caught.
             foreach (WorldArea a in cfg.areas)
             {
-                if (string.IsNullOrEmpty(a.overlays)) continue;
+                if (a == null || string.IsNullOrEmpty(a.overlays)) continue;
 
                 WorldArea target = cfg.Area(a.overlays);
                 if (target == null)
-                { reason = $"area '{a.id}' overlays unknown area '{a.overlays}'"; return false; }
+                { violations.Add($"area '{a.id}' overlays unknown area '{a.overlays}'"); continue; }
 
                 if (!Geo.Same(a.XMin, target.XMin) || !Geo.Same(a.XMax, target.XMax) ||
                     !Geo.Same(a.ZMin, target.ZMin) || !Geo.Same(a.ZMax, target.ZMax))
                 {
-                    reason = $"area '{a.id}' overlays '{target.id}' but its origin/size disagree";
-                    return false;
+                    violations.Add($"area '{a.id}' overlays '{target.id}' but its origin/size disagree");
                 }
             }
 
             for (int i = 0; i < cfg.areas.Length; i++)
             for (int j = i + 1; j < cfg.areas.Length; j++)
             {
+                if (cfg.areas[i] == null || cfg.areas[j] == null) continue;
+
                 // MV-697: an overlay area shares its target's exact footprint on purpose — the same
                 // gantry-over-a-floor-room revisit AreasOverlap otherwise exists to refuse.
                 if (IsOverlayPair(cfg.areas[i], cfg.areas[j])) continue;
 
                 if (AreasOverlap(cfg.areas[i], cfg.areas[j]))
-                {
-                    reason = $"area '{cfg.areas[i].id}' overlaps area '{cfg.areas[j].id}'";
-                    return false;
-                }
+                    violations.Add($"area '{cfg.areas[i].id}' overlaps area '{cfg.areas[j].id}'");
             }
 
             int entryCount = 0;
-            foreach (WorldArea a in cfg.areas) if (a.IsEntryRole) entryCount++;
+            foreach (WorldArea a in cfg.areas) if (a != null && a.IsEntryRole) entryCount++;
             if (entryCount != 1)
             {
-                reason = $"the world config has {entryCount} entry areas — it needs exactly one " +
-                         "('An entry stub precedes Area 1', spec §7)";
-                return false;
+                violations.Add($"the world config has {entryCount} entry areas — it needs exactly one " +
+                         "('An entry stub precedes Area 1', spec §7)");
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>True only for a genuine overlap — areas that merely touch along a shared wall
@@ -1105,7 +1089,7 @@ namespace MaxWorlds.Arena
         /// "behaves exactly as it does today" (AC2) — several shipped areas (e.g. world1's a11, 4.8-5.4 m
         /// from its walls) predate this rule and were never authored against it, so gating on count is
         /// what keeps them valid rather than retroactively breaking already-shipped content.</summary>
-        private static bool WorldSheds(WorldConfig cfg, out string reason)
+        private static void WorldSheds(WorldConfig cfg, List<string> violations)
         {
             foreach (WorldArea a in cfg.areas)
             {
@@ -1117,9 +1101,8 @@ namespace MaxWorlds.Arena
                     if (s.x - a.XMin < MinShedWallMargin || a.XMax - s.x < MinShedWallMargin ||
                         s.z - a.ZMin < MinShedWallMargin || a.ZMax - s.z < MinShedWallMargin)
                     {
-                        reason = $"a shed in area '{a.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
-                                 $"{MinShedWallMargin} m of its area's walls";
-                        return false;
+                        violations.Add($"a shed in area '{a.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
+                                 $"{MinShedWallMargin} m of its area's walls");
                     }
                 }
 
@@ -1129,54 +1112,50 @@ namespace MaxWorlds.Arena
                     float dist = Vector2.Distance(new Vector2(sheds[i].x, sheds[i].z), new Vector2(sheds[j].x, sheds[j].z));
                     if (dist < MinShedSeparation)
                     {
-                        reason = $"area '{a.id}' has two sheds {dist:0.#} m apart — under the " +
-                                 $"{MinShedSeparation} m minimum shed separation";
-                        return false;
+                        violations.Add($"area '{a.id}' has two sheds {dist:0.#} m apart — under the " +
+                                 $"{MinShedSeparation} m minimum shed separation");
                     }
                 }
             }
-
-            reason = null;
-            return true;
         }
 
-        private static bool WorldGates(WorldConfig cfg, out string reason)
+        private static void WorldGates(WorldConfig cfg, List<string> violations)
         {
             var seenIds = new HashSet<string>();
             foreach (WorldGate g in cfg.gates)
             {
-                if (g == null) { reason = "a gate is null"; return false; }
+                if (g == null) { violations.Add("a gate is null"); continue; }
 
                 if (string.IsNullOrWhiteSpace(g.id))
-                { reason = "a gate has no id"; return false; }
+                { violations.Add("a gate has no id"); continue; }
 
                 if (!seenIds.Add(g.id))
-                { reason = $"two gates share the id '{g.id}'"; return false; }
+                    violations.Add($"two gates share the id '{g.id}'");
 
-                if (!ResolveEndpoint(cfg, g.from, out WorldArea fromArea, out Wall fromWall, out reason)) return false;
-                if (!ResolveEndpoint(cfg, g.to, out WorldArea toArea, out Wall toWall, out reason)) return false;
+                if (!ResolveEndpoint(cfg, g.from, out WorldArea fromArea, out Wall fromWall, out string fromReason))
+                { violations.Add(fromReason); continue; }
+                if (!ResolveEndpoint(cfg, g.to, out WorldArea toArea, out Wall toWall, out string toReason))
+                { violations.Add(toReason); continue; }
 
-                if (!ValidateOpensWith(cfg, "gate", g.id, g.opensWith, out reason)) return false;
+                if (!ValidateOpensWith(cfg, "gate", g.id, g.opensWith, out string opensReason))
+                    violations.Add(opensReason);
 
                 if (toWall != WallEnums.Opposite(fromWall))
                 {
-                    reason = $"gate '{g.id}' joins '{fromArea.id}'s {fromWall} wall to '{toArea.id}'s {toWall} wall — " +
-                             $"they must be opposite walls ({fromWall}↔{WallEnums.Opposite(fromWall)})";
-                    return false;
+                    violations.Add($"gate '{g.id}' joins '{fromArea.id}'s {fromWall} wall to '{toArea.id}'s {toWall} wall — " +
+                             $"they must be opposite walls ({fromWall}↔{WallEnums.Opposite(fromWall)})");
+                    continue;
                 }
 
                 if (!Geo.Same(fromArea.WallCoord(fromWall), toArea.WallCoord(toWall)))
                 {
-                    reason = $"gate '{g.id}': '{fromArea.id}'s {fromWall} wall and '{toArea.id}'s {toWall} wall " +
-                             "do not sit on the same line — move one area so the walls coincide";
-                    return false;
+                    violations.Add($"gate '{g.id}': '{fromArea.id}'s {fromWall} wall and '{toArea.id}'s {toWall} wall " +
+                             "do not sit on the same line — move one area so the walls coincide");
+                    continue;
                 }
 
                 if (g.width < MinDoorway)
-                {
-                    reason = $"gate '{g.id}' is {g.width} m wide — under {MinDoorway} m Max and a swarm cannot both fit through";
-                    return false;
-                }
+                    violations.Add($"gate '{g.id}' is {g.width} m wide — under {MinDoorway} m Max and a swarm cannot both fit through");
 
                 Span fromSpan = fromArea.WallSpan(fromWall);
                 Span toSpan = toArea.WallSpan(toWall);
@@ -1184,16 +1163,16 @@ namespace MaxWorlds.Arena
 
                 if (overlap.IsEmpty)
                 {
-                    reason = $"gate '{g.id}': '{fromArea.id}' and '{toArea.id}' walls do not overlap at all — " +
-                             "the opening has nowhere to sit";
-                    return false;
+                    violations.Add($"gate '{g.id}': '{fromArea.id}' and '{toArea.id}' walls do not overlap at all — " +
+                             "the opening has nowhere to sit");
+                    continue;
                 }
 
                 if (overlap.Length < g.width - Geo.Epsilon)
                 {
-                    reason = $"gate '{g.id}' is {g.width} m wide but its two walls only share {overlap.Length:0.#} m " +
-                             "— the opening does not fit";
-                    return false;
+                    violations.Add($"gate '{g.id}' is {g.width} m wide but its two walls only share {overlap.Length:0.#} m " +
+                             "— the opening does not fit");
+                    continue;
                 }
 
                 float posFrom = fromSpan.Min + Mathf.Clamp01(g.from.pos) * fromSpan.Length;
@@ -1203,14 +1182,10 @@ namespace MaxWorlds.Arena
 
                 if (along - half < overlap.Min - Geo.Epsilon || along + half > overlap.Max + Geo.Epsilon)
                 {
-                    reason = $"gate '{g.id}' at {along:0.#} spills past the shared wall [{overlap.Min:0.#}, {overlap.Max:0.#}] " +
-                             $"— move its pos closer to the middle or narrow it below {overlap.Length:0.#} m";
-                    return false;
+                    violations.Add($"gate '{g.id}' at {along:0.#} spills past the shared wall [{overlap.Min:0.#}, {overlap.Max:0.#}] " +
+                             $"— move its pos closer to the middle or narrow it below {overlap.Length:0.#} m");
                 }
             }
-
-            reason = null;
-            return true;
         }
 
         /// <summary>Validates an authored <c>opensWith</c> string against the <see cref="GateCondition"/>
@@ -1294,9 +1269,10 @@ namespace MaxWorlds.Arena
         /// <summary>Every area reachable from the entry stub via the gate graph (spec rule (b)) —
         /// unlike <see cref="Reachable"/> above, which only checks the boss, this checks ALL of them,
         /// because a free-2D layout can strand a side area a straight corridor never could.</summary>
-        private static bool WorldReachability(WorldConfig cfg, out string reason)
+        private static void WorldReachability(WorldConfig cfg, List<string> violations)
         {
             WorldArea entry = FindEntry(cfg);
+            if (entry == null) return; // WorldAreas already reports the missing/duplicate entry stub
 
             var reached = new HashSet<string> { entry.id };
             var queue = new Queue<string>();
@@ -1319,15 +1295,9 @@ namespace MaxWorlds.Arena
 
             foreach (WorldArea a in cfg.areas)
             {
-                if (!reached.Contains(a.id))
-                {
-                    reason = $"area '{a.id}' is not reachable from the entry stub '{entry.id}' — no chain of gates reaches it";
-                    return false;
-                }
+                if (a != null && !reached.Contains(a.id))
+                    violations.Add($"area '{a.id}' is not reachable from the entry stub '{entry.id}' — no chain of gates reaches it");
             }
-
-            reason = null;
-            return true;
         }
 
         private static WorldArea FindEntry(WorldConfig cfg)
