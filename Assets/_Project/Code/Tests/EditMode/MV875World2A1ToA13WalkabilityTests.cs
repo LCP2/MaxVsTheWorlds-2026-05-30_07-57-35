@@ -19,13 +19,14 @@ namespace MaxWorlds.Tests.EditMode
     /// fault, plus a9's and a12's own pre-existing siblings, as part of a full a1-a13 re-conversion from
     /// Lee's workbook.
     ///
-    /// a13 is gated the same as every other area here: the ticket's own resolution (2026-09-21) nudged
-    /// 7 of its 21 Replicators by one or two cells each — never redesigning Lee's maze, only relieving
-    /// the boxes whose IN lane or OUT pad was filled by the body of the NEXT box, which no amount of
-    /// pipe removal could fix — so every non-DECK gate out of a13 and all 21 replicator IN lanes are
-    /// reached and clear, same as a1..a12. a13's own interior still keeps dead pockets by design (91%
-    /// floor coverage from its entry, not 100%); this test does not require full-floor coverage, only
-    /// the gate-to-gate and replicator-lane properties AC1 asks for.
+    /// a13 is an authored maze of 1-cell (1.0 m) lanes against Max's 1.0 m width — deliberately not
+    /// fully walkable, and that is Lee's design call, not a defect (ticket comment, 2026-09-21T17:39:
+    /// "AC1 was wrong, not a13... a13 is permanently exempt from all connectivity, reachability and
+    /// walkability assertions"). So for a13 this test keeps only the lane-clear-of-cover check (a
+    /// replicator's IN lane must not overlap cover) and drops both the out-gate-reached and the
+    /// replicator-lane-reached checks. a1..a12 keep the full check, unchanged: every non-DECK gate out
+    /// of the area and every replicator's IN lane must be both reached from the area's own entry mouth
+    /// and clear of cover.
     /// </summary>
     public sealed class MV875World2A1ToA13WalkabilityTests
     {
@@ -148,12 +149,20 @@ namespace MaxWorlds.Tests.EditMode
                     TryVisit(cx, cz - 1, nx, nz, blocked, visited, queue);
                 }
 
-                foreach (var (other, mouth, gateId) in outGates)
+                // a13 is an authored maze, permanently exempt from gate-to-gate and replicator-lane
+                // reachability (ticket comment, 2026-09-21T17:39): only the lane-clear-of-cover check
+                // below still applies to it.
+                bool checkReachability = index != LastArea;
+
+                if (checkReachability)
                 {
-                    bool reached = visited[IxOf(mouth.x), IzOf(mouth.y)];
-                    if (!reached)
-                        failures.Add($"area '{zoneId}': gate '{gateId}' to '{other}' at " +
-                                     $"({mouth.x:0.##}, {mouth.y:0.##}) is not reached from its own entry mouth");
+                    foreach (var (other, mouth, gateId) in outGates)
+                    {
+                        bool reached = visited[IxOf(mouth.x), IzOf(mouth.y)];
+                        if (!reached)
+                            failures.Add($"area '{zoneId}': gate '{gateId}' to '{other}' at " +
+                                         $"({mouth.x:0.##}, {mouth.y:0.##}) is not reached from its own entry mouth");
+                    }
                 }
 
                 foreach (MapEntity r in map.entities)
@@ -166,6 +175,13 @@ namespace MaxWorlds.Tests.EditMode
                     {
                         if (c == null || c.Kind != EntityKind.Cover) continue;
                         if (lane.Overlaps(c.ToCover().Footprint)) { laneClear = false; break; }
+                    }
+
+                    if (!checkReachability)
+                    {
+                        if (!laneClear)
+                            failures.Add($"area '{zoneId}': replicator '{r.id}' IN lane clear=False");
+                        continue;
                     }
 
                     // The lane's own midpoint (1.5 m out from the box face) — far enough from the box's
