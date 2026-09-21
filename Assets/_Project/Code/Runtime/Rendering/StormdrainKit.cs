@@ -1728,7 +1728,12 @@ namespace MaxWorlds.Rendering
             Shader shader = MaterialLibrary.SurfaceShader;
             if (shader == null) return null;
 
-            var m = new Material(shader) { name = "Stormdrain_HazardStripe", hideFlags = HideFlags.HideAndDontSave };
+            var m = new Material(shader)
+            {
+                name = "Stormdrain_HazardStripe",
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true, // MV-882: shared across every hazard band/parapet in a level
+            };
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", HazardStripeColor);
             if (m.HasProperty("_Color")) m.SetColor("_Color", HazardStripeColor);
             if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", HazardStripeColor * HazardStripeEmissive);
@@ -1829,7 +1834,12 @@ namespace MaxWorlds.Rendering
             if (shader == null || !shader.isSupported) shader = MaterialLibrary.SurfaceShader;
             if (shader == null) return null;
 
-            var mat = new Material(shader) { name = $"Stormdrain_{name}", hideFlags = HideFlags.HideAndDontSave };
+            var mat = new Material(shader)
+            {
+                name = $"Stormdrain_{name}",
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true, // MV-882: shared per colour across every lamp lens/void it paints
+            };
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tone);
             if (mat.HasProperty("_Color")) mat.SetColor("_Color", tone);
             _unlit[tone] = mat;
