@@ -137,11 +137,15 @@ namespace MaxWorlds.Core
 
         private static string s_areaCensusLine;
 
-        public static void RecordAreaRendererCensus(int mapGeometry, int replicators, int robots, int sludgeDressing, int opaque, int transparent)
+        /// <summary>MV-887: <paramref name="enabled"/> is how many of <paramref name="mapGeometry"/> +
+        /// <paramref name="replicators"/> + <paramref name="robots"/> + <paramref name="sludgeDressing"/>
+        /// currently have <c>Renderer.enabled</c> true — the area-renderer gate's own effect made visible
+        /// in the same one screenshot the total already was, rather than a second, separate readout.</summary>
+        public static void RecordAreaRendererCensus(int mapGeometry, int replicators, int robots, int sludgeDressing, int opaque, int transparent, int enabled)
         {
             int total = mapGeometry + replicators + robots + sludgeDressing;
             s_areaCensusLine =
-                $"census renderers {total} (opaque {opaque} transparent {transparent})  " +
+                $"census renderers {total} enabled {enabled} (opaque {opaque} transparent {transparent})  " +
                 $"map {mapGeometry} repl {replicators} robots {robots} sludge {sludgeDressing}";
         }
 
