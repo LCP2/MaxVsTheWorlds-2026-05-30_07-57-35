@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.VFX
@@ -163,10 +165,20 @@ namespace MaxWorlds.VFX
             FrameCost.End(FrameCost.Bucket.Anchor);
         }
 
-        /// <summary>Flatten to the lawn. Actors' origins sit at different heights — Max's is his
-        /// capsule's centre, a robot's is half its collider — and a ground mark that inherited that
-        /// would float at a different height under each one.</summary>
-        private static Vector3 Ground(Vector3 p) => new Vector3(p.x, 0f, p.z);
+        /// <summary>Flatten to the surface the owner is actually standing on (MV-898): the deck top
+        /// when its XZ position is over an authored deck at deck height, the area floor otherwise —
+        /// never a fixed floor plane, which is what left every ring and shadow on World 2's raised
+        /// decks drawing 2.5 m below the actor they belonged to. <see cref="MapData.SurfaceHeightAt"/>
+        /// is the same "on a deck" test <see cref="MapData.SnapToWalkableSurface"/> already uses for a
+        /// following Sentinel, so a mark and the Sentinel standing on it never disagree about which
+        /// level they're on. Falls back to the floor when there is no map to consult (an EditMode
+        /// fixture with no <see cref="MaxWorlds.Arena.BackyardPath"/> in the scene).</summary>
+        private static Vector3 Ground(Vector3 p)
+        {
+            MapData map = EnemyNavigation.Map;
+            float y = map != null ? map.SurfaceHeightAt(p) : 0f;
+            return new Vector3(p.x, y, p.z);
+        }
 
         private GroundRing NextShadow()
         {
