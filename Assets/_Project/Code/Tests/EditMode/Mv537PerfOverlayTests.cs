@@ -92,17 +92,13 @@ namespace MaxWorlds.Tests.EditMode
             // misreport as a violation.
             _overlay.BuildOverlayText(0f);
 
-            // Fully qualified rather than "using UnityEngine.TestTools.Constraints;" — that namespace
-            // also declares an "Is" that collides with NUnit.Framework.Is used everywhere else in
-            // this file (CS0104).
-            //
-            // Must be a void statement lambda (TestDelegate), not a value-returning one: a
-            // Func<string> lambda makes NUnit dereference it to its return value up front (for
-            // building a failure message), and AllocatingGCMemoryConstraint.ApplyTo(object) then
-            // throws ArgumentNullException on that dereferenced null instead of ever measuring GC —
-            // it needs the raw delegate handed back to re-invoke internally, not a resolved value.
-            Assert.That(() => { _overlay.BuildOverlayText(0f); },
-                UnityEngine.TestTools.Constraints.ConstraintExtensions.AllocatingGCMemory(Is.Not));
+            // MV-889: Is.Not.AllocatingGCMemory()-family constraints measure the WHOLE managed heap
+            // for the delegate's duration, so anything else allocating in the CI process during that
+            // window trips them regardless of this method's own behaviour — see AllocationAssert's
+            // doc comment. AllocationAssert.NoGcMemory measures only this thread's allocations via
+            // GC.GetAllocatedBytesForCurrentThread(), immune to that noise. Do not revert this to the
+            // NUnit constraint form.
+            AllocationAssert.NoGcMemory(() => _overlay.BuildOverlayText(0f));
             Assert.IsNull(_overlay.BuildOverlayText(0f), "a hidden overlay must still build nothing at all");
         }
 

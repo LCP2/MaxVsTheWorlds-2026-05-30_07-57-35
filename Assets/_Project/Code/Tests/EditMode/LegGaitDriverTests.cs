@@ -115,9 +115,14 @@ namespace MaxWorlds.Tests.EditMode
                 // otherwise (mis)attribute to the method itself.
                 driver.Tick(legs, new Vector3(0.01f, 0f, 0f), 1f / 60f);
 
+                // MV-889: Is.Not.AllocatingGCMemory() measures the WHOLE managed heap for the
+                // delegate's duration, so anything else allocating in the CI process during that
+                // window trips it regardless of Tick's own behaviour — see AllocationAssert's doc
+                // comment. AllocationAssert.NoGcMemory measures only this thread's allocations via
+                // GC.GetAllocatedBytesForCurrentThread(), immune to that noise. Do not revert this to
+                // Is.Not.AllocatingGCMemory().
                 Vector3 pos = new Vector3(0.02f, 0f, 0f);
-                Assert.That(() => driver.Tick(legs, pos, 1f / 60f),
-                    Is.Not.AllocatingGCMemory());
+                AllocationAssert.NoGcMemory(() => driver.Tick(legs, pos, 1f / 60f));
             }
             finally { Destroy(legs); }
         }
