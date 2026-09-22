@@ -121,6 +121,13 @@ be made on the arithmetic.
 When an authored area breaks a rule, measure it, show him which cells and which rule, hand him the decision.
 Do not redesign it and do not ship a redesign in a ticket.
 
+**`a13` (Trolley Yard floor) is a deliberate 1 m-lane maze, permanently exempt from connectivity,
+reachability and walkability assertions.** Lee authored it on his own 1 m grid; Max is 1.0 m wide
+(`CharacterController` radius 0.5), and large parts of it are deliberately impassable — that is the design,
+not a defect. No ticket or test may assert gate-to-gate reachability, replicator-lane reachability, or a
+minimum lane width against `a13`; the only walkability check it carries is lane-clear-of-cover. A ticket
+that asserts a13 connectivity is mis-shaped. Origin: MV-875 (2026-09-21).
+
 **ONE WRITER for `world2_config.DESIGN.json` — the shaping chat, never the worker.** The worker regenerates
 `Assets/_Project/Resources/Worlds/world2_config.json` from it and never edits the DESIGN file, not even to
 apply values quoted at it. Always read the file back after writing and quote the changed values in the Jira
