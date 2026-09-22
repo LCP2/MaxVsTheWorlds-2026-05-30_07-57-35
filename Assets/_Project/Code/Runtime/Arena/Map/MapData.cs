@@ -432,14 +432,25 @@ namespace MaxWorlds.Arena
         /// step off a deck edge, through a parapet, or over a wall. Unlike
         /// <see cref="ResolveWalkableSurfacePoint"/> this never refuses — a Sentinel already alive on the
         /// level must always have SOME point to stand at — degrading to <paramref name="point"/>
-        /// unchanged if <paramref name="fromPosition"/> is not standing in any zone, or a deck-level zone
-        /// has no matching Deck/Hatch rect (an authoring gap).</summary>
+        /// unchanged if <paramref name="fromPosition"/> is not standing in any zone, or is at deck height
+        /// with no matching Deck/Hatch rect underneath it (an authoring gap).
+        ///
+        /// MV-896: whether <paramref name="fromPosition"/> is "on a deck" is now decided the same way
+        /// <see cref="ZoneAt(float, float, float)"/>'s own "onDeck" height test decides it — never by
+        /// <c>zone.level</c>. World 2's a10/a11/a12 (MV-692: a deck entity authored directly inside its
+        /// own level-0 area, no overlay) never set a level&gt;0 zone the way a15/a13's MV-697 overlay
+        /// pair does, so the old <c>zone.level == 0</c> branch wrongly read every one of those three
+        /// decks as plain floor — leaving a following Sentinel's XZ completely unclamped while Y still
+        /// (coincidentally, since it reads Max's own true Y) matched the deck: exactly Lee's "hovering
+        /// off the deck / standing on top of a wall" report, on the three decks that don't use the
+        /// overlay pattern.</summary>
         public Vector3 SnapToWalkableSurface(Vector3 fromPosition, Vector3 point, float deckEdgeMargin)
         {
             MapZone zone = ZoneAt(fromPosition.x, fromPosition.y, fromPosition.z);
             if (zone == null) return point;
 
-            if (zone.level == 0) return new Vector3(point.x, fromPosition.y, point.z);
+            bool onDeck = fromPosition.y >= deckHeight - 0.5f;
+            if (!onDeck) return new Vector3(point.x, fromPosition.y, point.z);
 
             MapEntity deck = DeckEntityAt(fromPosition.x, fromPosition.z);
             return deck != null ? ClampIntoDeckRect(deck, point, deckEdgeMargin) : point;
