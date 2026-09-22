@@ -6,6 +6,8 @@
 
 The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable** `needs-cc-web` ticket and keep going **without stopping**. Re-check the backlog after every completion.
 
+Standing rulings for this project: docs/DECISIONS.md - read it before shaping or building any ticket.
+
 **Actionable** means all of: labelled `needs-cc-web`; not labelled `needs-lee`; status `Ready for Dev` or `Developing`; and **every ticket it "is blocked by" has already been pushed** - that is, the blocker's status is `QA Running`, `QA Passed`, `On Staging` or `Done`. A blocker still at Backlog / Shaping / Ready for Dev / Developing is unsatisfied, so the dependent ticket is NOT actionable: **skip it silently and take the next one.** Never set `needs-lee` because another ticket is unfinished - `needs-lee` means a human DECISION is required and nothing else. Among actionable tickets: highest priority first, then key ascending.
 
 Only STOP and wait for Lee when one of these is true:

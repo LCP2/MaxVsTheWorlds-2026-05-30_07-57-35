@@ -1,6 +1,7 @@
 # CLAUDE.md — MAX vs THE WORLDS (Unity mobile game)
 
 Follows **The Codynamics Development Standard** (Confluence space **DM**). Read the For Claude pages first, every chat.
+Standing rulings for this project: docs/DECISIONS.md - read it before shaping or building any ticket.
 Landing: https://codynamics.atlassian.net/wiki/spaces/DM/pages/32374806/For+Claude
 
 ## The money rule (non-negotiable)
