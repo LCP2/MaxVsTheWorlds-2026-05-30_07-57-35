@@ -1205,11 +1205,28 @@ namespace MaxWorlds.VFX
 
         private void OnRocketMuzzle(Vector3 worldPos, Vector3 forward) => _rackRecoilSeq = NewRecoilSequence();
 
-        private void OnShockPulseLanded(Vector3 worldPos) => _shockLeanSeq = new AnimSequence(new[]
+        /// <summary>MV-891: Shock lands per-ROBOT, every 4th pulse hit on that same robot
+        /// (<c>PulseLaser.ShockHitInterval</c>) — independent of frame time, so a handful of
+        /// independently-tracked robots can each cross that threshold within the same ~0.15s window
+        /// (<see cref="shockLeanKickSeconds"/> + <see cref="shockLeanReturnSeconds"/>), and a higher
+        /// Rate track level only shortens that window further. <see cref="MaxWorlds.Feel.GameFeel"/>
+        /// already guards its own hit-stop half of this same signal with a shared cooldown, precisely
+        /// so "a stream through a crowd" can't "freeze time several times a second" and "stutter, not
+        /// punch" (its own doc comment) — but the lean half had no equivalent guard, so it kept
+        /// restarting mid-return on every qualifying hit instead of letting one kick resolve before
+        /// the next could start, reading as a shudder instead of the single punctuation lean it is
+        /// meant to be. Guarding on the sequence's own completion (rather than duplicating GameFeel's
+        /// tuned interval) keeps the two effects the player perceives as one moment in sync without
+        /// hardcoding a second copy of that number here.</summary>
+        private void OnShockPulseLanded(Vector3 worldPos)
         {
-            new AnimStep(0f, shockLeanKickSeconds, AnimEase.OutQuad),
-            new AnimStep(shockLeanKickSeconds, shockLeanReturnSeconds, AnimEase.OutQuad),
-        });
+            if (_shockLeanSeq != null && !_shockLeanSeq.IsComplete) return;
+            _shockLeanSeq = new AnimSequence(new[]
+            {
+                new AnimStep(0f, shockLeanKickSeconds, AnimEase.OutQuad),
+                new AnimStep(shockLeanKickSeconds, shockLeanReturnSeconds, AnimEase.OutQuad),
+            });
+        }
 
         /// <summary>
         /// The hair and the charms lag behind him, then catch up.
