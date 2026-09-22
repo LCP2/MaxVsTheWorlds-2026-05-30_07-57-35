@@ -349,6 +349,16 @@ namespace MaxWorlds.Arena
                     float height = d.height > 0f ? d.height : defaultDeckHeight;
                     deckRects.Add((d, rect, height));
 
+                    // MV-907: a base (level-0) area's own deck declaration that exactly matches one its
+                    // overlay ALSO declares is duplicate authoring, not two distinct decks — an overlay
+                    // is "always the deck side of the pair" (WorldArea.level's own doc, MV-697), so the
+                    // overlay's copy is the one that should build. Building both doubles every
+                    // renderer/collider on the shared footprint (MV-907's own measured case: a13/a15's
+                    // Trolley Yard deck). Skip the base's here rather than touch world2_config.json,
+                    // which is Lee's authored data.
+                    if (!isOverlay && DeckDuplicatedByOverlay(cfg, a, rect, height, defaultDeckHeight))
+                        continue;
+
                     entities.Add(new MapEntity
                     {
                         id = d.id,
@@ -657,6 +667,33 @@ namespace MaxWorlds.Arena
 
         private static bool RangesTouch(float minA, float maxA, float minB, float maxB) =>
             minA < maxB - Geo.Epsilon && maxA > minB + Geo.Epsilon;
+
+        /// <summary>MV-907: true if some OTHER area that overlays <paramref name="baseArea"/> (i.e.
+        /// <see cref="WorldArea.overlays"/> names it) declares its own deck at the same resolved
+        /// world-space rect and height as (<paramref name="rect"/>, <paramref name="height"/>) — the
+        /// signature of the base area's copy being a duplicate of the overlay's, not a second real
+        /// deck.</summary>
+        private static bool DeckDuplicatedByOverlay(WorldConfig cfg, WorldArea baseArea, Rect rect, float height,
+            float defaultDeckHeight)
+        {
+            foreach (WorldArea candidate in cfg.areas)
+            {
+                if (candidate == null || candidate.overlays != baseArea.id) continue;
+
+                foreach (WorldDeck d in candidate.decks ?? Array.Empty<WorldDeck>())
+                {
+                    if (d == null) continue;
+                    Rect candidateRect = candidate.WorldRectOf(d.x, d.z, d.w, d.d);
+                    float candidateHeight = d.height > 0f ? d.height : defaultDeckHeight;
+                    if (Geo.Same(candidateRect.x, rect.x) && Geo.Same(candidateRect.y, rect.y) &&
+                        Geo.Same(candidateRect.width, rect.width) && Geo.Same(candidateRect.height, rect.height) &&
+                        Geo.Same(candidateHeight, height))
+                        return true;
+                }
+            }
+
+            return false;
+        }
 
         private static WorldArea FindEntry(WorldConfig cfg)
         {
