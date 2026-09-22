@@ -84,11 +84,19 @@ namespace MaxWorlds.Arena
             if (_statics != null && _statics.Length > 0)
                 StaticBatchingUtility.Combine(_statics, gameObject);
 
-            // MV-887 change 5: the sludge dressing kit (StormdrainDressing) is a SIBLING of this map's
-            // own root, built later in the same Awake as MapRuntime.Build — by the time Start() fires,
-            // Unity guarantees every Awake this frame has already run (the same guarantee this class's
-            // own doc comment already leans on for the static-batch combine above), so its "Sludge" host
-            // already exists and can be folded into the same per-zone index MapRuntime.Build populated.
+            // MV-887 change 5, widened by MV-904: the dressing kit (StormdrainDressing) is a SIBLING of
+            // this map's own root, built later in the same Awake as MapRuntime.Build — by the time
+            // Start() fires, Unity guarantees every Awake this frame has already run (the same guarantee
+            // this class's own doc comment already leans on for the static-batch combine above), so its
+            // whole "Stormdrain Dressing" host already exists and can be folded into the same per-zone
+            // index MapRuntime.Build populated. MV-887 originally tagged only the "Sludge" child of that
+            // host, so every OTHER thing StormdrainDressing.Dress builds — wall kerbs/pipes/lamps/
+            // soffits, the overhead structure, the drain-machinery props that replace cover boxes, panel
+            // joints/bays/stains, hazard-bulkhead fittings — stayed untagged and therefore always
+            // enabled, everywhere, forever (this ticket's own measured defect: 0 of 16,106 non-sludge
+            // dressing renderers tagged on the live build). Tagging the whole subtree by each renderer's
+            // own resolved position is exactly the same idiom MapRuntime.TagStatic already uses for
+            // ordinary props/cover/sludge/ramps/grates built directly under the map root.
             TagDressingSludge();
 
             // MV-890: snapshot BEFORE the first ApplyAreaGate call ever runs — see _dressedHidden's own
@@ -189,19 +197,21 @@ namespace MaxWorlds.Arena
             }
         }
 
+        // MV-904: walks the WHOLE "Stormdrain Dressing" host, not just its "Sludge" child — see this
+        // method's own call site (above) for why the narrower Sludge-only walk left every other dressing
+        // renderer permanently enabled regardless of the area gate.
         private void TagDressingSludge()
         {
             if (_map == null || _rendererZones == null) return;
 
             Transform areaRoot = transform.parent != null ? transform.parent : transform;
             Transform dressing = areaRoot.Find("Stormdrain Dressing");
-            Transform sludgeHost = dressing != null ? dressing.Find("Sludge") : null;
-            if (sludgeHost == null) return;
+            if (dressing == null) return;
 
-            foreach (Renderer r in sludgeHost.GetComponentsInChildren<Renderer>(true))
+            foreach (Renderer r in dressing.GetComponentsInChildren<Renderer>(true))
             {
                 Vector3 p = r.transform.position;
-                MapZone zone = _map.ZoneAt(p.x, p.y, p.z);
+                MapZone zone = _map.ZoneAt(p.x, p.y, p.z) ?? MapRuntime.NearestFloorZone(_map, p.x, p.z);
                 if (zone == null) continue;
 
                 if (!_rendererZones.TryGetValue(r, out List<string> zones))
@@ -478,12 +488,63 @@ namespace MaxWorlds.Arena
         /// <summary>MV-887: tags every renderer under <paramref name="go"/> by its own resolved position
         /// — correct for anything that sits comfortably inside one room (cover, props, sludge, a deck's
         /// own pieces), unlike a wall which sits exactly on a shared boundary and needs <see cref="TagWallZones"/>'s
-        /// two-sided probe instead.</summary>
+        /// two-sided probe instead.
+        ///
+        /// MV-904: unlike <see cref="TagRendererAt"/> (used by <see cref="TagWallZones"/>, where a side
+        /// with no room really does border nothing and must stay untagged — see that method's own "never
+        /// invented" doc), a piece this method tags is documented to always sit inside SOME room. A few
+        /// measurably don't (e.g. a sludge tile's own scattered bubble prop landing outside every zone's
+        /// footprint) — those fall back to the nearest floor zone by rect distance rather than leaking
+        /// through the area gate as permanently-enabled, the same fallback <see cref="TagDressingSludge"/>
+        /// uses for the same reason.</summary>
         private static void TagStatic(MapData map, GameObject go, Dictionary<Renderer, List<string>> rendererZones)
         {
             if (go == null) return;
             foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
-                TagRendererAt(map, r, r.transform.position, rendererZones);
+            {
+                Vector3 p = r.transform.position;
+                MapZone zone = map.ZoneAt(p.x, p.y, p.z) ?? NearestFloorZone(map, p.x, p.z);
+                if (zone == null) continue;
+
+                if (!rendererZones.TryGetValue(r, out List<string> zones))
+                    rendererZones[r] = zones = new List<string>(2);
+                if (!zones.Contains(zone.id)) zones.Add(zone.id);
+            }
+        }
+
+        /// <summary>MV-904: the nearest zone to (<paramref name="px"/>, <paramref name="pz"/>) by distance
+        /// to its own footprint rect (0 if the point already falls inside it) — the shared fallback both
+        /// <see cref="TagStatic"/> and <see cref="TagDressingSludge"/> use when
+        /// <see cref="MapData.ZoneAt(float,float,float)"/>'s exact containment test resolves to no zone
+        /// at all (a kerb/pipe/overhead run hugging a long elevated corridor's OWN walls, where no floor
+        /// zone sits underneath it — measured on World 2's own "area16", a 106 m deck with no underlying
+        /// room), so it gates with whichever zone it visually reads as belonging to instead of leaking
+        /// through the area gate as permanently-enabled forever.
+        ///
+        /// Every zone is a candidate, deck (<see cref="MapZone.level"/> &gt; 0) included: a standalone
+        /// elevated corridor with nothing beneath it is the exact case this fallback exists for, and
+        /// excluding it would silently reattribute its own dressing to whichever ordinary room happened
+        /// to sit nearest instead — wrong both visually (it would light up in the wrong area) and for the
+        /// gate's own measured effect (see this ticket's Jira comment for the count that caught it). Rect
+        /// distance rather than centre distance so a long or irregularly-shaped zone (the same 106 m
+        /// deck) is judged by how close the point actually sits to ITS footprint, not to its far-away
+        /// centroid. Deliberately NOT used by <see cref="TagWallZones"/>: a wall genuinely bordering no
+        /// room must stay untagged on that side, not backfilled to whatever zone happens to be nearest.</summary>
+        internal static MapZone NearestFloorZone(MapData map, float px, float pz)
+        {
+            if (map?.zones == null) return null;
+
+            MapZone best = null;
+            float bestDistSqr = float.MaxValue;
+            foreach (MapZone z in map.zones)
+            {
+                if (z == null) continue;
+                float dx = Mathf.Max(0f, Mathf.Max(z.XMin - px, px - z.XMax));
+                float dz = Mathf.Max(0f, Mathf.Max(z.ZMin - pz, pz - z.ZMax));
+                float distSqr = dx * dx + dz * dz;
+                if (distSqr < bestDistSqr) { bestDistSqr = distSqr; best = z; }
+            }
+            return best;
         }
 
         /// <summary>Everything the map creates from nothing: cover to fight around, and scenery with a
