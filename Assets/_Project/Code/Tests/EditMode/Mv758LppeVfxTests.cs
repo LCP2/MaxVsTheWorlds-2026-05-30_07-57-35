@@ -95,18 +95,20 @@ namespace MaxWorlds.Tests.EditMode
                 vfx.Impact(Vector3.zero, 9f, false);
                 vfx.Impact(Vector3.zero, 9f, true);
 
-                // Fully qualified rather than "using UnityEngine.TestTools.Constraints;" — that
-                // namespace also declares an "Is" that collides with NUnit.Framework.Is used
-                // throughout this file (CS0104). Must be a void statement lambda, not a
-                // value-returning one — see Mv537PerfOverlayTests's identical note.
-                Assert.That(() =>
+                // MV-889: Is.Not.AllocatingGCMemory()-family constraints measure the WHOLE managed
+                // heap for the delegate's duration, so anything else allocating in the CI process
+                // during that window trips them regardless of this loop's own behaviour — see
+                // AllocationAssert's doc comment. AllocationAssert.NoGcMemory measures only this
+                // thread's allocations via GC.GetAllocatedBytesForCurrentThread(), immune to that
+                // noise. Do not revert this to the NUnit constraint form.
+                AllocationAssert.NoGcMemory(() =>
                 {
                     for (int i = 0; i < 300; i++)
                     {
                         vfx.Muzzle(Vector3.zero, Vector3.forward);
                         vfx.Impact(Vector3.zero, 9f, (i % 4) == 3);
                     }
-                }, UnityEngine.TestTools.Constraints.ConstraintExtensions.AllocatingGCMemory(Is.Not));
+                });
 
                 // --- AC4: every magnitude LppeVfx introduces is reachable from CombatVfxTuning; no
                 // literal above 1.0 appears in the emit path. ---

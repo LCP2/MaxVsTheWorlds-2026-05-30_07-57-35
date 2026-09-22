@@ -92,8 +92,17 @@ namespace MaxWorlds.Tests.EditMode
         /// different proxy — buffer-reference identity across reflected calls — because its subjects
         /// are invoked via <c>MethodInfo.Invoke</c>, whose own allocation profile would otherwise
         /// contaminate the measurement. AnimSequence has no such constraint: Tick/Progress are called
-        /// directly, so <c>Is.Not.AllocatingGCMemory()</c> — NUnit's direct byte-count constraint, and
-        /// the literal ask in this AC — applies cleanly and is preferred over reinventing that proxy.)</summary>
+        /// directly.
+        ///
+        /// MV-889: this originally asserted <c>Is.Not.AllocatingGCMemory()</c> directly — NUnit's
+        /// byte-count constraint, which measures the WHOLE managed heap for the delegate's duration.
+        /// That is flaky by construction: anything else allocating in the CI process during that
+        /// window trips it regardless of whether AnimSequence itself allocates, and it did — MV-888's
+        /// QA #692 (main) failed here while its own QA #691 (PR branch, identical code) was green;
+        /// MV-882's QA #682 failed identically on a commit that touched MapRuntime/StormdrainKit only.
+        /// It now measures via <see cref="AllocationAssert.NoGcMemory"/>, a
+        /// <c>GC.GetAllocatedBytesForCurrentThread()</c> delta — immune to that noise since EditMode
+        /// runs single-threaded. Do not revert this to Is.Not.AllocatingGCMemory().</summary>
         [Test]
         public void TickAndProgress_AllocateNoGcMemory_Across1000Calls()
         {
@@ -104,14 +113,14 @@ namespace MaxWorlds.Tests.EditMode
             sequence.Tick(0.001f);
             sequence.Progress(0);
 
-            Assert.That(() =>
+            AllocationAssert.NoGcMemory(() =>
             {
                 for (int i = 0; i < 1000; i++)
                 {
                     sequence.Tick(0.001f);
                     sequence.Progress(0);
                 }
-            }, Is.Not.AllocatingGCMemory());
+            });
         }
 
         // ---------------------------------------------------------------------------- AC6
