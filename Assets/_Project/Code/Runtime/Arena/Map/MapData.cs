@@ -456,6 +456,25 @@ namespace MaxWorlds.Arena
             return deck != null ? ClampIntoDeckRect(deck, point, deckEdgeMargin) : point;
         }
 
+        /// <summary>MV-898: the walkable surface height directly beneath <paramref name="position"/> —
+        /// this level's own <see cref="deckHeight"/> when <paramref name="position"/> reads as "on a
+        /// deck" (the same <c>position.y &gt;= deckHeight - 0.5f</c> test <see cref="ZoneAt(float, float, float)"/>
+        /// and <see cref="SnapToWalkableSurface"/> already use) AND its XZ actually sits over an
+        /// authored Deck/Hatch rect (<see cref="DeckEntityAt"/>), the area floor (0) otherwise. Used by
+        /// a ground-projected mark (a ring, a shadow) to place itself on the surface its owner is
+        /// actually standing on, rather than on a fixed floor plane it was drawing on before this
+        /// ticket.</summary>
+        public float SurfaceHeightAt(Vector3 position)
+        {
+            MapZone zone = ZoneAt(position.x, position.y, position.z);
+            if (zone == null) return 0f;
+
+            bool onDeck = position.y >= deckHeight - 0.5f;
+            if (!onDeck) return 0f;
+
+            return DeckEntityAt(position.x, position.z) != null ? deckHeight : 0f;
+        }
+
         /// <summary>True if two zone ids are joined by an authored <see cref="MapLink"/>, in either
         /// direction (MV-833) — a corridor works both ways even though a link's own from/to only records
         /// one gate's authoring order. <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> uses this

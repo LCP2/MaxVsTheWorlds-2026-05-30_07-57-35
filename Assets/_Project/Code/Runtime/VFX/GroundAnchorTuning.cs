@@ -86,8 +86,9 @@ namespace MaxWorlds.VFX
 
         // --- Height ------------------------------------------------------------------------------
         //
-        // Ground marks are coplanar quads on a y=0 lawn, so the ONLY thing keeping them from
-        // z-fighting each other into a shimmering mess is that each one draws at its own height.
+        // Ground marks are coplanar quads on whatever surface their owner stands on (the area floor,
+        // or a deck's own top — MV-898), so the ONLY thing keeping them from z-fighting each other
+        // into a shimmering mess is that each one draws at its own height ABOVE that surface.
         // The order below is a priority order, and it is the whole reason these are constants in one
         // place rather than three magic numbers in three files. The actual values live in
         // GroundMarkHeights (MV-866), which also documents why the gameplay ladder sits where it
