@@ -54,6 +54,20 @@ Before claiming or working any ticket, read the **Design Principles & Craft Bibl
 
 It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship must comply with it. If a ticket's acceptance criteria conflict with the Craft Bible, flag it in a ticket comment instead of shipping. When principles tension against each other, the tie-breaker order is: readability > game feel > visual richness. Non-negotiable on every build: 60fps on iOS/WebGL, and readable on a 6-inch screen.
 
+## Design images — the shaping chat's obligation, on every visual ticket
+
+A ticket whose acceptance depends on how something LOOKS must carry an image. The worker sees ticket text, not the picture in anyone's head, and shaping a visual ticket in prose alone produces a poor build.
+
+* One image per ticket at `C:\Dev\MaxVsTheWorlds-Images\<KEY>.<ext>` (png/jpg/jpeg/webp), named exactly by the ticket key, with the path written into the description.
+* CREATE THE TICKET FIRST, read the real key back from Jira, THEN write the image. Never name an image from a predicted or incremented key, and never leave a `<KEY>` placeholder unsubstituted - the binding is filename-only and nothing verifies it.
+* Declare the mode on the ticket's first line: `BUILD MODE: INDICATIVE` (the image is the reference for the result and outranks prose on appearance) or `BUILD MODE: EXACT` (the ticket text is the specification; the image is only evidence). No mode line is treated as INDICATIVE.
+* NEVER attach an image showing a DEFECT to a ticket without an explicit EXACT line - the worker will build the bug.
+* If there is deliberately no image, say so in the description and why.
+* Images pasted into a chat never reach the filesystem. Get the originals from `C:\Users\lee\OneDrive - +61432418785\Pictures\Screenshots\` rather than asking Lee to save or drag files.
+* Do this at shaping time, in the same pass as writing the ticket. Retrofitting races the worker, which can pick the ticket up before the image is in place.
+
+Full detail is in `docs/DECISIONS.md`, section 2.
+
 ## Testing policy (MV-465)
 
 **Rule 1 — one new test per ticket, and it must be proven to fail.** At most one new test per ticket. It must fail on a named base commit, and the fix comment must quote its failure output. If you cannot make it fail before the fix, it is not evidence and should not be written. A ticket that needs two genuinely independent regressions covered is a ticket that should have been two tickets.
