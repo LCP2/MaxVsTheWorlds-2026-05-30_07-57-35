@@ -68,6 +68,12 @@ namespace MaxWorlds.Core
         private string _cachedFrameCostLine;
         private float _frameCostWindowStartAt = float.NegativeInfinity;
 
+        /// <summary>MV-888: `showFps` is a SerializeField and can't change on a deployed build, so
+        /// nobody could A/B whether the overlay itself costs a frame. This is the runtime toggle —
+        /// starts true (the overlay is never hidden by default; see the ticket's "do not re-raise"
+        /// list), flippable live via <see cref="PollOverlayToggle"/>.</summary>
+        private bool _overlayVisible = true;
+
         private void Awake()
         {
             // First line in the log, so a browser console immediately answers "which build is this?"
@@ -160,7 +166,60 @@ namespace MaxWorlds.Core
             return platform != RuntimePlatform.IPhonePlayer;
         }
 
+        /// <summary>MV-888: `Event.current`, not the new Input System — this file's assembly
+        /// (MaxWorlds.Core; see its .asmdef) references nothing, and this ticket's diff is scoped to
+        /// FrameCost.cs/Bootstrap.cs/one test file, so adding a package reference is off the table.
+        /// IMGUI's event queue is populated independently of the Active Input Handling project setting
+        /// (this project runs New-only — see CLAUDE.md), so a KeyDown/MouseDown check here works with
+        /// no dependency on either input path. F1 is free (grepped every existing binding under
+        /// Runtime/: Ctrl+Shift+D, F2-F4, [, ], ;, ' all belong to DevModeController). The tap zone is a
+        /// thin strip dead-centre along the top edge: every screen corner already hosts a live HudController
+        /// control (utility icons + HOME top-left, weapons button + module badge top-right, joysticks
+        /// bottom/left/right), and this ticket's diff can't touch that file to carve out a dedicated
+        /// icon — top-centre is the one strip nothing there already listens on. Neither branch draws or
+        /// allocates: only a Rect.Contains against Event.current's own struct fields, so it costs
+        /// nothing extra whether the overlay is visible or not.</summary>
+        private void PollOverlayToggle()
+        {
+            Event e = Event.current;
+            if (e == null) return;
+
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F1)
+            {
+                _overlayVisible = !_overlayVisible;
+                return;
+            }
+
+            if (e.type == EventType.MouseDown)
+            {
+                float w = Mathf.Min(200f, Screen.width * 0.3f);
+                var hotZone = new Rect(Screen.width * 0.5f - w * 0.5f, 0f, w, 48f);
+                if (hotZone.Contains(e.mousePosition)) _overlayVisible = !_overlayVisible;
+            }
+        }
+
         private void OnGUI()
+        {
+            PollOverlayToggle();
+            if (!_overlayVisible) return;
+
+            FrameCost.Begin(FrameCost.Bucket.Debug);
+            try
+            {
+                DrawOverlay();
+            }
+            finally
+            {
+                FrameCost.End(FrameCost.Bucket.Debug);
+            }
+        }
+
+        /// <summary>MV-888: the pre-existing OnGUI body, unchanged, now wrapped by the caller in
+        /// FrameCost's Debug bucket so its own IMGUI cost gets a line instead of landing silently in
+        /// `other`. Split out rather than inlined so every early return below still closes the timer
+        /// (the try/finally in <see cref="OnGUI"/>), and so the toggle check above never itself does
+        /// any IMGUI work.</summary>
+        private void DrawOverlay()
         {
             if (!ShouldShowDebugOverlay(showFps, Application.platform, Application.isEditor)) return;
 

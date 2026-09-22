@@ -35,9 +35,12 @@ namespace MaxWorlds.Core
     /// </summary>
     public static class FrameCost
     {
-        public enum Bucket { Robot, Repl, Sludge, Anchor, Hud, Vfx }
+        /// <summary>MV-888: <see cref="Debug"/> added alongside the original six. Bootstrap.OnGUI
+        /// drew seven lines of IMGUI with no bucket wrapping it at all, so whatever it cost landed
+        /// silently in <c>other</c> — this bucket is how that gets its own line instead.</summary>
+        public enum Bucket { Robot, Repl, Sludge, Anchor, Hud, Vfx, Debug }
 
-        private const int BucketCount = 6;
+        private const int BucketCount = 7;
 
         /// <summary>The raw tick source, isolated behind an interface so a test can inject exact,
         /// hand-picked deltas instead of wall time — same seam <see cref="IFrameTimingSource"/> already
@@ -247,7 +250,8 @@ namespace MaxWorlds.Core
                 $"ms robot {s_bucketMs[(int)Bucket.Robot] / frames:0.0} (awake {s_robotAwakeLast}) " +
                 $"repl {s_bucketMs[(int)Bucket.Repl] / frames:0.0} sludge {s_bucketMs[(int)Bucket.Sludge] / frames:0.0} " +
                 $"anch {s_bucketMs[(int)Bucket.Anchor] / frames:0.0} hud {s_bucketMs[(int)Bucket.Hud] / frames:0.0} " +
-                $"vfx {s_bucketMs[(int)Bucket.Vfx] / frames:0.0} other {residualPerFrame:0.0} render {renderPerFrame:0.0}  " +
+                $"vfx {s_bucketMs[(int)Bucket.Vfx] / frames:0.0} dbg {s_bucketMs[(int)Bucket.Debug] / frames:0.0} " +
+                $"other {residualPerFrame:0.0} render {renderPerFrame:0.0}  " +
                 $"fixed {fixedPerFrame:0.0}/frame";
 
             return bucketLine + "\n" + FormatProfilerLine();
