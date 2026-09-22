@@ -54,6 +54,20 @@ namespace MaxWorlds.Arena
         private Dictionary<Renderer, List<string>> _rendererZones;
         private AreaAccumulationDirector _areaDirector;
 
+        /// <summary>MV-890: every tagged renderer that was ALREADY disabled the first time this class
+        /// ever looks (snapshotted in <see cref="Start"/>, before the first <see cref="ApplyAreaGate"/>
+        /// call) — a cover piece's own box, retired by <c>StormdrainDressing.Dress</c> (and
+        /// <c>BackyardDressing</c>/<c>ReefDressing</c>'s own copies of the same "collider stays, art
+        /// swaps" contract) via <c>Renderer.enabled = false</c> during the SAME <c>Awake</c>, before this
+        /// component's own <c>Start</c> ever runs. Before this fix, <see cref="ApplyAreaGate"/> re-enabled
+        /// one of these the moment its zone became current — a dressed box has no art of its own left, so
+        /// turning it back on is exactly the reported "pipes encased in grey blocks" regression: the
+        /// full-size collider box drawing again, swallowing the (still-enabled, never-gated) dressing prop
+        /// sitting inside its footprint. A renderer in this set is never touched by the gate again, for
+        /// the same reason <see cref="ApplyAreaGate"/>'s own doc already gives for an UNTAGGED renderer:
+        /// once something else has taken over deciding whether it draws, the gate must leave it alone.</summary>
+        private HashSet<Renderer> _dressedHidden;
+
         /// <summary>Exactly what was handed to <see cref="StaticBatchingUtility.Combine"/> — every
         /// GameObject this build classified as never moving.</summary>
         public IReadOnlyList<GameObject> Statics => _statics;
@@ -76,6 +90,15 @@ namespace MaxWorlds.Arena
             // own doc comment already leans on for the static-batch combine above), so its "Sludge" host
             // already exists and can be folded into the same per-zone index MapRuntime.Build populated.
             TagDressingSludge();
+
+            // MV-890: snapshot BEFORE the first ApplyAreaGate call ever runs — see _dressedHidden's own
+            // doc for why a renderer already disabled at this exact point must never be touched again.
+            _dressedHidden = new HashSet<Renderer>();
+            if (_rendererZones != null)
+            {
+                foreach (Renderer r in _rendererZones.Keys)
+                    if (r != null && !r.enabled) _dressedHidden.Add(r);
+            }
 
             // The area the gate starts with — Max's own physical area at map-build time, read off
             // AreaAccumulationDirector rather than assumed, so this never has to hard-code "area1"
@@ -107,7 +130,23 @@ namespace MaxWorlds.Arena
         /// single map-spanning floor slab, and anything gameplay-owned — robots, replicators, factories,
         /// bosses, area gates, all explicitly out of scope per the ticket's own "renderers only, and not
         /// gameplay's renderers either" rule) is never touched here and keeps whatever state it already
-        /// had.</summary>
+        /// had.
+        ///
+        /// MV-890, fix 2: a renderer in <see cref="_dressedHidden"/> is skipped outright — see that
+        /// field's own doc for why a dressed-away cover box must never come back.
+        ///
+        /// MV-890, fix 3: <paramref name="currentZoneId"/>'s own gate-linked neighbours are only half of
+        /// what "active" means. A deck/hatch overlay (<see cref="MapZone.level"/> &gt; 0) shares its exact
+        /// XZ footprint with the level-0 zone it roofs (<see cref="MapZone.ShareFootprint"/>, MV-697/
+        /// MV-832) but is reached by a ramp, not a doorway — so it carries NO <see cref="MapLink"/> of its
+        /// own to that floor zone, and the loop above alone never adds it to <c>active</c> no matter which
+        /// floor zone is current. World 2's own data proves this is real, not hypothetical: "area17"
+        /// (Junction Hall deck) links only sideways to area16/area18, never down to "area3" (Junction Hall
+        /// floor) that it overlays — so a17's own renderers went dark for every player standing in a3
+        /// looking up at them, exactly the reported "a17's upper floor is gone". Every zone sharing a
+        /// footprint with an already-active one is folded in below, symmetrically (floor activates its
+        /// deck and a deck, if ever current itself, keeps its own floor lit) — the same footprint test,
+        /// not a second hand-authored adjacency list to drift out of sync with the first.</summary>
         public void ApplyAreaGate(string currentZoneId)
         {
             if (_rendererZones == null || string.IsNullOrEmpty(currentZoneId)) return;
@@ -123,10 +162,29 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            if (_map?.zones != null)
+            {
+                var activeZones = new List<MapZone>();
+                foreach (MapZone z in _map.zones)
+                    if (z != null && active.Contains(z.id)) activeZones.Add(z);
+
+                foreach (MapZone z in _map.zones)
+                {
+                    if (z == null || active.Contains(z.id)) continue;
+                    foreach (MapZone match in activeZones)
+                    {
+                        if (!MapZone.ShareFootprint(z, match)) continue;
+                        active.Add(z.id);
+                        break;
+                    }
+                }
+            }
+
             foreach (KeyValuePair<Renderer, List<string>> pair in _rendererZones)
             {
                 Renderer r = pair.Key;
                 if (r == null) continue;
+                if (_dressedHidden != null && _dressedHidden.Contains(r)) continue;
                 r.enabled = pair.Value.Exists(active.Contains);
             }
         }
