@@ -55,11 +55,11 @@ Request links on that query (`fields=key,priority,status,issuelinks`). Walk the 
 
 **Design image first.** Check `C:\Dev\MaxVsTheWorlds-Images` for a file named after this ticket (`<KEY>.png` / `.jpg` / `.jpeg` / `.webp`). If one exists, **Read it**. What you do with it is set by the BUILD MODE line on the first line of the ticket description:
 
-* **BUILD MODE: INDICATIVE** — the image is the source of truth for layout, framing, proportion, colour and readability, ahead of any prose describing appearance. Prose still wins on behaviour; if image and prose disagree on behaviour, block with `needs-lee` rather than picking one.
+* **BUILD MODE: INDICATIVE** — the image is the source of truth for layout, framing, proportion, colour and readability, ahead of any prose describing appearance. Prose still wins on behaviour; if image and prose disagree on behaviour, block with `needs-triage` rather than picking one.
 * **BUILD MODE: EXACT** — the image is EVIDENCE, not the specification. The ticket text is the specification. Where the image and the ticket text disagree, the ticket text wins. Do not build toward what the image shows.
 * **No BUILD MODE line** — treat as INDICATIVE.
 
-If the ticket references a design image that is not in that folder, treat it as a missing asset: stop, set `needs-lee`, and say what is missing. You have full read/write to the folder and may save generated or annotated images back there, named by the ticket key.
+If the ticket references a design image that is not in that folder, treat it as a missing asset: stop, set `needs-triage`, and say what is missing. You have full read/write to the folder and may save generated or annotated images back there, named by the ticket key.
 
 Read the ticket description, the Phase B spec (12058680), and any linked Confluence pages. Branch:
 
