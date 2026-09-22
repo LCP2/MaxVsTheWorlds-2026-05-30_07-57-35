@@ -727,13 +727,14 @@ namespace MaxWorlds.Arena
                 if (mouths.Contains(wall)) continue;
                 if (e.walled)
                 {
-                    // MV-859: a [DECK] gate's own doorway can meet this exact edge — the parapet must
-                    // split around it (or vanish entirely, if the gate's span covers the whole edge)
-                    // rather than standing across the gate's own mouth the way MV-852 built it blind.
-                    if (TryDeckGateSpan(map, e, wall, out Span gateSpan))
-                        BuildDeckParapetSplit(map, root, staticGeometry, e, wall, slab.TopY, gateSpan, rendererZones);
-                    else
-                        BuildDeckParapet(map, root, staticGeometry, e, wall, slab.TopY, rendererZones);
+                    // MV-859: a [DECK] gate's own doorway can meet this exact edge. MV-899: a SECOND
+                    // deck at the same height can also occupy the far side of this edge, at a corner or
+                    // T-join where a walkway bends — either way the parapet must open a gap rather than
+                    // standing solid across ground Max can already walk onto, the way MV-852 built every
+                    // edge blind to both.
+                    var holes = AbuttingDeckSpans(map, e, wall);
+                    if (TryDeckGateSpan(map, e, wall, out Span gateSpan)) holes.Add(gateSpan);
+                    BuildDeckParapetOpenAt(map, root, staticGeometry, e, wall, slab.TopY, holes, rendererZones);
                     continue;
                 }
                 BuildDeckEdgeBand(map, root, staticGeometry, e, wall, slab.TopY, rendererZones);
@@ -815,52 +816,128 @@ namespace MaxWorlds.Arena
             AddStatic(map, band, staticGeometry, rendererZones);
         }
 
+        /// <summary>MV-899: the sub-span(s) of <paramref name="deck"/>'s <paramref name="wall"/> edge
+        /// that ANOTHER deck rect authored in the SAME area already occupies on the far (outward) side
+        /// of that line — two rects of one bending walkway meeting flush edge-to-edge (their footprints
+        /// just touch), or one rect's edge running straight through a perpendicular rect's footprint at
+        /// a corner or T-join (the bug this ticket reports — see the Jira comment for World 2's own
+        /// abutting pairs), both show up here. A deck that merely touches the line without extending
+        /// past it (its own far edge exactly on the line, same as <paramref name="deck"/>'s) does NOT
+        /// count — that is two rects independently ending at the same place, not one continuing past the
+        /// other.
+        ///
+        /// Deliberately scoped to decks in the SAME area (same <c>"&lt;areaId&gt;_deck..."</c> id prefix
+        /// every world config's own decks already follow — MV-821's own test already relies on the same
+        /// convention). A bending walkway is always authored as multiple rects inside ONE area's own
+        /// <c>decks</c> list (there is no other way to author it); two DIFFERENT areas' decks meeting
+        /// edge-to-edge (World 2's own a14/a15, MV-859's g32) are joined by an <see cref="AreaGate"/> on
+        /// purpose — that boundary must stay a real wall except exactly at the gate's own span
+        /// (<see cref="TryDeckGateSpan"/>), never fall open just because the two rects happen to touch.</summary>
+        private static List<Span> AbuttingDeckSpans(MapData map, MapEntity deck, Wall wall)
+        {
+            var spans = new List<Span>();
+            const float heightTolerance = 0.05f;
+            const float lineTolerance = 0.05f;
+            string areaPrefix = DeckAreaPrefix(deck.id);
+
+            bool alongX = wall == Wall.N || wall == Wall.S;
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            float edgeCoord = wall switch
+            {
+                Wall.N => deck.z + halfD,
+                Wall.S => deck.z - halfD,
+                Wall.E => deck.x + halfW,
+                _ => deck.x - halfW, // W
+            };
+            float wallMin = alongX ? deck.x - halfW : deck.z - halfD;
+            float wallMax = alongX ? deck.x + halfW : deck.z + halfD;
+            bool outwardIsMax = wall == Wall.N || wall == Wall.E; // outward = +coord for N/E, -coord for S/W
+
+            foreach (DeckSlab other in MapGeometry.Decks(map))
+            {
+                if (other.Id == deck.id) continue;
+                if (DeckAreaPrefix(other.Id) != areaPrefix) continue;
+                if (Mathf.Abs(other.TopY - deck.height) > heightTolerance) continue;
+
+                float oHalfW = other.Size.x * 0.5f, oHalfD = other.Size.z * 0.5f;
+                float perpMin = alongX ? other.Center.z - oHalfD : other.Center.x - oHalfW;
+                float perpMax = alongX ? other.Center.z + oHalfD : other.Center.x + oHalfW;
+
+                // The other deck must reach the line (no gap) AND genuinely extend past it on the
+                // outward side — merely touching from the SAME side as this deck's own body is not an
+                // abutment, it is two decks independently ending at the same coordinate.
+                bool reachesAndCrosses = outwardIsMax
+                    ? perpMin <= edgeCoord + lineTolerance && perpMax > edgeCoord + lineTolerance
+                    : perpMax >= edgeCoord - lineTolerance && perpMin < edgeCoord - lineTolerance;
+                if (!reachesAndCrosses) continue;
+
+                float alongMin = alongX ? other.Center.x - oHalfW : other.Center.z - oHalfD;
+                float alongMax = alongX ? other.Center.x + oHalfW : other.Center.z + oHalfD;
+                float from = Mathf.Max(wallMin, alongMin);
+                float to = Mathf.Min(wallMax, alongMax);
+                if (to - from > lineTolerance) spans.Add(new Span(from, to));
+            }
+            return spans;
+        }
+
+        /// <summary>MV-899: the area a deck id belongs to, per the <c>"&lt;areaId&gt;_deck..."</c>
+        /// convention every world config's own decks author (verified against all three shipped
+        /// configs). Falls back to the whole id for anything that doesn't match — a bridge deck (e.g.
+        /// <c>"b1"</c>) never collides with a real area id this way, so it simply never matches any
+        /// area's own decks, exactly as it should (a bridge's own ends already open via
+        /// <see cref="DeckMouthWalls"/>, never via this path).</summary>
+        private static string DeckAreaPrefix(string deckId)
+        {
+            int idx = deckId.IndexOf("_deck", System.StringComparison.Ordinal);
+            return idx >= 0 ? deckId.Substring(0, idx) : deckId;
+        }
+
         /// <summary>MV-852 — a walled deck's parapet, replacing the ordinary open edge band/beam on
         /// every non-mouth wall: the SAME <see cref="StormdrainKit.BuildHazardBanding"/> visual, just
         /// <see cref="DeckParapetHeight"/> tall instead of <see cref="DeckEdgeBandHeight"/>, plus a
         /// separate, coincident, invisible box that keeps its default (non-stripped) collider — the one
         /// thing every other deck-edge primitive in this file deliberately strips. Never assigned to
         /// <see cref="CoverLayer"/>, so it blocks Max/robots (ordinary <c>CharacterController.Move</c>
-        /// collision, layer-agnostic) while every projectile in the game passes straight through it.</summary>
-        private static void BuildDeckParapet(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY,
-            Dictionary<Renderer, List<string>> rendererZones)
+        /// collision, layer-agnostic) while every projectile in the game passes straight through it.
+        ///
+        /// MV-899: <paramref name="holes"/> generalises MV-859's single gate-doorway opening to any
+        /// number of spans to leave open — a gate's own span, another deck abutting this edge (see
+        /// <see cref="AbuttingDeckSpans"/>), or both at once. Empty holes builds one continuous parapet,
+        /// exactly as before.</summary>
+        private static void BuildDeckParapetOpenAt(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY,
+            List<Span> holes, Dictionary<Renderer, List<string>> rendererZones)
         {
+            bool alongX = wall == Wall.N || wall == Wall.S;
             float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
-            float centerY = topY + DeckParapetHeight * 0.5f;
-            Vector3 centre;
-            float length;
-            bool alongX;
-            switch (wall)
+            float wallMin = alongX ? deck.x - halfW : deck.z - halfD;
+            float wallMax = alongX ? deck.x + halfW : deck.z + halfD;
+            float fixedCoord = wall switch
             {
-                case Wall.N:
-                    centre = new Vector3(deck.x, centerY, deck.z + halfD);
-                    length = deck.width; alongX = true;
-                    break;
-                case Wall.S:
-                    centre = new Vector3(deck.x, centerY, deck.z - halfD);
-                    length = deck.width; alongX = true;
-                    break;
-                case Wall.E:
-                    centre = new Vector3(deck.x + halfW, centerY, deck.z);
-                    length = deck.depth; alongX = false;
-                    break;
-                default: // Wall.W
-                    centre = new Vector3(deck.x - halfW, centerY, deck.z);
-                    length = deck.depth; alongX = false;
-                    break;
+                Wall.N => deck.z + halfD,
+                Wall.S => deck.z - halfD,
+                Wall.E => deck.x + halfW,
+                _ => deck.x - halfW, // W
+            };
+            float centerY = topY + DeckParapetHeight * 0.5f;
+
+            if (holes.Count == 0)
+            {
+                BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, wallMin, wallMax, 0, rendererZones);
+                return;
             }
 
-            GameObject visual = StormdrainKit.BuildHazardBanding(root, centre, length, DeckParapetHeight, alongX, DeckParapetThickness);
-            visual.name = $"{deck.id}_parapet_{wall}";
-            AddStatic(map, visual, staticGeometry, rendererZones);
-
-            // The blocker's own renderer is disabled below, so it never submits a draw call whether
-            // batched or not — left out of staticGeometry rather than combining dead weight.
-            Vector3 blockerSize = alongX
-                ? new Vector3(length, DeckParapetHeight, DeckParapetThickness)
-                : new Vector3(DeckParapetThickness, DeckParapetHeight, length);
-            GameObject blocker = Spawn(root, $"{deck.id}_parapet_{wall}_collider", PrimitiveType.Cube, centre, blockerSize);
-            foreach (Renderer r in blocker.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+            holes.Sort((a, b) => a.Min.CompareTo(b.Min));
+            float cursor = wallMin;
+            int index = 0;
+            foreach (Span hole in holes)
+            {
+                float from = cursor, to = Mathf.Min(hole.Min, wallMax);
+                if (to - from > 0.05f)
+                    BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, from, to, ++index, rendererZones);
+                cursor = Mathf.Max(cursor, hole.Max);
+            }
+            if (wallMax - cursor > 0.05f)
+                BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, cursor, wallMax, ++index, rendererZones);
         }
 
         /// <summary>MV-859: does a <c>[DECK]</c> gate's own doorway meet this deck's edge on
@@ -902,35 +979,11 @@ namespace MaxWorlds.Arena
             return false;
         }
 
-        /// <summary>MV-859 change 1 — a <c>[DECK]</c> gate's doorway meets this deck's edge partway
-        /// along it (or exactly matches it end to end, in which case both segments below come out
-        /// empty and no parapet is built at all): the parapet is split around the gate's own span
-        /// instead of standing across its mouth, which is the reported bug — MV-852 built every
-        /// parapet blind to gates.</summary>
-        private static void BuildDeckParapetSplit(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, float topY, Span opening,
-            Dictionary<Renderer, List<string>> rendererZones)
-        {
-            bool alongX = wall == Wall.N || wall == Wall.S;
-            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
-            float wallMin = alongX ? deck.x - halfW : deck.z - halfD;
-            float wallMax = alongX ? deck.x + halfW : deck.z + halfD;
-            float fixedCoord = wall switch
-            {
-                Wall.N => deck.z + halfD,
-                Wall.S => deck.z - halfD,
-                Wall.E => deck.x + halfW,
-                _ => deck.x - halfW, // W
-            };
-            float centerY = topY + DeckParapetHeight * 0.5f;
-
-            BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, wallMin, Mathf.Min(opening.Min, wallMax), 1, rendererZones);
-            BuildParapetSpan(map, root, staticGeometry, deck, wall, alongX, fixedCoord, centerY, Mathf.Max(opening.Max, wallMin), wallMax, 2, rendererZones);
-        }
-
-        /// <summary>One stretch of a split parapet (MV-859) — same visual/collider pairing as
-        /// <see cref="BuildDeckParapet"/>'s single continuous one, just clipped to <paramref name="from"/>..
-        /// <paramref name="to"/> instead of the whole edge. A non-positive length means the gate's own
-        /// span reaches (or overruns) this end, so there is nothing left of this stretch to build.</summary>
+        /// <summary>One stretch of a parapet (MV-859, generalised MV-899 by <see cref="BuildDeckParapetOpenAt"/>)
+        /// — the same visual/collider pairing whether it is the single continuous run covering a whole
+        /// edge or one piece either side of a hole, just clipped to <paramref name="from"/>..
+        /// <paramref name="to"/>. A non-positive length means a hole reaches (or overruns) this end, so
+        /// there is nothing left of this stretch to build.</summary>
         private static void BuildParapetSpan(MapData map, Transform root, List<GameObject> staticGeometry, MapEntity deck, Wall wall, bool alongX, float fixedCoord,
             float centerY, float from, float to, int index, Dictionary<Renderer, List<string>> rendererZones)
         {
