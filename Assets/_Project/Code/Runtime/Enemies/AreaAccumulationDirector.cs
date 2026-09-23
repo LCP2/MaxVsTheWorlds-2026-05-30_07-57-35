@@ -361,7 +361,18 @@ namespace MaxWorlds.Enemies
             // advance to an area that isn't actually linked (by a gate or deck gate) to the one Max is
             // physically in — the guard against a stray zone-resolution jump (or an as-yet-unbuilt map)
             // silently skipping the areas in between.
-            if (area > _physicalArea)
+            //
+            // MV-920: "advance" used to mean "area number went up" (`area > _physicalArea`), which
+            // silently no-opped a live crossing into a LOWER-numbered but still-linked area — exactly
+            // World 2's own a15->a12->a11->a10->a16 deck gantry (measured, MV-920 Jira comment), whose
+            // authored area numbers count DOWN before going back up. The tracker latched at whichever
+            // area it last raised to, so ApplyAreaGate never re-ran for the rest of the gantry and every
+            // area past the freeze point kept whatever enabled/disabled state its renderers already had —
+            // the reported "walking on an invisible deck". A live crossing is any change of area, raised
+            // or lowered alike, same as the authoritative <see cref="SetCurrentArea"/> reset already
+            // treats it (MV-909) — still refused if the two areas aren't actually linked, so a stray
+            // zone-resolution jump is caught exactly as before.
+            if (area > 0 && area != _physicalArea)
             {
                 if (IsLinkedArea(_physicalArea, area))
                 {
