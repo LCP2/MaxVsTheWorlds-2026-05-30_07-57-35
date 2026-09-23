@@ -58,6 +58,17 @@ namespace MaxWorlds.UI
         private bool _weaponCoreCollected;
         private float _weaponCoreDropRealtime;
 
+        // MV-915: a FOURTH condition, riding the same "live only for the run that actually dropped a
+        // Weapon Core" latch as the third — _payoffFinished (BossVictoryPayoff's own walk-out beat) is
+        // scoped to whichever boss area clears FIRST in the whole run (a12, mid-run), so by the time
+        // World 1's real finale (a30) empties, _payoffFinished is already long since true and would let
+        // Victory seal the instant RunComplete lands, with no walk-out of its own. WorldFinaleGate only
+        // opens on RunComplete for the world's actual last boss area, so gating on it here is what makes
+        // "walk through the open gate" a real, necessary beat for the finale specifically, without
+        // touching a12/a20's own (unrelated) payoff timing at all.
+        private bool _finaleGateAwaited;
+        private bool _finaleGateCrossed;
+
         private void OnEnable()
         {
             // MV-841: seed from whatever the checkpoint bridge already holds — 0 for a genuinely
@@ -72,6 +83,7 @@ namespace MaxWorlds.UI
             HudSignals.RunComplete += OnRunComplete;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
+            HudSignals.FinaleGateCrossed += OnFinaleGateCrossed;
         }
 
         private void OnDisable()
@@ -84,6 +96,7 @@ namespace MaxWorlds.UI
             HudSignals.RunComplete -= OnRunComplete;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
+            HudSignals.FinaleGateCrossed -= OnFinaleGateCrossed;
         }
 
         // MV-841: a checkpoint restore landed while this RunTracker was already alive — a RESUME tap
@@ -134,6 +147,15 @@ namespace MaxWorlds.UI
             _weaponCoreAwaited = true;
             _weaponCoreCollected = false;
             _weaponCoreDropRealtime = Time.unscaledTime;
+            _finaleGateAwaited = true;   // MV-915: this run is the real finale — it must be walked out of
+        }
+
+        // MV-915: Max crossed WorldFinaleGate once it opened — the other half of the finale's own seal
+        // condition, alongside _weaponCoreCollected above.
+        private void OnFinaleGateCrossed()
+        {
+            _finaleGateCrossed = true;
+            TrySeal();
         }
 
         // MV-698: the awaited core was collected — walk-over (PickupDirector.Collect) or the timeout
@@ -165,11 +187,17 @@ namespace MaxWorlds.UI
         /// ended the game. Victory now needs the final area cleared AS WELL, and takes whichever of
         /// the two lands later, so the loot-and-walk-to-the-door beat is unchanged. MV-698 adds a
         /// third, usually-inert condition: if this run's finale dropped a Weapon Core, it must be
-        /// collected too (walk-over or the auto-collect timeout) before Victory seals.</summary>
+        /// collected too (walk-over or the auto-collect timeout) before Victory seals. MV-915 adds a
+        /// fourth, riding the same latch as the third: that same run must also have crossed
+        /// <c>WorldFinaleGate</c> once it opened — <see cref="_payoffFinished"/> is scoped to whichever
+        /// boss area clears FIRST in the run (a12, mid-run) and is long since true by the time the real
+        /// finale (a30) empties, so without this the results card would cut in the instant the last
+        /// robot dies, with no walk-out of its own for the world's actual finale.</summary>
         private void TrySeal()
         {
             if (_sealed || !_payoffFinished || !_runComplete) return;
             if (_weaponCoreAwaited && !_weaponCoreCollected) return;
+            if (_finaleGateAwaited && !_finaleGateCrossed) return;
             Seal(RunOutcome.Victory);
             ShowResults();
         }

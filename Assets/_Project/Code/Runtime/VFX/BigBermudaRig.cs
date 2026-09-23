@@ -203,14 +203,14 @@ namespace MaxWorlds.VFX
         {
             HudSignals.BossEngaged += OnEngaged;
             HudSignals.BossHealthChanged += OnHealth;
-            HudSignals.BossDefeated += OnDefeated;
+            HudSignals.BossKilled += OnKilled;
         }
 
         private void OnDisable()
         {
             HudSignals.BossEngaged -= OnEngaged;
             HudSignals.BossHealthChanged -= OnHealth;
-            HudSignals.BossDefeated -= OnDefeated;
+            HudSignals.BossKilled -= OnKilled;
         }
 
         private void Bind(BigBermudaBoss boss)
@@ -820,13 +820,19 @@ namespace MaxWorlds.VFX
             _lastHealth = normalized;
         }
 
-        private void OnDefeated()
+        private void OnKilled(Vector3 diedAt)
         {
-            // MV-625: HudSignals.BossDefeated carries no boss identity — it fires whenever ANY boss on
-            // the map dies, and every rig built so far (the whole map is built at scene load, MV-573)
-            // is subscribed. Without this check, a12's boss dying played every OTHER boss's death
-            // animation too and deactivated their rigs (TickDeath's gameObject.SetActive(false)),
-            // leaving a20/a30's still-alive bosses invisible while their brood volleys kept firing.
+            // MV-915: HudSignals.BossDefeated only fires once every boss IN AN AREA is down (MV-591),
+            // so a30's FIRST of two bosses dying never raised it at all — that boss's own rig sat
+            // frozen mid-fight, visibly alive, until the SECOND boss died and both rigs finally keyed
+            // off the one shared signal. HudSignals.BossKilled (MV-721) fires per boss instead, so this
+            // now starts THIS rig's own death the instant its own boss actually dies, whether or not
+            // any other boss shares its area.
+            //
+            // MV-625's own guard still applies unchanged: BossKilled is scene-wide too (every rig built
+            // so far is subscribed, MV-573), so a check against THIS rig's own boss is still what picks
+            // "was it mine" out of the broadcast — it just now asks the question once per boss's own
+            // death instead of once per area's last one.
             if (_boss == null || !_boss.IsDead) return;
             if (_dying) return;
             _dying = true;
