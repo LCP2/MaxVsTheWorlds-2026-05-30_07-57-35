@@ -325,6 +325,59 @@ namespace MaxWorlds.Rendering
         private const float ChannelCrossingSlatPitch = 0.34f;
         private const float ChannelCrossingPostHeight = 0.75f;
 
+        /// <summary>MV-906: above this channel run length, its crossing spacing (MV-801 change 5) widens
+        /// by <see cref="LongChannelSpacingScale"/> — comfortably above every ordinary World 2 channel
+        /// run (world2_config.json's own sludge rects top out well under this) and comfortably below
+        /// a16's own 106 m channel, the one run this exists to thin. a16 (Gantry Run, level 1, no floor
+        /// zone beneath it) carries no ordinary room walls at all (<see cref="MapGeometry.Walls"/> skips
+        /// a <c>level &gt; 0</c> zone) — its own dominant dressing cost is this ONE channel's hazard
+        /// banding and crossings, not wall dressing.
+        ///
+        /// The hazard-stripe PITCH itself is never touched here — MV-803's own approved 0.42 m pitch is
+        /// an exact figure <see cref="MV803HazardBandingTests"/> checks on every banding instance in the
+        /// map, a16's included, so a16's own banding is thinned by covering LESS of the run
+        /// (<see cref="LongChannelHazardSegmentLength"/>/<see cref="LongChannelHazardSegmentSpacing"/>,
+        /// see <see cref="BuildLongChannelHazardBanding"/>) rather than by spacing its stripes wider.
+        /// </summary>
+        private const float LongChannelRunLength = 40f;
+        private const float LongChannelSpacingScale = 4f;
+
+        /// <summary>MV-906: each hazard-banding segment a long channel gets, in metres — short enough
+        /// that every segment still reads as a normal MV-803 band (same pitch, same lean) rather than a
+        /// stretched-out one.</summary>
+        private const float LongChannelHazardSegmentLength = 8f;
+
+        /// <summary>MV-906: distance between segment CENTRES along a long channel's run — comfortably
+        /// wider than <see cref="LongChannelHazardSegmentLength"/> so most of the run is genuinely
+        /// undressed between segments, with a segment anchored at (or within half a spacing of) each end
+        /// so the corridor never reads unmarked right at its own drop-off.</summary>
+        private const float LongChannelHazardSegmentSpacing = 24f;
+
+        private static float LongChannelScale(float run) => run > LongChannelRunLength ? LongChannelSpacingScale : 1f;
+
+        /// <summary>MV-906: a long channel's hazard banding along one drop edge, built as several
+        /// <see cref="LongChannelHazardSegmentLength"/> m segments every
+        /// <see cref="LongChannelHazardSegmentSpacing"/> m along <paramref name="run"/> (first and last
+        /// segment centred within half a spacing of each end, so the corridor is dressed at both ends
+        /// and at regular intervals, per the ticket's own AC) instead of one continuous band. Each
+        /// segment is a normal <see cref="BuildHazardBanding"/> call — same approved 0.42 m stripe pitch,
+        /// same 34-degree lean — so <see cref="MV803HazardBandingTests"/>'s per-instance pitch check
+        /// still holds; only the total banded LENGTH (and so total stripe count) drops.</summary>
+        private static void BuildLongChannelHazardBanding(Transform parent, Vector3 edgeCentre, float run,
+                                                            float height, bool alongX, float depth)
+        {
+            int segments = Mathf.Max(2, Mathf.RoundToInt(run / LongChannelHazardSegmentSpacing) + 1);
+            Vector3 along = alongX ? Vector3.right : Vector3.forward;
+            float span = run - LongChannelHazardSegmentLength;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float t = (i / (float)(segments - 1)) - 0.5f;
+                Vector3 segCentre = edgeCentre + along * (t * span);
+                BuildHazardBanding(parent, segCentre, LongChannelHazardSegmentLength, height, alongX, depth);
+            }
+        }
+
         // ---------------------------------------------------------------- primitives
 
         /// <summary>A collider-free box in a flat tinted material. Every piece below is made of these
@@ -1522,6 +1575,11 @@ namespace MaxWorlds.Rendering
         {
             bool alongZ = Mathf.Abs(Vector3.Dot(flow, Vector3.forward)) > 0.5f;
 
+            // MV-906: the hazard band's own run is the channel's LONG axis (width when not alongZ, depth
+            // when alongZ) — the same "run" BuildChannelCrossings already derives below.
+            float run = alongZ ? depth : width;
+            bool longChannel = run > LongChannelRunLength;
+
             var trough = new GameObject("Channel Trough").transform;
             trough.SetParent(root, false);
             trough.localPosition = Vector3.up * ChannelOozeDrop;
@@ -1543,10 +1601,18 @@ namespace MaxWorlds.Rendering
 
                 // MV-803: hazard banding on both drop edges, flush with the cut at the top of each wall
                 // (the lip's own line) — the run is along Z here, so alongX is false.
-                BuildHazardBanding(root, new Vector3(width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
-                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
-                BuildHazardBanding(root, new Vector3(-width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f),
-                    depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                Vector3 edgeA = new Vector3(width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f);
+                Vector3 edgeB = new Vector3(-width * 0.5f, -ChannelHazardBandHeight * 0.5f, 0f);
+                if (longChannel)
+                {
+                    BuildLongChannelHazardBanding(root, edgeA, depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                    BuildLongChannelHazardBanding(root, edgeB, depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                }
+                else
+                {
+                    BuildHazardBanding(root, edgeA, depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                    BuildHazardBanding(root, edgeB, depth, ChannelHazardBandHeight, alongX: false, ChannelWallThickness);
+                }
 
                 Box(root, "Trough Lip A", new Vector3(width * 0.5f, lipY, 0f),
                     new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
@@ -1566,10 +1632,18 @@ namespace MaxWorlds.Rendering
                     new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
 
                 // MV-803: hazard banding on both drop edges — the run is along X here.
-                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, depth * 0.5f),
-                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
-                BuildHazardBanding(root, new Vector3(0f, -ChannelHazardBandHeight * 0.5f, -depth * 0.5f),
-                    width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                Vector3 edgeA = new Vector3(0f, -ChannelHazardBandHeight * 0.5f, depth * 0.5f);
+                Vector3 edgeB = new Vector3(0f, -ChannelHazardBandHeight * 0.5f, -depth * 0.5f);
+                if (longChannel)
+                {
+                    BuildLongChannelHazardBanding(root, edgeA, width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                    BuildLongChannelHazardBanding(root, edgeB, width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                }
+                else
+                {
+                    BuildHazardBanding(root, edgeA, width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                    BuildHazardBanding(root, edgeB, width, ChannelHazardBandHeight, alongX: true, ChannelWallThickness);
+                }
 
                 Box(root, "Trough Lip A", new Vector3(0f, lipY, depth * 0.5f),
                     new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
@@ -1600,8 +1674,10 @@ namespace MaxWorlds.Rendering
             float span = alongZ ? width : depth;
             float crossSpan = span + ChannelCrossingOverhang * 2f;
 
+            // MV-906: same long-channel widening BuildChannelTrough applies to its own hazard banding —
+            // a16's own 106 m channel otherwise gets a crossing (8 renderers each) every 8-12 m end to end.
             float spacing = Mathf.Lerp(ChannelCrossingSpacingMin, ChannelCrossingSpacingMax,
-                Frac(seed * 0.8123f));
+                Frac(seed * 0.8123f)) * LongChannelScale(run);
             int count = Mathf.Max(1, Mathf.FloorToInt(run / spacing));
 
             for (int i = 0; i < count; i++)
