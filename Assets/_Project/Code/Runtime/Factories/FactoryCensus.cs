@@ -87,6 +87,42 @@ namespace MaxWorlds.Factories
             if (AllDown) Cleared?.Invoke();
         }
 
+        /// <summary>The stable ids (<see cref="MowerHutch.Id"/>) of every registered shed this run has
+        /// already reported destroyed (MV-922) — what a mid-run checkpoint capture persists so a resume
+        /// can re-apply the exact same destroyed set onto the fresh instances a level rebuild creates.
+        /// Same shape as <see cref="DestroyedReplicatorIds"/>. A shed whose <see cref="MowerHutch.Id"/>
+        /// was never stamped (a hand-built test fixture that skips <see cref="MowerHutch.SetId"/>) is
+        /// simply left out.</summary>
+        public static string[] DestroyedShedIds()
+        {
+            var ids = new List<string>();
+            foreach (MowerHutch h in Registered)
+                if (h != null && !Standing.Contains(h) && !string.IsNullOrEmpty(h.Id))
+                    ids.Add(h.Id);
+            return ids.ToArray();
+        }
+
+        /// <summary>Re-applies a checkpoint's already-recorded shed destruction (MV-922) onto whichever
+        /// currently-registered, still-alive sheds carry a matching <see cref="MowerHutch.Id"/> — called
+        /// once by <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> on RESUME, after the level's
+        /// own sheds have already registered themselves alive (the ordinary build). Same shape as
+        /// <see cref="ApplyCheckpointDestroyedIds"/>. A no-op for an empty/null set.</summary>
+        public static void ApplyCheckpointDestroyedShedIds(IReadOnlyList<string> destroyedIds)
+        {
+            if (destroyedIds == null || destroyedIds.Count == 0) return;
+
+            foreach (MowerHutch h in Registered)
+            {
+                if (h == null || !h.IsAlive || string.IsNullOrEmpty(h.Id)) continue;
+                for (int i = 0; i < destroyedIds.Count; i++)
+                {
+                    if (destroyedIds[i] != h.Id) continue;
+                    h.ApplyCheckpointDestroyed();
+                    break;
+                }
+            }
+        }
+
         /// <summary>Register a Replicator by the id of the area it was authored into (MV-703) —
         /// <see cref="MaxWorlds.Arena.WorldRunner"/> calls this once per built Replicator, the same
         /// "known by the time anything reads it" ordering <see cref="Register"/> above guarantees for
