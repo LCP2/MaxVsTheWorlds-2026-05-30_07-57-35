@@ -132,6 +132,12 @@ namespace MaxWorlds.Arena
                                            // (art pass, YT-75; shed added YT-172; machinery added MV-744;
                                            // pipe added MV-802)
 
+        /// <summary>Cover only (MV-917) — explicit behaviour: <c>solid</c> (default) or
+        /// <c>see_through</c> (blocks movement only, never sight or shots). See
+        /// <see cref="CoverKind"/>'s own doc comment for why this is additive alongside the existing
+        /// dressing-keyed Hedge/Pipe exemption, not a replacement for it.</summary>
+        public string coverKind = "solid";
+
         /// <summary>Factory only — resolved from <see cref="WorldShed.mobile"/> (MV-548, shed roadmap
         /// stage 3). <see cref="MapRuntime"/> gives a mobile factory a <c>CharacterController</c> and
         /// wires it into <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> instead of
@@ -194,6 +200,7 @@ namespace MaxWorlds.Arena
         public EntityKind Kind => MapEnums.Entity(kind);
         public CoverShape Shape => MapEnums.Shape(shape);
         public CoverDressing Dressing => MapEnums.Dressing(dressing);
+        public CoverKind CoverKind => MapEnums.CoverBehaviour(coverKind);
 
         public Vector3 Size => new Vector3(width, height, depth);
         public Vector2 CenterXz => new Vector2(x, z);
@@ -205,7 +212,7 @@ namespace MaxWorlds.Arena
         /// <summary>The same record expressed as the cover struct the rest of the game already
         /// speaks (<see cref="BackyardCover"/>, the dressing pass, the sight-line tests).</summary>
         public ArenaCover ToCover() =>
-            new ArenaCover(string.IsNullOrEmpty(id) ? "Cover" : id, CenterXz, Size, Shape, Dressing);
+            new ArenaCover(string.IsNullOrEmpty(id) ? "Cover" : id, CenterXz, Size, Shape, Dressing, CoverKind);
     }
 
     /// <summary>
@@ -527,6 +534,9 @@ namespace MaxWorlds.Arena
 
         public static CoverDressing Dressing(string s) =>
             Parse(s, CoverDressing.None, nameof(Dressing));
+
+        public static CoverKind CoverBehaviour(string s) =>
+            Parse(s, CoverKind.Solid, nameof(CoverBehaviour));
 
         /// <summary>A comma-separated list of entity ids, as written by hand: <c>"a, b"</c> and
         /// <c>"a,b"</c> and <c>"a"</c> all say what they look like they say. Ids themselves are taken

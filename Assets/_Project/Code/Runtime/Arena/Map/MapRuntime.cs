@@ -1281,13 +1281,22 @@ namespace MaxWorlds.Arena
                 ApplyBevelledBoxMesh(body, scale);
 
             // This is the line that turns a prop from scenery into a mechanic (YT-83) — except for a
-            // hedge row (MV-400), and now a pipe barrier too (MV-863, Lee's decision 2026-09-17): both
-            // keep blocking a footstep (the collider Spawn() just built is untouched) while stopping
-            // blocking a sight-line or a shot, so they are the dressings deliberately left off the
-            // Cover layer. LineOfSight, WaterBlaster's spray and HomingMissile all cast against
-            // CoverLayer.Mask, so skipping the assign here is the single point that makes robots see,
-            // and shoot, straight through a plant row or a pipe run.
-            if (cover.Dressing != CoverDressing.Hedge && cover.Dressing != CoverDressing.Pipe)
+            // hedge row (MV-400), a pipe barrier (MV-863, Lee's decision 2026-09-17), or anything
+            // authored with an explicit see-through CoverKind (MV-917): all three keep blocking a
+            // footstep (the collider Spawn() just built is untouched) while stopping blocking a
+            // sight-line or a shot, so they are left off the Cover layer. LineOfSight, WaterBlaster's
+            // spray and HomingMissile all cast against CoverLayer.Mask, so skipping the assign here is
+            // the single point that makes robots see, and shoot, straight through a plant row, a pipe
+            // run, or any piece authored see-through.
+            //
+            // MV-917 ORs its explicit cover.Kind check onto the existing dressing check rather than
+            // replacing it: world2_config.json's 29 shipped "pipe" pieces carry no coverKind yet (that
+            // data lands separately, in the design workbook re-author) and CoverKind defaults to Solid,
+            // so replacing the dressing check outright would silently revert those pieces to blocking
+            // sight and shots — undoing the MV-863 decision by accident, exactly what MV-917's own
+            // schema default is meant to prevent.
+            if (cover.Kind != CoverKind.SeeThrough
+                && cover.Dressing != CoverDressing.Hedge && cover.Dressing != CoverDressing.Pipe)
                 CoverLayer.Assign(body);
 
             return new CoverPiece(cover, body);
