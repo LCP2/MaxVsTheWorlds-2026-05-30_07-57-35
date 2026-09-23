@@ -5,6 +5,7 @@ using UnityEngine.TestTools;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -122,6 +123,67 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(root);
                 LogAssert.ignoreFailingMessages = false;
+            }
+        }
+
+        // ---------------------------------------------------------------- MV-911: world-independent colour
+
+        /// <summary>MV-911 AC1/AC2. Lee (live build), World 1: a general lighting darkening he's happy
+        /// with elsewhere left the Spiker shed fitting "heavily blackened" and its spikes unreadable.
+        /// <see cref="ShedFitting"/> never got the MV-857/MV-861 treatment: its corner-turret cube wears
+        /// a plain <see cref="MaterialLibrary.Tinted"/> metal material with no emission, so it is fully
+        /// dependent on scene lighting for how bright it reads — the exact defect those two tickets
+        /// already fixed for Max and the Launcher missile. Resolved-value (Tier 2): reads the actual
+        /// <c>_EmissionColor</c> Unity resolves on a BUILT fitting's own material, not an authored
+        /// constant, and holds both worlds in one test rather than splitting into two (Rule 1). One
+        /// TestCase per kind covers AC2 (Laser/Missile share the same build path and defect) without a
+        /// second test method.</summary>
+        [TestCase(ShedFittingKind.Spiker)]
+        [TestCase(ShedFittingKind.Laser)]
+        [TestCase(ShedFittingKind.Missile)]
+        public void MV911_FittingEmissionCompensatesInWorld2_UnchangedInWorld1(ShedFittingKind kind)
+        {
+            BiomePalette previousPalette = MaterialLibrary.Palette;
+            try
+            {
+                MaterialLibrary.Palette = BiomePalette.Backyard;
+                Color world1Emission = FittingEmissionOfFreshFitting(kind);
+                Assert.That(world1Emission.maxColorComponent, Is.EqualTo(0f),
+                    "World 1's fitting must resolve the same (zero) emission it has today — its look " +
+                    "there is already correct, so this must not regress it.");
+
+                MaterialLibrary.Palette = BiomePalette.Stormdrain;
+                Color world2Emission = FittingEmissionOfFreshFitting(kind);
+                Assert.That(world2Emission.maxColorComponent, Is.GreaterThan(0f),
+                    "World 2's dim Stormdrain look must add compensation emission to the fitting, or it " +
+                    "stays dependent on the world's own lighting — the exact bug being fixed.");
+
+                Color.RGBToHSV(ShedFitting.FittingColorForTests, out float bodyHue, out _, out _);
+                Color.RGBToHSV(world2Emission, out float emissionHue, out _, out _);
+                float hueDiffDegrees = Mathf.Abs(Mathf.DeltaAngle(bodyHue * 360f, emissionHue * 360f));
+                Assert.That(hueDiffDegrees, Is.LessThan(10f),
+                    $"the fitting's World 2 emission hue ({emissionHue * 360f:F1}deg) drifted more than " +
+                    $"10deg from its own World 1 base colour ({bodyHue * 360f:F1}deg) — it must read as " +
+                    "MORE of the same colour, not a different one.");
+            }
+            finally
+            {
+                MaterialLibrary.Palette = previousPalette;
+            }
+        }
+
+        private static Color FittingEmissionOfFreshFitting(ShedFittingKind kind)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var fitting = go.AddComponent<ShedFitting>();
+                fitting.Bind(null, kind);
+                return go.GetComponent<MeshRenderer>().sharedMaterial.GetColor("_EmissionColor");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
             }
         }
     }
