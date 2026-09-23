@@ -144,5 +144,41 @@ namespace MaxWorlds.Factories
 
             return true;
         }
+
+        /// <summary>The stable ids (<see cref="Replicator.Id"/>) of every registered Replicator this run
+        /// has already reported destroyed (MV-776) — what a mid-run checkpoint capture persists so a
+        /// resume can re-apply the exact same destroyed set onto the fresh instances a level rebuild
+        /// creates. A Replicator whose <see cref="Replicator.Id"/> was never stamped (a hand-built test
+        /// fixture that skips <see cref="Replicator.SetId"/>) is simply left out.</summary>
+        public static string[] DestroyedReplicatorIds()
+        {
+            var ids = new List<string>();
+            foreach (Replicator r in ReplicatorsRegistered)
+                if (r != null && !ReplicatorsStanding.Contains(r) && !string.IsNullOrEmpty(r.Id))
+                    ids.Add(r.Id);
+            return ids.ToArray();
+        }
+
+        /// <summary>Re-applies a checkpoint's already-recorded destruction (MV-776) onto whichever
+        /// currently-registered, still-alive Replicators carry a matching <see cref="Replicator.Id"/> —
+        /// called once by <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> on RESUME, after the
+        /// level's own Replicators have already registered themselves alive (the ordinary build). Silent
+        /// by design (<see cref="Replicator.ApplyCheckpointDestroyed"/>): this is restoring history, not
+        /// scoring a fresh kill, so no pickup drop or HUD signal fires. A no-op for an empty/null set.</summary>
+        public static void ApplyCheckpointDestroyedIds(IReadOnlyList<string> destroyedIds)
+        {
+            if (destroyedIds == null || destroyedIds.Count == 0) return;
+
+            foreach (Replicator r in ReplicatorsRegistered)
+            {
+                if (r == null || !r.IsAlive || string.IsNullOrEmpty(r.Id)) continue;
+                for (int i = 0; i < destroyedIds.Count; i++)
+                {
+                    if (destroyedIds[i] != r.Id) continue;
+                    r.ApplyCheckpointDestroyed();
+                    break;
+                }
+            }
+        }
     }
 }

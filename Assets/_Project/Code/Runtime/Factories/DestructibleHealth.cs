@@ -66,5 +66,16 @@ namespace MaxWorlds.Factories
             Current = Mathf.Min(Max, Current + amount);
             Changed?.Invoke(Current);
         }
+
+        /// <summary>MV-776: reaches zero HP with no <see cref="Destroyed"/> event — a checkpoint restore
+        /// re-applying history a run already earned, not a live kill that should re-trigger whatever a
+        /// subscriber wires to that event (loot, HUD signal, VFX). One-shot, same as
+        /// <see cref="TakeDamage"/>: a no-op once already destroyed.</summary>
+        public void SilentlyDestroy()
+        {
+            if (!IsAlive) return;
+            Current = 0f;
+            Changed?.Invoke(Current);
+        }
     }
 }

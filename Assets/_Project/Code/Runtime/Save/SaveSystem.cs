@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
 
@@ -111,7 +112,13 @@ namespace MaxWorlds.Save
         /// be checkpointed. Both the personal-best and world-advance halves always save, unlike the
         /// old personal-best-only early-return, since a save that didn't beat the record must still
         /// remember the world advanced. No-op for no active profile (e.g. tests driving a run with no
-        /// Home screen involved).</summary>
+        /// Home screen involved).
+        ///
+        /// MV-776: wipes the WHOLE checkpoint, not just <see cref="SaveSlotData.CheckpointAreaIndex"/> —
+        /// the ticket's own named bug, "a stale checkpoint into a world already finished". Before this,
+        /// <see cref="SaveSlotData.HasRunInProgress"/> stayed true and every other Checkpoint* field
+        /// stayed stale, so a subsequent RESUME would restore a dead run's THE RIG/wallet/flood/
+        /// destroyed-Replicator snapshot straight into the world just finished.</summary>
         public static void RecordResult(int slot, int deathsTaken)
         {
             if (slot < 0) return;
@@ -122,7 +129,7 @@ namespace MaxWorlds.Save
                 data.BestDeathsToVictory = deathsTaken;
 
             data.WorldIndex = Math.Min(data.WorldIndex + 1, WorldLibrary.Count - 1);
-            data.CheckpointAreaIndex = 0;
+            ResetCheckpointFields(data);
 
             Save(slot, data);
         }
@@ -157,6 +164,8 @@ namespace MaxWorlds.Save
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
             data.CheckpointElapsedSeconds = RunProgressState.Elapsed;
             data.CheckpointKills = RunProgressState.Kills;
+            data.CheckpointFloodLevel01 = StormdrainFlood.Level01;
+            data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.HasRunInProgress = true;
 
             Save(slot, data);
@@ -165,7 +174,15 @@ namespace MaxWorlds.Save
         /// <summary>Restore <paramref name="slot"/>'s captured checkpoint (MV-557, part 1 of MV-524)
         /// into the live <see cref="RigState"/>/<see cref="PickupWallet"/>/<see cref="DeathRunState"/>.
         /// Returns false and changes nothing if the slot holds no checkpoint. Re-entering the checkpoint's
-        /// area is the caller's job — this ticket does not wire a scene/HomeScreen caller (MV-524 part 3).</summary>
+        /// area is the caller's job — this ticket does not wire a scene/HomeScreen caller (MV-524 part 3).
+        ///
+        /// MV-776: also rewinds <see cref="StormdrainFlood"/> to the checkpoint's own level (never the
+        /// live one — a resume restores what the gate looked like, not wherever the flood drifted to by
+        /// the time the run ended) and re-applies the checkpoint's destroyed-Replicator set onto whichever
+        /// currently-registered instances the level's own build has already brought alive by the time
+        /// this runs (<see cref="FactoryCensus.ApplyCheckpointDestroyedIds"/>) — both pure-data systems
+        /// with no scene dependency of their own, same as every other field this method already
+        /// restores.</summary>
         public static bool RestoreCheckpoint(int slot)
         {
             SaveSlotData data = Load(slot);
@@ -180,6 +197,8 @@ namespace MaxWorlds.Save
             PickupWallet.SetPowerCellSecondary(data.CheckpointPowerCellsSecondary);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
             RunProgressState.Restore(data.CheckpointElapsedSeconds, data.CheckpointKills);
+            StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
+            FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             return true;
         }
 
@@ -205,6 +224,16 @@ namespace MaxWorlds.Save
             SaveSlotData data = Load(slot);
             if (!data.HasRunInProgress) return;
 
+            ResetCheckpointFields(data);
+            Save(slot, data);
+        }
+
+        /// <summary>Every Checkpoint* field (MV-776) back to "no run in progress" — shared by
+        /// <see cref="ClearCheckpoint"/> (PLAY starting fresh) and <see cref="RecordResult"/> (a Victory,
+        /// which must wipe the checkpoint outright, not just <see cref="SaveSlotData.CheckpointAreaIndex"/>
+        /// as it used to). Mutates <paramref name="data"/> in place; the caller saves it.</summary>
+        private static void ResetCheckpointFields(SaveSlotData data)
+        {
             data.HasRunInProgress = false;
             data.CheckpointAreaIndex = 0;
             data.CheckpointRigNodeIds = Array.Empty<string>();
@@ -215,7 +244,8 @@ namespace MaxWorlds.Save
             data.CheckpointDeathsTaken = 0;
             data.CheckpointElapsedSeconds = 0f;
             data.CheckpointKills = 0;
-            Save(slot, data);
+            data.CheckpointFloodLevel01 = 0f;
+            data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a

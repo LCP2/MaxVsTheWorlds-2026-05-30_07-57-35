@@ -161,6 +161,11 @@ namespace MaxWorlds.Arena
                         repSpawner.ConfigureWorldConfig(cfg);
                     }
 
+                    // MV-776: stamps this box's stable id onto the component itself so a mid-run
+                    // checkpoint can persist and restore "which Replicators are destroyed" by id — the
+                    // same id this loop already computed to look itself up in build.Actors, which used
+                    // to be discarded the moment that lookup finished.
+                    replicator.SetId(replicatorId);
                     FactoryCensus.RegisterReplicator(replicator, area.id);
                     // MV-828: area.id is the raw config id (e.g. "a3"), which AreaIndexOf can never
                     // parse (it only recognises the "area<N>" string WorldMapLoader translates zone ids

@@ -89,5 +89,17 @@ namespace MaxWorlds.Save
         /// <summary><c>RunProgressState.Kills</c> at the checkpoint (MV-841), same contract as
         /// <see cref="CheckpointElapsedSeconds"/>.</summary>
         public int CheckpointKills;
+
+        /// <summary><c>StormdrainFlood.Level01</c> at the checkpoint (MV-776) — restored on RESUME so
+        /// the flood rewinds to the gate the player last passed, not wherever it had risen to by the
+        /// time they died. World-agnostic (a flat 0..1 fraction, not a World 2 concept), so a later
+        /// world's own flood-like mechanic can reuse this same field with no schema migration.</summary>
+        public float CheckpointFloodLevel01;
+
+        /// <summary>Stable ids (<c>Replicator.Id</c>) of every Replicator destroyed by the time this
+        /// checkpoint was captured (MV-776) — restored on RESUME by silently re-destroying whichever of
+        /// the freshly-rebuilt level's Replicators carry a matching id, so a resume never resurrects a
+        /// factory the player already paid to destroy.</summary>
+        public string[] CheckpointDestroyedReplicatorIds = Array.Empty<string>();
     }
 }

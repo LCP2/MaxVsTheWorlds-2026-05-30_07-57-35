@@ -196,6 +196,19 @@ namespace MaxWorlds.Arena
         public static bool PumpsDraining => _level01 >= PumpDrainThreshold;
         public static bool WetWellOpen => _level01 >= WetWellThreshold;
 
+        /// <summary>MV-776: rewinds the flood to a checkpoint's own recorded level — used only by
+        /// <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> on RESUME, called after
+        /// <see cref="Reset"/> already ran for this run (the level build that happened before the Home
+        /// screen ever showed), so this is the last write and sticks. Bypasses <see cref="Tick"/>'s rate
+        /// maths entirely; surge timers restart fresh from the restored level on the next real tick,
+        /// same as a freshly booted run that happens to start mid-band.</summary>
+        public static void RestoreLevel01(float level01)
+        {
+            _level01 = Mathf.Clamp01(level01);
+            _band1SurgeElapsed = -1f;
+            _band2SurgeElapsed = -1f;
+        }
+
         /// <summary>Which flood band an authored combat area belongs to, by its 1-based index among
         /// <paramref name="totalAreas"/> (MV-774's own stand-in rule): the last third of the route
         /// (closest to the Wet Well) is band 1, the middle third is band 2, the first third never floods
