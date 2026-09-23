@@ -304,6 +304,14 @@ namespace MaxWorlds.Arena
         public float depth = 1f;
         public string shape = "box";
         public string dressing = "none";
+
+        /// <summary>MV-917: explicit cover behaviour — <c>"solid"</c> (blocks movement, sight and
+        /// shots) or <c>"see_through"</c> (blocks movement only). Default <c>"solid"</c> so a config
+        /// authored before this field existed loads unchanged. World 2's pipe barriers (<c>|</c>) and
+        /// collapsed gratings (<c>X</c>) are the intended see-through cases; that data lands separately
+        /// (see <see cref="MapRuntime.BuildCover"/> for why the existing dressing-keyed exemption stays
+        /// alongside this field rather than being replaced by it).</summary>
+        public string coverKind = "solid";
     }
 
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a

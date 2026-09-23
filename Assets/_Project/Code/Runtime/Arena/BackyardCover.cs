@@ -23,6 +23,22 @@ namespace MaxWorlds.Arena
     /// collider and footprint, adding none.</summary>
     public enum CoverDressing { None, Tree, Hedge, Planter, Shed, Machinery, Pipe }
 
+    /// <summary>MV-917: a cover piece's behaviour, as an explicit, data-driven property rather than an
+    /// inference from <see cref="CoverDressing"/> — dressing is how a piece LOOKS, not how it behaves,
+    /// and World 2's pipe barriers (<c>|</c>) and collapsed gratings (<c>X</c>) need to say "blocks
+    /// movement only" without that being bolted onto their art choice. <see cref="Solid"/> is the
+    /// default so an unauthored piece never changes behaviour by accident.
+    ///
+    /// This is layered ADDITIVELY alongside the existing <see cref="CoverDressing.Hedge"/>/
+    /// <see cref="CoverDressing.Pipe"/> exemption in <see cref="MaxWorlds.Arena.Map.MapRuntime.BuildCover"/>
+    /// (MV-400, MV-863), not a replacement for it: World 2's already-shipped pipe cover carries no
+    /// <c>coverKind</c> yet (MV-917's own AC forbids touching that data — the design workbook's
+    /// re-authored config lands it later) and defaulting <see cref="Solid"/> would silently revert
+    /// those 29 pieces to blocking sight and shots, undoing Lee's own MV-863 decision. Keeping both
+    /// checks means today's data is untouched and new data authored with <c>coverKind: "see_through"</c>
+    /// works immediately, on any dressing.</summary>
+    public enum CoverKind { Solid, SeeThrough }
+
     /// <summary>One free-standing cover prop in the lawn (YT-68). Sits on the floor by construction:
     /// only its XZ centre is authored, the height follows from the size, so a prop can never be
     /// authored half-buried or floating.</summary>
@@ -34,11 +50,12 @@ namespace MaxWorlds.Arena
         public Vector3 Size;      // full world size (a cylinder's X/Z are its diameter)
         public CoverShape Shape;
         public CoverDressing Dressing;
+        public CoverKind Kind;
 
         public ArenaCover(string name, Vector2 centerXz, Vector3 size, CoverShape shape,
-                          CoverDressing dressing = CoverDressing.None)
+                          CoverDressing dressing = CoverDressing.None, CoverKind kind = CoverKind.Solid)
         {
-            Name = name; CenterXz = centerXz; Size = size; Shape = shape; Dressing = dressing;
+            Name = name; CenterXz = centerXz; Size = size; Shape = shape; Dressing = dressing; Kind = kind;
         }
 
         /// <summary>World centre — Y derived so the prop rests on the ground plane (y=0).</summary>

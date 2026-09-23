@@ -305,6 +305,7 @@ namespace MaxWorlds.Arena
                         depth = c.depth,
                         shape = c.shape,
                         dressing = c.dressing,
+                        coverKind = c.coverKind,
                     });
                 }
             }
