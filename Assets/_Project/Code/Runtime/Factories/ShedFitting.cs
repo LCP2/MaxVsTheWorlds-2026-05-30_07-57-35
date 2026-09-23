@@ -2,7 +2,9 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Factories
 {
@@ -58,6 +60,55 @@ namespace MaxWorlds.Factories
         private const float MissileDamage = 22f;
         private const float MissileSplashRadius = 2f;
 
+        // ---------------------------------------------------------------- MV-911: world-independent colour
+        //
+        // Bug (Lee, live build, World 1): a general lighting darkening left the Spiker fitting "heavily
+        // blackened" and its spikes unreadable. The fitting cube (built by MapRuntime.BuildShedFittings)
+        // is IDamageable and mounted under the shed's own MowerHutch, so CharacterSkinDirector classifies
+        // it CharacterRole.Structure and paints it with a plain MaterialLibrary.Tinted metal material —
+        // no emission, so it is entirely dependent on scene lighting for how bright it reads. That is the
+        // exact defect MV-857 (Max) and MV-861 (the Launcher missile) already fixed: give the surface its
+        // own emission, computed from the active BackyardLook, so it stops depending on the scene light.
+        //
+        // This also has to keep CharacterSkinDirector's own sweep off the fitting (SelfDrivenTint, the
+        // same "whoever drives a block owns it" marker MowerHutch's VulnerableCore already uses), or that
+        // director claims the renderer a frame later and overwrites this material with its own undressed
+        // metal-tint version.
+
+        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+
+        /// <summary>The fitting's own colour — the same pale galvanised steel every other part of the
+        /// shed wears (<see cref="CharacterRole.Structure"/>), read live rather than duplicated so a
+        /// future retune of the shed's own colour flows through here automatically.</summary>
+        private static readonly Color FittingColor = CharacterSkin.BaseColorFor(CharacterRole.Structure);
+
+        /// <summary>Exposes <see cref="FittingColor"/> for <c>MV547ShedFittingTests</c> (MV-911), same
+        /// shape as <see cref="MaxWorlds.Enemies.HomingMissile.ShaftColorForTests"/>.</summary>
+        public static Color FittingColorForTests => FittingColor;
+
+        /// <summary>Gives the fitting's own renderer a private material carrying MV-857's own
+        /// world-compensation emission, and marks it so CharacterSkinDirector never re-dresses it back to
+        /// a plain, lighting-only surface. A private clone (never the shared <see cref="MaterialLibrary"/>
+        /// cache entry) — MowerHutch tints the exact same <see cref="FittingColor"/> tone, and writing
+        /// emission onto the cached instance directly would leak this fitting's glow onto the shed body
+        /// too (the same trap <see cref="MaxWorlds.Enemies.HomingMissile"/>'s own EmissiveInstance avoids).</summary>
+        private static void BuildVisual(GameObject go)
+        {
+            go.AddComponent<SelfDrivenTint>();
+
+            var renderer = go.GetComponent<MeshRenderer>();
+            Material template = MaterialLibrary.Tinted(SurfaceKind.Metal, FittingColor);
+            if (renderer == null || template == null) return;
+
+            var mat = new Material(template) { name = "ShedFitting", hideFlags = HideFlags.HideAndDontSave };
+            if (mat.HasProperty(EmissionId))
+            {
+                BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+                mat.SetColor(EmissionId, MaxRig.WorldCompensationEmission(FittingColor, activeLook));
+            }
+            renderer.sharedMaterial = mat;
+        }
+
         private enum Phase { Idle, Telegraph, Beam }
 
         private ShedFittingKind _kind;
@@ -84,6 +135,7 @@ namespace MaxWorlds.Factories
             _hutch = hutch;
             _kind = kind;
             _health = new DestructibleHealth(StatsFor(kind).Hp);
+            BuildVisual(gameObject);
         }
 
         /// <summary>Point this fitting at what it should shoot — a test's synthetic Max, or (via
