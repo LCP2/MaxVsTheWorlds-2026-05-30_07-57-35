@@ -163,8 +163,16 @@ namespace MaxWorlds.Tests.EditMode
                 Pickup core = LivePickups().First(p => p.Kind == PickupKind.WeaponCore);
                 InvokeCollect(pickupDirector, core);
 
+                Assert.AreEqual(0, SaveSystem.Load(0).WorldIndex,
+                    "collecting the core alone must not yet seal Victory -- MV-915 adds a fourth " +
+                    "condition (crossing WorldFinaleGate) riding the same _weaponCoreAwaited latch");
+
+                // MV-915: the world's own finale exit -- Max walking through it once it opened.
+                HudSignals.EmitFinaleGateCrossed();
+
                 Assert.AreEqual(1, SaveSystem.Load(0).WorldIndex,
-                    "collecting the core must let Victory seal and advance WorldIndex into World 2");
+                    "crossing the finale gate after the core is collected must let Victory seal and " +
+                    "advance WorldIndex into World 2");
             }
             finally
             {

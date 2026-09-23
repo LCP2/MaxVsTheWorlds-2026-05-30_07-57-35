@@ -88,6 +88,13 @@ namespace MaxWorlds.UI
         /// so a listener never has to care which.</summary>
         public static event Action WeaponCoreCollected;
 
+        /// <summary>Max walked through the world's finale exit (MV-915), once <c>WorldFinaleGate</c>
+        /// opened it — distinct from <see cref="BossPayoffFinished"/>/<see cref="RunComplete"/>: a run
+        /// whose finale drops a Weapon Core must wait for this too before <c>RunTracker</c> seals
+        /// Victory, so the player has to actually reach and cross the gate rather than have results
+        /// appear the instant the final area empties.</summary>
+        public static event Action FinaleGateCrossed;
+
         /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
         /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
@@ -268,6 +275,9 @@ namespace MaxWorlds.UI
 
         public static void EmitWeaponCoreCollected()
             => WeaponCoreCollected?.Invoke();
+
+        public static void EmitFinaleGateCrossed()
+            => FinaleGateCrossed?.Invoke();
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);
