@@ -447,26 +447,59 @@ namespace MaxWorlds.Factories
             // TickContactTouch) so the cooldown keeps counting down while it's still closing in.
             _contactCooldownTimer -= dt;
 
-            if (dist <= PursuitStandoff)
-            {
-                TryDealContactDamage(to, target);
-                return;
-            }
+            // MV-912: contact damage lands on anything on the player's side the hutch is actually
+            // touching — Max (the pursuit target) AND any deployed Sentinel within the same standoff
+            // ring — not only the pursuit target. This never changes WHERE the hutch walks: pursuit
+            // still homes on targetPosition (Max) alone, so a Sentinel standing elsewhere is never
+            // chased, only hit if the hutch's own path toward Max brings it into range.
+            TryDealContactDamageToNearby(to, dist, target);
+
+            if (dist <= PursuitStandoff) return;
 
             Vector3 dir = to.normalized;
             float step = Mathf.Min(PursuitSpeed * dt, dist - PursuitStandoff);
             if (step > 0f) MoveBody(dir * step);
         }
 
-        /// <summary>Brute-pace contact damage (MV-618, Lee: "they don't do any damage... as much
-        /// damage as a brute") — a hutch parked at its standoff ring hits for <see cref="ContactDamage"/>
-        /// once per <see cref="RobotCompositionTuning.DefaultContactCooldown"/>, the same one-hit-per-
-        /// second cadence the robots' own touch damage uses. No-op with <paramref name="target"/> null
-        /// (a test exercising only movement/timing) or dead.</summary>
-        private void TryDealContactDamage(Vector3 to, IDamageable target)
+        /// <summary>MV-912: widens MV-618's contact damage from "the pursuit target only" to "the
+        /// pursuit target (Max) AND every deployed <see cref="Sentinel"/> within the same
+        /// <see cref="PursuitStandoff"/> contact range" — the shed still only ever pursues Max
+        /// (<paramref name="target"/>/<paramref name="to"/>/<paramref name="dist"/> are unchanged from
+        /// MV-618), a Sentinel is hit only when the hutch's own movement toward Max happens to bring it
+        /// into range. One shared <see cref="_contactCooldownTimer"/> for the whole hutch, exactly as
+        /// MV-618 tuned — this widens WHO can be hit on an eligible tick, not how often the hutch gets
+        /// to hit at all. No-op while the cooldown hasn't elapsed, same gate MV-618 used.</summary>
+        private void TryDealContactDamageToNearby(Vector3 to, float dist, IDamageable target)
         {
-            if (target == null || !target.IsAlive || _contactCooldownTimer > 0f) return;
-            _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
+            if (_contactCooldownTimer > 0f) return;
+
+            bool hitAny = false;
+
+            if (target != null && target.IsAlive && dist <= PursuitStandoff)
+            {
+                DealContactDamage(target, to);
+                hitAny = true;
+            }
+
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel sentinel = sentinels[i];
+                if (sentinel == null || !sentinel.IsAlive) continue;
+                Vector3 toSentinel = sentinel.transform.position - transform.position; toSentinel.y = 0f;
+                if (toSentinel.magnitude > PursuitStandoff) continue;
+                DealContactDamage(sentinel, toSentinel);
+                hitAny = true;
+            }
+
+            if (hitAny) _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
+        }
+
+        /// <summary>Brute-pace contact damage (MV-618, Lee: "they don't do any damage... as much
+        /// damage as a brute") — <see cref="ContactDamage"/> to one damageable already confirmed in
+        /// range by <see cref="TryDealContactDamageToNearby"/>.</summary>
+        private void DealContactDamage(IDamageable target, Vector3 to)
+        {
             Vector3 dir = to.sqrMagnitude > 1e-8f ? to.normalized : Vector3.forward;
             target.TakeDamage(new DamageInfo(ContactDamage, transform.position, dir, Team.Enemy));
         }
