@@ -334,6 +334,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv825LppeFire());
             Add(BuildMv824LitGroundCheck());
             Add(BuildMv857MaxWorld2Colors());
+            Add(BuildMv913MissileLauncherCheck());
             return d;
         }
 
@@ -2611,6 +2612,86 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-857-max-world2", NoSetup) },
+            };
+        }
+
+        // ---- MV913MissileLauncherCheck (MV-913 AC4) -------------------------------------------
+
+        /// <summary>The ticket's own one-shot capture check: a shed body with four
+        /// <see cref="ShedFittingKind.Missile"/> fittings mounted on its roof corners — the exact
+        /// <c>MapRuntime.BuildShedFittings</c> corner layout, reproduced directly here rather than
+        /// loading a whole <c>WorldConfig</c> through <c>WorldMapLoader</c> for one throwaway shed, the
+        /// same "build the one prop this shot needs, standalone" idiom <see cref="BuildMv693Replicator"/>
+        /// already uses for a Replicator. <c>ShedFitting.Bind</c> is called with a null <c>MowerHutch</c>
+        /// (same as <c>MV547ShedFittingTests</c>'s own EditMode fixture) — this is a cosmetic capture,
+        /// not a combat scenario, so the fitting needs no living shed to poll.</summary>
+        private static CapturePreset BuildMv913MissileLauncherCheck()
+        {
+            const float pitch = 60f;
+            const float distance = 8.5f;   // MV-913 iteration 1: 6m clipped the far two corner fittings out of frame
+            const float fittingSize = 0.5f;
+            const float fittingInset = 0.85f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject shedGo = null;
+            var fittings = new List<GameObject>();
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                Vector3 shedSize = new Vector3(3f, 2.4f, 3f);
+
+                shedGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                shedGo.name = "MV913CaptureShed";
+                shedGo.transform.position = focus + Vector3.up * (shedSize.y * 0.5f);
+                shedGo.transform.localScale = shedSize;
+
+                Vector2[] cornerSigns = { new Vector2(-1f, -1f), new Vector2(1f, -1f), new Vector2(1f, 1f), new Vector2(-1f, 1f) };
+                float halfW = shedSize.x * 0.5f * fittingInset;
+                float halfD = shedSize.z * 0.5f * fittingInset;
+                float roofY = shedGo.transform.position.y + shedSize.y * 0.5f + fittingSize * 0.5f;
+
+                for (int i = 0; i < cornerSigns.Length; i++)
+                {
+                    var go = new GameObject($"MV913CaptureFitting{i + 1}");
+                    go.transform.position = new Vector3(shedGo.transform.position.x + cornerSigns[i].x * halfW,
+                        roofY, shedGo.transform.position.z + cornerSigns[i].y * halfD);
+                    go.transform.SetParent(shedGo.transform, worldPositionStays: true);
+
+                    var fitting = go.AddComponent<ShedFitting>();
+                    fitting.Bind(null, ShedFittingKind.Missile);
+                    fittings.Add(go);
+                }
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the rigs settle and start facing Max
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = shedGo.transform.position;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv913missilelauncher",
+                LogTag = "[MV913Capture]",
+                Flag = "-mv913shot",
+                ArmFile = "Temp/mv913.arm",
+                HeadlessMarker = "Temp/mv913.headless",
+                DoneFileName = "_mv913_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-913", Setup) },
+                Cleanup = () =>
+                {
+                    foreach (var go in fittings) if (go != null) Destroy(go);
+                    if (shedGo != null) Destroy(shedGo);
+                },
             };
         }
     }

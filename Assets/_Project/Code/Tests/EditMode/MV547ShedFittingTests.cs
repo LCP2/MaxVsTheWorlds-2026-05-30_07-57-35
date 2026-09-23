@@ -172,14 +172,21 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        /// <summary>MV-913: Missile no longer wears its own MeshRenderer — <see cref="ShedFitting.Bind"/>
+        /// builds it a <see cref="MaxWorlds.VFX.MissileLauncherRig"/> of CHILD parts instead (the whole
+        /// point of AC2's "no primitive" assertion), so the fixture matches <c>MapRuntime.BuildShedFittings</c>'s
+        /// real construction (a bare GameObject, not <c>CreatePrimitive</c>) and the read walks into
+        /// children via <see cref="Component.GetComponentInChildren{T}()"/> rather than assuming the
+        /// fitting's own root carries the renderer. Spiker/Laser are untouched: their own primitive cube
+        /// still carries its MeshRenderer directly on the root, which GetComponentInChildren finds first.</summary>
         private static Color FittingEmissionOfFreshFitting(ShedFittingKind kind)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var go = kind == ShedFittingKind.Missile ? new GameObject() : GameObject.CreatePrimitive(PrimitiveType.Cube);
             try
             {
                 var fitting = go.AddComponent<ShedFitting>();
                 fitting.Bind(null, kind);
-                return go.GetComponent<MeshRenderer>().sharedMaterial.GetColor("_EmissionColor");
+                return go.GetComponentInChildren<MeshRenderer>().sharedMaterial.GetColor("_EmissionColor");
             }
             finally
             {
