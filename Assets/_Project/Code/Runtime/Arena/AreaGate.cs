@@ -359,12 +359,29 @@ namespace MaxWorlds.Arena
         {
             RefreshStormdrainLamp();
             StartStormdrainSlide(opening: true);
+
+            // MV-918: pre-MV-759, the leaf itself was the visible thing swinging open, so leaving
+            // _leafCollider solid through the swing (MV-386) read correctly -- a still-visible door
+            // panel that happens to now block a different spot. MV-759 hid that leaf's own renderer
+            // and drew a cosmetic sliding door in its place instead, so the doorway reads fully clear
+            // the instant it opens while the real leaf collider is still out there, solid, wherever
+            // the unrelated hinge-swing maths left it -- measured (MV-918) swinging clear across the
+            // doorway into the room, e.g. g28/g30 landing at X[222,225.8], right at the corner where
+            // the lane turns into the gate. Never built for a non-Stormdrain gate (this handler only
+            // ever runs once ApplyStormdrainGateSkin has wired it), so a plain single-cube gate's own
+            // still-visible swinging leaf keeps blocking exactly as MV-386 intended.
+            if (_leafCollider != null) _leafCollider.enabled = false;
         }
 
         private void OnStormdrainClosed()
         {
             RefreshStormdrainLamp();
             StartStormdrainSlide(opening: false);
+
+            // MV-918: restores the same collider OnStormdrainOpened drops, so a Reclose() (Max died,
+            // the arena reset) puts the physical leaf back exactly as solid as the freshly-built gate
+            // was, matching its snapped-back closed pose.
+            if (_leafCollider != null) _leafCollider.enabled = true;
         }
 
         private void RefreshStormdrainLamp()
