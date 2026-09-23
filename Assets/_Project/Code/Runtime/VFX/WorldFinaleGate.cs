@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
-using MaxWorlds.Save;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.VFX
@@ -41,12 +41,14 @@ namespace MaxWorlds.VFX
 
         /// <summary>Same "is there anywhere left to advance into" check <c>BossVictoryPayoff</c> makes
         /// before dropping a Weapon Core — kept local rather than shared, since it is two lines and the
-        /// two classes must never depend on one another.</summary>
+        /// two classes must never depend on one another. MV-921: reads the world actually being PLAYED
+        /// (<see cref="AreaAccumulationDirector.ActiveWorldIndex"/>), not a fresh <c>SaveSlotData.WorldIndex</c>
+        /// read — a save's furthest-progress marker can be further along than the world this run is
+        /// actually replaying, and that must not suppress the finale gate.</summary>
         private static bool HasNextWorld()
         {
-            if (SaveSystem.ActiveSlot < 0) return false;
-            SaveSlotData save = SaveSystem.Load(SaveSystem.ActiveSlot);
-            return WorldLibrary.Count > save.WorldIndex + 1;
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            return areaDirector != null && WorldLibrary.Count > areaDirector.ActiveWorldIndex + 1;
         }
 
         private static readonly Color BarWarn = new Color(0.85f, 0.20f, 0.16f);   // shut: reads as blocked

@@ -209,10 +209,17 @@ namespace MaxWorlds.UI
             _stats.Finish(outcome);
 
             // MV-687: capture whether this victory WILL advance the world before RecordResult actually
-            // does it — SaveSystem is the only place that knows the pre-advance WorldIndex, and the
-            // Result screen needs to know whether there's a next world to name its CTA correctly.
-            bool advancesWorld = SaveSystem.ActiveSlot >= 0 &&
-                SaveSystem.Load(SaveSystem.ActiveSlot).WorldIndex < WorldLibrary.Count - 1;
+            // does it — the Result screen needs to know whether there's a next world to name its CTA
+            // correctly. MV-921: "is there a next world" is decided by the world actually being PLAYED
+            // (AreaAccumulationDirector.ActiveWorldIndex, the same active-world source ActiveWorldConfig
+            // already resolves against), not a fresh SaveSlotData.WorldIndex read — a save can already
+            // have gone further than the world this run replayed, and that must not read as "no further
+            // worlds". playedWorldIndex is also what RecordResult below advances relative to, so a
+            // replay offers the world right after the one just played, never regressing to whatever the
+            // save's own WorldIndex already was.
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            int playedWorldIndex = areaDirector != null ? areaDirector.ActiveWorldIndex : 0;
+            bool advancesWorld = SaveSystem.ActiveSlot >= 0 && playedWorldIndex < WorldLibrary.Count - 1;
             _stats.SetAdvancesWorld(advancesWorld);
 
             // MV-698: this run's finale granted a Weapon Core (already collected by now — TrySeal
@@ -224,7 +231,7 @@ namespace MaxWorlds.UI
             // stopped meaning anything once a death no longer ends the run (every player eventually
             // reaches 100%). Still only banked on a run that actually finishes (Victory); bailing out
             // early via the HOME button records nothing (YT-218).
-            SaveSystem.RecordResult(SaveSystem.ActiveSlot, DeathRunState.DeathsTaken);
+            SaveSystem.RecordResult(SaveSystem.ActiveSlot, DeathRunState.DeathsTaken, playedWorldIndex);
         }
 
         private void ShowResults()

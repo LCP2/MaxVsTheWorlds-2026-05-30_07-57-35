@@ -29,8 +29,19 @@ namespace MaxWorlds.Save
         public int BestDeathsToVictory = -1;
 
         /// <summary>Which world (<see cref="MaxWorlds.Arena.WorldLibrary.Keys"/>) this profile plays
-        /// next, 0-based (MV-687). Advances by one on every Victory, clamped to the last world.</summary>
+        /// next, 0-based (MV-687). Advances to one past whichever world was actually PLAYED on every
+        /// Victory (MV-921), clamped to the last world — replaying an earlier world than
+        /// <see cref="FurthestWorldIndex"/> and winning moves this to the world right after the one
+        /// just played, not past the profile's own furthest reach.</summary>
         public int WorldIndex;
+
+        /// <summary>The highest <see cref="WorldIndex"/> this profile has ever reached, 0-based
+        /// (MV-921) — separate from <see cref="WorldIndex"/> itself, which names which world plays NEXT
+        /// and can legitimately move backward relative to this when an earlier world is replayed (e.g.
+        /// a dev-tool jump, or a future world-select). Never reduced. Defaults to 0 for a pre-existing
+        /// save with no explicit value yet; <c>SaveSystem.RecordResult</c> self-heals it from
+        /// <see cref="WorldIndex"/> on its first call for such a save.</summary>
+        public int FurthestWorldIndex;
 
         /// <summary>Which primary this profile is currently equipped with (MV-689) — the RCDA until a
         /// World 1 finale Weapon Core morph flips it to the LPPE for good. Mirrors

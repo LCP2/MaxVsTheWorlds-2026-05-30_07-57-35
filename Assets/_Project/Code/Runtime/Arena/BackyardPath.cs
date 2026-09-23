@@ -130,7 +130,7 @@ namespace MaxWorlds.Arena
             // path and is stuck on the legacy AreaPopulation fallback for the rest of the run.
             _areaDirector = new GameObject("Area Accumulation").AddComponent<AreaAccumulationDirector>();
             _areaDirector.transform.SetParent(transform, false);
-            _areaDirector.ConfigureWorld(cfg);
+            _areaDirector.ConfigureWorld(cfg, worldIndex);
             _areaDirector.Configure(_map, _build.Cover);
 
             // MV-579 (DECISION, Lee 26 Aug 2026 playtest): sentinels now persist across an area
