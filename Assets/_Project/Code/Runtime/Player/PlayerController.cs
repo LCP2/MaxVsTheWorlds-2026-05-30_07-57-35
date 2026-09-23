@@ -83,6 +83,12 @@ namespace MaxWorlds.Player
             _cc = GetComponent<CharacterController>();
             _cc.slopeLimit = SlopeLimitDegrees;
 
+            // MV-895: Unity's CharacterController.minMoveDistance defaults to 0.001 m and silently
+            // discards any Move() below it. A residual, non-normalised analogue moveDir at a lane
+            // corner -- shrunk further by MV-883's low-timeScale clamp on dt -- resolves to a commanded
+            // displacement under that threshold, which reads in-game as an invisible, immovable wall.
+            _cc.minMoveDistance = 0f;
+
             _move = new InputAction("Move", InputActionType.Value);
             _move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w").With("Down", "<Keyboard>/s")
