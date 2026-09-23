@@ -306,18 +306,37 @@ namespace MaxWorlds.Enemies
             FillArea(areaIndex);
         }
 
-        /// <summary>Force <see cref="CurrentArea"/> and the physical-position tracker back to
-        /// <paramref name="areaIndex"/> (MV-427) — called once, right after a death respawn places Max
-        /// back in an earlier arena, so walking forward into the area he died in again re-fires
-        /// <see cref="PlayerCrossedIntoArea"/> and the normal gate-open population hand-off exactly as
-        /// it would on a first approach. Only ever rewinds — never raises either tracker, since
-        /// <see cref="EnterArea"/> and <see cref="Update"/>'s own position check already own forward
-        /// advancement.</summary>
+        /// <summary>Establishes both <see cref="CurrentArea"/> and the physical-position tracker AT
+        /// <paramref name="areaIndex"/> — called once, right after a death respawn places Max back in an
+        /// earlier arena (MV-427), and once from a cold-boot RESUME landing mid-world
+        /// (<see cref="MaxWorlds.Arena.WorldRunner.ResumeCheckpoint"/>, MV-909). Both callers are saying
+        /// "this is where Max actually is now", unlike <see cref="EnterArea"/> and <see cref="Update"/>'s
+        /// own position check, which own ORDINARY forward advancement and validate every step against
+        /// <see cref="IsLinkedArea"/> — this is an authoritative reset, not a live per-frame crossing, so
+        /// it is never refused.
+        ///
+        /// MV-909: previously this "only ever rewound" — correct for a death respawn, where both
+        /// trackers are already at or past the death area, so the target is always lower. But a fresh
+        /// <see cref="Configure"/> leaves both trackers at 1, and a RESUME straight into a mid-world
+        /// checkpoint needs to RAISE them — the old rewind-only guard (<c>if (areaIndex &lt; tracker)</c>)
+        /// made that a silent no-op, latching <see cref="_physicalArea"/> at 1 forever: the very next
+        /// <see cref="Update"/> then read Max's real position as an unlinked jump from area1 and refused
+        /// to advance, permanently pinning the render gate's active set at the entry room's neighbours —
+        /// exactly the reported "whole area is blanked" regression.
+        ///
+        /// Clears any latched <see cref="_lastBlockedAreaJump"/> and re-fires
+        /// <see cref="PlayerCrossedIntoArea"/> whenever the physical tracker actually changes (raise or
+        /// rewind alike), so the render gate re-applies for wherever this landed, exactly as a live
+        /// crossing would.</summary>
         public void SetCurrentArea(int areaIndex)
         {
             if (areaIndex <= 0) return;
-            if (areaIndex < CurrentArea) CurrentArea = areaIndex;
-            if (areaIndex < _physicalArea) _physicalArea = areaIndex;
+            CurrentArea = areaIndex;
+
+            if (areaIndex == _physicalArea) return;
+            _physicalArea = areaIndex;
+            _lastBlockedAreaJump = default;
+            PlayerCrossedIntoArea?.Invoke(areaIndex);
         }
 
         private void Update()
