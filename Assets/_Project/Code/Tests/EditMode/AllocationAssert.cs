@@ -10,32 +10,59 @@ namespace MaxWorlds.Tests.EditMode
     /// QA-run evidence). This helper replaces it with a direct delta read instead of routing through
     /// that constraint.
     ///
-    /// The ticket's own suggested mechanism — `GC.GetAllocatedBytesForCurrentThread()` deltas — was
-    /// tried first and rejected on hard evidence, not preference: in this project's Unity Editor Mono
-    /// runtime that API is a dead stub. It reported a flat 0 for a loop that deliberately allocated
-    /// 40 MB (10,000 iterations of `new byte[4096]`), proven with <c>Mv889AllocationAssertTests</c>
-    /// during this ticket's own investigation. A guard built on it could never fail, which is worse
-    /// than the flaky guard it would replace — a Tier-1-shaped defect (see MV-465), just arrived at by
-    /// a different route.
+    /// The obvious alternative — `GC.GetAllocatedBytesForCurrentThread()` deltas — was tried and
+    /// rejected on hard evidence, not preference: in this project's Unity Editor Mono runtime that API
+    /// is a dead stub. It reported a flat 0 for a loop that deliberately allocated 40 MB (10,000
+    /// iterations of `new byte[4096]`), proven with <c>Mv889AllocationAssertTests</c> during MV-889's
+    /// own investigation. A guard built on it could never fail, which is worse than the flaky guard it
+    /// would replace — a Tier-1-shaped defect (see MV-465), just arrived at by a different route.
     ///
-    /// <see cref="GC.GetTotalMemory"/> was verified instead: 10 trials of an allocation-free loop
+    /// <see cref="GC.GetTotalMemory"/> is what's actually used: 10 trials of an allocation-free loop
     /// measured exactly 0 every time, and 5 trials of a loop deliberately allocating 1000×4096-byte
     /// arrays measured the identical non-zero delta every time (see <c>Mv889AllocationAssertTests</c>,
     /// which pins both). It reads the WHOLE managed heap rather than a single thread's allocations, so
-    /// it is not immune in principle to a concurrent background thread allocating during the measured
-    /// window — but EditMode tests run synchronously on Unity's single main thread with no yield
-    /// inside the measured delegate, so there is no user code running concurrently with it, and the
-    /// repeated trials above found no such noise in practice.
+    /// a collection landing inside the measured window can make the delta go negative — MV-916:
+    /// <see cref="MeasureAllocatedBytes"/> now forces a collection immediately before the "before"
+    /// snapshot to shrink that window, and retries (discarding the reading) if the delta still comes
+    /// back negative, rather than ever returning or clamping a negative figure.
     /// </summary>
     internal static class AllocationAssert
     {
+        private const int MaxMeasurementAttempts = 5;
+
         /// <summary>The raw measurement: the managed-heap delta across <paramref name="action"/>.</summary>
         public static long MeasureAllocatedBytes(Action action)
         {
-            long before = GC.GetTotalMemory(false);
-            action();
-            long after = GC.GetTotalMemory(false);
-            return after - before;
+            return MeasureAllocatedBytes(action, GC.GetTotalMemory, MaxMeasurementAttempts);
+        }
+
+        /// <summary>
+        /// Same measurement, with the heap reader and attempt budget injected so a test can drive the
+        /// retry-exhaustion path deterministically without relying on a real GC race (MV-916 AC3).
+        /// </summary>
+        internal static long MeasureAllocatedBytes(Action action, Func<bool, long> readTotalMemory, int maxAttempts)
+        {
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                // Force a collection immediately before the "before" snapshot to shrink the chance a
+                // collection lands inside the measured window below.
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+
+                long before = readTotalMemory(false);
+                action();
+                long after = readTotalMemory(false);
+                long delta = after - before;
+
+                // A negative delta means a collection landed inside the window anyway — the reading is
+                // invalid, not zero and not negative. Discard it and retry rather than return or clamp it.
+                if (delta >= 0) return delta;
+            }
+
+            throw new InvalidOperationException(
+                $"AllocationAssert could not obtain a clean measurement window after {maxAttempts} attempts " +
+                "(a garbage collection kept landing inside the measured delta)");
         }
 
         /// <summary>Asserts <paramref name="action"/> allocates exactly zero bytes on the managed heap.</summary>

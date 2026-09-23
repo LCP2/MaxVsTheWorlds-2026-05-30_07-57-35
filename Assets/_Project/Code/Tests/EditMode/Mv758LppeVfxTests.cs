@@ -98,9 +98,9 @@ namespace MaxWorlds.Tests.EditMode
                 // MV-889: Is.Not.AllocatingGCMemory()-family constraints measure the WHOLE managed
                 // heap for the delegate's duration, so anything else allocating in the CI process
                 // during that window trips them regardless of this loop's own behaviour — see
-                // AllocationAssert's doc comment. AllocationAssert.NoGcMemory measures only this
-                // thread's allocations via GC.GetAllocatedBytesForCurrentThread(), immune to that
-                // noise. Do not revert this to the NUnit constraint form.
+                // AllocationAssert's doc comment. AllocationAssert.NoGcMemory measures via
+                // GC.GetTotalMemory with a forced pre-collection and negative-delta retry (MV-916),
+                // immune to that noise. Do not revert this to the NUnit constraint form.
                 AllocationAssert.NoGcMemory(() =>
                 {
                     for (int i = 0; i < 300; i++)

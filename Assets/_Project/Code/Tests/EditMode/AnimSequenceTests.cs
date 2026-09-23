@@ -101,8 +101,9 @@ namespace MaxWorlds.Tests.EditMode
         /// QA #692 (main) failed here while its own QA #691 (PR branch, identical code) was green;
         /// MV-882's QA #682 failed identically on a commit that touched MapRuntime/StormdrainKit only.
         /// It now measures via <see cref="AllocationAssert.NoGcMemory"/>, a
-        /// <c>GC.GetAllocatedBytesForCurrentThread()</c> delta — immune to that noise since EditMode
-        /// runs single-threaded. Do not revert this to Is.Not.AllocatingGCMemory().</summary>
+        /// <c>GC.GetTotalMemory</c> delta with a forced pre-collection and negative-delta retry
+        /// (MV-916) — immune to that noise since EditMode runs single-threaded. Do not revert this to
+        /// Is.Not.AllocatingGCMemory().</summary>
         [Test]
         public void TickAndProgress_AllocateNoGcMemory_Across1000Calls()
         {
