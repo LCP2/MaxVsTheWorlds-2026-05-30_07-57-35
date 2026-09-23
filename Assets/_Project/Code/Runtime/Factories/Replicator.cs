@@ -294,6 +294,17 @@ namespace MaxWorlds.Factories
         /// every other post-build configure call in this file.</summary>
         public void SetAreaIndex(int area) => AreaIndex = area;
 
+        /// <summary>MV-776: this box's stable id — the same <c>WorldReplicator.id</c> (or its
+        /// synthesized <c>"{area.id}_replicatorN"</c> fallback) <see cref="MaxWorlds.Arena.WorldRunner"/>
+        /// already computes to look itself up in the built scene, now also stamped onto the component so
+        /// a checkpoint can persist and restore "which Replicators are destroyed" by id rather than by a
+        /// C# reference that dies with the scene. Empty until <see cref="SetId"/> is called.</summary>
+        public string Id { get; private set; } = string.Empty;
+
+        /// <summary>Public so an EditMode test can drive identity directly, same reasoning as every other
+        /// post-build configure call in this file.</summary>
+        public void SetId(string id) => Id = id ?? string.Empty;
+
         /// <summary>MV-860: rotates this box in a 90° step so its IN face (the hatch, built at local
         /// -Z) sits on the given compass side ("N"|"S"|"E"|"W", default/unrecognised falls back to "S",
         /// today's unrotated behaviour) — the OUT face (built at local +Z) always lands on the opposite
@@ -911,6 +922,22 @@ namespace MaxWorlds.Factories
 
         private void OnDestroyed()
         {
+            ApplyDestructionEffects();
+
+            // Exactly the shed drop (MV-706 change 5): PickupDirector.OnFactoryDestroyed is subscribed
+            // to this same signal, and drops one Device if any RIG category is locked, otherwise one
+            // Supercell + ShedCellCacheAmount PowerCells — never both, never anything else. This is the
+            // one call MowerHutch.OnDestroyed itself makes to get that exact drop.
+            HudSignals.EmitFactoryDestroyed(transform.position);
+        }
+
+        /// <summary>MV-776: everything a death does to this box EXCEPT the pickup drop/HUD signal
+        /// (<see cref="OnDestroyed"/>'s own last line) — pulled out so
+        /// <see cref="ApplyCheckpointDestroyed"/> can silently re-apply a checkpoint's already-recorded
+        /// destruction (a resume rebuilding the level from scratch) without re-granting loot the player
+        /// already banked on the run that actually earned it.</summary>
+        private void ApplyDestructionEffects()
+        {
             // A robot mid-consume when the box dies is destroyed WITH it — no emission (MV-706 change 5).
             // MV-809: any not-yet-first-emitted entry is still holding its reservation — release it
             // here or that slot leaks out of the global budget forever, since nothing else ever spends
@@ -933,12 +960,6 @@ namespace MaxWorlds.Factories
             }
             _intakeSeq = null;
 
-            // Exactly the shed drop (MV-706 change 5): PickupDirector.OnFactoryDestroyed is subscribed
-            // to this same signal, and drops one Device if any RIG category is locked, otherwise one
-            // Supercell + ShedCellCacheAmount PowerCells — never both, never anything else. This is the
-            // one call MowerHutch.OnDestroyed itself makes to get that exact drop.
-            HudSignals.EmitFactoryDestroyed(transform.position);
-
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
 
@@ -950,6 +971,22 @@ namespace MaxWorlds.Factories
             // completely for that to read — the same "hide it, let the husk take over" contract
             // MowerHutch already gives FactoryHusk.
             if (_bodyRoot != null) _bodyRoot.gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-776: silently applies a checkpoint's already-recorded destruction — called once,
+        /// on RESUME, by <see cref="FactoryCensus.ApplyCheckpointDestroyedIds"/> against whichever of the
+        /// freshly-rebuilt level's Replicators carry an id the checkpoint already marked destroyed. Skips
+        /// the live-combat <see cref="OnDestroyed"/> path's pickup drop/HUD signal entirely (via
+        /// <see cref="DestructibleHealth.SilentlyDestroy"/> instead of <see cref="TakeDamage"/>) — a
+        /// resume is restoring history, not scoring a new kill, and the player already banked whatever
+        /// this box dropped on the run that actually destroyed it. Reports itself to
+        /// <see cref="FactoryCensus"/> directly since nothing else will now that no event fired.</summary>
+        public void ApplyCheckpointDestroyed()
+        {
+            if (_health == null || !_health.IsAlive) return;
+            _health.SilentlyDestroy();
+            ApplyDestructionEffects();
+            FactoryCensus.ReportReplicatorDestroyed(this);
         }
 
         private void LateUpdate()
