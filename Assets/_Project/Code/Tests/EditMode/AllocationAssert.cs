@@ -22,9 +22,19 @@ namespace MaxWorlds.Tests.EditMode
     /// arrays measured the identical non-zero delta every time (see <c>Mv889AllocationAssertTests</c>,
     /// which pins both). It reads the WHOLE managed heap rather than a single thread's allocations, so
     /// a collection landing inside the measured window can make the delta go negative — MV-916:
-    /// <see cref="MeasureAllocatedBytes"/> now forces a collection immediately before the "before"
+    /// <see cref="MeasureAllocatedBytes"/> forces a collection immediately before the "before"
     /// snapshot to shrink that window, and retries (discarding the reading) if the delta still comes
     /// back negative, rather than ever returning or clamping a negative figure.
+    ///
+    /// MV-923: that forced collection was paid on every retry attempt, not just the first — up to
+    /// <see cref="MaxMeasurementAttempts"/> full blocking `GC.Collect()` + `WaitForPendingFinalizers()`
+    /// + `GC.Collect()` rounds per call. Measured locally (1976-test EditMode suite,
+    /// <c>Logs/editmode-before-full.xml</c>): <c>Mv916AllocationAssertRetryTests</c>'s 20-trial retry
+    /// test alone cost 19.4s of a 427s suite. The collection now runs once before the first attempt;
+    /// a clean collection makes a negative delta rare, so retries — which still run with no forced
+    /// collection of their own — should almost never trigger in practice. Retry correctness (MV-916
+    /// AC1/AC3) is unaffected: a negative delta is still discarded and retried, and exhaustion still
+    /// throws rather than returning or clamping.
     /// </summary>
     internal static class AllocationAssert
     {
@@ -42,14 +52,16 @@ namespace MaxWorlds.Tests.EditMode
         /// </summary>
         internal static long MeasureAllocatedBytes(Action action, Func<bool, long> readTotalMemory, int maxAttempts)
         {
+            // Force a collection once, before the first attempt, to shrink the chance a collection
+            // lands inside the measured window below (MV-916). MV-923: this used to run again before
+            // every retry, which is what made the guard expensive — after one clean collection a
+            // negative delta should be rare, so retries below don't force another.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
             for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
-                // Force a collection immediately before the "before" snapshot to shrink the chance a
-                // collection lands inside the measured window below.
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-                GC.Collect();
-
                 long before = readTotalMemory(false);
                 action();
                 long after = readTotalMemory(false);
