@@ -56,6 +56,14 @@ namespace MaxWorlds.VFX
         private bool _opening;
         private float _t;
 
+        /// <summary>True from the instant the boss falls (MV-921) — the gate's own resolved "has it
+        /// been told to open" state, latched (unlike <see cref="_opening"/>, which only covers the
+        /// swing animation and goes false again once it settles). No shed/factory/robot prerequisite:
+        /// <see cref="OnDefeated"/> is the only thing that sets this, off <see cref="HudSignals.BossDefeated"/>
+        /// alone. Doesn't require <see cref="Update"/> to have ticked, so a test can assert it right
+        /// after driving the signal.</summary>
+        public bool IsOpen { get; private set; }
+
         private void Awake()
         {
             var path = FindFirstObjectByType<BackyardPath>();
@@ -106,7 +114,7 @@ namespace MaxWorlds.VFX
         private void OnEnable() => HudSignals.BossDefeated += OnDefeated;
         private void OnDisable() => HudSignals.BossDefeated -= OnDefeated;
 
-        private void OnDefeated() { _opening = true; _t = 0f; }
+        private void OnDefeated() { IsOpen = true; _opening = true; _t = 0f; }
 
         private void Update()
         {

@@ -3,7 +3,6 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
-using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Upgrades;
 
@@ -146,11 +145,16 @@ namespace MaxWorlds.Bosses
             return area != null && area.IsBossRole && areaIndex == cfg.dials.areaCount;
         }
 
+        /// <summary>MV-921: must ask "is there a next world AFTER the one I'm PLAYING", never "after
+        /// the save's own furthest-progress marker" — replaying an earlier world on a save that has
+        /// gone further must still pay out, since it's the active world (
+        /// <see cref="AreaAccumulationDirector.ActiveWorldIndex"/>, the same source
+        /// <see cref="IsFinalBossAreaDefeat"/> already resolves against via <c>ActiveWorldConfig</c>)
+        /// that decides, not a fresh re-read of <c>SaveSlotData.WorldIndex</c>.</summary>
         private static bool HasNextWorld()
         {
-            if (SaveSystem.ActiveSlot < 0) return false;
-            SaveSlotData save = SaveSystem.Load(SaveSystem.ActiveSlot);
-            return WorldLibrary.Count > save.WorldIndex + 1;
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            return areaDirector != null && WorldLibrary.Count > areaDirector.ActiveWorldIndex + 1;
         }
 
         private void Update()

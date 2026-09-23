@@ -191,6 +191,17 @@ namespace MaxWorlds.Enemies
         /// other knob reads its authored default off a live object.</summary>
         public WorldConfig ActiveWorldConfig => _worldCfg;
 
+        /// <summary>The 0-based world index this director was configured against (MV-921) — the world
+        /// actually being PLAYED right now, as resolved once at run start by whichever caller built
+        /// this director (<see cref="MaxWorlds.Arena.BackyardPath.Awake"/>). Kept here, alongside
+        /// <see cref="ActiveWorldConfig"/>, so a consumer that already asks "which world am I in" via
+        /// <see cref="ActiveWorldConfig"/> (e.g. <c>BossVictoryPayoff.IsFinalBossAreaDefeat</c>) has the
+        /// same active-world concept available as a plain index too, rather than re-deriving it from a
+        /// fresh, possibly-stale <c>SaveSlotData.WorldIndex</c> read of its own — the mismatch between
+        /// those two readings (the world being played vs. the save's own furthest-progress marker) was
+        /// MV-921's root cause. Defaults to 0 (World 1) until <see cref="ConfigureWorld"/> is called.</summary>
+        public int ActiveWorldIndex { get; private set; }
+
         /// <summary>Wires this director to a built map and starts Area 1's population. Call once, right
         /// after <see cref="MapRuntime.Build"/>. <paramref name="cover"/> is the cover the same build
         /// actually placed — used so a robot is never spawned on top of a hedge or planter.</summary>
@@ -219,7 +230,14 @@ namespace MaxWorlds.Enemies
         /// <see cref="AreaPopulation"/> formula — "drive its enemies through the difficulty engine"
         /// (World &amp; Difficulty Framework §5/§10 step 4). Call any time before the area in question
         /// is first filled; areas already filled are not retroactively re-composed.</summary>
-        public void ConfigureWorld(WorldConfig cfg) => _worldCfg = cfg;
+        /// <param name="worldIndex">MV-921: the 0-based world this config was resolved for — see
+        /// <see cref="ActiveWorldIndex"/>. Optional (defaults to World 1) so every pre-existing caller
+        /// that only cares about composition/garrison behaviour keeps compiling unchanged.</param>
+        public void ConfigureWorld(WorldConfig cfg, int worldIndex = 0)
+        {
+            _worldCfg = cfg;
+            ActiveWorldIndex = worldIndex;
+        }
 
         /// <summary>Grants a room's population a head start: called the instant the gate into it breaks
         /// (<see cref="AreaGate.Opened"/>), which is before the player has actually walked through the

@@ -106,20 +106,31 @@ namespace MaxWorlds.Save
         /// <summary>A run on <paramref name="slot"/> just finished (Victory — MV-427: death no longer
         /// ends a run) having taken <paramref name="deathsTaken"/> deaths — bank it as the profile's
         /// personal best if it beats the existing one (fewer is better; -1 means "no finished run
-        /// yet" and always loses), and advance <see cref="SaveSlotData.WorldIndex"/> to the next world
-        /// (MV-687), clamped to the last one, resetting the mid-run checkpoint area back to 0 — a
-        /// fresh world starts at its own beginning, not wherever the previous world's run happened to
-        /// be checkpointed. Both the personal-best and world-advance halves always save, unlike the
-        /// old personal-best-only early-return, since a save that didn't beat the record must still
-        /// remember the world advanced. No-op for no active profile (e.g. tests driving a run with no
-        /// Home screen involved).
+        /// yet" and always loses), and advance <see cref="SaveSlotData.WorldIndex"/> to the world right
+        /// after <paramref name="playedWorldIndex"/> (MV-921), clamped to the last one, resetting the
+        /// mid-run checkpoint area back to 0 — a fresh world starts at its own beginning, not wherever
+        /// the previous world's run happened to be checkpointed. Both the personal-best and
+        /// world-advance halves always save, unlike the old personal-best-only early-return, since a
+        /// save that didn't beat the record must still remember the world advanced. No-op for no
+        /// active profile (e.g. tests driving a run with no Home screen involved).
+        ///
+        /// MV-921: <paramref name="playedWorldIndex"/> is the world actually PLAYED this run — NOT
+        /// necessarily <paramref name="data"/>'s own (possibly further-along) <c>WorldIndex</c>. The old
+        /// "always <c>WorldIndex + 1</c>" math silently no-opped (clamped straight back to itself) when
+        /// an earlier world was replayed on a save that had already gone further, which is the bug this
+        /// ticket fixes: finishing World 1 again on a save that reached World 3 must offer World 2 next,
+        /// not stay parked on World 3. <see cref="SaveSlotData.FurthestWorldIndex"/> is the profile's
+        /// own separate high-water mark, which this can only raise, never lower (self-healing it from
+        /// the pre-existing <c>WorldIndex</c> first, for a save saved before this field existed).
+        /// Defaults <paramref name="playedWorldIndex"/> to -1, meaning "not specified" — every
+        /// pre-existing caller keeps the old "advance off my own WorldIndex" behaviour unchanged.
         ///
         /// MV-776: wipes the WHOLE checkpoint, not just <see cref="SaveSlotData.CheckpointAreaIndex"/> —
         /// the ticket's own named bug, "a stale checkpoint into a world already finished". Before this,
         /// <see cref="SaveSlotData.HasRunInProgress"/> stayed true and every other Checkpoint* field
         /// stayed stale, so a subsequent RESUME would restore a dead run's THE RIG/wallet/flood/
         /// destroyed-Replicator snapshot straight into the world just finished.</summary>
-        public static void RecordResult(int slot, int deathsTaken)
+        public static void RecordResult(int slot, int deathsTaken, int playedWorldIndex = -1)
         {
             if (slot < 0) return;
             SaveSlotData data = Load(slot);
@@ -128,7 +139,11 @@ namespace MaxWorlds.Save
             if (data.BestDeathsToVictory < 0 || deathsTaken < data.BestDeathsToVictory)
                 data.BestDeathsToVictory = deathsTaken;
 
-            data.WorldIndex = Math.Min(data.WorldIndex + 1, WorldLibrary.Count - 1);
+            int played = playedWorldIndex >= 0 ? playedWorldIndex : data.WorldIndex;
+            data.FurthestWorldIndex = Math.Max(data.FurthestWorldIndex, data.WorldIndex);   // migrate a pre-existing save
+            int nextIndex = Math.Min(played + 1, WorldLibrary.Count - 1);
+            data.FurthestWorldIndex = Math.Max(data.FurthestWorldIndex, nextIndex);
+            data.WorldIndex = nextIndex;
             ResetCheckpointFields(data);
 
             Save(slot, data);

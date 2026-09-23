@@ -62,10 +62,12 @@ namespace MaxWorlds.UI
             var title = AddText(panel.rectTransform, 78f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             Top(title.rectTransform, 0f, -60f, 680f, 90f);
             // MV-687: reads the loaded world's own name, not a "Backyard"-literal — a Victory in
-            // World 2 (or beyond) must not still read as if it happened in the Backyard.
+            // World 2 (or beyond) must not still read as if it happened in the Backyard. MV-921: every
+            // authored WorldConfig.world already reads "World N — Name" (e.g. "World 1 — Backyard"), so
+            // a hardcoded "WORLD " prefix here doubled up into "WORLD WORLD 1 — BACKYARD SAVED".
             var backyardPath = FindFirstObjectByType<BackyardPath>();
             string worldName = backyardPath != null && backyardPath.Map != null ? backyardPath.Map.name : "World";
-            title.text = $"WORLD {worldName.ToUpperInvariant()} SAVED";
+            title.text = $"{worldName.ToUpperInvariant()} SAVED";
 
             // Stat rows — the whole world's tally from its first entry to this victory, across any
             // deaths along the way (MV-841: RunProgressState/DeathRunState both checkpoint and
