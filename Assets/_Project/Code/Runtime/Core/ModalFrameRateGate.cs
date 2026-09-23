@@ -24,6 +24,10 @@ namespace MaxWorlds.Core
 
         private static int _openCount;
 
+        /// <summary>MV-910: the open-count read back live, so "no modal looks open" on a screenshot
+        /// becomes a number an overlay can print instead of a judgement call.</summary>
+        public static int OpenCount => _openCount;
+
         public static void Enter()
         {
             _openCount++;

@@ -38,6 +38,7 @@ namespace MaxWorlds.Dev
         private string _buildStamp;
         private string _cachedPerfLine;
         private string _cachedTimingLine;
+        private string _cachedFrameRateLine;
         private string _cachedPopulationLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
@@ -162,6 +163,50 @@ namespace MaxWorlds.Dev
                 ? $"cpu {t.CpuFrameTimeMs:0.0} ms (main {t.CpuMainThreadFrameTimeMs:0.0} / render {t.CpuRenderThreadFrameTimeMs:0.0})  gpu {t.GpuFrameTimeMs:0.0} ms"
                 : "timing n/a";
 
+        /// <summary>Resolved frame-rate/thermal figures for one instant — MV-910. Settles whether a
+        /// steady 30fps reading is our own code (an unbalanced <see cref="ModalFrameRateGate"/>
+        /// Enter/Exit leaking the idle rate upward) or an external iOS ceiling (this reads 60 while
+        /// measured fps stays low). A plain data carrier so a test can assert the numbers directly
+        /// instead of parsing the drawn text.</summary>
+        public readonly struct FrameRateSnapshot
+        {
+            public readonly int ResolvedTargetFrameRate;
+            public readonly int ModalGateOpenCount;
+            public readonly bool ThermalHasReading;
+            public readonly string ThermalStateName;
+            public readonly bool IsLowPowerModeEnabled;
+
+            public FrameRateSnapshot(int resolvedTargetFrameRate, int modalGateOpenCount, bool thermalHasReading,
+                string thermalStateName, bool isLowPowerModeEnabled)
+            {
+                ResolvedTargetFrameRate = resolvedTargetFrameRate;
+                ModalGateOpenCount = modalGateOpenCount;
+                ThermalHasReading = thermalHasReading;
+                ThermalStateName = thermalStateName;
+                IsLowPowerModeEnabled = isLowPowerModeEnabled;
+            }
+        }
+
+        /// <summary>Reads back the RESOLVED <see cref="Application.targetFrameRate"/> — never the
+        /// authored constant (MV-910 AC1) — alongside <see cref="ModalFrameRateGate.OpenCount"/> and
+        /// the iOS-only thermal reading.</summary>
+        public static FrameRateSnapshot BuildFrameRateSnapshot() =>
+            new FrameRateSnapshot(
+                Application.targetFrameRate,
+                ModalFrameRateGate.OpenCount,
+                IosDeviceStateProbe.HasReading,
+                IosDeviceStateProbe.ThermalStateName,
+                IosDeviceStateProbe.IsLowPowerModeEnabled);
+
+        /// <summary>MV-910 — "thermal n/a" (never a false reading) is what
+        /// <see cref="FrameRateSnapshot.ThermalHasReading"/> false formats to off-iOS, same convention
+        /// as <see cref="FormatTimingLine"/> above.</summary>
+        private static string FormatFrameRateLine(FrameRateSnapshot s) =>
+            $"[MV-910] target {s.ResolvedTargetFrameRate} fps  modalGate {s.ModalGateOpenCount}  " +
+            (s.ThermalHasReading
+                ? $"thermal {s.ThermalStateName} lowPower={s.IsLowPowerModeEnabled}"
+                : "thermal n/a");
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -214,6 +259,9 @@ namespace MaxWorlds.Dev
                 var perf = BuildPerfSnapshot(_perfMeter, _buildStamp);
                 _cachedPerfLine = FormatPerfLine(perf, _perfMeter.SnapshotHistoryOldestFirstMs());
                 _cachedTimingLine = FormatTimingLine(BuildTimingSnapshot(_timingProbe));
+                // MV-910: same cadence, same cache — settles "our own gate idled it" vs "iOS capped it
+                // externally" right next to the timing line it was too coarse to answer.
+                _cachedFrameRateLine = FormatFrameRateLine(BuildFrameRateSnapshot());
                 // MV-869: same cadence, same cache — the population/Replicator line under MV-663's
                 // timing line, never rebuilt more often than the perf figures already are.
                 _cachedPopulationLine = PopulationReadout.BuildLine();
@@ -226,7 +274,7 @@ namespace MaxWorlds.Dev
 
             string perfBlock = _cachedPerfLine == null
                 ? null
-                : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedPopulationLine;
+                : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" + _cachedPopulationLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 
