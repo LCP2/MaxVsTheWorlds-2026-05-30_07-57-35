@@ -112,5 +112,13 @@ namespace MaxWorlds.Save
         /// the freshly-rebuilt level's Replicators carry a matching id, so a resume never resurrects a
         /// factory the player already paid to destroy.</summary>
         public string[] CheckpointDestroyedReplicatorIds = Array.Empty<string>();
+
+        /// <summary>Stable ids (<c>MowerHutch.Id</c>) of every World 1 shed destroyed by the time this
+        /// checkpoint was captured (MV-922) — the World 1 equivalent of
+        /// <see cref="CheckpointDestroyedReplicatorIds"/>, restored the same way: silently re-destroying
+        /// whichever of the freshly-rebuilt level's sheds carry a matching id, so a resume never
+        /// resurrects a shed the player already destroyed, and the destroyed-factory count restores
+        /// intact instead of restarting from zero.</summary>
+        public string[] CheckpointDestroyedShedIds = Array.Empty<string>();
     }
 }

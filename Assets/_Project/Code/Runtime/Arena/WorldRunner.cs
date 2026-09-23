@@ -123,6 +123,11 @@ namespace MaxWorlds.Arena
 
                     MowerHutch hutch = shedGo.GetComponent<MowerHutch>();
                     if (hutch == null) continue;
+                    // MV-922: stamps this shed's stable id onto the component itself, the same id this
+                    // loop already computed to look itself up in build.Actors — so a mid-run checkpoint
+                    // can persist and restore "which sheds are destroyed" by id, same as MV-776 already
+                    // does for World 2's Replicator.
+                    hutch.SetId(shedId);
                     _sheds.Add((area.id, shedId, hutch));
 
                     // MV-643: this shed may only ever emit a kind ITS OWN area's authored composition

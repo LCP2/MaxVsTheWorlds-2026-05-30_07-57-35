@@ -130,6 +130,18 @@ namespace MaxWorlds.Factories
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
 
+        /// <summary>MV-922: this shed's stable id — the same <c>WorldShed</c> id (<c>area.ShedId</c>)
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/> already computes to look itself up in the built
+        /// scene, now also stamped onto the component so a checkpoint can persist and restore "which
+        /// sheds are destroyed" by id rather than by a C# reference that dies with the scene — the
+        /// same shape MV-776 gave <see cref="Replicator.Id"/>. Empty until <see cref="SetId"/> is
+        /// called.</summary>
+        public string Id { get; private set; } = string.Empty;
+
+        /// <summary>Public so an EditMode test can drive identity directly, same reasoning as every
+        /// other post-build configure call in this file.</summary>
+        public void SetId(string id) => Id = id ?? string.Empty;
+
         /// <summary>Wire the gate this factory's destruction helps open. The map engine (YT-89) calls
         /// this at load time from the map's <c>opensOn</c>, so "kill the source and the way opens" is
         /// a property of the level data rather than a slot a human drags — a slot that silently comes
@@ -289,9 +301,29 @@ namespace MaxWorlds.Factories
         {
             // Death-throes surge (YT-182): fire BEFORE the post-destruction switch below — the
             // wreck coughs up one last wave (and, on a roll, a tougher "elite") so breaking the
-            // source lands as a spike of danger instead of the quietest moment in the fight.
+            // source lands as a spike of danger instead of the quietest moment in the fight. Never
+            // replayed on a checkpoint restore (see ApplyCheckpointDestroyed) — that would spawn a
+            // fresh wave of enemies out of nowhere on RESUME for a kill the player already earned.
             if (_spawner != null) _spawner.SpawnSurge();
 
+            ApplyDestructionEffects();
+
+            // The destruction VFX hangs off this signal (CombatVfx, YT-48), and the pickup banner is
+            // the exact-shed drop — both a live kill only, never replayed on a checkpoint restore
+            // (see ApplyCheckpointDestroyed): a resume must not re-grant loot the player already
+            // banked on the run that actually destroyed this shed.
+            HudSignals.EmitFactoryDestroyed(transform.position);
+            HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, Banner(), barColor);
+        }
+
+        /// <summary>MV-922: everything a death does to this shed EXCEPT the death-throes surge and the
+        /// pickup drop/HUD signal (<see cref="OnDestroyed"/>'s own remaining lines) — pulled out, same
+        /// shape as <see cref="Replicator.ApplyDestructionEffects"/>, so <see cref="ApplyCheckpointDestroyed"/>
+        /// can silently re-apply a checkpoint's already-recorded destruction (a resume rebuilding the
+        /// level from scratch) without re-surging enemies or re-granting loot the player already banked
+        /// on the run that actually earned it.</summary>
+        private void ApplyDestructionEffects()
+        {
             // MV-456: the shed area is a renewable cell faucet — a destroyed source drops to a slow
             // steady trickle instead of stopping outright (it used to call Stop(), which latches
             // production off for good, YT-100). Not enabled = false either: dev mode re-asserts
@@ -306,9 +338,6 @@ namespace MaxWorlds.Factories
             // exactly where it died mid-pursuit; only the hover Y is undone. TickMobility never runs
             // again once IsAlive is false, so nothing re-lifts it after this.
             if (_mobile) transform.position = new Vector3(transform.position.x, _groundY, transform.position.z);
-            // The destruction VFX hangs off this signal (CombatVfx, YT-48).
-            HudSignals.EmitFactoryDestroyed(transform.position);
-            HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, Banner(), barColor);
 
             // The source is gone: hide the body, collider, and bar — but keep the GameObject
             // ALIVE, because the robots it already spawned are parented here and must keep
@@ -331,6 +360,20 @@ namespace MaxWorlds.Factories
                 _core.SetPropertyBlock(_coreMpb);
                 _core.gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>MV-922: silently applies a checkpoint's already-recorded destruction — called once,
+        /// on RESUME, by <see cref="FactoryCensus.ApplyCheckpointDestroyedShedIds"/> against whichever of
+        /// the freshly-rebuilt level's sheds carry an id the checkpoint already marked destroyed. Skips
+        /// the live-combat <see cref="OnDestroyed"/> path's surge/pickup-drop/HUD signal entirely (via
+        /// <see cref="DestructibleHealth.SilentlyDestroy"/> instead of <see cref="TakeDamage"/>) — a
+        /// resume is restoring history, not scoring a new kill. Same shape as
+        /// <see cref="Replicator.ApplyCheckpointDestroyed"/>.</summary>
+        public void ApplyCheckpointDestroyed()
+        {
+            if (_health == null || !_health.IsAlive) return;
+            _health.SilentlyDestroy();
+            ApplyDestructionEffects();
         }
 
         /// <summary>What the kill shouts. With one factory, breaking it opens the gate, and saying so

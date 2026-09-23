@@ -181,6 +181,7 @@ namespace MaxWorlds.Save
             data.CheckpointKills = RunProgressState.Kills;
             data.CheckpointFloodLevel01 = StormdrainFlood.Level01;
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
+            data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
             data.HasRunInProgress = true;
 
             Save(slot, data);
@@ -197,7 +198,11 @@ namespace MaxWorlds.Save
         /// currently-registered instances the level's own build has already brought alive by the time
         /// this runs (<see cref="FactoryCensus.ApplyCheckpointDestroyedIds"/>) — both pure-data systems
         /// with no scene dependency of their own, same as every other field this method already
-        /// restores.</summary>
+        /// restores.
+        ///
+        /// MV-922: same treatment for World 1's own factory, the Mower Hutch shed — before this, a
+        /// resume restored the area but every shed behind the player came back alive and the
+        /// destroyed-factory count restarted from zero (<see cref="FactoryCensus.ApplyCheckpointDestroyedShedIds"/>).</summary>
         public static bool RestoreCheckpoint(int slot)
         {
             SaveSlotData data = Load(slot);
@@ -214,6 +219,7 @@ namespace MaxWorlds.Save
             RunProgressState.Restore(data.CheckpointElapsedSeconds, data.CheckpointKills);
             StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
+            FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
             return true;
         }
 
@@ -261,6 +267,7 @@ namespace MaxWorlds.Save
             data.CheckpointKills = 0;
             data.CheckpointFloodLevel01 = 0f;
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
+            data.CheckpointDestroyedShedIds = Array.Empty<string>();
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a
