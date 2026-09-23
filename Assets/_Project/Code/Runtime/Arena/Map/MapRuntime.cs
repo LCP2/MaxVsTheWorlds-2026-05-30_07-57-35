@@ -1002,9 +1002,19 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>MV-859: does a <c>[DECK]</c> gate's own doorway meet this deck's edge on
-        /// <paramref name="wall"/>? Resolved the exact same way <see cref="MapGeometry.Walls"/> itself
-        /// cuts the wall for that gate (<see cref="MapGeometry.Doorway"/> on the link naming it), so the
-        /// parapet opening can never disagree with where the wall (and the gate) actually open.</summary>
+        /// <paramref name="wall"/>? <see cref="MapGeometry.Doorway"/> is still used to CONFIRM which
+        /// link/gate belongs on this wall (same resolution <see cref="MapGeometry.Walls"/> itself uses),
+        /// but MV-919: its own hole is centred and sized against the two AREAS' full shared wall — for a
+        /// floor-level gate that IS the deck's own edge, but a deck's edge is only a narrow slice of that
+        /// wall (World 2's decks sit at one end of a much taller area rect), so trusting that hole
+        /// verbatim could leave it straddling the deck's own bounds: mostly outside them at one end
+        /// (wasted) and short of covering the doorway's own reach at the other, leaving a stray sliver of
+        /// parapet neither the doorway nor the deck's own genuine edge needs (World 2's a15/a10/a11/a12/a16
+        /// gate joins, confirmed on the live build - see the MV-919 Jira comment for the measured before/
+        /// after). The fix re-centres the SAME authored doorway width on the gate's own resolved
+        /// position, clamped into THIS deck's own span — never wider than the deck's own edge, and never
+        /// escaping it — so the opening is always exactly what the gate needs and nothing the deck's own
+        /// edge doesn't already own.</summary>
         private static bool TryDeckGateSpan(MapData map, MapEntity deck, Wall wall, out Span span)
         {
             span = default;
@@ -1034,7 +1044,10 @@ namespace MaxWorlds.Arena
                 // gate sharing the same infinite line elsewhere in the level.
                 if (hole.Max <= spanMin + 0.05f || hole.Min >= spanMax - 0.05f) continue;
 
-                span = hole;
+                float gateCoord = wallAlongX ? gate.x : gate.z;
+                float half = (link.doorway > 0f ? Mathf.Min(link.doorway, spanMax - spanMin) : spanMax - spanMin) * 0.5f;
+                float centre = Mathf.Clamp(gateCoord, spanMin + half, spanMax - half);
+                span = new Span(centre - half, centre + half);
                 return true;
             }
             return false;
