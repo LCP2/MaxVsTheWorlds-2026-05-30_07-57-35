@@ -206,9 +206,36 @@ namespace MaxWorlds.Arena
 
         // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
         // turret to its target. MV-616 fixed that with a bare LineRenderer, then reused the SAME water
-        // VFX Max's own jet fires. MV-806 replaces THAT: a friendly turret spraying Max's own jet, only
-        // bigger, upstaged him — the beam is now a small red SentinelBolt instead (see FireBeam).
+        // VFX Max's own jet fires. MV-806 replaced THAT everywhere: a friendly turret spraying Max's
+        // own jet, only bigger, upstaged him — the beam became a small red SentinelBolt. MV-914: that
+        // swap was unconditional and gave World 1 World 2's own hazard-red bolt too (Lee, device,
+        // 2026-09-23). World 1 now fires the water beam again; every other world keeps SentinelBolt.
+        // See FireBeam.
         private const float MuzzleHeight = 1.1f; // near the top of the built body (see BuildBody)
+
+        /// <summary>MV-914: World 1's restored water beam — see <see cref="FireWaterBeam"/>. Deliberately
+        /// well under the jet's own 1.1 m visual radius (<c>WaterBlaster.streamVisualRadius</c>) since
+        /// this is "a hose pipe on a stick" (class doc), not Max's two-handed blaster. Unchanged from the
+        /// values MV-806 replaced.</summary>
+        private const float SentinelBeamRadius = 0.28f;
+
+        /// <summary>MV-914: the water beam's cone half-angle, fed to <see cref="WaterVfx.Init"/>. The
+        /// turret aims a single locked-on shot at one target rather than spraying a wide arc like Max's
+        /// cone weapon, so this is kept tight — <see cref="WaterVfx.SprayHalfAngleFor"/> floors the
+        /// visible stream at 1 degree regardless, i.e. effectively a straight jet.</summary>
+        private const float SentinelBeamConeHalfAngle = 3f;
+
+        /// <summary>MV-914: cosmetic damage value handed to <see cref="WaterVfx.Splash"/> purely to size
+        /// the impact droplet count (<see cref="WaterVfxTuning.SplashDroplets"/>) — NOT the shot's actual
+        /// damage, which already landed on the target before this VFX call runs (see <see cref="Update"/>).</summary>
+        private const float SentinelBeamSplashWeight = 2f;
+
+        /// <summary>MV-914: how long the water beam stays visible per shot. Capped below the fire
+        /// interval so a fast-firing turret's beam never runs into the next shot's own flash.</summary>
+        private float BeamVisibleSeconds => Mathf.Min(0.12f, _fireInterval * 0.9f);
+
+        private WaterVfx _beamVfx;
+        private float _beamTimer;
 
         public string ReadoutName => "SENTINEL";
 
@@ -218,6 +245,10 @@ namespace MaxWorlds.Arena
         private float _moveSpeed;
         private float _standoffDistance;
         private Transform _followTarget;
+
+        /// <summary>MV-914: which world this sentinel fires into, resolved once at <see cref="Init"/>
+        /// rather than re-read per shot — see <see cref="ResolveWorldIndex"/>.</summary>
+        private int _worldIndex;
 
         private Collider _bodyCollider;
 
@@ -324,6 +355,7 @@ namespace MaxWorlds.Arena
             _moveSpeed = moveSpeed;
             _standoffDistance = standoffDistance;
             _followTarget = followTarget;
+            _worldIndex = ResolveWorldIndex();
             InitHealth(maxHp);
             BuildBody();
             IgnorePlayerCollision();
@@ -335,6 +367,18 @@ namespace MaxWorlds.Arena
             // above is belt-and-braces rather than relying on OnEnable alone). OnDestroy is the
             // matching, PROVEN-reliable teardown point in edit mode (see its own doc).
             RigState.Changed += RefreshFromRigState;
+        }
+
+        /// <summary>MV-914: the same established accessor <see cref="BuildWorldProbeLine"/> already
+        /// uses (<see cref="BackyardPath.ResolvedWorldIndex"/>, itself resolved once from the active
+        /// save's WorldIndex) rather than a new world-detection path. -1 with no <see cref="BackyardPath"/>
+        /// in the scene (a bare EditMode fixture, same no-level fallback <see cref="SnapToLevelSurface"/>
+        /// already documents) falls through to <see cref="SentinelBolt"/> in <see cref="FireBeam"/>,
+        /// matching every shot before this ticket.</summary>
+        private static int ResolveWorldIndex()
+        {
+            var path = FindFirstObjectByType<BackyardPath>();
+            return path != null ? path.ResolvedWorldIndex : -1;
         }
 
         /// <summary>
@@ -555,6 +599,15 @@ namespace MaxWorlds.Arena
                 _model.localPosition = modelPos;
             }
 
+            // MV-914: only World 1's water beam runs on a visible-seconds timer (the world's own
+            // SetStreaming(false) needs an explicit stop); SentinelBolt is fire-and-forget and never
+            // sets _beamTimer, so this is a no-op every other world.
+            if (_beamTimer > 0f)
+            {
+                _beamTimer -= dt;
+                if (_beamTimer <= 0f && _beamVfx != null) _beamVfx.SetStreaming(false);
+            }
+
             _fireCooldown -= dt;
             if (_fireCooldown > 0f) return;
 
@@ -691,16 +744,54 @@ namespace MaxWorlds.Arena
             if (displacement != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement);
         }
 
-        /// <summary>Fires a <see cref="SentinelBolt"/> from the turret's muzzle to the point it just
-        /// hit. Cosmetic only — the damage above has already landed regardless of whether this draws.
-        /// A fresh bolt every shot, not a reused instance (MV-806: unlike the old <c>WaterVfx</c> beam,
-        /// there is no per-shot re-Init — the bolt just flies and destroys itself, see
-        /// <see cref="SentinelBolt.Tick"/>).</summary>
+        /// <summary>Fires the turret's shot visual from the muzzle to the point it just hit. Cosmetic
+        /// only — the damage above has already landed regardless of whether this draws. MV-914: World 1
+        /// (<see cref="_worldIndex"/> == 0) restores the pre-MV-806 <see cref="WaterVfx"/> beam; every
+        /// other world — including the -1 "no BackyardPath resolved" fallback a bare EditMode fixture
+        /// gets — keeps MV-806's <see cref="SentinelBolt"/> exactly as it is today: a fresh bolt every
+        /// shot, not a reused instance, since it just flies and destroys itself
+        /// (see <see cref="SentinelBolt.Tick"/>).</summary>
         private void FireBeam(Vector3 targetPosition)
         {
             Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
-            SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed);
+
+            if (_worldIndex == 0) FireWaterBeam(muzzle, end);
+            else SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed);
+        }
+
+        /// <summary>MV-914: World 1's restored water beam. Reuses <see cref="WaterVfx"/> rather than a
+        /// second hand-authored effect (the same reasoning MV-616 originally gave): each shot re-Inits
+        /// the same built instance at the CURRENT target distance (cheap — see <c>WaterVfx.Refit</c>,
+        /// the same path a nozzle upgrade takes on Max's own jet), so the stream always lands exactly on
+        /// the robot it just hit rather than a fixed authored range.</summary>
+        private void FireWaterBeam(Vector3 muzzle, Vector3 end)
+        {
+            if (_beamVfx == null) _beamVfx = BuildBeamVfx();
+
+            float distance = Mathf.Max(0.5f, Vector3.Distance(muzzle, end));
+            _beamVfx.Init(distance, SentinelBeamRadius, SentinelBeamConeHalfAngle);
+            _beamVfx.SetStreaming(true);
+
+            Vector3 dir = end - muzzle;
+            dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : transform.forward;
+            _beamVfx.Splash(end, dir, SentinelBeamSplashWeight);
+
+            _beamTimer = BeamVisibleSeconds;
+        }
+
+        /// <summary>Built once and reused for this turret's whole life (a Sentinel is never pooled —
+        /// see the class doc), parented at <see cref="MuzzleHeight"/> with identity local rotation so
+        /// it inherits the turret's own facing — <see cref="Update"/> already rotates the whole body
+        /// to look at the target before calling <see cref="FireBeam"/>, so the water needs no separate
+        /// aim logic of its own.</summary>
+        private WaterVfx BuildBeamVfx()
+        {
+            var go = new GameObject("BeamOrigin");
+            go.transform.SetParent(transform, worldPositionStays: false);
+            go.transform.localPosition = new Vector3(0f, MuzzleHeight, 0f);
+            go.transform.localRotation = Quaternion.identity;
+            return go.AddComponent<WaterVfx>();
         }
 
         /// <summary>MV-832: the fix for Sentinels shooting through walls, into a neighbouring area, or
