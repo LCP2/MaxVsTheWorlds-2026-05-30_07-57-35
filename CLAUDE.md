@@ -17,7 +17,7 @@ review, debugging. Releases ship from a **tag push**, never from a chat driving 
 
 ## Parameters
 - Jira: project **YT**.
-- Build-ready label: **`needs-cc-web`**. Human-block `needs-lee`.
+- Build-ready label: **`needs-cc-web`**. Human-block `needs-lee`. Authored level data is authority - see `CC_AUTONOMY.md`, Decide and Work. Never `needs-lee` for a rule that refuses Lee's own drawing.
 - Verify / QA: `cc-verify.bat` (and `cc-verify-playmode.bat` for play-mode tests). Read the real exit code; don't proceed on red.
 - Worker contract: **`CC_AUTONOMY.md`**. (`CC_AUTONOMY_ART.md` is retired.)
 - Deploy: **TestFlight** via Fastlane (`ios-testflight.yml`).
