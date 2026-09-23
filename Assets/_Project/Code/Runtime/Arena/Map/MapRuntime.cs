@@ -1459,7 +1459,24 @@ namespace MaxWorlds.Arena
             for (int i = 0; i < count; i++)
             {
                 Vector2 sign = FittingCornerSigns[i];
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+                // MV-913: Missile gets MissileLauncherRig's generated-mesh body (built inside
+                // ShedFitting.Bind) riding on a bare collider host — CreatePrimitive would leave a
+                // stray Unity cube mesh/renderer behind the rig, which is exactly the primitive the
+                // ticket's AC2 test asserts is gone. Spiker/Laser are untouched: their own tickets
+                // convert them later, and until then they still need CreatePrimitive's box mesh AND
+                // its collider in one call.
+                GameObject go;
+                if (kind == ShedFittingKind.Missile)
+                {
+                    go = new GameObject();
+                    go.AddComponent<BoxCollider>();
+                }
+                else
+                {
+                    go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                }
+
                 go.name = $"{e.id}_fitting{i + 1}";
                 go.transform.position = new Vector3(center.x + sign.x * halfW, roofY, center.z + sign.y * halfD);
                 go.transform.localScale = Vector3.one * FittingSize;

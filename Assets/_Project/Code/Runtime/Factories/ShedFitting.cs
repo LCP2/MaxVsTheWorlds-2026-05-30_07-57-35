@@ -109,6 +109,50 @@ namespace MaxWorlds.Factories
             renderer.sharedMaterial = mat;
         }
 
+        // ---------------------------------------------------------------- MV-913: reusable missile rig
+        //
+        // Missile only (ticket scope) — Spiker/Laser stay on BuildVisual's plain tinted cube above until
+        // their own tickets convert them. Builds MissileLauncherRig (Runtime/VFX/MissileLauncherRig.cs),
+        // a generated-mesh rig with no reference to sheds/MowerHutch/ShedFitting of its own, and hands it
+        // a palette carrying the SAME MV-857/861/911 world-compensation emission BuildVisual gives every
+        // other fitting — so the missile launcher reads no darker in World 2 fog than a Spiker sitting
+        // right next to it. One material per part (never MaterialLibrary's own cached instance), same
+        // "clone before you tint" rule BuildVisual already follows.
+
+        private static Material MissilePartMaterial(string name, Color tone, BackyardLook activeLook)
+        {
+            Material template = MaterialLibrary.Tinted(SurfaceKind.Metal, tone);
+            if (template == null) return null;
+            var mat = new Material(template) { name = name, hideFlags = HideFlags.HideAndDontSave };
+            if (mat.HasProperty(EmissionId)) mat.SetColor(EmissionId, MaxRig.WorldCompensationEmission(tone, activeLook));
+            return mat;
+        }
+
+        private static MissileLauncherRig BuildMissileVisual(GameObject go)
+        {
+            go.AddComponent<SelfDrivenTint>();
+
+            // MapRuntime.BuildShedFittings has already set go.transform.localScale to FittingSize
+            // (0.5) by the time Bind() runs — the same "1x1x1 unit cube, shrunk by the parent's own
+            // scale" trick the old CreatePrimitive cube relied on. MissileLauncherRig authors its parts
+            // in real metres, so building it straight under go.transform would scale it down AGAIN
+            // (YT-71/YT-74's exact trap — see ParentScale's own doc comment). MakeMetreSpace cancels it.
+            Transform metreSpace = ParentScale.MakeMetreSpace(new GameObject("MissileLauncherVisual").transform, go.transform);
+
+            BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+            var palette = new MissileLauncherPalette(
+                MissilePartMaterial("ShedFittingMissileBase", FittingColor, activeLook),
+                MissilePartMaterial("ShedFittingMissileArm", FittingColor, activeLook),
+                MissilePartMaterial("ShedFittingMissileTip", FittingColor * 0.6f, activeLook));
+
+            return MissileLauncherRig.Build(metreSpace, FittingSizeForRig, palette);
+        }
+
+        /// <summary>The fitting's own authored roof-corner size in real metres — <c>MapRuntime.FittingSize</c>,
+        /// kept as a private copy rather than a cross-file constant reference, so this file never needs to
+        /// know that name.</summary>
+        private const float FittingSizeForRig = 0.5f;
+
         private enum Phase { Idle, Telegraph, Beam }
 
         private ShedFittingKind _kind;
@@ -119,6 +163,11 @@ namespace MaxWorlds.Factories
         private Phase _phase;
         private float _phaseTimer;
         private float _cooldownTimer;
+
+        /// <summary>MV-913: non-null only for <see cref="ShedFittingKind.Missile"/> — the reusable rig
+        /// this fitting drives (facing + fire recoil) but never builds the logic for; see
+        /// <see cref="BuildMissileVisual"/>.</summary>
+        private MissileLauncherRig _missileRig;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -135,7 +184,8 @@ namespace MaxWorlds.Factories
             _hutch = hutch;
             _kind = kind;
             _health = new DestructibleHealth(StatsFor(kind).Hp);
-            BuildVisual(gameObject);
+            if (kind == ShedFittingKind.Missile) _missileRig = BuildMissileVisual(gameObject);
+            else BuildVisual(gameObject);
         }
 
         /// <summary>Point this fitting at what it should shoot — a test's synthetic Max, or (via
@@ -169,8 +219,10 @@ namespace MaxWorlds.Factories
         private void OnDestroyed()
         {
             HudSignals.EmitFittingDestroyed(transform.position);
-            var rend = GetComponent<Renderer>();
-            if (rend != null) rend.enabled = false;
+            // MV-913: GetComponentsInChildren, not GetComponent — Missile's MissileLauncherRig renders
+            // through CHILD parts (base/arm/tip), not a renderer on this root, so a root-only lookup used
+            // to leave a "destroyed" launcher's whole generated body still visible.
+            foreach (var rend in GetComponentsInChildren<Renderer>()) rend.enabled = false;
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
         }
@@ -197,6 +249,15 @@ namespace MaxWorlds.Factories
         {
             if (_hutch != null && !_hutch.IsAlive) { KillWithShed(); return; }
             if (!IsAlive || _kind == ShedFittingKind.None) return;
+
+            // MV-913: the rig ticks (facing + recoil decay) every step this fitting is alive, regardless
+            // of which combat phase below returns early — a turret that only turned to face while firing
+            // would sit frozen aimed at whatever it last shot, which is not "tracks its current target".
+            if (_missileRig != null)
+            {
+                if (_target != null) _missileRig.Face(_target.position - transform.position);
+                _missileRig.Tick(dt);
+            }
 
             switch (_phase)
             {
@@ -273,6 +334,7 @@ namespace MaxWorlds.Factories
                     break;
                 case ShedFittingKind.Missile:
                     HomingMissile.Fire(transform.position, _target, MissileSpeed, MissileDamage, MissileSplashRadius);
+                    _missileRig?.Fire(); // MV-913: the visible recoil — no diff to the missile's own flight numbers above
                     break;
             }
         }
