@@ -23,6 +23,10 @@ namespace MaxWorlds.Tests.EditMode
     /// in the re-authored level. Both are plain sums read directly off the shipped config, not a guess.
     /// The two overlay pairs (overlay, target) are now (a17, a3) and (a15, a13) — MV-852 called them
     /// (a19, a3) and (a15, a6).
+    ///
+    /// Counts updated again by MV-900 (Lee's signed-off V8 config): the Replicator total rises 47 -> 48
+    /// (a13's west-lane Replicators removed, a19's upper-level pair removed, a19's new pipe-fenced
+    /// compound adds 6 — net +1). areas.Length, dials.areaCount and the two overlay pairs are unchanged.
     /// </summary>
     public sealed class MV700World2ConfigTests
     {
@@ -35,13 +39,14 @@ namespace MaxWorlds.Tests.EditMode
             // MV-852 deleted a7 (Silt Beds) and a13 (The Weir deck) outright, and their Replicators
             // with them — 24 areas/25 Replicators (MV-700) drop to 22/23. MV-865 (World 2 re-author) then
             // realigns dials.areaCount to the real 21 authored areas and re-authors the level's content,
-            // raising the Replicator total to 47 (see the class doc comment for both numbers).
+            // raising the Replicator total to 47. MV-900 (V8 config) raises it again to 48 (see the
+            // class doc comment for the detail).
             Assert.AreEqual(22, cfg.areas.Length, "World 2 authors 21 areas plus the entry stub");
             Assert.AreEqual(21, cfg.dials.areaCount);
 
             int totalReplicators = 0;
             foreach (WorldArea a in cfg.areas) totalReplicators += a.replicators?.Length ?? 0;
-            Assert.AreEqual(47, totalReplicators, "World 2 authors 47 Replicators across its areas");
+            Assert.AreEqual(48, totalReplicators, "World 2 authors 48 Replicators across its areas");
 
             WorldGate g31 = Array.Find(cfg.gates, g => g.id == "g31");
             WorldGate g24 = Array.Find(cfg.gates, g => g.id == "g24");
