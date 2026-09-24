@@ -170,6 +170,20 @@ namespace MaxWorlds.Enemies
         public static List<Rect> DeckFootprints(WorldArea area, WorldConfig cfg) =>
             DeckFootprints(area, cfg, out _, out _);
 
+        /// <summary>The elevation a level-1 (MV-697) garrison entry at <paramref name="worldPoint"/>
+        /// actually resolves to — same lookup <see cref="ResolveDeckHeights"/> gives a seeded robot's
+        /// spawn Y, exposed here so <see cref="MaxWorlds.Arena.MapValidation"/>'s garrison-vs-cover
+        /// clearance rule (MV-927) can tell "this robot stands on a deck above this floor-level cover"
+        /// from "these two are actually at the same height", instead of comparing XZ distance alone.</summary>
+        public static float ResolveLevelHeight(WorldArea area, WorldConfig cfg, Vector2 worldPoint)
+        {
+            List<Rect> rects = DeckFootprints(area, cfg, out float defaultDeckHeight, out List<float> heights);
+            for (int i = 0; i < rects.Count; i++)
+                if (rects[i].Contains(worldPoint)) return heights[i];
+
+            return defaultDeckHeight;
+        }
+
         private static List<Rect> DeckFootprints(WorldArea area, WorldConfig cfg, out float defaultDeckHeight, out List<float> heights)
         {
             var rects = new List<Rect>();

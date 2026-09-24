@@ -893,9 +893,19 @@ namespace MaxWorlds.Arena
                     }
 
                     float requiredGap = MinGarrisonCoverGap(kind);
+
+                    // MV-927: a level-1 entry stands on a deck, not the floor — its own resolved
+                    // elevation (same lookup a seeded robot's spawn Y uses) is the height to clear
+                    // cover from, not 0. A deck-standing robot cannot physically overlap a cover box
+                    // that tops out below the deck surface, so XZ-only distance can't tell "same
+                    // footprint, different height" from "actually touching"; skip the clearance check
+                    // per-cover once the cover's own top height is below the entry's resolved elevation.
+                    float entryElevation = entry.level > 0 ? Garrison.ResolveLevelHeight(a, cfg, point) : 0f;
+
                     foreach (WorldCover c in a.cover)
                     {
                         if (c == null) continue;
+                        if (entryElevation > 0f && c.height < entryElevation) continue;
 
                         ArenaCover body = new MapEntity
                         {
