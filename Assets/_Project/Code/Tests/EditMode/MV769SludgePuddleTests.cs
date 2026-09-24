@@ -59,11 +59,12 @@ namespace MaxWorlds.Tests.EditMode
                 puddle.Tick(2f); // simulated 2 seconds standing in the puddle
                 float lost = before - _playerHealth.Current;
 
-                // The ticket's own authored rate is EXACTLY 6 damage/second, so 2s inside must resolve
-                // to 12 — hardcoded from the spec, not read back off SludgePuddle.DamagePerSecond,
-                // so a future change to the rate constant alone still fails this test honestly.
-                Assert.AreEqual(12f, lost, 0.01f,
-                    "an IDamageable standing in the puddle for 2s at the ticket's authored 6 dmg/s must lose 12 HP, not 0");
+                // MV-924 retuned the authored rate from 6 to EXACTLY 7.5 damage/second, so 2s inside
+                // must resolve to 15 — hardcoded from the spec, not read back off
+                // SludgePuddle.DamagePerSecond, so a future change to the rate constant alone still
+                // fails this test honestly.
+                Assert.AreEqual(15f, lost, 0.01f,
+                    "MV-924: an IDamageable standing in the puddle for 2s at the ticket's authored 7.5 dmg/s must lose 15 HP, not 0");
 
                 _playerHealth.Revive();
                 _playerGo.transform.position = new Vector3(50f, 0f, 0f); // well outside the 2 m radius

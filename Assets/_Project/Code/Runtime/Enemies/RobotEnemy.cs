@@ -2636,19 +2636,23 @@ namespace MaxWorlds.Enemies
         }
 
         private const float SludgerSplitOffset = 0.6f;
+        private const int SludgerSplitCount = 4; // MV-924: was 2 (either side on X); now all four compass points
         private const float SludgerSplitNoReplicateSeconds = 8f;
         private const float SludgerPuddleRadius = 2f;
         private const float SludgerPuddleDuration = 4f;
 
-        /// <summary>MV-705: a Sludge Drone's death spawns two Rushers (a world's own override
-        /// reskins/restats them — World 2's Scrap Rat, MV-701) at half health, 0.6 m either side, and a
-        /// temporary sludge puddle at the death point. Built standalone rather than through
-        /// <see cref="EnemySpawner"/> — a Sludger dies wherever the fight is, not next to a shed's
-        /// mouth — the same construction <see cref="MaxWorlds.Bosses.BigBermudaBoss.CreateAdd"/> already
-        /// uses for a boss-flung add. Spawned AWAKE (no Dormant/emergence beat, per the ticket) and
-        /// tagged <see cref="TagNoReplicate"/> so a fresh pair can't immediately walk back into the box
-        /// that doubled it. The splits themselves are never counted as authored composition (the
-        /// ticket's own wording) — only <see cref="ActiveCount"/>, same as any other live robot.</summary>
+        /// <summary>MV-705: a Sludge Drone's death spawns Rushers (a world's own override
+        /// reskins/restats them — World 2's Scrap Rat, MV-701) at half health and a temporary sludge
+        /// puddle at the death point. MV-924 raised the split count from two (either side on X) to
+        /// <see cref="SludgerSplitCount"/> four, one at each compass point (+X, -X, +Z, -Z) — all four
+        /// still <see cref="SludgerSplitOffset"/> from the death point and so still inside the puddle.
+        /// Built standalone rather than through <see cref="EnemySpawner"/> — a Sludger dies wherever the
+        /// fight is, not next to a shed's mouth — the same construction
+        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss.CreateAdd"/> already uses for a boss-flung add.
+        /// Spawned AWAKE (no Dormant/emergence beat, per the ticket) and tagged
+        /// <see cref="TagNoReplicate"/> so a fresh batch can't immediately walk back into the box that
+        /// quadrupled it. The splits themselves are never counted as authored composition (the ticket's
+        /// own wording) — only <see cref="ActiveCount"/>, same as any other live robot.</summary>
         private void SpawnSludgerSplit()
         {
             Vector3 deathPos = transform.position;
@@ -2656,10 +2660,17 @@ namespace MaxWorlds.Enemies
             WorldConfig worldCfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
             EnemyArchetype rusherArchetype = EnemyArchetype.For(EnemyKind.Rusher, worldCfg);
 
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < SludgerSplitCount; i++)
             {
-                float side = i == 0 ? -1f : 1f;
-                Vector3 pos = deathPos + new Vector3(side * SludgerSplitOffset, 0f, 0f);
+                Vector3 offset;
+                switch (i)
+                {
+                    case 0: offset = new Vector3(SludgerSplitOffset, 0f, 0f); break;
+                    case 1: offset = new Vector3(-SludgerSplitOffset, 0f, 0f); break;
+                    case 2: offset = new Vector3(0f, 0f, SludgerSplitOffset); break;
+                    default: offset = new Vector3(0f, 0f, -SludgerSplitOffset); break;
+                }
+                Vector3 pos = deathPos + offset;
 
                 var go = GameObject.CreatePrimitive(
                     rusherArchetype.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
