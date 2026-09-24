@@ -160,14 +160,14 @@ namespace MaxWorlds.Tests.EditMode
                             Assert.IsNotNull(wallPanels, "setup failure: StormdrainDressing.Dress must build its own Wall Panels host");
                             Renderer eastWallPanel = FindFarthestInZone(wallPanels, map, area14, maximizeX: true);
                             Assert.IsNotNull(eastWallPanel, "setup failure: a14 must carry at least one east-side wall panel replacement");
-                            Assert.IsTrue(eastWallPanel.enabled,
+                            Assert.IsTrue(IsRepresentedAndEnabled(eastWallPanel, "area14", rendererZones),
                                 $"MV-920 AC5: a14's east wall panel replacement ('{eastWallPanel.name}') must be enabled with area14 current");
 
                             Transform coverDressingRoot = host.transform.Find("Stormdrain Dressing")?.Find("Cover");
                             Assert.IsNotNull(coverDressingRoot, "setup failure: StormdrainDressing.Dress must build its own Cover host");
                             Renderer pipeBarrier = FindFarthestInZone(coverDressingRoot, map, area14, maximizeX: false);
                             Assert.IsNotNull(pipeBarrier, "setup failure: a14 must carry at least one cover-dressing (pipe/machinery) replacement");
-                            Assert.IsTrue(pipeBarrier.enabled,
+                            Assert.IsTrue(IsRepresentedAndEnabled(pipeBarrier, "area14", rendererZones),
                                 $"MV-920 AC5: a14's internal pipe barrier dressing ('{pipeBarrier.name}') must be enabled with area14 current");
                         }
                         else if (toIndex == 15)
@@ -324,6 +324,27 @@ namespace MaxWorlds.Tests.EditMode
             (Dictionary<Renderer, List<string>>)typeof(MapStaticBatchRoot)
                 .GetField("_rendererZones", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(batchRoot);
+
+        /// <summary>MV-934: <paramref name="original"/> may have been folded into a combined static mesh
+        /// for its own zone (<c>MapStaticBatchRoot.CombineZoneGeometry</c>) — its own renderer is then
+        /// permanently disabled and dropped from <paramref name="rendererZones"/> by design, with its
+        /// geometry drawn through that zone's own "Combined ..." mesh instead. True if EITHER the
+        /// original is still individually tracked and enabled, OR some combined mesh tagged to
+        /// <paramref name="zoneId"/> is enabled in its place. Copied from Mv909ResumeAreaGateLatchTests
+        /// (MV-909's own precedent for this exact idiom).</summary>
+        private static bool IsRepresentedAndEnabled(Renderer original, string zoneId, Dictionary<Renderer, List<string>> rendererZones)
+        {
+            if (original == null) return false;
+            if (rendererZones.TryGetValue(original, out List<string> zones) && zones.Contains(zoneId))
+                return original.enabled;
+
+            foreach (KeyValuePair<Renderer, List<string>> pair in rendererZones)
+            {
+                if (pair.Key == null || !pair.Key.name.StartsWith("Combined ")) continue;
+                if (pair.Value.Contains(zoneId)) return pair.Key.enabled;
+            }
+            return false;
+        }
 
         private static bool IsDressedHidden(MapStaticBatchRoot batchRoot, Renderer r)
         {

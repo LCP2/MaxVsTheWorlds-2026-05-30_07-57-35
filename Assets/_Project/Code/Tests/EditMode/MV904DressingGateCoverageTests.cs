@@ -103,7 +103,17 @@ namespace MaxWorlds.Tests.EditMode
                     totalCount++;
                     if (r.enabled) enabledCount++;
 
+                    // MV-934: "tagged" alone used to mean "the gate can control this renderer" -- true
+                    // when every controllable renderer stayed individually tracked. Now a renderer the
+                    // gate tagged can ALSO have been folded into a combined static mesh for its own zone
+                    // (MapStaticBatchRoot.CombineZoneGeometry), which removes its own dict entry and
+                    // permanently disables its own renderer by design -- that is the fix working, not a
+                    // coverage gap. "Accounted for" is the real invariant this test guards: either still
+                    // individually tracked, or permanently off because something else (the combined mesh)
+                    // now draws it. What must never happen is untracked AND still enabled -- exactly the
+                    // "always on, everywhere, forever" defect this ticket (MV-904) exists to catch.
                     bool tagged = rendererZones.ContainsKey(r);
+                    bool accounted = tagged || !r.enabled;
                     bool isSludge = sludgeHost != null && r.transform.IsChildOf(sludgeHost);
                     bool isDressing = !isSludge && dressingRoot != null && r.transform.IsChildOf(dressingRoot);
                     bool isGameplay = !isSludge && !isDressing &&
@@ -114,11 +124,11 @@ namespace MaxWorlds.Tests.EditMode
                          r.GetComponentInParent<AreaGate>() != null);
                     bool isGroundSlab = !isSludge && !isDressing && !isGameplay && r.name == "Map Floor";
 
-                    if (isSludge) { sludgeTotal++; if (tagged) sludgeTagged++; }
-                    else if (isDressing) { dressingTotal++; if (tagged) dressingTagged++; }
+                    if (isSludge) { sludgeTotal++; if (accounted) sludgeTagged++; }
+                    else if (isDressing) { dressingTotal++; if (accounted) dressingTagged++; }
                     else if (isGameplay) gameplayTotal++;
                     else if (isGroundSlab) groundSlabTotal++;
-                    else { mapGeomTotal++; if (tagged) mapGeomTagged++; }
+                    else { mapGeomTotal++; if (accounted) mapGeomTagged++; }
                 }
 
                 float reduction = BaselineEnabledArea10 > 0 ? 1f - (float)enabledCount / BaselineEnabledArea10 : 0f;
@@ -127,7 +137,8 @@ namespace MaxWorlds.Tests.EditMode
                 Debug.Log("MV-904 AC1: area10 enabled " +
                     $"{enabledCount}/{totalCount} vs base-commit baseline {BaselineEnabledArea10}/{BaselineTotalArea10} " +
                     $"— reduction {reduction:P1} (must be >= 60.0%).");
-                Debug.Log("MV-904 AC2: tagging coverage — " +
+                Debug.Log("MV-904 AC2: accounted-for coverage (tagged, or permanently off because MV-934 " +
+                    "folded it into a combined zone mesh instead) — " +
                     $"stormdrainDressing(non-sludge) {dressingTagged}/{dressingTotal} ({dressingCoverage:P1}), " +
                     $"sludge {sludgeTagged}/{sludgeTotal}, mapGeometry {mapGeomTagged}/{mapGeomTotal}, " +
                     $"gameplay {gameplayTotal} (excluded by design), groundSlab {groundSlabTotal} (excluded by design).");
@@ -206,8 +217,8 @@ namespace MaxWorlds.Tests.EditMode
                     $"({BaselineEnabledArea10}/{BaselineTotalArea10}) — measured {enabledCount}/{totalCount} " +
                     $"({reduction:P1} reduction).");
                 Assert.GreaterOrEqual(dressingCoverage, 0.99f,
-                    $"MV-904 AC2: non-sludge Stormdrain Dressing tagging coverage must be >= 99% — measured " +
-                    $"{dressingTagged}/{dressingTotal} ({dressingCoverage:P1}).");
+                    $"MV-904 AC2: non-sludge Stormdrain Dressing accounted-for coverage must be >= 99% — " +
+                    $"measured {dressingTagged}/{dressingTotal} ({dressingCoverage:P1}).");
             }
             finally
             {

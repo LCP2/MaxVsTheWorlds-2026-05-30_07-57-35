@@ -130,12 +130,25 @@ namespace MaxWorlds.Tests.EditMode
         /// <summary>The first wall (<see cref="StructuralWall"/>-carrying) renderer <paramref name="rendererZones"/>
         /// tags as belonging to <paramref name="zoneId"/> — walls specifically, since this ticket's own
         /// acceptance criterion names walls, and <see cref="MapRuntime.TagWallZones"/>'s two-sided probe
-        /// is exactly the tagging path a shared boundary exercises.</summary>
+        /// is exactly the tagging path a shared boundary exercises.
+        ///
+        /// MV-934: an ordinary (single-material) wall no longer carries its own <see cref="StructuralWall"/>
+        /// marker into <paramref name="rendererZones"/> at all — <c>MapStaticBatchRoot.CombineZoneGeometry</c>
+        /// folds it into that zone's own combined static mesh, disables the wall's own renderer for good,
+        /// and drops it from the map. Falls back to that zone's own "Combined ..." renderer (tagged with
+        /// the exact same zone id) when no individually-tracked wall remains — it is what actually draws
+        /// the wall now.</summary>
         private static Renderer FindWallRenderer(Dictionary<Renderer, List<string>> rendererZones, string zoneId)
         {
             foreach (KeyValuePair<Renderer, List<string>> pair in rendererZones)
             {
                 if (pair.Key == null || pair.Key.GetComponent<StructuralWall>() == null) continue;
+                if (pair.Value.Contains(zoneId)) return pair.Key;
+            }
+
+            foreach (KeyValuePair<Renderer, List<string>> pair in rendererZones)
+            {
+                if (pair.Key == null || !pair.Key.name.StartsWith("Combined ")) continue;
                 if (pair.Value.Contains(zoneId)) return pair.Key;
             }
             return null;
