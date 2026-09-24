@@ -28,11 +28,17 @@ namespace MaxWorlds.Arena
         public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
     }
 
-    /// <summary>MV-882: combines every GameObject <see cref="MapRuntime.Build"/> hands it into one draw
-    /// call per material, via the (gos, staticBatchRoot) overload — which leaves every object exactly
-    /// where it was already parented (this map's own floor, walls, cover and static deck pieces stay
-    /// direct children of the map root, unmoved; only used as the coordinate origin baked into the
-    /// combined mesh), so no test or caller that navigates this hierarchy by path sees any difference.
+    /// <summary>MV-882 originally combined every GameObject <see cref="MapRuntime.Build"/> hands it via
+    /// <c>StaticBatchingUtility.Combine</c>'s (gos, staticBatchRoot) overload. MV-934 replaces that call
+    /// (see <see cref="CombineZoneGeometry"/>'s own doc for why: static batching shares one vertex buffer
+    /// but still submits one draw call per original renderer, so it never actually reduced World 2's
+    /// set-pass count) with a real <c>Mesh.CombineMeshes</c> pass, gated the same (zone, material)
+    /// granularity <see cref="ApplyAreaGate"/> already switches on and off. Every combined object is a
+    /// NEW GameObject parented under this one, alongside the untouched originals (now disabled, not
+    /// destroyed) — <see cref="Statics"/> below still reflects <c>MapRuntime.Build</c>'s own declared
+    /// list, not the post-combine hierarchy, since that is what an EditMode test needs to assert "this
+    /// kind is/isn't safe to batch" (MV882StaticBatchingTests) independent of what actually got folded
+    /// into a combined mesh this run.
     ///
     /// Deferred to <see cref="Start"/> rather than called inline at the end of Build: <c>BackyardPath.
     /// Awake</c> still has to run <c>ApplyWorldMaterials</c> (and, for World 2, <c>StormdrainDressing.
@@ -96,8 +102,10 @@ namespace MaxWorlds.Arena
         /// inside a zone that is already active. Never consulted for a gameplay decision.</summary>
         public int ApplyAreaGateCallCount { get; private set; }
 
-        /// <summary>Exactly what was handed to <see cref="StaticBatchingUtility.Combine"/> — every
-        /// GameObject this build classified as never moving.</summary>
+        /// <summary>Every GameObject <c>MapRuntime.Build</c> classified as never moving (MV-882's own
+        /// list; MV-934's <see cref="CombineZoneGeometry"/> is what actually folds these into combined
+        /// meshes now, but this stays the declared classification an EditMode test asserts against).</summary>
+
         public IReadOnlyList<GameObject> Statics => _statics;
 
         public void Configure(GameObject[] statics, MapData map, Dictionary<Renderer, List<string>> rendererZones)
@@ -109,9 +117,6 @@ namespace MaxWorlds.Arena
 
         private void Start()
         {
-            if (_statics != null && _statics.Length > 0)
-                StaticBatchingUtility.Combine(_statics, gameObject);
-
             // MV-887 change 5, widened by MV-904: the dressing kit (StormdrainDressing) is a SIBLING of
             // this map's own root, built later in the same Awake as MapRuntime.Build — by the time
             // Start() fires, Unity guarantees every Awake this frame has already run (the same guarantee
@@ -135,6 +140,12 @@ namespace MaxWorlds.Arena
                 foreach (Renderer r in _rendererZones.Keys)
                     if (r != null && !r.enabled) _dressedHidden.Add(r);
             }
+
+            // MV-934: replaces MV-882's StaticBatchingUtility.Combine call that used to sit at the top
+            // of this method — see CombineZoneGeometry's own doc for why that call never brought the
+            // draw-call count down, and must run here (after TagDressingSludge and the _dressedHidden
+            // snapshot above) rather than where the old call sat.
+            CombineZoneGeometry();
 
             // The area the gate starts with — Max's own physical area at map-build time, read off
             // AreaAccumulationDirector rather than assumed, so this never has to hard-code "area1"
@@ -434,6 +445,139 @@ namespace MaxWorlds.Arena
             foreach (string id in ids)
                 if (!zones.Contains(id)) zones.Add(id);
         }
+
+        /// <summary>MV-934: replaces MV-882's <see cref="StaticBatchingUtility"/>.Combine call, which
+        /// reduced per-object CPU setup but never reduced the actual draw-call/set-pass count — Unity's
+        /// static batching still submits one draw call per original renderer, it only shares one big
+        /// vertex/index buffer between them. Measured live at World 2 a10: 10,487 enabled renderers,
+        /// 5,968 set-pass calls, despite MV-882 already static-batching every wall/cover/prop. This
+        /// folds every combinable renderer's mesh into ONE real <see cref="Mesh.CombineMeshes"/> result
+        /// per (zone id, material) — the exact granularity <see cref="ApplyAreaGate"/> already gates by
+        /// — so the gate keeps switching whole zones on and off, just as one draw call each instead of
+        /// hundreds. A renderer tagged with more than one zone id (a boundary wall/panel) is baked into
+        /// EACH of those zones' own combined meshes — a little duplicated geometry, never a shared one
+        /// that the gate could only half-hide.
+        ///
+        /// Three combinable groups, chosen to match exactly what MV882StaticBatchingTests already proves
+        /// never moves or repaints:
+        ///  * <see cref="_statics"/> — MapRuntime's own walls/cover/props/deck edge-and-post dressing
+        ///    (the deck SLAB itself is never in this list; <see cref="DeckVisibility"/> repaints it).
+        ///  * Sludge — <see cref="MapRuntime.BuildSludge"/>'s own flat tile, found by its
+        ///    <see cref="SludgeFlow"/> component, which this method moves onto the combined mesh (one
+        ///    per zone/tone group) so the scroll keeps working there instead of on the now-disabled
+        ///    originals.
+        ///  * The "Stormdrain Dressing" subtree <see cref="TagDressingSludge"/> just tagged — kerbs,
+        ///    pipe banks, soffits, panel joints/bays/stains, hazard-bulkhead structure: MV-904's own
+        ///    measured 16,106-renderer figure that MV-887 never even gated, let alone batched.
+        ///
+        /// What never goes in a bucket, on purpose:
+        ///  * Anything in <see cref="_dressedHidden"/> — combining a dressed-away cover box's geometry
+        ///    back in would draw it again the moment its zone gates on, reopening the exact MV-890
+        ///    regression ("pipes encased in grey blocks") that field exists to prevent.
+        ///  * Anything under a <see cref="SludgeFlowRig"/> (MV-873's bands/chevrons/foam — 43 of a
+        ///    tile's ~45 dressed pieces move every frame), a <see cref="GrateShudder"/>, or a
+        ///    <see cref="LightFittingPulse"/> (the hazard-lamp and LED-cell blink) — see
+        ///    <see cref="HasAnimatedAncestor"/>. Folding a moving piece into a static combined mesh would
+        ///    freeze it mid-animation, which is a visible change this ticket's AC explicitly forbids.
+        ///  * A renderer with zero or more than one material — <see cref="Mesh.CombineMeshes"/> with
+        ///    <c>mergeSubMeshes: true</c> needs exactly one, and nothing this map builds is authored
+        ///    with more, so this is a defensive skip, not an expected path.
+        ///
+        /// Colliders are never touched: the original GameObject (and whatever collider it carries) stays
+        /// exactly where it was — only its <see cref="Renderer"/> is switched off (AC3) and its zone tag
+        /// moved onto the new combined renderer, which carries no collider of its own.</summary>
+        private void CombineZoneGeometry()
+        {
+            if (_rendererZones == null || _rendererZones.Count == 0) return;
+
+            var staticsSet = _statics != null ? new HashSet<GameObject>(_statics) : new HashSet<GameObject>();
+
+            Transform areaRoot = transform.parent != null ? transform.parent : transform;
+            Transform dressing = areaRoot.Find("Stormdrain Dressing");
+            var dressingSet = dressing != null
+                ? new HashSet<Renderer>(dressing.GetComponentsInChildren<Renderer>(true))
+                : null;
+
+            // (zone id, material) -> every renderer whose mesh belongs in that one combined result.
+            var buckets = new Dictionary<(string zoneId, Material material), List<Renderer>>();
+
+            foreach (KeyValuePair<Renderer, List<string>> pair in _rendererZones)
+            {
+                Renderer r = pair.Key;
+                if (r == null || (_dressedHidden != null && _dressedHidden.Contains(r))) continue;
+
+                bool combinable = staticsSet.Contains(r.gameObject)
+                    || r.GetComponent<SludgeFlow>() != null
+                    || (dressingSet != null && dressingSet.Contains(r));
+                if (!combinable || HasAnimatedAncestor(r)) continue;
+
+                MeshFilter mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                Material[] mats = r.sharedMaterials;
+                if (mats.Length != 1 || mats[0] == null) continue;
+
+                foreach (string zoneId in pair.Value)
+                {
+                    var key = (zoneId, mats[0]);
+                    if (!buckets.TryGetValue(key, out List<Renderer> list))
+                        buckets[key] = list = new List<Renderer>(8);
+                    list.Add(r);
+                }
+            }
+            if (buckets.Count == 0) return;
+
+            var combinedAway = new HashSet<Renderer>();
+            int index = 0;
+
+            foreach (KeyValuePair<(string zoneId, Material material), List<Renderer>> entry in buckets)
+            {
+                List<Renderer> pieces = entry.Value;
+                var combine = new CombineInstance[pieces.Count];
+                bool isSludge = false;
+                Vector2 sludgeScrollSpeed = default;
+
+                for (int i = 0; i < pieces.Count; i++)
+                {
+                    Renderer piece = pieces[i];
+                    combine[i].mesh = piece.GetComponent<MeshFilter>().sharedMesh;
+                    combine[i].transform = transform.worldToLocalMatrix * piece.transform.localToWorldMatrix;
+
+                    if (piece.TryGetComponent(out SludgeFlow flow))
+                    {
+                        isSludge = true;
+                        sludgeScrollSpeed = flow.ScrollSpeed;
+                    }
+                    combinedAway.Add(piece);
+                }
+
+                // MV-934, watch the 65k vertex limit: 32-bit indices rather than splitting the mesh.
+                var combined = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+                combined.CombineMeshes(combine, mergeSubMeshes: true, useMatrices: true);
+
+                var go = new GameObject($"Combined {entry.Key.zoneId} {index++}");
+                go.transform.SetParent(transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = combined;
+                MeshRenderer mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = entry.Key.material;
+                if (isSludge) go.AddComponent<SludgeFlow>().Configure(entry.Key.material, sludgeScrollSpeed);
+
+                _rendererZones[mr] = new List<string>(1) { entry.Key.zoneId };
+            }
+
+            foreach (Renderer r in combinedAway)
+            {
+                r.enabled = false;
+                _rendererZones.Remove(r);
+            }
+        }
+
+        /// <summary>MV-934: true if <paramref name="r"/> sits under (or on) a GameObject that some
+        /// per-frame system moves, resizes or repaints on its own — see <see cref="CombineZoneGeometry"/>'s
+        /// own doc for why a piece like this must never be folded into a static combined mesh.</summary>
+        private static bool HasAnimatedAncestor(Renderer r) =>
+            r.GetComponentInParent<SludgeFlowRig>() != null ||
+            r.GetComponentInParent<GrateShudder>() != null ||
+            r.GetComponentInParent<LightFittingPulse>() != null;
 
         /// <summary>MV-925: the two-sided zone ids for the <see cref="WallSegment"/> that
         /// <paramref name="rendererTransform"/>'s own "Wall Run" ancestor was built for — found by nearest
