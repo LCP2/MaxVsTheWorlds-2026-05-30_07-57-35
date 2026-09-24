@@ -65,7 +65,15 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(distinctKinds.Count, 4,
                 $"World 2 must span at least 4 distinct CoverDressing values, got {distinctKinds.Count}: {string.Join(", ", distinctKinds)}");
 
+            // a13 (Trolley Yard) exemption: Lee's signed-off World 2 V10 redraw (MV-900) authors
+            // every one of a13's 21 cover pieces as "pipe", matching the Trolley Yard's pipe-yard
+            // set dressing - the old lone "none"-dressed piece that used to give it a second kind
+            // was dropped along with the rest of that area's old content. That is deliberate,
+            // cell-by-cell-diffed level data, not a placeholder or an accident, so per
+            // CC_AUTONOMY's "authored level data is authority" the monotone-kind check is what's
+            // wrong for this one area, not the data. MV-930.
             var monotoneAreas = resolved
+                .Where(t => t.area.id != "a13")
                 .GroupBy(t => t.area.id)
                 .Where(g => g.Count() >= 3 && g.Select(t => t.dressing).Distinct().Count() == 1)
                 .Select(g => g.Key)
