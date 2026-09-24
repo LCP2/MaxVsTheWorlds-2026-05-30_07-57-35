@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -55,6 +56,7 @@ namespace MaxWorlds.Tests.EditMode
                 // its own outside Play mode. Same reflection trick MV833RampZoneTests already uses for
                 // AreaAccumulationDirector's own Update().
                 InvokePrivate(batchRoot, "Start");
+                var rendererZones = RendererZones(batchRoot);
 
                 // Not every zone carries a gated renderer — area1's own entry stub, for one, is
                 // deliberately built empty (AreaAccumulationDirector.FillArea's own "the lead-in room
@@ -71,20 +73,20 @@ namespace MaxWorlds.Tests.EditMode
                     if (map.AreLinked("area1", z.id))
                     {
                         if (neighbourRenderer != null) continue;
-                        Renderer candidate = FindGatedRenderer(mapRoot, map, z.id);
+                        Renderer candidate = FindGatedRenderer(rendererZones, z.id);
                         if (candidate != null) { neighbourId = z.id; neighbourRenderer = candidate; }
                     }
                     else
                     {
                         if (farRenderer != null) continue;
-                        Renderer candidate = FindGatedRenderer(mapRoot, map, z.id);
+                        Renderer candidate = FindGatedRenderer(rendererZones, z.id);
                         if (candidate != null) { farId = z.id; farRenderer = candidate; }
                     }
                 }
                 Assert.IsNotNull(neighbourRenderer, "setup failure: no MapLink neighbour of area1 has a gated renderer to assert against");
                 Assert.IsNotNull(farRenderer, "setup failure: no zone with no link to area1 has a gated renderer to assert against");
 
-                Renderer currentRenderer = FindGatedRenderer(mapRoot, map, "area1");
+                Renderer currentRenderer = FindGatedRenderer(rendererZones, "area1");
                 Assert.IsNotNull(currentRenderer, "setup failure: area1 must contain at least one gated renderer");
 
                 Assert.IsTrue(currentRenderer.enabled,
@@ -104,30 +106,30 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>The first renderer under <paramref name="mapRoot"/> that MV-887's own gate actually
-        /// tags and resolves to <paramref name="zoneId"/> — skips anything the gate deliberately never
-        /// touches (the map-spanning floor, and gameplay actors: replicators, hutches, bosses, area
-        /// gates), so a factory or gate that happens to stand in the far zone can never produce a false
-        /// pass on "must be disabled". Also skips a <see cref="StructuralWall"/>: a wall sitting exactly
-        /// on a shared boundary can legitimately belong to MORE than one zone (the production gate tags
-        /// it for every zone it borders — see MapRuntime.TagWallZones — so a wall between the current
-        /// area and an otherwise-unlinked one correctly stays enabled), whereas this single-point
-        /// <see cref="MapData.ZoneAt(float, float, float)"/> probe only ever names one of them — picking
-        /// a non-wall example keeps this assertion unambiguous.</summary>
-        private static Renderer FindGatedRenderer(Transform mapRoot, MapData map, string zoneId)
+        /// <summary>MV-934: the gate now controls visibility at (zone, material) granularity — most of
+        /// what used to be individually-positioned candidate renderers here (cover, props, non-wall
+        /// dressing) are folded into a combined mesh per zone (<see cref="MapStaticBatchRoot.CombineZoneGeometry"/>),
+        /// permanently disabled and removed from the live <c>_rendererZones</c> map in their own right. A
+        /// position-based probe over <em>every</em> renderer (disabled combined-away originals included)
+        /// would keep finding those permanently-off ghosts and never the thing actually drawing the zone
+        /// now, so this reads the gate's own live tag map instead (Rule 2: still a resolved value, just
+        /// the current one) — the first entry tagged to <paramref name="zoneId"/> that isn't a
+        /// <see cref="StructuralWall"/> (see this method's own original doc for why: a boundary wall can
+        /// legitimately carry more than one zone tag, which would make "enabled" ambiguous here) or a
+        /// gameplay actor (replicators, hutches, bosses, area gates — the gate never tags these; kept as
+        /// a defensive skip).</summary>
+        private static Renderer FindGatedRenderer(Dictionary<Renderer, List<string>> rendererZones, string zoneId)
         {
-            foreach (Renderer r in mapRoot.GetComponentsInChildren<Renderer>(true))
+            foreach (KeyValuePair<Renderer, List<string>> pair in rendererZones)
             {
-                if (r.name == "Map Floor") continue;
+                Renderer r = pair.Key;
+                if (r == null || !pair.Value.Contains(zoneId)) continue;
                 if (r.GetComponent<StructuralWall>() != null) continue;
                 if (r.GetComponentInParent<Replicator>() != null) continue;
                 if (r.GetComponentInParent<MowerHutch>() != null) continue;
                 if (r.GetComponentInParent<BigBermudaBoss>() != null) continue;
                 if (r.GetComponentInParent<AreaGate>() != null) continue;
-
-                Vector3 p = r.transform.position;
-                MapZone zone = map.ZoneAt(p.x, p.y, p.z);
-                if (zone != null && zone.id == zoneId) return r;
+                return r;
             }
             return null;
         }
@@ -135,5 +137,10 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokePrivate(object target, string methodName) =>
             target.GetType().GetMethod(methodName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 .Invoke(target, null);
+
+        private static Dictionary<Renderer, List<string>> RendererZones(MapStaticBatchRoot batchRoot) =>
+            (Dictionary<Renderer, List<string>>)typeof(MapStaticBatchRoot)
+                .GetField("_rendererZones", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(batchRoot);
     }
 }
