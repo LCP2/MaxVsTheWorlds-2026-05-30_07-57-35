@@ -44,30 +44,65 @@ namespace MaxWorlds.Core
         /// actually triggered rather than inferring it from tick counts.</summary>
         public static int CallCount;
 
+        /// <summary>MV-926: hard cap on how many <c>cc.Move</c> sub-steps a single <see cref="SafeMove"/>
+        /// call can issue, however large <paramref name="displacement"/> is. Before this existed, step
+        /// count was <c>CeilToInt(dist / MaxSafeStep)</c> with no ceiling: once a WebGL frame-time
+        /// stall inflated every moving robot's per-frame displacement, each one issued proportionally
+        /// more physics queries AND logged a warning every single call, and the extra work (plus
+        /// WebGL's expensive console logging) made the next frame slower still — a feedback loop that
+        /// took a 93-robot scene from 17fps to 5.6fps (this ticket's own evidence). Capping the COUNT
+        /// (not the per-step size) means one call's physics cost is now bounded regardless of distance;
+        /// distances beyond <c>MaxSubSteps * MaxSafeStep</c> (0.8 m) trade step precision for that
+        /// bound instead of adding more queries.</summary>
+        public const int MaxSubSteps = 4;
+
+        /// <summary>MV-926: whether <see cref="SafeMove"/> has already logged its one-time oversized-move
+        /// warning this session. <c>Debug.LogWarning</c> used to fire on every single oversized call —
+        /// harmless in isolation, but WebGL's console logging is expensive enough that doing it every
+        /// frame for every moving robot during a stall was itself a meaningful chunk of the feedback
+        /// loop this ticket fixes. One warning per process is enough to tell a live browser console
+        /// that the split path is firing at all (the original MV-386 diagnostic purpose); test-settable,
+        /// same seam as <see cref="CallCount"/>.</summary>
+        public static bool HasWarnedOversizedMove;
+
+        /// <summary>MV-926 test-only instrumentation: how many actual <c>CharacterController.Move</c>
+        /// sweeps <see cref="SafeMove"/> has performed. Unlike <see cref="CallCount"/> (which counts
+        /// <see cref="SafeMove"/> entries, always 1 per call), this counts every individual physics
+        /// query issued — the resolved value a test needs to prove <see cref="MaxSubSteps"/> actually
+        /// bounds one call's physics cost, rather than inferring it from the displacement it was given.</summary>
+        public static int MoveSweepCount;
+
         /// <summary>Moves <paramref name="cc"/> by <paramref name="displacement"/>, splitting it into
-        /// <see cref="MaxSafeStep"/>-sized steps when it's larger than that. Each step is its own swept
-        /// collision test, so a stall-inflated single-frame displacement can't skip past a thin
-        /// collider the way one oversized <c>Move()</c> call can.</summary>
+        /// up to <see cref="MaxSubSteps"/> steps when it's larger than <see cref="MaxSafeStep"/>. Each
+        /// step is its own swept collision test, so a stall-inflated single-frame displacement can't
+        /// skip past a thin collider the way one oversized <c>Move()</c> call can.</summary>
         public static void SafeMove(CharacterController cc, Vector3 displacement)
         {
             CallCount++;
             float dist = displacement.magnitude;
             if (dist <= MaxSafeStep)
             {
+                MoveSweepCount++;
                 cc.Move(displacement);
                 return;
             }
 
-            // MV-386 diagnostic: this is the exact spike under investigation. Logged (not just
-            // silently handled) so a live WebGL browser console can show whether this fires at the
-            // same moment Lee sees a pass-through -- the correlation the ticket's own AC asks for.
-            Debug.LogWarning($"[CharacterControllerMotion] {cc.name}: oversized single-frame Move " +
-                              $"({dist:F2} m) split into {Mathf.CeilToInt(dist / MaxSafeStep)} steps");
+            if (!HasWarnedOversizedMove)
+            {
+                HasWarnedOversizedMove = true;
+                // MV-386 diagnostic: this is the exact spike under investigation. Logged once (not
+                // every call, MV-926) so a live WebGL browser console can still show that the split
+                // path fired at all -- the correlation the ticket's own AC asks for -- without the
+                // per-call logging cost that turned into part of the MV-926 feedback loop itself.
+                Debug.LogWarning($"[CharacterControllerMotion] {cc.name}: oversized single-frame Move " +
+                                  $"({dist:F2} m) split into steps (further occurrences this session are not logged)");
+            }
 
-            int steps = Mathf.CeilToInt(dist / MaxSafeStep);
+            int steps = Mathf.Clamp(Mathf.CeilToInt(dist / MaxSafeStep), 1, MaxSubSteps);
             Vector3 step = displacement / steps;
             for (int i = 0; i < steps; i++)
             {
+                MoveSweepCount++;
                 cc.Move(step);
             }
         }

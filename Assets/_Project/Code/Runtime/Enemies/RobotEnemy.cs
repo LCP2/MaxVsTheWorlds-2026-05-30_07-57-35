@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
@@ -1608,16 +1609,69 @@ namespace MaxWorlds.Enemies
         /// into this buffer instead.</summary>
         private static readonly Plane[] s_frustumPlanes = new Plane[6];
 
-        /// <summary>Whether this robot's body centre sits inside the gameplay camera's frustum right
-        /// now (MV-478). Fails OPEN (true) when no camera can be resolved — headless build, EditMode
+        /// <summary>MV-926: the rig that owns the live camera's zoom, cached once (same reasoning as
+        /// <see cref="s_frustumPlanes"/> — this runs once per dormant robot per frame). Null in EditMode
+        /// fixtures / a headless scene with no rig, which <see cref="IsOnScreen"/> treats as "fall back
+        /// to the live camera" rather than an error.</summary>
+        private static FixedAngleCameraRig s_cameraRig;
+
+        /// <summary>MV-926: disabled scratch camera used only to compute a frustum at the rig's DEFAULT
+        /// zoom (see <see cref="IsOnScreen"/>) — never rendered, never enabled, so it costs nothing
+        /// beyond the transform/projection writes each call already needs. A real second <c>Camera</c>
+        /// component is used (rather than hand-built view/projection matrices) so its FOV/aspect/clip
+        /// planes stay copied exactly from <c>Camera.main</c> via <see cref="Camera.CopyFrom"/>, with no
+        /// separate matrix-math path to get wrong.</summary>
+        private static Camera s_defaultZoomProbeCamera;
+
+        private static Camera DefaultZoomProbeCamera()
+        {
+            if (s_defaultZoomProbeCamera == null)
+            {
+                var go = new GameObject("RobotEnemy-DefaultZoomFrustumProbe") { hideFlags = HideFlags.HideAndDontSave };
+                s_defaultZoomProbeCamera = go.AddComponent<Camera>();
+                s_defaultZoomProbeCamera.enabled = false;
+            }
+            return s_defaultZoomProbeCamera;
+        }
+
+        /// <summary>Whether this robot's body centre sits inside the gameplay camera's frustum AT THE
+        /// PLAY CAMERA'S DEFAULT ZOOM (MV-926) — not at whatever distance <see cref="Camera.main"/> is
+        /// currently sitting at. Zooming the live camera out (the dev-mode nudge, or the player-facing
+        /// zoom setting) widens what <c>Camera.main</c> can actually see without changing what the
+        /// player has ACTUALLY looked at through the default framing, and <see cref="Activate"/> is
+        /// one-way — so a wake test keyed to the live, zoomed-out frustum permanently woke every
+        /// dormant robot the wider view newly covered (this ticket's own regression, MV-927 evidence:
+        /// 16 → 93 robots awake after one zoom-out). The frustum is built at the SAME pitch/FOV/aspect
+        /// as the live camera, anchored to the live follow target (the player) every tick — only the
+        /// distance-along-the-view-ray is pinned to the default. Falls back to the plain live-camera
+        /// frustum test (MV-478's original behaviour) when no rig or player target can be resolved
+        /// (EditMode fixture, headless scene with no rig) — same fail-open contract as the `cam == null`
+        /// case below. Fails OPEN (true) when no camera can be resolved at all — headless build, EditMode
         /// fixture — so a missing camera can never leave a level full of frozen robots (AC8). Same
         /// frustum-test idiom as <see cref="AreaAccumulationDirector"/>'s own on-screen check.</summary>
         private bool IsOnScreen()
         {
             _frustumTestCount++;   // MV-611 test instrumentation — see IsWellBehindPlayer's own doc comment
-            Camera cam = Camera.main;
-            if (cam == null) return true;
-            GeometryUtility.CalculateFrustumPlanes(cam, s_frustumPlanes);
+            Camera liveCam = Camera.main;
+            if (liveCam == null) return true;
+
+            if (s_cameraRig == null) s_cameraRig = FindFirstObjectByType<FixedAngleCameraRig>();
+
+            if (s_cameraRig != null && _playerTarget != null)
+            {
+                Camera probe = DefaultZoomProbeCamera();
+                probe.CopyFrom(liveCam);
+                Vector3 offset = FixedAngleCameraRig.ComputeOffset(
+                    FixedAngleCameraRig.DefaultDistanceForCurrentDevice, s_cameraRig.Pitch);
+                probe.transform.SetPositionAndRotation(
+                    _playerTarget.position + offset, Quaternion.Euler(s_cameraRig.Pitch, 0f, 0f));
+                GeometryUtility.CalculateFrustumPlanes(probe, s_frustumPlanes);
+            }
+            else
+            {
+                GeometryUtility.CalculateFrustumPlanes(liveCam, s_frustumPlanes);
+            }
+
             return GeometryUtility.TestPlanesAABB(s_frustumPlanes, new Bounds(transform.position, Vector3.one));
         }
 
