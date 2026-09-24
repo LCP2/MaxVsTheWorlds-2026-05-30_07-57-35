@@ -26,8 +26,24 @@ namespace MaxWorlds.Arena
     {
         public const string Name = "Cover";
 
+        /// <summary>Cached answer to <see cref="LayerMask.NameToLayer(string)"/> (MV-936) — that is a
+        /// native TagManager lookup, and <see cref="Mask"/> used to call it twice (via <see cref="Exists"/>
+        /// then again itself) on every single <see cref="LineOfSight.Clear"/> raycast, for every robot,
+        /// every frame, regardless of state. <c>int.MinValue</c> means "not resolved yet", kept distinct
+        /// from Unity's own real "layer missing" answer of -1 so that failure mode still reads correctly
+        /// once resolved. The layer a build ships with does not change while the process is running, so
+        /// nothing invalidates this.</summary>
+        private static int s_index = int.MinValue;
+
         /// <summary>Layer index, or -1 if the layer is missing from TagManager.</summary>
-        public static int Index => LayerMask.NameToLayer(Name);
+        public static int Index
+        {
+            get
+            {
+                if (s_index == int.MinValue) s_index = LayerMask.NameToLayer(Name);
+                return s_index;
+            }
+        }
 
         public static bool Exists => Index >= 0;
 
