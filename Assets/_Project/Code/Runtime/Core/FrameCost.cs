@@ -143,12 +143,17 @@ namespace MaxWorlds.Core
         /// <summary>MV-887: <paramref name="enabled"/> is how many of <paramref name="mapGeometry"/> +
         /// <paramref name="replicators"/> + <paramref name="robots"/> + <paramref name="sludgeDressing"/>
         /// currently have <c>Renderer.enabled</c> true — the area-renderer gate's own effect made visible
-        /// in the same one screenshot the total already was, rather than a second, separate readout.</summary>
-        public static void RecordAreaRendererCensus(int mapGeometry, int replicators, int robots, int sludgeDressing, int opaque, int transparent, int enabled)
+        /// in the same one screenshot the total already was, rather than a second, separate readout.
+        ///
+        /// MV-925: <paramref name="gateZoneId"/> is the zone id the gate is CURRENTLY applied to — called
+        /// again every time the gate re-applies (not just once at build time, as before this ticket), so
+        /// this line can never go stale the way it did when the render gate silently latched on an old
+        /// area while this reading kept reporting whatever it read at Start().</summary>
+        public static void RecordAreaRendererCensus(int mapGeometry, int replicators, int robots, int sludgeDressing, int opaque, int transparent, int enabled, string gateZoneId)
         {
             int total = mapGeometry + replicators + robots + sludgeDressing;
             s_areaCensusLine =
-                $"census renderers {total} enabled {enabled} (opaque {opaque} transparent {transparent})  " +
+                $"census gate {gateZoneId} renderers {total} enabled {enabled} (opaque {opaque} transparent {transparent})  " +
                 $"map {mapGeometry} repl {replicators} robots {robots} sludge {sludgeDressing}";
         }
 

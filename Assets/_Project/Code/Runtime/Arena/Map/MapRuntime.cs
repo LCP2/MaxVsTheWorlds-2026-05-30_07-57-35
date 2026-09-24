@@ -53,6 +53,16 @@ namespace MaxWorlds.Arena
         private MapData _map;
         private Dictionary<Renderer, List<string>> _rendererZones;
         private AreaAccumulationDirector _areaDirector;
+        private Transform _target;
+
+        /// <summary>MV-925: the zone id <see cref="ApplyAreaGate"/> last gated to — the readout's own
+        /// "which zone is the gate actually current on" figure (see <see cref="RecordRendererCensus"/>).</summary>
+        private string _currentGateZoneId;
+
+        /// <summary>MV-925: the active set (current zone + linked neighbours + footprint-sharing
+        /// overlays) <see cref="ApplyAreaGate"/> last computed — kept so <see cref="Update"/> can ask
+        /// "is the zone under Max's own feet actually lit right now" every frame without recomputing it.</summary>
+        private HashSet<string> _activeZoneIds;
 
         /// <summary>MV-890: every tagged renderer that was ALREADY disabled the first time this class
         /// ever looks (snapshotted in <see cref="Start"/>, before the first <see cref="ApplyAreaGate"/>
@@ -119,8 +129,6 @@ namespace MaxWorlds.Arena
             // Replicator.OnAreaEntered already consumes for the same reason (see the ticket).
             if (_areaDirector != null)
                 _areaDirector.PlayerCrossedIntoArea += OnPlayerCrossedIntoArea;
-
-            RecordRendererCensus();
         }
 
         private void OnDestroy()
@@ -130,6 +138,38 @@ namespace MaxWorlds.Arena
         }
 
         private void OnPlayerCrossedIntoArea(int area) => ApplyAreaGate($"area{area}");
+
+        /// <summary>MV-925: the gate's own self-heal. <see cref="AreaAccumulationDirector"/>'s tracker
+        /// (and the <see cref="OnPlayerCrossedIntoArea"/> event it fires) only ever advances between
+        /// zones an authored <see cref="MapLink"/> actually joins — right for the ambient-population
+        /// tracker's own accumulation rules, wrong for this gate, which must never leave Max standing
+        /// somewhere its own walls and deck went dark. A Blink over a wall, or <see cref="MapData.ZoneAt(float,float,float)"/>
+        /// resolving to an overlay that carries no <see cref="MapLink"/> of its own (World 2's a15/a17,
+        /// this ticket's own measured trigger), both leave the tracker refusing to move while Max's real
+        /// position has already jumped — <see cref="AreaAccumulationDirector.Update"/> logs "blocked an
+        /// area-tracker jump" and holds, and nothing before this fix ever re-checked the gate again.
+        ///
+        /// Deliberately independent of the tracker entirely: this asks only "is the zone under Max's own
+        /// feet part of the active set <see cref="ApplyAreaGate"/> last computed" — regardless of why it
+        /// might not be — and re-applies the gate to THAT zone the instant it isn't. Never touches
+        /// <see cref="AreaAccumulationDirector"/> or any of its garrison/accumulation state.</summary>
+        private void Update()
+        {
+            if (_map == null || _rendererZones == null) return;
+
+            if (_target == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return;
+                _target = p.transform;
+            }
+
+            MapZone zone = _map.ZoneAt(_target.position.x, _target.position.y, _target.position.z);
+            if (zone == null) return;
+            if (_activeZoneIds != null && _activeZoneIds.Contains(zone.id)) return;
+
+            ApplyAreaGate(zone.id);
+        }
 
         /// <summary>MV-887: enables every renderer this build tagged as belonging to
         /// <paramref name="currentZoneId"/> or to one of its gate-connected neighbours (read straight off
@@ -195,11 +235,26 @@ namespace MaxWorlds.Arena
                 if (_dressedHidden != null && _dressedHidden.Contains(r)) continue;
                 r.enabled = pair.Value.Exists(active.Contains);
             }
+
+            // MV-925 item 4: re-recorded on every call (not just once in Start), and item 2's own
+            // self-heal check (Update, above) reads _activeZoneIds every frame — both need this call's
+            // own result, not whatever the last call computed.
+            _currentGateZoneId = currentZoneId;
+            _activeZoneIds = active;
+            RecordRendererCensus();
         }
 
         // MV-904: walks the WHOLE "Stormdrain Dressing" host, not just its "Sludge" child — see this
         // method's own call site (above) for why the narrower Sludge-only walk left every other dressing
         // renderer permanently enabled regardless of the area gate.
+        //
+        // MV-925 (lower-severity item 3): a wall panel run (StormdrainDressing.DressWallPanels' own
+        // "Wall Panels" host, one "Wall Run" per StructuralWall it replaces) sits exactly ON a shared
+        // boundary the same way the wall box itself does — a single-point probe can resolve it to only
+        // ONE of the two zones it actually borders (MapData.ZoneAt is inclusive at both ends of a shared
+        // edge), going permanently dark on the side that single point didn't land on. Every renderer
+        // under a given "Wall Run" is tagged with the SAME two-sided zone ids TagWallZones already
+        // resolves for the StructuralWall it replaces, not its own individual position.
         private void TagDressingSludge()
         {
             if (_map == null || _rendererZones == null) return;
@@ -208,31 +263,78 @@ namespace MaxWorlds.Arena
             Transform dressing = areaRoot.Find("Stormdrain Dressing");
             if (dressing == null) return;
 
+            Transform wallPanels = dressing.Find("Wall Panels");
+            List<WallSegment> wallSegments = wallPanels != null ? MapGeometry.Walls(_map) : null;
+
             foreach (Renderer r in dressing.GetComponentsInChildren<Renderer>(true))
             {
-                Vector3 p = r.transform.position;
-                MapZone zone = _map.ZoneAt(p.x, p.y, p.z) ?? MapRuntime.NearestFloorZone(_map, p.x, p.z);
-                if (zone == null) continue;
+                List<string> ids = wallPanels != null && r.transform.IsChildOf(wallPanels)
+                    ? WallPanelZoneIds(r.transform, wallPanels, wallSegments)
+                    : null;
+
+                if (ids == null)
+                {
+                    Vector3 p = r.transform.position;
+                    MapZone zone = _map.ZoneAt(p.x, p.y, p.z) ?? MapRuntime.NearestFloorZone(_map, p.x, p.z);
+                    if (zone == null) continue;
+                    ids = new List<string>(1) { zone.id };
+                }
 
                 if (!_rendererZones.TryGetValue(r, out List<string> zones))
-                    _rendererZones[r] = zones = new List<string>(1);
-                if (!zones.Contains(zone.id)) zones.Add(zone.id);
+                    _rendererZones[r] = zones = new List<string>(ids.Count);
+                foreach (string id in ids)
+                    if (!zones.Contains(id)) zones.Add(id);
             }
         }
 
-        /// <summary>MV-886 item 2: a one-off census of this area's own Renderer population, taken at the
-        /// same "everything this area starts with already exists" point the static-batch combine above
-        /// relies on (see class comment), and handed to <see cref="FrameCost"/> to cache and display —
-        /// never recomputed per frame (AC3). Walks up to this map's own parent (the transform
+        /// <summary>MV-925: the two-sided zone ids for the <see cref="WallSegment"/> that
+        /// <paramref name="rendererTransform"/>'s own "Wall Run" ancestor was built for — found by nearest
+        /// centre match against <see cref="MapGeometry.Walls"/> (a pure function of the map, so it
+        /// reproduces the exact same segments <c>MapRuntime.Build</c>'s own wall loop already built;
+        /// <c>StormdrainKit.BuildWallPanels</c> plants each "Wall Run" at that segment's own
+        /// <see cref="WallSegment.Center"/> with no transform in between). Null (falls back to the
+        /// ordinary single-point probe) if <paramref name="rendererTransform"/> isn't under a "Wall Run"
+        /// or no segment matches — should never happen for a real build, but never worth an exception if
+        /// a future change to the dressing kit's own hierarchy ever breaks the assumption.</summary>
+        private List<string> WallPanelZoneIds(Transform rendererTransform, Transform wallPanels, List<WallSegment> wallSegments)
+        {
+            if (wallSegments == null) return null;
+
+            Transform run = rendererTransform;
+            while (run != null && run.parent != wallPanels) run = run.parent;
+            if (run == null) return null;
+
+            WallSegment? best = null;
+            float bestDistSqr = float.MaxValue;
+            foreach (WallSegment seg in wallSegments)
+            {
+                float distSqr = (seg.Center - run.position).sqrMagnitude;
+                if (distSqr < bestDistSqr) { bestDistSqr = distSqr; best = seg; }
+            }
+            if (best == null) return null;
+
+            List<string> ids = MapRuntime.ResolveWallZoneIds(_map, best.Value);
+            return ids.Count > 0 ? ids : null;
+        }
+
+        /// <summary>MV-886 item 2: a census of this area's own Renderer population, taken at the same
+        /// "everything this area starts with already exists" point the static-batch combine above relies
+        /// on (see class comment), and handed to <see cref="FrameCost"/> to cache and display — never
+        /// recomputed per frame (AC3). MV-925: re-run on every <see cref="ApplyAreaGate"/> call (not just
+        /// once, as originally built), so the readout's own "enabled" figure and gate zone id can never go
+        /// stale the way the fixed-at-Start reading used to whenever the gate re-applied later. Walks up
+        /// to this map's own parent (the transform
         /// <see cref="BackyardPath"/>/each world's own area script builds both the map and, for World 2,
         /// <c>StormdrainDressing</c>'s "Stormdrain Dressing" root under) rather than just this GameObject's
         /// own children, because dressing is a SIBLING of the map root, not nested under it — MapRuntime.
         /// Build and StormdrainDressing.Dress are both called with the same parent transform.
         ///
-        /// Robots are not built here at all (they spawn later, from a factory/Replicator's own timer),
-        /// so the robots bucket below genuinely reads 0 at this point for a freshly-built area — an
-        /// honest reading of what the AREA itself built, not a claim about the area's live enemy
-        /// population (that is <c>PopulationReadout</c>'s job, already on its own readout line).</summary>
+        /// Robots are not built here at all (they spawn later, from a factory/Replicator's own timer), so
+        /// the robots bucket below genuinely read 0 the one time this ever ran (right after <c>Build</c>,
+        /// before any robot existed) — before MV-925 made this a repeating call. Called again on a later
+        /// gate change, it counts whatever is actually alive under <c>areaRoot</c> at that moment, same as
+        /// every other bucket here — an honest live reading, not a second, competing source of truth for
+        /// population (that stays <c>PopulationReadout</c>'s own job, its own line).</summary>
         private void RecordRendererCensus()
         {
             Transform areaRoot = transform.parent != null ? transform.parent : transform;
@@ -270,7 +372,7 @@ namespace MaxWorlds.Arena
                 else opaque++;
             }
 
-            FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent, enabledCount);
+            FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent, enabledCount, _currentGateZoneId);
         }
     }
 
@@ -448,6 +550,25 @@ namespace MaxWorlds.Arena
             Renderer renderer = wallGo.GetComponent<Renderer>();
             if (renderer == null) return;
 
+            List<string> ids = ResolveWallZoneIds(map, w);
+            if (ids.Count == 0) return;
+
+            if (!rendererZones.TryGetValue(renderer, out List<string> zones))
+                rendererZones[renderer] = zones = new List<string>(ids.Count);
+            foreach (string id in ids)
+                if (!zones.Contains(id)) zones.Add(id);
+        }
+
+        /// <summary>MV-925: <see cref="TagWallZones"/>'s own two-sided probe, extracted so a wall's OWN
+        /// dressing (<see cref="MapStaticBatchRoot.WallPanelZoneIds"/>) can tag every piece of a wall's
+        /// panel/rib/pilaster/coping/kerb run with the SAME zone ids the wall box itself carries, rather
+        /// than resolving each small piece by its own single-point position — the "lower severity" defect
+        /// this ticket also reports: a panel sitting exactly on a shared boundary can resolve to only one
+        /// of the two zones it actually borders, going dark on the side that single point didn't land on.</summary>
+        internal static List<string> ResolveWallZoneIds(MapData map, WallSegment w)
+        {
+            var ids = new List<string>(2);
+
             float length = w.AlongX ? w.Size.x : w.Size.z;
             float inset = Mathf.Max(map.wallThickness, 0.5f);
             float halfLength = length * 0.5f - 0.05f;
@@ -466,9 +587,17 @@ namespace MaxWorlds.Arena
                     ? new Vector3(along.x, along.y, along.z + inset)
                     : new Vector3(along.x + inset, along.y, along.z);
 
-                TagRendererAt(map, renderer, sideLower, rendererZones);
-                TagRendererAt(map, renderer, sideUpper, rendererZones);
+                AddZoneId(map, sideLower, ids);
+                AddZoneId(map, sideUpper, ids);
             }
+
+            return ids;
+        }
+
+        private static void AddZoneId(MapData map, Vector3 worldPos, List<string> ids)
+        {
+            MapZone zone = map.ZoneAt(worldPos.x, worldPos.y, worldPos.z);
+            if (zone != null && !ids.Contains(zone.id)) ids.Add(zone.id);
         }
 
         /// <summary>MV-887: resolves the zone at <paramref name="worldPos"/> and, if one exists, records
