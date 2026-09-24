@@ -33,9 +33,10 @@ namespace MaxWorlds.VFX
     ///     and became walls.
     /// Rings owned by this director are parented to the director, so neither can reach them.
     ///
-    /// Perf: rings are pooled and re-used frame to frame, share one material per texture, and are
-    /// tinted through a MaterialPropertyBlock — a full arena of 30 actors is 60 quads and two draw
-    /// setups, which is the same bargain <see cref="TelegraphVfx"/> already makes.
+    /// Perf: rings are pooled per-actor (MV-935: one persistent ring + shadow for the life of the
+    /// actor, not re-used across different actors), share one material per texture, and are tinted
+    /// through a MaterialPropertyBlock — a full arena of 30 actors is 60 quads and two draw setups,
+    /// which is the same bargain <see cref="TelegraphVfx"/> already makes.
     ///
     /// DISCOVERY (MV-532): this used to be a per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c>
     /// scan — a fresh, GC-allocating scene-wide array every frame, the MV-527 regression shape. MV-527
@@ -74,6 +75,20 @@ namespace MaxWorlds.VFX
     /// as the fallback for when there is no player in the scene: <c>GroundAnchorPlayTests</c>'
     /// <c>FakeActor</c> fixture is wired to nothing and MV-532 forbids touching that test, so it has
     /// to keep passing through the fallback path rather than the new player-relative one.
+    ///
+    /// MV-935: the query above bounds WHO gets found; it never bounded what happens to each one once
+    /// found. Every hit re-ran <see cref="Ground"/> (a <see cref="MapData"/> lookup) and both
+    /// <see cref="GroundRing.Show"/> calls (a transform write plus a MaterialPropertyBlock round trip)
+    /// EVERY frame, for every actor within <see cref="PlayerScanRadius"/> — awake or not. World 2's
+    /// garrisons are mostly Dormant and, by design, never move until they wake (<c>RobotEnemy</c>'s
+    /// "dormant until seen" contract): measured live at World 2 a10 (24 awake, 75 Dormant robots plus
+    /// 3 Sentinels within range), that was ~100 actors repainted from scratch every single frame for no
+    /// visible change, and the anch bucket read 16.9 ms against a &lt;1.5 ms target. Per-actor state now
+    /// lives in <see cref="_slots"/>, keyed on the <see cref="CharacterController"/> itself (the same
+    /// identity the discovery contract already keys on, so no new per-type wiring), and a slot is only
+    /// re-placed when its position, footprint or side has actually changed since the last frame it was
+    /// seen — never by concrete type, so a stationary Sentinel or a stationary FakeActor is skipped
+    /// exactly like a stationary robot, and a moving one is repainted exactly as before.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GroundAnchorVfx : MonoBehaviour
@@ -102,10 +117,34 @@ namespace MaxWorlds.VFX
         // cover piece was counted, so the buffer silently truncated regardless of the query's radius.
         private static readonly Collider[] s_hits = new Collider[512];
 
-        private readonly List<GroundRing> _shadows = new List<GroundRing>(32);
-        private readonly List<GroundRing> _rings = new List<GroundRing>(32);
-        private int _usedShadows;
-        private int _usedRings;
+        /// <summary>One entry per actor ever discovered within scan range, keyed on its own
+        /// <see cref="CharacterController"/> (stable for a pooled robot's whole life — MV-870).
+        /// Never shrinks; a slot for an actor that walks out of range or dies just goes quiet
+        /// (<see cref="AnchorSlot.Placed"/> false) rather than being removed, so a returning actor is
+        /// cheap to recognise and its ring/shadow are never handed to a different actor. Bounded by
+        /// Phase B's own actor population (a few hundred, MV-871's own headroom note), so walking the
+        /// whole table once a frame to retire unclaimed slots (below) is far cheaper than the
+        /// per-actor repaint it replaces.</summary>
+        private sealed class AnchorSlot
+        {
+            public GroundRing Shadow;
+            public GroundRing Ring;
+            public Vector3 LastPosition;
+            public float LastFootprint;
+            public bool LastIsPlayer;
+            public bool Placed;
+            public bool SeenThisFrame;
+        }
+
+        private readonly Dictionary<CharacterController, AnchorSlot> _slots =
+            new Dictionary<CharacterController, AnchorSlot>(64);
+
+        /// <summary>How many times an actor's ring/shadow were actually re-placed this run — a cache
+        /// MISS, not a claim. Test-only diagnostic (MV-935), same shape as
+        /// <see cref="MaxWorlds.Arena.MapBuild.ApplyAreaGateCallCount"/>: proves a stationary actor
+        /// stops driving <see cref="Ground"/>/<see cref="GroundRing.Show"/> once its slot is warm,
+        /// without asserting a rendered pixel or a timing number either could flake on.</summary>
+        public int AnchorRecomputeCount { get; private set; }
 
         // Cached, not re-found every frame — same reasoning as HudController/MaxRig. Re-attempted
         // lazily (Unity's overloaded null check) so a player that spawns after this director installs
@@ -115,9 +154,6 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             FrameCost.Begin(FrameCost.Bucket.Anchor);
-
-            _usedShadows = 0;
-            _usedRings = 0;
 
             if (_player == null) _player = FindFirstObjectByType<PlayerController>();
 
@@ -144,23 +180,64 @@ namespace MaxWorlds.VFX
                 float footprint = GroundAnchorTuning.FootprintRadius(cc);
                 if (footprint <= 0f) continue;
 
-                Vector3 ground = Ground(cc.transform.position);
+                if (!_slots.TryGetValue(cc, out AnchorSlot slot))
+                {
+                    slot = new AnchorSlot { Shadow = CreateShadow(), Ring = CreateRing() };
+                    _slots[cc] = slot;
+                }
+
+                Vector3 pos = cc.transform.position;
                 bool isPlayer = actor.Team == Team.Player;
 
-                NextShadow().Show(ground,
-                    footprint * GroundAnchorTuning.ShadowRadiusScale,
-                    GroundAnchorTuning.ContactShadow);
+                // MV-935: skip the repaint entirely once this actor is already sitting exactly where
+                // its ring/shadow were last placed for it — true for most of a garrisoned area's
+                // population every single frame, since a Dormant robot (or an idle Sentinel) does not
+                // move at all until something wakes it. `Placed` is false the first time a slot is
+                // seen and again the frame after it goes quiet (below), so a reappearing or freshly
+                // pool-reused actor always gets one full, correct recompute rather than trusting a
+                // stale value.
+                bool unchanged = slot.Placed
+                    && pos == slot.LastPosition
+                    && footprint == slot.LastFootprint
+                    && isPlayer == slot.LastIsPlayer;
 
-                NextRing().Show(ground,
-                    footprint * GroundAnchorTuning.RingRadiusScale,
-                    isPlayer ? GroundAnchorTuning.PlayerRing : GroundAnchorTuning.EnemyRing);
+                if (!unchanged)
+                {
+                    Vector3 ground = Ground(pos);
+
+                    slot.Shadow.Show(ground,
+                        footprint * GroundAnchorTuning.ShadowRadiusScale,
+                        GroundAnchorTuning.ContactShadow);
+
+                    slot.Ring.Show(ground,
+                        footprint * GroundAnchorTuning.RingRadiusScale,
+                        isPlayer ? GroundAnchorTuning.PlayerRing : GroundAnchorTuning.EnemyRing);
+
+                    slot.LastPosition = pos;
+                    slot.LastFootprint = footprint;
+                    slot.LastIsPlayer = isPlayer;
+                    slot.Placed = true;
+                    AnchorRecomputeCount++;
+                }
+
+                slot.SeenThisFrame = true;
             }
 
-            // Retire whatever nobody claimed. A robot that died this frame is already deactivated,
-            // so it claims nothing and its anchors go out with it — which is the whole reason the
-            // pool is re-walked from zero every frame rather than tracked per actor.
-            for (int i = _usedShadows; i < _shadows.Count; i++) _shadows[i].Hide();
-            for (int i = _usedRings; i < _rings.Count; i++) _rings[i].Hide();
+            // Retire whatever nobody claimed this frame — a robot that died is already deactivated,
+            // so it claims nothing and its anchors go quiet with it; an actor that merely walked
+            // outside PlayerScanRadius goes quiet the same way and comes back to a full recompute
+            // (Placed is cleared here) rather than a stale position. The slot itself is kept, not
+            // removed — see the class doc comment on _slots.
+            foreach (KeyValuePair<CharacterController, AnchorSlot> kv in _slots)
+            {
+                AnchorSlot slot = kv.Value;
+                if (slot.SeenThisFrame) { slot.SeenThisFrame = false; continue; }
+                if (!slot.Placed) continue;
+
+                slot.Shadow.Hide();
+                slot.Ring.Hide();
+                slot.Placed = false;
+            }
 
             FrameCost.End(FrameCost.Bucket.Anchor);
         }
@@ -180,27 +257,22 @@ namespace MaxWorlds.VFX
             return new Vector3(p.x, y, p.z);
         }
 
-        private GroundRing NextShadow()
+        /// <summary>One-time construction for a newly-discovered actor's contact shadow (MV-935: no
+        /// longer pool-reused across actors by discovery order — see <see cref="AnchorSlot"/>).</summary>
+        private GroundRing CreateShadow()
         {
-            if (_usedShadows < _shadows.Count) return _shadows[_usedShadows++];
-
             var s = GroundRing.Create("ContactShadow", VfxMaterials.Glow());
             s.Lift = GroundAnchorTuning.ShadowLift;
             s.transform.SetParent(transform, worldPositionStays: false);
-            _shadows.Add(s);
-            _usedShadows++;
             return s;
         }
 
-        private GroundRing NextRing()
+        /// <summary>One-time construction for a newly-discovered actor's ring. See <see cref="CreateShadow"/>.</summary>
+        private GroundRing CreateRing()
         {
-            if (_usedRings < _rings.Count) return _rings[_usedRings++];
-
             var r = GroundRing.Create("AnchorRing", VfxMaterials.Annulus());
             r.Lift = GroundAnchorTuning.RingLift;
             r.transform.SetParent(transform, worldPositionStays: false);
-            _rings.Add(r);
-            _usedRings++;
             return r;
         }
     }
