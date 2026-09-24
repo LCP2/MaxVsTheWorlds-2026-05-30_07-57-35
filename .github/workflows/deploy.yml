@@ -70,10 +70,10 @@ jobs:
 
           # 2. Compute BUSY and READY by JQL, per whether QA Passed exists yet.
           if [ "$QAPASSED_EXISTS" = "true" ]; then
-            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\",\"QA Running\") AND labels != \"needs-lee\""
+            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\",\"QA Running\") AND labels != \"needs-lee\" AND labels != \"needs-triage\""
             READY_JQL="project = $PKEY AND status = \"QA Passed\""
           else
-            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\") AND labels != \"needs-lee\""
+            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\") AND labels != \"needs-lee\" AND labels != \"needs-triage\""
             READY_JQL="project = $PKEY AND status = \"QA Running\""
           fi
 
