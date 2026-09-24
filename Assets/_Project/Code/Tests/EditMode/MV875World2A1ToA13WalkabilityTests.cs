@@ -20,13 +20,15 @@ namespace MaxWorlds.Tests.EditMode
     /// Lee's workbook.
     ///
     /// a13 is an authored maze of 1-cell (1.0 m) lanes against Max's 1.0 m width — deliberately not
-    /// fully walkable, and that is Lee's design call, not a defect (ticket comment, 2026-09-21T17:39:
-    /// "AC1 was wrong, not a13... a13 is permanently exempt from all connectivity, reachability and
-    /// walkability assertions"). So for a13 this test keeps only the lane-clear-of-cover check (a
-    /// replicator's IN lane must not overlap cover) and drops both the out-gate-reached and the
-    /// replicator-lane-reached checks. a1..a12 keep the full check, unchanged: every non-DECK gate out
-    /// of the area and every replicator's IN lane must be both reached from the area's own entry mouth
-    /// and clear of cover.
+    /// fully walkable, and that is Lee's design call, not a defect (ticket comment, 2026-09-21T17:39).
+    /// This test models Replicators as standing blockers (see the Kind == Replicator check below), and
+    /// for THAT model a13 stays exempt from reachability (docs/DECISIONS.md §4, narrowed 2026-09-24):
+    /// it keeps only the lane-clear-of-cover check (a replicator's IN lane must not overlap cover) and
+    /// drops both the out-gate-reached and the replicator-lane-reached checks. That narrowing also
+    /// permits a SEPARATE gate-to-gate assertion against a13 once Replicators are removed — that is
+    /// `MV900World2WalkabilityTests`, not this test; this test is unchanged. a1..a12 keep the full
+    /// check here, unchanged: every non-DECK gate out of the area and every replicator's IN lane must
+    /// be both reached from the area's own entry mouth and clear of cover.
     /// </summary>
     public sealed class MV875World2A1ToA13WalkabilityTests
     {
@@ -149,9 +151,11 @@ namespace MaxWorlds.Tests.EditMode
                     TryVisit(cx, cz - 1, nx, nz, blocked, visited, queue);
                 }
 
-                // a13 is an authored maze, permanently exempt from gate-to-gate and replicator-lane
-                // reachability (ticket comment, 2026-09-21T17:39): only the lane-clear-of-cover check
-                // below still applies to it.
+                // a13 is an authored maze, exempt from gate-to-gate and replicator-lane reachability
+                // IN THIS TEST'S MODEL (Replicators standing as blockers) — docs/DECISIONS.md §4,
+                // narrowed 2026-09-24. Only the lane-clear-of-cover check below still applies to it
+                // here; MV900World2WalkabilityTests separately asserts a13 gate-to-gate with
+                // Replicators removed.
                 bool checkReachability = index != LastArea;
 
                 if (checkReachability)

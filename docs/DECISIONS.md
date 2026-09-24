@@ -128,6 +128,11 @@ not a defect. No ticket or test may assert gate-to-gate reachability, replicator
 minimum lane width against `a13`; the only walkability check it carries is lane-clear-of-cover. A ticket
 that asserts a13 connectivity is mis-shaped. Origin: MV-875 (2026-09-21).
 
+**Narrowed 2026-09-24 (source: Lee via design chat, MV-900).** a13 stays exempt from full walkability and
+from reachability with Replicators standing (MV-875 unchanged) — but IS assertable gate-to-gate with
+Replicators removed, since Lee's V10 redraw of a13 is a single, deliberately-connected west-to-east route
+once Replicators are cleared. `MV900World2WalkabilityTests` asserts exactly that case.
+
 **ONE WRITER for `world2_config.DESIGN.json` — the shaping chat, never the worker.** The worker regenerates
 `Assets/_Project/Resources/Worlds/world2_config.json` from it and never edits the DESIGN file, not even to
 apply values quoted at it. Always read the file back after writing and quote the changed values in the Jira
