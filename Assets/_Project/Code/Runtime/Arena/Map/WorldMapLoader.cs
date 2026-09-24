@@ -110,6 +110,10 @@ namespace MaxWorlds.Arena
             {
                 WorldArea a = cfg.areas[i];
                 Vector2 c = a.CenterXz;
+                // MV-902: resolved once here off cfg.Area, same lookup TryLoad already used above to
+                // copy an overlay's origin/size — the target's own index is what the player-facing
+                // "<N> Up" label (MinimapModel.AreaDisplayLabel) needs, not the overlay's own index.
+                WorldArea overlayTarget = string.IsNullOrEmpty(a.overlays) ? null : cfg.Area(a.overlays);
                 zones[i] = new MapZone
                 {
                     id = zoneId[a.id],
@@ -120,6 +124,7 @@ namespace MaxWorlds.Arena
                     width = a.size.w,
                     depth = a.size.d,
                     level = a.level,
+                    overlayOfIndex = overlayTarget?.index ?? 0,
                 };
             }
 

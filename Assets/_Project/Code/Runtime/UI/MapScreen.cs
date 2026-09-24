@@ -343,7 +343,7 @@ namespace MaxWorlds.UI
             int zoneCount = 0;
             // Queued rather than drawn inline (MV-567 item 7): labels must land above cover/gates/sheds/
             // bosses in the final draw order, not just above their own room's fill+border.
-            var roomLabels = new List<(RectTransform room, Vector2 roomSize, int areaIndex, string name, bool isBoss)>();
+            var roomLabels = new List<(RectTransform room, Vector2 roomSize, string displayLabel, string name, bool isBoss)>();
 
             foreach (MapZone zone in _map.zones)
             {
@@ -376,7 +376,7 @@ namespace MaxWorlds.UI
                 outline.raycastTarget = false;
                 _areaBorderImages.Add(outline);
 
-                roomLabels.Add((room.rectTransform, roomSize, areaIndex, zone.name, isBoss));
+                roomLabels.Add((room.rectTransform, roomSize, MinimapModel.AreaDisplayLabel(zone), zone.name, isBoss));
 
                 totalAreaWidth += zone.width;
                 zoneCount++;
@@ -422,7 +422,7 @@ namespace MaxWorlds.UI
             // Area index + name labels (item 8) — anchored to each room's own bottom-left corner (item
             // 3): the top-left is where cover clusters, and drawn last so a label is never buried under
             // a shed or boss glow that happens to sit near it.
-            foreach ((RectTransform room, Vector2 roomSize, int areaIndex, string name, bool isBoss) in roomLabels)
+            foreach ((RectTransform room, Vector2 roomSize, string displayLabel, string name, bool isBoss) in roomLabels)
             {
                 Color labelColor = isBoss ? MapScreenDesign.BossLabelText : MapScreenDesign.LabelText;
                 // Bounded to the room's OWN width (MV-567 fidelity fix, not in the original seven
@@ -436,7 +436,7 @@ namespace MaxWorlds.UI
                     new Vector2(labelWidth, MapScreenDesign.IndexLabelHeight * 1.3f),
                     new Vector2(MapScreenDesign.LabelInset, MapScreenDesign.LabelInset),
                     labelColor, TextAnchor.LowerLeft);
-                indexLabel.text = areaIndex.ToString();
+                indexLabel.text = displayLabel;
                 indexLabel.fontStyle = FontStyle.Bold;
                 indexLabel.raycastTarget = false;
 

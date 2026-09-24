@@ -44,6 +44,15 @@ namespace MaxWorlds.Arena
         /// resolve which of two same-footprint zones a 3D position is actually standing in.</summary>
         public int level;
 
+        /// <summary>MV-902: the 1-based area index of the zone THIS one is a vertical overlay of
+        /// (<see cref="WorldArea.overlays"/>, resolved by <see cref="WorldMapLoader.TryLoad"/> off that
+        /// target's own <see cref="WorldArea.index"/>), or 0 for an ordinary, non-overlay zone. Lee's
+        /// workbook names an overlay deck by the floor it roofs (e.g. World 2's a15 is "13 Up", not "15")
+        /// while keeping the config's own index/play order untouched — this is what
+        /// <see cref="MaxWorlds.UI.MinimapModel.AreaDisplayLabel"/> reads to show that player-facing name
+        /// instead of the raw internal index.</summary>
+        public int overlayOfIndex;
+
         public ZoneKind Kind => MapEnums.Zone(type);
 
         public float XMin => x - width * 0.5f;

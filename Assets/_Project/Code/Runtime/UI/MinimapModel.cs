@@ -89,6 +89,19 @@ namespace MaxWorlds.UI
         /// iterating <c>map.zones</c> doesn't need its own guard.</summary>
         public static bool IsBossZone(MapZone zone) => zone != null && zone.Kind == ZoneKind.Boss;
 
+        /// <summary>MV-902: the player-facing area number for a zone — Lee's workbook names an overlay
+        /// deck by the floor it roofs (World 2's a15/a17 read "13 Up"/"3 Up", never the internal
+        /// index-15/17 <see cref="MapZone.overlayOfIndex"/> resolves off <see cref="WorldArea.overlays"/>)
+        /// while the config's own index/play order — what <see cref="AreaAccumulationDirector.AreaIndexOf"/>
+        /// still reads — stays untouched. An ordinary, non-overlay zone (every floor area, every zone in
+        /// every other world) just shows its own index, unchanged.</summary>
+        public static string AreaDisplayLabel(MapZone zone)
+        {
+            if (zone == null) return "";
+            if (zone.overlayOfIndex > 0) return $"{zone.overlayOfIndex} Up";
+            return AreaAccumulationDirector.AreaIndexOf(zone.id).ToString();
+        }
+
         /// <summary>Does a shed stand inside this zone's own footprint (MV-563)? A shed is authored as
         /// its own <see cref="MapEntity"/> (kind <c>factory</c>, dressing <c>shed</c>,
         /// <see cref="WorldMapLoader"/>) at a position inside the area that owns it, not as a flag on the
