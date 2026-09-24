@@ -20,8 +20,11 @@ namespace MaxWorlds.Tests.EditMode
     /// One consolidated test (testing policy MV-465, Rule 1), asserting RESOLVED values only (Rule 2,
     /// Tier 2): the direction a synthetic rect on each axis actually resolves; the direction every one
     /// of World 2's shipped sludge rects actually resolves; the longest bounding axis a built tile's
-    /// two lip children actually carry; how far a built tile's rig actually ticks a band in 1.0s; and
-    /// the direction resolved when a map DOES author an "outfall" entity.
+    /// two lip children actually carry; the axis a built tile's flow-dressing mesh actually spans
+    /// (MV-938: was "how far a built tile's rig actually ticks a band in 1.0s" — the scroll is now
+    /// baked into the flow mesh's own vertex layout rather than a per-piece Transform, so the resolved
+    /// axis check moved onto that mesh's own bounds); and the direction resolved when a map DOES author
+    /// an "outfall" entity.
     ///
     /// Count updated by MV-852 (World 2 re-layout): a7 and a13 were deleted outright along with their
     /// sludge rects, dropping the count from 20 to 18. Count updated again by MV-865 (World 2
@@ -78,9 +81,9 @@ namespace MaxWorlds.Tests.EditMode
             var lipHost = new GameObject("MV792 lip host").transform;
             try
             {
-                SludgeFlowRig rig = StormdrainKit.DressSludgeTile(lipHost, Vector3.zero, 22f, 4f, Vector3.right, seed: 3);
-                Transform lipA = rig.transform.Find("Lip Bank A");
-                Transform lipB = rig.transform.Find("Lip Bank B");
+                GameObject root = StormdrainKit.DressSludgeTile(lipHost, Vector3.zero, 22f, 4f, Vector3.right, seed: 3);
+                Transform lipA = root.transform.Find("Lip Bank A");
+                Transform lipB = root.transform.Find("Lip Bank B");
                 Assert.IsNotNull(lipA, "a built sludge tile must carry 'Lip Bank A'");
                 Assert.IsNotNull(lipB, "a built sludge tile must carry 'Lip Bank B'");
 
@@ -97,41 +100,22 @@ namespace MaxWorlds.Tests.EditMode
                 UnityEngine.Object.DestroyImmediate(lipHost.gameObject);
             }
 
-            // ---- AC4: ticking a 22x4 tile's rig by 1s moves an unclipped band 0.35m along X, not Z ----
+            // ---- AC4: a 22x4 tile's flow-dressing mesh runs its own long/flow axis along X, not Z ----
+            // (MV-938: the bands/chevrons/foam scroll axis used to be provable only by ticking
+            // SludgeFlowRig and watching a Transform move; it is now baked directly into the single
+            // flow mesh's own vertex layout, so the resolved value to check is that mesh's bounds.)
             var axisHost = new GameObject("MV792 axis host").transform;
             try
             {
-                SludgeFlowRig rig = StormdrainKit.DressSludgeTile(axisHost, Vector3.zero, 22f, 4f, Vector3.right, seed: 5);
-                Transform bandsGroup = rig.transform.Find("Bands");
-                var before = new Vector3[bandsGroup.childCount];
-                var scaleBefore = new Vector3[bandsGroup.childCount];
-                for (int i = 0; i < bandsGroup.childCount; i++)
-                {
-                    before[i] = bandsGroup.GetChild(i).localPosition;
-                    scaleBefore[i] = bandsGroup.GetChild(i).localScale;
-                }
+                GameObject root = StormdrainKit.DressSludgeTile(axisHost, Vector3.zero, 22f, 4f, Vector3.right, seed: 5);
+                Transform flow = root.transform.Find("Flow");
+                Assert.IsNotNull(flow, "a built sludge tile must carry a 'Flow' group for its bands/chevron/foam dressing");
 
-                rig.Tick(1.0f);
-
-                // MV-796: a band within its own half-extent of the tile edge is now clipped to fit
-                // rather than allowed to overhang, so it no longer moves at the raw scroll speed on the
-                // frames it's clipped on (proven directly by MV796SludgeBandContainmentTests). Its scale
-                // stays at its authored 1 while unclipped, so that's the signal used to prove the raw
-                // axis/speed on whichever band(s) stayed clear of the edge across this tick.
-                int checkedCount = 0;
-                for (int i = 0; i < bandsGroup.childCount; i++)
-                {
-                    Transform band = bandsGroup.GetChild(i);
-                    if (scaleBefore[i].x < 0.999f || band.localScale.x < 0.999f) continue;
-                    Vector3 after = band.localPosition;
-
-                    Assert.AreEqual(0.35f, Mathf.Abs(after.x - before[i].x), 0.01f,
-                        $"band {i} on a 22x4 tile must move 0.35m along X in 1.0s (from {before[i]} to {after})");
-                    Assert.AreEqual(0f, Mathf.Abs(after.z - before[i].z), 0.001f,
-                        $"band {i} on a 22x4 tile must NOT move along Z (from {before[i]} to {after})");
-                    checkedCount++;
-                }
-                Assert.Greater(checkedCount, 0, "at least one band on a 22x4 tile must remain unclipped to prove the raw scroll axis/speed");
+                Bounds b = flow.GetComponent<MeshFilter>().sharedMesh.bounds;
+                Assert.AreEqual(22f, b.size.x, 0.01f,
+                    $"a 22x4 (X-run) tile's flow mesh must span its own run (22m) along X, resolved size {b.size}");
+                Assert.AreEqual(4f, b.size.z, 0.01f,
+                    $"a 22x4 (X-run) tile's flow mesh must span its own span (4m) along Z, resolved size {b.size}");
             }
             finally
             {

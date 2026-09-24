@@ -73,9 +73,10 @@ namespace MaxWorlds.Tests.EditMode
                 // (Rule 3 -- an assertion here would just be a presence check on a debug number). "before"
                 // is this ticket's own live-WebGL evidence (enabled 10487/30425, setp 5968 at a10); this
                 // is the closest "after" figure EditMode can produce -- combined-mesh count vs. everything
-                // still individually gated (ramps/grates/deck slabs by design, and every SludgeFlowRig-
-                // driven band/chevron/foam piece, excluded because it moves every frame -- see
-                // CombineZoneGeometry's own doc).
+                // still individually gated (ramps/grates/deck slabs by design -- see CombineZoneGeometry's
+                // own doc; MV-938 moved the sludge bands/chevrons/foam fill off the excluded list entirely,
+                // since it is one static shader-animated mesh per tile now rather than 43 per-frame-moved
+                // Transforms).
                 int combinedCount = 0, combinedEnabled = 0, individualCount = 0, individualEnabled = 0;
                 foreach (KeyValuePair<Renderer, List<string>> pair in rendererZones)
                 {
@@ -86,7 +87,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
                 Debug.Log("MV-934: area10 post-combine — " +
                     $"combined meshes {combinedEnabled}/{combinedCount} enabled, " +
-                    $"still-individual renderers (ramps/grates/deck slabs/SludgeFlowRig pieces) " +
+                    $"still-individual renderers (ramps/grates/deck slabs) " +
                     $"{individualEnabled}/{individualCount} enabled.");
 
                 var byMaterial = new Dictionary<Material, int>();
