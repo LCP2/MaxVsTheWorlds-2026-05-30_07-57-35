@@ -43,7 +43,11 @@ namespace MaxWorlds.Arena
     /// <c>StaticBatchingUtility.Combine</c> itself). <see cref="Start"/> is guaranteed by Unity to run
     /// after every object's <c>Awake</c> has already fired this scene — the same guarantee
     /// <see cref="MaxWorlds.VFX.RuntimeSurfaceDirector"/>'s own one-shot sweep relies on — so every
-    /// world's biome dressing has already landed by the time this fires. Public (not internal) so an
+    /// world's biome dressing has already landed by the time this fires. World 1's own dressing
+    /// (<see cref="MaxWorlds.Arena.BackyardDressing"/> and its three siblings, MV-932) relies on the same
+    /// guarantee one step further out: each self-installs via <c>[RuntimeInitializeOnLoadMethod(
+    /// AfterSceneLoad)]</c>, which Unity always fires after every <c>Awake</c> this scene but before any
+    /// <c>Start</c> — so it too has already finished building by the time this fires. Public (not internal) so an
     /// EditMode test can read <see cref="Statics"/> straight off the built hierarchy (Rule 2: a
     /// resolved value, not an authored constant) — this project's EditMode test assembly carries no
     /// <c>InternalsVisibleTo</c> back to Gameplay.</summary>
@@ -77,6 +81,14 @@ namespace MaxWorlds.Arena
         /// the same reason <see cref="ApplyAreaGate"/>'s own doc already gives for an UNTAGGED renderer:
         /// once something else has taken over deciding whether it draws, the gate must leave it alone.</summary>
         private HashSet<Renderer> _dressedHidden;
+
+        /// <summary>MV-932: World 1's dressing (<see cref="MaxWorlds.Arena.BackyardDressing"/>,
+        /// <see cref="MaxWorlds.Arena.BackyardBackdrop"/>, <see cref="MaxWorlds.Arena.BackyardHomeShed"/>,
+        /// <see cref="MaxWorlds.Arena.BackyardEntryDoor"/>) builds on its own scene-root GameObject, not
+        /// as a sibling of this map's own root the way World 2/3's dressing does — so
+        /// <see cref="RecordRendererCensus"/> cannot find it just by walking <c>areaRoot</c>'s own
+        /// children. Populated once, in <see cref="TagBackyardDressing"/>.</summary>
+        private readonly List<Transform> _externalDressingRoots = new List<Transform>(4);
 
         /// <summary>MV-937 diagnostic: how many times <see cref="ApplyAreaGate"/> has actually run for
         /// this instance — read by a test (or a future debug readout) to prove the self-heal in
@@ -113,7 +125,7 @@ namespace MaxWorlds.Arena
             // dressing renderers tagged on the live build). Tagging the whole subtree by each renderer's
             // own resolved position is exactly the same idiom MapRuntime.TagStatic already uses for
             // ordinary props/cover/sludge/ramps/grates built directly under the map root.
-            TagDressingSludge();
+            TagWorldDressing();
 
             // MV-890: snapshot BEFORE the first ApplyAreaGate call ever runs — see _dressedHidden's own
             // doc for why a renderer already disabled at this exact point must never be touched again.
@@ -252,6 +264,26 @@ namespace MaxWorlds.Arena
             RecordRendererCensus();
         }
 
+        /// <summary>MV-932: generalises the area-gate registration that used to run for World 2's
+        /// "Stormdrain Dressing" alone (MV-887/904/925) across every world's own dressing — World 3's
+        /// hull circuit spine and cover props, and World 1's kit props / home shed / entry door — so
+        /// dressing that never used to be gated (World 3: always-on since it's built under the same
+        /// area root as everything else; World 1: not even counted, since it builds on its own
+        /// scene-root GameObject entirely outside <c>areaRoot</c>) is now disabled outside Max's own
+        /// zone and its linked neighbours exactly like World 2's already was. A whole-world piece (the
+        /// ocean backdrop, the neighbourhood beyond the fence) is deliberately left untouched here —
+        /// it is not per-area, so it stays always-on, same as before this ticket.</summary>
+        private void TagWorldDressing()
+        {
+            if (_map == null || _rendererZones == null) return;
+
+            Transform areaRoot = transform.parent != null ? transform.parent : transform;
+
+            TagStormdrainDressing(areaRoot);
+            TagReefDressing(areaRoot);
+            TagBackyardDressing();
+        }
+
         // MV-904: walks the WHOLE "Stormdrain Dressing" host, not just its "Sludge" child — see this
         // method's own call site (above) for why the narrower Sludge-only walk left every other dressing
         // renderer permanently enabled regardless of the area gate.
@@ -263,11 +295,13 @@ namespace MaxWorlds.Arena
         // edge), going permanently dark on the side that single point didn't land on. Every renderer
         // under a given "Wall Run" is tagged with the SAME two-sided zone ids TagWallZones already
         // resolves for the StructuralWall it replaces, not its own individual position.
-        private void TagDressingSludge()
+        //
+        // MV-932: unchanged from before this ticket — kept as its own method, rather than folded into a
+        // single loop over a list of host names, precisely so the "Wall Panels" two-sided handling stays
+        // scoped to the one host that actually has that hierarchy and nothing about World 2's own result
+        // moves.
+        private void TagStormdrainDressing(Transform areaRoot)
         {
-            if (_map == null || _rendererZones == null) return;
-
-            Transform areaRoot = transform.parent != null ? transform.parent : transform;
             Transform dressing = areaRoot.Find("Stormdrain Dressing");
             if (dressing == null) return;
 
@@ -280,19 +314,125 @@ namespace MaxWorlds.Arena
                     ? WallPanelZoneIds(r.transform, wallPanels, wallSegments)
                     : null;
 
-                if (ids == null)
-                {
-                    Vector3 p = r.transform.position;
-                    MapZone zone = _map.ZoneAt(p.x, p.y, p.z) ?? MapRuntime.NearestFloorZone(_map, p.x, p.z);
-                    if (zone == null) continue;
-                    ids = new List<string>(1) { zone.id };
-                }
-
-                if (!_rendererZones.TryGetValue(r, out List<string> zones))
-                    _rendererZones[r] = zones = new List<string>(ids.Count);
-                foreach (string id in ids)
-                    if (!zones.Contains(id)) zones.Add(id);
+                if (ids != null) AddRendererZones(r, ids);
+                else TagRendererSimple(r);
             }
+        }
+
+        /// <summary>MV-932, change item 2: World 3's own per-wall dressing — <see cref="ReefKit.BuildCircuitSpine"/>'s
+        /// "Circuit Spine" strips one per <see cref="StructuralWall"/>, sitting exactly at that wall's own
+        /// position — and "Reef Props" (<see cref="MaxWorlds.Arena.ReefDressing"/>'s coolant turrets, one
+        /// per Machinery cover piece). Both are siblings of this map's own root (the same "built under
+        /// <c>host</c>, right after <c>MapRuntime.Build</c> returns, in the same <c>Awake</c>" idiom World
+        /// 2's Stormdrain host already uses), so the same <c>areaRoot.Find</c> lookup applies unchanged.
+        /// <see cref="ReefKit.DressHull"/> itself re-skins renderers <c>MapRuntime.Build</c> already
+        /// tagged (the floor and the walls), so there is nothing new to tag for the hull.
+        /// The "Ocean Backdrop" (the four parallax layers, MV-713) is deliberately never looked up here —
+        /// it is a whole-world skyline, not per-area, and stays always-on exactly as before.
+        ///
+        /// A circuit strip sits exactly ON its wall's own centreline the same way a Wall Panel run does,
+        /// so it gets the SAME two-sided zone probe (<see cref="NearestWallZoneIds"/>) rather than the
+        /// plain single-point one — a strip built for a wall that borders two rooms must stay lit from
+        /// both, not go dark on whichever side <see cref="MapData.ZoneAt(float,float,float)"/>'s
+        /// single-point test didn't land on.</summary>
+        private void TagReefDressing(Transform areaRoot)
+        {
+            Transform circuitSpine = areaRoot.Find("Circuit Spine");
+            if (circuitSpine != null)
+            {
+                List<WallSegment> wallSegments = MapGeometry.Walls(_map);
+                foreach (Renderer r in circuitSpine.GetComponentsInChildren<Renderer>(true))
+                {
+                    List<string> ids = NearestWallZoneIds(r.transform.position, wallSegments);
+                    if (ids != null) AddRendererZones(r, ids);
+                    else TagRendererSimple(r);
+                }
+            }
+
+            Transform reefProps = areaRoot.Find("Reef Props");
+            if (reefProps != null)
+                foreach (Renderer r in reefProps.GetComponentsInChildren<Renderer>(true))
+                    TagRendererSimple(r);
+        }
+
+        /// <summary>MV-932, change item 3: World 1's dressing builds on its own scene-root GameObject —
+        /// <see cref="MaxWorlds.Arena.BackyardDressing"/>, <see cref="MaxWorlds.Arena.BackyardBackdrop"/>,
+        /// <see cref="MaxWorlds.Arena.BackyardHomeShed"/> and <see cref="MaxWorlds.Arena.BackyardEntryDoor"/>
+        /// each self-install via <c>[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]</c> rather than being
+        /// parented under this map's own <c>host</c> transform the way World 2/3's dressing is — so
+        /// <c>areaRoot.Find</c> finds none of them, and each is found by type instead (the scene carries
+        /// at most one of each, same "install once" guarantee its own <c>Install</c> already enforces).
+        /// <c>AfterSceneLoad</c> fires after every <c>Awake</c> this frame (including
+        /// <see cref="BackyardPath"/>'s, which these depend on) but before any <c>Start</c> — the same
+        /// "already built by the time this class's own Start runs" guarantee World 2/3's dressing relies
+        /// on, just via a different Unity callback.
+        ///
+        /// Only the per-area dressing is tagged: <c>BackyardDressing</c>'s "Kit Props" (the fence line,
+        /// trees, planters and cover dressing — <see cref="MaxWorlds.Arena.BackyardDressing.DressCover"/>'s
+        /// own footprint is a single <see cref="MaxWorlds.Arena.CoverPiece"/>, which sits in exactly one
+        /// zone), and the home shed / entry door (built flush against the entry area's own boundary
+        /// wall). <c>BackyardDressing</c>'s own "Yard Surround" and <c>BackyardBackdrop</c>'s
+        /// "Neighbourhood" are never tagged — both wrap the WHOLE map (the ticket's own "far backdrop/
+        /// neighbourhood stays always-on") — but every root found here is still recorded in
+        /// <see cref="_externalDressingRoots"/> so <see cref="RecordRendererCensus"/> can count them
+        /// (change item 4), gated or not.</summary>
+        private void TagBackyardDressing()
+        {
+            var backyardDressing = Object.FindFirstObjectByType<MaxWorlds.Arena.BackyardDressing>();
+            if (backyardDressing != null)
+            {
+                _externalDressingRoots.Add(backyardDressing.transform);
+                Transform kitProps = backyardDressing.transform.Find("Kit Props");
+                if (kitProps != null)
+                    foreach (Renderer r in kitProps.GetComponentsInChildren<Renderer>(true))
+                        TagRendererSimple(r);
+            }
+
+            var backyardBackdrop = Object.FindFirstObjectByType<MaxWorlds.Arena.BackyardBackdrop>();
+            if (backyardBackdrop != null) _externalDressingRoots.Add(backyardBackdrop.transform);
+
+            var homeShed = Object.FindFirstObjectByType<MaxWorlds.Arena.BackyardHomeShed>();
+            if (homeShed != null)
+            {
+                _externalDressingRoots.Add(homeShed.transform);
+                Transform maxsShed = homeShed.transform.Find("MaxsShed");
+                if (maxsShed != null)
+                    foreach (Renderer r in maxsShed.GetComponentsInChildren<Renderer>(true))
+                        TagRendererSimple(r);
+            }
+
+            var entryDoor = Object.FindFirstObjectByType<MaxWorlds.Arena.BackyardEntryDoor>();
+            if (entryDoor != null)
+            {
+                _externalDressingRoots.Add(entryDoor.transform);
+                Transform door = entryDoor.transform.Find("EntryDoor");
+                if (door != null)
+                    foreach (Renderer r in door.GetComponentsInChildren<Renderer>(true))
+                        TagRendererSimple(r);
+            }
+        }
+
+        /// <summary>MV-932: the plain single-point probe + nearest-floor-zone fallback World 2's own
+        /// dressing tagging already used, extracted so every world's dressing can share it rather than
+        /// each re-implementing the same two lines.</summary>
+        private void TagRendererSimple(Renderer r)
+        {
+            Vector3 p = r.transform.position;
+            MapZone zone = _map.ZoneAt(p.x, p.y, p.z) ?? MapRuntime.NearestFloorZone(_map, p.x, p.z);
+            if (zone == null) return;
+            AddRendererZones(r, new List<string>(1) { zone.id });
+        }
+
+        /// <summary>Merges <paramref name="ids"/> into whatever zone ids <paramref name="r"/> already
+        /// carries in <see cref="_rendererZones"/> — the same de-duplicating merge every tagging path
+        /// here needs, extracted once (MV-932) rather than repeated per caller.</summary>
+        private void AddRendererZones(Renderer r, List<string> ids)
+        {
+            if (ids == null) return;
+            if (!_rendererZones.TryGetValue(r, out List<string> zones))
+                _rendererZones[r] = zones = new List<string>(ids.Count);
+            foreach (string id in ids)
+                if (!zones.Contains(id)) zones.Add(id);
         }
 
         /// <summary>MV-925: the two-sided zone ids for the <see cref="WallSegment"/> that
@@ -312,16 +452,27 @@ namespace MaxWorlds.Arena
             while (run != null && run.parent != wallPanels) run = run.parent;
             if (run == null) return null;
 
-            WallSegment? best = null;
+            return NearestWallZoneIds(run.position, wallSegments);
+        }
+
+        /// <summary>MV-932: <see cref="WallPanelZoneIds"/>'s own nearest-centre match against
+        /// <see cref="MapGeometry.Walls"/>, extracted so <see cref="TagReefDressing"/>'s circuit-spine
+        /// strips (which sit directly at a wall's own position, one per wall, with no "Wall Run" ancestor
+        /// to walk up to first) can use the exact same two-sided probe World 2's wall-panel dressing
+        /// uses, rather than a re-derived copy.</summary>
+        private List<string> NearestWallZoneIds(Vector3 worldPos, List<WallSegment> wallSegments)
+        {
+            if (wallSegments == null || wallSegments.Count == 0) return null;
+
+            WallSegment best = wallSegments[0];
             float bestDistSqr = float.MaxValue;
             foreach (WallSegment seg in wallSegments)
             {
-                float distSqr = (seg.Center - run.position).sqrMagnitude;
+                float distSqr = (seg.Center - worldPos).sqrMagnitude;
                 if (distSqr < bestDistSqr) { bestDistSqr = distSqr; best = seg; }
             }
-            if (best == null) return null;
 
-            List<string> ids = MapRuntime.ResolveWallZoneIds(_map, best.Value);
+            List<string> ids = MapRuntime.ResolveWallZoneIds(_map, best);
             return ids.Count > 0 ? ids : null;
         }
 
@@ -342,7 +493,14 @@ namespace MaxWorlds.Arena
         /// before any robot existed) — before MV-925 made this a repeating call. Called again on a later
         /// gate change, it counts whatever is actually alive under <c>areaRoot</c> at that moment, same as
         /// every other bucket here — an honest live reading, not a second, competing source of truth for
-        /// population (that stays <c>PopulationReadout</c>'s own job, its own line).</summary>
+        /// population (that stays <c>PopulationReadout</c>'s own job, its own line).
+        ///
+        /// MV-932, change item 4: World 1's dressing builds on its OWN scene-root GameObject, not as a
+        /// sibling of <c>areaRoot</c> the way World 2/3's dressing is — walking <c>areaRoot</c> alone
+        /// would keep reading 0 for it forever, the same "never counted" defect the ticket's own context
+        /// names. <see cref="_externalDressingRoots"/> (populated once, in <see cref="TagBackyardDressing"/>)
+        /// is walked alongside <c>areaRoot</c> below so every world's dressing is counted, not just the
+        /// ones that happen to already sit under this map's own parent.</summary>
         private void RecordRendererCensus()
         {
             Transform areaRoot = transform.parent != null ? transform.parent : transform;
@@ -359,7 +517,7 @@ namespace MaxWorlds.Arena
             // not to silently shrink to "whatever happens to be on right now" the way the pre-gate skip
             // here used to (harmless before this ticket, since nothing but two invisible blockers ever
             // disabled a renderer).
-            foreach (Renderer r in areaRoot.GetComponentsInChildren<Renderer>(false))
+            foreach (Renderer r in CensusRenderers(areaRoot))
             {
                 bool isSludge = sludgeHost != null && r.transform.IsChildOf(sludgeHost);
                 bool isRobot = !isSludge && r.GetComponentInParent<RobotEnemy>() != null;
@@ -381,6 +539,24 @@ namespace MaxWorlds.Arena
             }
 
             FrameCost.RecordAreaRendererCensus(mapGeometry, replicators, robots, sludge, opaque, transparent, enabledCount, _currentGateZoneId);
+        }
+
+        /// <summary>MV-932: every renderer <see cref="RecordRendererCensus"/> should count — everything
+        /// under <paramref name="areaRoot"/> (World 2/3's dressing already lives there) plus every root
+        /// <see cref="TagBackyardDressing"/> found off-tree for World 1. Extracted rather than inlined so
+        /// the "count everything, gated or not" contract has one place to read, not two loops that could
+        /// drift apart.</summary>
+        private IEnumerable<Renderer> CensusRenderers(Transform areaRoot)
+        {
+            foreach (Renderer r in areaRoot.GetComponentsInChildren<Renderer>(false))
+                yield return r;
+
+            foreach (Transform root in _externalDressingRoots)
+            {
+                if (root == null) continue;
+                foreach (Renderer r in root.GetComponentsInChildren<Renderer>(false))
+                    yield return r;
+            }
         }
     }
 
@@ -632,7 +808,7 @@ namespace MaxWorlds.Arena
         /// invented" doc), a piece this method tags is documented to always sit inside SOME room. A few
         /// measurably don't (e.g. a sludge tile's own scattered bubble prop landing outside every zone's
         /// footprint) — those fall back to the nearest floor zone by rect distance rather than leaking
-        /// through the area gate as permanently-enabled, the same fallback <see cref="TagDressingSludge"/>
+        /// through the area gate as permanently-enabled, the same fallback <see cref="MapStaticBatchRoot.TagRendererSimple"/>
         /// uses for the same reason.</summary>
         private static void TagStatic(MapData map, GameObject go, Dictionary<Renderer, List<string>> rendererZones)
         {
@@ -651,7 +827,7 @@ namespace MaxWorlds.Arena
 
         /// <summary>MV-904: the nearest zone to (<paramref name="px"/>, <paramref name="pz"/>) by distance
         /// to its own footprint rect (0 if the point already falls inside it) — the shared fallback both
-        /// <see cref="TagStatic"/> and <see cref="TagDressingSludge"/> use when
+        /// <see cref="TagStatic"/> and <see cref="MapStaticBatchRoot.TagRendererSimple"/> use when
         /// <see cref="MapData.ZoneAt(float,float,float)"/>'s exact containment test resolves to no zone
         /// at all (a kerb/pipe/overhead run hugging a long elevated corridor's OWN walls, where no floor
         /// zone sits underneath it — measured on World 2's own "area16", a 106 m deck with no underlying
