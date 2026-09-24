@@ -38,6 +38,21 @@ namespace MaxWorlds.Enemies
         /// <summary>Kept clear of a room's walls so a robot never spawns inside geometry.</summary>
         private const float EdgeMargin = 3f;
 
+        /// <summary>MV-937: how far past the zone Max is CURRENTLY tracked as standing in his raw
+        /// position must sit before a crossing into a different, gate-linked zone is honoured. Standing
+        /// exactly on the shared boundary between two rooms (a gantry doorway — World 2's a12/a11 deck,
+        /// this ticket's own measured case) lets ordinary movement noise (measured: +/-0.1m) flip
+        /// <see cref="MapData.ZoneAt(float,float,float)"/>'s raw answer every single frame; before this
+        /// fix that flip advanced <see cref="_physicalArea"/> and fired <see cref="PlayerCrossedIntoArea"/>
+        /// on every one of them, re-running the render gate's full ~30k-renderer pass plus a census
+        /// re-record each time — the measured walking-only fps collapse (Lee, 2026-09-24: 0.6-1.8fps
+        /// walking a12/a11's own decks vs ~7fps standing). A margin comfortably larger than the measured
+        /// jitter, well inside a single room's own scale (10s of metres), so a genuine walk into a new
+        /// room — whose own authored centre/spawn points sit far past any edge — is never delayed by
+        /// this; only a position still hovering in the doorway itself is held back. See
+        /// <see cref="StillNearZone"/>.</summary>
+        private const float BoundaryStickyMargin = 0.5f;
+
         /// <summary>Minimum gap kept between a newly placed robot and any other already-active one, or
         /// a cover prop's footprint — placement retries rather than allowing an overlap.</summary>
         private const float PlacementSpacing = 1.5f;
@@ -274,6 +289,17 @@ namespace MaxWorlds.Enemies
             return _map.AreLinked($"area{from}", $"area{to}");
         }
 
+        /// <summary>MV-937: true if (<paramref name="px"/>, <paramref name="pz"/>) sits within
+        /// <paramref name="margin"/> of <paramref name="zone"/>'s own rectangular bounds — i.e. <paramref name="zone"/>'s
+        /// footprint inflated by <paramref name="margin"/> on every side, exactly what
+        /// <see cref="BoundaryStickyMargin"/>'s own doc describes as "still basically standing in the
+        /// doorway". False (never sticky) for a null zone — a fresh <see cref="Configure"/> or an area
+        /// the map doesn't recognise has nothing to hold a crossing back against.</summary>
+        private static bool StillNearZone(MapZone zone, float px, float pz, float margin) =>
+            zone != null &&
+            px >= zone.XMin - margin && px <= zone.XMax + margin &&
+            pz >= zone.ZMin - margin && pz <= zone.ZMax + margin;
+
         /// <summary>The last blocked area-tracker jump this director warned about (MV-833) — logged once
         /// per distinct (from, to) pair rather than every frame the player stands in the disallowed spot.</summary>
         private (int from, int to) _lastBlockedAreaJump;
@@ -390,7 +416,11 @@ namespace MaxWorlds.Enemies
             // or lowered alike, same as the authoritative <see cref="SetCurrentArea"/> reset already
             // treats it (MV-909) — still refused if the two areas aren't actually linked, so a stray
             // zone-resolution jump is caught exactly as before.
-            if (area > 0 && area != _physicalArea)
+            // MV-937: a raw crossing is suppressed while Max is still within BoundaryStickyMargin of the
+            // zone he's CURRENTLY tracked as standing in — see StillNearZone's own doc for why. A genuine
+            // walk into a new room is never delayed by this (its own centre-authored spawn/probe points
+            // sit far outside any zone's own edge+margin), only a jitter astride a shared doorway is.
+            if (area > 0 && area != _physicalArea && !StillNearZone(_map.Zone($"area{_physicalArea}"), _target.position.x, _target.position.z, BoundaryStickyMargin))
             {
                 if (IsLinkedArea(_physicalArea, area))
                 {
