@@ -388,6 +388,17 @@ namespace MaxWorlds.UI
                     }
                 }, tab: TabFeel);
 
+            // MV-931: the performance-stats overlay switch — same slider-as-toggle idiom as "Force
+            // field hold" above (Default==Min==0), but wired straight to
+            // PerfOverlaySettings.Visible rather than through DevTuning: this one persists on every
+            // flip immediately (see that class), not gated behind "Save settings" like every other
+            // knob here — a display on/off has no "try before you commit" reason to withhold that.
+            // It also has to agree with Bootstrap's F1 / top-strip toggle, which reads and writes
+            // the exact same property.
+            Add("Performance stats", "on/off", 0f, 1f, 0f,
+                () => PerfOverlaySettings.Visible ? 1f : 0f,
+                v => PerfOverlaySettings.Visible = v >= 0.5f, tab: TabFeel);
+
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
             // through, the gated-area knobs (WV-234, spec §1/§9), and the World & Difficulty
             // Framework's own dials (below). ----
