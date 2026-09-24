@@ -71,6 +71,15 @@ namespace MaxWorlds.CameraRig
         /// <summary>True on a handheld build (iOS/Android/TestFlight, and a mobile WebGL browser).</summary>
         public static bool IsPhoneClass => SimulatePhoneClass ?? Application.isMobilePlatform;
 
+        /// <summary>MV-926: the shipped per-device default distance, ignoring any live dev-mode zoom
+        /// nudge (<see cref="Nudge"/>/<see cref="SetDistance"/>) or player-facing zoom setting
+        /// (<c>SettingsPanel</c>) that may have moved <see cref="cameraDistance"/> away from it. Used by
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.TickDormant"/>'s on-screen wake test, which must judge
+        /// "has the player looked at this" against the same view regardless of how far the live camera
+        /// happens to be zoomed out right now — otherwise zooming out permanently wakes every dormant
+        /// robot the wider frustum newly covers (this ticket's own regression).</summary>
+        public static float DefaultDistanceForCurrentDevice => IsPhoneClass ? PhoneDistance : DesktopDefaultDistance;
+
         [Tooltip("Fixed top-down pitch (MV-468: 60°, Lee's approved framing, superseding an earlier " +
                  "64.88° landed the same day). No longer load-bearing for an AI-art pipeline — every " +
                  "character is built procedurally in code now, so nothing is baked to a fixed shot " +
@@ -84,7 +93,12 @@ namespace MaxWorlds.CameraRig
                  "read the number off the dev overlay, then commit it here. Keep the pitch fixed. " +
                  "MV-468: re-derived for the 60° pitch via DistanceHoldingVisibleArea against the " +
                  "pre-MV-468 72° baseline, not eyeballed.")]
-        [SerializeField] private float cameraDistance = 26.02f;   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 24.284037)
+        /// <summary>Committed desktop/WebGL default distance (MV-658: baked from Lee's 2026-09-02
+        /// tuning pass, was 24.284037) — named so <see cref="DefaultDistanceForCurrentDevice"/> (MV-926)
+        /// has one place to read the shipped default from, rather than a second copy of the number.</summary>
+        public const float DesktopDefaultDistance = 26.02f;
+
+        [SerializeField] private float cameraDistance = DesktopDefaultDistance;
 
         /// <summary>Current pull-back, in metres. Read by the dev overlay so the number Lee dials in
         /// by eye is the number he can paste back into the field above.</summary>
