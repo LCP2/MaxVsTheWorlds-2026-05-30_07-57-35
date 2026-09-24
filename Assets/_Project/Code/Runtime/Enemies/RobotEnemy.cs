@@ -1566,7 +1566,58 @@ namespace MaxWorlds.Enemies
             // camera falls on (the fixed ~72 degree top-down rig never reaches back that far) — skip
             // the frustum test entirely rather than run it every frame only to read false forever.
             if (IsWellBehindPlayer) return;
+
+            // MV-936: the residue population that ISN'T well behind (a garrison in or near the
+            // player's own area, the case IsWellBehindPlayer above deliberately never throttles) used
+            // to run the frustum test below flat out, every one of them, every single frame — fine for
+            // a handful, but W2's midgame residue runs into the hundreds (this ticket's own evidence:
+            // 103 dormant robots, robot bucket 138ms while Max stood on a deck above them). This
+            // spreads each robot's OWN check across DormantWakeCheckPeriod frames — a fixed, bounded
+            // amount of latency (at most that many frames before it can notice the player's camera has
+            // fallen on it) in exchange for dividing the steady-state population cost by the same
+            // factor. Never applies to the FIRST check after a robot starts caring (leaving
+            // IsWellBehindPlayer, or being newly placed) — that one always runs immediately, so a robot
+            // is never left looking like it silently stopped checking at all.
+            if (!DormantWakeCheckDueThisTick()) return;
+
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
+        }
+
+        /// <summary>How many of this robot's own TickDormant calls (while not well behind — see
+        /// <see cref="TickDormant"/>) the round-robin wake-check budget spreads across (MV-936). Not a
+        /// real-time interval — deliberately keyed off this robot's OWN call count rather than
+        /// <see cref="Time.frameCount"/> so it stays exactly as testable, and exactly as deterministic
+        /// across a dropped/resumed frame, as the rest of this class's reflection-driven EditMode
+        /// coverage already is.</summary>
+        private const int DormantWakeCheckPeriod = 6;
+
+        /// <summary>Whether this robot has ever run its wake check while not well behind (MV-936) — the
+        /// very first one always runs immediately, before the round-robin below starts spreading it
+        /// out, so a robot newly in range is never left waiting up to <see cref="DormantWakeCheckPeriod"/>
+        /// calls just to find out whether the player is already looking at it.</summary>
+        private bool _dormantWakeCheckPrimed;
+
+        /// <summary>This robot's own slot in the round-robin (MV-936), assigned once from its instance
+        /// ID the first time it's needed — same per-instance spread idiom <see cref="Tick"/>'s own
+        /// <c>_dormantFarAccumulator</c> stagger uses, so a whole garrison placed (or coming into
+        /// range) on the same call doesn't re-synchronise onto "every Nth call, together".</summary>
+        private int _dormantWakeCheckBucket;
+
+        /// <summary>How many not-well-behind <see cref="TickDormant"/> calls this robot has made since
+        /// its first (MV-936) — advances only on the calls that come after the always-on first one.</summary>
+        private int _dormantWakeCheckCount;
+
+        private bool DormantWakeCheckDueThisTick()
+        {
+            if (!_dormantWakeCheckPrimed)
+            {
+                _dormantWakeCheckPrimed = true;
+                _dormantWakeCheckBucket = Mathf.Abs(GetInstanceID()) % DormantWakeCheckPeriod;
+                return true;
+            }
+
+            _dormantWakeCheckCount++;
+            return _dormantWakeCheckCount % DormantWakeCheckPeriod == _dormantWakeCheckBucket;
         }
 
         /// <summary>How many areas behind the player's own a robot's area must be before it counts as
