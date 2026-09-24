@@ -68,12 +68,6 @@ namespace MaxWorlds.Core
         private string _cachedFrameCostLine;
         private float _frameCostWindowStartAt = float.NegativeInfinity;
 
-        /// <summary>MV-888: `showFps` is a SerializeField and can't change on a deployed build, so
-        /// nobody could A/B whether the overlay itself costs a frame. This is the runtime toggle —
-        /// starts true (the overlay is never hidden by default; see the ticket's "do not re-raise"
-        /// list), flippable live via <see cref="PollOverlayToggle"/>.</summary>
-        private bool _overlayVisible = true;
-
         private void Awake()
         {
             // First line in the log, so a browser console immediately answers "which build is this?"
@@ -178,7 +172,11 @@ namespace MaxWorlds.Core
         /// bottom/left/right), and this ticket's diff can't touch that file to carve out a dedicated
         /// icon — top-centre is the one strip nothing there already listens on. Neither branch draws or
         /// allocates: only a Rect.Contains against Event.current's own struct fields, so it costs
-        /// nothing extra whether the overlay is visible or not.</summary>
+        /// nothing extra whether the overlay is visible or not.
+        ///
+        /// MV-931: flips <see cref="PerfOverlaySettings.Visible"/> directly, the same flag the
+        /// Settings panel's "Performance stats" switch reads and writes, so this path and that one
+        /// can never disagree — and the flip persists immediately, same as a switch tap.</summary>
         private void PollOverlayToggle()
         {
             Event e = Event.current;
@@ -186,7 +184,7 @@ namespace MaxWorlds.Core
 
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F1)
             {
-                _overlayVisible = !_overlayVisible;
+                PerfOverlaySettings.Visible = !PerfOverlaySettings.Visible;
                 return;
             }
 
@@ -194,14 +192,14 @@ namespace MaxWorlds.Core
             {
                 float w = Mathf.Min(200f, Screen.width * 0.3f);
                 var hotZone = new Rect(Screen.width * 0.5f - w * 0.5f, 0f, w, 48f);
-                if (hotZone.Contains(e.mousePosition)) _overlayVisible = !_overlayVisible;
+                if (hotZone.Contains(e.mousePosition)) PerfOverlaySettings.Visible = !PerfOverlaySettings.Visible;
             }
         }
 
         private void OnGUI()
         {
             PollOverlayToggle();
-            if (!_overlayVisible) return;
+            if (!PerfOverlaySettings.Visible) return;
 
             FrameCost.Begin(FrameCost.Bucket.Debug);
             try
