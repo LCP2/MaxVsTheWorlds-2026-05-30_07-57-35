@@ -25,9 +25,22 @@ namespace MaxWorlds.Tests.EditMode
     /// were removed so the only way up is the new Replicator door), and every deck this ticket touches
     /// — a14/a15/a12/a11/a10/a16/a17/a18 in MV-865's post-renumber ids (a12/a15/a16/a17/a18/a14/a19/a20
     /// in MV-852's own numbering at the time) — is now deliberately `walled`, a real 1.0 m parapet, not
-    /// the open 0.10 m band this test guards. a19 (was a21) is untouched by MV-852 and stays a plain,
-    /// unwalled deck, so it's still a faithful stand-in for "every deck NOT authored `walled`" elsewhere
-    /// in the game.
+    /// the open 0.10 m band this test guards. a19 (was a21) was untouched by MV-852 and stayed a plain,
+    /// unwalled deck, so it was a faithful stand-in for "every deck NOT authored `walled`" elsewhere in
+    /// the game.
+    ///
+    /// Retargeted again by MV-900 (World 2 V10): a19's upper level is authored away entirely (decks and
+    /// ramps both emptied — Lee's own change list), so it can no longer stand in for anything. a13's own
+    /// decks are a dead end too: they duplicate its overlay a15's rects, a15's copies are all authored
+    /// `"walled": true`, and <c>WorldMapLoader</c>'s MV-907 fix (its own doc comment names this exact
+    /// a13/a15 pair) skips the BASE area's (a13's) copy at build time, so only a15's — walled — decks
+    /// ever reach <c>MapGeometry.Decks</c>. a21's own four corner pads are the one deck set left
+    /// unwalled in the shipped config (none carry `"walled": true`, untouched by MV-900) and, unlike
+    /// a13/a15, they are not an overlay/base pair — every one of them actually builds. MV821's own edge/
+    /// post/collider checks are per-deck already, with no cross-deck reachability requirement, so four
+    /// small, physically disjoint pads (a21's own design — MV-900's walkability test at MV900World2WalkabilityTests
+    /// treats them as separate reachability units for the same reason) exercise this test just as well
+    /// as one long walkway did.
     /// </summary>
     public sealed class MV821DeckWalkwayTests
     {
@@ -37,14 +50,14 @@ namespace MaxWorlds.Tests.EditMode
         private const float InfillEpsilon = 0.05f; // above this a renderer no longer reads as the flush ground-shadow decal
 
         [Test]
-        public void WorldTwoArea19Decks_ReadAsOpenWalkwaysWithColliderUntouched()
+        public void WorldTwoArea21Decks_ReadAsOpenWalkwaysWithColliderUntouched()
         {
             WorldConfig w2cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(w2cfg, "World 2's own shipped config must load for this test to mean anything");
             Assert.IsTrue(WorldMapLoader.TryLoad(w2cfg, out MapData map, out string reason), reason);
 
-            List<DeckSlab> a19Decks = MapGeometry.Decks(map).Where(d => d.Id.StartsWith("a19_deck")).ToList();
-            Assert.IsNotEmpty(a19Decks, "World 2's a19 must author at least one deck for this test to mean anything");
+            List<DeckSlab> a21Decks = MapGeometry.Decks(map).Where(d => d.Id.StartsWith("a21_deck")).ToList();
+            Assert.IsNotEmpty(a21Decks, "World 2's a21 must author at least one deck for this test to mean anything");
 
             var host = new GameObject("MV821 host").transform;
             try
@@ -54,7 +67,7 @@ namespace MaxWorlds.Tests.EditMode
                 var failures = new List<string>();
                 Transform[] allChildren = host.GetComponentsInChildren<Transform>(true);
 
-                foreach (DeckSlab deck in a19Decks)
+                foreach (DeckSlab deck in a21Decks)
                 {
                     // (d) the deck's own top-collider slab is byte-for-byte untouched.
                     Transform body = allChildren.FirstOrDefault(t => t.name == deck.Id);

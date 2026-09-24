@@ -15,7 +15,8 @@ namespace MaxWorlds.Tests.EditMode
     /// real blocker is <c>BuildDeckParapet</c>'s own invisible, non-stripped collider box (MV-852):
     /// a17's decks are all authored <c>"walled": true</c>, and MV-852 walls every edge blind to a second
     /// deck occupying the far side of that same edge line — the same way MV-859 already found it blind
-    /// to a gate's own doorway.
+    /// to a gate's own doorway. (MV-900 later redrew a17's own rects — the H shape lost two arms — so
+    /// the specific coordinates this test probes moved with it; see the outer-edge assertion below.)
     ///
     /// One consolidated EditMode test (testing policy MV-465, Rule 1), asserting RESOLVED values only
     /// (Tier 2 — built collider bounds, never an authored constant or a rendered pixel): at a point on
@@ -55,13 +56,16 @@ namespace MaxWorlds.Tests.EditMode
                     "a17_deck3 (both decks at height 2.5) — Max must be able to cross it, but a built " +
                     "collider still blocks this point");
 
-                // A genuinely outer edge on the SAME deck (west wall, x=62 — nothing else in a17 ever
-                // reaches this line) must stay exactly as walled as before.
-                var outerEdgePoint = new Vector3(62f, 3.0f, 111.5f);
+                // A genuinely outer edge on the SAME deck (west wall, x=61 — nothing else in a17 ever
+                // reaches this line) must stay exactly as walled as before. MV-900 widened a17_deck1
+                // from w=3 (local x=8) to w=4 (local x=7), moving its true west edge from world x=62 to
+                // x=61; no other a17 deck reaches x=61 either, so the point this assertion needs just
+                // moved with it.
+                var outerEdgePoint = new Vector3(61f, 3.0f, 111.5f);
                 bool outerEdgeBlocked = colliders.Any(c => c.bounds.Contains(outerEdgePoint));
                 Assert.IsTrue(outerEdgeBlocked,
                     $"MV-899: a17_deck1's genuinely outer west edge at {outerEdgePoint} must stay walled " +
-                    "— no other deck ever reaches x=62 in a17");
+                    "— no other deck ever reaches x=61 in a17");
             }
             finally
             {
