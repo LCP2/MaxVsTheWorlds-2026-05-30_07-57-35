@@ -157,7 +157,7 @@ namespace MaxWorlds.Core
                 $"map {mapGeometry} repl {replicators} robots {robots} sludge {sludgeDressing}";
         }
 
-        /// <summary>Null until the first area finishes building — <see cref="Bootstrap.DrawWrappedLine"/>
+        /// <summary>Null until the first area finishes building — <see cref="Bootstrap.RebuildReadout"/>
         /// already skips a null/empty line, so nothing draws before then.</summary>
         public static string AreaCensusLine() => s_areaCensusLine;
 

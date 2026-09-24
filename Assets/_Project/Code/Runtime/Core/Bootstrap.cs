@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using UnityEngine;
 
 namespace MaxWorlds.Core
@@ -47,26 +48,38 @@ namespace MaxWorlds.Core
 
         /// <summary>MV-869: the robot-population / Replicator-state diagnostic line, resolved and
         /// formatted by <c>MaxWorlds.Enemies.PopulationReadout.BuildLine</c>. Same "Core can't see
-        /// Gameplay" wiring as <see cref="WorldProbeLineProvider"/>. Rebuilt on <see cref="PopulationLineRefreshSeconds"/>
-        /// (see <see cref="OnGUI"/>), never once per <c>OnGUI</c> call — the provider walks the live
-        /// robot registry, and this readout must not itself cost a frame.</summary>
+        /// Gameplay" wiring as <see cref="WorldProbeLineProvider"/>. Rebuilt on
+        /// <see cref="ReadoutRefreshSeconds"/>'s cadence (see <see cref="RebuildReadout"/>), never once
+        /// per <c>OnGUI</c> call — the provider walks the live robot registry, and this readout must not
+        /// itself cost a frame.</summary>
         public static Func<string> PopulationLineProvider;
 
-        /// <summary>MV-869: how often <see cref="PopulationLineProvider"/> is re-invoked — a glance-rate
-        /// readout, not a per-frame one, matching <c>Mv503DiagnosticOverlay.PerfRefreshSeconds</c>'s own
-        /// cached-line cadence.</summary>
-        private const float PopulationLineRefreshSeconds = 0.25f;
+        /// <summary>MV-933: the readout's own build cadence — at most 4 times/second, cached between
+        /// rebuilds. Before this ticket the fps line and <see cref="WorldProbeLineProvider"/> were
+        /// rebuilt on EVERY <c>OnGUI</c> invocation (Unity calls it at least twice per rendered frame —
+        /// Layout then Repaint — and once per queued input event besides), so a provider that walks the
+        /// live scene (<c>BackyardPath.BuildWorldProbeLine</c>'s <c>FindFirstObjectByType</c>/
+        /// <c>GameObject.Find</c> calls) paid that cost dozens of times a second regardless of frame
+        /// rate — worse the slower the game already ran, the exact runaway MV-933 measured (104.9 ms/
+        /// frame in World 2 a10). The population and frame-cost lines already had their own 0.25s
+        /// refresh timers before this ticket; one clock now gates every line, extending that same
+        /// discipline to the two lines (fps, world-probe) that never had it.</summary>
+        private const float ReadoutRefreshSeconds = 0.25f;
 
-        private string _cachedPopulationLine;
-        private float _populationLineBuiltAt = float.NegativeInfinity;
+        private float _readoutBuiltAt = float.NegativeInfinity;
 
-        /// <summary>MV-876: the script-time attribution line — see <see cref="FrameCost"/>. Same
-        /// refresh-window reasoning as <see cref="PopulationLineRefreshSeconds"/>: the accumulator
-        /// itself costs ticks only every frame, and only this cadence allocates a string from it.</summary>
-        private const float FrameCostRefreshSeconds = 0.25f;
+        /// <summary>The compact ("FPS only") readout — first line alone: fps, target, build stamp.
+        /// Rebuilt only on <see cref="ReadoutRefreshSeconds"/>'s cadence, never per <c>OnGUI</c> call.</summary>
+        private GUIContent _compactContent;
+        private float _compactHeight;
 
-        private string _cachedFrameCostLine;
-        private float _frameCostWindowStartAt = float.NegativeInfinity;
+        /// <summary>The full readout — every line, joined with "\n" into ONE <see cref="GUIContent"/> so
+        /// <see cref="DrawOverlay"/> makes exactly one <c>GUI.Label</c> call per frame instead of one per
+        /// line (MV-933 fix items 2/3: a single retained label, no per-frame IMGUI layout or string
+        /// concatenation). <see cref="GUIStyle.CalcHeight"/> — the other per-line cost the old code paid
+        /// every frame via <c>DrawWrappedLine</c> — is also only computed at rebuild time.</summary>
+        private GUIContent _fullContent;
+        private float _fullHeight;
 
         private void Awake()
         {
@@ -83,7 +96,6 @@ namespace MaxWorlds.Core
             // MV-876: a clean accumulation window from this boot, not whatever a previous scene load
             // left behind (the static accumulator survives domain reloads across scene changes).
             FrameCost.Reset();
-            _frameCostWindowStartAt = Time.realtimeSinceStartup;
 
             // MV-886: subscribed once for the process lifetime — see FrameCost's own doc comment.
             FrameCost.SubscribeRenderEvents();
@@ -174,9 +186,11 @@ namespace MaxWorlds.Core
         /// allocates: only a Rect.Contains against Event.current's own struct fields, so it costs
         /// nothing extra whether the overlay is visible or not.
         ///
-        /// MV-931: flips <see cref="PerfOverlaySettings.Visible"/> directly, the same flag the
+        /// MV-931: flips <see cref="PerfOverlaySettings.CurrentMode"/> directly, the same value the
         /// Settings panel's "Performance stats" switch reads and writes, so this path and that one
-        /// can never disagree — and the flip persists immediately, same as a switch tap.</summary>
+        /// can never disagree — and the flip persists immediately, same as a switch tap. MV-933:
+        /// three states now exist, so both the key and the tap zone cycle Off -> FPS only -> Full ->
+        /// Off rather than a plain negation.</summary>
         private void PollOverlayToggle()
         {
             Event e = Event.current;
@@ -184,7 +198,7 @@ namespace MaxWorlds.Core
 
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.F1)
             {
-                PerfOverlaySettings.Visible = !PerfOverlaySettings.Visible;
+                PerfOverlaySettings.CurrentMode = NextMode(PerfOverlaySettings.CurrentMode);
                 return;
             }
 
@@ -192,19 +206,24 @@ namespace MaxWorlds.Core
             {
                 float w = Mathf.Min(200f, Screen.width * 0.3f);
                 var hotZone = new Rect(Screen.width * 0.5f - w * 0.5f, 0f, w, 48f);
-                if (hotZone.Contains(e.mousePosition)) PerfOverlaySettings.Visible = !PerfOverlaySettings.Visible;
+                if (hotZone.Contains(e.mousePosition)) PerfOverlaySettings.CurrentMode = NextMode(PerfOverlaySettings.CurrentMode);
             }
         }
+
+        private static PerfOverlaySettings.Mode NextMode(PerfOverlaySettings.Mode mode) =>
+            (PerfOverlaySettings.Mode)(((int)mode + 1) % 3);
 
         private void OnGUI()
         {
             PollOverlayToggle();
-            if (!PerfOverlaySettings.Visible) return;
+            PerfOverlaySettings.Mode mode = PerfOverlaySettings.CurrentMode;
+            if (mode == PerfOverlaySettings.Mode.Off) return;
+            if (!ShouldShowDebugOverlay(showFps, Application.platform, Application.isEditor)) return;
 
             FrameCost.Begin(FrameCost.Bucket.Debug);
             try
             {
-                DrawOverlay();
+                DrawOverlay(mode);
             }
             finally
             {
@@ -212,20 +231,58 @@ namespace MaxWorlds.Core
             }
         }
 
-        /// <summary>MV-888: the pre-existing OnGUI body, unchanged, now wrapped by the caller in
-        /// FrameCost's Debug bucket so its own IMGUI cost gets a line instead of landing silently in
-        /// `other`. Split out rather than inlined so every early return below still closes the timer
-        /// (the try/finally in <see cref="OnGUI"/>), and so the toggle check above never itself does
-        /// any IMGUI work.</summary>
-        private void DrawOverlay()
-        {
-            if (!ShouldShowDebugOverlay(showFps, Application.platform, Application.isEditor)) return;
+        /// <summary>MV-933: whether the cached readout content is stale and must be rebuilt — a pure,
+        /// static predicate (same "extract for testability" idiom as <see cref="ShouldShowDebugOverlay"/>)
+        /// so an EditMode test can drive the throttle with a simulated clock, with no MonoBehaviour, no
+        /// OnGUI, no Unity object lifecycle involved.</summary>
+        public static bool ShouldRebuildReadout(float now, float lastBuiltAt, float refreshSeconds) =>
+            now - lastBuiltAt >= refreshSeconds;
 
+        /// <summary>Tracks which mode the cached content was last built for, so flipping the switch
+        /// (a rare, user-driven event, not a per-frame one) shows the right content immediately instead
+        /// of waiting out the rest of the current <see cref="ReadoutRefreshSeconds"/> window.</summary>
+        private PerfOverlaySettings.Mode? _readoutBuiltForMode;
+
+        /// <summary>MV-888's OnGUI body, now wrapped by the caller in FrameCost's Debug bucket so its
+        /// own IMGUI cost gets a line instead of landing silently in `other`. MV-933: the expensive part
+        /// — building the strings (including <see cref="WorldProbeLineProvider"/>'s scene-walking Find
+        /// calls) and measuring their height — now happens only inside <see cref="RebuildReadout"/>, on
+        /// <see cref="ReadoutRefreshSeconds"/>'s cadence; every other call here just draws whichever
+        /// <see cref="GUIContent"/> is already cached, one <c>GUI.Label</c> call, no layout work.</summary>
+        private void DrawOverlay(PerfOverlaySettings.Mode mode)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (_readoutBuiltForMode != mode || ShouldRebuildReadout(now, _readoutBuiltAt, ReadoutRefreshSeconds))
+            {
+                RebuildReadout(mode);
+                _readoutBuiltAt = now;
+                _readoutBuiltForMode = mode;
+            }
+
+            bool compact = mode == PerfOverlaySettings.Mode.FpsOnly;
+            GUIContent content = compact ? _compactContent : _fullContent;
+            float height = compact ? _compactHeight : _fullHeight;
+            if (content == null) return;
+
+            float labelWidth = Mathf.Min(900f, Screen.width - 24f);
+            GUI.Label(new Rect(12f, 8f, labelWidth, height), content, _fpsStyle);
+        }
+
+        /// <summary>MV-933: builds the readout content at most every <see cref="ReadoutRefreshSeconds"/>
+        /// — never per <c>OnGUI</c> call (fix items 1-3). The compact ("FPS only") first line is always
+        /// built, since either mode can draw it; the full line set (fix item 5's "Full" state) — and the
+        /// <see cref="WorldProbeLineProvider"/>/<see cref="PopulationLineProvider"/>/<see cref="FrameCost"/>
+        /// work behind it — is skipped entirely in FPS-only mode (fix item 4: compact mode must not pay
+        /// for lines it never shows).</summary>
+        private void RebuildReadout(PerfOverlaySettings.Mode mode)
+        {
             _fpsStyle ??= new GUIStyle(GUI.skin.label)
             {
                 fontSize = Mathf.Max(14, Mathf.RoundToInt(Screen.height * 0.035f)),
                 normal = { textColor = Color.white }
             };
+
+            float labelWidth = Mathf.Min(900f, Screen.width - 24f);
 
             // Two rules here, both learned the hard way:
             //
@@ -240,74 +297,41 @@ namespace MaxWorlds.Core
                        : _meter.Fps < 10f ? $"{_meter.Fps:0.0} fps"
                        : $"{_meter.Fps:0} fps";
 
-            // MV-881 Requirement A: every row below is drawn by DrawWrappedLine, which advances y by
-            // that row's own measured height (including wrapped rows) instead of a fixed offset — see
-            // its doc comment. labelWidth also caps rows at the visible screen so wrapping (and the
-            // legibility that depends on it) is measured against what a phone can actually show, not a
-            // fixed 900px that could run off a narrower device.
-            float labelWidth = Mathf.Min(900f, Screen.width - 24f);
-            float y = 8f;
+            string firstLine = $"{fps}   (target {targetFrameRate})   build {Application.version}";
 
-            DrawWrappedLine($"{fps}   (target {targetFrameRate})   build {Application.version}", ref y, labelWidth);
+            _compactContent = new GUIContent(firstLine);
+            _compactHeight = _fpsStyle.CalcHeight(_compactContent, labelWidth);
 
-            // MV-766: a second line, under the same "smoke-verification, not player UI" condition
-            // as the stamp above — what actually resolved, read from the live objects, never
-            // recomputed from the world index.
+            if (mode != PerfOverlaySettings.Mode.Full) return;
+
+            var sb = new StringBuilder(firstLine);
+
+            // MV-766: the world/palette/look diagnostic — what actually resolved, read from the live
+            // objects, never recomputed from the world index. This walk (FindFirstObjectByType /
+            // GameObject.Find) is the one MV-933 traced as the readout's real cost in a heavy scene —
+            // it now runs at most 4 times/second instead of on every OnGUI call.
             string probeLine = WorldProbeLineProvider?.Invoke();
-            if (string.IsNullOrEmpty(probeLine)) return;
+            if (!string.IsNullOrEmpty(probeLine)) sb.Append('\n').Append(probeLine);
 
-            DrawWrappedLine(probeLine, ref y, labelWidth);
+            // MV-869: how many actors are alive and whether World 2's Replicator chain is actually
+            // live.
+            string populationLine = PopulationLineProvider?.Invoke();
+            if (!string.IsNullOrEmpty(populationLine)) sb.Append('\n').Append(populationLine);
 
-            // MV-869: a third line, under the same condition as the two above — how many actors are
-            // alive and whether World 2's Replicator chain is actually live. Rebuilt at most every
-            // PopulationLineRefreshSeconds, never once per OnGUI call, so reading it never costs a
-            // frame the way an unbounded per-frame walk of the robot registry would.
-            float now = Time.realtimeSinceStartup;
-            if (PopulationLineProvider != null && now - _populationLineBuiltAt >= PopulationLineRefreshSeconds)
-            {
-                _cachedPopulationLine = PopulationLineProvider.Invoke();
-                _populationLineBuiltAt = now;
-            }
-
-            DrawWrappedLine(_cachedPopulationLine, ref y, labelWidth);
-
-            // MV-876: a fourth/fifth line (MV-881 made the readout two lines — see FrameCost.FormatLine),
-            // under the same condition as the ones above — the script-time attribution readout that
-            // replaces guessing at World 2's pinned 11 fps with measurement. Rebuilt at most every
-            // FrameCostRefreshSeconds, never once per OnGUI call, matching the population line's own
-            // "must not itself cost a frame" reasoning (FrameCost.FormatLine allocates;
-            // FrameCost.Begin/End/MarkFrameRendered/NotifyFixedUpdate never do).
-            if (now - _frameCostWindowStartAt >= FrameCostRefreshSeconds)
-            {
-                _cachedFrameCostLine = FrameCost.FormatLine();
-                FrameCost.Reset();
-                _frameCostWindowStartAt = now;
-            }
-
-            DrawWrappedLine(_cachedFrameCostLine, ref y, labelWidth);
+            // MV-876/MV-881: the script-time attribution readout. FormatLine/Reset are paired so the
+            // window FrameCost reports on is exactly the one between this rebuild and the last.
+            string frameCostLine = FrameCost.FormatLine();
+            FrameCost.Reset();
+            if (!string.IsNullOrEmpty(frameCostLine)) sb.Append('\n').Append(frameCostLine);
 
             // MV-886: the one-off renderer census — already formatted and cached by MapRuntime the
-            // moment an area finishes building (see FrameCost.RecordAreaRendererCensus), so reading it
-            // here every OnGUI call costs nothing beyond drawing the string that's already there. Null
-            // until the first area has built, which DrawWrappedLine already treats as "skip this line".
-            DrawWrappedLine(FrameCost.AreaCensusLine(), ref y, labelWidth);
-        }
+            // moment an area finishes building, so reading it here costs nothing beyond appending the
+            // string that's already there. Null until the first area has built.
+            string censusLine = FrameCost.AreaCensusLine();
+            if (!string.IsNullOrEmpty(censusLine)) sb.Append('\n').Append(censusLine);
 
-        /// <summary>MV-881 Requirement A: a ticket comment caught the population line and the frame-cost
-        /// line physically overlapping — GUI.Label wraps text that doesn't fit <paramref name="width"/>,
-        /// but the readout's rows were spaced at a fixed <c>fontSize * 1.2</c> regardless, so a wrapped
-        /// row bled into the next label's position and cost a digit (misread as "robot 10.6" instead of
-        /// "robot 100.6"). Each line now gets a rect sized to its OWN measured height — including
-        /// embedded "\n"s, which is how a two-line <see cref="FrameCost.FormatLine"/> return draws as
-        /// two rows from one label — and <paramref name="y"/> only advances by that much, so no line can
-        /// ever draw on top of another at any font size or aspect.</summary>
-        private void DrawWrappedLine(string text, ref float y, float width)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-
-            float height = _fpsStyle.CalcHeight(new GUIContent(text), width);
-            GUI.Label(new Rect(12f, y, width, height), text, _fpsStyle);
-            y += height;
+            _fullContent = new GUIContent(sb.ToString());
+            _fullHeight = _fpsStyle.CalcHeight(_fullContent, labelWidth);
         }
     }
 }
