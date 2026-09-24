@@ -335,8 +335,8 @@ namespace MaxWorlds.Rendering
         /// which is opaque) — same URP Unlit-shader blend setup <c>VfxMaterials.Get</c> uses on the
         /// particle shader (<c>_Surface</c>=1, <c>_Blend</c>=2/additive, <c>_ZWrite</c>=0), duplicated
         /// here rather than referenced because <c>MaxWorlds.Rendering</c> cannot depend on
-        /// <c>MaxWorlds.VFX</c> (Gameplay assembly) — see <see cref="SludgeFlowRig"/>'s own header for
-        /// the same assembly-boundary note.</summary>
+        /// <c>MaxWorlds.VFX</c> (Gameplay assembly) — the same assembly-boundary constraint
+        /// <see cref="LightFittingPulse"/> below documents for <c>AnimSequence</c>.</summary>
         public static Material AdditiveUnlit(Color tone, string name)
         {
             if (_additive.TryGetValue(tone, out Material cached) && cached != null) return cached;
@@ -425,8 +425,8 @@ namespace MaxWorlds.Rendering
     /// <summary>
     /// Hand-rolled per-frame pulse/blink timer for a light fitting (MV-787) — the same
     /// "<c>MaxWorlds.Rendering</c> cannot reference <c>AnimSequence</c>" constraint
-    /// <see cref="SludgeFlowRig"/> already documents, so this ticks its own clock instead rather than
-    /// using <see cref="MaxWorlds.Feel.AnimSequence"/> (Gameplay assembly).
+    /// <see cref="StormdrainLightKit.AdditiveUnlit"/> documents above, so this ticks its own clock
+    /// instead rather than using <see cref="MaxWorlds.Feel.AnimSequence"/> (Gameplay assembly).
     ///
     /// Phase is a pure function of the fitting's own world position (<see cref="PhaseFor"/>) — never
     /// <see cref="UnityEngine.Random"/> — so two fittings at different positions land at different

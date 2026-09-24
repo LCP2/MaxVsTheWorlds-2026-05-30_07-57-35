@@ -468,17 +468,22 @@ namespace MaxWorlds.Arena
         ///    originals.
         ///  * The "Stormdrain Dressing" subtree <see cref="TagDressingSludge"/> just tagged — kerbs,
         ///    pipe banks, soffits, panel joints/bays/stains, hazard-bulkhead structure: MV-904's own
-        ///    measured 16,106-renderer figure that MV-887 never even gated, let alone batched.
+        ///    measured 16,106-renderer figure that MV-887 never even gated, let alone batched. MV-938's
+        ///    sludge flow dressing (bands/chevrons/foam) lives here too now — it is already ONE renderer
+        ///    per tile with its own per-tile material (see <c>StormdrainKit.BuildSludgeFlowSurface</c>),
+        ///    so it passes through this bucketing like anything else; a unique material just means it
+        ///    ends up as its own one-renderer "combined" bucket, which costs nothing extra.
         ///
         /// What never goes in a bucket, on purpose:
         ///  * Anything in <see cref="_dressedHidden"/> — combining a dressed-away cover box's geometry
         ///    back in would draw it again the moment its zone gates on, reopening the exact MV-890
         ///    regression ("pipes encased in grey blocks") that field exists to prevent.
-        ///  * Anything under a <see cref="SludgeFlowRig"/> (MV-873's bands/chevrons/foam — 43 of a
-        ///    tile's ~45 dressed pieces move every frame), a <see cref="GrateShudder"/>, or a
-        ///    <see cref="LightFittingPulse"/> (the hazard-lamp and LED-cell blink) — see
-        ///    <see cref="HasAnimatedAncestor"/>. Folding a moving piece into a static combined mesh would
-        ///    freeze it mid-animation, which is a visible change this ticket's AC explicitly forbids.
+        ///  * Anything under a <see cref="GrateShudder"/> or a <see cref="LightFittingPulse"/> (the
+        ///    hazard-lamp and LED-cell blink) — see <see cref="HasAnimatedAncestor"/>. Folding a moving
+        ///    piece into a static combined mesh would freeze it mid-animation, which is a visible change
+        ///    this ticket's AC explicitly forbids. MV-938 removed the sludge bands/chevrons/foam's own
+        ///    entry here along with <c>SludgeFlowRig</c> itself — that fill is a static shader-animated
+        ///    mesh now, not a per-frame Transform move, so it has nothing left to exclude for.
         ///  * A renderer with zero or more than one material — <see cref="Mesh.CombineMeshes"/> with
         ///    <c>mergeSubMeshes: true</c> needs exactly one, and nothing this map builds is authored
         ///    with more, so this is a defensive skip, not an expected path.
@@ -575,9 +580,12 @@ namespace MaxWorlds.Arena
         /// per-frame system moves, resizes or repaints on its own — see <see cref="CombineZoneGeometry"/>'s
         /// own doc for why a piece like this must never be folded into a static combined mesh.</summary>
         private static bool HasAnimatedAncestor(Renderer r) =>
-            r.GetComponentInParent<SludgeFlowRig>() != null ||
             r.GetComponentInParent<GrateShudder>() != null ||
-            r.GetComponentInParent<LightFittingPulse>() != null;
+            r.GetComponentInParent<LightFittingPulse>() != null ||
+            // MV-938: not "animated" any more (the sludge flow mesh scrolls entirely in-shader, no
+            // per-frame Transform move) but still combine-exempt for its own reason — see
+            // SludgeFlowSurfaceMarker's own doc.
+            r.GetComponentInParent<SludgeFlowSurfaceMarker>() != null;
 
         /// <summary>MV-925: the two-sided zone ids for the <see cref="WallSegment"/> that
         /// <paramref name="rendererTransform"/>'s own "Wall Run" ancestor was built for — found by nearest

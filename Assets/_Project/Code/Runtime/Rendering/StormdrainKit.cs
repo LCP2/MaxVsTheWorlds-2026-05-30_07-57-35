@@ -1361,17 +1361,23 @@ namespace MaxWorlds.Rendering
 
         /// <summary>
         /// Dresses one sludge tile (MV-785, "Stormdrain Surface Kit", approved by Lee 2026-09-12): one
-        /// bright lip per bank, ten flow bands and twelve chevron pairs scrolling downstream, nine foam
-        /// clumps collecting along the banks, and reed clusters along its long sides. Returns the
-        /// <see cref="SludgeFlowRig"/> driving the scroll so a caller (or a test) can <c>Tick</c> it
-        /// directly with no scene running.
+        /// bright lip per bank, a flow surface reading as ten bands and twelve chevron pairs scrolling
+        /// downstream with nine foam clumps collecting along the banks, and reed clusters along its long
+        /// sides. Returns the root GameObject.
+        ///
+        /// MV-938: the bands/chevrons/foam used to be 43 separately animated Transforms, ticked every
+        /// frame by <c>SludgeFlowRig</c> — at World 2's a10 alone, ~2,000 renderers that could never be
+        /// mesh-combined (MV-934). <see cref="BuildSludgeFlowSurface"/> now builds that whole pattern as
+        /// ONE static quad with the <c>MaxWorlds/SludgeChannelFlow</c> shader reproducing it (same
+        /// colours, same counts, same two scroll speeds) entirely on the GPU via <c>_Time.y</c> — no
+        /// driver script, no distance gate, nothing left for either to gate.
         ///
         /// The sludge is the world's one saturated colour. In the key art it is the thing the eye lands
         /// on first, and the thing that tells the player which way is downstream — that is what the
         /// chevrons and bands are for, and why this is dressing and not decoration.
         /// </summary>
-        public static SludgeFlowRig DressSludgeTile(Transform parent, Vector3 center, float width, float depth,
-                                                     Vector3 flowDirection, int seed, bool isChannel = false)
+        public static GameObject DressSludgeTile(Transform parent, Vector3 center, float width, float depth,
+                                                  Vector3 flowDirection, int seed, bool isChannel = false)
         {
             var root = new GameObject("Sludge Dressing");
             root.transform.SetParent(parent, false);
@@ -1381,7 +1387,6 @@ namespace MaxWorlds.Rendering
             flow.y = 0f;
             flow.Normalize();
             Vector3 across = new Vector3(flow.z, 0f, -flow.x);
-            Quaternion yawRot = Quaternion.LookRotation(flow, Vector3.up);
             bool alongZ = Mathf.Abs(Vector3.Dot(flow, Vector3.forward)) > 0.5f;
             float run = alongZ ? depth : width;
             float span = alongZ ? width : depth;
@@ -1405,133 +1410,15 @@ namespace MaxWorlds.Rendering
 
             // Phases are seeded from the rect's own world position (MV-785's own requirement), not from
             // the caller's incrementing tile counter, so two adjacent channels are never in step even
-            // when built back-to-back with consecutive seeds.
-            float globalPhase = Frac(center.x * 0.4127f + center.z * 0.6180339887f) * run;
+            // when built back-to-back with consecutive seeds. Two independently-salted phases — bands/
+            // chevrons (fast) and foam (slow) — so the two layers never lock in step, the same reasoning
+            // the old per-piece phases used.
+            float fastPhase = Frac(center.x * 0.4127f + center.z * 0.6180339887f) * run;
+            float slowPhase = Frac(center.x * 0.8123f + center.z * 0.2718281f + 11.3f) * run;
 
-            // Ten flow bands, alternating tones, jittered across the channel's width, scrolling with the
-            // chevrons along the flow axis.
-            var bandsGroup = new GameObject("Bands").transform;
-            bandsGroup.SetParent(root.transform, false);
-            var bandT = new Transform[SludgeBandCount];
-            var bandExtra = new Vector3[SludgeBandCount];
-            var bandPhase = new float[SludgeBandCount];
-            var bandHalfExtent = new float[SludgeBandCount];
-            for (int i = 0; i < SludgeBandCount; i++)
-            {
-                float hLen = Frac(seed * 1.91f + i * 3.17f);
-                float hDepth = Frac(seed * 2.53f + i * 4.71f);
-                float hCross = Frac(seed * 0.77f + i * 1.33f);
-                float length = Mathf.Lerp(SludgeBandLengthMin, SludgeBandLengthMax, hLen);
-                float crossDepth = Mathf.Lerp(SludgeBandDepthMin, SludgeBandDepthMax, hDepth);
-                float crossOffset = (hCross - 0.5f) * Mathf.Max(0f, span - crossDepth);
-                float phase = Mathf.Repeat((i + 0.5f) / SludgeBandCount * run + globalPhase, run);
-                Color tone = (i & 1) == 0 ? Sludge : SludgeBand;
-
-                GameObject band = Box(bandsGroup, $"Band{i}", Vector3.zero,
-                    new Vector3(crossDepth, 0.05f, length), tone, SurfaceKind.Foliage);
-                band.transform.localRotation = yawRot;
-                Vector3 extra = across * crossOffset + Vector3.up * SludgeBandY;
-                band.transform.localPosition = extra;
-                bandT[i] = band.transform;
-                bandExtra[i] = extra;
-                bandPhase[i] = phase;
-                // A band's length axis is exactly aligned with the flow axis by yawRot, so its
-                // half-extent along the scroll axis is simply half its length (MV-796).
-                bandHalfExtent[i] = length * 0.5f;
-            }
-
-            // Twelve chevron pairs (24 strips) scrolling with the bands, in their own mid tone.
-            var chevronsGroup = new GameObject("Chevrons").transform;
-            chevronsGroup.SetParent(root.transform, false);
-            var chevronT = new Transform[SludgeChevronPairs * 2];
-            var chevronExtra = new Vector3[SludgeChevronPairs * 2];
-            var chevronPhase = new float[SludgeChevronPairs * 2];
-            var chevronHalfExtent = new float[SludgeChevronPairs * 2];
-            const float chevronLegLength = 0.95f;
-            const float chevronLegThickness = 0.16f;
-            // A leg leans 45 degrees off the flow axis, so its footprint along that axis is the
-            // diagonal projection of both its length AND its thickness, not half its raw length
-            // (MV-796) — sin/cos of 45 degrees are equal, so both contribute via the same factor.
-            float chevronLegHalfExtent = (chevronLegLength * 0.5f + chevronLegThickness * 0.5f) * Mathf.Sin(45f * Mathf.Deg2Rad);
-            for (int i = 0; i < SludgeChevronPairs; i++)
-            {
-                float phase = Mathf.Repeat((i + 0.5f) / SludgeChevronPairs * run + globalPhase, run);
-                Vector3 pivotUp = Vector3.up * SludgeChevronY;
-
-                GameObject l = Box(chevronsGroup, $"Chevron{i}L", Vector3.zero,
-                    new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
-                // Apex points downstream (+local Z), matching the direction the bands/foam scroll (MV-797).
-                l.transform.localRotation = yawRot * Quaternion.Euler(0f, -45f, 0f);
-                Vector3 extraL = yawRot * new Vector3(-0.30f, 0f, 0.30f) + pivotUp;
-                l.transform.localPosition = extraL;
-                int idxL = i * 2;
-                chevronT[idxL] = l.transform;
-                chevronExtra[idxL] = extraL;
-                chevronPhase[idxL] = phase;
-                chevronHalfExtent[idxL] = chevronLegHalfExtent;
-
-                GameObject r = Box(chevronsGroup, $"Chevron{i}R", Vector3.zero,
-                    new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
-                r.transform.localRotation = yawRot * Quaternion.Euler(0f, 45f, 0f);
-                Vector3 extraR = yawRot * new Vector3(0.30f, 0f, 0.30f) + pivotUp;
-                r.transform.localPosition = extraR;
-                int idxR = idxL + 1;
-                chevronT[idxR] = r.transform;
-                chevronExtra[idxR] = extraR;
-                chevronPhase[idxR] = phase;
-                chevronHalfExtent[idxR] = chevronLegHalfExtent;
-            }
-
-            // Nine foam clumps collecting along both banks, scrolling slower than the bands — the
-            // differential is what sells the sludge as fluid rather than a conveyor. No explicit tone is
-            // given in the ticket for foam; it reuses SludgeBright, the brightest established tone,
-            // consistent with foam reading as the lightest froth in the channel.
-            var foamGroup = new GameObject("Foam").transform;
-            foamGroup.SetParent(root.transform, false);
-            var foamT = new Transform[SludgeFoamCount];
-            var foamExtra = new Vector3[SludgeFoamCount];
-            var foamPhase = new float[SludgeFoamCount];
-            var foamHalfExtent = new float[SludgeFoamCount];
-            for (int i = 0; i < SludgeFoamCount; i++)
-            {
-                float hRadius = Frac(seed * 3.71f + i * 5.13f);
-                float radius = Mathf.Lerp(SludgeFoamRadiusMin, SludgeFoamRadiusMax, hRadius);
-                float hInset = Frac(seed * 4.29f + i * 2.77f);
-                float edgeOffset = Mathf.Max(0f, span * 0.5f - radius * 1.3f - hInset * 0.15f);
-                float crossOffset = (i & 1) == 0 ? edgeOffset : -edgeOffset;
-                float hPhase = Frac(seed * 6.10f + i * 1.91f + globalPhase);
-                float phase = hPhase * run;
-
-                GameObject clump = BuildFoamClump(foamGroup, $"Foam{i}", Vector3.zero, radius,
-                    seed * 0.001f + i * 0.777f, SludgeBright);
-                Vector3 extra = across * crossOffset + Vector3.up * SludgeFoamY;
-                clump.transform.localPosition = extra;
-                foamT[i] = clump.transform;
-                foamExtra[i] = extra;
-                foamPhase[i] = phase;
-                // Unrotated blob, so its radius bounds its extent along any axis — but BuildBlobMesh
-                // jitters each rim vertex out to StainSegmentMaxT (1.3x) of the nominal radius, so that
-                // authored ceiling, not the radius itself, is the true half-extent (MV-796).
-                foamHalfExtent[i] = radius * StainSegmentMaxT;
-            }
-
-            // Bands and chevrons scroll together at SludgeFlowSpeed; foam scrolls slower on its own timer.
-            var fastT = new Transform[bandT.Length + chevronT.Length];
-            var fastExtra = new Vector3[fastT.Length];
-            var fastPhase = new float[fastT.Length];
-            var fastHalfExtent = new float[fastT.Length];
-            System.Array.Copy(bandT, 0, fastT, 0, bandT.Length);
-            System.Array.Copy(chevronT, 0, fastT, bandT.Length, chevronT.Length);
-            System.Array.Copy(bandExtra, 0, fastExtra, 0, bandExtra.Length);
-            System.Array.Copy(chevronExtra, 0, fastExtra, bandExtra.Length, chevronExtra.Length);
-            System.Array.Copy(bandPhase, 0, fastPhase, 0, bandPhase.Length);
-            System.Array.Copy(chevronPhase, 0, fastPhase, bandPhase.Length, chevronPhase.Length);
-            System.Array.Copy(bandHalfExtent, 0, fastHalfExtent, 0, bandHalfExtent.Length);
-            System.Array.Copy(chevronHalfExtent, 0, fastHalfExtent, bandHalfExtent.Length, chevronHalfExtent.Length);
-
-            var rig = root.AddComponent<SludgeFlowRig>();
-            rig.Configure(flow, run, fastT, fastExtra, fastPhase, fastHalfExtent,
-                          flow, run, foamT, foamExtra, foamPhase, foamHalfExtent);
+            // The bands/chevrons/foam fill, as ONE static mesh + shader (MV-938) — see
+            // BuildSludgeFlowSurface's own doc for why this replaces the old 43-Transform build.
+            BuildSludgeFlowSurface(root.transform, flow, across, run, span, fastPhase, slowPhase);
 
             // Reeds at the edges — the key art's one piece of organic silhouette, and the only thing
             // in the drain that breaks a horizon line.
@@ -1559,7 +1446,119 @@ namespace MaxWorlds.Rendering
                 root.transform.position += Vector3.down * ChannelOozeDrop;
             }
 
-            return rig;
+            return root;
+        }
+
+        // ---------------------------------------------------------------- sludge flow surface (MV-938)
+
+        /// <summary>Builds the bands/chevrons/foam fill as ONE static quad, wired to the
+        /// <c>MaxWorlds/SludgeChannelFlow</c> shader (see that shader's own header) — the replacement for
+        /// the old per-piece build's ten band, twenty-four chevron-leg and nine foam Transforms, all
+        /// ticked every frame by the now-removed <c>SludgeFlowRig</c>. The quad's own vertices are built
+        /// directly from <paramref name="flow"/>/<paramref name="across"/> rather than a rotated
+        /// Transform (the same convention the old per-piece build used for its own local offsets), and
+        /// its UV0 carries the tile-local coordinate in METRES — the shader reads that directly against
+        /// <c>_Run</c>/<c>_BandCount</c>/etc, so no separate tiling-scale property is needed.</summary>
+        private static void BuildSludgeFlowSurface(Transform parent, Vector3 flow, Vector3 across,
+                                                    float run, float span, float fastPhase, float slowPhase)
+        {
+            var go = new GameObject("Flow");
+            go.transform.SetParent(parent, false);
+
+            go.AddComponent<MeshFilter>().sharedMesh = BuildSludgeFlowQuad(flow, across, run, span);
+            MeshRenderer mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = SludgeFlowMaterial(run, span, fastPhase, slowPhase);
+
+            // Every tile's material is already unique (its own run/span/phase), so it is already the
+            // minimum one renderer this fill can ever be — MapStaticBatchRoot.CombineZoneGeometry
+            // folding a one-renderer bucket into a "Combined ..." mesh buys nothing (still one draw
+            // call) but WOULD relocate it out from under "Stormdrain Dressing" to the map root, which
+            // the dressing census tests (MV-755, MV-906) rely on it staying under. This marker keeps it
+            // out of that bucketing — see MapRuntime.HasAnimatedAncestor's own doc.
+            go.AddComponent<SludgeFlowSurfaceMarker>();
+        }
+
+        private static Mesh BuildSludgeFlowQuad(Vector3 flow, Vector3 across, float run, float span)
+        {
+            float halfRun = run * 0.5f;
+            float halfSpan = span * 0.5f;
+            Vector3 up = Vector3.up * SludgeBandY;
+
+            var verts = new[]
+            {
+                -flow * halfRun - across * halfSpan + up,
+                 flow * halfRun - across * halfSpan + up,
+                 flow * halfRun + across * halfSpan + up,
+                -flow * halfRun + across * halfSpan + up,
+            };
+            var uvs = new[]
+            {
+                new Vector2(-halfRun, -halfSpan),
+                new Vector2( halfRun, -halfSpan),
+                new Vector2( halfRun,  halfSpan),
+                new Vector2(-halfRun,  halfSpan),
+            };
+            var normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+            var tris = new[] { 0, 1, 2, 0, 2, 3 };
+
+            var mesh = new Mesh { name = "SludgeFlowQuad", hideFlags = HideFlags.HideAndDontSave };
+            mesh.vertices = verts;
+            mesh.uv = uvs;
+            mesh.normals = normals;
+            mesh.triangles = tris;
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>Name of the hand-written sludge-flow shader (MV-938) — <c>Shader.Find</c>-only, so it
+        /// lives in Always Included Shaders or the build strips it, same contract as every other
+        /// hand-written shader <see cref="MaterialLibrary"/> resolves this way.</summary>
+        public const string SludgeFlowShaderName = "MaxWorlds/SludgeChannelFlow";
+
+        private static Shader _sludgeFlowShader;
+        private static bool _sludgeFlowShaderResolved;
+
+        /// <summary>A fresh material instance per tile — <paramref name="run"/>/<paramref name="span"/>/
+        /// phase all vary per tile, so one shared instance can't serve every tile the way
+        /// <see cref="Unlit"/>'s per-colour cache does (the same reason World 2's base sludge slab
+        /// already takes a per-tile <see cref="MaterialLibrary.Tinted"/> instance rather than a shared
+        /// one). Every instance shares the same shader, so the SRP Batcher still batches them — this is
+        /// exactly its target case, distinct from static/dynamic batching's "identical material" need.
+        /// Degrades to a flat unlit tile rather than magenta if the shader isn't in the build (the same
+        /// "look regression, never a broken one" contract <see cref="MaterialLibrary.Build"/> keeps).</summary>
+        private static Material SludgeFlowMaterial(float run, float span, float fastPhase, float slowPhase)
+        {
+            if (!_sludgeFlowShaderResolved)
+            {
+                _sludgeFlowShaderResolved = true;
+                Shader sh = Shader.Find(SludgeFlowShaderName);
+                _sludgeFlowShader = sh != null && sh.isSupported ? sh : null;
+                if (_sludgeFlowShader == null)
+                    Debug.LogWarning($"[StormdrainKit] '{SludgeFlowShaderName}' unavailable; " +
+                                      "sludge flow falls back to a flat unlit tile (no bands/chevrons/foam).");
+            }
+
+            if (_sludgeFlowShader == null) return Unlit(Sludge, "SludgeFlowFallback");
+
+            var m = new Material(_sludgeFlowShader)
+            {
+                name = "Stormdrain_SludgeFlow",
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            m.SetColor("_BaseColor", Sludge);
+            m.SetColor("_BandColor", SludgeBand);
+            m.SetColor("_ChevronColor", SludgeChevronMid);
+            m.SetColor("_FoamColor", SludgeBright);
+            m.SetFloat("_Run", run);
+            m.SetFloat("_Span", span);
+            m.SetFloat("_BandCount", SludgeBandCount);
+            m.SetFloat("_ChevronPairs", SludgeChevronPairs);
+            m.SetFloat("_FoamCount", SludgeFoamCount);
+            m.SetFloat("_FastSpeed", SludgeFlowSpeed);
+            m.SetFloat("_SlowSpeed", SludgeFoamSpeed);
+            m.SetFloat("_FastPhase", fastPhase);
+            m.SetFloat("_SlowPhase", slowPhase);
+            return m;
         }
 
         // ---------------------------------------------------------------- channel trough (MV-801)

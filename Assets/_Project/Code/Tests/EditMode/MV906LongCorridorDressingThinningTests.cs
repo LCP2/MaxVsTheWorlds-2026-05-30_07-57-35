@@ -86,9 +86,18 @@ namespace MaxWorlds.Tests.EditMode
                     if (!r.transform.IsChildOf(dressingRoot)) continue;
 
                     a16Count++;
-                    float px = r.transform.position.x;
-                    int bin = Mathf.Clamp(Mathf.FloorToInt((px - a16.XMin) / binWidth), 0, bins.Length - 1);
-                    bins[bin] = true;
+
+                    // MV-938: a sludge tile's flow dressing is now ONE mesh spanning the tile's whole
+                    // footprint rather than 43 small pieces scattered across it, so a wide tile's single
+                    // Transform position under-represents which bins it actually covers. Bin membership
+                    // is resolved off the renderer's own world-space bounds (Rule 2/3: a measured
+                    // geometric property) rather than its pivot position, so a renderer that spans
+                    // several bins marks all of them, exactly as its visible geometry does.
+                    Bounds b = r.bounds;
+                    int firstBin = Mathf.Clamp(Mathf.FloorToInt((b.min.x - a16.XMin) / binWidth), 0, bins.Length - 1);
+                    int lastBin = Mathf.Clamp(Mathf.FloorToInt((b.max.x - a16.XMin) / binWidth), 0, bins.Length - 1);
+                    for (int bin = firstBin; bin <= lastBin; bin++)
+                        bins[bin] = true;
                 }
 
                 float reduction = BaselineA16DressingCount > 0

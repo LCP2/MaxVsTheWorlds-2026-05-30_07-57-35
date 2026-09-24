@@ -78,7 +78,7 @@ namespace MaxWorlds.Tests.EditMode
                 Vector3 a3Center = new Vector3(a3Sludge.x, 0f, a3Sludge.z);
                 Vector3 a3Flow = StormdrainDressing.SludgeFlowDirection(map, a3Sludge);
 
-                SludgeFlowRig baselineA3 = StormdrainKit.DressSludgeTile(baselineHost, a3Center,
+                GameObject baselineA3 = StormdrainKit.DressSludgeTile(baselineHost, a3Center,
                     a3Sludge.width, a3Sludge.depth, a3Flow, seed: 1, isChannel: false);
                 float baselineA3MinY = LowestPieceY(baselineA3.transform);
 

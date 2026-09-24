@@ -1085,8 +1085,8 @@ namespace MaxWorlds.Arena
                     // y 0-0.05 (SludgeThickness), covering the trough BuildChannelTrough is about to cut
                     // below y 0 — that slab, not this dressing pass, is what the player actually saw as
                     // "no diagonal striping" at every channel. Found by the SludgeFlow component MapRuntime
-                    // uniquely tags its own slab with (StormdrainKit's own SludgeFlowRig is a different
-                    // type), matched by id since a level can build more than one sludge rect.
+                    // uniquely tags its own slab with, matched by id since a level can build more than one
+                    // sludge rect.
                     HideMapRuntimeSlabRenderer(mapHost, e.id);
                 }
 

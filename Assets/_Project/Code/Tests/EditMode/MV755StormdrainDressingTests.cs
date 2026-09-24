@@ -69,7 +69,10 @@ namespace MaxWorlds.Tests.EditMode
                         $"{piece.Body.name}'s original grey renderer is still enabled — its art was never swapped");
                 }
 
-                // ---- sludge tiles, each carrying a flow chevron ----
+                // ---- sludge tiles, each carrying a built flow dressing mesh (MV-938: the bands/
+                // chevrons/foam used to be separate named Transforms including one starting "Chevron";
+                // they are now one "Flow" mesh reproducing the same pattern in-shader, so the resolved
+                // check moves onto that mesh actually carrying built geometry) ----
                 int expectedSludge = w2map.entities.Count(e => e != null && e.Kind == EntityKind.Sludge);
                 Assert.AreEqual(expectedSludge, report1.SludgeTiles,
                     "every Sludge entity in the map must get exactly one dressed tile");
@@ -78,9 +81,11 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(sludgeHost, "the sludge dressing host was never built");
                 foreach (Transform tile in sludgeHost)
                 {
-                    bool hasChevron = tile.GetComponentsInChildren<Transform>(true)
-                        .Any(t => t.name.StartsWith("Chevron"));
-                    Assert.IsTrue(hasChevron, $"{tile.name} carries no flow chevron");
+                    Transform flow = tile.Find("Flow");
+                    Assert.IsNotNull(flow, $"{tile.name} carries no 'Flow' group for its bands/chevron/foam dressing");
+                    Mesh flowMesh = flow.GetComponent<MeshFilter>()?.sharedMesh;
+                    Assert.IsNotNull(flowMesh, $"{tile.name}'s Flow renderer carries no built mesh");
+                    Assert.Greater(flowMesh.vertexCount, 0, $"{tile.name}'s Flow mesh resolved with no vertices");
                 }
 
                 // ---- nothing built here carries a collider ----
