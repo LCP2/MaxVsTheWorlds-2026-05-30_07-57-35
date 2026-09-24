@@ -94,7 +94,7 @@ jobs:
             RANGE="$CURRENT_SHA~1..$CURRENT_SHA"
           fi
           echo "Commit range: $RANGE"
-          KEYS=$(git log --format=%s%n%b "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u)
+          KEYS=$(git log --format=%s "$RANGE" | grep -oE "^$PKEY-[0-9]+" | sort -u)
           if [ -z "$KEYS" ]; then
             echo "::notice::No $PKEY keys in range - nothing to transition."
             exit 0
