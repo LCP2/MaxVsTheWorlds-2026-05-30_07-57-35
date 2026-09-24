@@ -18,11 +18,16 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Counts updated again by MV-865 (World 2 re-author, renumbered areas in play order): areas.Length
     /// stays 22 (21 authored areas plus the entry stub) but dials.areaCount realigns to the real 21
-    /// (was 23, already stale before this ticket), and the Replicator total rises 23 -> 47 — the
-    /// Trolley Yard floor (now a13, "The Sump" in MV-852's own numbering) alone authors 21 Replicators
-    /// in the re-authored level. Both are plain sums read directly off the shipped config, not a guess.
+    /// (was 23, already stale before this ticket), and the Replicator total rose 23 -> 47 — the
+    /// Trolley Yard floor (now a13, "The Sump" in MV-852's own numbering) alone authored 21 Replicators
+    /// in that re-authored level. Both were plain sums read directly off the shipped config, not a guess.
     /// The two overlay pairs (overlay, target) are now (a17, a3) and (a15, a13) — MV-852 called them
     /// (a19, a3) and (a15, a6).
+    ///
+    /// MV-900 (World 2 V10, Lee's signed-off config) re-authors a13 again — every Replicator redrawn
+    /// with a 2-wide x 3-deep IN area to resolve MV-928 by data — dropping the world total 47 -> 41 (a
+    /// plain sum over the shipped config, not a guess; MV-900's own ticket text: "572 robots, 41
+    /// Replicators").
     /// </summary>
     public sealed class MV700World2ConfigTests
     {
@@ -35,13 +40,14 @@ namespace MaxWorlds.Tests.EditMode
             // MV-852 deleted a7 (Silt Beds) and a13 (The Weir deck) outright, and their Replicators
             // with them — 24 areas/25 Replicators (MV-700) drop to 22/23. MV-865 (World 2 re-author) then
             // realigns dials.areaCount to the real 21 authored areas and re-authors the level's content,
-            // raising the Replicator total to 47 (see the class doc comment for both numbers).
+            // raising the Replicator total to 47; MV-900 (V10) then re-authors a13 again, dropping it to
+            // 41 (see the class doc comment for all three numbers).
             Assert.AreEqual(22, cfg.areas.Length, "World 2 authors 21 areas plus the entry stub");
             Assert.AreEqual(21, cfg.dials.areaCount);
 
             int totalReplicators = 0;
             foreach (WorldArea a in cfg.areas) totalReplicators += a.replicators?.Length ?? 0;
-            Assert.AreEqual(47, totalReplicators, "World 2 authors 47 Replicators across its areas");
+            Assert.AreEqual(41, totalReplicators, "World 2 authors 41 Replicators across its areas");
 
             WorldGate g31 = Array.Find(cfg.gates, g => g.id == "g31");
             WorldGate g24 = Array.Find(cfg.gates, g => g.id == "g24");
