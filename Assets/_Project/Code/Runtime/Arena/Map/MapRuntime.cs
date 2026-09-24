@@ -78,6 +78,12 @@ namespace MaxWorlds.Arena
         /// once something else has taken over deciding whether it draws, the gate must leave it alone.</summary>
         private HashSet<Renderer> _dressedHidden;
 
+        /// <summary>MV-937 diagnostic: how many times <see cref="ApplyAreaGate"/> has actually run for
+        /// this instance — read by a test (or a future debug readout) to prove the self-heal in
+        /// <see cref="Update"/> is not re-applying the gate needlessly while Max merely stands or walks
+        /// inside a zone that is already active. Never consulted for a gameplay decision.</summary>
+        public int ApplyAreaGateCallCount { get; private set; }
+
         /// <summary>Exactly what was handed to <see cref="StaticBatchingUtility.Combine"/> — every
         /// GameObject this build classified as never moving.</summary>
         public IReadOnlyList<GameObject> Statics => _statics;
@@ -198,6 +204,8 @@ namespace MaxWorlds.Arena
         public void ApplyAreaGate(string currentZoneId)
         {
             if (_rendererZones == null || string.IsNullOrEmpty(currentZoneId)) return;
+
+            ApplyAreaGateCallCount++;
 
             var active = new HashSet<string> { currentZoneId };
             if (_map?.links != null)
