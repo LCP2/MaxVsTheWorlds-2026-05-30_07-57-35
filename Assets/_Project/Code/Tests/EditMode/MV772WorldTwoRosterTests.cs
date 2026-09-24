@@ -35,16 +35,19 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-875 (workbook edits + a1-a13 conversion repair) dropped the total to 407 (a9 brute 2→1, a11
     /// turret 4→3/gunner 25→24/sludger 14→13/launcher 1→0) and moved a13's garrison and 45 other entries
     /// (a7/a8/a10/a11/a12/a13) by 0.02-0.35 m within their own authored cell for engine-side collider
-    /// clearance (<see cref="MapValidation.WorldGarrison"/>, MV-655) — both expected below are recomputed
-    /// against the new shipped config, not hand-picked.
+    /// clearance (<see cref="MapValidation.WorldGarrison"/>, MV-655) — both expected below were recomputed
+    /// against the shipped config at the time, not hand-picked.
+    ///
+    /// MV-900 (World 2 V10, Lee's signed-off config) re-authors a3/a13/a16/a18/a19 and the a10-a12 decks,
+    /// raising the total to 572 (ticket's own "572 robots, 41 Replicators") and moving a great many
+    /// entries' x/z — both expected below are recomputed again against the V10 shipped config, still a
+    /// plain sum/hash over real data, not hand-picked.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
-        // MV-875 re-authored a1-a13's garrison from Lee's re-converted sheet and nudged 45 entries for
-        // engine-side collider clearance, moving nearly every entry's x/z along the way — recomputed
-        // against the shipped config, still a guard against an UNRELATED drift (not an authored constant:
-        // derived from the real config, not hand-picked).
-        private const uint ExpectedCoordinateHash = 4004953417u;
+        // Recomputed against the V10 shipped config (MV-900) — still a guard against an UNRELATED drift,
+        // not an authored constant: derived from the real config, not hand-picked.
+        private const uint ExpectedCoordinateHash = 3219086536u;
 
         [Test]
         public void WorldTwoRoster_MatchesTheMV772Conversion()
@@ -68,7 +71,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(407, total, "World 2's total garrison placement count (MV-875 workbook edits + a1-a13 conversion repair)");
+            Assert.AreEqual(572, total, "World 2's total garrison placement count (MV-900 V10 config)");
 
             int Count(string kind) => counts.TryGetValue(kind, out int n) ? n : 0;
             int worldTwoKinds = Count("sludger") + Count("charger") + Count("turret") + Count("lurker");

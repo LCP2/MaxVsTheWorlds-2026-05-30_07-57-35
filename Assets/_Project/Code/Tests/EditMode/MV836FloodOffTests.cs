@@ -102,9 +102,9 @@ namespace MaxWorlds.Tests.EditMode
                 // MV-865 (World 2 re-author) re-authored the level's content, not just its numbering:
                 // the Trolley Yard floor (now a13, was a6) alone now authors 21 Replicators, so World 2's
                 // total rises from the MV-700/MV-852 count of 23 to 47 — a direct sum over cfg.areas
-                // (see MV700World2ConfigTests), not a value this ticket's own renumbering can be blamed
-                // for.
-                Assert.AreEqual(47, FactoryCensus.ReplicatorsAlive,
+                // (see MV700World2ConfigTests). MV-900 (V10) then re-authors a13 again (a 2-wide x 3-deep
+                // IN area per Replicator, resolving MV-928), dropping the total to 41.
+                Assert.AreEqual(41, FactoryCensus.ReplicatorsAlive,
                     "setup failure: every one of World 2's own Replicators must be standing for 'all Replicators alive' to mean anything");
 
                 WorldArea a18 = cfg.Area("a18");
