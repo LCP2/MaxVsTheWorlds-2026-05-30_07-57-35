@@ -98,12 +98,12 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsFalse(StormdrainFlood.FloodEnabled, "setup failure: MV-836 must still have the flood switched off");
 
                 // === AC1: Max at floor level (y 0) inside a3_sludge1, Force Field down, 2.0s -> loses
-                // === 12 HP (6/s), within the AC's own ±1.5 tolerance. ===
+                // === 15 HP (7.5/s, MV-924 retune), within the AC's own ±1.5 tolerance. ===
                 float beforeFloor = health.Current;
                 for (float t = 0f; t < simulatedSeconds; t += step) runner.TickSludgeDamage(step);
                 float lost = beforeFloor - health.Current;
-                Assert.AreEqual(12f, lost, 1.5f,
-                    "MV-838: 2s standing in floor-level map sludge with the Force Field down must cost ~12 HP");
+                Assert.AreEqual(15f, lost, 1.5f,
+                    "MV-924: 2s standing in floor-level map sludge with the Force Field down must cost ~15 HP");
 
                 // === AC3: Max on a17_deck1 (y == map.deckHeight), above the same a3 sludge channel,
                 // === 2.0s -> 0 damage. Force Field is still down here. (a17 was a19 before MV-865

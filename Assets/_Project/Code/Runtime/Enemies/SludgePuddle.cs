@@ -37,9 +37,11 @@ namespace MaxWorlds.Enemies
         /// this puddle is a self-contained timed hazard, not an authored map feature.</summary>
         public const float SpeedMultiplier = 0.6f;
 
-        /// <summary>MV-769's own authored rate: corrosive sludge does not check allegiance, so this
-        /// applies to Max and every robot alike via <see cref="ApplyDamageTick"/>.</summary>
-        public const float DamagePerSecond = 6f;
+        /// <summary>MV-769's own authored rate, 6 — retuned to 7.5 by MV-924 (+25%, same rate as
+        /// <see cref="MaxWorlds.Arena.MapSludgeDamage.DamagePerSecond"/>). MV-924 also narrowed who this
+        /// applies to: Max and a deployed <see cref="MaxWorlds.Arena.Sentinel"/> ONLY, never a robot —
+        /// see <see cref="ApplyDamageTick"/>.</summary>
+        public const float DamagePerSecond = 7.5f;
 
         /// <summary>Fixed damage cadence (MV-769) — ticks on this interval rather than per-frame, so
         /// the rate is frame-rate independent and an EditMode test gets the same answer for any dt.</summary>
@@ -209,12 +211,13 @@ namespace MaxWorlds.Enemies
             }
         }
 
-        /// <summary>MV-769: damage-over-time on a fixed <see cref="DamageTickInterval"/> cadence
-        /// (never per-frame), applied to Max and every robot standing inside — corrosive sludge does
-        /// not check allegiance, so this skips <see cref="DamageRules"/> entirely and hits both via
-        /// <see cref="Team.Neutral"/> (which every receiver's own <c>TakeDamage</c> always lets through).
-        /// Same "find the tagged Player, iterate RobotEnemy.Active" idiom as
-        /// <see cref="CorrosionPuddle.Tick"/> — Max and a robot are the only two movers this world has.</summary>
+        /// <summary>MV-769: damage-over-time on a fixed <see cref="DamageTickInterval"/> cadence (never
+        /// per-frame). MV-924 narrowed WHO this hits: Max and a deployed <see cref="MaxWorlds.Arena.Sentinel"/>
+        /// only, via <see cref="Team.Neutral"/> (which both receivers' own <c>TakeDamage</c> lets
+        /// through) — never a robot, including the small robots this same drone's death just spawned
+        /// standing in its own puddle. MV-924 also gates the damage floor-vs-deck, the same rule
+        /// <see cref="SpeedMultiplierAt"/>'s slow already applied but the damage never did — see
+        /// <see cref="IsFloorLevel"/>.</summary>
         private void TickDamage(float dt)
         {
             _sinceDamageTick += dt;
@@ -240,18 +243,30 @@ namespace MaxWorlds.Enemies
                 }
             }
             if (_playerTarget != null && _playerDamageable != null && _playerDamageable.IsAlive
-                && InRadius(transform.position, _playerTarget.position, _radius))
+                && InRadius(transform.position, _playerTarget.position, _radius)
+                && IsFloorLevel(_playerTarget.position))
             {
                 _playerDamageable.TakeDamage(info);
             }
 
-            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
+            // MV-924: never a robot (D3) — Max and a deployed Sentinel only.
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
             {
-                RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive) continue;
-                if (InRadius(transform.position, r.transform.position, _radius)) r.TakeDamage(info);
+                Sentinel s = sentinels[i];
+                if (s == null || !s.IsAlive) continue;
+                if (InRadius(transform.position, s.transform.position, _radius) && IsFloorLevel(s.transform.position))
+                    s.TakeDamage(info);
             }
+        }
+
+        /// <summary>MV-924: the same floor-vs-deck gate <see cref="SpeedMultiplierAt"/>'s slow already
+        /// applies (<c>map.deckHeight - 0.5</c>) — the puddle's DAMAGE never had this gate before. No
+        /// loaded map means no deck to be above, so the gate is skipped entirely, same as the slow.</summary>
+        private static bool IsFloorLevel(Vector3 worldPosition)
+        {
+            MapData map = EnemyNavigation.Map;
+            return map == null || worldPosition.y < map.deckHeight - 0.5f;
         }
 
         /// <summary>Pure so the puddle's own dwell check is testable without a scene or a clock.</summary>

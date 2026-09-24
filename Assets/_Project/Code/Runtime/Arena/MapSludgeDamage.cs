@@ -13,8 +13,9 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class MapSludgeDamage
     {
-        /// <summary>Lee's own authored rate (2026-09-17 decision) — do not retune.</summary>
-        public const float DamagePerSecond = 6f;
+        /// <summary>Lee's own authored rate — 6 (2026-09-17 decision) retuned to 7.5 by MV-924
+        /// (+25%, "standing in sludge should feel urgent to leave").</summary>
+        public const float DamagePerSecond = 7.5f;
 
         /// <summary>Same fixed-cadence idiom as every other damage-over-time hazard in this project
         /// (<see cref="SludgePuddle"/>, <see cref="StormdrainFlood"/>'s own ticker): frame-rate

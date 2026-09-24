@@ -272,6 +272,13 @@ namespace MaxWorlds.Arena
         private DestructibleHealth _health;
         private float _timeSinceDamage;
 
+        /// <summary>MV-924: this sentinel's OWN map-sludge damage clock — a deployed sentinel now takes
+        /// the same 7.5 HP/s map-authored sludge damage Max does (never protected by his Force Field,
+        /// which is his bubble only), floor-vs-deck gated exactly like Max's own tick via
+        /// <see cref="MapSludgeDamage.IsInFloorSludge"/>. A per-instance field, not a shared ticker,
+        /// so two sentinels standing in sludge for different lengths of time never share one clock.</summary>
+        private MapSludgeDamageTicker _sludgeTicker;
+
         /// <summary>MV-862 FOCUS: Max's own equipped-primary components, resolved lazily off
         /// <see cref="_followTarget"/> and cached — same lazy-resolve-and-cache idiom
         /// <see cref="MaxWorlds.Player.PlayerHealth.PrimaryEnergyNormalized"/> already uses for this
@@ -576,6 +583,9 @@ namespace MaxWorlds.Arena
             float dt = Time.deltaTime;
             _timeSinceDamage += dt;
             TickHijack(dt);
+
+            bool inFloorSludge = MapSludgeDamage.IsInFloorSludge(EnemyNavigation.Map, transform.position);
+            _sludgeTicker.Tick(dt, inFloorSludge, this, transform.position);
 
             float regenPerSec = AbilityTuning.SentinelRegenPerSec(
                 RigState.Level("u_hp"), RigBoard.MaxLevel("u_hp"),

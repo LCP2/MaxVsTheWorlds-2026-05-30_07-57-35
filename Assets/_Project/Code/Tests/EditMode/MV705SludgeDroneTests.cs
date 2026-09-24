@@ -8,8 +8,9 @@ using MaxWorlds.Enemies;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-705's Sludge Drone: killing it spawns two Rushers at half health either side of the death
-    /// point, tags them <c>NoReplicate</c>, and leaves a 2 m/4 s sludge puddle behind. EditMode only,
+    /// MV-705's Sludge Drone: killing it spawns Rushers at half health around the death point, tags
+    /// them <c>NoReplicate</c>, and leaves a 2 m/4 s sludge puddle behind. MV-924 raised the split count
+    /// to four (one per compass point) — this test pins that new count. EditMode only,
     /// reflection-driven for the same reason every other kind's test here is (repo convention):
     /// <c>Awake</c>/<c>OnEnable</c> are not reliably invoked outside Play mode, so <c>_cc</c> is stamped
     /// by hand (same idiom as <c>MV691PipeTurretTests.NewTurret</c>) and the assertions read
@@ -66,7 +67,7 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------ AC1
 
         [Test]
-        public void KillingASludger_SpawnsTwoHalfHealthRushersAndASludgePuddle_ThatDespawnsAfterFourSeconds()
+        public void KillingASludger_SpawnsFourHalfHealthRushersAndASludgePuddle_ThatDespawnsAfterFourSeconds()
         {
             RobotEnemy sludger = NewSludger(new Vector3(5f, 0f, 3f));
             Vector3 deathPos = sludger.transform.position;
@@ -77,7 +78,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (RobotEnemy r in Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
                 if (r.Kind == EnemyKind.Rusher) rushers.Add(r);
 
-            Assert.AreEqual(2, rushers.Count, "a Sludger's death must spawn exactly two Rushers");
+            Assert.AreEqual(4, rushers.Count, "MV-924: a Sludger's death must spawn exactly four Rushers");
             foreach (RobotEnemy r in rushers)
             {
                 Assert.LessOrEqual(Vector3.Distance(r.transform.position, deathPos), 1f,
