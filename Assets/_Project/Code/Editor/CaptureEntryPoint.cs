@@ -117,6 +117,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv913MissileLauncher() => RunFromMenu(CapturePresets.All["mv913missilelauncher"]);
         public static void CaptureMv913MissileLauncher() => Run(CapturePresets.All["mv913missilelauncher"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Colours a10+a13 (MV-939)")]
+        public static void MenuMv939W2Colors() => RunFromMenu(CapturePresets.All["mv939w2colors"]);
+        public static void CaptureMv939W2Colors() => Run(CapturePresets.All["mv939w2colors"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
