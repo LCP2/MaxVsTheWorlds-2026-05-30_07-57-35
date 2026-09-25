@@ -81,7 +81,7 @@ namespace MaxWorlds.Tests.EditMode
             var staleCheckpoint = new Dictionary<string, int>
             {
                 { "p_prc", 2 },   // a node an older save owned, since deleted this ticket
-                { "p_dmg", 6 },   // above the new cap of 4
+                { "p_dmg", 9 },   // above World 1's cap (7 since MV-947, was 4 at this ticket's own time)
                 { "p_spr", 9 },   // above the new cap of 4
                 { "p_flw", 3 },   // in range — must survive the restore untouched
             };
@@ -89,7 +89,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.SnapshotLevels().ContainsKey("p_prc"), Is.False,
                 "a retired node id must not be stranded in the restored state — no dangling reference");
-            Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4), "an out-of-range p_dmg level must clamp to its new cap, not persist or throw");
+            Assert.That(RigState.Level("p_dmg"), Is.EqualTo(7), "an out-of-range p_dmg level must clamp to its current cap (7, MV-947), not persist or throw");
             Assert.That(RigState.Level("p_spr"), Is.EqualTo(4), "an out-of-range p_spr level must clamp to its new cap, not persist or throw");
             Assert.That(RigState.Level("p_flw"), Is.EqualTo(3), "an already in-range level must survive the restore exactly as saved");
 

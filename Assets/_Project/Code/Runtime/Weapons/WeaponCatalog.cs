@@ -130,14 +130,17 @@ namespace MaxWorlds.Weapons
         /// <c>rig_board.json</c>'s own per-node <c>maxLevel</c> — the RIG board's real gameplay gate
         /// (<see cref="RigState.RaiseLevel"/> reads <see cref="RigBoard.MaxLevel"/> directly) — this
         /// duplicate exists only because <see cref="MaxWorlds.Combat.WaterBlaster.VisualStrength"/>-style
-        /// enum-keyed callers predate the RIG board and were never migrated to read the JSON directly.</summary>
+        /// enum-keyed callers predate the RIG board and were never migrated to read the JSON directly.
+        /// Damage's cap reads straight off <c>p_dmg</c>'s own board <c>maxLevel</c> (MV-947: World 1's
+        /// board diverges from World 2's, 7 vs. 8, so a literal here can no longer serve both — same
+        /// live-read shape MV-840 used for Force Field).</summary>
         public static int MaxLevel(WeaponTrackKind kind)
         {
             switch (kind)
             {
                 case WeaponTrackKind.Range: return 6;
                 case WeaponTrackKind.Spread: return 4;
-                case WeaponTrackKind.Damage: return 4;
+                case WeaponTrackKind.Damage: return RigBoard.MaxLevel("p_dmg");
                 case WeaponTrackKind.Capacity: return 8;
                 default: return 6;
             }

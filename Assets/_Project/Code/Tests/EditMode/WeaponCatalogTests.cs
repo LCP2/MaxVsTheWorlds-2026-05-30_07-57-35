@@ -131,17 +131,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageTrack_MaxLevelIs1Point6xBase_MV597()
+        public void DamageTrack_MaxLevelIs2Point2xBaseOnWorld1_MV947()
         {
             // MV-291 originally capped Damage at 6 levels (~2x base). MV-597 cut the cap to 4 levels
-            // (Lee's playtest: maxed Damage+Spread+Flow was over-powered) without touching the
-            // per-level step, landing the new ceiling at 1.6x base instead.
+            // (1.6x base). MV-947 raised World 1's cap 4 -> 7 (Lee: give World 1 more upgrade headroom
+            // rather than revert MV-832's Sentinel LOS change) without touching the per-level step,
+            // landing the new ceiling at 2.2x base: 1 + 0.2*(7-1).
             float baseDamage = WaterBlaster.DefaultDamagePerTick;
             float maxDamage = WeaponCatalog.EffectiveDamagePerTick(
                 baseDamage, WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), WeaponCatalog.DefaultRcdaDamagePerLevel);
 
-            Assert.That(maxDamage, Is.EqualTo(baseDamage * 1.6f).Within(0.05f),
-                "MV-597: capping Damage at 4 levels must land the maxed track at 1.6x base (6.4 dmg/tick), not the old 2x (8)");
+            Assert.That(maxDamage, Is.EqualTo(baseDamage * 2.2f).Within(0.05f),
+                "MV-947: capping Damage at 7 levels must land the maxed track at 2.2x base, not MV-597's 1.6x (4-level cap)");
         }
 
         // ---------------------------------------------------------------- MV-368: drain scales with output

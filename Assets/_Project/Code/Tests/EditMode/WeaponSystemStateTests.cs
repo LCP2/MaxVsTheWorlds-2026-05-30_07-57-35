@@ -129,12 +129,20 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageAndSpreadCapAtFourLevels_MV597()
+        public void SpreadCapsAtFourLevels_MV597()
         {
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(4),
-                "MV-597 cut Damage's cap from 6 to 4 (Lee's playtest: maxed Damage+Spread+Flow was over-powered)");
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(4),
                 "MV-597 cut Spread's cap from 9 to 4 — the biggest single lever on the over-power");
+        }
+
+        [Test]
+        public void DamageCapsAtSevenLevelsOnWorld1_MV947()
+        {
+            // World 1's board only — WeaponCatalog.MaxLevel(Damage) now reads RigBoard.MaxLevel("p_dmg")
+            // live (MV-947, same live-read shape MV-840 used for Force Field) instead of a hardcoded
+            // literal, so World 1 and World 2 can diverge (7 vs. 8).
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(7),
+                "MV-947 raised World 1's Damage cap from 4 to 7 (Lee: give World 1 more upgrade headroom)");
         }
 
         [Test]

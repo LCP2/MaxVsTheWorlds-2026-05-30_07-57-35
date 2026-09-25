@@ -191,7 +191,7 @@
       "y": 420,
       "icon": "dmg",
       "label": "DAMAGE",
-      "maxLevel": 4,
+      "maxLevel": 7,
       "kind": "cap",
       "parent": null,
       "startLevel": 1
@@ -371,7 +371,7 @@
       "y": 580,
       "icon": "sdmg",
       "label": "DAMAGE",
-      "maxLevel": 5,
+      "maxLevel": 8,
       "kind": "cap",
       "parent": "u_sen",
       "startLevel": 0
