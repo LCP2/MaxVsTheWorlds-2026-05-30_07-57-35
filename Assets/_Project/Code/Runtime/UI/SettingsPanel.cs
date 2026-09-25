@@ -179,6 +179,11 @@ namespace MaxWorlds.UI
         // Pause-on-open (WV-234, spec §8) — same capture/zero/restore idiom as WeaponsScreen.Open/Close.
         private float _prevTimeScale = 1f;
 
+        // MV-940: the "Jump to area" knob's own last-set value — a one-shot trigger, not persisted game
+        // state, so this just echoes back whatever was last dialled in (same idiom "Force field hold"
+        // above uses for its own DevTuning-backed slider).
+        private float _mv940JumpSliderValue;
+
         // Built once, a frame after the scene loads (the objects it reads defaults from wake in their
         // own Awake first). Always — there is no gate any more.
         private void Start() => Build();
@@ -400,6 +405,31 @@ namespace MaxWorlds.UI
             Add("Performance stats", "off/fps/full", 0f, 2f, 0f,
                 () => (float)(int)PerfOverlaySettings.CurrentMode,
                 v => PerfOverlaySettings.CurrentMode = (PerfOverlaySettings.Mode)Mathf.Clamp(Mathf.RoundToInt(v), 0, 2),
+                tab: TabFeel);
+
+            // MV-940: reproduces the World 2 upper-walkway fps collapse (a13 Up -> a12 Up) in seconds —
+            // dev builds and TestFlight only (this project has no App Store channel to gate against yet,
+            // so it's always available here, same as the switch above). Same "trigger via slider, getter
+            // just echoes the last value" idiom as "Force field hold" above: N = jump to area N's floor,
+            // -N = jump to area N's deck overlay ("N Up"), 0 = no-op. Fires every time the slider is set
+            // to a nonzero value, even the same one twice, so re-jumping to reset the standing population
+            // needs no separate control.
+            Add("Jump to area", "N=floor, -N=N Up, 0=off", -40f, 40f, 0f,
+                () => _mv940JumpSliderValue,
+                v =>
+                {
+                    _mv940JumpSliderValue = v;
+                    int iv = Mathf.RoundToInt(v);
+                    if (iv == 0) return;
+                    string spec = iv > 0 ? $"a{iv}" : $"a{-iv}up";
+                    MaxWorlds.Dev.DevModeController.TryJumpToArea(spec);
+                }, tab: TabFeel);
+
+            // MV-940: mirrors the WebGL ?perf=1 URL param — the only way to turn the MVPERF console log
+            // on where there is no URL bar (iOS).
+            Add("Perf log", "off/on", 0f, 1f, 0f,
+                () => MaxWorlds.Dev.DevModeController.PerfLogEnabled ? 1f : 0f,
+                v => MaxWorlds.Dev.DevModeController.PerfLogEnabled = v >= 0.5f,
                 tab: TabFeel);
 
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights

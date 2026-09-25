@@ -37,10 +37,44 @@ namespace MaxWorlds.Core
     {
         /// <summary>MV-888: <see cref="Debug"/> added alongside the original six. Bootstrap.OnGUI
         /// drew seven lines of IMGUI with no bucket wrapping it at all, so whatever it cost landed
-        /// silently in <c>other</c> — this bucket is how that gets its own line instead.</summary>
-        public enum Bucket { Robot, Repl, Sludge, Anchor, Hud, Vfx, Debug }
+        /// silently in <c>other</c> — this bucket is how that gets its own line instead.
+        ///
+        /// MV-940: <see cref="Gate"/> (MapRuntime's own per-frame gate self-heal check, MV-925/937 —
+        /// the ticket's own lead that shipped in 0.9.9 without fixing the World 2 walkway fps collapse)
+        /// and <see cref="Sentinel"/> (a live sentinel's per-frame Update) are the two systems Lee's
+        /// iPhone overlay could not previously attribute at all — everything before this bucket existed
+        /// landed silently in <c>other</c>, same reasoning as <see cref="Debug"/> above.</summary>
+        public enum Bucket { Robot, Repl, Sludge, Anchor, Hud, Vfx, Debug, Gate, Sentinel }
 
-        private const int BucketCount = 7;
+        private const int BucketCount = 9;
+
+        /// <summary>MV-940: a robot's per-frame cost broken down by WHICH part of its tick spent it —
+        /// nested inside the single <see cref="Bucket.Robot"/> charge <see cref="RobotEnemy"/>'s own
+        /// Update already wraps its whole tick in, so these are deliberately NOT part of
+        /// <see cref="s_bucketMs"/>/<see cref="BucketCount"/> and never enter <see cref="FormatLine"/>'s
+        /// sum-vs-frame-time residual: adding them there would double-count the same milliseconds the
+        /// outer Robot bucket already charges. Purely an additional breakdown line for reading where
+        /// inside "robot" the time actually goes. <see cref="Behind"/> is exactly
+        /// <see cref="RobotEnemy.IsWellBehindPlayer"/> while <see cref="RobotEnemy.State.Dormant"/> —
+        /// the same definition <see cref="MaxWorlds.Enemies.PopulationReadout"/>'s "behind" count already
+        /// uses, so this bucket's robot count always agrees with that line.</summary>
+        public enum RobotSubPhase { Dormant, AwakeAiRoute, Behind, Separation, Movement }
+
+        private const int RobotSubPhaseCount = 5;
+        private static readonly long[] s_subBeginTicks = new long[RobotSubPhaseCount];
+        private static readonly double[] s_subMs = new double[RobotSubPhaseCount];
+
+        /// <summary>Nested inside an outer <see cref="Begin(Bucket, bool)"/>/<see cref="End"/> pair for
+        /// <see cref="Bucket.Robot"/> — see <see cref="RobotSubPhase"/>'s own doc for why this never
+        /// touches <see cref="s_bucketMs"/>.</summary>
+        public static void BeginRobotSub(RobotSubPhase phase) =>
+            s_subBeginTicks[(int)phase] = s_clock.GetTimestamp();
+
+        public static void EndRobotSub(RobotSubPhase phase)
+        {
+            long elapsedTicks = s_clock.GetTimestamp() - s_subBeginTicks[(int)phase];
+            s_subMs[(int)phase] += elapsedTicks * 1000.0 / Stopwatch.Frequency;
+        }
 
         /// <summary>The raw tick source, isolated behind an interface so a test can inject exact,
         /// hand-picked deltas instead of wall time — same seam <see cref="IFrameTimingSource"/> already
@@ -256,11 +290,22 @@ namespace MaxWorlds.Core
                 $"repl {s_bucketMs[(int)Bucket.Repl] / frames:0.0} sludge {s_bucketMs[(int)Bucket.Sludge] / frames:0.0} " +
                 $"anch {s_bucketMs[(int)Bucket.Anchor] / frames:0.0} hud {s_bucketMs[(int)Bucket.Hud] / frames:0.0} " +
                 $"vfx {s_bucketMs[(int)Bucket.Vfx] / frames:0.0} dbg {s_bucketMs[(int)Bucket.Debug] / frames:0.0} " +
+                $"gate {s_bucketMs[(int)Bucket.Gate] / frames:0.0} sent {s_bucketMs[(int)Bucket.Sentinel] / frames:0.0} " +
                 $"other {residualPerFrame:0.0} render {renderPerFrame:0.0}  " +
                 $"fixed {fixedPerFrame:0.0}/frame";
 
-            return bucketLine + "\n" + FormatProfilerLine();
+            return bucketLine + "\n" + FormatProfilerLine() + "\n" + FormatRobotSubPhaseLine(frames);
         }
+
+        /// <summary>MV-940: the robot-bucket breakdown — see <see cref="RobotSubPhase"/>'s own doc for
+        /// why this is a separate, non-summed line rather than more entries in <see cref="bucketLine"/>
+        /// above.</summary>
+        private static string FormatRobotSubPhaseLine(int frames) =>
+            $"robot/ dormant {s_subMs[(int)RobotSubPhase.Dormant] / frames:0.0} " +
+            $"awake {s_subMs[(int)RobotSubPhase.AwakeAiRoute] / frames:0.0} " +
+            $"behind {s_subMs[(int)RobotSubPhase.Behind] / frames:0.0} " +
+            $"sep {s_subMs[(int)RobotSubPhase.Separation] / frames:0.0} " +
+            $"move {s_subMs[(int)RobotSubPhase.Movement] / frames:0.0}";
 
         /// <summary>Clears every bucket, the fixed-update/frame counters and the frame-time accumulator
         /// — the top of the next accumulation window.</summary>
@@ -276,6 +321,8 @@ namespace MaxWorlds.Core
             s_robotAwakeLast = 0;
             s_renderFrameTimeSumMs = 0.0;
             s_renderFrameSampleCount = 0;
+
+            for (int i = 0; i < RobotSubPhaseCount; i++) s_subMs[i] = 0.0;
 
             EnsureRecordersStarted();
         }

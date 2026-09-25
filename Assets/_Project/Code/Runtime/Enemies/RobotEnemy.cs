@@ -1315,6 +1315,30 @@ namespace MaxWorlds.Enemies
                 _dormantFarStaggered = false; // re-arm: the NEXT Dormant-far spell gets its own stagger
             }
 
+            // MV-940: which FrameCost.RobotSubPhase bucket the rest of this tick's cost is charged to —
+            // diagnostic-only breakdown nested inside the outer Bucket.Robot charge Update() already
+            // wraps this whole call in (see RobotSubPhase's own doc comment). Behind matches exactly the
+            // farDormant condition above, the same IsWellBehindPlayer-while-Dormant definition
+            // PopulationReadout's "behind" count uses.
+            FrameCost.RobotSubPhase subPhase =
+                farDormant ? FrameCost.RobotSubPhase.Behind
+                : Current == State.Dormant ? FrameCost.RobotSubPhase.Dormant
+                : FrameCost.RobotSubPhase.AwakeAiRoute;
+            FrameCost.BeginRobotSub(subPhase);
+            try
+            {
+                TickBody(dt, farDormant);
+            }
+            finally
+            {
+                FrameCost.EndRobotSub(subPhase);
+            }
+        }
+
+        /// <summary>MV-940: split out of <see cref="Tick"/> purely so the sub-phase try/finally above
+        /// has a single call to wrap — no behaviour here changed by this split.</summary>
+        private void TickBody(float dt, bool farDormant)
+        {
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
@@ -1386,7 +1410,9 @@ namespace MaxWorlds.Enemies
             // still falling (or on a full-rate tick, farDormant is false and this never skips) keeps
             // getting one.
             bool skipGravity = farDormant && _cc.isGrounded;
+            FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
             if (!skipGravity) ApplyGravity(dt);
+            FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
             // MV-697: applied after every state's own movement, regardless of state -- except a
             // reduced Dormant-far tick where nothing has moved this robot since _lastTickPosition was
@@ -1396,14 +1422,18 @@ namespace MaxWorlds.Enemies
                 farDormant && (transform.position - _lastTickPosition).sqrMagnitude < 1e-8f;
             if (!positionUnchangedSinceLastTick)
             {
+                FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
                 ClampToDeckFootprint();
+                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
                 // MV-611: keeps this robot's own entry in the shared neighbour grid current every
                 // tick, REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found
                 // by another robot's separation query exactly as it was when _active was scanned
                 // directly; only TickChase's own QUERY is state-gated (nothing but a chaser needs to
                 // ask). O(1) amortized — see SeparationGrid.UpdatePosition's own doc comment.
+                FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Separation);
                 _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
+                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Separation);
             }
             _lastTickPosition = transform.position;
         }

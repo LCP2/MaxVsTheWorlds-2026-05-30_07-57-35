@@ -40,6 +40,7 @@ namespace MaxWorlds.Dev
         private string _cachedTimingLine;
         private string _cachedFrameRateLine;
         private string _cachedPopulationLine;
+        private string _cachedFrameCostLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
         public IReadOnlyList<string> Lines => _lines;
@@ -265,6 +266,12 @@ namespace MaxWorlds.Dev
                 // MV-869: same cadence, same cache — the population/Replicator line under MV-663's
                 // timing line, never rebuilt more often than the perf figures already are.
                 _cachedPopulationLine = PopulationReadout.BuildLine();
+                // MV-940: the per-system ms buckets (robot/repl/sludge/anch/hud/vfx/dbg/gate/sent, the
+                // robot sub-phase breakdown, and the dev-build-only physics/GC ProfilerRecorder line)
+                // used to exist only behind Bootstrap's own F1/top-strip "Full" overlay — never visible
+                // on this one, the overlay Lee actually reads off TestFlight. Same 0.25s cache as every
+                // other line here (MV-933: rebuilt at most 4x/s).
+                _cachedFrameCostLine = FrameCost.FormatLine();
                 _perfBuiltAt = now;
             }
 
@@ -274,7 +281,8 @@ namespace MaxWorlds.Dev
 
             string perfBlock = _cachedPerfLine == null
                 ? null
-                : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" + _cachedPopulationLine;
+                : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" +
+                  _cachedPopulationLine + "\n" + _cachedFrameCostLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 
