@@ -272,6 +272,11 @@ namespace MaxWorlds.Arena
         private DestructibleHealth _health;
         private float _timeSinceDamage;
 
+        /// <summary>MV-946: the same fall/out-of-bounds safety net Max carries
+        /// (<see cref="MaxWorlds.Player.PlayerController"/>) — seeded with this sentinel's own deploy
+        /// point, ticked every <see cref="TickSentinel"/>.</summary>
+        private FallRecoveryState _fallRecovery;
+
         /// <summary>MV-924: this sentinel's OWN map-sludge damage clock — a deployed sentinel now takes
         /// the same 7.5 HP/s map-authored sludge damage Max does (never protected by his Force Field,
         /// which is his bubble only), floor-vs-deck gated exactly like Max's own tick via
@@ -363,6 +368,7 @@ namespace MaxWorlds.Arena
             _standoffDistance = standoffDistance;
             _followTarget = followTarget;
             _worldIndex = ResolveWorldIndex();
+            _fallRecovery = new FallRecoveryState(position);
             InitHealth(maxHp);
             BuildBody();
             IgnorePlayerCollision();
@@ -613,6 +619,11 @@ namespace MaxWorlds.Arena
 
             TickMovement(dt);
 
+            // MV-946: below the floor or outside the world bounds for more than the grace window ->
+            // back to solid ground. No damage, no death -- this is recovery, not a hazard.
+            Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _controller.isGrounded, dt);
+            if (recoverTo.HasValue) Recover(recoverTo.Value);
+
             // MV-580: the walk cycle. Driven off the sentinel's OWN world position, after the movement
             // above has already updated it this frame — so a mover that just stepped shows legs that
             // moved, and one that didn't (no follow target, or already at its standoff distance) shows
@@ -661,6 +672,16 @@ namespace MaxWorlds.Arena
                     source: DamageSource.Ability));
                 FireBeam(target.transform.position);
             }
+        }
+
+        /// <summary>MV-946: teleports this sentinel back to solid ground once <see cref="_fallRecovery"/>
+        /// trips — same disable/set/enable shape <see cref="MaxWorlds.Player.PlayerController"/>'s own
+        /// recovery uses so <see cref="_controller"/>'s cached internal state doesn't fight the jump.</summary>
+        private void Recover(Vector3 position)
+        {
+            _controller.enabled = false;
+            transform.position = position;
+            _controller.enabled = true;
         }
 
         /// <summary>MV-624: the sidestep/standoff-follow/separation movement, split out of <see cref="Update"/>

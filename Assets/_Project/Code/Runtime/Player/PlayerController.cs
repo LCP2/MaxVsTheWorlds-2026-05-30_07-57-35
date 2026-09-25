@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
 
@@ -54,6 +55,10 @@ namespace MaxWorlds.Player
         private Vector3 _facing = Vector3.forward;
         private float _verticalVel;
 
+        /// <summary>MV-946: the fall/out-of-bounds safety net — ticked every <see cref="Update"/>,
+        /// seeded with Max's spawn position so it always has somewhere real to recover to.</summary>
+        private FallRecoveryState _fallRecovery;
+
         // MV-503: "Max rotates but never translates on a fresh run" diagnostic. ELIMINATED input, walk
         // speed, an exception and spawn-in-cover as causes, which leaves the CharacterController itself
         // either disabled or geometrically pinned — this instrument pins which, from a live build,
@@ -82,6 +87,7 @@ namespace MaxWorlds.Player
         {
             _cc = GetComponent<CharacterController>();
             _cc.slopeLimit = SlopeLimitDegrees;
+            _fallRecovery = new FallRecoveryState(transform.position);
 
             // MV-895: Unity's CharacterController.minMoveDistance defaults to 0.001 m and silently
             // discards any Move() below it. A residual, non-normalised analogue moveDir at a lane
@@ -187,6 +193,24 @@ namespace MaxWorlds.Player
                 Quaternion target = Quaternion.LookRotation(_facing, Vector3.up);
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, target, rotationSpeed * dt);
             }
+
+            // MV-946: below the floor or outside the world bounds for more than the grace window ->
+            // back to solid ground. No damage, no death -- this is recovery, not a hazard.
+            Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
+            if (recoverTo.HasValue) Recover(recoverTo.Value);
+        }
+
+        /// <summary>MV-946: teleports Max back to solid ground once <see cref="_fallRecovery"/> trips —
+        /// same disable/set/enable shape every other direct position write in this project uses so the
+        /// CharacterController's cached internal state doesn't fight the jump. Clears the accumulated
+        /// fall speed too, so the very next frame doesn't read as still-falling and immediately start
+        /// re-accumulating gravity from a large negative <see cref="_verticalVel"/>.</summary>
+        private void Recover(Vector3 position)
+        {
+            _cc.enabled = false;
+            transform.position = position;
+            _cc.enabled = true;
+            _verticalVel = 0f;
         }
 
         /// <summary>MV-752: this frame's motion as two separate vectors — horizontal (the walk, Y forced
