@@ -39,6 +39,12 @@ namespace MaxWorlds.Factories
         public static int Total => Registered.Count;
         public static int Destroyed => Registered.Count - Standing.Count;
 
+        /// <summary>How many registered Replicators are down (MV-948) — the Replicator counterpart to
+        /// <see cref="Destroyed"/>, so a caller that needs "every shed-equivalent factory destroyed this
+        /// run" regardless of which world it's in can add the two without reaching into either list
+        /// directly.</summary>
+        public static int ReplicatorsDestroyed => ReplicatorsRegistered.Count - ReplicatorsStanding.Count;
+
         /// <summary>True once every factory this run has is down. False in a level with none — an
         /// empty arena has not been cleared, it just never had a source to break.</summary>
         public static bool AllDown => Registered.Count > 0 && Standing.Count == 0;
