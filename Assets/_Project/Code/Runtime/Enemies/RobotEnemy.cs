@@ -1222,13 +1222,19 @@ namespace MaxWorlds.Enemies
                 RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
             }
 
+            // MV-944: a Sentinel on the other combat level is never a valid engage target — this robot
+            // must fall through to Max exactly as if no Sentinel existed at all (still gated same-level
+            // itself at the actual fire/contact sites below, since Max can also be off-level).
+            MapData map = EnemyNavigation.Map;
             float distToPlayer = Vector3.Distance(transform.position, _playerTarget.position);
             Sentinel nearest = SentinelTargeting.Nearest(transform.position);
-            float distToSentinel = nearest != null
+            bool nearestSameLevel = nearest != null
+                && CombatLevel.SameLevel(map, transform.position, nearest.transform.position);
+            float distToSentinel = nearestSameLevel
                 ? Vector3.Distance(transform.position, nearest.transform.position)
                 : float.MaxValue;
 
-            bool engageSentinel = nearest != null &&
+            bool engageSentinel = nearestSameLevel &&
                 SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToSentinel, SentinelTargeting.AggroRadius);
 
             if (engageSentinel && nearest != _engagedSentinel)
@@ -1609,6 +1615,12 @@ namespace MaxWorlds.Enemies
             // IsWellBehindPlayer, or being newly placed) — that one always runs immediately, so a robot
             // is never left looking like it silently stopped checking at all.
             if (!DormantWakeCheckDueThisTick()) return;
+
+            // MV-944: a robot on the other combat level from Max never wakes to him at all — floor and
+            // deck fight separately, so this is the same "invisible target" rule AcquireTarget/ARC/etc.
+            // apply to firing, applied here to the wake decision itself (stays dormant/idle, per spec).
+            if (_playerTarget != null &&
+                !CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, _playerTarget.position)) return;
 
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
         }
@@ -2353,6 +2365,7 @@ namespace MaxWorlds.Enemies
         private void TickBeam(float dt)
         {
             if (target != null && _sight.HasSight &&
+                CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position) &&
                 BeamGeometry.Hits(transform.position, _lungeDir, lungeRange, contactRadius, target.position))
             {
                 _targetDamageable ??= target.GetComponent<IDamageable>();
@@ -2375,7 +2388,10 @@ namespace MaxWorlds.Enemies
             if (!_dealtThisLunge)
             {
                 _dealtThisLunge = true;
-                if (target != null)
+                // MV-944: a Launcher on the other combat level from its own target never fires at all —
+                // the missile only ever homes on the target it launched at, so refusing to launch is the
+                // whole fix.
+                if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
                     HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius);
             }
 
@@ -2392,7 +2408,9 @@ namespace MaxWorlds.Enemies
             if (!_dealtThisLunge)
             {
                 _dealtThisLunge = true;
-                if (target != null)
+                // MV-944: same rule as TickMissileFire — a Bolter never fires at a target on the other
+                // combat level.
+                if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
                     BolterBolt.Fire(transform.position, target, lungeSpeed, lungeRange, contactRadius);
             }
 
@@ -2410,7 +2428,9 @@ namespace MaxWorlds.Enemies
             if (!_dealtThisLunge)
             {
                 _dealtThisLunge = true;
-                if (target != null)
+                // MV-944: same rule as TickMissileFire/TickBolt — a Turret never lobs at a target on the
+                // other combat level.
+                if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
                 {
                     CorrosiveGlob.Fire(transform.position, target, lungeSpeed, contactDamage <= 0f ? GlobDamage : contactDamage,
                         contactRadius, GlobPuddleRadius, GlobPuddleDuration);
@@ -2515,6 +2535,9 @@ namespace MaxWorlds.Enemies
         private void TryContactDamage()
         {
             if (target == null) return;
+            // MV-944: a melee lunge that closed the horizontal (XZ) gap to a target standing on the
+            // other combat level — directly below/above this robot — must still not land.
+            if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position)) return;
             Vector3 to = target.position - transform.position; to.y = 0f;
             if (to.magnitude <= contactRadius)
             {

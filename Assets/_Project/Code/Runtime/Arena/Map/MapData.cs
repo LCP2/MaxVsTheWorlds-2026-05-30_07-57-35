@@ -368,6 +368,18 @@ namespace MaxWorlds.Arena
         /// pair, which share theirs by definition), so this needs no separate zone-to-entity lookup.</summary>
         private bool IsOverDeckSurface(float px, float pz) => DeckEntityAt(px, pz) != null;
 
+        /// <summary>MV-944: whether a position counts as "on the deck" for combat-level purposes — high
+        /// enough to clear <see cref="deckHeight"/> AND actually standing over an authored Deck/Hatch rect
+        /// (never a ramp mid-climb), the same rule <see cref="ZoneAt(float, float, float)"/> uses to pick
+        /// an overlay pair's deck zone. Deliberately position-only, never <see cref="MapZone.level"/>: a
+        /// true overlay pair (a15/a13, a17/a3) has a separate deck zone <c>ZoneAt</c> can hand back, but an
+        /// in-place-deck area (a12, a single <see cref="WorldArea"/> whose garrison entries carry their own
+        /// 0/1 <see cref="WorldGarrisonEntry.level"/>) has only ONE zone covering both — <c>ZoneAt</c>
+        /// returns that same zone for a floor point and a deck point alike, so <c>zone.level</c> can never
+        /// tell them apart there. This is the one test that works for both shapes, which is what MV-944's
+        /// cross-level targeting filter needs.</summary>
+        public bool IsOnDeck(float px, float py, float pz) => py >= deckHeight - 0.5f && IsOverDeckSurface(px, pz);
+
         /// <summary>The Deck/Hatch entity (never a ramp — MV-833's own rule) whose rect contains
         /// (<paramref name="px"/>, <paramref name="pz"/>), or null if none does. Factored out of
         /// <see cref="IsOverDeckSurface"/> (MV-864) so <see cref="ResolveWalkableSurfacePoint"/> and

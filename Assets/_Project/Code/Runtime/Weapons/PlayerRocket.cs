@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
@@ -94,6 +95,15 @@ namespace MaxWorlds.Weapons
         private float _age;
         private bool _detonated;
 
+        /// <summary>MV-944: the exact point this rocket left from, captured once at <see cref="Fire"/>
+        /// and never updated — the combat-level reference every level check below uses, rather than this
+        /// rocket's own live <c>transform.position</c>. A homing rocket's own Y eases toward its
+        /// target's height as it flies (<see cref="Tick"/>'s <c>HeightEaseRate</c> ease), so by the time
+        /// it detonates near a deck target it may have already climbed to deck height itself — a level
+        /// check against the LIVE position would then read "same level" no matter which level Max
+        /// actually fired from, exactly defeating the fix.</summary>
+        private Vector3 _origin;
+
         /// <summary>The robot this rocket was launched at — <c>MV694ShoulderRackTests</c> asserts the
         /// salvo picked the nearer, in-range Rusher over the out-of-range Heavy.</summary>
         public Transform TargetForTests => _target;
@@ -124,6 +134,7 @@ namespace MaxWorlds.Weapons
 
             var rocket = go.AddComponent<PlayerRocket>();
             rocket.Init(target, speed, damage, splashRadius, cluster);
+            rocket._origin = origin;
             s_active.Add(rocket);
             return rocket;
         }
@@ -335,11 +346,14 @@ namespace MaxWorlds.Weapons
         /// nearest live, awake robot within 12m of the rocket; if none, fly straight and detonate at
         /// fuel-out." Reads <see cref="RobotEnemy.Active"/> directly — the same static-registry idiom
         /// this class's own <see cref="Active"/> and <see cref="ShoulderRack"/>'s in-range scan use —
-        /// rather than a physics query, since every live robot is already in that list.</summary>
+        /// rather than a physics query, since every live robot is already in that list. MV-944: never
+        /// retargets onto a robot on the other combat level from <see cref="_origin"/> — the level Max
+        /// actually fired from, not this rocket's own live (possibly already-climbed) position.</summary>
         private void RetargetIfLost()
         {
             if (_target != null && _targetRobot != null && _targetRobot.IsAlive && !_targetRobot.IsDormant) return;
 
+            MapData map = EnemyNavigation.Map;
             RobotEnemy replacement = null;
             float bestSq = RetargetRangeMeters * RetargetRangeMeters;
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
@@ -347,6 +361,7 @@ namespace MaxWorlds.Weapons
             {
                 RobotEnemy r = active[i];
                 if (r == null || !r.IsAlive || r.IsDormant) continue;
+                if (!CombatLevel.SameLevel(map, _origin, r.transform.position)) continue;
                 float d = (r.transform.position - transform.position).sqrMagnitude;
                 if (d <= bestSq) { bestSq = d; replacement = r; }
             }
@@ -361,9 +376,9 @@ namespace MaxWorlds.Weapons
             _detonated = true;
             s_active.Remove(this);
 
-            ApplySplashDamage(transform.position, _damage, _splashRadius);
+            ApplySplashDamage(_origin, transform.position, _damage, _splashRadius);
             RocketImpactVfx.PlaySplashRing(transform.position, _splashRadius);
-            if (_cluster) SpawnClusterBomblets(transform.position);
+            if (_cluster) SpawnClusterBomblets(_origin, transform.position);
 
             // MV-770: the impact's own flash+sparks (CombatVfx) and feel (GameFeel's hitstop/shake) —
             // same "either way" bus idiom HomingMissile.Detonate uses for HudSignals.MissileImpact.
@@ -379,9 +394,14 @@ namespace MaxWorlds.Weapons
 
         /// <summary>One AOE damage query — reused for both the rocket's own splash and each cluster
         /// bomblet (MV-694 <c>s_clu</c>), same dedupe idiom <see cref="PlayerAbilities.Land"/> uses for
-        /// the Water Balloon splash.</summary>
-        private static void ApplySplashDamage(Vector3 point, float damage, float radius)
+        /// the Water Balloon splash. MV-944: never damages a receiver on the other combat level from
+        /// <paramref name="shooterOrigin"/> — the level Max actually fired from (see <see cref="_origin"/>'s
+        /// own doc comment for why this must be the launch point, never <paramref name="point"/> itself,
+        /// which a homing rocket may have already climbed to the target's own height by the time it gets
+        /// here).</summary>
+        private static void ApplySplashDamage(Vector3 shooterOrigin, Vector3 point, float damage, float radius)
         {
+            MapData map = EnemyNavigation.Map;
             s_hitIds.Clear();
             int count = Physics.OverlapSphereNonAlloc(point, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
@@ -390,6 +410,7 @@ namespace MaxWorlds.Weapons
                 if (!s_hitIds.Add(s_hits[i].gameObject.GetInstanceID())) continue;
                 if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive) continue;
                 if (!DamageRules.Applies(Team.Player, d.Team)) continue;
+                if (!CombatLevel.SameLevel(map, shooterOrigin, s_hits[i].transform.position)) continue;
                 d.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player,
                     source: DamageSource.SecondaryWeapon));
             }
@@ -397,14 +418,16 @@ namespace MaxWorlds.Weapons
 
         /// <summary>MV-768 <c>s_clu</c>: three bomblets in a ring around the impact point, each its own
         /// small splash — gated by <see cref="ShoulderRack"/> on <c>s_clu</c>'s own RIG node level, not
-        /// (as it was pre-MV-768) a maxed Salvo track.</summary>
-        private static void SpawnClusterBomblets(Vector3 center)
+        /// (as it was pre-MV-768) a maxed Salvo track. <paramref name="shooterOrigin"/> threads through to
+        /// each bomblet's own <see cref="ApplySplashDamage"/> call, same MV-944 reasoning as the rocket's
+        /// own splash.</summary>
+        private static void SpawnClusterBomblets(Vector3 shooterOrigin, Vector3 center)
         {
             for (int i = 0; i < ClusterBombletCount; i++)
             {
                 float angle = i * (360f / ClusterBombletCount) * Mathf.Deg2Rad;
                 Vector3 point = center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ClusterRingRadius;
-                ApplySplashDamage(point, ClusterBombletDamage, ClusterBombletSplash);
+                ApplySplashDamage(shooterOrigin, point, ClusterBombletDamage, ClusterBombletSplash);
                 RocketImpactVfx.PlayBombletPop(point);
             }
         }

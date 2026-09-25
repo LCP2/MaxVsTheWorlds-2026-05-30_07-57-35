@@ -418,7 +418,10 @@ namespace MaxWorlds.Combat
                         // robots' sight of Max but not Max's spray of them, hiding would be strictly
                         // dominant: stand behind cover, kill everything in perfect safety, never come
                         // out. Cover has to cost you your shot too, or it isn't cover, it's a turret nest.
-                        && LineOfSight.Clear(origin, testPoint, sightTarget))
+                        && LineOfSight.Clear(origin, testPoint, sightTarget)
+                        // MV-944: floor and deck fight separately — the spray never washes a target
+                        // standing on the other combat level, whatever the cone/LOS above allow.
+                        && CombatLevel.SameLevel(EnemyNavigation.Map, origin, testPoint))
                     {
                         s_buffer.Add(d);
                         s_contacts.Add(_hits[i]);
