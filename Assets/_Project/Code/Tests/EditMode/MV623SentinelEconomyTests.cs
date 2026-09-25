@@ -103,11 +103,11 @@ namespace MaxWorlds.Tests.EditMode
             foreach (string id in new[] { "u_sen", "e_cel", "p_dmg", "s_bal" })
             {
                 Assert.That(CellSpend.UnlockCostFor(id), Is.EqualTo(10), $"'{id}' unlock price must stay the untouched flat 10");
-                Assert.That(CellSpend.UpgradeCostFor(id, 1), Is.EqualTo(5), $"'{id}' upgrade price at level 1 must stay untouched");
-                Assert.That(CellSpend.UpgradeCostFor(id, 2), Is.EqualTo(10), $"'{id}' upgrade price at level 2 must stay untouched");
-                Assert.That(CellSpend.UpgradeCostFor(id, 3), Is.EqualTo(15), $"'{id}' upgrade price at level 3 must stay untouched");
-                Assert.That(CellSpend.UpgradeCostFor(id, 4), Is.EqualTo(20), $"'{id}' upgrade price at level 4 must stay untouched");
-                Assert.That(CellSpend.UpgradeCostFor(id, 5), Is.EqualTo(20), $"'{id}' upgrade price at level 5 must stay untouched (escalation cap)");
+                Assert.That(CellSpend.UpgradeCostFor(id, 1), Is.EqualTo(10), $"'{id}' upgrade price at level 1 must stay on the global (MV-949) ladder");
+                Assert.That(CellSpend.UpgradeCostFor(id, 2), Is.EqualTo(15), $"'{id}' upgrade price at level 2 must stay on the global (MV-949) ladder");
+                Assert.That(CellSpend.UpgradeCostFor(id, 3), Is.EqualTo(20), $"'{id}' upgrade price at level 3 must stay on the global (MV-949) ladder");
+                Assert.That(CellSpend.UpgradeCostFor(id, 4), Is.EqualTo(20), $"'{id}' upgrade price at level 4 must stay on the global (MV-949) ladder");
+                Assert.That(CellSpend.UpgradeCostFor(id, 5), Is.EqualTo(20), $"'{id}' upgrade price at level 5 must stay on the global (MV-949) ladder (escalation cap)");
             }
 
             // ---------------------------------------------------------------- AC7: deploy cost

@@ -31,7 +31,14 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-947 (Lee: give World 1 more upgrade headroom) raised World 1's own <c>p_dmg</c> cap 4 -&gt; 7,
     /// same 20-cells-a-level flat rate past level 4 this ticket's own table already charges it -- 3
     /// extra levels at 20 cells each add exactly 60 to World 1's own total this test measures
-    /// (365 -&gt; 425).</summary>
+    /// (365 -&gt; 425).
+    ///
+    /// MV-949 (Lee: an upgrade cost must never drop below the unlock cost) shifted
+    /// <see cref="CellSpend.UpgradeCostFor(int)"/>'s ladder from 5/10/15/20 to 10/15/20/20 (capped at
+    /// level 4, read off <c>level + 1</c>) — every node's own total rises by 5 cells per escalating
+    /// upgrade level (levels 1-3 of its own climb), scaled by whatever multiplier already applied to
+    /// it: World 1's total rises 425 -&gt; 515 unscaled, World 2's rises 1061 -&gt; 1329 through the same
+    /// 2.5x PRIMARY/SECONDARY multiplier this file's own table already charges.</summary>
     public sealed class MV767WorldTwoEconomyTests
     {
         [TearDown]
@@ -41,14 +48,15 @@ namespace MaxWorlds.Tests.EditMode
         public void World2Economy_MatchesTheMV767Rebalance()
         {
             int world2Total = TotalPrimarySecondaryCost(worldIndex: 1);
-            Assert.That(world2Total, Is.InRange(1041, 1081),
+            Assert.That(world2Total, Is.InRange(1309, 1349),
                 $"World 2's PRIMARY+SECONDARY total must land near parity with its (reduced) Parts " +
-                $"supply after MV-767's 2.5x multiplier, MV-844's own +200 (4 more p_dmg levels at 50 " +
-                $"cells each) and MV-846's own new p_cap node (~150 more), got {world2Total}");
+                $"supply after MV-767's 2.5x multiplier, MV-844's own +200, MV-846's own new p_cap node " +
+                $"(~150 more) and MV-949's own ladder shift (+268 through the 2.5x multiplier), got {world2Total}");
 
             int world1Total = TotalPrimarySecondaryCost(worldIndex: 0);
-            Assert.That(world1Total, Is.EqualTo(425),
-                "World 1's PRIMARY+SECONDARY total must reflect MV-947's own +60 (3 more p_dmg levels at 20 cells each)");
+            Assert.That(world1Total, Is.EqualTo(515),
+                "World 1's PRIMARY+SECONDARY total must reflect MV-947's own +60 (3 more p_dmg levels at 20 cells each) " +
+                "and MV-949's own +90 (the 5/10/15/20 -> 10/15/20/20 ladder shift)");
 
             Assert.That(CellEconomyTuning.DefaultPowerCellDropRatio, Is.EqualTo(1.0f),
                 "Rack ammo must drop at parity with Parts, not 40% of it");

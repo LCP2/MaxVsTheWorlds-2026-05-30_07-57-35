@@ -133,11 +133,15 @@ namespace MaxWorlds.Tests.EditMode
             RigState.RaiseLevel("p_dmg"); // model-layer raise, no currency — p_dmg to level 2, unlocks p_rng's cell path
             Assert.That(RigState.IsCellUnlockable("p_rng"), Is.True, "fixture: p_dmg is now level 2");
 
-            RefreshWith(CellSpend.UnlockCostCells - 1); // one cell short for both p_rng's unlock and p_dmg's level-2 upgrade
+            RefreshWith(CellSpend.UnlockCostCells - 1); // one cell short of p_rng's own unlock cost
             AssertInteractableMatchesSpendable("p_dmg");
             AssertInteractableMatchesSpendable("p_rng");
 
-            RefreshWith(CellSpend.UnlockCostCells); // covers p_rng's unlock AND (coincidentally) p_dmg's level-2 upgrade
+            // MV-949: p_rng's unlock (10) and p_dmg's level-2 upgrade (15) are no longer the same
+            // number (pre-MV-949 they coincidentally both read 10) — bank whichever costs more so this
+            // single wallet state covers both actions at once.
+            int coversBothActions = Mathf.Max(CellSpend.UnlockCostFor("p_rng"), CellSpend.UpgradeCostFor("p_dmg", RigState.Level("p_dmg")));
+            RefreshWith(coversBothActions);
             Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_rng", PickupWallet.PowerCells), Is.True, "fixture: unlock cost must be spendable");
             Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", PickupWallet.PowerCells), Is.True, "fixture: level-2 upgrade cost must also be spendable here");
             AssertInteractableMatchesSpendable("p_dmg");

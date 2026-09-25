@@ -57,7 +57,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.UnlockCategory("SECONDARY");
             // PRIMARY: p_dmg owned at run start (RigState.Reset's own baseline); raised to level 3 so
             // (a) p_rng (its child) clears the parent->=2 cell-unlock gate and becomes draftable, and
-            // (b) p_dmg's own next upgrade costs UpgradeCostFor(3) = 15, used by the AC6 section below.
+            // (b) p_dmg's own next upgrade costs UpgradeCostFor(3) = 20, used by the AC6 section below.
             // MV-597 capped p_dmg's own maxLevel at 4 — level 4 is now MAXED (no live upgrade action
             // left, so no progress ring), which is why this fixture stops one level short of that.
             RigState.RaiseLevel("p_dmg");
@@ -122,17 +122,17 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(p_dmgRing, Is.Not.Null, "p_dmg must have an active progress ring — owned, below max level");
             Assert.That(p_dmgRing.fillAmount, Is.EqualTo(CellSpend.CellCostProgress01("p_dmg", cellsBanked)).Within(1e-4f),
                 "AC5: p_dmg's ring fillAmount must equal CellCostProgress01 exactly, mid-progress");
-            Assert.That(p_dmgRing.fillAmount, Is.EqualTo(10f / 15f).Within(1e-4f),
-                "fixture cross-check: 10 cells banked / UpgradeCostFor(3)=15 must resolve to a genuinely partial fill");
+            Assert.That(p_dmgRing.fillAmount, Is.EqualTo(10f / 20f).Within(1e-4f),
+                "fixture cross-check: 10 cells banked / UpgradeCostFor(3)=20 must resolve to a genuinely partial fill");
 
             // ---------------------------------------------------------------- AC6: "ready" is a
             // discontinuity, not a fuller reading — at fillAmount 1.0 the node is actionable
             // (spendable/interactable); one cell short, still < 1.0, it is not. p_dmg's own
-            // upgrade cost at level 3 is UpgradeCostFor(3) = 15, so 14/15 is exactly one cell short.
-            Assert.That(CellSpend.CellCostProgress01("p_dmg", 14), Is.EqualTo(14f / 15f).Within(1e-4f), "fixture: 14/15 is one cell short");
-            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", 14), Is.False, "AC6: one cell short of cost, the node must NOT be actionable");
-            Assert.That(CellSpend.CellCostProgress01("p_dmg", 15), Is.EqualTo(1.0f).Within(1e-4f), "fixture: 15/15 = 1.0");
-            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", 15), Is.True, "AC6: at fillAmount 1.0 (cost exactly met) the node must be actionable");
+            // upgrade cost at level 3 is UpgradeCostFor(3) = 20, so 19/20 is exactly one cell short.
+            Assert.That(CellSpend.CellCostProgress01("p_dmg", 19), Is.EqualTo(19f / 20f).Within(1e-4f), "fixture: 19/20 is one cell short");
+            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", 19), Is.False, "AC6: one cell short of cost, the node must NOT be actionable");
+            Assert.That(CellSpend.CellCostProgress01("p_dmg", 20), Is.EqualTo(1.0f).Within(1e-4f), "fixture: 20/20 = 1.0");
+            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", 20), Is.True, "AC6: at fillAmount 1.0 (cost exactly met) the node must be actionable");
         }
     }
 }

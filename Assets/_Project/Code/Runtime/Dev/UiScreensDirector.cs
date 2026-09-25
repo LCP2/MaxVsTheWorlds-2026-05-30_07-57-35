@@ -284,7 +284,7 @@ namespace MaxWorlds.Dev
 
         /// <summary>MV-470: the same node levels as <see cref="ApplyRigFixture"/>, but only 4 cells
         /// banked — below both <see cref="CellSpend.UnlockCostCells"/> (10) and the cheapest possible
-        /// <see cref="CellSpend.UpgradeCostFor"/> (level 1, 5 cells), so every cell-costed node on the
+        /// <see cref="CellSpend.UpgradeCostFor"/> (level 1, 10 cells since MV-949), so every cell-costed node on the
         /// board reads inert rather than live. MV-511 dropped the fixed 5-cell value this used to bank —
         /// that used to sit safely below the old flat 10-cell upgrade cost, but now equals the new level-1
         /// upgrade cost exactly, which would make e_cel/u_sen/u_rng (each owned at level 1 by
@@ -392,7 +392,7 @@ namespace MaxWorlds.Dev
         }
 
         /// <summary>MV-538 AC8 shot 2: p_dmg (owned, level 1 from <see cref="RigState.Reset"/>'s own
-        /// baseline) with 2 of its 5-cell <see cref="CellSpend.UpgradeCostFor"/>(1) banked — a genuine
+        /// baseline) with 2 of its 10-cell <see cref="CellSpend.UpgradeCostFor"/>(1) banked — a genuine
         /// partial fill, neither empty nor full, so the new <c>ProgressTrack</c> (Part 2) is visibly
         /// "part of a whole" behind the arc rather than a bare stray fill.</summary>
         public static void ApplyRigFixtureMv538Progress()
