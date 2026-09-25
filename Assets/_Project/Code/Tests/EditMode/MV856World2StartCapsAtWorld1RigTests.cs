@@ -54,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
             IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
 
             Assert.AreEqual(5, RigState.Level("e_ff"), "e_ff must cap at World 1's own maxLevel (5), not World 2's (7)");
-            Assert.AreEqual(5, RigState.Level("u_dmg"), "u_dmg must cap at World 1's own maxLevel (5), not World 2's (10)");
+            Assert.AreEqual(8, RigState.Level("u_dmg"), "u_dmg must cap at World 1's own maxLevel (8, MV-947), not World 2's (10)");
             Assert.AreEqual(0, RigState.Level("e_cmg"), "e_cmg does not exist on World 1's board and must stay unowned");
             Assert.AreEqual(0, RigState.Level("p_cap"), "p_cap (PRIMARY) must stay untouched by the World 2 additions");
             Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg is the owned-but-unupgraded floor the morph itself grants");

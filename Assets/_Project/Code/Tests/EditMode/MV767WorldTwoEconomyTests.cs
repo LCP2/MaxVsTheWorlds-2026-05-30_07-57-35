@@ -26,7 +26,12 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// MV-846 adds World 2's own new <c>p_cap</c> node (5 levels, standard unlock/upgrade costs, no
     /// per-node override) -- its unlock plus 4 upgrades scaled by the same 2.5x World2PrimarySecondary
-    /// multiplier add ~150 cells (911 -&gt; 1061), so the range widens by that amount again.</summary>
+    /// multiplier add ~150 cells (911 -&gt; 1061), so the range widens by that amount again.
+    ///
+    /// MV-947 (Lee: give World 1 more upgrade headroom) raised World 1's own <c>p_dmg</c> cap 4 -&gt; 7,
+    /// same 20-cells-a-level flat rate past level 4 this ticket's own table already charges it -- 3
+    /// extra levels at 20 cells each add exactly 60 to World 1's own total this test measures
+    /// (365 -&gt; 425).</summary>
     public sealed class MV767WorldTwoEconomyTests
     {
         [TearDown]
@@ -42,8 +47,8 @@ namespace MaxWorlds.Tests.EditMode
                 $"cells each) and MV-846's own new p_cap node (~150 more), got {world2Total}");
 
             int world1Total = TotalPrimarySecondaryCost(worldIndex: 0);
-            Assert.That(world1Total, Is.EqualTo(365),
-                "World 1's PRIMARY+SECONDARY total is not in question here and must be unchanged");
+            Assert.That(world1Total, Is.EqualTo(425),
+                "World 1's PRIMARY+SECONDARY total must reflect MV-947's own +60 (3 more p_dmg levels at 20 cells each)");
 
             Assert.That(CellEconomyTuning.DefaultPowerCellDropRatio, Is.EqualTo(1.0f),
                 "Rack ammo must drop at parity with Parts, not 40% of it");
