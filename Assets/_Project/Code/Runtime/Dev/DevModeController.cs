@@ -1,8 +1,13 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MaxWorlds.Arena;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
+using MaxWorlds.Player;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Dev
 {
@@ -43,6 +48,11 @@ namespace MaxWorlds.Dev
         {
             DevMode.Reset();
             if (UrlRequestsDevMode()) Enable("URL ?dev=1");
+
+            // MV-940: same "URL param on WebGL, always-available Settings control everywhere else"
+            // idiom as DevMode itself above — see PerfLogEnabled/TryJumpToArea's own doc comments.
+            if (UrlRequestsPerfLog()) PerfLogEnabled = true;
+            if (TryGetUrlAreaParam(out string area)) _mv940PendingAreaSpec = area;
         }
 
         private void OnDestroy() => DevMode.Reset();
@@ -65,6 +75,11 @@ namespace MaxWorlds.Dev
 
         private void Update()
         {
+            // MV-940: independent of DevMode.Enabled below — the perf log/jump-to-area controls are
+            // their own always-available surface (see PerfLogEnabled's own doc comment), not gated on
+            // dev mode being on.
+            TickMv940PerfDebug();
+
             var kb = Keyboard.current;
             if (kb == null) return;
 
@@ -173,6 +188,186 @@ namespace MaxWorlds.Dev
 
             GUI.Label(new Rect(rect.x + 10f, rect.y + 94f, w - 20f, 22f),
                 "Ctrl+Shift+D to turn off");
+        }
+
+        // =================================================================================================
+        // MV-940 Phase 1 — "measure before changing anything". Two things Lee needs to reproduce the
+        // World 2 upper-walkway fps collapse (a13 Up -> a12 Up) without a fresh TestFlight round-trip:
+        //
+        // 1. Jump to area: teleports Max to a chosen area/level with every earlier Replicator destroyed
+        //    (the standing population a real playthrough would have left behind by the time it got
+        //    there), reachable from the Settings panel (every platform) and a WebGL ?area= URL param.
+        //
+        // 2. MVPERF console log: one compact line every 2s with the same FrameCost per-system buckets
+        //    the iPhone overlay shows, plus area id, level and fps, so the design chat can measure a
+        //    WebGL deploy from a browser console with no device round-trip at all.
+        //
+        // Both default OFF and stay off until touched — deliberately NOT gated on DevMode.Enabled
+        // (which is URL/Ctrl+Shift+D only, so an iPhone TestFlight tester with no keyboard could never
+        // reach it) and no build-time gating either (this project has no App Store channel yet, only
+        // Editor/WebGL/TestFlight, so there is nothing further to gate against — same reasoning the
+        // MV-503/537/910 diagnostic overlay's own "hidden by default, present on TestFlight" precedent
+        // already established). Folded into this existing file rather than a new one under Runtime/Dev/
+        // per CC_AUTONOMY.md's guardrail against per-ticket dev-file proliferation (MV-592).
+        // =================================================================================================
+
+        /// <summary>Settings panel "Perf log" toggle — mirrors <c>?perf=1</c> for iOS, where there is no
+        /// URL bar. Never persisted across a relaunch.</summary>
+        public static bool PerfLogEnabled { get; set; }
+
+        private const float Mv940PerfLogIntervalSeconds = 2f;
+        private float _mv940PerfLogLoggedAt = float.NegativeInfinity;
+        private string _mv940PendingAreaSpec;
+
+        /// <summary>The world (map, player) isn't necessarily built yet the instant this installs —
+        /// retries every frame, silently, until both exist, then jumps exactly once. A malformed spec or
+        /// an unresolvable zone logs a warning at that point and is never retried again.</summary>
+        private void TickMv940PerfDebug()
+        {
+            if (_mv940PendingAreaSpec != null)
+            {
+                if (EnemyNavigation.Map != null && GameObject.FindGameObjectWithTag("Player") != null)
+                {
+                    TryJumpToArea(_mv940PendingAreaSpec);
+                    _mv940PendingAreaSpec = null;
+                }
+            }
+
+            if (!PerfLogEnabled) return;
+
+            float now = Time.realtimeSinceStartup;
+            if (now - _mv940PerfLogLoggedAt < Mv940PerfLogIntervalSeconds) return;
+            _mv940PerfLogLoggedAt = now;
+            Debug.Log(BuildMvPerfLine());
+        }
+
+        private static bool UrlRequestsPerfLog()
+        {
+            string url = Application.absoluteURL;
+            if (string.IsNullOrEmpty(url)) return false;
+            url = url.ToLowerInvariant();
+            return url.Contains("perf=1") || url.Contains("perf=true");
+        }
+
+        private static bool TryGetUrlAreaParam(out string area)
+        {
+            area = null;
+            string url = Application.absoluteURL;
+            if (string.IsNullOrEmpty(url)) return false;
+
+            int qIndex = url.IndexOf('?');
+            if (qIndex < 0) return false;
+
+            foreach (string pair in url.Substring(qIndex + 1).Split('&'))
+            {
+                int eq = pair.IndexOf('=');
+                if (eq < 0) continue;
+                if (!string.Equals(pair.Substring(0, eq), "area", StringComparison.OrdinalIgnoreCase)) continue;
+                area = Uri.UnescapeDataString(pair.Substring(eq + 1));
+                return !string.IsNullOrEmpty(area);
+            }
+            return false;
+        }
+
+        /// <summary>"a12", "a12up", "12", "12up" (case-insensitive) all parse — digits are the 1-based
+        /// floor area index, an optional trailing "up" selects that area's deck overlay instead. Shared
+        /// entry point for the Settings knob and <c>?area=</c>.</summary>
+        public static bool TryJumpToArea(string areaSpec)
+        {
+            if (!TryParseMv940AreaSpec(areaSpec, out int index, out bool up))
+            {
+                Debug.LogWarning($"[MV-940] jump-to-area: could not parse \"{areaSpec}\"");
+                return false;
+            }
+
+            MapData map = EnemyNavigation.Map;
+            if (map == null) return false;
+
+            MapZone zone = up ? FindMv940OverlayZone(map, index) : map.Zone($"area{index}");
+            if (zone == null)
+            {
+                Debug.LogWarning($"[MV-940] jump-to-area: no zone for \"{areaSpec}\" (area{index}{(up ? " up" : "")})");
+                return false;
+            }
+
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj == null) return false;
+            Transform player = playerObj.transform;
+
+            // Same collider-disable/teleport/re-enable shape WorldRunner.RespawnPlayer and
+            // MapRuntime.Adopt already use — a CharacterController caches its own position and would
+            // otherwise undo a plain transform.position set.
+            var cc = player.GetComponent<CharacterController>();
+            bool wasEnabled = cc != null && cc.enabled;
+            if (cc != null) cc.enabled = false;
+            player.position = new Vector3(zone.x, player.position.y, zone.z);
+            if (cc != null) cc.enabled = wasEnabled;
+
+            DestroyMv940ReplicatorsBefore(index);
+
+            // Best-effort sync — MapRuntime's own gate self-heal (Update) re-lights the correct zone off
+            // Max's live position regardless, within one frame, whether or not this tracker agrees; this
+            // just keeps population-facing systems keyed off it from reading a stale area.
+            var director = FindFirstObjectByType<AreaAccumulationDirector>();
+            director?.SetCurrentArea(index);
+
+            Debug.Log($"[MV-940] jumped to {areaSpec} (area{index}{(up ? " up" : "")})");
+            return true;
+        }
+
+        private static bool TryParseMv940AreaSpec(string spec, out int index, out bool up)
+        {
+            index = 0;
+            up = false;
+            if (string.IsNullOrEmpty(spec)) return false;
+
+            string s = spec.Trim().ToLowerInvariant();
+            if (s.Length > 0 && s[0] == 'a') s = s.Substring(1);
+
+            up = s.EndsWith("up", StringComparison.Ordinal);
+            if (up) s = s.Substring(0, s.Length - 2);
+
+            return int.TryParse(s, out index) && index > 0;
+        }
+
+        private static MapZone FindMv940OverlayZone(MapData map, int floorIndex)
+        {
+            if (map.zones == null) return null;
+            foreach (MapZone z in map.zones)
+                if (z != null && z.overlayOfIndex == floorIndex) return z;
+            return null;
+        }
+
+        /// <summary>"Every earlier Replicator destroyed" (MV-940 ticket text) — every registered
+        /// Replicator whose own <see cref="Replicator.AreaIndex"/> is strictly before the jump target, so
+        /// a fresh jump reproduces the standing population a real playthrough would have left behind by
+        /// the time it reached there, not a pristine, never-played-through world.</summary>
+        private static void DestroyMv940ReplicatorsBefore(int targetAreaIndex)
+        {
+            foreach (Replicator r in FactoryCensus.RegisteredReplicators)
+            {
+                if (r != null && r.IsAlive && r.AreaIndex < targetAreaIndex)
+                    r.ApplyCheckpointDestroyed();
+            }
+        }
+
+        private static string BuildMvPerfLine()
+        {
+            var player = FindFirstObjectByType<PlayerController>();
+            MapData map = EnemyNavigation.Map;
+            MapZone zone = player != null && map != null
+                ? map.ZoneAt(player.transform.position.x, player.transform.position.y, player.transform.position.z)
+                : null;
+
+            string areaLabel = zone != null ? MinimapModel.AreaDisplayLabel(zone) : "?";
+            string level = zone != null && zone.level > 0 ? "deck" : "floor";
+            float fps = Bootstrap.ActiveMeter != null ? Bootstrap.ActiveMeter.Fps : 0f;
+
+            // FrameCost.FormatLine() is multi-line (bucket/profiler/robot-sub-phase); collapsed to one
+            // line here since the ticket asks for ONE compact console line per interval.
+            string frameCostLine = FrameCost.FormatLine().Replace("\n", "  ");
+
+            return $"MVPERF area={areaLabel} level={level} fps={fps:0.0}  {frameCostLine}  {PopulationReadout.BuildLine()}";
         }
     }
 }

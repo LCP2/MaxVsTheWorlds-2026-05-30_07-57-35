@@ -580,7 +580,23 @@ namespace MaxWorlds.Arena
         private void Update()
         {
             if (!IsAlive) return;
-            float dt = Time.deltaTime;
+
+            // MV-940: this sentinel's whole per-frame tick, same "wrap the whole Update" idiom
+            // RobotEnemy.Update uses for FrameCost.Bucket.Robot — previously landed silently in
+            // FrameCost's "other" residual with no attribution at all.
+            FrameCost.Begin(FrameCost.Bucket.Sentinel);
+            try
+            {
+                TickSentinel(Time.deltaTime);
+            }
+            finally
+            {
+                FrameCost.End(FrameCost.Bucket.Sentinel);
+            }
+        }
+
+        private void TickSentinel(float dt)
+        {
             _timeSinceDamage += dt;
             TickHijack(dt);
 

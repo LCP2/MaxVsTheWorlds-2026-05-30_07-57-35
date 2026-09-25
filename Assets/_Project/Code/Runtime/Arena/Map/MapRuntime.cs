@@ -184,6 +184,24 @@ namespace MaxWorlds.Arena
         /// <see cref="AreaAccumulationDirector"/> or any of its garrison/accumulation state.</summary>
         private void Update()
         {
+            // MV-940: the gate self-heal's own per-frame cost — MV-925/937 shipped this check without
+            // any FrameCost attribution at all, so whatever it cost (a ZoneAt scan every frame, plus a
+            // full ApplyAreaGate rebuild on a miss) landed silently in "other". A ticket lead ("gate
+            // self-heal on decks") named this exact system as a candidate before it had a bucket of its
+            // own to prove or rule out.
+            FrameCost.Begin(FrameCost.Bucket.Gate);
+            try
+            {
+                TickGateSelfHeal();
+            }
+            finally
+            {
+                FrameCost.End(FrameCost.Bucket.Gate);
+            }
+        }
+
+        private void TickGateSelfHeal()
+        {
             if (_map == null || _rendererZones == null) return;
 
             if (_target == null)
