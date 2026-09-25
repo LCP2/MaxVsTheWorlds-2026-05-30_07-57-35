@@ -344,11 +344,19 @@ namespace MaxWorlds.Weapons
         ///
         /// This supersedes MV-670's path <c>CapsuleCast</c> (a genuine wall used to clamp Max just short
         /// of it even when the aimed destination itself was clear well past it) per Lee's direct
-        /// instruction — do not re-raise "a wall in the path should still stop the blink".</summary>
+        /// instruction — do not re-raise "a wall in the path should still stop the blink".
+        ///
+        /// MV-945: "fits" also requires landing on the SAME walkable surface Max blinked FROM
+        /// (<see cref="LandsOnWalkableSurface"/>) — <see cref="CapsuleFitsAt"/> alone only rejects a
+        /// landing that overlaps solid <see cref="CoverLayer"/> geometry, and a deck's parapet colliders
+        /// are deliberately kept off that layer (they block <c>CharacterController.Move</c> directly),
+        /// so open air just past a deck's own edge used to pass the old check clean and strand Max there
+        /// exactly like the Sentinel-deploy bug MV-864 already fixed for the other half of this
+        /// symptom.</summary>
         private Vector3 ResolveSameRoomLanding(Vector3 from, Vector3 target)
         {
             if (!CoverLayer.Exists) return target;
-            if (CapsuleFitsAt(target)) return target;
+            if (LandsOnWalkableSurface(from, target)) return target;
 
             Vector3 offset = target - from;
             float distance = offset.magnitude;
@@ -358,10 +366,23 @@ namespace MaxWorlds.Weapons
             for (float back = TeleportLandingSearchStep; back < distance; back += TeleportLandingSearchStep)
             {
                 Vector3 candidate = target - dir * back;
-                if (CapsuleFitsAt(candidate)) return candidate;
+                if (LandsOnWalkableSurface(from, candidate)) return candidate;
             }
 
             return from;
+        }
+
+        /// <summary>True if Max's own <see cref="CharacterController"/> capsule fits at
+        /// <paramref name="position"/> (<see cref="CapsuleFitsAt"/>) AND that position is still on the
+        /// same walkable surface (deck rect, or room floor) <paramref name="from"/> is standing on
+        /// (<see cref="MapData.IsWalkable"/>) — degrading to the capsule check alone with no level
+        /// loaded, the same no-level fallback <see cref="TryResolveSentinelSurfacePoint"/> already
+        /// uses.</summary>
+        private bool LandsOnWalkableSurface(Vector3 from, Vector3 position)
+        {
+            if (!CapsuleFitsAt(position)) return false;
+            MapData map = EnemyNavigation.Map;
+            return map == null || map.IsWalkable(from, position);
         }
 
         /// <summary>True if Max's own <see cref="CharacterController"/> capsule, placed at

@@ -3791,7 +3791,8 @@
           "z": 22,
           "w": 30,
           "d": 4,
-          "height": 2.5
+          "height": 2.5,
+          "walled": true
         }
       ],
       "ramps": [],
