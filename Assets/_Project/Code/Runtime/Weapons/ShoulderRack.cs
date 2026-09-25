@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -171,6 +172,7 @@ namespace MaxWorlds.Weapons
             int count = Physics.OverlapSphereNonAlloc(
                 transform.position, RangeMeters, s_hits, ~0, QueryTriggerInteraction.Ignore);
 
+            MapData map = EnemyNavigation.Map;
             RobotEnemy best = null;
             float bestSq = float.MaxValue;
             for (int i = 0; i < count; i++)
@@ -178,6 +180,8 @@ namespace MaxWorlds.Weapons
                 if (s_hits[i] == null) continue;
                 if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot)) continue;
                 if (!robot.IsAlive || robot.IsDormant) continue;
+                // MV-944: the rack never locks a robot standing on the other combat level.
+                if (!CombatLevel.SameLevel(map, transform.position, robot.transform.position)) continue;
 
                 float d = (robot.transform.position - transform.position).sqrMagnitude;
                 if (d < bestSq) { bestSq = d; best = robot; }

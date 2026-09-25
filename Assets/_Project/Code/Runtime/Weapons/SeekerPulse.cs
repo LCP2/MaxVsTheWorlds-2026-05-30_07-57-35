@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
@@ -156,13 +157,16 @@ namespace MaxWorlds.Weapons
                 GroundGlowColorFor(_powerLevelFraction));
         }
 
-        /// <summary>Nearest awake, alive robot within range and the lock cone — "awake" excludes a
+        /// <summary>Nearest awake, alive robot within range and the lock cone, ON THE SAME COMBAT LEVEL AS
+        /// <paramref name="origin"/> (MV-944: floor and deck fight separately) — "awake" excludes a
         /// still-<see cref="RobotEnemy.IsDormant"/> robot by rule (spec: "dormant robots are invisible
-        /// targets"). Reads the field-wide registry, so any level/deck qualifies, not just this room.</summary>
+        /// targets"). Reads the field-wide registry (any ROOM qualifies, not just this one), but never a
+        /// robot standing on the other side of a floor/deck split.</summary>
         private static RobotEnemy AcquireTarget(Vector3 origin, Vector3 aimDir, float lockRange,
             float lockHalfAngleDeg)
         {
             var active = RobotEnemy.Active;
+            MapData map = EnemyNavigation.Map;
             RobotEnemy best = null;
             float bestDistSq = float.MaxValue;
             float rangeSq = lockRange * lockRange;
@@ -171,6 +175,7 @@ namespace MaxWorlds.Weapons
             {
                 RobotEnemy candidate = active[i];
                 if (candidate == null || !candidate.IsAlive || candidate.IsDormant) continue;
+                if (!CombatLevel.SameLevel(map, origin, candidate.transform.position)) continue;
 
                 Vector3 to = candidate.transform.position - origin;
                 to.y = 0f;

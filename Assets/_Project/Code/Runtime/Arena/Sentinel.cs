@@ -952,11 +952,14 @@ namespace MaxWorlds.Arena
         /// <summary>Alive, awake (not <see cref="RobotEnemy.IsDormant"/>), able to take damage right
         /// now (<see cref="RobotEnemy.IsDamageable"/> — false for a Grate Lurker outside its Emerged
         /// beat), within <paramref name="rangeSq"/> measured flat (XZ, ignoring elevation so a deck
-        /// doesn't itself extend a Sentinel's reach), and has a clear <see cref="LineOfSight"/> from
-        /// <paramref name="muzzle"/>.</summary>
+        /// doesn't itself extend a Sentinel's reach), ON THE SAME COMBAT LEVEL AS THIS SENTINEL (MV-944:
+        /// floor and deck fight separately — checked here so it also covers the FOCUS branch above, which
+        /// calls this directly rather than going through the zone-narrowed candidate loop below), and has
+        /// a clear <see cref="LineOfSight"/> from <paramref name="muzzle"/>.</summary>
         private bool IsEligibleTarget(RobotEnemy robot, Vector3 muzzle, float rangeSq)
         {
             if (!robot.IsAlive || robot.IsDormant || !robot.IsDamageable) return false;
+            if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, robot.transform.position)) return false;
 
             Vector3 rp = robot.transform.position;
             Vector3 flat = new Vector3(rp.x - transform.position.x, 0f, rp.z - transform.position.z);
