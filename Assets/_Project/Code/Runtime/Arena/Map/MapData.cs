@@ -484,6 +484,35 @@ namespace MaxWorlds.Arena
             return deck != null ? ClampIntoDeckRect(deck, point, deckEdgeMargin) : point;
         }
 
+        /// <summary>MV-945: whether <paramref name="point"/> sits on the SAME walkable surface
+        /// <paramref name="fromPosition"/> is already standing on — a deck's own rect (never a ramp)
+        /// when <paramref name="fromPosition"/> reads as "on a deck" (the same
+        /// <c>fromPosition.y &gt;= deckHeight - 0.5f</c> test <see cref="SnapToWalkableSurface"/> and
+        /// <see cref="ZoneAt(float, float, float)"/> already use), that zone's own rect otherwise.
+        /// <see cref="PlayerAbilities.ResolveSameRoomLanding"/> uses this to stop a same-room blink from
+        /// landing past a deck's edge: <see cref="CapsuleFitsAt"/>-style overlap checks alone never
+        /// catch this, since a deck's parapet colliders are deliberately kept OFF
+        /// <see cref="CoverLayer"/> (they block <c>CharacterController.Move</c> directly, not a swept
+        /// capsule query) — open air just past the edge has nothing on it to overlap. Degrades to true
+        /// (never blocks) with no zone at <paramref name="fromPosition"/>, or with a deck reading "on
+        /// deck" by height but no matching Deck/Hatch rect underneath (an authoring gap) — the same
+        /// degrade <see cref="SnapToWalkableSurface"/> already uses, never a NEW refusal mode.</summary>
+        public bool IsWalkable(Vector3 fromPosition, Vector3 point)
+        {
+            MapZone zone = ZoneAt(fromPosition.x, fromPosition.y, fromPosition.z);
+            if (zone == null) return true;
+
+            bool onDeck = fromPosition.y >= deckHeight - 0.5f;
+            if (!onDeck) return zone.Contains(point.x, point.z);
+
+            MapEntity deck = DeckEntityAt(fromPosition.x, fromPosition.z);
+            if (deck == null) return true;
+
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            return point.x >= deck.x - halfW && point.x <= deck.x + halfW &&
+                   point.z >= deck.z - halfD && point.z <= deck.z + halfD;
+        }
+
         /// <summary>MV-898: the walkable surface height directly beneath <paramref name="position"/> —
         /// this level's own <see cref="deckHeight"/> when <paramref name="position"/> reads as "on a
         /// deck" (the same <c>position.y &gt;= deckHeight - 0.5f</c> test <see cref="ZoneAt(float, float, float)"/>
