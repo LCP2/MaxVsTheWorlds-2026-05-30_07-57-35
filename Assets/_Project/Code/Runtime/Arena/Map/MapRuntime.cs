@@ -564,6 +564,10 @@ namespace MaxWorlds.Arena
                 go.AddComponent<MeshFilter>().sharedMesh = combined;
                 MeshRenderer mr = go.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = entry.Key.material;
+                // MV-939: the pieces folded into this mesh already carried the tint they were bucketed
+                // by — WorldMaterials.Apply / RuntimeSurfaceDirector.Sweep must leave it alone the same
+                // way they leave any other KeepsOwnMaterial renderer alone, or this repaints grey.
+                go.AddComponent<KeepsOwnMaterial>();
                 if (isSludge) go.AddComponent<SludgeFlow>().Configure(entry.Key.material, sludgeScrollSpeed);
 
                 _rendererZones[mr] = new List<string>(1) { entry.Key.zoneId };

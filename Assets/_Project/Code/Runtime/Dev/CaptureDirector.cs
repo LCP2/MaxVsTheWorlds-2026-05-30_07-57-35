@@ -335,6 +335,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv824LitGroundCheck());
             Add(BuildMv857MaxWorld2Colors());
             Add(BuildMv913MissileLauncherCheck());
+            Add(BuildMv939W2ColorCheck());
             return d;
         }
 
@@ -2612,6 +2613,87 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-857-max-world2", NoSetup) },
+            };
+        }
+
+        // ---- MV939W2ColorCheck (MV-939 AC1) ---------------------------------------------------
+
+        /// <summary>MV-939's own before/after evidence: World 2's real shipped config, framed on the
+        /// zone centre of area10 then area13 — the same two "spots" Lee's TestFlight report named —
+        /// via <see cref="MapStaticBatchRoot.ApplyAreaGate"/> called directly the same way
+        /// MV934CombinedMeshTests/MV939CombinedMeshKeepsOwnMaterialTests already do in EditMode, so the
+        /// zone's own combined mesh is actually enabled for the shot rather than gated off. Run once
+        /// against the pre-fix commit and once after (see the fix comment for both filenames) — this is
+        /// a local Windows-Editor Play capture, not a live WebGL view (CC_AUTONOMY.md / MV-934's own
+        /// fix comment: the worker has no path to a deployed WebGL build from this session), but it is
+        /// the same rendering pipeline and is what MV-857 already used for an equivalent colour-regression
+        /// AC.</summary>
+        private static CapturePreset BuildMv939W2ColorCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"World 2 map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("World 2 built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area10");
+            }
+
+            IEnumerator SetupArea13(Camera cam) => FrameZone(cam, "area13");
+
+            return new CapturePreset
+            {
+                Key = "mv939w2colors",
+                LogTag = "[MV939Capture]",
+                Flag = "-mv939shot",
+                ArmFile = "Temp/mv939.arm",
+                HeadlessMarker = "Temp/mv939.headless",
+                DoneFileName = "_mv939_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-939-a10", NoSetup),
+                    new CaptureShot("MV-939-a13", SetupArea13),
+                },
             };
         }
 
