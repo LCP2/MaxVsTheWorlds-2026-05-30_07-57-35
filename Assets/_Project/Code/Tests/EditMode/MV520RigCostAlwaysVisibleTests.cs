@@ -74,7 +74,7 @@ namespace MaxWorlds.Tests.EditMode
                 "an unowned node's cost text must read the flat unlock price regardless of the parent-level gate");
             var unlockGlyph = _screen.NodeCostIcon("p_rng").sprite;
 
-            // p_dmg at level 1 (owned): its own next upgrade costs UpgradeCostFor(1) = 5.
+            // p_dmg at level 1 (owned): its own next upgrade costs UpgradeCostFor(1) = 10.
             Assert.That(_screen.NodeCostText("p_dmg").text, Is.EqualTo(CellSpend.UpgradeCostFor(1).ToString()),
                 "an owned level-1 node's cost text must read its own upgrade price");
             var upgradeGlyph = _screen.NodeCostIcon("p_dmg").sprite;
@@ -87,7 +87,7 @@ namespace MaxWorlds.Tests.EditMode
             _screen.Close();
             _screen.Open(); // force a fresh Refresh() — RigState.Changed isn't reliably pumped outside Play mode
             Assert.That(_screen.NodeCostText("p_dmg").text, Is.EqualTo(CellSpend.UpgradeCostFor(3).ToString()),
-                "an owned level-3 node's cost text must read UpgradeCostFor(3) = 15");
+                "an owned level-3 node's cost text must read UpgradeCostFor(3) = 20");
             Assert.That(_screen.NodeCostIcon("p_dmg").sprite, Is.EqualTo(upgradeGlyph),
                 "an owned node keeps the same upgrade glyph at every level below max");
 

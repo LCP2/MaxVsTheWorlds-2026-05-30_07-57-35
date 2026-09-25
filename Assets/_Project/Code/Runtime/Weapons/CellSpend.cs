@@ -71,14 +71,19 @@ namespace MaxWorlds.Weapons
             Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UnlockCostCells) * CostMultiplierFor(id));
 
         /// <summary>Cost to raise a node currently at <paramref name="level"/> by one level with cells —
-        /// 5, 10, 15, 20, 20, 20... for levels 1..6 and beyond, escalating by the node's OWN level (a
+        /// 10, 15, 20, 20, 20... for levels 1..5 and beyond, escalating by the node's OWN level (a
         /// within-build depth-vs-breadth trade the player makes) rather than by world/area progress,
         /// which would tax advancement the way <see cref="MaxWorlds.Weapons.RigState"/>'s design
-        /// deliberately avoids (see MV-511 for the full reasoning). Capped at
+        /// deliberately avoids (see MV-511 for the full reasoning). MV-949: shifted one level up from
+        /// MV-511's original 5/10/15/20 ladder (<c>level</c>, capped) to <c>level + 1</c>, capped — the
+        /// old ladder started below <see cref="UnlockCostCells"/> (a level 1->2 upgrade cost 5, less than
+        /// the 10-cell unlock that preceded it), so a node's own price visibly DROPPED right after its
+        /// unlock before climbing back past it. The full per-node sequence (unlock, then upgrades) must
+        /// never decrease — see <see cref="UnlockCostFor"/>. Capped at
         /// <see cref="UpgradeCostEscalationCap"/> so every single upgrade stays affordable on
         /// <see cref="MaxWorlds.Pickups.PickupWallet.DefaultCapacity"/> alone. The fallback
         /// <see cref="UpgradeCostFor(string, int)"/> reads for every id not in <see cref="s_flatNodeCost"/>.</summary>
-        public static int UpgradeCostFor(int level) => UpgradeCostBaseCells * Mathf.Min(level, UpgradeCostEscalationCap);
+        public static int UpgradeCostFor(int level) => UpgradeCostBaseCells * Mathf.Min(level + 1, UpgradeCostEscalationCap);
 
         /// <summary>Cost to raise <paramref name="id"/>, currently at <paramref name="level"/>, by one
         /// level with cells — <see cref="s_flatNodeCost"/>'s flat price if it has one, else the same
