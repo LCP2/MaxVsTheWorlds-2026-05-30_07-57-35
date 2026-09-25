@@ -9,6 +9,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -341,6 +342,7 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryRegistered += OnFactoryRegistered;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
+            FactoryCensus.CheckpointRestored += OnCheckpointRestored;
             HudSignals.WorldFactoryWording += OnWorldFactoryWording;
             HudSignals.PressureWording += OnPressureWording;
             HudSignals.BossRegistered += OnBossRegistered;
@@ -379,6 +381,7 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryRegistered -= OnFactoryRegistered;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+            FactoryCensus.CheckpointRestored -= OnCheckpointRestored;
             HudSignals.WorldFactoryWording -= OnWorldFactoryWording;
             HudSignals.PressureWording -= OnPressureWording;
             HudSignals.BossRegistered -= OnBossRegistered;
@@ -572,6 +575,12 @@ namespace MaxWorlds.UI
         private void OnBossDefeated() => _model.DefeatBossExternal();
 
         private void OnFactoryRegistered() => _model.RegisterFactory();
+
+        /// <summary>MV-950: a checkpoint restore just moved every already-destroyed shed/Replicator
+        /// out of <see cref="FactoryCensus"/>'s standing lists — catch the banner up to that count
+        /// directly, never via <see cref="OnFactoryDestroyed"/> (which would replay loot/VFX).</summary>
+        private void OnCheckpointRestored() =>
+            _model.RestoreFactoriesDestroyed(FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed);
 
         private void OnWorldFactoryWording(bool isReplicatorWorld) => _model.Arena.SetReplicatorWorld(isReplicatorWorld);
 

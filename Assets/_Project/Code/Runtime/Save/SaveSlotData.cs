@@ -117,8 +117,12 @@ namespace MaxWorlds.Save
         /// checkpoint was captured (MV-922) — the World 1 equivalent of
         /// <see cref="CheckpointDestroyedReplicatorIds"/>, restored the same way: silently re-destroying
         /// whichever of the freshly-rebuilt level's sheds carry a matching id, so a resume never
-        /// resurrects a shed the player already destroyed, and the destroyed-factory count restores
-        /// intact instead of restarting from zero.</summary>
+        /// resurrects a shed the player already destroyed, and <c>FactoryCensus.Destroyed</c> restores
+        /// intact instead of restarting from zero. That gameplay count was never the whole story: until
+        /// MV-950, the HUD's FACTORIES/REPLICATORS banner and the Result screen's tally each kept their
+        /// own separate counter fed only by the live destruction signal, so both still read 0/N after a
+        /// resume even though <c>FactoryCensus</c> itself was correct. MV-950 seeds those two off
+        /// <c>FactoryCensus.CheckpointRestored</c> so every counter now agrees.</summary>
         public string[] CheckpointDestroyedShedIds = Array.Empty<string>();
     }
 }

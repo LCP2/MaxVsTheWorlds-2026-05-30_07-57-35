@@ -82,6 +82,11 @@ namespace MaxWorlds.UI
 
         public void MarkFactoryDestroyed() => FactoriesDestroyed++;
 
+        /// <summary>MV-950: overwrite (never add) from a checkpoint restore — same "history the game
+        /// already knows, not a fresh event" contract as <see cref="Restore"/>, so a resumed run's
+        /// Result screen tally doesn't undercount the factories destroyed before the checkpoint.</summary>
+        public void RestoreFactoriesDestroyed(int count) => FactoriesDestroyed = Math.Max(0, count);
+
         /// <summary>Set the final outcome. First call wins; later calls are ignored so a death
         /// after the boss dies (or vice-versa) can't flip the result.</summary>
         public void Finish(RunOutcome outcome)

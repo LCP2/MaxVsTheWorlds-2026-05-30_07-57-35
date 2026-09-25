@@ -1,6 +1,7 @@
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Save;
 
 namespace MaxWorlds.UI
@@ -79,6 +80,7 @@ namespace MaxWorlds.UI
 
             HudSignals.EnemyKilled += OnKill;
             HudSignals.FactoryDestroyed += OnFactory;
+            FactoryCensus.CheckpointRestored += OnCheckpointRestored;
             HudSignals.BossPayoffFinished += OnBossPayoffFinished;
             HudSignals.RunComplete += OnRunComplete;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
@@ -92,6 +94,7 @@ namespace MaxWorlds.UI
 
             HudSignals.EnemyKilled -= OnKill;
             HudSignals.FactoryDestroyed -= OnFactory;
+            FactoryCensus.CheckpointRestored -= OnCheckpointRestored;
             HudSignals.BossPayoffFinished -= OnBossPayoffFinished;
             HudSignals.RunComplete -= OnRunComplete;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
@@ -138,6 +141,12 @@ namespace MaxWorlds.UI
             RunProgressState.Sync(_stats.Elapsed, _stats.Kills);
         }
         private void OnFactory(Vector3 _) => _stats.MarkFactoryDestroyed();
+
+        /// <summary>MV-950: a checkpoint restore just moved every already-destroyed shed/Replicator
+        /// out of <see cref="FactoryCensus"/>'s standing lists — catch the Result screen's tally up
+        /// to that count directly, never via <see cref="OnFactory"/> (which would replay loot/VFX).</summary>
+        private void OnCheckpointRestored() =>
+            _stats.RestoreFactoriesDestroyed(FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed);
 
         // MV-698: a Weapon Core landed on the ground — Victory must wait for it (walk-over or the
         // auto-collect timeout above), the same "necessary but not sufficient on its own" shape

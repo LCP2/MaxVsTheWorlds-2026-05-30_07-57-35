@@ -220,6 +220,14 @@ namespace MaxWorlds.Save
             StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
+
+            // MV-950: the two Apply* calls above already fixed FactoryCensus.Destroyed/
+            // ReplicatorsDestroyed (gameplay state) — but the HUD's ArenaProgress banner and the
+            // Result screen's RunStats tally are separate counters that only ever advanced off the
+            // live HudSignals.FactoryDestroyed kill signal, deliberately never replayed here (that
+            // would re-drop loot/VFX). Without this, both silently read 0/N after a resume even
+            // though the gameplay state correctly knew otherwise.
+            FactoryCensus.RaiseCheckpointRestored();
             return true;
         }
 

@@ -149,6 +149,13 @@ namespace MaxWorlds.UI
             MaybeEngageBoss();
         }
 
+        /// <summary>MV-950: seed the arena's destroyed-factory count from a checkpoint restore
+        /// (<see cref="MaxWorlds.Factories.FactoryCensus.CheckpointRestored"/>) — deliberately NOT
+        /// via <see cref="RegisterFactoryDestroyed"/>, which replays the live-kill path (sub-zone
+        /// clear, boss engage) for factories a resume must treat as already-old news, not a fresh
+        /// kill just landed.</summary>
+        public void RestoreFactoriesDestroyed(int count) => Arena.RestoreFactoriesDestroyed(count);
+
         private void MaybeEngageBoss()
         {
             if (_externalBoss) return; // a real boss engages itself via signals
