@@ -70,6 +70,15 @@ namespace MaxWorlds.Tests.EditMode
                 // a real bay population AND at least one bay within NearFittingRadius of a fitting --
                 // preserving this test's own "biggest room that can demonstrate the effect" intent
                 // rather than hard-coding a zone id this ticket's floor cut happened to gut.
+                //
+                // MV-942: a16 (Gantry Run, 106x14 m) picked up a real level-0 floor zone for the first
+                // time (it wrongly authored level 1 with no overlay partner before this ticket, so it
+                // never reached this filter at all) and is now the single largest floor zone in World 2
+                // by raw area, same shape of problem MV-801 already hit with a23. a16's whole footprint
+                // is a 14 m-wide corridor, so every bay sits within 7 m of SOME wall fitting -- it clears
+                // the near-bay gate but can never supply the far bay the assertions below need, and
+                // nothing before this required a candidate to have BOTH. Require both here, at selection
+                // time, instead of discovering the shortfall only once the far-bay assert below fires.
                 List<MapZone> zonesByArea = map.zones
                     .Where(z => z != null && z.level == 0)
                     .OrderByDescending(z => z.width * z.depth)
@@ -87,13 +96,15 @@ namespace MaxWorlds.Tests.EditMode
                         .ToList();
                     if (candidateBays.Count < 3) continue;
                     if (!candidateBays.Any(b => fittingPositions.Min(f => Vector2.Distance(b.pos, f)) <= NearFittingRadius)) continue;
+                    if (!candidateBays.Any(b => fittingPositions.Min(f => Vector2.Distance(b.pos, f)) > FarFittingRadius)) continue;
 
                     zoneRect = candidateRect;
                     bays = candidateBays;
                     break;
                 }
                 Assert.IsNotNull(bays,
-                    "no floor zone has both >= 3 bays and at least one within 2.0 m of a fitting -- this test would pass on garbage");
+                    "no floor zone has >= 3 bays with at least one within 2.0 m of a fitting AND at least " +
+                    "one beyond 7.0 m of every fitting -- this test would pass on garbage");
 
                 float darkest = bays.Min(b => b.luma);
                 float brightest = bays.Max(b => b.luma);

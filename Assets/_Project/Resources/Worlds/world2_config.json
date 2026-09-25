@@ -4868,13 +4868,10 @@
       "hasShed": false,
       "garrisonDensity": "normal",
       "targetThreatBudget": 30.72,
-      "level": 1,
       "composition": {
         "gunner": 20,
-        "turret": 25,
-        "sludger": 18,
         "blinker": 7,
-        "bolter": 2,
+        "bolter": 45,
         "charger": 14,
         "bruiser": 16
       },
@@ -5020,25 +5017,25 @@
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 110.75,
           "z": 119.2,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 132.25,
           "z": 119.2,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 153.75,
           "z": 119.2,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 175.25,
           "z": 119.2,
           "level": 1
@@ -5080,13 +5077,13 @@
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 186.5,
           "z": 118.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 100,
           "z": 117.8,
           "level": 1
@@ -5104,7 +5101,7 @@
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 121.5,
           "z": 117.8,
           "level": 1
@@ -5116,97 +5113,97 @@
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 156.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 158.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 160.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 162.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 164.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 166.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 168.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 170.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 172.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 174.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 176.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 178.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 180.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 182.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 184.5,
           "z": 117.5,
           "level": 1
         },
         {
-          "kind": "sludger",
+          "kind": "bolter",
           "x": 186,
           "z": 117.8,
           "level": 1
@@ -5476,121 +5473,121 @@
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 153.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 155.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 157.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 159.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 161.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 163.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 165.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 167.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 169.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 171.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 173.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 175.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 177.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 179.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 181.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 183.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 185.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 187.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 189.5,
           "z": 108.5,
           "level": 1
         },
         {
-          "kind": "turret",
+          "kind": "bolter",
           "x": 191.5,
           "z": 108.5,
           "level": 1

@@ -42,6 +42,13 @@ namespace MaxWorlds.Tests.EditMode
     /// raising the total to 572 (ticket's own "572 robots, 41 Replicators") and moving a great many
     /// entries' x/z — both expected below are recomputed again against the V10 shipped config, still a
     /// plain sum/hash over real data, not hand-picked.
+    ///
+    /// MV-942 (Lee, 2026-09-25) converts every a16 turret/sludger (25 + 18 = 43 entries) to bolter — a16's
+    /// deck robots misbehaved on TestFlight and Lee's own decision replaces them outright, kind only, so
+    /// the coordinate hash is unchanged. That drops the World 2 kinds share from 48.8% (279/572) to 41.3%
+    /// (236/572), below the old 45% floor. The floor is widened to 40% — still comfortably clear of the
+    /// ~37% reverted-conversion signal this assertion actually guards, per the same reasoning MV-865/875
+    /// used each time a legitimate re-author moved this number.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
@@ -78,11 +85,12 @@ namespace MaxWorlds.Tests.EditMode
             double share = (double)worldTwoKinds / total;
             // MV-865 re-authored areas 1-14 straight from Lee's sheet, which freely mixes in plenty of
             // World 1-shared kinds on its own authority — dropping the resolved share from 57-64% to
-            // 49.3% (203/412). MV-875's edits move it again, to 47.7% (194/407). The floor is widened to
-            // still comfortably catch the thing this AC actually guards (a reverted conversion, at ~37%),
-            // not loosened to the point of catching nothing.
-            Assert.That(share, Is.InRange(0.45, 0.64),
-                $"World 2's own kinds (sludger/charger/turret/lurker) must land between 45% and 64% of all " +
+            // 49.3% (203/412). MV-875's edits move it again, to 47.7% (194/407). MV-942 converts a16's
+            // 43 turret/sludger entries to bolter, dropping it again to 41.3% (236/572). The floor is
+            // widened each time to still comfortably catch the thing this AC actually guards (a reverted
+            // conversion, at ~37%), not loosened to the point of catching nothing.
+            Assert.That(share, Is.InRange(0.40, 0.64),
+                $"World 2's own kinds (sludger/charger/turret/lurker) must land between 40% and 64% of all " +
                 $"placements after the re-authoring, got {share:P1} ({worldTwoKinds}/{total})");
 
             double turretShare = (double)Count("turret") / total;
