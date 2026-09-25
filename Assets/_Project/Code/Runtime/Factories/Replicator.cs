@@ -943,6 +943,14 @@ namespace MaxWorlds.Factories
         /// already banked on the run that actually earned it.</summary>
         private void ApplyDestructionEffects()
         {
+            // MV-948: report to the census HERE, synchronously with the kill, instead of waiting for
+            // WorldRunner.RefreshConditionGates's next poll — a caller reacting to this same
+            // OnDestroyed/ApplyCheckpointDestroyed call (PickupDirector.OnFactoryDestroyed's shed-count
+            // parity) needs THIS Replicator already counted, not one poll tick later. Idempotent
+            // (FactoryCensus.ReportReplicatorDestroyed no-ops on a second report), so WorldRunner's own
+            // later poll-time call stays harmless.
+            FactoryCensus.ReportReplicatorDestroyed(this);
+
             // A robot mid-consume when the box dies is destroyed WITH it — no emission (MV-706 change 5).
             // MV-809: any not-yet-first-emitted entry is still holding its reservation — release it
             // here or that slot leaks out of the global budget forever, since nothing else ever spends
@@ -984,14 +992,14 @@ namespace MaxWorlds.Factories
         /// the live-combat <see cref="OnDestroyed"/> path's pickup drop/HUD signal entirely (via
         /// <see cref="DestructibleHealth.SilentlyDestroy"/> instead of <see cref="TakeDamage"/>) — a
         /// resume is restoring history, not scoring a new kill, and the player already banked whatever
-        /// this box dropped on the run that actually destroyed it. Reports itself to
-        /// <see cref="FactoryCensus"/> directly since nothing else will now that no event fired.</summary>
+        /// this box dropped on the run that actually destroyed it. <see cref="ApplyDestructionEffects"/>
+        /// itself reports to <see cref="FactoryCensus"/> (MV-948) since nothing else will now that no
+        /// event fired.</summary>
         public void ApplyCheckpointDestroyed()
         {
             if (_health == null || !_health.IsAlive) return;
             _health.SilentlyDestroy();
             ApplyDestructionEffects();
-            FactoryCensus.ReportReplicatorDestroyed(this);
         }
 
         private void LateUpdate()

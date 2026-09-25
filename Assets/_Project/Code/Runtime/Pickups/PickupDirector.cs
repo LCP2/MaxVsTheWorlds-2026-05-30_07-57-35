@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
@@ -36,14 +37,17 @@ namespace MaxWorlds.Pickups
     ///
     /// Sheds are the ability-unlock mechanic (WV-229; draft-pick MV-357; moved off the mid-fight modal
     /// by MV-358): a destroyed <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>.
-    /// If any RIG category is still locked, this director drops a visible <see cref="PickupKind.Device"/> —
-    /// now a Morphing Module — pickup at the shed's spot (MV-382, reinstating the walk-over collectible
-    /// MV-357/358 had reduced to an instant invisible grant) — no pause, no screen, the fight keeps
-    /// going. Walking over it draws THE RIG's locked-category pool immediately and routes straight to
-    /// the outcome (MV-424, replacing the old bank-then-BUILD-ABILITY step; MV-457 replaced the node draw
-    /// with a family draw): 0 candidates consumes the module, 1 unlocks it directly, 2 opens THE RIG
-    /// board's draft overlay to choose between them. Nothing left locked falls back to a part plus a
-    /// bigger "cell cache" instead, same as before.
+    /// The first shed drops a visible <see cref="PickupKind.Device"/> — now a Morphing Module — pickup
+    /// at the shed's spot if any RIG category is still locked (MV-382, reinstating the walk-over
+    /// collectible MV-357/358 had reduced to an instant invisible grant) — no pause, no screen, the
+    /// fight keeps going. After that, only every OTHER destroyed shed does (MV-948, see
+    /// <see cref="IsDeviceShedOrdinal"/>) — spreading the unlocks out rather than opening every
+    /// remaining category in the run's first few sheds. Walking over a Device draws THE RIG's
+    /// locked-category pool immediately and routes straight to the outcome (MV-424, replacing the old
+    /// bank-then-BUILD-ABILITY step; MV-457 replaced the node draw with a family draw): 0 candidates
+    /// consumes the module, 1 unlocks it directly, 2 opens THE RIG board's draft overlay to choose
+    /// between them. A shed that doesn't drop a Device — nothing left locked, or an even ordinal —
+    /// falls back to a part plus a bigger "cell cache" instead.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -340,12 +344,28 @@ namespace MaxWorlds.Pickups
             HudSignals.EmitWeaponCoreDropped();
         }
 
+        /// <summary>MV-948: shed #1 drops a Device (if any category's still locked), then only every
+        /// OTHER destroyed shed after that (#3, #5, #7...) does — spreading ability-family unlocks out
+        /// so a player spends more cells on PRIMARY/SECONDARY in between, instead of opening every
+        /// remaining category in the run's first few sheds. The ordinal is the current total of every
+        /// shed-equivalent factory destroyed this run so far (World 1's MowerHutch count plus World 2's
+        /// Replicator count) — both are already reported to <see cref="FactoryCensus"/> synchronously
+        /// with the kill that fires this very signal (<see cref="MaxWorlds.Factories.MowerHutch.OnDestroyed"/>,
+        /// <see cref="MaxWorlds.Factories.Replicator.ApplyDestructionEffects"/>), so the shed THIS call is
+        /// about is already counted and the result is a plain 1-based ordinal. Needs no new saved field:
+        /// <see cref="FactoryCensus.Destroyed"/>/<see cref="FactoryCensus.ReplicatorsDestroyed"/> are
+        /// exactly what MV-922/MV-776's checkpoint capture and restore, so a cold-boot RESUME re-derives
+        /// the same ordinal a checkpoint rewind left off at, and a same-session death+CONTINUE (which
+        /// never rebuilds the level, MV-941) never touches either count at all.</summary>
+        private static bool IsDeviceShedOrdinal() =>
+            (FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed) % 2 == 1;
+
         private void OnFactoryDestroyed(Vector3 pos)
         {
             bool anyLocked = false;
             foreach (var _ in RigState.LockedCategoryIds()) { anyLocked = true; break; }
 
-            if (!anyLocked) SpawnCellCache(pos);
+            if (!anyLocked || !IsDeviceShedOrdinal()) SpawnCellCache(pos);
             else SpawnDrop(PickupKind.Device, pos);
 
             // MV-727: the FIRST Replicator destroyed in a World 2 run ALSO drops a Rack Module — once
