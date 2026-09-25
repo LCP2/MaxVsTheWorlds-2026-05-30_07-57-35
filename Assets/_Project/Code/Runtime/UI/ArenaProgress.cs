@@ -76,6 +76,17 @@ namespace MaxWorlds.UI
             Changed?.Invoke(false);
         }
 
+        /// <summary>MV-950: overwrite the destroyed count from a checkpoint restore — never via
+        /// <see cref="DestroyFactory"/>'s one-at-a-time increment, which is a live-kill idiom this
+        /// isn't: a resume is catching the banner up to history the game already knows (the sheds/
+        /// Replicators a checkpoint already recorded destroyed), not scoring a fresh kill. Clamped
+        /// to the total, same defensive shape as <see cref="SetFactoriesTotal"/>.</summary>
+        public void RestoreFactoriesDestroyed(int count)
+        {
+            FactoriesDestroyed = Mathf.Clamp(count, 0, FactoriesTotal);
+            Changed?.Invoke(false);
+        }
+
         /// <summary>MV-706: which word the banner uses. A quiet tick (Lee's eye isn't meant to be
         /// pulled by a label swap the way a count change pulls it) — but still notifies, so the HUD
         /// text rebuilds even if it happens to land on an otherwise-unchanged count.</summary>

@@ -52,6 +52,22 @@ namespace MaxWorlds.Factories
         /// <summary>The last factory has fallen. Fires once per run.</summary>
         public static event Action Cleared;
 
+        /// <summary>MV-950: fired once, at the end of <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/>,
+        /// after both <see cref="ApplyCheckpointDestroyedIds"/> and <see cref="ApplyCheckpointDestroyedShedIds"/>
+        /// have moved every checkpoint-recorded Replicator/shed out of <see cref="ReplicatorsStanding"/>/
+        /// <see cref="Standing"/> — <see cref="Destroyed"/> and <see cref="ReplicatorsDestroyed"/> already
+        /// read correctly by this point, so a listener reacts by re-reading them, not by replaying the
+        /// live-kill signal (that would re-drop loot/VFX for a kill the player already banked). A RESUME
+        /// never reloads the scene, so this is what tells the HUD's already-alive <c>HudModel</c> and
+        /// <c>RunTracker</c>'s already-alive <c>RunStats</c> to catch up — both otherwise stay at zero
+        /// since neither is constructed fresh by a restore. Never fires for a fresh PLAY (<c>RestoreCheckpoint</c>
+        /// returns before reaching here when the slot holds no checkpoint).</summary>
+        public static event Action CheckpointRestored;
+
+        /// <summary>Raise <see cref="CheckpointRestored"/> — the public trigger <c>SaveSystem</c> (a
+        /// different namespace) needs, since a C# event can only be invoked from its declaring type.</summary>
+        public static void RaiseCheckpointRestored() => CheckpointRestored?.Invoke();
+
         /// <summary>Wipe the census. Called when a level starts building (the map engine), so a scene
         /// loaded a second time — in the game or in a test run — counts its own factories and not the
         /// previous level's ghosts.</summary>
