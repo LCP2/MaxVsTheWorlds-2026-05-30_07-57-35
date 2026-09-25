@@ -27,9 +27,10 @@ namespace MaxWorlds.Arena
     ///
     /// MV-438: the respawn itself no longer runs synchronously off the death. <see cref="OnPlayerDied"/>
     /// now only records the death and shows <see cref="DeathOverlay"/>; everything MV-427 used to do
-    /// immediately — area restore, gate reclose, sentinel wipe, teleport — waits in
-    /// <see cref="_pendingRespawn"/> for <see cref="Continue"/>, which the overlay's CONTINUE button
-    /// calls.
+    /// immediately — gate reclose, sentinel wipe, teleport — waits in <see cref="_pendingRespawn"/> for
+    /// <see cref="Continue"/>, which the overlay's CONTINUE button calls. MV-941 dropped area restore
+    /// from that list: a death no longer wipes/respawns the arena's robots (see <see cref="Continue"/>'s
+    /// own doc comment).
     /// </summary>
     public sealed class WorldRunner : MonoBehaviour
     {
@@ -555,21 +556,22 @@ namespace MaxWorlds.Arena
         /// <summary>CONTINUE was tapped (MV-438) — runs the deferred respawn sequence exactly as
         /// <see cref="OnPlayerDied"/> did in full before this ticket, then un-pauses. A no-op if there
         /// is nothing pending (e.g. a stray extra call), so this is always safe to wire straight to a
-        /// button.</summary>
+        /// button.
+        ///
+        /// MV-941: no longer calls <see cref="AreaAccumulationDirector.RestoreArea"/> on the death area.
+        /// That used to wipe every live robot there — survivors included — and re-solve a brand-new
+        /// authored composition, which directly contradicted Lee's rule ("if you destroyed those robots,
+        /// they stay destroyed"): a robot still alive at the moment of death got despawned anyway, and
+        /// every robot already destroyed before death came back. A death now leaves the arena's robot
+        /// population exactly as it was — nothing here despawns or (re)spawns anything.
+        /// <see cref="AreaAccumulationDirector.RestoreArea"/> itself is untouched and stays wired to
+        /// <see cref="ResumeCheckpoint"/>, the cold-boot Home-screen RESUME path that lands into a
+        /// freshly-built scene with no robots yet — a different situation this ticket doesn't touch.</summary>
         public void Continue()
         {
             if (!_pendingRespawn.HasValue) return;
             RespawnPlan plan = _pendingRespawn.Value;
             _pendingRespawn = null;
-
-            // Wipe and respawn the death arena's robots to its authored composition. Sheds and the
-            // area's own part-grant flag are untouched by this — a destroyed shed's DestructibleHealth
-            // never revives, and DeathRunState.TryGrantAreaPart is keyed by area index, not by
-            // "how many times this area has been filled".
-            _areaDirector.RestoreArea(plan.RestoreAreaIndex);
-
-            if (_pickupDirector == null) _pickupDirector = FindFirstObjectByType<PickupDirector>();
-            _pickupDirector?.ResetBruiserCountdown(plan.RestoreAreaIndex);
 
             if (plan.RecloseGate && _gateIntoArea.TryGetValue(plan.RestoreAreaIndex, out AreaGate gate) && gate != null)
                 gate.Reclose();

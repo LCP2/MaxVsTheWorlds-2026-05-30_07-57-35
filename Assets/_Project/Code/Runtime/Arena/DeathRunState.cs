@@ -27,8 +27,11 @@ namespace MaxWorlds.Arena
 
         /// <summary>An area's last-Bruiser part reward is granted at most once, ever — call this
         /// exactly when the reward is about to be handed out; it returns true the first time for a
-        /// given <paramref name="areaIndex"/> and false every time after, including after that area's
-        /// robots are wiped and respawned by a death (<c>AreaAccumulationDirector.RestoreArea</c>).</summary>
+        /// given <paramref name="areaIndex"/> and false every time after, including after a death in
+        /// that area (MV-941: a death no longer wipes/respawns an area's robots at all, but this guard
+        /// predates and does not depend on that — it stops the reward being farmed by dying and coming
+        /// back to the same still-standing garrison just as much as it stopped farming a full
+        /// re-solve).</summary>
         public static bool TryGrantAreaPart(int areaIndex)
         {
             return s_partGrantedAreas.Add(areaIndex);
