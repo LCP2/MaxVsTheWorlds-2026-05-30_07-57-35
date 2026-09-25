@@ -27,8 +27,11 @@ namespace MaxWorlds.Tests.EditMode
     /// both are sealed MonoBehaviours with no seam to intercept, so the only honest way to prove
     /// WorldRunner defers calling them is to give it the real things and watch their own observable
     /// state (gate.IsOpen, Sentinel.Active.Count, the robot's IsAlive, the player's transform, and
-    /// AreaAccumulationDirector.CurrentArea for RestoreArea/SetCurrentArea) stay untouched until
-    /// <see cref="WorldRunner.Continue"/> runs.
+    /// AreaAccumulationDirector.CurrentArea for SetCurrentArea) stay untouched until
+    /// <see cref="WorldRunner.Continue"/> runs. MV-941: <c>Continue</c> no longer calls
+    /// <c>AreaAccumulationDirector.RestoreArea</c> at all — the planted robot's IsAlive is now asserted
+    /// true both before AND after CONTINUE, proving a death never despawns a robot that was still alive
+    /// at the moment Max fell.
     ///
     /// This flow adds no coroutine at all (MV-438's own "left to you" note lets entry animation/timing
     /// go unbuilt for this ticket) — so the WaitForSeconds-vs-WaitForSecondsRealtime trap the ticket
@@ -83,8 +86,8 @@ namespace MaxWorlds.Tests.EditMode
         /// <c>RespawnAreaIndex</c> resolves to area1, so <c>SetCurrentArea</c> actually LOWERS
         /// <see cref="AreaAccumulationDirector.CurrentArea"/> from 2 back to 1 — a death in area1 instead
         /// would fall back to the un-observable entry stub (index 0), which <c>SetCurrentArea</c>
-        /// no-ops on. <c>RestoreAreaIndex</c> is area2 (so a robot planted there proves
-        /// <c>RestoreArea</c>), and gate g1 (into area2) is the one that re-closes.</summary>
+        /// no-ops on. <c>RestoreAreaIndex</c> is area2 (so a robot planted there proves a death never
+        /// touches it — MV-941), and gate g1 (into area2) is the one that re-closes.</summary>
         private static WorldConfig TwoAreaWorld() => new WorldConfig
         {
             world = "MV-438 Test World",
@@ -213,7 +216,7 @@ namespace MaxWorlds.Tests.EditMode
             // --- AC1: nothing else has happened yet ---
             Assert.IsTrue(gate.IsOpen, "AC1: Reclose() must not run before CONTINUE");
             Assert.That(Sentinel.Active.Count, Is.EqualTo(1), "AC1: Sentinel.DestroyAllActive() must not run before CONTINUE");
-            Assert.IsTrue(robot.IsAlive, "AC1: RestoreArea() must not despawn area2's robots before CONTINUE");
+            Assert.IsTrue(robot.IsAlive, "AC1: nothing must despawn area2's robots before CONTINUE");
             Assert.That(_playerGo.transform.position, Is.EqualTo(deathPosition), "AC1: RespawnPlayer() must not move Max before CONTINUE");
             Assert.That(areaDirector.CurrentArea, Is.EqualTo(2), "AC1: SetCurrentArea() must not run before CONTINUE");
 
@@ -224,7 +227,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(Time.timeScale, Is.EqualTo(1f), "AC2: CONTINUE must restore Time.timeScale to 1");
             Assert.IsFalse(gate.IsOpen, "AC2: CONTINUE must reclose gate g1, the gate into the death area");
             Assert.That(Sentinel.Active.Count, Is.EqualTo(0), "AC2: CONTINUE must run Sentinel.DestroyAllActive()");
-            Assert.IsFalse(robot.IsAlive, "AC2: CONTINUE must run RestoreArea(), despawning area2's old robot");
+            Assert.IsTrue(robot.IsAlive, "AC2 (MV-941): CONTINUE must NOT despawn a robot that was still alive at the moment of death");
             Assert.AreNotEqual(deathPosition, _playerGo.transform.position, "AC2: CONTINUE must run RespawnPlayer(), moving Max");
             Assert.That(areaDirector.CurrentArea, Is.EqualTo(1), "AC2: CONTINUE must run SetCurrentArea(1), the respawn area");
 

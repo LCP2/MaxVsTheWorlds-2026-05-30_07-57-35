@@ -313,7 +313,12 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>Wipe <paramref name="areaIndex"/>'s live/queued robots and re-solve a fresh
-        /// instance of its authored composition (MV-427: the arena Max died in fully resets). Every
+        /// instance of its authored composition. Originally MV-427's "the arena Max died in fully
+        /// resets" — MV-941 dropped the death call site (see <see cref="MaxWorlds.Arena.WorldRunner.Continue"/>'s
+        /// own doc comment: a death must leave a still-destroyed robot destroyed, not hand it a fresh
+        /// roster). The only live caller now is <see cref="MaxWorlds.Arena.WorldRunner.ResumeCheckpoint"/>,
+        /// a Home-screen RESUME landing into a freshly-built scene, where "fully resets to the authored
+        /// composition" is exactly correct — there is nothing else in that area yet. Every
         /// robot currently standing inside the area's zone bounds is <see cref="RobotEnemy.Despawn"/>'d
         /// (no kill credit, no loot — it was never defeated) rather than left to keep fighting a
         /// player who is no longer there; anything still queued but not yet released for this area is
@@ -522,7 +527,8 @@ namespace MaxWorlds.Enemies
             // walks into it, rather than depending on the queue/interval/cap timing lining up. Seeded
             // from THIS area's own just-queued composition (deducted from what's queued, not added on
             // top of it), so RestoreArea (which re-runs this same method) gets exactly the same
-            // guarantee on a post-death re-entry that first entry does.
+            // guarantee on a re-entry (MV-941: a Home-screen RESUME into a freshly-built scene, no
+            // longer a death — a death leaves an area's robots untouched) that first entry does.
             //
             // MV-514: usually this garrison already exists — placed dormant back when the PREVIOUS
             // area was filled (see PlacePendingGarrison) — so ActivateGarrisonFor just wakes and
@@ -646,7 +652,8 @@ namespace MaxWorlds.Enemies
         /// immediate-placement path always did, so this area's live-cap accounting stays correct even
         /// though the robot itself already existed. Falls back to the original <see cref="SeedGarrison"/>
         /// (solve, place and toughen immediately) when nothing was pre-placed for this area — area 1
-        /// (nothing precedes it) or a post-death <see cref="RestoreArea"/> re-fill.</summary>
+        /// (nothing precedes it) or a <see cref="RestoreArea"/> re-fill (MV-941: a Home-screen RESUME
+        /// re-entry now, not a death — a death no longer re-fills anything).</summary>
         private void ActivateGarrisonFor(int areaIndex, WorldArea area)
         {
             if (!_pendingGarrisonByArea.TryGetValue(areaIndex, out List<RobotEnemy> pending))
