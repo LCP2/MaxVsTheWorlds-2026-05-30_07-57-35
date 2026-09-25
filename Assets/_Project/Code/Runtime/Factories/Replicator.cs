@@ -377,10 +377,15 @@ namespace MaxWorlds.Factories
             // would otherwise try to run.
             _spawner.Stop();
 
-            // Same reasoning as MowerHutch: a 2x2 armoured box breaks a sight-line exactly as a shed
-            // does, and putting it on the cover layer doesn't stop the Water Blaster hitting the
-            // collider it's actually aimed at.
-            CoverLayer.Assign(gameObject);
+            // MV-943: unlike MowerHutch, this box is deliberately left OFF the cover layer — same
+            // "keeps its collider, stops blocking a sight-line or a shot" treatment MapRuntime.BuildCover
+            // already gives a hedge row/pipe barrier/see-through cover piece (MV-400/MV-863/MV-917). A
+            // robot's wake check (AmbushWake.ShouldWake) and its ordinary Chase perception both gate on
+            // LineOfSight, which casts against CoverLayer.Mask — putting this box on it meant a robot
+            // standing in a straight line to Max, with only a Replicator between them, could never see
+            // him and sat stationary as if the box were a wall. The collider itself is untouched, so it
+            // still blocks a footstep and the Water Blaster (hitMask defaults to ~0, layer-independent)
+            // still hits it.
 
             BuildBody();
         }
