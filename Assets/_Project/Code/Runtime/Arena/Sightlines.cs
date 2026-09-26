@@ -78,6 +78,12 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class LineOfSight
     {
+        /// <summary>How many times <see cref="Between"/> has actually run a raycast (MV-980) — test-only
+        /// instrumentation, same "cache MISS, not a claim" idiom as
+        /// <see cref="MaxWorlds.Core.CharacterControllerMotion.CallCount"/>. What proves a Dormant robot's
+        /// own per-frame Tick genuinely never touches this any more.</summary>
+        public static int CallCount;
+
         /// <summary>
         /// Where a sight-line is measured from and to.
         ///
@@ -121,6 +127,7 @@ namespace MaxWorlds.Arena
         /// <summary>Sight-line between two actors, sampled at their body centres.</summary>
         public static bool Between(Transform looker, Transform target)
         {
+            CallCount++;
             if (looker == null || target == null) return false;
             return Clear(EyeOf(looker), EyeOf(target), target);
         }

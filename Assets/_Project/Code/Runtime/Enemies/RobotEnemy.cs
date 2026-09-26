@@ -1248,6 +1248,12 @@ namespace MaxWorlds.Enemies
             IsConverted = false;
             _convertedElapsed = 0f;
             _team = Team.Enemy;
+            // MV-980: a pooled robot must not carry the last life's disabled CharacterController
+            // forward — one that died mid-Dormant (BeginDormant disables it; only Activate re-enables)
+            // would otherwise spawn back in unable to move at all. ResetState always lands in the awake
+            // State.Chase, so unconditionally re-enabling here is always correct.
+            if (_cc == null) _cc = GetComponent<CharacterController>();
+            if (_cc != null) _cc.enabled = true;
             // MV-952: a pooled robot must not carry the last life's fall-recovery memory forward — this
             // life's own spawn position (already stamped onto transform.position by EnemySpawner before
             // SetActive) is the only "last grounded" point that means anything to it.
@@ -1355,19 +1361,28 @@ namespace MaxWorlds.Enemies
         {
             if (Current == State.Dead) return;
 
-            // MV-940: which FrameCost.RobotSubPhase bucket the rest of this tick's cost is charged to —
-            // diagnostic-only breakdown nested inside the outer Bucket.Robot charge Update() already
-            // wraps this whole call in (see RobotSubPhase's own doc comment).
-            FrameCost.RobotSubPhase subPhase =
-                Current == State.Dormant ? FrameCost.RobotSubPhase.Dormant : FrameCost.RobotSubPhase.AwakeAiRoute;
-            FrameCost.BeginRobotSub(subPhase);
+            // MV-980: a Dormant robot costs NOTHING per frame until it wakes — no gravity/SafeMove, no
+            // LineOfSight, no fall-recovery tick, no separation-grid write, nothing TickBody below does.
+            // Guarded here (not just in Update()) so ANY caller — the real Update() loop or a test
+            // driving Tick directly — gets the same guarantee. DormantWakeScheduler is the only place a
+            // Dormant robot's wake test still runs, on its own central, bounded (<=10 Hz) pass, via
+            // CentralWakeCheck — MV-936's own per-instance round-robin throttle is retired below (it
+            // bounded only the wake CHECK; everything else in TickBody still ran every frame for it).
+            if (Current == State.Dormant) return;
+
+            // MV-940: diagnostic-only breakdown nested inside the outer Bucket.Robot charge Update()
+            // already wraps this whole call in (see RobotSubPhase's own doc comment). MV-980:
+            // RobotSubPhase.Dormant never gets charged any more — Tick() above already returned for a
+            // Dormant robot, so everything that reaches here is awake by construction; the FrameCost
+            // report's own "dormant" bucket reading 0 forever is the correct proof of that, not a bug.
+            FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.AwakeAiRoute);
             try
             {
                 TickBody(dt);
             }
             finally
             {
-                FrameCost.EndRobotSub(subPhase);
+                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.AwakeAiRoute);
             }
         }
 
@@ -1423,7 +1438,8 @@ namespace MaxWorlds.Enemies
                     case State.Lunge:    TickLunge(dt);    break;
                     case State.Recover:  TickRecover(dt);  break;
                     case State.Teleport: TickTeleport(dt); break;
-                    case State.Dormant:  TickDormant();    break;
+                    // MV-980: State.Dormant never reaches this switch any more — Tick() returns before
+                    // getting here (see its own comment). TickDormant lives on as CentralWakeCheck's body.
                     case State.Alert:    TickAlert(dt);    break;
                     case State.ReplicatorSeeking: TickReplicatorSeeking(dt); break;
                     case State.Submerged: TickLurkerSubmerged(dt); break;
@@ -1573,6 +1589,13 @@ namespace MaxWorlds.Enemies
             Current = State.Dormant;
             _stateTimer = 0f;
             SetTell(idleTell);
+            // MV-980: no CharacterController.Move while asleep — Tick() already skips every frame's
+            // gravity/knockback SafeMove for a Dormant robot; disabling the controller itself is what
+            // also drops it out of GroundAnchorVfx's OverlapSphere discovery (that director keys
+            // explicitly off CharacterController — see its own class doc). Re-enabled the instant it
+            // wakes, in Activate().
+            if (_cc == null) _cc = GetComponent<CharacterController>();
+            if (_cc != null) _cc.enabled = false;
         }
 
         /// <summary>Wires this Lurker to its home grate and every grate in its own area (MV-688) —
@@ -1616,23 +1639,6 @@ namespace MaxWorlds.Enemies
         /// frustum too is what makes waking mean "the player's own view fell on it".</summary>
         private void TickDormant()
         {
-            // MV-936: this residue population used to run the frustum test below flat out, every one
-            // of them, every single frame — fine for a handful, but W2's midgame residue runs into the
-            // hundreds (this ticket's own evidence: 103 dormant robots, robot bucket 138ms while Max
-            // stood on a deck above them). This spreads each robot's OWN check across
-            // DormantWakeCheckPeriod frames — a fixed, bounded amount of latency (at most that many
-            // frames before it can notice the player's camera has fallen on it) in exchange for
-            // dividing the steady-state population cost by the same factor. Never applies to the FIRST
-            // check after a robot starts caring (waking from Dormant, or being newly placed) — that one
-            // always runs immediately, so a robot is never left looking like it silently stopped
-            // checking at all.
-            //
-            // MV-966: a robot outside Max's reach is now PARKED (deactivated) by
-            // AreaAccumulationDirector.ParkByReach the instant it stops being reachable, so this method
-            // simply never runs for it at all — the old "well behind the player" early return that used
-            // to guard this frustum test is gone; there is nothing left to guard against.
-            if (!DormantWakeCheckDueThisTick()) return;
-
             // MV-944: a robot on the other combat level from Max never wakes to him at all — floor and
             // deck fight separately, so this is the same "invisible target" rule AcquireTarget/ARC/etc.
             // apply to firing, applied here to the wake decision itself (stays dormant/idle, per spec).
@@ -1642,40 +1648,22 @@ namespace MaxWorlds.Enemies
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
         }
 
-        /// <summary>How many of this robot's own TickDormant calls (while not well behind — see
-        /// <see cref="TickDormant"/>) the round-robin wake-check budget spreads across (MV-936). Not a
-        /// real-time interval — deliberately keyed off this robot's OWN call count rather than
-        /// <see cref="Time.frameCount"/> so it stays exactly as testable, and exactly as deterministic
-        /// across a dropped/resumed frame, as the rest of this class's reflection-driven EditMode
-        /// coverage already is.</summary>
-        private const int DormantWakeCheckPeriod = 6;
-
-        /// <summary>Whether this robot has ever run its wake check while not well behind (MV-936) — the
-        /// very first one always runs immediately, before the round-robin below starts spreading it
-        /// out, so a robot newly in range is never left waiting up to <see cref="DormantWakeCheckPeriod"/>
-        /// calls just to find out whether the player is already looking at it.</summary>
-        private bool _dormantWakeCheckPrimed;
-
-        /// <summary>This robot's own slot in the round-robin (MV-936), assigned once from its instance
-        /// ID the first time it's needed, so a whole garrison placed (or coming into range) on the same
-        /// call doesn't re-synchronise onto "every Nth call, together".</summary>
-        private int _dormantWakeCheckBucket;
-
-        /// <summary>How many not-well-behind <see cref="TickDormant"/> calls this robot has made since
-        /// its first (MV-936) — advances only on the calls that come after the always-on first one.</summary>
-        private int _dormantWakeCheckCount;
-
-        private bool DormantWakeCheckDueThisTick()
+        /// <summary>Called by <see cref="DormantWakeScheduler"/>'s own central, bounded (MV-980, at most
+        /// 10 Hz) pass — the ONLY place a Dormant robot's wake test still runs from, now that
+        /// <see cref="Tick"/> returns immediately for it every frame (see that method's own comment;
+        /// MV-936's old per-instance round-robin throttle, which bounded only the wake CHECK while
+        /// everything else in TickBody kept running every frame regardless, is retired). Refreshes this
+        /// robot's own sight memory — the same <see cref="LineOfSight.Between"/> read <see cref="Tick"/>
+        /// used to make every single frame, unconditionally — then runs the exact same wake test
+        /// <see cref="TickDormant"/> always has. Re-acquires a null target first (MV-657: a destroyed
+        /// reference, e.g. a respawned player or a dead MV-362 Sentinel, must not leave a Dormant robot
+        /// stuck forever with no way to ever notice Max again).</summary>
+        public void CentralWakeCheck(float dt)
         {
-            if (!_dormantWakeCheckPrimed)
-            {
-                _dormantWakeCheckPrimed = true;
-                _dormantWakeCheckBucket = Mathf.Abs(GetInstanceID()) % DormantWakeCheckPeriod;
-                return true;
-            }
-
-            _dormantWakeCheckCount++;
-            return _dormantWakeCheckCount % DormantWakeCheckPeriod == _dormantWakeCheckBucket;
+            if (Current != State.Dormant) return;
+            if (target == null) AcquireTarget();
+            if (target != null) _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
+            TickDormant();
         }
 
         /// <summary>How many areas behind the player's own a robot's area must be before it counts as
@@ -1805,6 +1793,7 @@ namespace MaxWorlds.Enemies
             Current = State.Alert;
             _stateTimer = 0f;
             SetTell(windupTell);
+            if (_cc != null) _cc.enabled = true; // MV-980: re-enable movement the instant it wakes
         }
 
         /// <summary>The beat itself: a pulsing tell (same idiom as <see cref="TickTelegraph"/>'s
@@ -2690,6 +2679,9 @@ namespace MaxWorlds.Enemies
                 Debug.Log($"[RobotEnemy] rejected same-team damage from {info.Attacker} at {info.Point}");
                 return;
             }
+            // MV-980: a hit wakes a sleeping garrison robot immediately — DormantWakeScheduler's own
+            // <=10 Hz pass is a wake-by-SIGHT bound only; taking damage has never waited on it.
+            if (IsDormant) Activate();
             // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
             // applies (20 -> 25 at the ticket's own 1.25x). MV-715: the Dredge Hulk's front-arc armour
             // multiplies it back down for a hit that arrived from in front — see
