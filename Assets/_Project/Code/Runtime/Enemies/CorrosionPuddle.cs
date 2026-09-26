@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
@@ -26,7 +27,7 @@ namespace MaxWorlds.Enemies
     /// live at once.
     /// </summary>
     [MaxWorlds.Core.PerfSection("sludge")]
-    public sealed class CorrosionPuddle : MonoBehaviour
+    public sealed class CorrosionPuddle : MonoBehaviour, IZoneGatedActor
     {
         /// <summary>MV-789's own authored rate — deliberately the same numbers as
         /// <see cref="SludgePuddle.DamagePerSecond"/>/<see cref="SludgePuddle"/>'s own tick interval,
@@ -51,8 +52,23 @@ namespace MaxWorlds.Enemies
             int seed = SeedFromPosition(position);
             puddle._churnPivot = BuildVisual(go.transform, radius, seed);
             puddle.Init(radius, duration);
+            // MV-978: registers with the MV-972 gate under whichever zone it landed in — this is a
+            // free-flying, runtime-spawned hazard with no home zone id of its own to hand in the way a
+            // map-authored piece has, so it resolves one off its own drop position instead.
+            MapStaticBatchRoot.Active?.RegisterGatedActorAtPosition(puddle, position);
             return puddle;
         }
+
+        /// <summary>MV-978: <see cref="IZoneGatedActor"/> — this puddle never moves once dropped.</summary>
+        Vector3 IZoneGatedActor.ZoneGatePosition => transform.position;
+
+        private bool _zoneTickEnabled = true;
+
+        void IZoneGatedActor.SetZoneGateVisible(bool visible) => _zoneTickEnabled = visible;
+
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Tick"/> has
+        /// actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int TickCallCount { get; private set; }
 
         /// <summary>MV-789's three tones: the base fill, the brighter churn lobes, and the hot rim —
         /// replacing the single flat <c>PuddleColor</c> the old cylinder used.</summary>
@@ -257,6 +273,12 @@ namespace MaxWorlds.Enemies
         /// Play mode and this project authors no PlayMode tests.</summary>
         public void Tick(float dt)
         {
+            // MV-978: skip the whole tick — damage, churn drift, lifetime countdown — while gated
+            // invisible; nobody stands close enough to take damage from a puddle nobody can see, and the
+            // 22 m chase override already keeps this live the instant Max (or a chasing robot) approaches.
+            if (!_zoneTickEnabled) return;
+            TickCallCount++;
+
             if (_playerTarget == null)
             {
                 var p = GameObject.FindGameObjectWithTag("Player");

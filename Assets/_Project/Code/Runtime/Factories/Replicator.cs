@@ -29,7 +29,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("replicator")]
-    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody
+    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
@@ -292,8 +292,29 @@ namespace MaxWorlds.Factories
         public int AreaIndex { get; private set; }
 
         /// <summary>Public so an EditMode test can drive area membership directly, same reasoning as
-        /// every other post-build configure call in this file.</summary>
-        public void SetAreaIndex(int area) => AreaIndex = area;
+        /// every other post-build configure call in this file. MV-978: also registers this box with the
+        /// MV-972 gate under its own home zone — same call <c>RobotEnemy.SetAreaIndex</c> already makes —
+        /// so <see cref="Update"/>/<see cref="LateUpdate"/> stop running while nothing is near this box.</summary>
+        public void SetAreaIndex(int area)
+        {
+            AreaIndex = area;
+            if (area > 0) MapStaticBatchRoot.Active?.RegisterGatedActor(this, $"area{area}");
+        }
+
+        /// <summary>MV-978: <see cref="IZoneGatedActor"/> — this box never moves, so its live position IS
+        /// its home zone's own position; no separate live tracking needed.</summary>
+        Vector3 IZoneGatedActor.ZoneGatePosition => transform.position;
+
+        /// <summary>MV-978: this box's own zone-tick state, combined (never overwritten outright the way
+        /// a renderer would be) with whatever else already gates it — there is nothing else here, so the
+        /// gate's own verdict is the whole answer.</summary>
+        private bool _zoneTickEnabled = true;
+
+        void IZoneGatedActor.SetZoneGateVisible(bool visible) => _zoneTickEnabled = visible;
+
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Update"/> has
+        /// actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int UpdateCallCount { get; private set; }
 
         /// <summary>MV-776: this box's stable id — the same <c>WorldReplicator.id</c> (or its
         /// synthesized <c>"{area.id}_replicatorN"</c> fallback) <see cref="MaxWorlds.Arena.WorldRunner"/>
@@ -921,6 +942,12 @@ namespace MaxWorlds.Factories
 
         private void Update()
         {
+            // MV-978: ticked only while this box's own zone is in the MV-972 gate's active set (or Max
+            // is within its 22 m chase range) — the fan spin/consumption tick otherwise ran for every
+            // Replicator in the world regardless of area, ~41 of them on World 2.
+            if (!_zoneTickEnabled) return;
+
+            UpdateCallCount++;
             FrameCost.Begin(FrameCost.Bucket.Repl);
 
             if (!IsAlive) { FrameCost.End(FrameCost.Bucket.Repl); return; }
@@ -1015,6 +1042,10 @@ namespace MaxWorlds.Factories
 
         private void LateUpdate()
         {
+            // MV-978: same zone-tick gate as Update — the LED/status-ring property-block repaint costs
+            // the same whether or not anything is close enough to see it.
+            if (!_zoneTickEnabled) return;
+
             FrameCost.Begin(FrameCost.Bucket.Repl);
 
             if (!IsAlive) { FrameCost.End(FrameCost.Bucket.Repl); return; }

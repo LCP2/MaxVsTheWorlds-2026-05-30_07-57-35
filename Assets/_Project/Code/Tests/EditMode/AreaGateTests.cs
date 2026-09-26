@@ -360,9 +360,17 @@ namespace MaxWorlds.Tests.EditMode
         /// (includeInactive: false) on purpose: a locked gate's bar strip is hidden, not cleared, via
         /// SetBarHiddenKeepLabel (MV-571), so a stale number sitting in an inactive, unrendered Text
         /// object is not a player-visible bug and must not fail this test.</summary>
+        // MV-978: the bar's own label Texts no longer live under `go` (see WorldHealthBar.SharedCanvas's
+        // own doc) — walk its own RectTransform instead of the gate's hierarchy.
+        private static Transform LabelRoot(GameObject go)
+        {
+            var bar = go.GetComponent<WorldHealthBar>();
+            return bar != null && bar.BarRectTransform != null ? bar.BarRectTransform : go.transform;
+        }
+
         private static void AssertNoVisibleLabelIsABareNumber(GameObject go, string label)
         {
-            foreach (Text t in go.GetComponentsInChildren<Text>(false))
+            foreach (Text t in LabelRoot(go).GetComponentsInChildren<Text>(false))
                 Assert.IsFalse(Regex.IsMatch(t.text.Trim(), @"^\d+$"),
                     $"{label} pill shows a bare number '{t.text}' on its own label — a player can't " +
                     "interpret it (MV-740)");
@@ -370,7 +378,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private static bool AnyVisibleLabelContains(GameObject go, string substring)
         {
-            foreach (Text t in go.GetComponentsInChildren<Text>(false))
+            foreach (Text t in LabelRoot(go).GetComponentsInChildren<Text>(false))
                 if (t.text.Contains(substring)) return true;
             return false;
         }

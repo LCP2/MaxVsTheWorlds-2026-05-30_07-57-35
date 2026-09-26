@@ -50,8 +50,11 @@ namespace MaxWorlds.Tests.PlayMode
 
             var bar = _go.GetComponent<WorldHealthBar>();
             Assert.IsNotNull(bar, "the bar did not survive being pooled");
-            Assert.IsNotNull(_go.GetComponentInChildren<Canvas>(true),
-                             "the bar's canvas did not come back with the recycled body");
+            // MV-978: the bar's own RectTransform lives on a canvas shared by every bar of this kind now
+            // (see WorldHealthBar.SharedCanvas), not as a child of this robot — its own accessor is what
+            // proves the plate survived pooling, not a hierarchy walk off the recycled body.
+            Assert.IsNotNull(bar.BarRectTransform,
+                             "the bar's own plate did not come back with the recycled body");
         }
 
         /// <summary>

@@ -457,6 +457,10 @@ namespace MaxWorlds.Rendering
 
         public float Phase { get; private set; }
 
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Tick"/> has
+        /// actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int TickCallCount { get; private set; }
+
         public void Configure(Vector3 worldPos, float period, Renderer renderer, Color baseTone)
         {
             Phase = PhaseFor(worldPos);
@@ -474,6 +478,12 @@ namespace MaxWorlds.Rendering
 
         public void Tick(float dt)
         {
+            // MV-978: this fitting's own lens/cell renderer is already zone-tagged (built directly onto
+            // it — see the two Configure call sites) — while the MV-972 gate has it disabled, skip the
+            // whole blink evaluation instead of just skipping the write at the bottom.
+            if (_renderer != null && !_renderer.enabled) return;
+
+            TickCallCount++;
             _time += dt;
             if (_renderer == null) return;
 
