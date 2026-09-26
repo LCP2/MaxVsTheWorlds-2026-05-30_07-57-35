@@ -124,5 +124,30 @@ namespace MaxWorlds.Save
         /// resume even though <c>FactoryCensus</c> itself was correct. MV-950 seeds those two off
         /// <c>FactoryCensus.CheckpointRestored</c> so every counter now agrees.</summary>
         public string[] CheckpointDestroyedShedIds = Array.Empty<string>();
+
+        /// <summary><c>AbilityCreditBank.Banked</c> at the checkpoint (MV-951) — restored the same way
+        /// <see cref="CheckpointDeathsTaken"/> is, so a cold-boot RESUME doesn't lose a banked-but-unspent
+        /// ability credit to <c>HomeScreen.OnResume</c>'s own transient-state wipe.</summary>
+        public int CheckpointAbilityCredits;
+
+        /// <summary><c>UpgradeState</c>'s installed set at the checkpoint (MV-951), by
+        /// <c>PartKind</c> name — same string-array idiom as <see cref="CheckpointDestroyedReplicatorIds"/>
+        /// since <c>JsonUtility</c> can't serialize a <c>HashSet</c>.</summary>
+        public string[] CheckpointInstalledParts = Array.Empty<string>();
+
+        /// <summary><c>DifficultyDirector.Elapsed</c> at the checkpoint (MV-951) — the Invasion Level's
+        /// real-time clock. <c>MapRuntime.Build</c> always resets it to zero on every cold-boot scene
+        /// build, before a RESUME even knows there's a checkpoint to land in, so a resumed run must
+        /// restore it explicitly, the same way <see cref="MaxWorlds.Arena.StormdrainFlood"/>'s own clock
+        /// already does.</summary>
+        public float CheckpointEscalationElapsed;
+
+        /// <summary><c>DifficultyDirector</c>'s accumulated shed skip-ahead at the checkpoint (MV-951) —
+        /// paired with <see cref="CheckpointEscalationElapsed"/> so the Invasion Level resumes at exactly
+        /// the value it was captured at, not just the real-time portion of it.</summary>
+        public float CheckpointEscalationShedSkipSeconds;
+
+        /// <summary><c>DifficultyDirector.ShedsDestroyed</c> at the checkpoint (MV-951).</summary>
+        public int CheckpointEscalationShedsDestroyed;
     }
 }
