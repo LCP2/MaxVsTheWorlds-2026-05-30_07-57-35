@@ -57,7 +57,33 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(Vector4.Distance(rusherColour, rig.CurrentBodyColor), Is.GreaterThan(0.3f),
                     "the built Bolter must not be wearing the Rusher's RobotBody colour");
 
-                var names = e.GetComponentsInChildren<Transform>(true).Select(t => t.name).ToList();
+                // MV-969: RobotRig now folds every static part it built (Spike/Barrel included) into one
+                // combined mesh, so there is no more "Spike"/"Barrel" Transform left under the live rig
+                // to look up by name. RobotBodies.BuildBolter's OWN silhouette — the thing this test
+                // actually guards — is independent of whatever RobotRig later does with its output, so
+                // it's proven here against a raw, uncombined build instead.
+                AssertBolterSilhouette();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = true;
+                try { Object.DestroyImmediate(go); }
+                finally { LogAssert.ignoreFailingMessages = false; }
+            }
+        }
+
+        /// <summary>MV-969: RobotBodies.BuildBolter's own silhouette, proven directly rather than
+        /// through a live RobotRig — the combine step folds these named parts away (see the caller's own
+        /// comment), but the geometry BuildBolter emits is unchanged and independently testable.</summary>
+        private static void AssertBolterSilhouette()
+        {
+            var m = new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
+            var root = new GameObject("RawBolterBody").transform;
+            try
+            {
+                RobotBodies.Build(EnemyKind.Bolter, root, new RobotPalette(m, m, m, m));
+
+                var names = root.GetComponentsInChildren<Transform>(true).Select(t => t.name).ToList();
                 Assert.AreEqual(6, names.Count(n => n == "Spike"),
                     "the Bolter body must be built with 6 large radial spike parts around the drum's " +
                     "equator, not the Rusher's two shared body-cone lathes");
@@ -66,9 +92,8 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
-                LogAssert.ignoreFailingMessages = true;
-                try { Object.DestroyImmediate(go); }
-                finally { LogAssert.ignoreFailingMessages = false; }
+                Object.DestroyImmediate(root.gameObject);
+                Object.DestroyImmediate(m);
             }
         }
     }

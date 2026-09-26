@@ -35,9 +35,10 @@ namespace MaxWorlds.Editor
         public const string MobileRendererPath = "Assets/Settings/Mobile_Renderer.asset";
         public const string PcRendererPath = "Assets/Settings/PC_Renderer.asset";
 
-        /// <summary>Shadows have to reach the far end of the arena: the boss room is 22 m deep and
-        /// the camera sits 20 m back from whatever it's watching.</summary>
-        public const float ShadowDistance = 55f;
+        /// <summary>MV-969: reduced from 55m — the fixed play camera sits ~14.6m from Max, so a cascade
+        /// reaching 55m spent most of its texels on ground nothing on screen ever showed. 25m keeps
+        /// margin over that camera distance without paying for shadow detail nobody sees.</summary>
+        public const float ShadowDistance = 25f;
 
         /// <summary>Two cascades, not one and not four. One spends its whole shadow map on the whole
         /// arena and gives the player's own feet four blurry texels; four is a PC luxury we'd pay for
@@ -66,8 +67,10 @@ namespace MaxWorlds.Editor
             touched += Pipeline(MobileRpPath, shadowmap: 2048) ? 1 : 0;
             touched += Pipeline(PcRpPath, shadowmap: 2048) ? 1 : 0;
 
-            touched += Occlusion(MobileRendererPath) ? 1 : 0;
-            touched += Occlusion(PcRendererPath) ? 1 : 0;
+            // MV-969: SSAO is a mobile-only perf cost with nothing to show for it under Stormdrain's
+            // fog — off on Mobile from here on; PC keeps it, same as always.
+            touched += Occlusion(MobileRendererPath, active: false) ? 1 : 0;
+            touched += Occlusion(PcRendererPath, active: true) ? 1 : 0;
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -98,8 +101,12 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>Give the renderer an SSAO pass, and tune it from the same
-        /// <see cref="BackyardLook"/> every other number in the look comes from.</summary>
-        private static bool Occlusion(string path)
+        /// <see cref="BackyardLook"/> every other number in the look comes from. <paramref name="active"/>
+        /// (MV-969) is the tier's own on/off dial — Mobile turns it off (a depth copy plus AO passes,
+        /// every frame, mostly invisible under Stormdrain's fog); PC keeps it on. Everything else this
+        /// method tunes (radius, intensity, downsample, source) still applies to the feature whether or
+        /// not it's active, so re-enabling it later needs no other change here.</summary>
+        private static bool Occlusion(string path, bool active)
         {
             var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
             if (data == null)
@@ -133,7 +140,7 @@ namespace MaxWorlds.Editor
             BackyardLook look = BackyardLook.Default;
             var so = new SerializedObject(ssao);
 
-            Set(so, "m_Active", true);
+            Set(so, "m_Active", active);
             Set(so, "m_Settings.Intensity", look.AoIntensity);
             Set(so, "m_Settings.Radius", look.AoRadius);
             Set(so, "m_Settings.DirectLightingStrength", 0.25f);

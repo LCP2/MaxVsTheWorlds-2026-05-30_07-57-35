@@ -17,7 +17,9 @@ namespace MaxWorlds.Rendering
     public static class MobileRenderTuning
     {
         public const float DefaultRenderScale = 1f;
-        public const float DefaultShadowDistance = 55f;
+        // MV-969: mirrors Mobile_RPAsset.asset's own reduction from 55m to 25m — see this class's own
+        // doc comment on why these consts have to track that file's authored values.
+        public const float DefaultShadowDistance = 25f;
         public const bool DefaultSoftShadowsSupported = true;
         public const bool DefaultMainLightShadowsSupported = true;
         public const LightRenderingMode DefaultAdditionalLightsRenderingMode = LightRenderingMode.PerPixel;

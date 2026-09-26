@@ -265,6 +265,11 @@ namespace MaxWorlds.Arena
             // snapshot above) rather than where the old call sat.
             CombineZoneGeometry();
 
+            // MV-969: no generated world geometry has ever set shadowCastingMode — see
+            // ApplyLowProfileShadowCasting's own doc. Runs after CombineZoneGeometry so the combined
+            // meshes it just produced are swept too, not only whatever stayed individual.
+            ApplyLowProfileShadowCasting();
+
             // MV-972: the live map's own gate, for anything spawning after this point (a robot placed
             // by AreaAccumulationDirector, a pickup dropped mid-run) to register with — see Active's own
             // doc for why a plain static back-pointer is enough here.
@@ -807,6 +812,39 @@ namespace MaxWorlds.Arena
             {
                 r.enabled = false;
                 _rendererZones.Remove(r);
+            }
+        }
+
+        /// <summary>MV-969 (root-cause review 2026-09-26): no generated world geometry — StormdrainKit,
+        /// StormdrainDressing, StormdrainLightKit, this class's own combined meshes — has ever set
+        /// <see cref="Renderer.shadowCastingMode"/>, so floor stains, panel joints, kerbs, pools and
+        /// decals all render into both 2048 shadow cascades while the phone camera sits ~14.6 m from
+        /// Max. A HEIGHT test, not a per-kind allowlist: a piece low enough to be a decal or a floor
+        /// dressing (own resolved world-space bounds no taller than
+        /// <see cref="LowProfileShadowHeight"/>) casts a shadow nobody can see and gains nothing from
+        /// switching it off; a wall, cover, a deck, a pipe, a shed, a Replicator or a boss is tall
+        /// enough that this test always leaves it exactly as Unity defaults it (On). This is also
+        /// exactly the test this ticket's own AC1 asserts against, so the rule and the proof are the
+        /// same test. Runs once, after <see cref="CombineZoneGeometry"/>, over <paramref name="areaRoot"/>
+        /// (this map's own root, walked up to its parent) — not just this GameObject's own children,
+        /// because StormdrainDressing's "Stormdrain Dressing" host is a SIBLING of the map root, not
+        /// nested under it (see <see cref="CombineZoneGeometry"/>'s own <c>areaRoot</c> walk and
+        /// <see cref="TagStormdrainDressing"/>'s doc for the same fact). Sweeping only this map's own
+        /// children left every one of StormdrainDressing's kerbs/pipes/panel joints/pools/decals — the
+        /// ticket's own named geometry — casting shadows unchanged. Robot parts are untouched (already
+        /// Off, set unconditionally by <see cref="MaxWorlds.VFX.CharacterPart.Add"/> regardless of
+        /// height) and never appear here anyway until
+        /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> spawns them, well after this runs.</summary>
+        private const float LowProfileShadowHeight = 0.3f;
+
+        private void ApplyLowProfileShadowCasting()
+        {
+            Transform areaRoot = transform.parent != null ? transform.parent : transform;
+            foreach (Renderer r in areaRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (r.bounds.size.y <= LowProfileShadowHeight)
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
         }
 

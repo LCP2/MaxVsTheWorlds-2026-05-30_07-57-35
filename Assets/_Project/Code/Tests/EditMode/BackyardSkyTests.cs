@@ -138,8 +138,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(so.FindProperty("m_SoftShadowsSupported").boolValue,
                 "the tier WebGL ships with can't draw a soft shadow, whatever the light asks for");
 
-            Assert.GreaterOrEqual(so.FindProperty("m_ShadowDistance").floatValue, 45f,
-                "shadows stop before the far end of the arena does");
+            // MV-969: reduced from 55m to 25m — the fixed play camera sits ~14.6m from Max, so a
+            // cascade reaching 55m spent most of its texels on ground nothing on screen ever showed.
+            // Still comfortably past the camera distance, with margin, not the old boss-room figure.
+            Assert.GreaterOrEqual(so.FindProperty("m_ShadowDistance").floatValue, 20f,
+                "shadows stop short of what the play camera can actually see");
 
             Assert.GreaterOrEqual(so.FindProperty("m_ShadowCascadeCount").intValue, 2,
                 "one cascade spends the whole shadow map on the whole arena; the player's own feet " +
@@ -147,11 +150,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TheShippedTier_HasAmbientOcclusion()
+        public void TheShippedTier_HasAmbientOcclusionFeature_ButItIsOffForCost()
         {
-            // The SSAO on PC_Renderer has never once shipped: WebGL doesn't use that renderer. AO is
-            // what puts a dark line where a fence post meets the lawn — without it the props are
-            // stickers on the grass, however good the shadows are.
+            // The SSAO on PC_Renderer has never once shipped: WebGL doesn't use that renderer.
+            // MV-969: the feature itself stays on the mobile renderer (so re-enabling it later is a
+            // one-line flip, not a rebuild) but is switched OFF — a depth copy plus AO passes every
+            // frame that measured 17.3ms GPU on a quiet walkway, mostly invisible under Stormdrain's
+            // fog in the first place.
             var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(
                 Stage76RenderScaffold.MobileRendererPath);
             Assert.IsNotNull(data, "no mobile renderer asset");
@@ -161,7 +166,8 @@ namespace MaxWorlds.Tests.EditMode
                 "the tier WebGL ships with has no ambient-occlusion pass — run " +
                 "MaxWorlds ▸ Art ▸ Apply Render Settings (YT-76) and commit the asset");
 
-            Assert.IsTrue(ssao.isActive, "the AO feature is there but switched off");
+            Assert.IsFalse(ssao.isActive,
+                "SSAO is active on the mobile renderer — MV-969 turned this off for GPU cost");
         }
 
         // --- the neighbourhood --------------------------------------------------------------------

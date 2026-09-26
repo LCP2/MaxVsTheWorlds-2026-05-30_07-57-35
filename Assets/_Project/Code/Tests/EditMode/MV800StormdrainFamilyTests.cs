@@ -125,12 +125,21 @@ namespace MaxWorlds.Tests.EditMode
 
             foreach (var r in e.GetComponentsInChildren<MeshRenderer>(true))
             {
-                if (r.sharedMaterial == null || r.sharedMaterial.name != expectedBodyName) continue;
+                // MV-969: RobotRig now folds every static part into ONE combined renderer carrying one
+                // material PER SUBMESH — sharedMaterial (singular) only ever sees submesh 0, and a
+                // property-block override lives at that same submesh index, so both have to be read by
+                // index rather than off the renderer as a whole. An eye or a wheel still carries exactly
+                // one material at index 0, so this is unchanged for those.
+                Material[] mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] == null || mats[i].name != expectedBodyName) continue;
 
-                var mpb = new MaterialPropertyBlock();
-                r.GetPropertyBlock(mpb);
-                if (!mpb.isEmpty) return mpb.GetColor(BaseColorId);
-                return r.sharedMaterial.GetColor(BaseColorId);
+                    var mpb = new MaterialPropertyBlock();
+                    r.GetPropertyBlock(mpb, i);
+                    if (!mpb.isEmpty) return mpb.GetColor(BaseColorId);
+                    return mats[i].GetColor(BaseColorId);
+                }
             }
 
             Assert.Fail($"no built part of the {e.Kind} rig wears '{expectedBodyName}' — it never got " +

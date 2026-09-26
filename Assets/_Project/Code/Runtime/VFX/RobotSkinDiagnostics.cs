@@ -136,30 +136,45 @@ namespace MaxWorlds.VFX
 
             foreach (MeshRenderer r in renderers)
             {
-                Material mat = r.sharedMaterial;
-                string matName = mat != null ? mat.name : "NULL";
-                string shaderName = mat != null ? mat.shader.name : "n/a";
-                string baseColor = mat != null && mat.HasProperty(BaseColorId)
-                    ? "#" + ColorUtility.ToHtmlStringRGB(mat.GetColor(BaseColorId))
-                    : "n/a";
-
-                bool hasBlock = r.HasPropertyBlock();
-                string blockColor = "none";
-                if (hasBlock)
+                // MV-969: a renderer can now be RobotRig's own combined static mesh, carrying one
+                // material PER SUBMESH rather than one material total — report every submesh, or the
+                // hunt this diagnostic exists for goes blind on whichever materials aren't in slot 0.
+                // sharedMaterials.Length is 1 for every renderer this ticket didn't combine (an eye, a
+                // wheel), so this loop is a no-op change for those.
+                Material[] mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
                 {
-                    r.GetPropertyBlock(mpb);
-                    blockColor = "#" + ColorUtility.ToHtmlStringRGB(mpb.GetColor(BaseColorId));
+                    Material mat = mats[i];
+                    string matName = mat != null ? mat.name : "NULL";
+                    string shaderName = mat != null ? mat.shader.name : "n/a";
+                    string baseColor = mat != null && mat.HasProperty(BaseColorId)
+                        ? "#" + ColorUtility.ToHtmlStringRGB(mat.GetColor(BaseColorId))
+                        : "n/a";
+
+                    // MV-969: index 0's block and the renderer-wide (no materialIndex) block are two
+                    // DISTINCT storage slots in this Unity version — Set/GetPropertyBlock with no
+                    // materialIndex argument does NOT round-trip through GetPropertyBlock(dest, 0),
+                    // confirmed empirically (a value set the no-index way reads back isEmpty=true at
+                    // index 0, and isEmpty=false with no index). RobotRig.ApplyEyes still writes eye
+                    // tint the no-index way, so submesh 0 has to check BOTH slots or this diagnostic
+                    // goes blind on exactly the renderer (an eye) MV-350 exists to catch a stray tint
+                    // on. Only RobotRig's own combined-body heat write (LateUpdate) uses the indexed
+                    // overload, so index 0's own read is checked first and never overridden by a
+                    // false "none" from a slot nothing ever wrote to.
+                    r.GetPropertyBlock(mpb, i);
+                    if (mpb.isEmpty && i == 0) r.GetPropertyBlock(mpb);
+                    string blockColor = mpb.isEmpty ? "none" : "#" + ColorUtility.ToHtmlStringRGB(mpb.GetColor(BaseColorId));
+
+                    bool selfDrivenTint = r.GetComponent<SelfDrivenTint>() != null;
+                    var skin = r.GetComponent<CharacterSkin>();
+                    string skinInfo = skin != null
+                        ? $"role={skin.Role} bodyColor=#{ColorUtility.ToHtmlStringRGB(skin.BodyColor)}"
+                        : "none";
+
+                    sb.Append($"\n  part={r.name} submesh={i} enabled={r.enabled} material={matName} " +
+                              $"shader={shaderName} baseColor={baseColor} propertyBlock={blockColor} " +
+                              $"selfDrivenTint={selfDrivenTint} characterSkin={skinInfo}");
                 }
-
-                bool selfDrivenTint = r.GetComponent<SelfDrivenTint>() != null;
-                var skin = r.GetComponent<CharacterSkin>();
-                string skinInfo = skin != null
-                    ? $"role={skin.Role} bodyColor=#{ColorUtility.ToHtmlStringRGB(skin.BodyColor)}"
-                    : "none";
-
-                sb.Append($"\n  part={r.name} enabled={r.enabled} material={matName} shader={shaderName} " +
-                          $"baseColor={baseColor} propertyBlock={blockColor} selfDrivenTint={selfDrivenTint} " +
-                          $"characterSkin={skinInfo}");
             }
 
             return sb.ToString();

@@ -59,6 +59,17 @@ namespace MaxWorlds.VFX
         private readonly List<Snapshot> _snapshots = new List<Snapshot>(48);
         private readonly List<Ghost> _ghosts = new List<Ghost>(16);
 
+        /// <summary>MV-969: a dedicated CLONE of <see cref="MaterialLibrary.Character()"/>, built once
+        /// and shared by every ghost — never the template itself. Every living character (RobotRig,
+        /// MaxBody, the boss) also clones that same template via <c>new Material(template)</c>, and
+        /// Unity copies a source material's ENABLED KEYWORDS into a clone at the moment it's made — so
+        /// enabling <c>_DISSOLVE_ON</c> on the raw template directly, the first time anything ever died,
+        /// would silently switch every character built AFTER that moment back to paying the dissolve
+        /// clip's cost forever, defeating the entire point of gating it. Cloning once here, off the
+        /// pristine template, keeps that leak impossible: RobotRig/MaxBody/BigBermudaRig clone from
+        /// <see cref="MaterialLibrary.Character()"/>, never from this field.</summary>
+        private Material _ghostMaterial;
+
         /// <summary>Per-robot MeshFilter lookup, cached once (MV-611) — a robot's body never changes
         /// shape once spawned (the spawner pools strictly by kind, RobotEnemy's own doc comment), so
         /// the GetComponentInChildren walk in <see cref="CachedMeshFilter"/> only ever needs to run
@@ -80,6 +91,9 @@ namespace MaxWorlds.VFX
                 if (g.Go != null) Destroy(g.Go);
             }
             _ghosts.Clear();
+
+            // Ours (MV-969): a clone this component made, not the shared template.
+            if (_ghostMaterial != null) Destroy(_ghostMaterial);
         }
 
         private void LateUpdate()
@@ -151,8 +165,20 @@ namespace MaxWorlds.VFX
 
         private void SpawnGhost(Snapshot snap)
         {
-            var mat = MaterialLibrary.Character();
-            if (mat == null) return;   // no stylised shader -> no dissolve; the enemy just pops as before
+            Material template = MaterialLibrary.Character();
+            if (template == null) return;   // no stylised shader -> no dissolve; the enemy just pops as before
+
+            // MV-969: built once, off the pristine template — see _ghostMaterial's own doc for why
+            // this must never be the template itself.
+            if (_ghostMaterial == null)
+            {
+                _ghostMaterial = new Material(template)
+                {
+                    name = "DissolveGhost",
+                    hideFlags = HideFlags.HideAndDontSave,
+                };
+                _ghostMaterial.EnableKeyword("_DISSOLVE_ON");
+            }
 
             if (_ghosts.Count >= maxGhosts) Retire(0);
 
@@ -163,7 +189,7 @@ namespace MaxWorlds.VFX
 
             go.AddComponent<MeshFilter>().sharedMesh = snap.Mesh;
             var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = mat;
+            r.sharedMaterial = _ghostMaterial;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             _ghosts.Add(new Ghost

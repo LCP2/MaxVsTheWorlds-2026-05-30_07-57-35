@@ -108,6 +108,11 @@ Shader "MaxWorlds/StylizedCharacter"
             HLSLPROGRAM
             #pragma vertex OutlineVert
             #pragma fragment OutlineFrag
+            // MV-969: multi_compile, not shader_feature — this is only ever toggled from script
+            // (DissolveVfx's own dedicated ghost material), never set on a serialized .mat asset, so a
+            // shader_feature variant would be stripped from the build as "unused" and a dying enemy's
+            // outline would silently stop dissolving in a real build while still working in the editor.
+            #pragma multi_compile_local _ _DISSOLVE_ON
 
             struct Attributes
             {
@@ -145,8 +150,13 @@ Shader "MaxWorlds/StylizedCharacter"
             half4 OutlineFrag(Varyings IN) : SV_Target
             {
                 // The outline dissolves with the body, or a dead enemy leaves a floating shell.
+                // MV-969: compiled out entirely when _DISSOLVE_ON is off (every living character,
+                // every frame) — the noise lattice and the clip it feeds only exist in the variant a
+                // dissolving ghost actually uses.
+            #if defined(_DISSOLVE_ON)
                 float n = noise31(IN.positionWS * _NoiseScale);
                 clip(n - _Dissolve);
+            #endif
                 return half4(_OutlineColor.rgb, 1);
             }
             ENDHLSL
@@ -165,6 +175,9 @@ Shader "MaxWorlds/StylizedCharacter"
             #pragma fragment LitFrag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
+            // MV-969: see the Outline pass's own comment on why this is multi_compile, not
+            // shader_feature.
+            #pragma multi_compile_local _ _DISSOLVE_ON
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
@@ -192,8 +205,14 @@ Shader "MaxWorlds/StylizedCharacter"
 
             half4 LitFrag(Varyings IN) : SV_Target
             {
+                // MV-969: the noise lattice (8 hash lookups) and its clip only run in the
+                // _DISSOLVE_ON variant — every living character (the overwhelming majority of frames)
+                // compiles neither in, which is what lets Apple's hidden-surface removal actually work
+                // on this pass instead of every character in the yard defeating it unconditionally.
+            #if defined(_DISSOLVE_ON)
                 float noise = noise31(IN.positionWS * _NoiseScale);
                 clip(noise - _Dissolve);
+            #endif
 
                 float3 N = normalize(IN.normalWS);
                 float3 V = normalize(GetWorldSpaceViewDir(IN.positionWS));
@@ -218,9 +237,11 @@ Shader "MaxWorlds/StylizedCharacter"
 
                 // The dissolve's leading edge glows, so a death reads as burning away rather than
                 // as the model quietly developing holes.
+            #if defined(_DISSOLVE_ON)
                 float edge = 1.0 - saturate((noise - _Dissolve) / max(_EdgeWidth, 1e-4));
                 edge = saturate(edge) * step(0.0001, _Dissolve);
                 lit = lerp(lit, _EdgeColor.rgb, edge);
+            #endif
 
                 return half4(lit, 1);
             }
@@ -242,6 +263,9 @@ Shader "MaxWorlds/StylizedCharacter"
             HLSLPROGRAM
             #pragma vertex ShadowVert
             #pragma fragment ShadowFrag
+            // MV-969: see the Outline pass's own comment on why this is multi_compile, not
+            // shader_feature.
+            #pragma multi_compile_local _ _DISSOLVE_ON
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
@@ -273,8 +297,13 @@ Shader "MaxWorlds/StylizedCharacter"
             half4 ShadowFrag(Varyings IN) : SV_Target
             {
                 // A dissolving body must stop casting the parts of itself that have burned away.
+                // MV-969: same _DISSOLVE_ON guard as the other two passes, for consistency — in
+                // practice this pass never actually runs today, since every character and every
+                // DissolveVfx ghost sets shadowCastingMode Off (YT-186).
+            #if defined(_DISSOLVE_ON)
                 float n = noise31(IN.positionWS * _NoiseScale);
                 clip(n - _Dissolve);
+            #endif
                 return 0;
             }
             ENDHLSL

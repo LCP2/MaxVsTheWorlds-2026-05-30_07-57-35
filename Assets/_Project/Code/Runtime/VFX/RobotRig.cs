@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Core;
@@ -163,6 +164,21 @@ namespace MaxWorlds.VFX
         private Material _hazardMat;
         private MaterialPropertyBlock _eyeMpb;
 
+        /// <summary>MV-969: the one renderer <see cref="CombineStaticParts"/> folds this robot's whole
+        /// static geometry into — a multi-submesh mesh, one submesh per distinct material. Null only if
+        /// a future kind somehow builds zero static parts (never happens today).</summary>
+        private MeshRenderer _combinedRenderer;
+
+        /// <summary>The submesh index within <see cref="_combinedRenderer"/> that carries <see cref="_bodyMat"/>
+        /// — where the per-robot heat write in <see cref="LateUpdate"/> now lands, via
+        /// <see cref="Renderer.SetPropertyBlock(MaterialPropertyBlock, int)"/>, instead of mutating
+        /// <see cref="_bodyMat"/> directly (which MV-969 made a material SHARED across every robot of
+        /// this kind — see <see cref="SharedCharacterMaterial"/>). -1 if the body colour never made it
+        /// into a combined submesh (should not happen; guarded defensively).</summary>
+        private int _bodyMaterialIndex = -1;
+
+        private MaterialPropertyBlock _bodyMpb;
+
         private bool _built;
         private Color _tellColor = EyeIdle;
         private float _flash;
@@ -320,20 +336,31 @@ namespace MaxWorlds.VFX
             ApplyEyes(_tellColor);
         }
 
+        /// <summary>MV-969 (root-cause review 2026-09-26, observation 3): a fresh <c>new Material</c> per
+        /// LIVING ROBOT — 90 robots meant 90+ character-material instances, none of them shareable by
+        /// the SRP batcher no matter how identical their colour. <see cref="ResolveBodyColor"/> and the
+        /// Cool/Dark/Gold/hazard-band colours are all pure, deterministic functions of a small finite
+        /// input space (role/skin/colourRole; reef on/off) — the same resolved <see cref="Color"/> value
+        /// always means the same kind's own tint, so caching a material INSTANCE per distinct Color and
+        /// handing the same instance to every robot that resolves to it is "one material per robot kind",
+        /// exactly as the ticket asks, at the cost of one small process-lifetime dictionary instead of a
+        /// per-robot allocation. Never destroyed by any one robot's <see cref="OnDestroy"/> any more —
+        /// see that method's own comment.</summary>
+        private static readonly Dictionary<Color, Material> s_sharedCharacterMats = new Dictionary<Color, Material>();
+
         /// <summary>
-        /// Four materials, all OURS (MV-451).
-        ///
-        /// Instances of <see cref="MaterialLibrary.Character()"/> — never that material itself, which is
-        /// worn by every robot in the yard and by Max and the boss; heating this one robot's chassis on
-        /// its wind-up would heat the entire cast. Instances rather than a MaterialPropertyBlock per
-        /// renderer for the same reason the boss's rig does it: a block BREAKS SRP batching and a shared
-        /// material instance KEEPS it, and the whole model heats with one property write.
+        /// Four materials, SHARED across every robot that resolves to the same colour (MV-969; see
+        /// <see cref="s_sharedCharacterMats"/>).
         ///
         /// The body wears the kind's own colour, straight from <see cref="CharacterSkin"/> so "them" is
         /// one colour everywhere — <see cref="RobotSkinDiagnostics"/> (MV-350) reads it off
         /// <see cref="CurrentBodyColor"/>. Cool, dark and gold are the three materials SHARED across the
         /// whole roster (identical colour on every kind — see <see cref="CharacterSkin.RobotCool"/> and
         /// friends), which is what makes seven kinds read as one family built out of one shed.
+        ///
+        /// Per-robot variation (the wind-up heat, a hit flash, the teleport pop) no longer writes to
+        /// these materials directly — see <see cref="LateUpdate"/>'s own comment on
+        /// <see cref="_bodyMaterialIndex"/> for where that moved.
         /// </summary>
         private void BuildMaterials()
         {
@@ -358,10 +385,10 @@ namespace MaxWorlds.VFX
             Color dark = reef ? WorldMaterials.ReefMetalDark : CharacterSkin.RobotDark;
             Color gold = reef ? WorldMaterials.ReefBioGlow : CharacterSkin.RobotGold;
 
-            _bodyMat = NewCharacterMaterial($"Robot_{role}_Body", body);
-            _coolMat = NewCharacterMaterial("Robot_Cool", cool);
-            _darkMat = NewCharacterMaterial("Robot_Dark", dark);
-            _goldMat = NewCharacterMaterial("Robot_Gold", gold);
+            _bodyMat = SharedCharacterMaterial($"Robot_{role}_Body", body);
+            _coolMat = SharedCharacterMaterial("Robot_Cool", cool);
+            _darkMat = SharedCharacterMaterial("Robot_Dark", dark);
+            _goldMat = SharedCharacterMaterial("Robot_Gold", gold);
 
             // MV-800: the shared stormdrain shoulder band — one material, worn identically by every
             // World 2 kind, so it never varies per-instance the way _bodyMat does. Null (no band) for
@@ -369,14 +396,20 @@ namespace MaxWorlds.VFX
             // robot's own skin is "stormdrain".
             if (stormdrain)
             {
-                _hazardMat = NewCharacterMaterial("Robot_Stormdrain_Band", StormdrainHazardBand);
+                _hazardMat = SharedCharacterMaterial("Robot_Stormdrain_Band", StormdrainHazardBand);
+                // A constant, not a per-robot value — every stormdrain-skinned robot shares this one
+                // material now, so this just re-sets the same value on however many robots build first;
+                // still worth writing here directly (nothing else ever touches this material's emission)
+                // rather than through a property block, unlike the body heat below.
                 if (_hazardMat.HasProperty(EmissionId))
                     _hazardMat.SetColor(EmissionId, StormdrainHazardBand * 0.30f);
             }
         }
 
-        private static Material NewCharacterMaterial(string name, Color color)
+        private static Material SharedCharacterMaterial(string name, Color color)
         {
+            if (s_sharedCharacterMats.TryGetValue(color, out Material cached) && cached != null) return cached;
+
             // No character shader in this build is a look regression, never a magenta one (YT-58): a
             // plain lit material still draws a correctly coloured robot, just without the outline.
             var template = MaterialLibrary.Character();
@@ -389,6 +422,8 @@ namespace MaxWorlds.VFX
             if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
             if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, Color.black);
+
+            s_sharedCharacterMats[color] = m;
             return m;
         }
 
@@ -416,9 +451,12 @@ namespace MaxWorlds.VFX
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
             _restModelScale = _model.localScale;
-            _visibilityProbe = _model.GetComponentInChildren<Renderer>();
 
-            _wheels = body.Wheels;
+            // MV-969: RobotBodies authors a wheel as TWO OR THREE co-located parts sharing one pivot
+            // (Charger's tyre+hub, Bruiser's tread+hub+dust-cap) — see CombineWheelGroups' own doc for
+            // why this has to run before _wheelRadius is measured (off the FINAL, post-combine mesh)
+            // and before CombineStaticParts (whose exclude set is built from whatever _wheels holds).
+            _wheels = CombineWheelGroups(feet, body.Wheels);
             _wheelRadius = new float[_wheels.Length];
             for (int i = 0; i < _wheels.Length; i++)
             {
@@ -427,6 +465,236 @@ namespace MaxWorlds.VFX
                     ? mf.sharedMesh.bounds.extents.x
                     : 0.1f;
             }
+
+            // MV-969: fold everything RobotBodies just built that ISN'T independently animated (an eye,
+            // a wheel, the Reef Puffer Mine's inflatable core) into one combined renderer — must run
+            // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
+            // exclusion set, and BEFORE _visibilityProbe is picked below, or that probe could land on
+            // one of the parts this is about to destroy.
+            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable);
+            if (_combinedRenderer != null)
+            {
+                Material[] mats = _combinedRenderer.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] != _bodyMat) continue;
+                    _bodyMaterialIndex = i;
+                    break;
+                }
+            }
+
+            _visibilityProbe = _combinedRenderer != null
+                ? _combinedRenderer
+                : _model.GetComponentInChildren<Renderer>();
+        }
+
+        /// <summary>MV-969: <see cref="RobotBodies"/> authors a wheel as TWO OR THREE separate parts
+        /// sharing one pivot — Charger's tyre+hub (8 wheel parts for 4 physical wheels), Bruiser's
+        /// tread+hub+dust-cap — each independently <c>wheels.Add</c>'d at the exact same local
+        /// position/rotation, so <see cref="SpinWheels"/> always rotated them together but
+        /// <see cref="CombineStaticParts"/>'s own wheel exclusion still left every layer of every wheel
+        /// as its own enabled renderer (Charger alone: 8 wheel renderers + 1 eye + 1 combined body = 10,
+        /// over this ticket's own AC1 6-renderer budget). Folds every group of wheel parts that share a
+        /// local position/rotation into ONE combined renderer per PHYSICAL wheel — the same per-material
+        /// bucket-then-merge <see cref="CombineStaticParts"/> uses for the body, just scoped to one
+        /// wheel's own parts — matching the ticket's own "wheels ... as their own renderers" wording:
+        /// one renderer per wheel, not per visual layer of a wheel. Runs BEFORE
+        /// <see cref="CombineStaticParts"/> so its exclude set only ever walks these deduplicated
+        /// pivots. A wheel authored as a single part (no co-located sibling) passes through unchanged —
+        /// nothing here forces a group of one through the combine machinery.</summary>
+        private static Transform[] CombineWheelGroups(Transform root, Transform[] wheels)
+        {
+            if (wheels == null || wheels.Length == 0) return wheels ?? System.Array.Empty<Transform>();
+
+            var groups = new Dictionary<(Vector3, Quaternion), List<Transform>>();
+            foreach (Transform w in wheels)
+            {
+                if (w == null) continue;
+                var key = (RoundToMillimetre(w.localPosition), RoundToMillimetre(w.localRotation));
+                if (!groups.TryGetValue(key, out List<Transform> group))
+                    groups[key] = group = new List<Transform>(2);
+                group.Add(w);
+            }
+
+            var result = new List<Transform>(groups.Count);
+            foreach (List<Transform> group in groups.Values)
+            {
+                if (group.Count == 1) { result.Add(group[0]); continue; }
+
+                var byMaterial = new Dictionary<Material, List<MeshRenderer>>();
+                foreach (Transform t in group)
+                {
+                    var r = t.GetComponent<MeshRenderer>();
+                    var mf = t.GetComponent<MeshFilter>();
+                    if (r == null || mf == null || mf.sharedMesh == null || r.sharedMaterial == null) continue;
+                    if (!byMaterial.TryGetValue(r.sharedMaterial, out List<MeshRenderer> list))
+                        byMaterial[r.sharedMaterial] = list = new List<MeshRenderer>(2);
+                    list.Add(r);
+                }
+                if (byMaterial.Count == 0) { result.Add(group[0]); continue; }
+
+                Transform first = group[0];
+                var pivot = new GameObject("Wheel").transform;
+                pivot.SetParent(root, worldPositionStays: false);
+                pivot.localPosition = first.localPosition;
+                pivot.localRotation = first.localRotation;
+                pivot.localScale = Vector3.one;
+
+                var perMaterialMeshes = new List<Mesh>(byMaterial.Count);
+                var perMaterialCombine = new List<CombineInstance>(byMaterial.Count);
+                var materials = new List<Material>(byMaterial.Count);
+
+                foreach (KeyValuePair<Material, List<MeshRenderer>> entry in byMaterial)
+                {
+                    var subCombine = new CombineInstance[entry.Value.Count];
+                    for (int i = 0; i < entry.Value.Count; i++)
+                    {
+                        MeshRenderer r = entry.Value[i];
+                        subCombine[i].mesh = r.GetComponent<MeshFilter>().sharedMesh;
+                        // Relative to the NEW pivot's own local space — see CombineStaticParts' own
+                        // comment on why useMatrices needs a world-to-local bake, not a world-space one.
+                        subCombine[i].transform = pivot.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                    }
+
+                    var bucketMesh = new Mesh { name = "WheelBucket" };
+                    bucketMesh.CombineMeshes(subCombine, mergeSubMeshes: true, useMatrices: true);
+                    perMaterialMeshes.Add(bucketMesh);
+                    perMaterialCombine.Add(new CombineInstance { mesh = bucketMesh, transform = Matrix4x4.identity });
+                    materials.Add(entry.Key);
+                }
+
+                var finalMesh = new Mesh { name = "Wheel" };
+                finalMesh.CombineMeshes(perMaterialCombine.ToArray(), mergeSubMeshes: false, useMatrices: true);
+                foreach (Mesh bucketMesh in perMaterialMeshes)
+                    if (Application.isPlaying) Object.Destroy(bucketMesh); else Object.DestroyImmediate(bucketMesh);
+
+                pivot.gameObject.AddComponent<SelfDrivenTint>();
+                pivot.gameObject.AddComponent<MeshFilter>().sharedMesh = finalMesh;
+                var combined = pivot.gameObject.AddComponent<MeshRenderer>();
+                combined.sharedMaterials = materials.ToArray();
+                combined.shadowCastingMode = ShadowCastingMode.Off;
+                combined.receiveShadows = false;
+
+                foreach (Transform t in group)
+                {
+                    if (Application.isPlaying) Object.Destroy(t.gameObject); else Object.DestroyImmediate(t.gameObject);
+                }
+
+                result.Add(pivot);
+            }
+
+            return result.ToArray();
+        }
+
+        private static Vector3 RoundToMillimetre(Vector3 v) => new Vector3(
+            Mathf.Round(v.x * 1000f) / 1000f, Mathf.Round(v.y * 1000f) / 1000f, Mathf.Round(v.z * 1000f) / 1000f);
+
+        private static Quaternion RoundToMillimetre(Quaternion q) => new Quaternion(
+            Mathf.Round(q.x * 1000f) / 1000f, Mathf.Round(q.y * 1000f) / 1000f,
+            Mathf.Round(q.z * 1000f) / 1000f, Mathf.Round(q.w * 1000f) / 1000f);
+
+        /// <summary>
+        /// MV-969 (root-cause review 2026-09-26, observation 3): RobotBodies.Build hands back 15-40
+        /// separate part renderers per robot for something the fixed camera reads by silhouette and eye
+        /// colour alone — roughly 3,000+ draw calls at 90 robots once the outline pass's own extra draw
+        /// per part is counted too. Folds every one of them that ISN'T independently animated into ONE
+        /// renderer per robot: a multi-submesh mesh, one submesh per distinct material the static parts
+        /// actually use, built by combining per-material buckets (mergeSubMeshes: true) and then those
+        /// buckets into each other (mergeSubMeshes: false, which is what keeps each bucket its own
+        /// submesh/material slot instead of collapsing them into one).
+        ///
+        /// <paramref name="eyes"/>/<paramref name="wheels"/>/<paramref name="inflatable"/> are excluded
+        /// and left as their own renderers/transforms — RobotRig colours an eye and spins a wheel every
+        /// frame by writing to THAT renderer/transform directly (<see cref="ApplyEyes"/>,
+        /// <see cref="SpinWheels"/>, <see cref="UpdateReefInflate"/>), and folding any of them into a
+        /// static mesh would freeze it. <see cref="RobotBodies.Body.Legs"/> is folded IN, not excluded:
+        /// this rig never reads that array (only <c>Sentinel.cs</c>'s own separately-built body drives
+        /// <see cref="LegGaitDriver"/> off it), so a robot's own legs never move once this has built them.
+        ///
+        /// The ORIGINAL part GameObjects are destroyed, not merely disabled — <see cref="RobotEnemy.RefreshBodyVisibility"/>
+        /// caches every <see cref="Renderer"/> under this robot with <c>GetComponentsInChildren&lt;Renderer&gt;
+        /// (includeInactive: true)</c> and rewrites ALL of their <c>enabled</c> flags on every visibility
+        /// change (a Lurker's submerge/emerge, an area gate) — a disabled-not-destroyed original would be
+        /// silently switched back ON the next time that runs, drawing the same geometry twice (MV-757
+        /// already hit this exact trap for the greybox stand-in; see <see cref="EnsureBuilt"/>'s own
+        /// comment). Destroying happens here, well before that cache is ever populated (it's built lazily
+        /// on first use, never during <see cref="Awake"/>), so it always sees the post-combine hierarchy.
+        /// </summary>
+        private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels, Transform inflatable)
+        {
+            var exclude = new HashSet<Renderer>();
+            if (eyes != null)
+                foreach (var e in eyes) if (e != null) exclude.Add(e);
+            if (wheels != null)
+                foreach (var w in wheels)
+                    if (w != null) foreach (var r in w.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
+            if (inflatable != null)
+                foreach (var r in inflatable.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
+
+            var byMaterial = new Dictionary<Material, List<MeshRenderer>>();
+            foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (exclude.Contains(r)) continue;
+                Material mat = r.sharedMaterial;
+                if (mat == null) continue;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+
+                if (!byMaterial.TryGetValue(mat, out List<MeshRenderer> list))
+                    byMaterial[mat] = list = new List<MeshRenderer>(8);
+                list.Add(r);
+            }
+            if (byMaterial.Count == 0) return null;
+
+            var perMaterialMeshes = new List<Mesh>(byMaterial.Count);
+            var perMaterialCombine = new List<CombineInstance>(byMaterial.Count);
+            var materials = new List<Material>(byMaterial.Count);
+            var toDestroy = new List<GameObject>(16);
+
+            foreach (KeyValuePair<Material, List<MeshRenderer>> entry in byMaterial)
+            {
+                var subCombine = new CombineInstance[entry.Value.Count];
+                for (int i = 0; i < entry.Value.Count; i++)
+                {
+                    MeshRenderer r = entry.Value[i];
+                    subCombine[i].mesh = r.GetComponent<MeshFilter>().sharedMesh;
+                    // Relative to ROOT's local space, not world space — the combined result is parented
+                    // under root at identity, and useMatrices bakes each source part's own transform in.
+                    subCombine[i].transform = root.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                    toDestroy.Add(r.gameObject);
+                }
+
+                var bucketMesh = new Mesh { name = "RobotStaticBucket" };
+                bucketMesh.CombineMeshes(subCombine, mergeSubMeshes: true, useMatrices: true);
+                perMaterialMeshes.Add(bucketMesh);
+                perMaterialCombine.Add(new CombineInstance { mesh = bucketMesh, transform = Matrix4x4.identity });
+                materials.Add(entry.Key);
+            }
+
+            var finalMesh = new Mesh { name = "RobotStatic" };
+            // mergeSubMeshes: false is load-bearing — it's what keeps each material's bucket as its own
+            // submesh (so sharedMaterials below lines up 1:1 with submesh index) instead of flattening
+            // everything into one submesh that could only ever wear one material.
+            finalMesh.CombineMeshes(perMaterialCombine.ToArray(), mergeSubMeshes: false, useMatrices: true);
+
+            foreach (Mesh bucketMesh in perMaterialMeshes)
+                if (Application.isPlaying) Object.Destroy(bucketMesh); else Object.DestroyImmediate(bucketMesh);
+
+            var go = new GameObject("Static");
+            go.transform.SetParent(root, worldPositionStays: false);
+            go.AddComponent<MeshFilter>().sharedMesh = finalMesh;
+            var combined = go.AddComponent<MeshRenderer>();
+            combined.sharedMaterials = materials.ToArray();
+            combined.shadowCastingMode = ShadowCastingMode.Off;
+            combined.receiveShadows = false;
+            go.AddComponent<SelfDrivenTint>();
+
+            foreach (GameObject partGo in toDestroy)
+            {
+                if (Application.isPlaying) Object.Destroy(partGo); else Object.DestroyImmediate(partGo);
+            }
+
+            return combined;
         }
 
         // ---------------------------------------------------------------- running it
@@ -477,13 +745,21 @@ namespace MaxWorlds.VFX
             Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
                        + TeleportFlashColor * (teleportPop * 0.8f);
             // MV-963: skip the write once heat has settled (the steady state for the vast majority of
-            // robots, most frames — no wind-up, no flash, no teleport pop) instead of re-assigning the
-            // shared material's emission colour to the same value every tick.
-            if (_bodyMat != null && _bodyMat.HasProperty(EmissionId) &&
+            // robots, most frames — no wind-up, no flash, no teleport pop).
+            // MV-969: writes to a MaterialPropertyBlock on THIS robot's own combined renderer, at the
+            // submesh _bodyMat lives in — not to _bodyMat itself any more, which MV-969 turned into a
+            // material SHARED by every robot of this kind (see BuildMaterials/SharedCharacterMaterial).
+            // Mutating it directly here would heat every robot of that kind at once, the instant any one
+            // of them wound up.
+            if (_combinedRenderer != null && _bodyMaterialIndex >= 0 && _bodyMat != null &&
+                _bodyMat.HasProperty(EmissionId) &&
                 (!_lastAppliedBodyHeat.HasValue || _lastAppliedBodyHeat.Value != heat))
             {
                 _lastAppliedBodyHeat = heat;
-                _bodyMat.SetColor(EmissionId, heat);
+                _bodyMpb ??= new MaterialPropertyBlock();
+                _combinedRenderer.GetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                _bodyMpb.SetColor(EmissionId, heat);
+                _combinedRenderer.SetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
             }
         }
 
@@ -820,14 +1096,11 @@ namespace MaxWorlds.VFX
             if ((pos - transform.position).sqrMagnitude <= flashRadius * flashRadius) _flash = 1f;
         }
 
-        private void OnDestroy()
-        {
-            // Instances, and ours: nothing else points at them.
-            if (_bodyMat != null) Destroy(_bodyMat);
-            if (_coolMat != null) Destroy(_coolMat);
-            if (_darkMat != null) Destroy(_darkMat);
-            if (_goldMat != null) Destroy(_goldMat);
-            if (_hazardMat != null) Destroy(_hazardMat);
-        }
+        // MV-969: OnDestroy used to Destroy() _bodyMat/_coolMat/_darkMat/_goldMat/_hazardMat here — they
+        // are SHARED now (SharedCharacterMaterial caches one instance per resolved colour across every
+        // robot of a kind), so destroying one on this robot's death would pull the material out from
+        // under every OTHER live robot still wearing it. Nothing here owns them any more; they live for
+        // the process, the same "cached forever, never explicitly torn down" lifetime VfxMaterials' own
+        // particle-material cache already uses.
     }
 }

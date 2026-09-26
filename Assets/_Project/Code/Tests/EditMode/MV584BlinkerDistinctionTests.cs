@@ -58,7 +58,36 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(Vector4.Distance(rusherColour, rig.CurrentBodyColor), Is.GreaterThan(0.3f),
                     "the built Blinker must not be wearing the Rusher's RobotBody colour");
 
-                var parts = e.GetComponentsInChildren<Transform>(true).ToList();
+                // MV-969: RobotRig now folds every static part it built (Shard/CrystalCore included)
+                // into one combined mesh, so there is no more "Shard"/"CrystalCore" Transform left under
+                // the live rig to look up by name. RobotBodies.BuildBlinker's OWN silhouette — the thing
+                // this test actually guards — is independent of whatever RobotRig later does with its
+                // output, so it's proven here against a raw, uncombined build instead.
+                AssertBlinkerSilhouette();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = true;
+                try { Object.DestroyImmediate(go); }
+                finally { LogAssert.ignoreFailingMessages = false; }
+            }
+        }
+
+        /// <summary>MV-969: RobotBodies.BuildBlinker's own silhouette, proven directly rather than
+        /// through a live RobotRig — the combine step folds these named parts away (see the caller's own
+        /// comment), but the geometry BuildBlinker emits is unchanged and independently testable.</summary>
+        private static void AssertBlinkerSilhouette()
+        {
+            var warm = new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
+            var cool = new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
+            var dark = new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
+            var gold = new Material(Shader.Find("Hidden/InternalErrorShader") ?? Shader.Find("Standard"));
+            var root = new GameObject("RawBlinkerBody").transform;
+            try
+            {
+                RobotBodies.Build(EnemyKind.Blinker, root, new RobotPalette(warm, cool, dark, gold));
+
+                var parts = root.GetComponentsInChildren<Transform>(true).ToList();
                 Assert.AreEqual(3, parts.Count(t => t.name == "Shard"),
                     "the Blinker body must be built with three floating crystal shards orbiting the " +
                     "core — the at-a-glance tell that this one is not a wheeled robot");
@@ -70,17 +99,18 @@ namespace MaxWorlds.Tests.EditMode
                 {
                     var renderer = part.GetComponent<MeshRenderer>();
                     Assert.IsNotNull(renderer, $"{part.name} must carry a MeshRenderer");
-                    Color coreColour = renderer.sharedMaterial.GetColor(Shader.PropertyToID("_BaseColor"));
-                    Assert.That(Vector4.Distance(coreColour, rig.CurrentBodyColor), Is.LessThan(0.01f),
-                        "the crystal core must wear the BODY material (magenta), not the shared " +
+                    Assert.AreSame(warm, renderer.sharedMaterial,
+                        "the crystal core must wear the BODY material (p.Warm), not the shared " +
                         "p.Cool/p.Dark tones every other part of the roster uses");
                 }
             }
             finally
             {
-                LogAssert.ignoreFailingMessages = true;
-                try { Object.DestroyImmediate(go); }
-                finally { LogAssert.ignoreFailingMessages = false; }
+                Object.DestroyImmediate(root.gameObject);
+                Object.DestroyImmediate(warm);
+                Object.DestroyImmediate(cool);
+                Object.DestroyImmediate(dark);
+                Object.DestroyImmediate(gold);
             }
         }
     }

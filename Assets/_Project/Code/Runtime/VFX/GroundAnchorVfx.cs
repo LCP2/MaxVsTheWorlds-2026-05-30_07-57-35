@@ -181,14 +181,17 @@ namespace MaxWorlds.VFX
                 float footprint = GroundAnchorTuning.FootprintRadius(cc);
                 if (footprint <= 0f) continue;
 
-                if (!_slots.TryGetValue(cc, out AnchorSlot slot))
-                {
-                    slot = new AnchorSlot { Shadow = CreateShadow(), Ring = CreateRing() };
-                    _slots[cc] = slot;
-                }
-
                 Vector3 pos = cc.transform.position;
                 bool isPlayer = actor.Team == Team.Player;
+
+                // MV-969: a CharacterController never changes side once discovered, so the ring's
+                // tint is decided once, right here, rather than re-selected (or, before this ticket,
+                // re-pushed through a MaterialPropertyBlock) every frame — see CreateRing.
+                if (!_slots.TryGetValue(cc, out AnchorSlot slot))
+                {
+                    slot = new AnchorSlot { Shadow = CreateShadow(), Ring = CreateRing(isPlayer) };
+                    _slots[cc] = slot;
+                }
 
                 // MV-935: skip the repaint entirely once this actor is already sitting exactly where
                 // its ring/shadow were last placed for it — true for most of a garrisoned area's
@@ -206,13 +209,11 @@ namespace MaxWorlds.VFX
                 {
                     Vector3 ground = Ground(pos);
 
-                    slot.Shadow.Show(ground,
-                        footprint * GroundAnchorTuning.ShadowRadiusScale,
-                        GroundAnchorTuning.ContactShadow);
-
-                    slot.Ring.Show(ground,
-                        footprint * GroundAnchorTuning.RingRadiusScale,
-                        isPlayer ? GroundAnchorTuning.PlayerRing : GroundAnchorTuning.EnemyRing);
+                    // MV-969: place-only — both marks were already built with their tint baked into
+                    // a shared material (CreateShadow/CreateRing), so there is nothing left to write
+                    // through a MaterialPropertyBlock here.
+                    slot.Shadow.Show(ground, footprint * GroundAnchorTuning.ShadowRadiusScale);
+                    slot.Ring.Show(ground, footprint * GroundAnchorTuning.RingRadiusScale);
 
                     slot.LastPosition = pos;
                     slot.LastFootprint = footprint;
@@ -259,19 +260,27 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>One-time construction for a newly-discovered actor's contact shadow (MV-935: no
-        /// longer pool-reused across actors by discovery order — see <see cref="AnchorSlot"/>).</summary>
+        /// longer pool-reused across actors by discovery order — see <see cref="AnchorSlot"/>).
+        /// MV-969: built from a fixed-tint material (the shadow tint never varies) rather than the
+        /// shared colourless one plus a per-instance MaterialPropertyBlock, so ninety live shadows
+        /// share one draw setup instead of ninety.</summary>
         private GroundRing CreateShadow()
         {
-            var s = GroundRing.Create("ContactShadow", VfxMaterials.Glow());
+            Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Glow(), GroundAnchorTuning.ContactShadow);
+            var s = GroundRing.CreateFixedTint("ContactShadow", tinted);
             s.Lift = GroundAnchorTuning.ShadowLift;
             s.transform.SetParent(transform, worldPositionStays: false);
             return s;
         }
 
-        /// <summary>One-time construction for a newly-discovered actor's ring. See <see cref="CreateShadow"/>.</summary>
-        private GroundRing CreateRing()
+        /// <summary>One-time construction for a newly-discovered actor's ring (MV-969: same fixed-tint
+        /// reasoning as <see cref="CreateShadow"/> — <paramref name="isPlayer"/> is decided once, at
+        /// discovery, because a CharacterController never changes side).</summary>
+        private GroundRing CreateRing(bool isPlayer)
         {
-            var r = GroundRing.Create("AnchorRing", VfxMaterials.Annulus());
+            Color tone = isPlayer ? GroundAnchorTuning.PlayerRing : GroundAnchorTuning.EnemyRing;
+            Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Annulus(), tone);
+            var r = GroundRing.CreateFixedTint("AnchorRing", tinted);
             r.Lift = GroundAnchorTuning.RingLift;
             r.transform.SetParent(transform, worldPositionStays: false);
             return r;
