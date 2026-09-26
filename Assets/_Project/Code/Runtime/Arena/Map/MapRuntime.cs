@@ -857,7 +857,12 @@ namespace MaxWorlds.Arena
             // cover layer would have every sight-line ray graze it. Never tagged (see rendererZones'
             // own doc above) — one slab spans the whole map, so there is no single zone to gate it by,
             // and it is cheap enough (one renderer) that leaving it always on costs nothing.
-            AddStatic(Box(root, "Map Floor", floor.Center, floor.Size, blocksSight: false, isStatic: true), staticGeometry);
+            GameObject floorGo = Box(root, "Map Floor", floor.Center, floor.Size, blocksSight: false, isStatic: true);
+            // MV-954: FloorThickness grew to 2.0 m so a stall-inflated physics sub-step can never clear
+            // it — thick enough that WorldMaterials.KindOf's shape heuristic no longer reads it as flat.
+            // Say what it is explicitly, same as StructuralWall does for walls (MV-742).
+            floorGo.AddComponent<StructuralFloor>();
+            AddStatic(floorGo, staticGeometry);
 
             foreach (WallSegment w in MapGeometry.Walls(map))
             {
