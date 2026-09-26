@@ -272,12 +272,11 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>The 1-based area number of an "area&lt;N&gt;" zone id, or 0 for anything else
-        /// (the compost clearing, an unrecognised id, standing in the void).</summary>
-        public static int AreaIndexOf(string zoneId)
-        {
-            if (string.IsNullOrEmpty(zoneId) || !zoneId.StartsWith("area")) return 0;
-            return int.TryParse(zoneId.Substring(4), out int n) ? n : 0;
-        }
+        /// (the compost clearing, an unrecognised id, standing in the void). A caller that already has
+        /// the <see cref="MapZone"/> itself should read <see cref="MapZone.AreaIndex"/> directly instead
+        /// (MV-963) — this string overload (moved to <see cref="MapEnums.AreaIndexOf"/>) still allocates
+        /// nothing, but a zone's own cached field skips the parse entirely.</summary>
+        public static int AreaIndexOf(string zoneId) => MapEnums.AreaIndexOf(zoneId);
 
         /// <summary>True if <paramref name="to"/> is reachable from <paramref name="from"/> by an
         /// authored <see cref="MapLink"/> (MV-833) — area 0 (standing in the void, or an unrecognised

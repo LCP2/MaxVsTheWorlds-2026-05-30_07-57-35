@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -173,6 +174,14 @@ namespace MaxWorlds.UI
         /// <see cref="_heightAboveCentre"/> every frame in <see cref="SyncToBody"/>, never baked into it,
         /// so it tracks the cluster living or dying without needing its own reset hook.</summary>
         private float _clutterLift;
+
+        /// <summary>MV-963: this bar's own visibility decision (alwaysShow / damage-or-target trigger /
+        /// alive), computed fresh every <see cref="Refresh"/> — independent of whether the pivot is
+        /// actually active right now. A <c>groupable</c> bar's OWN "yes" is not the final word (grouping
+        /// can still hide it behind a leader), so <see cref="ResolveGroups"/> reads this instead of
+        /// <see cref="Showing"/> to gather candidates, rather than the stale, possibly-still-hidden
+        /// activeSelf a previous frame's grouping left behind.</summary>
+        private bool _wantsShow;
 
         /// <summary>Metres above the unit's origin the bar floats. Read back by the layout tests.</summary>
         public float HeightAboveCentre => _heightAboveCentre;
@@ -443,33 +452,63 @@ namespace MaxWorlds.UI
         /// GameObject, so two robots standing together stack in a fixed order instead of fighting over
         /// who goes on top frame to frame — the flicker a mutual "push apart by whoever's closer"
         /// scheme would produce.
+        ///
+        /// MV-963: sorted by world X once, then swept with a window bounded by
+        /// <paramref name="clusterRadius"/> — any pair further apart in X than the radius can never be
+        /// within it, so the window stops the instant that gap is exceeded either direction, in place
+        /// of the old flat O(n²) all-pairs scan (measured, at ~180 field-wide robots, as the actual cost
+        /// the class doc above used to wave off as "comfortably inside budget"). Produces the identical
+        /// rank for every bar — every pair the window still visits gets the exact same distance/instance-
+        /// ID test as before, only pairs the X gap alone already rules out are skipped.
         /// </summary>
         internal static void ResolveClutter(float clusterRadius, float stackStep)
         {
-            // Showing-only, gathered once so the O(n²) pass below never touches a hidden/pooled bar.
+            // Showing-only, gathered once so the sweep below never touches a hidden/pooled bar.
             _showingScratch.Clear();
             for (int i = 0; i < _active.Count; i++)
                 if (_active[i].Showing) _showingScratch.Add(_active[i]);
             LastShowingCount = _showingScratch.Count;
 
+            _showingScratch.Sort(CompareByWorldX);
+
             float clusterRadiusSqr = clusterRadius * clusterRadius;
-            for (int i = 0; i < _showingScratch.Count; i++)
+            int n = _showingScratch.Count;
+            for (int i = 0; i < n; i++)
             {
                 var bar = _showingScratch[i];
                 Vector3 pos = bar.transform.position;
                 int rank = 0;
-                for (int j = 0; j < _showingScratch.Count; j++)
+
+                for (int j = i - 1; j >= 0; j--)
                 {
-                    if (i == j) continue;
                     var other = _showingScratch[j];
-                    Vector3 d = other.transform.position - pos;
-                    d.y = 0f;   // cluster test is planar — two robots stacked in height alone aren't visually crowded
-                    if (d.sqrMagnitude <= clusterRadiusSqr && other.GetInstanceID() < bar.GetInstanceID())
+                    Vector3 otherPos = other.transform.position;
+                    if (pos.x - otherPos.x > clusterRadius) break;   // every earlier j is even further away
+                    if (WithinCluster(otherPos, pos, clusterRadiusSqr) && other.GetInstanceID() < bar.GetInstanceID())
                         rank++;
                 }
+                for (int j = i + 1; j < n; j++)
+                {
+                    var other = _showingScratch[j];
+                    Vector3 otherPos = other.transform.position;
+                    if (otherPos.x - pos.x > clusterRadius) break;   // every later j is even further away
+                    if (WithinCluster(otherPos, pos, clusterRadiusSqr) && other.GetInstanceID() < bar.GetInstanceID())
+                        rank++;
+                }
+
                 bar._clutterLift = rank * stackStep;
             }
         }
+
+        private static bool WithinCluster(Vector3 a, Vector3 b, float clusterRadiusSqr)
+        {
+            Vector3 d = a - b;
+            d.y = 0f;   // cluster test is planar — two robots stacked in height alone aren't visually crowded
+            return d.sqrMagnitude <= clusterRadiusSqr;
+        }
+
+        private static readonly Comparison<WorldHealthBar> CompareByWorldX =
+            (a, b) => a.transform.position.x.CompareTo(b.transform.position.x);
 
         private static readonly List<WorldHealthBar> _showingScratch = new List<WorldHealthBar>();
 
@@ -543,9 +582,13 @@ namespace MaxWorlds.UI
         /// </summary>
         internal static void ResolveGroups(float groupRadius, int plateCap, Vector3 referencePosition)
         {
+            // MV-963: candidates are gathered off each bar's own fresh _wantsShow, not Showing/activeSelf
+            // — a non-leader bar's pivot is left inactive from THIS SAME resolve, further down, so its
+            // activeSelf is already the final answer by the time the NEXT frame's Refresh runs, not a
+            // signal of whether it wants to be a candidate again.
             _groupScratch.Clear();
             for (int i = 0; i < _active.Count; i++)
-                if (_active[i]._groupable && _active[i].Showing) _groupScratch.Add(_active[i]);
+                if (_active[i]._groupable && _active[i]._wantsShow) _groupScratch.Add(_active[i]);
 
             int n = _groupScratch.Count;
             _unionParent.Clear();
@@ -604,10 +647,17 @@ namespace MaxWorlds.UI
 
                 if (!isLeader || !info.CapVisible)
                 {
-                    bar._pivot.gameObject.SetActive(false);
+                    // Diffed (MV-963): most non-leaders were ALREADY hidden by last resolve and stay
+                    // hidden — only a bar whose group/cap standing just changed this frame is an actual
+                    // state transition (and Canvas rebuild) rather than a same-value no-op call.
+                    if (bar._pivot.gameObject.activeSelf) bar._pivot.gameObject.SetActive(false);
                     continue;
                 }
 
+                // MV-963: the activation Refresh() deliberately deferred for every groupable candidate —
+                // this is the one place a groupable bar's pivot is ever turned ON, decided once the
+                // leader/cap question is actually settled.
+                if (!bar._pivot.gameObject.activeSelf) bar._pivot.gameObject.SetActive(true);
                 bar.ApplyGroupDisplay(info.Count, info.HealthCurrentSum, info.NormalizedSum / info.Count);
             }
         }
@@ -618,15 +668,35 @@ namespace MaxWorlds.UI
         /// components rather than through <see cref="Refresh"/>'s per-instance diff cache: a former
         /// leader that drops back to a group of one must show its own plain name on the very next
         /// call, not stay stuck on a stale "×N" until its own HP happens to change.</summary>
+        /// <summary>MV-963: the (name, count) <see cref="ApplyGroupDisplay"/> last actually PRINTED — so
+        /// the "<c>NAME xN</c>" string is only rebuilt (a fresh allocation, every call, previously) when
+        /// either half of it changes, not on every one of the group's own frames.</summary>
+        private string _shownGroupName;
+        private int _shownGroupCount = int.MinValue;
+        private int _shownGroupHp = int.MinValue;
+
         private void ApplyGroupDisplay(int count, float healthCurrentSum, float normalizedAvg)
         {
-            // ASCII only (MV-600): LegacyRuntime.ttf has no glyph for U+00D7 outside the two files
-            // MV-600 already allow-listed (MapScreen.cs/WeaponsScreen.cs) — a lowercase "x" reads the
-            // same way ("SALVAGE CRAB x3") without risking a blank gap where the multiply sign would be.
-            _nameText.text = count > 1 ? $"{_source.ReadoutName} x{count}" : _source.ReadoutName;
+            string readoutName = _source.ReadoutName;
+            if (count != _shownGroupCount || readoutName != _shownGroupName)
+            {
+                _shownGroupCount = count;
+                _shownGroupName = readoutName;
+                // ASCII only (MV-600): LegacyRuntime.ttf has no glyph for U+00D7 outside the two files
+                // MV-600 already allow-listed (MapScreen.cs/WeaponsScreen.cs) — a lowercase "x" reads the
+                // same way ("SALVAGE CRAB x3") without risking a blank gap where the multiply sign would be.
+                _nameText.text = count > 1 ? $"{readoutName} x{count}" : readoutName;
+            }
 
             if (_showNumber)
-                _numberText.text = Mathf.Max(0, Mathf.CeilToInt(healthCurrentSum)).ToString();
+            {
+                int hp = Mathf.Max(0, Mathf.CeilToInt(healthCurrentSum));
+                if (hp != _shownGroupHp)
+                {
+                    _shownGroupHp = hp;
+                    _numberText.text = hp.ToString();
+                }
+            }
 
             if (_fill != null)
             {
@@ -668,8 +738,24 @@ namespace MaxWorlds.UI
             // MV-571: a bar-hidden-keep-label gate still needs the pivot (and so the label) on screen
             // even though it has nothing bar-shaped to draw — that's the whole point of the flag.
             bool show = !_forceHidden && _source.IsAlive && (_barHiddenKeepLabel || wouldShowBar);
+            _wantsShow = show;
 
-            if (_pivot.gameObject.activeSelf != show) _pivot.gameObject.SetActive(show);
+            // MV-963: a NON-groupable bar (Max, a gate) has no later pass that can override this
+            // decision, so it is applied immediately, same as always. A groupable bar's "yes" is only
+            // a CANDIDATE — ResolveGroups decides which candidate (if any) actually gets a visible
+            // pivot — so activation is deferred to there; only a "no" is ever applied here, since
+            // grouping can hide a bar that wants to show but can never show one that doesn't. Applying
+            // "yes" here unconditionally, the way this used to, is what forced ResolveGroups to flip a
+            // just-activated (Canvas-rebuilding) pivot straight back off for every non-leader, every
+            // single frame.
+            if (!show)
+            {
+                if (_pivot.gameObject.activeSelf) _pivot.gameObject.SetActive(false);
+            }
+            else if (!_groupable && !_pivot.gameObject.activeSelf)
+            {
+                _pivot.gameObject.SetActive(true);
+            }
 
             // Re-read every frame, diffed like the HP figure below (MV-312). A pooled robot's Kind is
             // stamped by RobotEnemy.Apply() AFTER this bar was first Build() — Awake (which attaches

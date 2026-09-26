@@ -1299,6 +1299,11 @@ namespace MaxWorlds.Enemies
         {
             if (Current == State.Dead) return;
 
+            // MV-963: invalidate IsWellBehindPlayer's per-tick cache once, up front, so however many
+            // times this tick's own body reads it (up to 3x for a Dormant robot: here, TickBody's
+            // skipSightForFarDormant, TickDormant) resolve to a single zone lookup instead of one each.
+            _wellBehindPlayerCacheValid = false;
+
             bool farDormant = Current == State.Dormant && IsWellBehindPlayer;
             if (farDormant)
             {
@@ -1701,19 +1706,34 @@ namespace MaxWorlds.Enemies
         {
             get
             {
-                MapData map = EnemyNavigation.Map;
-                if (map == null || _playerTarget == null) return false;
-
-                MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
-                MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.y, _playerTarget.position.z);
-                if (robotZone == null || playerZone == null) return false;
-
-                int robotArea = AreaAccumulationDirector.AreaIndexOf(robotZone.id);
-                int playerArea = AreaAccumulationDirector.AreaIndexOf(playerZone.id);
-                if (robotArea <= 0 || playerArea <= 0) return false;
-
-                return robotArea <= playerArea - WellBehindAreaSlack;
+                if (_wellBehindPlayerCacheValid) return _wellBehindPlayerCache;
+                _wellBehindPlayerCache = ComputeIsWellBehindPlayer();
+                _wellBehindPlayerCacheValid = true;
+                return _wellBehindPlayerCache;
             }
+        }
+
+        /// <summary>Per-tick cache for <see cref="IsWellBehindPlayer"/> (MV-963) — invalidated once, at
+        /// the top of <see cref="Tick"/>. A caller outside a tick (the population/Replicator probe line,
+        /// per this property's own doc comment) still gets a fresh value every time, since the cache is
+        /// only ever considered valid for the duration of the tick that set it.</summary>
+        private bool _wellBehindPlayerCacheValid;
+        private bool _wellBehindPlayerCache;
+
+        private bool ComputeIsWellBehindPlayer()
+        {
+            MapData map = EnemyNavigation.Map;
+            if (map == null || _playerTarget == null) return false;
+
+            MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
+            MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.y, _playerTarget.position.z);
+            if (robotZone == null || playerZone == null) return false;
+
+            int robotArea = robotZone.AreaIndex;
+            int playerArea = playerZone.AreaIndex;
+            if (robotArea <= 0 || playerArea <= 0) return false;
+
+            return robotArea <= playerArea - WellBehindAreaSlack;
         }
 
         /// <summary>Reused every call (MV-527) — <see cref="GeometryUtility.CalculateFrustumPlanes(Camera)"/>
