@@ -287,6 +287,51 @@ namespace MaxWorlds.Core
             return frames > 0 ? sum / frames : 0.0;
         }
 
+        /// <summary>MV-970: the single most-recently-closed frame's phase cost — never windowed/averaged
+        /// — so a session recorder can write exactly what THAT frame cost, not a smoothed figure. Zero
+        /// before the first frame has closed.</summary>
+        public static double LatestPhaseMs(EnginePhase phase)
+        {
+            if (s_ringCount == 0) return 0.0;
+            int lastSlot = (s_ringHead - 1 + RingCapacity) % RingCapacity;
+            return s_framePhaseMs[lastSlot * PhaseCount + (int)phase];
+        }
+
+        /// <summary>MV-970: the latest frame's fixed-timestep step count — the exact-count counterpart to
+        /// <see cref="WindowedFixedStepsPerFrame"/> for a per-frame CSV row.</summary>
+        public static int LatestFixedSteps()
+        {
+            if (s_ringCount == 0) return 0;
+            int lastSlot = (s_ringHead - 1 + RingCapacity) % RingCapacity;
+            return s_frameFixedSteps[lastSlot];
+        }
+
+        /// <summary>MV-970: the highest-cost section in the latest frame alone (never windowed) — the
+        /// "script sections" figure a spike row needs to name which system actually caused it. False
+        /// with no section registered yet.</summary>
+        public static bool TryGetLatestTopSection(out string name, out double ms)
+        {
+            name = null;
+            ms = 0.0;
+            if (s_ringCount == 0 || s_sectionCount == 0) return false;
+
+            int lastSlot = (s_ringHead - 1 + RingCapacity) % RingCapacity;
+            int bestIdx = -1;
+            double best = 0.0;
+            for (int i = 0; i < s_sectionCount; i++)
+            {
+                double v = s_frameSectionMs[lastSlot * MaxSections + i];
+                if (v <= best) continue;
+                best = v;
+                bestIdx = i;
+            }
+            if (bestIdx < 0) return false;
+
+            name = s_sectionNames[bestIdx];
+            ms = best;
+            return true;
+        }
+
         /// <summary>The top <paramref name="count"/> sections by windowed ms, highest first — the
         /// overlay's "top 8 sections" (ticket item 7). Writes into caller-supplied buffers rather than
         /// returning a new collection, so the overlay's own 0.25s-cadence formatting call is the only

@@ -46,6 +46,7 @@ namespace MaxWorlds.Dev
         private string _cachedFrameCostLine;
         private string _cachedPerfTelemetryLine;
         private string _cachedFallsLine;
+        private string _cachedSessionRecorderLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
         public IReadOnlyList<string> Lines => _lines;
@@ -232,6 +233,18 @@ namespace MaxWorlds.Dev
             return sb.ToString();
         }
 
+        /// <summary>MV-970 item 6: "current session file name and rows written" — the overlay's own
+        /// readout of the recorder writing everything else on this overlay to disk. Reads
+        /// <see cref="Bootstrap.ActiveSessionRecorder"/> rather than owning a reference, same "resolve
+        /// lazily off the static" idiom as <see cref="ResolvePerfMeterIfNeeded"/>.</summary>
+        private static string FormatSessionRecorderLine()
+        {
+            PerfSessionRecorder recorder = Bootstrap.ActiveSessionRecorder;
+            return recorder == null
+                ? "[MV-970] telemetry: not recording"
+                : $"[MV-970] telemetry: {recorder.SessionFileName}.csv  rows {recorder.RowsWritten}";
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -262,7 +275,11 @@ namespace MaxWorlds.Dev
         /// readout in the top-left that a thumb can reach.</summary>
         public static void ToggleVisible()
         {
-            if (_instance != null) _instance._visible = !_instance._visible;
+            if (_instance == null) return;
+            _instance._visible = !_instance._visible;
+            // MV-970: one of the ticket's own named events -- "overlay open/close".
+            Bootstrap.ActiveSessionRecorder?.RecordEvent(
+                System.DateTime.UtcNow, _instance._visible ? "overlay_open" : "overlay_close", "");
         }
 
         /// <summary>The text OnGUI would draw — null while hidden, so no line joining/formatting work
@@ -303,6 +320,9 @@ namespace MaxWorlds.Dev
                 // MV-955: same cadence, same cache -- the FALLS section, right after the frame-cost
                 // line every other debug readout already sits under.
                 _cachedFallsLine = FormatFallsLine();
+                // MV-970: same cadence, same cache -- the session recorder's own file name/row count,
+                // right after the FALLS section.
+                _cachedSessionRecorderLine = FormatSessionRecorderLine();
                 _perfBuiltAt = now;
             }
 
@@ -314,7 +334,7 @@ namespace MaxWorlds.Dev
                 ? null
                 : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" +
                   _cachedPopulationLine + "\n" + _cachedFrameCostLine + "\n" + _cachedPerfTelemetryLine +
-                  "\n" + _cachedFallsLine;
+                  "\n" + _cachedFallsLine + "\n" + _cachedSessionRecorderLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 
