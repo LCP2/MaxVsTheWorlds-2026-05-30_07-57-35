@@ -40,7 +40,9 @@ namespace MaxWorlds.Tests.EditMode
             var screen = go.AddComponent<HomeScreen>();
             try
             {
-                InvokePrivate(screen, "Open");
+                // MV-960 made HomeScreen.Open() public (its own layout test builds the screen through
+                // it) — InvokePrivate's NonPublic-only lookup no longer finds it, so call it directly.
+                screen.Open();
                 // HomeScreen.Close() unconditionally Destroy()s its canvas root, which only ever runs
                 // in a real Play session — under the edit-mode test runner that call logs an error
                 // that isn't the thing under test here, so it's expected rather than left to fail the

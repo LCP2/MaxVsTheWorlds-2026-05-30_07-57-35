@@ -186,6 +186,46 @@ namespace MaxWorlds.UI
             return sprite;
         }
 
+        /// <summary>Rounded-corner box with the BOTTOM two corners left square (MV-960: the Home
+        /// screen's hero band sits at the top of a rounded stage — its top corners must follow the
+        /// stage's own radius, but its bottom edge is a straight cut mid-panel, not a corner, so
+        /// rounding it too would carve two crescent gaps out of the art). 9-sliced like
+        /// <see cref="RoundedBox"/>, border zero on the bottom so the straight edge never distorts.</summary>
+        public static Sprite RoundedBoxTopOnly(int size, float cornerFraction)
+        {
+            string key = $"rboxTop{size}_{Mathf.RoundToInt(cornerFraction * 100)}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];
+            float radius = size * cornerFraction;
+            float cornerCy = size - radius;   // texture row space: higher y = higher on screen
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float a;
+                float py = y + 0.5f;
+                if (py >= cornerCy)
+                {
+                    float pxf = x + 0.5f;
+                    float cx = Mathf.Clamp(pxf, radius, size - radius);
+                    float dy = Mathf.Max(0f, py - cornerCy);
+                    float d = Mathf.Sqrt((pxf - cx) * (pxf - cx) + dy * dy);
+                    a = Mathf.Clamp01(radius - d + 0.5f);
+                }
+                else
+                {
+                    a = 1f;
+                }
+                px[y * size + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+                100f, 0, SpriteMeshType.FullRect, new Vector4(radius, 0f, radius, radius));
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
         /// <summary>Filled regular polygon (MV-423: THE RIG board's hex/diamond nodes). Vertex <c>i</c>
         /// sits at angle <c>(360/sides)*i + rotationDeg</c> in this y-down pixel space, so
         /// <c>rotationDeg=-90</c> puts a vertex straight up ("pointy-top" per the design data file).
