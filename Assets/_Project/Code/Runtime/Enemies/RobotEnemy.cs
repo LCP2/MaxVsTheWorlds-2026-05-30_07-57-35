@@ -30,7 +30,7 @@ namespace MaxWorlds.Enemies
     /// mesh would be a second, drifting copy of an answer we author.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IHealthReadout
+    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IHealthReadout, IZoneGatedActor
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
         // existing members would silently re-label every one of them.
@@ -350,7 +350,33 @@ namespace MaxWorlds.Enemies
         /// already gets), not re-derived live from position. 0 until stamped.</summary>
         public int AreaIndex { get; private set; }
 
-        public void SetAreaIndex(int area) => AreaIndex = area;
+        /// <summary>MV-972: also (re-)registers this robot with the live map's area gate under its new
+        /// home zone — a pooled robot's own re-tagging, the same "known before anything reads it"
+        /// ordering the field itself already gets. <c>area &lt;= 0</c> (the pooled-reset moment, this
+        /// robot inactive between lives) is a no-op registration; the next real placement re-registers.</summary>
+        public void SetAreaIndex(int area)
+        {
+            AreaIndex = area;
+            if (area > 0)
+                MapStaticBatchRoot.Active?.RegisterGatedActor(this, $"area{area}");
+        }
+
+        /// <summary>MV-972: <see cref="IZoneGatedActor.ZoneGatePosition"/> — this robot's own live world
+        /// position, read by the gate only for the "never hidden within 22 m of Max" chase override.</summary>
+        Vector3 IZoneGatedActor.ZoneGatePosition => transform.position;
+
+        private bool _zoneGateVisible = true;
+
+        /// <summary>MV-972: <see cref="IZoneGatedActor.SetZoneGateVisible"/> — the area gate's own
+        /// verdict, combined with (never overwriting) whatever this robot's own intrinsic visibility
+        /// already is via <see cref="RefreshBodyVisibility"/>. Called only from
+        /// <see cref="MapStaticBatchRoot.ApplyAreaGate"/> — on a zone change and at most 4x/second.</summary>
+        void IZoneGatedActor.SetZoneGateVisible(bool visible)
+        {
+            if (_zoneGateVisible == visible) return;
+            _zoneGateVisible = visible;
+            RefreshBodyVisibility();
+        }
 
         private bool _noReplicate;
         private bool _noReplicatePermanent;
@@ -1916,13 +1942,36 @@ namespace MaxWorlds.Enemies
             }
         }
 
-        /// <summary>Shows/hides every renderer under this robot's body (MV-688) — a Lurker is invisible
-        /// while SUBMERGED/RATTLE (the grate itself stands in as its body) and visible while
-        /// EMERGED/SUBMERGING. Cached on first use rather than in <see cref="Apply"/>/<see cref="ResetState"/>,
-        /// since the body isn't built by <see cref="MaxWorlds.VFX.RobotRig"/> until after those run.</summary>
+        /// <summary>This robot's own intrinsic visibility intent (MV-688) — a Lurker is invisible while
+        /// SUBMERGED/RATTLE (the grate itself stands in as its body) and visible while
+        /// EMERGED/SUBMERGING; an Anglerfish fades by range. Defaults true for every kind that never
+        /// calls <see cref="SetBodyVisible"/> at all.</summary>
+        private bool _intrinsicBodyVisible = true;
+
+        /// <summary>Shows/hides every renderer under this robot's body (MV-688). Cached on first use
+        /// rather than in <see cref="Apply"/>/<see cref="ResetState"/>, since the body isn't built by
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> until after those run.
+        ///
+        /// MV-972: this is now the intrinsic HALF of this robot's own visibility — combined with the
+        /// area gate's own verdict (<see cref="_zoneGateVisible"/>, set by <see cref="MapStaticBatchRoot.ApplyAreaGate"/>
+        /// via <see cref="IZoneGatedActor.SetZoneGateVisible"/>) by <see cref="RefreshBodyVisibility"/>,
+        /// rather than writing straight to <c>Renderer.enabled</c> here. Without this split, the area
+        /// gate re-enabling this robot's renderers the moment its zone comes active would un-submerge a
+        /// Lurker that gameplay had deliberately hidden, or restore an Anglerfish past its own fade
+        /// range — the gate winning a fight neither side knows it's in.</summary>
         private void SetBodyVisible(bool visible)
         {
+            _intrinsicBodyVisible = visible;
+            RefreshBodyVisibility();
+        }
+
+        /// <summary>MV-972: the single point that actually writes <c>Renderer.enabled</c> for this
+        /// robot's body — always <see cref="_intrinsicBodyVisible"/> AND <see cref="_zoneGateVisible"/>,
+        /// so neither side of the split above can force a renderer on that the other wants off.</summary>
+        private void RefreshBodyVisibility()
+        {
             if (_bodyRenderers == null) _bodyRenderers = GetComponentsInChildren<Renderer>(includeInactive: true);
+            bool visible = _intrinsicBodyVisible && _zoneGateVisible;
             for (int i = 0; i < _bodyRenderers.Length; i++)
                 if (_bodyRenderers[i] != null) _bodyRenderers[i].enabled = visible;
         }

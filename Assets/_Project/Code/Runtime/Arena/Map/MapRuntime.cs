@@ -28,6 +28,26 @@ namespace MaxWorlds.Arena
         public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
     }
 
+    /// <summary>MV-972: a world-placed actor that spawns/respawns after <see cref="MapRuntime.Build"/>
+    /// has already returned (a robot, garrisoned or released long after the map — and its
+    /// <see cref="MapStaticBatchRoot"/> — exist), and that already owns an intrinsic visibility toggle
+    /// of its own (a Lurker's submerge/emerge, an Anglerfish's range fade) which the area gate must
+    /// combine with rather than fight by writing straight to <c>Renderer.enabled</c> the way it does for
+    /// ordinary static geometry. <see cref="SetZoneGateVisible"/> is called only from
+    /// <see cref="MapStaticBatchRoot.ApplyAreaGate"/> — on a zone change and at most 4x/second, never
+    /// per frame — so an implementation must be cheap but need not be allocation-free on its own.</summary>
+    public interface IZoneGatedActor
+    {
+        /// <summary>This actor's current world position — read by the gate to decide the MV-972 "never
+        /// hidden while within 22 m of Max" chase override, since this actor's own zone tag is its HOME
+        /// area (stamped once at spawn), not a live position the gate re-resolves every tick.</summary>
+        Vector3 ZoneGatePosition { get; }
+
+        /// <summary>The gate's own verdict — combine with whatever this actor's own intrinsic visibility
+        /// state already is (never simply overwrite it).</summary>
+        void SetZoneGateVisible(bool visible);
+    }
+
     /// <summary>MV-882 originally combined every GameObject <see cref="MapRuntime.Build"/> hands it via
     /// <c>StaticBatchingUtility.Combine</c>'s (gos, staticBatchRoot) overload. MV-934 replaces that call
     /// (see <see cref="CombineZoneGeometry"/>'s own doc for why: static batching shares one vertex buffer
@@ -64,6 +84,37 @@ namespace MaxWorlds.Arena
         private Dictionary<Renderer, List<string>> _rendererZones;
         private AreaAccumulationDirector _areaDirector;
         private Transform _target;
+
+        /// <summary>MV-972: the live map's own gate — set in <see cref="Start"/>, cleared in
+        /// <see cref="OnDestroy"/>. One map is ever loaded at a time in this game, so a plain static
+        /// back-pointer (rather than a scene-wide <c>FindFirstObjectByType</c> call from every robot
+        /// spawn/respawn) is enough — the same reasoning <see cref="AreaAccumulationDirector"/>'s own
+        /// singleton-ish usage already relies on elsewhere in this codebase.</summary>
+        public static MapStaticBatchRoot Active { get; private set; }
+
+        /// <summary>MV-972: every <see cref="IZoneGatedActor"/> registered with this gate (currently:
+        /// every live <c>RobotEnemy</c>, via <c>SetAreaIndex</c>) and the zone id it was last stamped
+        /// with — its HOME area, not a live position (see <see cref="IZoneGatedActor"/>'s own doc for
+        /// why). Never pruned: these actors are pooled, not destroyed, for the lifetime of a loaded map.</summary>
+        private readonly Dictionary<IZoneGatedActor, string> _gatedActors = new Dictionary<IZoneGatedActor, string>(64);
+
+        /// <summary>MV-972: reused across every <see cref="ApplyAreaGate"/> call (the throttled
+        /// <see cref="TickDynamicGate"/> tick included) instead of a fresh <c>HashSet</c>/<c>List</c>
+        /// each time — the ticket's own "no allocation per evaluation" rule for the throttled 4x/second
+        /// path.</summary>
+        private readonly HashSet<string> _activeScratch = new HashSet<string>();
+        private readonly List<MapZone> _activeZonesScratch = new List<MapZone>(8);
+
+        /// <summary>MV-972: how far (XZ, metres) Max may stand from a linked neighbour's own shared
+        /// gate/boundary for that neighbour to draw — see the ticket's own "the phone camera sees ~15 m
+        /// from Max" reasoning. Squared once, compared without a square root every evaluation.</summary>
+        private const float NeighbourGateRangeMetres = 22f;
+        private const float NeighbourGateRangeSq = NeighbourGateRangeMetres * NeighbourGateRangeMetres;
+
+        /// <summary>MV-972: <see cref="TickDynamicGate"/>'s own throttle — "at most 4x/second, never per
+        /// frame" per the ticket.</summary>
+        private const float DynamicGateIntervalSeconds = 0.25f;
+        private float _nextDynamicGateTime;
 
         /// <summary>MV-925: the zone id <see cref="ApplyAreaGate"/> last gated to — the readout's own
         /// "which zone is the gate actually current on" figure (see <see cref="RecordRendererCensus"/>).</summary>
@@ -115,6 +166,72 @@ namespace MaxWorlds.Arena
             _rendererZones = rendererZones;
         }
 
+        /// <summary>MV-972: registers (or re-registers) <paramref name="actor"/> with this gate under its
+        /// own HOME zone id — called by <c>RobotEnemy.SetAreaIndex</c> every time a robot is placed or
+        /// reused from its pool, since a pooled robot must be re-tagged for its new life exactly the way
+        /// <c>AreaIndex</c> itself already is. A null/empty <paramref name="zoneId"/> (the pooled-reset
+        /// moment between lives, <c>AreaIndex = 0</c>) is a deliberate no-op — the robot is inactive at
+        /// that instant anyway (see <c>RobotEnemy.Apply</c>), and the next real placement re-registers
+        /// it. Applies the current gate's own verdict immediately, so a robot spawned into an already-
+        /// dark zone starts hidden rather than flashing visible for one frame until the next tick.</summary>
+        public void RegisterGatedActor(IZoneGatedActor actor, string zoneId)
+        {
+            if (actor == null || string.IsNullOrEmpty(zoneId)) return;
+            _gatedActors[actor] = zoneId;
+
+            bool visible = _activeZoneIds != null && _activeZoneIds.Contains(zoneId);
+            if (!visible && _target != null)
+            {
+                Vector3 ap = actor.ZoneGatePosition;
+                float dx = ap.x - _target.position.x;
+                float dz = ap.z - _target.position.z;
+                visible = dx * dx + dz * dz <= NeighbourGateRangeSq;
+            }
+            actor.SetZoneGateVisible(visible);
+        }
+
+        /// <summary>MV-972: tags every renderer under <paramref name="worldPos"/>'s own resolved zone —
+        /// for anything spawned well after <see cref="MapRuntime.Build"/> returns that never moves once
+        /// placed (a pickup dropped by a dying robot or a destroyed shed), so it doesn't need
+        /// <see cref="IZoneGatedActor"/>'s live chase override, just a one-time zone tag exactly like a
+        /// map-authored piece gets at build time. Applies the current gate's own verdict to these
+        /// renderers immediately, for the same "don't flash visible for a frame" reason
+        /// <see cref="RegisterGatedActor"/> does.</summary>
+        public void RegisterAtPosition(Renderer[] renderers, Vector3 worldPos)
+        {
+            if (_map == null || _rendererZones == null || renderers == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+
+            bool visible = _activeZoneIds != null && _activeZoneIds.Contains(zone.id);
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                if (!_rendererZones.TryGetValue(r, out List<string> zones))
+                    _rendererZones[r] = zones = new List<string>(1);
+                if (!zones.Contains(zone.id)) zones.Add(zone.id);
+                r.enabled = visible;
+            }
+        }
+
+        /// <summary>MV-972: a renderer some OTHER system just permanently hid, independent of
+        /// <see cref="Start"/>'s own one-time <see cref="_dressedHidden"/> snapshot — a destroyed shed's
+        /// body (<c>MowerHutch.ApplyDestructionEffects</c>), a destroyed fitting (<c>ShedFitting.OnDestroyed</c>),
+        /// or a Replicator's primitive-cube-to-generated-mesh swap (<c>Replicator.BuildBody</c>, measured
+        /// to run at an UNRELIABLE time relative to that snapshot when the component is added during
+        /// <see cref="MapRuntime.Build"/> rather than a live scene boot — an EditMode build left it
+        /// enabled at snapshot time, only disabled afterward). Folded into that SAME set either way, so
+        /// the gate never re-enables it just because its zone came back into the active set. A
+        /// Replicator's actual destruction (<c>Replicator.ApplyDestructionEffects</c>) needs no call
+        /// here of its own: it deactivates the whole generated body GameObject rather than toggling a
+        /// renderer this gate would ever re-enable.</summary>
+        public void MarkPermanentlyHidden(Renderer r)
+        {
+            if (r == null) return;
+            _dressedHidden ??= new HashSet<Renderer>();
+            _dressedHidden.Add(r);
+        }
+
         private void Start()
         {
             // MV-887 change 5, widened by MV-904: the dressing kit (StormdrainDressing) is a SIBLING of
@@ -147,12 +264,17 @@ namespace MaxWorlds.Arena
             // snapshot above) rather than where the old call sat.
             CombineZoneGeometry();
 
+            // MV-972: the live map's own gate, for anything spawning after this point (a robot placed
+            // by AreaAccumulationDirector, a pickup dropped mid-run) to register with — see Active's own
+            // doc for why a plain static back-pointer is enough here.
+            Active = this;
+
             // The area the gate starts with — Max's own physical area at map-build time, read off
             // AreaAccumulationDirector rather than assumed, so this never has to hard-code "area1"
             // separately from Configure()'s own convention.
             _areaDirector = Object.FindFirstObjectByType<AreaAccumulationDirector>();
             int startArea = _areaDirector != null ? _areaDirector.PhysicalArea : 1;
-            ApplyAreaGate($"area{startArea}");
+            ApplyAreaGate($"area{startArea}", ResolveMaxPosition());
 
             // Re-evaluate on area change only (AC4) — never per frame. This is the exact signal
             // Replicator.OnAreaEntered already consumes for the same reason (see the ticket).
@@ -164,9 +286,27 @@ namespace MaxWorlds.Arena
         {
             if (_areaDirector != null)
                 _areaDirector.PlayerCrossedIntoArea -= OnPlayerCrossedIntoArea;
+            if (Active == this) Active = null;
         }
 
-        private void OnPlayerCrossedIntoArea(int area) => ApplyAreaGate($"area{area}");
+        private void OnPlayerCrossedIntoArea(int area) => ApplyAreaGate($"area{area}", ResolveMaxPosition());
+
+        /// <summary>MV-972: Max's own live position, lazily resolved and cached the same way
+        /// <see cref="TickGateSelfHeal"/> already did inline — shared now so every
+        /// <see cref="ApplyAreaGate"/> call site (not just the self-heal) can pass Max's real position
+        /// for the 22 m neighbour-distance and chase-override rules. Null with no "Player"-tagged
+        /// object in the scene (an EditMode test that never spawned one) — every caller of this treats
+        /// that as "cannot judge distance", not as Max standing at the origin.</summary>
+        private Vector3? ResolveMaxPosition()
+        {
+            if (_target == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return null;
+                _target = p.transform;
+            }
+            return _target.position;
+        }
 
         /// <summary>MV-925: the gate's own self-heal. <see cref="AreaAccumulationDirector"/>'s tracker
         /// (and the <see cref="OnPlayerCrossedIntoArea"/> event it fires) only ever advances between
@@ -193,6 +333,7 @@ namespace MaxWorlds.Arena
             try
             {
                 TickGateSelfHeal();
+                TickDynamicGate();
             }
             finally
             {
@@ -204,18 +345,31 @@ namespace MaxWorlds.Arena
         {
             if (_map == null || _rendererZones == null) return;
 
-            if (_target == null)
-            {
-                var p = GameObject.FindGameObjectWithTag("Player");
-                if (p == null) return;
-                _target = p.transform;
-            }
+            Vector3? maxPosition = ResolveMaxPosition();
+            if (maxPosition == null) return;
 
-            MapZone zone = _map.ZoneAt(_target.position.x, _target.position.y, _target.position.z);
+            MapZone zone = _map.ZoneAt(maxPosition.Value.x, maxPosition.Value.y, maxPosition.Value.z);
             if (zone == null) return;
             if (_activeZoneIds != null && _activeZoneIds.Contains(zone.id)) return;
 
-            ApplyAreaGate(zone.id);
+            ApplyAreaGate(zone.id, maxPosition);
+        }
+
+        /// <summary>MV-972: the ticket's own "evaluate on zone change and at most 4x/second, never per
+        /// frame" rule for the 22 m neighbour-distance and chase-override checks — both depend on Max's
+        /// exact position within his own current zone, which can change every frame even while he never
+        /// crosses a zone boundary (walking up to a gate, or a robot chasing him across one), so
+        /// <see cref="TickGateSelfHeal"/>'s own "only reapply on an actual zone change" guard alone is
+        /// not enough to keep those two rules live. Throttled, not per-frame; re-runs the exact same
+        /// <see cref="ApplyAreaGate"/> the self-heal and zone-change paths already use, over the reusable
+        /// scratch buffers (no allocation per evaluation, per the ticket).</summary>
+        private void TickDynamicGate()
+        {
+            if (string.IsNullOrEmpty(_currentGateZoneId)) return;
+            if (Time.time < _nextDynamicGateTime) return;
+            _nextDynamicGateTime = Time.time + DynamicGateIntervalSeconds;
+
+            ApplyAreaGate(_currentGateZoneId, ResolveMaxPosition());
         }
 
         /// <summary>MV-887: enables every renderer this build tagged as belonging to
@@ -241,37 +395,76 @@ namespace MaxWorlds.Arena
         /// looking up at them, exactly the reported "a17's upper floor is gone". Every zone sharing a
         /// footprint with an already-active one is folded in below, symmetrically (floor activates its
         /// deck and a deck, if ever current itself, keeps its own floor lit) — the same footprint test,
-        /// not a second hand-authored adjacency list to drift out of sync with the first.</summary>
-        public void ApplyAreaGate(string currentZoneId)
+        /// not a second hand-authored adjacency list to drift out of sync with the first.
+        ///
+        /// MV-972: a gate-linked neighbour is now also range-gated — active only while
+        /// <paramref name="maxPosition"/> sits within <see cref="NeighbourGateRangeMetres"/> of the
+        /// doorway the link actually cuts (<see cref="MapGeometry.Doorway"/> — the same hole
+        /// <see cref="MapGeometry.Walls"/> cuts the wall for, so this never invents a second notion of
+        /// where a link's own gate stands). No position supplied (a caller with no way to judge
+        /// distance — an EditMode test with no "Player"-tagged object, same reasoning
+        /// <see cref="ResolveMaxPosition"/> already documents) or a link whose two zones don't spatially
+        /// touch (should never happen past <see cref="MapValidation"/>) both fall back to the pre-MV-972
+        /// behaviour of an unconditionally active neighbour, rather than guessing. Footprint-sharing
+        /// (the loop below) is deliberately NOT range-gated the same way — a deck and the floor it
+        /// roofs occupy the exact same XZ footprint, so there is no separate "gate" to stand near; it
+        /// stays active whenever whatever it overlays is (see that loop's own history, MV-890 fix 3,
+        /// above).
+        ///
+        /// MV-972 also drives every registered <see cref="IZoneGatedActor"/> (<see cref="_gatedActors"/>
+        /// — currently every live robot) off this SAME active set, with one addition: an actor within
+        /// <see cref="NeighbourGateRangeMetres"/> of Max himself is never hidden regardless of its own
+        /// zone tag — the ticket's own "an object chasing Max across a boundary is never hidden" rule.
+        /// A robot's zone tag is its HOME area (stamped once at spawn, MV-820), not live-updated as it
+        /// walks, so without this a robot chasing Max out of its own home zone would wink out the moment
+        /// that zone drops out of the active set — this override is what a live per-actor zone tracker
+        /// would otherwise be needed for, at a fraction of the per-frame cost (see <see cref="IZoneGatedActor"/>'s
+        /// own doc).</summary>
+        public void ApplyAreaGate(string currentZoneId, Vector3? maxPosition = null)
         {
             if (_rendererZones == null || string.IsNullOrEmpty(currentZoneId)) return;
 
             ApplyAreaGateCallCount++;
 
-            var active = new HashSet<string> { currentZoneId };
+            _activeScratch.Clear();
+            _activeScratch.Add(currentZoneId);
+
             if (_map?.links != null)
             {
                 foreach (MapLink link in _map.links)
                 {
                     if (link == null) continue;
-                    if (link.from == currentZoneId) active.Add(link.to);
-                    else if (link.to == currentZoneId) active.Add(link.from);
+                    string neighbour = link.from == currentZoneId ? link.to
+                                      : link.to == currentZoneId ? link.from
+                                      : null;
+                    if (neighbour == null) continue;
+
+                    if (maxPosition.HasValue &&
+                        MapGeometry.Doorway(_map, link, out bool runsAlongX, out float coord, out Span hole))
+                    {
+                        Vector2 doorMouth = runsAlongX ? new Vector2(hole.Mid, coord) : new Vector2(coord, hole.Mid);
+                        float dx = maxPosition.Value.x - doorMouth.x;
+                        float dz = maxPosition.Value.z - doorMouth.y;
+                        if (dx * dx + dz * dz > NeighbourGateRangeSq) continue;
+                    }
+
+                    _activeScratch.Add(neighbour);
                 }
             }
 
             if (_map?.zones != null)
             {
-                var activeZones = new List<MapZone>();
+                _activeZonesScratch.Clear();
                 foreach (MapZone z in _map.zones)
-                    if (z != null && active.Contains(z.id)) activeZones.Add(z);
+                    if (z != null && _activeScratch.Contains(z.id)) _activeZonesScratch.Add(z);
 
                 foreach (MapZone z in _map.zones)
                 {
-                    if (z == null || active.Contains(z.id)) continue;
-                    foreach (MapZone match in activeZones)
+                    if (z == null || _activeScratch.Contains(z.id)) continue;
+                    foreach (MapZone match in _activeZonesScratch)
                     {
                         if (!MapZone.ShareFootprint(z, match)) continue;
-                        active.Add(z.id);
+                        _activeScratch.Add(z.id);
                         break;
                     }
                 }
@@ -282,14 +475,32 @@ namespace MaxWorlds.Arena
                 Renderer r = pair.Key;
                 if (r == null) continue;
                 if (_dressedHidden != null && _dressedHidden.Contains(r)) continue;
-                r.enabled = pair.Value.Exists(active.Contains);
+                r.enabled = pair.Value.Exists(_activeScratch.Contains);
+            }
+
+            if (_gatedActors.Count > 0)
+            {
+                foreach (KeyValuePair<IZoneGatedActor, string> kv in _gatedActors)
+                {
+                    IZoneGatedActor actor = kv.Key;
+                    bool visible = _activeScratch.Contains(kv.Value);
+                    if (!visible && maxPosition.HasValue)
+                    {
+                        Vector3 ap = actor.ZoneGatePosition;
+                        float dx = ap.x - maxPosition.Value.x;
+                        float dz = ap.z - maxPosition.Value.z;
+                        visible = dx * dx + dz * dz <= NeighbourGateRangeSq;
+                    }
+                    actor.SetZoneGateVisible(visible);
+                }
             }
 
             // MV-925 item 4: re-recorded on every call (not just once in Start), and item 2's own
             // self-heal check (Update, above) reads _activeZoneIds every frame — both need this call's
-            // own result, not whatever the last call computed.
+            // own result, not whatever the last call computed. Reference-equal to _activeScratch
+            // (MV-972: reused, not reallocated) — always fully repopulated above before either is read.
             _currentGateZoneId = currentZoneId;
-            _activeZoneIds = active;
+            _activeZoneIds = _activeScratch;
             RecordRendererCensus();
         }
 
@@ -878,7 +1089,7 @@ namespace MaxWorlds.Arena
             }
 
             BuildProps(map, root, staticGeometry, built, rendererZones);
-            PlaceActors(map, root, built);
+            PlaceActors(map, root, built, rendererZones);
             WireGates(map, built);
 
             // MV-706: "REPLICATORS n/N" for a world with replicators and no sheds; "FACTORIES" wording
@@ -1073,12 +1284,22 @@ namespace MaxWorlds.Arena
                     }
 
                     case EntityKind.Pickup:
+                    {
                         // MV-644: currently only PowerupCadence.EnsureCoverage's guaranteed parts cache
                         // authors this kind — the same walk-over reward a shed drop already knows how to
                         // give (PickupDirector.PlacePartsCache), placed statically since there is no
                         // factory death here to hook it off.
-                        PickupDirector.EnsureInstalled().PlacePartsCache(e.GroundedCenter);
+                        //
+                        // MV-972: tagged the same way as every other map-authored piece — a pickup built
+                        // here exists before MapStaticBatchRoot does (Configure runs at the very end of
+                        // Build), so PickupDirector's own runtime registration (for a robot-death/shed-
+                        // destroyed drop, which always happens after the batch root exists) cannot reach
+                        // this one; tag it here instead, exactly like BuildSludge/BuildRamp/BuildGrate.
+                        List<Pickup> cache = PickupDirector.EnsureInstalled().PlacePartsCache(e.GroundedCenter);
+                        foreach (Pickup p in cache)
+                            if (p != null) TagStatic(map, p.gameObject, rendererZones);
                         break;
+                    }
 
                     case EntityKind.Sludge:
                     {
@@ -1811,7 +2032,8 @@ namespace MaxWorlds.Arena
         /// factories and bosses. An adopted actor's Y is left alone — the map authors a floor plan, not
         /// heights — while a built one gets a Y from its own body, so it can never be authored
         /// half-buried.</summary>
-        private static void PlaceActors(MapData map, Transform root, MapBuild built)
+        private static void PlaceActors(MapData map, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             foreach (MapEntity e in map.entities)
             {
@@ -1824,11 +2046,11 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Factory:
-                        built.Factories.Add(BuildFactory(map, e, root, built));
+                        built.Factories.Add(BuildFactory(map, e, root, built, rendererZones));
                         break;
 
                     case EntityKind.Replicator:
-                        built.Replicators.Add(BuildReplicator(e, root, built));
+                        built.Replicators.Add(BuildReplicator(map, e, root, built, rendererZones));
                         break;
 
                     case EntityKind.AreaGate:
@@ -1861,7 +2083,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Boss:
-                        built.Bosses.Add(BuildBoss(map, e, root, built));
+                        built.Bosses.Add(BuildBoss(map, e, root, built, rendererZones));
                         break;
                 }
             }
@@ -1900,7 +2122,8 @@ namespace MaxWorlds.Arena
         /// already uses for a boss's wake area — so a static shed's <see cref="MowerHutch.TickMobility"/>
         /// (a permanent no-op for it) never even reads the field.
         /// </summary>
-        private static MowerHutch BuildFactory(MapData map, MapEntity e, Transform root, MapBuild built)
+        private static MowerHutch BuildFactory(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
 
@@ -1939,6 +2162,13 @@ namespace MaxWorlds.Arena
             }
 
             BuildShedFittings(body, e, hutch);
+
+            // MV-972: the shed's own body renderer plus every fitting riding on it (fittings are
+            // parented to this same body, above) — tagged by resolved position exactly like any other
+            // static prop, so the area gate can hide a shed the same way it already hides cover/props.
+            // A mobile shed never leaves its own zone's footprint (SetAreaFootprint above leashes it),
+            // so a one-time tag at build time is correct for it too, not just a static shed.
+            TagStatic(map, body, rendererZones);
 
             built.Actors[e.id] = body;
             return hutch;
@@ -2008,7 +2238,8 @@ namespace MaxWorlds.Arena
         /// AddComponent (same ordering as <see cref="MowerHutch.ConfigureMobility"/>) so the box reads
         /// its own scale in Awake before anything else touches it.
         /// </summary>
-        private static Replicator BuildReplicator(MapEntity e, Transform root, MapBuild built)
+        private static Replicator BuildReplicator(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
             MarkDiscoverable(body);
@@ -2016,6 +2247,9 @@ namespace MaxWorlds.Arena
             var replicator = body.AddComponent<Replicator>();
             replicator.Configure(e.capacity);
             replicator.SetFacing(e.facing); // MV-860: which side is the IN face, "S" = today's behaviour
+
+            // MV-972: a Replicator never moves — tag it the same way BuildFactory now tags a shed.
+            TagStatic(map, body, rendererZones);
 
             built.Actors[e.id] = body;
             return replicator;
@@ -2034,7 +2268,8 @@ namespace MaxWorlds.Arena
         /// (including a boss) to sit inside a zone, so <c>ZoneAt</c> is resolved here, not defended
         /// against being null.
         /// </summary>
-        private static BigBermudaBoss BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built)
+        private static BigBermudaBoss BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
 
@@ -2050,6 +2285,11 @@ namespace MaxWorlds.Arena
             // any rig existed, so only the FIRST boss on a multi-boss map ever grew a body and every
             // other one stood there as the bare greybox cube above.
             BigBermudaRig.CreateFor(boss);
+
+            // MV-972: tagged AFTER the rig exists, so this also picks up every renderer the rig just
+            // built, not just the placeholder body cube — a boss's own wake area keeps it inside one
+            // zone, so a one-time tag at build time is correct.
+            TagStatic(map, body, rendererZones);
 
             built.Actors[e.id] = body;
             return boss;

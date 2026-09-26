@@ -343,7 +343,13 @@ namespace MaxWorlds.Factories
             // ALIVE, because the robots it already spawned are parented here and must keep
             // fighting until the player clears them (deactivating the GO would freeze them).
             var rend = GetComponent<Renderer>();
-            if (rend != null) rend.enabled = false;
+            if (rend != null)
+            {
+                rend.enabled = false;
+                // MV-972: the area gate must never re-enable a destroyed shed just because its own
+                // zone comes back into the active set — see MarkPermanentlyHidden's own doc.
+                MapStaticBatchRoot.Active?.MarkPermanentlyHidden(rend);
+            }
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
             if (_barPivot != null) _barPivot.gameObject.SetActive(false);
