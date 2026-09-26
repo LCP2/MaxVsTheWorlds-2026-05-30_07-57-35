@@ -1434,7 +1434,12 @@ namespace MaxWorlds.Enemies
             // back to solid ground, the same recovery MV-946 already gives Max and every Sentinel. No
             // damage, no death, and never counted as a kill -- this is recovery, not a hazard.
             Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
-            if (recoverTo.HasValue) RecoverFromFall(recoverTo.Value);
+            if (recoverTo.HasValue)
+            {
+                // MV-955: evidence for a live fall that could never be reproduced in EditMode.
+                FallEventLog.Record("robot", EnemyNavigation.Map, _fallRecovery.FirstOutOfPlayPosition, recoverTo.Value, dt);
+                RecoverFromFall(recoverTo.Value);
+            }
 
             // MV-697: applied after every state's own movement, regardless of state -- except a
             // reduced Dormant-far tick where nothing has moved this robot since _lastTickPosition was

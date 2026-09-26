@@ -60,12 +60,19 @@ namespace MaxWorlds.Arena
     {
         private Vector3 _lastSafePosition;
         private float _timeOutOfPlay;
+        private Vector3 _firstOutOfPlayPosition;
 
         /// <summary>Seeded with wherever the entity starts (spawn/deploy) — assumed safe, so this
         /// doubles as the ticket's "or the current area's entry if there is none" fallback: there is
         /// never a true null case, since a fresh state already has somewhere real to return to before a
         /// single grounded tick has run.</summary>
         public FallRecoveryState(Vector3 initialSafePosition) => _lastSafePosition = initialSafePosition;
+
+        /// <summary>MV-955: wherever this entity's position was the instant the CURRENT out-of-play
+        /// streak began — the position <see cref="MaxWorlds.Arena.FallEventLog"/> logs a fall against.
+        /// Meaningless (last streak's value) once <see cref="Tick"/> has recovered and reset the timer;
+        /// callers only ever read it in the same tick a non-null <see cref="Tick"/> return hands them.</summary>
+        public Vector3 FirstOutOfPlayPosition => _firstOutOfPlayPosition;
 
         /// <summary>Call once a tick with the entity's CURRENT position. Records it as the new safe
         /// point whenever it's grounded and in play; otherwise accumulates out-of-play time. Returns the
@@ -77,6 +84,11 @@ namespace MaxWorlds.Arena
         {
             bool outOfPlay = FallSafetyNet.IsOutOfPlay(position, map);
             if (!outOfPlay && grounded) _lastSafePosition = position;
+
+            // MV-955: the instant a fresh out-of-play streak starts (timer at 0) is the moment this
+            // entity was first detected out of play -- captured before AccumulateOutOfPlayTime below
+            // moves the timer off 0, so a streak that's already running never re-captures it.
+            if (outOfPlay && _timeOutOfPlay <= 0f) _firstOutOfPlayPosition = position;
 
             _timeOutOfPlay = FallSafetyNet.AccumulateOutOfPlayTime(_timeOutOfPlay, outOfPlay, dt);
             if (!FallSafetyNet.ShouldRecover(_timeOutOfPlay)) return null;

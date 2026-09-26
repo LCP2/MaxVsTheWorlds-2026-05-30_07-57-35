@@ -197,7 +197,12 @@ namespace MaxWorlds.Player
             // MV-946: below the floor or outside the world bounds for more than the grace window ->
             // back to solid ground. No damage, no death -- this is recovery, not a hazard.
             Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
-            if (recoverTo.HasValue) Recover(recoverTo.Value);
+            if (recoverTo.HasValue)
+            {
+                // MV-955: evidence for a live fall that could never be reproduced in EditMode.
+                FallEventLog.Record("max", EnemyNavigation.Map, _fallRecovery.FirstOutOfPlayPosition, recoverTo.Value, dt);
+                Recover(recoverTo.Value);
+            }
         }
 
         /// <summary>MV-946: teleports Max back to solid ground once <see cref="_fallRecovery"/> trips —

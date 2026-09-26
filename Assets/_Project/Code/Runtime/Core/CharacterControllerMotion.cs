@@ -100,6 +100,69 @@ namespace MaxWorlds.Core
         /// bounds one call's physics cost, rather than inferring it from the displacement it was given.</summary>
         public static int MoveSweepCount;
 
+        /// <summary>MV-955: how many recent <see cref="SafeMove"/> calls the rolling window below keeps
+        /// — the ticket's own "preceding 10 frames". Deliberately global rather than per-entity:
+        /// <see cref="SafeMove"/> is a stateless static utility with no caller identity to key a
+        /// per-entity window on, and this exists as fall-recovery evidence (<see cref="MaxWorlds.Arena.FallEventLog"/>),
+        /// not a gameplay-critical measurement — a fall's own log entry is written the instant that
+        /// entity's own recovery fires, when its own recent Move calls dominate the window in practice.</summary>
+        private const int RecentWindowCapacity = 10;
+
+        private static readonly int[] _recentSteps = new int[RecentWindowCapacity];
+        private static readonly float[] _recentStepSize = new float[RecentWindowCapacity];
+        private static readonly bool[] _recentOversized = new bool[RecentWindowCapacity];
+        private static int _recentIndex;
+        private static int _recentCount;
+
+        private static void RecordRecentStep(int steps, float stepSize, bool oversized)
+        {
+            _recentSteps[_recentIndex] = steps;
+            _recentStepSize[_recentIndex] = stepSize;
+            _recentOversized[_recentIndex] = oversized;
+            _recentIndex = (_recentIndex + 1) % RecentWindowCapacity;
+            if (_recentCount < RecentWindowCapacity) _recentCount++;
+        }
+
+        /// <summary>Largest sub-step COUNT any single <see cref="SafeMove"/> call issued, over the last
+        /// <see cref="RecentWindowCapacity"/> calls.</summary>
+        public static int LargestRecentSubStepCount()
+        {
+            int max = 0;
+            for (int i = 0; i < _recentCount; i++)
+                if (_recentSteps[i] > max) max = _recentSteps[i];
+            return max;
+        }
+
+        /// <summary>Largest per-sub-step displacement any single <see cref="SafeMove"/> call issued,
+        /// over the last <see cref="RecentWindowCapacity"/> calls.</summary>
+        public static float LargestRecentSubStepSize()
+        {
+            float max = 0f;
+            for (int i = 0; i < _recentCount; i++)
+                if (_recentStepSize[i] > max) max = _recentStepSize[i];
+            return max;
+        }
+
+        /// <summary>Whether any of the last <see cref="RecentWindowCapacity"/> <see cref="SafeMove"/>
+        /// calls exceeded <see cref="MaxSafeStep"/> (the condition the oversized-move warning gates on)
+        /// — read from this rolling window rather than <see cref="HasWarnedOversizedMove"/> itself, since
+        /// that flag latches true for the rest of the process the first time it ever fires (MV-926) and
+        /// so can't answer "did it happen near THIS fall" for any fall after the first one.</summary>
+        public static bool AnyRecentOversizedMove()
+        {
+            for (int i = 0; i < _recentCount; i++)
+                if (_recentOversized[i]) return true;
+            return false;
+        }
+
+        /// <summary>Test hygiene only — mirrors <see cref="HasWarnedOversizedMove"/>'s own test-settable
+        /// seam.</summary>
+        public static void ResetRecentWindow()
+        {
+            _recentIndex = 0;
+            _recentCount = 0;
+        }
+
         /// <summary>Moves <paramref name="cc"/> by <paramref name="displacement"/>, splitting it into
         /// up to <see cref="MaxSubSteps"/> steps when it's larger than <see cref="MaxSafeStep"/>. Each
         /// step is its own swept collision test, so a stall-inflated single-frame displacement can't
@@ -111,6 +174,7 @@ namespace MaxWorlds.Core
             if (dist <= MaxSafeStep)
             {
                 MoveSweepCount++;
+                RecordRecentStep(1, dist, false);
                 cc.Move(displacement);
                 return;
             }
@@ -128,6 +192,7 @@ namespace MaxWorlds.Core
 
             int steps = Mathf.Clamp(Mathf.CeilToInt(dist / MaxSafeStep), 1, MaxSubSteps);
             Vector3 step = displacement / steps;
+            RecordRecentStep(steps, step.magnitude, true);
             for (int i = 0; i < steps; i++)
             {
                 MoveSweepCount++;
