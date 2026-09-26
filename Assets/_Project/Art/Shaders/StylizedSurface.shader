@@ -253,6 +253,13 @@ Shader "MaxWorlds/StylizedSurface"
                 return OUT;
             }
 
+            // MV-973: the dominant-axis weight (see w below) a face's normal resolves to once it sits
+            // exactly 5 degrees off an axis. Above this, the other two triplanar samples already
+            // contribute less than 0.006% of the blended albedo (n^4 falloff) — invisible, but the GPU
+            // still pays for both fetches. Derived once, at compile time, from cos/sin(5 deg): let
+            // c = cos(5 deg), s = sin(5 deg); dominant/(dominant+other) = c^4 / (c^4 + s^4).
+            #define MV973_AXIS_ALIGNED_DOMINANT_WEIGHT 0.999941
+
             half4 SurfaceFrag(Varyings IN) : SV_Target
             {
                 float3 N = normalize(IN.normalWS);
@@ -280,14 +287,35 @@ Shader "MaxWorlds/StylizedSurface"
                 float2 uvY = wp.xz;
                 float2 uvZ = wp.xy;
 
-                float3 albedo =
-                      SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvX).rgb * w.x
-                    + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvY).rgb * w.y
-                    + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvZ).rgb * w.z;
+                // Which plane dominates, and its own projection — shared below by both the albedo's
+                // MV-973 single-sample branch and the relief fetch, which was already dominant-only.
+                bool xDom = w.x >= w.y && w.x >= w.z;
+                bool yDom = !xDom && w.y >= w.z;
+                float2 domUv = xDom ? uvX : (yDom ? uvY : uvZ);
+                float domWeight = xDom ? w.x : (yDom ? w.y : w.z);
+
+                // MV-973: MAX's world geometry is axis-aligned boxes and quads, so almost every pixel
+                // on almost every surface lands here — one base-map fetch instead of three, on a face
+                // that reads identically either way (see the threshold's own comment). Bevelled or
+                // rounded regions, where no single axis has run away with the weight, fall through to
+                // the full triplanar blend below exactly as before.
+                float3 albedo;
+                if (domWeight >= MV973_AXIS_ALIGNED_DOMINANT_WEIGHT)
+                {
+                    albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, domUv).rgb;
+                }
+                else
+                {
+                    albedo =
+                          SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvX).rgb * w.x
+                        + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvY).rgb * w.y
+                        + SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvZ).rgb * w.z;
+                }
 
                 albedo *= _BaseColor.rgb;
 
-                // The relief is taken from the DOMINANT plane only — one fetch, not three.
+                // The relief is taken from the DOMINANT plane only — one fetch, not three — regardless
+                // of the albedo branch above.
                 //
                 // The albedo has to blend across all three or a rock cross-fades badly at its corners;
                 // a slope does not. It is a small perturbation of a normal that is mostly the geometric
@@ -299,11 +327,7 @@ Shader "MaxWorlds/StylizedSurface"
                 // runtime as plain linear RGB (StylizedTextures.NormalFor), not DXT5nm-swizzled, so the
                 // helper would read the wrong channels on whichever platform took the other branch.
                 // Same reasoning as StylizedGround.
-                bool xDom = w.x >= w.y && w.x >= w.z;
-                bool yDom = !xDom && w.y >= w.z;
-                float2 nuv = xDom ? uvX : (yDom ? uvY : uvZ);
-
-                float2 t = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, nuv).rg * 2.0 - 1.0;
+                float2 t = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, domUv).rg * 2.0 - 1.0;
 
                 // That plane's 2D slope, rotated back into the world axes it was projected along, then
                 // added to the geometric normal. Far more stable than reconstructing a tangent frame

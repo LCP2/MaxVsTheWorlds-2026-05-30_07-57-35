@@ -40,10 +40,18 @@ namespace MaxWorlds.Editor
         /// margin over that camera distance without paying for shadow detail nobody sees.</summary>
         public const float ShadowDistance = 25f;
 
-        /// <summary>Two cascades, not one and not four. One spends its whole shadow map on the whole
-        /// arena and gives the player's own feet four blurry texels; four is a PC luxury we'd pay for
-        /// in a per-frame budget that has to survive a phone.</summary>
-        public const int ShadowCascades = 2;
+        /// <summary>PC tier only (the editor and the Windows standalone build — never what ships,
+        /// see this class's own doc comment) — a luxury this tier can afford that Mobile's per-frame
+        /// budget cannot. Left at 2, unrelated to MV-973's Mobile-only cut below.</summary>
+        public const int PcShadowCascades = 2;
+
+        /// <summary>MV-973: cut from 2 — at the MV-969 shadow distance (25m; the play camera sits
+        /// ~14.6m from Max) the single cascade's near-field texel density is equal or better than the
+        /// old first cascade's own, so the "feet get a handful of texels" problem two cascades used to
+        /// guard against does not recur, at one fewer cascade split evaluated per pixel on every
+        /// shadowed surface. Mobile only — see <see cref="PcShadowCascades"/> for the PC/editor tier,
+        /// which this ticket does not touch (PC is a dev/QA surface, never what ships).</summary>
+        public const int MobileShadowCascades = 1;
 
         [MenuItem("MaxWorlds/Art/Apply Render Settings (YT-76)")]
         public static void ApplyMenu()
@@ -64,8 +72,8 @@ namespace MaxWorlds.Editor
         {
             int touched = 0;
 
-            touched += Pipeline(MobileRpPath, shadowmap: 2048) ? 1 : 0;
-            touched += Pipeline(PcRpPath, shadowmap: 2048) ? 1 : 0;
+            touched += Pipeline(MobileRpPath, shadowmap: 2048, shadowCascades: MobileShadowCascades) ? 1 : 0;
+            touched += Pipeline(PcRpPath, shadowmap: 2048, shadowCascades: PcShadowCascades) ? 1 : 0;
 
             // MV-969: SSAO is a mobile-only perf cost with nothing to show for it under Stormdrain's
             // fog — off on Mobile from here on; PC keeps it, same as always.
@@ -78,7 +86,7 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>Soft shadows, long enough to reach the arena, sharp enough to read.</summary>
-        private static bool Pipeline(string path, int shadowmap)
+        private static bool Pipeline(string path, int shadowmap, int shadowCascades)
         {
             var asset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(path);
             if (asset == null)
@@ -91,7 +99,7 @@ namespace MaxWorlds.Editor
 
             Set(so, "m_SoftShadowsSupported", true);
             Set(so, "m_SoftShadowQuality", (int)SoftShadowQuality.Low);   // 4-tap: the one a phone can pay for
-            Set(so, "m_ShadowCascadeCount", ShadowCascades);
+            Set(so, "m_ShadowCascadeCount", shadowCascades);
             Set(so, "m_ShadowDistance", ShadowDistance);
             Set(so, "m_MainLightShadowmapResolution", shadowmap);
 

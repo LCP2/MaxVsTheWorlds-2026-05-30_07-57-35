@@ -144,9 +144,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(so.FindProperty("m_ShadowDistance").floatValue, 20f,
                 "shadows stop short of what the play camera can actually see");
 
-            Assert.GreaterOrEqual(so.FindProperty("m_ShadowCascadeCount").intValue, 2,
-                "one cascade spends the whole shadow map on the whole arena; the player's own feet " +
-                "get a handful of texels");
+            // MV-973: cut from 2 cascades to 1, deliberately — at the MV-969 shadow distance (25m, the
+            // play camera sits ~14.6m from Max) the single cascade's near-field texel density is equal
+            // or better than the old first cascade's own, so the "feet get a handful of texels" problem
+            // this line used to guard against does not recur. The resolved-value assertion for the new
+            // authored count now lives in MV973PerfZeroVisualChangeTests, with that ticket's own
+            // reasoning; this test keeps its other two assertions (soft shadows, shadow distance),
+            // which MV-973 didn't touch.
         }
 
         [Test]
