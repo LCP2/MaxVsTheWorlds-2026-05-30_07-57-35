@@ -138,8 +138,16 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private GameObject _panelRoot;
         private GameObject _scrim;
+        private Button _quitButton;   // MV-960: hidden while opened over Home, which has no run to quit
         private Text _dumpTextL, _dumpTextM, _dumpTextR;   // three-column value dump (YT-126, YT-192)
         private bool _open;
+        private bool _openedFromHome;
+
+        // MV-960: Home's own canvas sorts at 220; this panel's normal in-HUD order is 200. Opened
+        // from Home it must sort above 220 so its buttons win the raycast, then drop back to its
+        // normal order on close so the in-game (HUD) gear is unaffected.
+        private const int DefaultSortingOrder = 200;
+        private const int AboveHomeSortingOrder = 230;
 
         private readonly List<Knob> _knobs = new List<Knob>();
 
@@ -999,6 +1007,7 @@ namespace MaxWorlds.UI
                 afterSave + 380f + 16f + 300f + 16f + 200f + 16f, footerY, QuitBtnW, ButtonH);
             quit.GetComponent<Image>().color = QuitColor;
             quit.onClick.AddListener(RunFlow.QuitToMenu);
+            _quitButton = quit;
 
             // Three-column dump (YT-126, YT-192): keeps every line on the panel without pushing it
             // off a phone. Left/middle/right thirds of the value list, side by side.
@@ -1138,6 +1147,19 @@ namespace MaxWorlds.UI
         /// <summary>Open/close the Settings area. Entering it pauses the game (WV-234, spec §8), same
         /// capture/zero/restore idiom as <c>WeaponsScreen.Open</c>/<c>Close</c> — no shared pause
         /// manager exists in this codebase, so each screen owns its own <see cref="_prevTimeScale"/>.</summary>
+        /// <summary>MV-960: opens this panel ABOVE the Home screen (Home's own canvas sorts at 220) —
+        /// hides "Quit to menu" (there is no run on Home to quit) and restores both on close. Home
+        /// already parked <see cref="Time.timeScale"/> at 0 before calling this, so <see cref="SetOpen"/>'s
+        /// own capture/restore leaves the game exactly as paused as Home left it.</summary>
+        public void OpenFromHome()
+        {
+            Build();
+            _openedFromHome = true;
+            if (_quitButton != null) _quitButton.gameObject.SetActive(false);
+            if (_canvas != null) _canvas.sortingOrder = AboveHomeSortingOrder;
+            SetOpen(true);
+        }
+
         private void SetOpen(bool open)
         {
             // Only touch the timescale on an actual transition — Build() calls this once with the
@@ -1156,6 +1178,13 @@ namespace MaxWorlds.UI
                 {
                     Time.timeScale = _prevTimeScale;
                     ModalFrameRateGate.Exit();
+
+                    if (_openedFromHome)
+                    {
+                        _openedFromHome = false;
+                        if (_quitButton != null) _quitButton.gameObject.SetActive(true);
+                        if (_canvas != null) _canvas.sortingOrder = DefaultSortingOrder;
+                    }
                 }
             }
 
