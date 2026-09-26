@@ -611,6 +611,13 @@ namespace MaxWorlds.Enemies
                 go.transform.SetParent(Bodies(), false);   // metre space — see Bodies()
                 go.transform.localScale = a.BodyScale;
 
+                // MV-966: CreatePrimitive auto-attaches a BoxCollider/CapsuleCollider that nothing ever
+                // removed — same idiom as MapRuntime.BuildFactory's own mobile-shed strip
+                // (AreaAccumulationDirector.CreateInstance carries the identical fix). The
+                // CharacterController below is meant to be the only collider a robot carries.
+                var stray = go.GetComponent<Collider>();
+                if (stray != null) Object.DestroyImmediate(stray);
+
                 var cc = go.AddComponent<CharacterController>();
                 // Undo the BODY's scale so the metres asked for are the metres you get. The parent
                 // contributes nothing now, by construction.

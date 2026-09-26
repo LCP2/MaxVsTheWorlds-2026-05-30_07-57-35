@@ -230,5 +230,32 @@ namespace MaxWorlds.UI
             s_tintBlock.SetColor("_Color", tint);
             renderer.SetPropertyBlock(s_tintBlock);
         }
+
+        /// <summary>MV-966: one retained <see cref="Mesh"/> per aim-visual GameObject (the arc, the
+        /// landing/placement circle), built the first time it's needed. <see cref="RebuildAimVisual"/>
+        /// runs on every <see cref="OnDrag"/> event — before this, every concrete control's own
+        /// RebuildAimVisual allocated a brand-new <see cref="Mesh"/> here and never destroyed the one it
+        /// replaced, a per-drag-move leak/allocation this shared helper removes for all three at once.
+        /// Callers write into the returned mesh via <see cref="MaxWorlds.VFX.WaterBalloonAimMesh.BuildInto"/>/
+        /// <see cref="MaxWorlds.VFX.WaterBalloonAimMesh.BuildLandingCircleInto"/> rather than assigning a
+        /// fresh one to <c>sharedMesh</c>.</summary>
+        protected static Mesh RetainedMesh(GameObject meshGo)
+        {
+            MeshFilter mf = meshGo.GetComponent<MeshFilter>();
+            if (mf.sharedMesh == null) mf.sharedMesh = new Mesh { name = meshGo.name };
+            return mf.sharedMesh;
+        }
+
+        /// <summary>Destroys <paramref name="meshGo"/>'s own <see cref="RetainedMesh"/> before
+        /// destroying the GameObject itself (MV-966) — <c>Destroy(meshGo)</c> alone never touches a Mesh
+        /// it merely references. Safe to call on a control that never armed this run (<paramref name="meshGo"/>
+        /// null, or never given a mesh).</summary>
+        protected static void DestroyAimVisual(GameObject meshGo)
+        {
+            if (meshGo == null) return;
+            Mesh mesh = meshGo.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh != null) Destroy(mesh);
+            Destroy(meshGo);
+        }
     }
 }

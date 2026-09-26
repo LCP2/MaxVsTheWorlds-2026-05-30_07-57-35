@@ -57,13 +57,15 @@ namespace MaxWorlds.Core
         /// <see cref="s_bucketMs"/>/<see cref="BucketCount"/> and never enter <see cref="FormatLine"/>'s
         /// sum-vs-frame-time residual: adding them there would double-count the same milliseconds the
         /// outer Robot bucket already charges. Purely an additional breakdown line for reading where
-        /// inside "robot" the time actually goes. <see cref="Behind"/> is exactly
-        /// <see cref="RobotEnemy.IsWellBehindPlayer"/> while <see cref="RobotEnemy.State.Dormant"/> —
-        /// the same definition <see cref="MaxWorlds.Enemies.PopulationReadout"/>'s "behind" count already
-        /// uses, so this bucket's robot count always agrees with that line.</summary>
-        public enum RobotSubPhase { Dormant, AwakeAiRoute, Behind, Separation, Movement }
+        /// inside "robot" the time actually goes.
+        ///
+        /// MV-966: dropped the old <c>Behind</c> case — it existed only to separately account the
+        /// MV-870 Dormant-far throttle's reduced ticks, which this ticket removed outright in favour of
+        /// parking (see <see cref="RobotEnemy.Tick"/>'s own doc comment); there is no reduced-tick case
+        /// left to separately account.</summary>
+        public enum RobotSubPhase { Dormant, AwakeAiRoute, Separation, Movement }
 
-        private const int RobotSubPhaseCount = 5;
+        private const int RobotSubPhaseCount = 4;
         private static readonly long[] s_subBeginTicks = new long[RobotSubPhaseCount];
         private static readonly double[] s_subMs = new double[RobotSubPhaseCount];
 
@@ -364,7 +366,6 @@ namespace MaxWorlds.Core
         private static string FormatRobotSubPhaseLine(int frames) =>
             $"robot/ dormant {s_subMs[(int)RobotSubPhase.Dormant] / frames:0.0} " +
             $"awake {s_subMs[(int)RobotSubPhase.AwakeAiRoute] / frames:0.0} " +
-            $"behind {s_subMs[(int)RobotSubPhase.Behind] / frames:0.0} " +
             $"sep {s_subMs[(int)RobotSubPhase.Separation] / frames:0.0} " +
             $"move {s_subMs[(int)RobotSubPhase.Movement] / frames:0.0}";
 

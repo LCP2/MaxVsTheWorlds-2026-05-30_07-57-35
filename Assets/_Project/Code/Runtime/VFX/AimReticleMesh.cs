@@ -45,6 +45,21 @@ namespace MaxWorlds.VFX
         /// </summary>
         public static Mesh Build(float range, float halfAngleDeg, int segments = 28)
         {
+            var mesh = new Mesh { name = $"AimReticle {range:0.0}m {halfAngleDeg:0}deg" };
+            BuildInto(mesh, range, halfAngleDeg, segments);
+            return mesh;
+        }
+
+        /// <summary>MV-966: same wedge as <see cref="Build"/>, written into an already-existing
+        /// <paramref name="target"/> mesh instead of allocating a new one — <paramref name="range"/>/
+        /// <paramref name="halfAngleDeg"/> only ever move <see cref="Build"/>'s own vertex POSITIONS;
+        /// the vertex count and triangle list are identical for any two calls sharing the same
+        /// <paramref name="segments"/>, so a caller that rebuilds every frame (a drag-driven aim
+        /// visual, <see cref="MaxWorlds.VFX.WaterBalloonAimMesh.BuildLandingCircleInto"/>) can reuse one
+        /// retained mesh forever instead of allocating (and, until this ticket, leaking) a fresh one on
+        /// every rebuild.</summary>
+        public static void BuildInto(Mesh target, float range, float halfAngleDeg, int segments = 28)
+        {
             range = Mathf.Max(0.01f, range);
             halfAngleDeg = Mathf.Clamp(halfAngleDeg, 1f, 180f);
             segments = Mathf.Max(3, segments);
@@ -107,12 +122,11 @@ namespace MaxWorlds.VFX
                 }
             }
 
-            var mesh = new Mesh { name = $"AimReticle {range:0.0}m {halfAngleDeg:0}deg" };
-            mesh.SetVertices(verts);
-            mesh.SetColors(cols);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateBounds();
-            return mesh;
+            target.Clear();
+            target.SetVertices(verts);
+            target.SetColors(cols);
+            target.SetTriangles(tris, 0);
+            target.RecalculateBounds();
         }
 
         /// <summary>How far the drawn wedge actually reaches — the fade runs a little past the

@@ -71,7 +71,7 @@ namespace MaxWorlds.UI
 
         private void OnDestroy()
         {
-            if (_circleGo != null) Destroy(_circleGo);
+            DestroyAimVisual(_circleGo);
         }
 
         protected override void ShowAimVisuals()
@@ -133,7 +133,7 @@ namespace MaxWorlds.UI
             Vector3 landing = _origin.position + Direction * distance;
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
-            _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(LandingRadius);
+            WaterBalloonAimMesh.BuildLandingCircleInto(RetainedMesh(_circleGo), LandingRadius);
 
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);
         }
