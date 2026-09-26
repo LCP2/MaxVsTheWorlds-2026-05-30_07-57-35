@@ -36,6 +36,8 @@ namespace MaxWorlds.Tests.EditMode
 
         private RectTransform BarCanvas()
         {
+            // MowerHutch builds its own inline "FactoryHealthBar" canvas (BuildHealthBar) rather than
+            // using WorldHealthBar — unaffected by MV-978's shared-canvas change, still a child of _go.
             var canvas = _go.GetComponentInChildren<Canvas>(true);
             Assert.IsNotNull(canvas, "the factory has no health bar at all");
             return (RectTransform)canvas.transform;

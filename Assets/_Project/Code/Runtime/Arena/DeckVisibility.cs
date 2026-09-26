@@ -31,6 +31,10 @@ namespace MaxWorlds.Arena
         /// state: every deck the player isn't standing under, every frame the fade has finished).</summary>
         private float _lastAppliedAlpha = float.NaN;
 
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Update"/>
+        /// has actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int UpdateCallCount { get; private set; }
+
         public void Configure(Renderer grate, GameObject[] rails, Rect footprint, float deckTopY)
         {
             _grate = grate;
@@ -43,6 +47,13 @@ namespace MaxWorlds.Arena
 
         private void Update()
         {
+            // MV-978: this deck's own grate is already zone-tagged (MapRuntime.BuildDeck tags `body`
+            // directly, the same renderer passed in here) — while the MV-972 gate has it disabled,
+            // nobody can be standing on or under a deck nobody can see, so skip the whole fade/repaint.
+            if (_grate != null && !_grate.enabled) return;
+
+            UpdateCallCount++;
+
             if (_player == null)
             {
                 var p = GameObject.FindGameObjectWithTag("Player");
