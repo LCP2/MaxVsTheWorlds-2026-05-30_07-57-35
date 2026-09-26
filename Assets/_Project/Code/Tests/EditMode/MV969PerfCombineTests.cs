@@ -23,9 +23,19 @@ namespace MaxWorlds.Tests.EditMode
     /// every one of this ticket's fixes actually landed on the BUILT scene — never an authored constant
     /// read back off source (Rule 2): the SSAO feature is inactive on the shipped mobile renderer data,
     /// every low-profile (&lt;=0.3m) renderer under World 2's map root has shadowCastingMode Off, every
-    /// spawned robot combines down to at most 6 enabled renderers with materials shared per kind (not
-    /// cloned per robot), and nothing in the built scene has the dissolve keyword compiled in while at
-    /// rest.
+    /// robot in a11's/a5's own authored garrison (per AC1's exact wording — <see cref="RobotEnemy.AreaIndex"/>-filtered,
+    /// since a live run up to that area necessarily also leaves earlier areas' robots alive in the
+    /// scene) combines down to at most 6 enabled renderers with materials shared per kind (not cloned
+    /// per robot), and nothing in the built scene has the dissolve keyword compiled in while at rest.
+    ///
+    /// Deliberately does NOT check every robot the scene happens to contain: World 2's a11 and World 1's
+    /// a5 authored gardens never place a Bruiser (verified against <c>world2_config.json</c>/
+    /// <c>world1_config.json</c>'s own composition data, and <c>WorldConfig.SolveComposition</c>'s
+    /// authored-composition substitution never runs for either), but the wider accumulated scene this
+    /// test's own multi-gate setup produces can contain one from an earlier area — Bruiser's floor is 13
+    /// enabled renderers even after combining every co-located wheel-layer pair (four idler wheels have
+    /// no sibling to combine with), a real number but out of AC1's named scope. See this ticket's own
+    /// resolved-blocker Jira comment.
     ///
     /// Must fail on the base commit this branch was cut from: <c>ScreenSpaceAmbientOcclusion.isActive</c>
     /// reads true on Mobile_Renderer.asset, <c>MapStaticBatchRoot</c> carries no shadow-casting pass at
@@ -64,7 +74,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 root2 = BuildWorldAtArea(WorldLibrary.World2, enterUpTo: 11, currentArea: 11, dressWorld2: true);
                 AssertShadowCastingOnLowProfileGeometry(root2.transform);
-                AssertRobotCombiningAndSharedMaterials();
+                AssertRobotCombiningAndSharedMaterials(targetArea: 11);
                 AssertNoDissolveKeywordEnabled();
             }
             finally
@@ -82,7 +92,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 root1 = BuildWorldAtArea(WorldLibrary.World1, enterUpTo: 5, currentArea: 5, dressWorld2: false);
-                AssertRobotCombiningAndSharedMaterials();
+                AssertRobotCombiningAndSharedMaterials(targetArea: 5);
                 AssertNoDissolveKeywordEnabled();
             }
             finally
@@ -177,11 +187,22 @@ namespace MaxWorlds.Tests.EditMode
                 "setup failure: no low-profile (<=0.3m) renderer existed under the map root to check");
         }
 
-        /// <summary>AC1's robot-combining half — item 3's fix. Reads <c>RobotRig</c>'s own private
-        /// <c>_bodyMat</c> field (Tier 2: a resolved reference the engine actually renders with, not a
-        /// re-derived colour that could agree by coincidence) to prove SHARING, not merely matching
-        /// colour.</summary>
-        private static void AssertRobotCombiningAndSharedMaterials()
+        /// <summary>AC1's robot-combining half — item 3's fix, scoped to <paramref name="targetArea"/>'s
+        /// own authored garrison exactly as AC1 names it ("World 2 area a11 with its authored garrison
+        /// spawned" / "World 1 area a5 with its garrison spawned") — filtered by <see cref="RobotEnemy.AreaIndex"/>,
+        /// the same scoping idiom <c>MV966ParkByReachTests</c> already uses to isolate one area's robots
+        /// from the rest of a live run's accumulated population. <see cref="BuildWorldAtArea"/> walks
+        /// every gate up to <paramref name="targetArea"/> in order (matching a live run, and required so
+        /// <c>PlacePendingGarrison</c>/<c>RusherCap</c> solve in their true chronological order) — that
+        /// necessarily also leaves earlier areas' own robots alive in the scene, which is correct for a
+        /// live run but out of THIS ticket's scope: AC1 names two specific areas, and an authored
+        /// composition may place a kind whose own worst-case renderer count (e.g. Bruiser, 13 renderers
+        /// even after combining every co-located wheel-layer pair — see this ticket's own resolved
+        /// blocker comment) is out of scope wherever it doesn't appear in the two named areas' authored
+        /// gardens. Reads <c>RobotRig</c>'s own private <c>_bodyMat</c> field (Tier 2: a resolved
+        /// reference the engine actually renders with, not a re-derived colour that could agree by
+        /// coincidence) to prove SHARING, not merely matching colour.</summary>
+        private static void AssertRobotCombiningAndSharedMaterials(int targetArea)
         {
             FieldInfo bodyMatField = typeof(RobotRig).GetField("_bodyMat", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(bodyMatField, "RobotRig._bodyMat went missing");
@@ -191,6 +212,7 @@ namespace MaxWorlds.Tests.EditMode
 
             foreach (RobotEnemy e in Object.FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
+                if (e.AreaIndex != targetArea) continue;
                 var rig = e.GetComponent<RobotRig>();
                 if (rig == null || !rig.Built) continue;
                 robotsChecked++;
@@ -215,7 +237,8 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.Greater(robotsChecked, 0, "setup failure: no built robot existed to check");
+            Assert.Greater(robotsChecked, 0,
+                $"setup failure: no built robot existed in area{targetArea} to check");
         }
 
         /// <summary>AC1's dissolve half — item 4's fix. "In the scene", not "under a map root" (AC1's own
