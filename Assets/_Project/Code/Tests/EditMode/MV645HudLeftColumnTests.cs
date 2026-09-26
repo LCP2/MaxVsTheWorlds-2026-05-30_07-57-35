@@ -11,10 +11,12 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-645 — the left play-area column: MAP, the Settings/Controls gear, Water Balloon and Force
-    /// Field all share X=150 (the Move stick's own X), stacked bottom-to-top MAP/gear/Balloon/
-    /// Force-Field->Force-Field-bottom, and the top-left utility icon column drops its two dead "P"/
-    /// "S" placeholders, keeping only "?". Sole guard on this reshuffle; do not cull (MV-465).
+    /// MV-645 — the left play-area column: MAP, Water Balloon and Force Field all share X=150 (the
+    /// Move stick's own X), stacked bottom-to-top MAP/Balloon/Force-Field->Force-Field-bottom, and the
+    /// top-left utility icon column drops its two dead "P"/"S" placeholders, keeping only "?". The
+    /// Settings gear that used to share this column between MAP and Water Balloon was removed by
+    /// MV-961 — Settings now opens from the Home screen only, and the space it left stays empty.
+    /// Sole guard on this reshuffle; do not cull (MV-465).
     /// </summary>
     public sealed class MV645HudLeftColumnTests
     {
@@ -54,11 +56,6 @@ namespace MaxWorlds.Tests.EditMode
             InvokeLifecycle(overlay, "Awake");
             InvokeLifecycle(overlay, "OnEnable");
 
-            var settingsGo = new GameObject("SettingsPanel");
-            var settings = settingsGo.AddComponent<SettingsPanel>();
-            typeof(SettingsPanel).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(settings, null);
-
             try
             {
                 var map = FindRect(hudGo, "Map Button");
@@ -73,7 +70,6 @@ namespace MaxWorlds.Tests.EditMode
                 var spawnLevelBar = (RectTransform)typeof(HudController)
                     .GetField("_spawnLevelRoot", BindingFlags.NonPublic | BindingFlags.Instance)
                     .GetValue(hud);
-                var gear = FindRect(settingsGo, "Gear");
 
                 Assert.That(map, Is.Not.Null, "fixture: the map button must exist");
                 Assert.That(forceField, Is.Not.Null, "fixture: the force field button must exist");
@@ -83,7 +79,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(invasionDial, Is.Not.Null, "fixture: the invasion dial must exist");
                 Assert.That(arenaLabel, Is.Not.Null, "fixture: the arena label must exist");
                 Assert.That(spawnLevelBar, Is.Not.Null, "fixture: the spawn level bar must exist");
-                Assert.That(gear, Is.Not.Null, "fixture: the settings gear button must exist");
 
                 Assert.That(forceField.gameObject.activeInHierarchy, Is.True,
                     "fixture: Force Field must be visible once acquired");
@@ -112,32 +107,18 @@ namespace MaxWorlds.Tests.EditMode
                     Object.DestroyImmediate(hudRt);
                 }
 
-                Rect gearRect;
-                var gearCam = ConfigureCanvasForCapture(settingsGo.GetComponentInChildren<Canvas>(),
-                    settingsGo.GetComponentInChildren<CanvasScaler>(), out RenderTexture gearRt);
-                try
-                {
-                    gearRect = ScreenRect(gear, gearCam);
-                }
-                finally
-                {
-                    Object.DestroyImmediate(gearCam.gameObject);
-                    gearRt.Release();
-                    Object.DestroyImmediate(gearRt);
-                }
-
-                // MV-676: centres raised (357/554/744/894) as part of widening this column's gaps —
-                // see HudController.ForceFieldRise/WaterBalloonJoystickRise/MapButtonRise and
-                // SettingsPanel.GearRise.
+                // MV-676: centres raised (357/554/894) as part of widening this column's gaps — see
+                // HudController.ForceFieldRise/WaterBalloonJoystickRise/MapButtonRise. MV-961 removed
+                // the gear that used to sit at 744 between Water Balloon and MAP; that space stays
+                // empty, so no centre is asserted for it any more.
                 AssertCentre(ffRect, 150f, 357f, "Force Field");
                 AssertCentre(balloonRect, 150f, 554f, "Water Balloon");
-                AssertCentre(gearRect, 150f, 744f, "Settings gear");
                 AssertCentre(mapRect, 150f, 894f, "MAP");
 
                 // ---------------------------------------------------------------- AC2: no overlap, stack fits.
                 var column = new (string id, Rect rect)[]
                 {
-                    ("MAP", mapRect), ("Gear", gearRect), ("Balloon", balloonRect), ("ForceField", ffRect),
+                    ("MAP", mapRect), ("Balloon", balloonRect), ("ForceField", ffRect),
                 };
                 var others = new (string id, Rect rect)[]
                 {
@@ -175,7 +156,6 @@ namespace MaxWorlds.Tests.EditMode
                 InvokeLifecycle(overlay, "OnDisable");
                 Object.DestroyImmediate(hudGo);
                 Object.DestroyImmediate(overlayGo);
-                Object.DestroyImmediate(settingsGo);
                 WeaponSystemState.Reset();
                 RigState.Reset();
                 RigFusionState.Reset();

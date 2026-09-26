@@ -562,8 +562,8 @@ namespace MaxWorlds.UI
             Stretch(outline.rectTransform);
             outline.raycastTarget = false;
 
-            // Same procedural icon SettingsPanel.BuildGearButton draws, tinted Bone to match this
-            // button's own text rather than that panel's Accent green.
+            // Same TechRings procedural icon the in-game gear used to draw (MV-961 removed that
+            // gear), tinted Bone to match this button's own text rather than the panel's Accent green.
             var icon = AddImage(rt, HudTextures.TechRings(96, 3), Bone, "Icon");
             icon.raycastTarget = false;
             Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));

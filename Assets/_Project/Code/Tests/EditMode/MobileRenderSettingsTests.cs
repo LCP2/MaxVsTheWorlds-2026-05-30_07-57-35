@@ -84,11 +84,21 @@ namespace MaxWorlds.Tests.EditMode
 
                 var urp = UniversalRenderPipeline.asset;
                 Assert.IsNotNull(urp, "no active UniversalRenderPipelineAsset — cannot resolve the live effect of the knob");
+                float origRenderScale = urp.renderScale;
 
-                setter(0.7f);
+                try
+                {
+                    setter(0.7f);
 
-                Assert.That(urp.renderScale, Is.EqualTo(0.7f),
-                    "driving the 'Render scale' knob's setter must change the active URP asset's resolved renderScale");
+                    Assert.That(urp.renderScale, Is.EqualTo(0.7f),
+                        "driving the 'Render scale' knob's setter must change the active URP asset's resolved renderScale");
+                }
+                finally
+                {
+                    // Without this, the active asset is left at 0.7 for whichever EditMode test runs
+                    // next in this shared domain — WebGlRenderSettingsTests caught exactly that leak.
+                    urp.renderScale = origRenderScale;
+                }
             }
             finally
             {

@@ -21,7 +21,8 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// The in-game Settings panel (YT-120) — a gear button that opens a panel of live tuning sliders.
+    /// The Settings panel (YT-120) — a panel of live tuning sliders, opened via <see cref="OpenFromHome"/>
+    /// from the Home screen's own SETTINGS button (MV-961 removed the in-game gear that used to open it).
     ///
     /// It began as a dev-only overlay (YT-105) gated behind a build-time scripting define. That
     /// define was injected by editing ProjectSettings.asset mid-CI, which dirtied the git tree and
@@ -94,16 +95,6 @@ namespace MaxWorlds.UI
         // Grew again at YT-210 for the Gameplay tab's 18th knob (Run length), which pushed the
         // header-plus-knobs line count in the tallest column from 6 to 7.
         private const float DumpH = 195f;
-        private const float GearSize = 96f;
-        // MV-645: the gear now shares the HUD's left play-area column (X=150, same as MAP/Water
-        // Balloon/Force Field). BuildGearButton overrides its RectTransform's pivot to (0.5, 0.5), so
-        // anchoredPosition.x is already the button's CENTRE offset from the anchor's left edge — no
-        // half-width subtraction needed (unlike MAP, which keeps pivot (0,0.5) and does subtract).
-        // GearRise is an offset from the anchor's vertical mid-point (540): MV-676 raised the desired
-        // centre from 708 to 744 (part of the same HudController column-wide gap widening as
-        // ForceFieldRise/WaterBalloonJoystickRise/MapButtonRise) — 744 - 540.
-        private const float GearColumnX = 150f;
-        private const float GearRise = 204f;
 
         private const int LabelFont = 30;
         private const int HeaderFont = 40;
@@ -236,7 +227,6 @@ namespace MaxWorlds.UI
 
             BuildKnobs();
             BuildScrim();
-            BuildGearButton();
             BuildPanel();
             SetOpen(false);
         }
@@ -881,33 +871,6 @@ namespace MaxWorlds.UI
             btn.transition = Selectable.Transition.None;
             btn.onClick.AddListener(() => SetOpen(false));
             _scrim = rt.gameObject;
-        }
-
-        private void BuildGearButton()
-        {
-            // Left edge, vertically centred, then offset onto the HUD's left play-area column
-            // (MV-645) — second from the bottom, between Water Balloon and MAP.
-            var rt = NewRect("Gear", _safeRoot, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(GearSize, GearSize);
-            rt.anchoredPosition = new Vector2(GearColumnX, GearRise);
-
-            var img = rt.gameObject.AddComponent<Image>();
-            img.sprite = HudTextures.Disc();
-            img.color = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.78f);
-            img.raycastTarget = true;
-
-            var btn = rt.gameObject.AddComponent<Button>();
-            btn.targetGraphic = img;
-            btn.onClick.AddListener(() => SetOpen(!_open));
-
-            // A concentric-ring dial for the icon rather than a ⚙ glyph: the HUD renders in
-            // LegacyRuntime.ttf, which doesn't carry the gear codepoint, so a glyph would leave an
-            // empty box on device. TechRings is the same icon language the joysticks use, and reads
-            // clearly as an adjustable control.
-            var icon = AddImage(rt, HudTextures.TechRings(96, 3), Accent, "Icon");
-            Stretch(icon.rectTransform);
-            icon.raycastTarget = false;
         }
 
         private void BuildPanel()
