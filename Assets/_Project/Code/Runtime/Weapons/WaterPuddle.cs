@@ -10,6 +10,7 @@ namespace MaxWorlds.Weapons
     /// the RCDA stream can "arc between every wet robot standing in it" (the ticket's own wording); the
     /// stream itself is what actually deals the arced damage.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class WaterPuddle : MonoBehaviour
     {
         private static readonly List<WaterPuddle> s_active = new List<WaterPuddle>(4);

@@ -24,6 +24,7 @@ namespace MaxWorlds.UI
     /// (they both enumerate MeshRenderer only, and UI draws through CanvasRenderer).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("healthbars")]
     public sealed class WorldHealthBar : MonoBehaviour
     {
         // Sizes in metres, so the bar reads as a label on the unit rather than a banner over the

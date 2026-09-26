@@ -28,6 +28,7 @@ namespace MaxWorlds.Factories
     /// <see cref="capacity"/> is the maximum number of doublings it can ever perform — never a live dial.
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
+    [MaxWorlds.Core.PerfSection("replicator")]
     public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a

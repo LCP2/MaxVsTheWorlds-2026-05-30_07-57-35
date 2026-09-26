@@ -34,6 +34,7 @@ namespace MaxWorlds.Weapons
     /// the trap its own class doc warns about).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class ShoulderRack : MonoBehaviour
     {
         private const float RangeMeters = 12f;

@@ -15,6 +15,7 @@ namespace MaxWorlds.Rendering
     /// bars <see cref="StormdrainKit.BuildGrate"/> built it with, ticked by ordinary <see cref="Update"/>
     /// — no Animator, per the ticket's own instruction.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("rendering")]
     public sealed class GrateShudder : MonoBehaviour
     {
         private const float Duration = 0.35f;

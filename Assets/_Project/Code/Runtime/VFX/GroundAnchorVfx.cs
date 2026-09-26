@@ -91,6 +91,7 @@ namespace MaxWorlds.VFX
     /// exactly like a stationary robot, and a moving one is repainted exactly as before.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class GroundAnchorVfx : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

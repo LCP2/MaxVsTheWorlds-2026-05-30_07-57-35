@@ -20,6 +20,7 @@ namespace MaxWorlds.Dev
     /// surface, so a photo of it is self-identifying and doesn't need Xcode/Console.app to read.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("overlay")]
     public sealed class Mv503DiagnosticOverlay : MonoBehaviour
     {
         private const string Prefix = "[MV-503]";
@@ -43,6 +44,7 @@ namespace MaxWorlds.Dev
         private string _cachedFrameRateLine;
         private string _cachedPopulationLine;
         private string _cachedFrameCostLine;
+        private string _cachedPerfTelemetryLine;
         private string _cachedFallsLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
@@ -294,6 +296,10 @@ namespace MaxWorlds.Dev
                 // on this one, the overlay Lee actually reads off TestFlight. Same 0.25s cache as every
                 // other line here (MV-933: rebuilt at most 4x/s).
                 _cachedFrameCostLine = FrameCost.FormatLine();
+                // MV-968: same cadence, same cache — the windowed engine-phase breakdown and top
+                // sections PerfTelemetry resolves, replacing the since-boot FrameCost averages this
+                // ticket's own investigation found diluted on device (see PerfTelemetry's class doc).
+                _cachedPerfTelemetryLine = PerfTelemetry.FormatOverlayLine();
                 // MV-955: same cadence, same cache -- the FALLS section, right after the frame-cost
                 // line every other debug readout already sits under.
                 _cachedFallsLine = FormatFallsLine();
@@ -307,7 +313,8 @@ namespace MaxWorlds.Dev
             string perfBlock = _cachedPerfLine == null
                 ? null
                 : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" +
-                  _cachedPopulationLine + "\n" + _cachedFrameCostLine + "\n" + _cachedFallsLine;
+                  _cachedPopulationLine + "\n" + _cachedFrameCostLine + "\n" + _cachedPerfTelemetryLine +
+                  "\n" + _cachedFallsLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 

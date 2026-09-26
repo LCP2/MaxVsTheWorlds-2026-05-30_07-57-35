@@ -31,6 +31,7 @@ namespace MaxWorlds.UI
     /// its boss(es). A run with no next world (the last world's own last victory) has no core to await,
     /// so it still falls back to <see cref="HudSignals.RunComplete"/> — see <see cref="TrySeal"/>.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class RunTracker : MonoBehaviour
     {
         /// <summary>Backstop, realtime seconds: if the final area is cleared but the payoff director

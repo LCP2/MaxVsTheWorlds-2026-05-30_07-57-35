@@ -12,6 +12,7 @@ namespace MaxWorlds.Arena
     /// and deliberately does NOT gate on <see cref="StormdrainFlood.FloodEnabled"/>: sludge damage must
     /// keep working with the flood switched off (MV-836).
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class MapSludgeDamageRunner : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

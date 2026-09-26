@@ -27,6 +27,7 @@ namespace MaxWorlds.UI
     /// everything) before its staged shots, same rationale as HomeScreen (MV-441).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class SplashScreen : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

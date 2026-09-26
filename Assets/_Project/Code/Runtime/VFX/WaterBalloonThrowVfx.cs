@@ -18,6 +18,7 @@ namespace MaxWorlds.VFX
     /// and flight time and hands both to <see cref="Fire"/>; this only answers "what does the throw
     /// look like".
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class WaterBalloonThrowVfx : MonoBehaviour
     {
         private const float BodyDiameter = 0.32f;

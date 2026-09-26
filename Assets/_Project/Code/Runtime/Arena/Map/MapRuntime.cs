@@ -77,6 +77,7 @@ namespace MaxWorlds.Arena
     /// EditMode test can read <see cref="Statics"/> straight off the built hierarchy (Rule 2: a
     /// resolved value, not an authored constant) — this project's EditMode test assembly carries no
     /// <c>InternalsVisibleTo</c> back to Gameplay.</summary>
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class MapStaticBatchRoot : MonoBehaviour
     {
         private GameObject[] _statics;

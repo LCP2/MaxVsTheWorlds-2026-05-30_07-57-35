@@ -22,6 +22,7 @@ namespace MaxWorlds.Enemies
     /// vanishes. It sputters, drops, bounces along the ground with decaying energy, then explodes —
     /// see <see cref="FlightState"/> and <see cref="TickSputtering"/>/<see cref="TickBouncing"/>.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class HomingMissile : MonoBehaviour
     {
         private const float TurnRateDegPerSec = 90f;

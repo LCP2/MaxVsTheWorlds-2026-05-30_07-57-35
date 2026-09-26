@@ -18,6 +18,7 @@ namespace MaxWorlds.Weapons
     /// is nearest, awake and inside the lock cone — never re-evaluated mid-flight, so a locked pulse
     /// commits to the shot the player actually saw fire.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class SeekerPulse : MonoBehaviour
     {
         private const float ContactRadius = 0.5f;

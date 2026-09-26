@@ -10,6 +10,7 @@ namespace MaxWorlds.VFX
     /// Seeker-reticle bracket... the reticle/muzzle-glow polish is pure cosmetic surface not covered by
     /// any AC" — this is that bracket.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class LockBracketVfx : MonoBehaviour
     {
         private const float LifetimeSeconds = 0.25f;

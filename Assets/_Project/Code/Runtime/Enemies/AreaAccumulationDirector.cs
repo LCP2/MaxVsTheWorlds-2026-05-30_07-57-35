@@ -29,6 +29,7 @@ namespace MaxWorlds.Enemies
     /// A second, independent source from the three hutches: <see cref="EnemySpawner"/> keeps producing
     /// each factory's own local stream exactly as before (spec: "otherwise unchanged").
     /// </summary>
+    [MaxWorlds.Core.PerfSection("robot")]
     public sealed class AreaAccumulationDirector : MonoBehaviour
     {
         /// <summary>Seconds between ambient releases — spaces overflow (over-the-cap) robots out as

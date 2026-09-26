@@ -40,6 +40,7 @@ namespace MaxWorlds.Weapons
         /// its own GameObject — the same shape <see cref="MaxWorlds.VFX.WaterBalloonSplashVfx"/>'s own
         /// ring animates on, just self-contained since a rocket detonation has no owning component left
         /// alive to drive it (<see cref="PlayerRocket.Detonate"/> destroys itself the same frame).</summary>
+        [MaxWorlds.Core.PerfSection("weapons")]
         private sealed class RingLifetime : MonoBehaviour
         {
             private GroundRing _ring;

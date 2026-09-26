@@ -47,6 +47,7 @@ namespace MaxWorlds.Arena
     /// CANNOT — <c>WaterBlaster.FireTick</c> already skips every <c>Team.Player</c> receiver, so
     /// nothing extra is needed to stop Max from shooting his own sentinel.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sentinel")]
     public sealed class Sentinel : MonoBehaviour, IDamageable, IHealthReadout
     {
         private static readonly List<Sentinel> _active = new List<Sentinel>(8);

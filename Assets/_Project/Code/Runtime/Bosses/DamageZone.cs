@@ -12,6 +12,7 @@ namespace MaxWorlds.Bosses
     /// Team.Enemy, so it hurts Max but not the boss or robots (friendly-fire rule). Built and
     /// destroyed in code — a flat greybox disc stands in for the effect.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class DamageZone : MonoBehaviour
     {
         private float _radius;

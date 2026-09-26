@@ -54,6 +54,7 @@ namespace MaxWorlds.Intro
     /// blind input under the cinematic never moves Max; all three are restored at handoff.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("intro")]
     public sealed class IntroCinematic : MonoBehaviour
     {
         private static bool s_consumed;

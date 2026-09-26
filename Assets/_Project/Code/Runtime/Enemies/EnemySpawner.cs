@@ -16,6 +16,7 @@ namespace MaxWorlds.Enemies
     /// whatever this spawner was attached to, which read as teleporting-in rather than as a stream
     /// pouring out of a source.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("robot")]
     public sealed class EnemySpawner : MonoBehaviour
     {
         [SerializeField] private RobotEnemy prefab;

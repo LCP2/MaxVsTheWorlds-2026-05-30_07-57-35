@@ -25,6 +25,7 @@ namespace MaxWorlds.Factories
     /// tick and takes itself out the instant it flips false — the same idiom <c>FactoryHusk</c> already
     /// uses for the same reason.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("factories")]
     public sealed class ShedFitting : MonoBehaviour, IDamageable
     {
         /// <summary>The per-type table from the ticket: range/cadence/HP, fixed and never scaled.</summary>

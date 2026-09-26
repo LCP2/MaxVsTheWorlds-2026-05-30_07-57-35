@@ -16,6 +16,7 @@ namespace MaxWorlds.VFX
     /// on the game's <see cref="HoseDirector"/> so it never installs into a shared PlayMode test scene.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class TapArtDirector : MonoBehaviour
     {
         private const string ArtName = "TapArt";

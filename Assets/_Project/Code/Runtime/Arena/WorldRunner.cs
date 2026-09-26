@@ -32,6 +32,7 @@ namespace MaxWorlds.Arena
     /// from that list: a death no longer wipes/respawns the arena's robots (see <see cref="Continue"/>'s
     /// own doc comment).
     /// </summary>
+    [MaxWorlds.Core.PerfSection("world")]
     public sealed class WorldRunner : MonoBehaviour
     {
         /// <summary>Metres behind the gate a respawn lands — clear of the doorway's own collider and

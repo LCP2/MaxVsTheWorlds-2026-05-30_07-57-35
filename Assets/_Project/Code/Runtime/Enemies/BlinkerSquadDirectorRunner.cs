@@ -7,6 +7,7 @@ namespace MaxWorlds.Enemies
     /// the same pattern as <see cref="DifficultyDirectorRunner"/>: no scene wiring, so it exists in
     /// every scene — including a bare test fixture — with zero setup, and runs headlessly in CI.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("robot")]
     public sealed class BlinkerSquadDirectorRunner : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

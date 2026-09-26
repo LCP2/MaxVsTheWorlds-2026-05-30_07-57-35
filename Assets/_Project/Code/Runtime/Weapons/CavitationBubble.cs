@@ -13,6 +13,7 @@ namespace MaxWorlds.Weapons
     /// detonation. Unlike <see cref="PlayerRocket"/> it never homes — the spec's "slow spinning bubble"
     /// travels the barrel's own facing, not toward a locked target.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class CavitationBubble : MonoBehaviour
     {
         private const float ContactRadius = 0.35f;

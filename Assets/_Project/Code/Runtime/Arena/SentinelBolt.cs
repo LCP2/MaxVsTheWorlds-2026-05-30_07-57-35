@@ -18,6 +18,7 @@ namespace MaxWorlds.Arena
     /// component's only job is cosmetic: fly from the muzzle to the point that was already hit, then
     /// vanish.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sentinel")]
     public sealed class SentinelBolt : MonoBehaviour
     {
         /// <summary>The world's existing hazard red (MV-806 spec: "the world's existing hazard red

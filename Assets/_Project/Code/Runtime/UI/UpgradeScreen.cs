@@ -24,6 +24,7 @@ namespace MaxWorlds.UI
     /// which keeps running while the world is frozen.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class UpgradeScreen : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

@@ -25,6 +25,7 @@ namespace MaxWorlds.VFX
     /// reached into unilaterally.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class BossSpectacle : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

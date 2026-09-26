@@ -74,6 +74,7 @@ namespace MaxWorlds.VFX
     /// is built once and reused, never rebuilt on respawn.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class RobotRig : MonoBehaviour
     {
         // ---------------------------------------------------------------- the palette

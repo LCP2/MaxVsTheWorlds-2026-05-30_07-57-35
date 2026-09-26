@@ -22,6 +22,7 @@ namespace MaxWorlds.VFX
     /// stream raking across 20–30 enemies costs no allocations and no spawn churn.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class WaterVfx : MonoBehaviour
     {
         /// <summary>

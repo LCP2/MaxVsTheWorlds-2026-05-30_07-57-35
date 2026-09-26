@@ -23,6 +23,7 @@ namespace MaxWorlds.VFX
     /// carries on over the wreck, and a husk you could walk into would trap robots against it.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("factories")]
     public sealed class FactoryHusk : MonoBehaviour
     {
         /// <summary>Built exactly like <see cref="FactoryLife"/>'s: inactive, bound, then switched

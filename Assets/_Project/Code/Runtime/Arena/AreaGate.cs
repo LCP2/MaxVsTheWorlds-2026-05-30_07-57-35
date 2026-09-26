@@ -23,6 +23,7 @@ namespace MaxWorlds.Arena
     /// description of one (matches <c>gateBreakSeconds</c>/<c>gateRequiresClear</c> being read here,
     /// not just stored — WV-234 landed the settings, this ticket is what spends them).
     /// </summary>
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class AreaGate : MonoBehaviour, IDamageable, IHealthReadout
     {
         // Assumed sustained primary DPS used to size gate HP from gateBreakSeconds — the primary's own

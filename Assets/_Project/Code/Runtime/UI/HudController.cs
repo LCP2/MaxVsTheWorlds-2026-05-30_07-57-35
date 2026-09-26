@@ -27,6 +27,7 @@ namespace MaxWorlds.UI
     /// progress and the boss are driven off kills through <see cref="HudModel"/> (the real
     /// economy/factory/boss systems are later tickets).
     /// </summary>
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class HudController : MonoBehaviour
     {
         /// <summary>

@@ -50,6 +50,7 @@ namespace MaxWorlds.Intro
     /// entry-role area's centre for every world, world2_config's included).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("intro")]
     public sealed class WorldTransitionCinematic : MonoBehaviour
     {
         public const string Wreck = "wreck";

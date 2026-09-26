@@ -14,6 +14,7 @@ namespace MaxWorlds.VFX
     /// <see cref="Play"/> with the landing point once the balloon lands.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class WaterBalloonSplashVfx : MonoBehaviour
     {
         [Header("Palette")]

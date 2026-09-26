@@ -30,6 +30,7 @@ namespace MaxWorlds.Enemies
     /// <see cref="Tick"/> add/remove directly instead, so the registry is correct under a synchronous
     /// EditMode test too.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class SludgePuddle : MonoBehaviour
     {
         /// <summary>The ticket's own slow amount — same value <see cref="MaxWorlds.Arena.WorldDials.sludgeSpeedMultiplier"/>

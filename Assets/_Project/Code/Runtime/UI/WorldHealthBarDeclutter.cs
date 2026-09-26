@@ -16,6 +16,7 @@ namespace MaxWorlds.UI
     /// shipped de-clutter behaviour.
     /// </summary>
     [DefaultExecutionOrder(500)]
+    [MaxWorlds.Core.PerfSection("healthbars")]
     public sealed class WorldHealthBarDeclutter : MonoBehaviour
     {
         /// <summary>XZ metres within which two showing bars count as clustered. Close to a robot's own

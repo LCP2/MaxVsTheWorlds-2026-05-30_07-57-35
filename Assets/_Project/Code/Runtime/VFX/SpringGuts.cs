@@ -61,6 +61,7 @@ namespace MaxWorlds.VFX
     /// many are on the lawn.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class SpringGuts : MonoBehaviour
     {
         // ---------------------------------------------------------------- tuning

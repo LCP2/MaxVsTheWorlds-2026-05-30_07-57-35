@@ -8,6 +8,7 @@ namespace MaxWorlds.Core
     /// Entry point for the runnable shell (YT-32 §7). Sets the frame pacing and draws the on-screen
     /// FPS readout. Attach to a single GameObject in <c>Bootstrap.unity</c>.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("bootstrap")]
     public sealed class Bootstrap : MonoBehaviour
     {
         [Tooltip("Frame rate the game requests on startup. 60 for the slice. Not applied on WebGL " +
@@ -99,6 +100,11 @@ namespace MaxWorlds.Core
 
             // MV-886: subscribed once for the process lifetime — see FrameCost's own doc comment.
             FrameCost.SubscribeRenderEvents();
+
+            // MV-968: same "install once for the process lifetime" idiom, wrapping the seven top-level
+            // PlayerLoop phases so PerfTelemetry's windowed figures are real in a release TestFlight
+            // build, not just in the Editor.
+            PerfTelemetry.InstallPlayerLoopHooks();
 
             QualitySettings.vSyncCount = 0;
 

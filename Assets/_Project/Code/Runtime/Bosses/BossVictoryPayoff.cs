@@ -30,6 +30,7 @@ namespace MaxWorlds.Bosses
     /// leaks its per-frame work into the shared PlayMode scenes that have no boss.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class BossVictoryPayoff : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

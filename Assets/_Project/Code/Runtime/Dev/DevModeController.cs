@@ -35,6 +35,7 @@ namespace MaxWorlds.Dev
     /// purely so Lee can find the number he wants before a follow-up ticket bakes it in.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("overlay")]
     public sealed class DevModeController : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

@@ -433,6 +433,7 @@ namespace MaxWorlds.Rendering
     /// phases and the same fitting rebuilt at the same position always phases identically (the
     /// ticket's own determinism rule, change 3).
     /// </summary>
+    [MaxWorlds.Core.PerfSection("rendering")]
     public sealed class LightFittingPulse : MonoBehaviour
     {
         private Renderer _renderer;

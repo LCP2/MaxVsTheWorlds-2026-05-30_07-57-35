@@ -257,6 +257,7 @@ namespace MaxWorlds.Rendering
     /// than one per strip: every strip shares <see cref="WorldMaterials.M_Circuit_Cyan"/>'s single
     /// cached instance, and <c>Update</c> mutates that shared instance, so a driver per strip would
     /// scroll it once per strip per frame instead of once for the whole spine.</summary>
+    [MaxWorlds.Core.PerfSection("rendering")]
     public sealed class ReefCircuitFlow : MonoBehaviour
     {
         private Material _material;

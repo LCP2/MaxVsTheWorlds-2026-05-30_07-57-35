@@ -24,6 +24,7 @@ namespace MaxWorlds.Enemies
     /// retargeting was aimed at) — still never a robot or a shed, whatever <see cref="IDamageable"/>
     /// happens to sit at the point of impact.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class BolterBolt : MonoBehaviour
     {
         /// <summary>Fraction of the target's own max health one bolt deals (MV-539 AC1, extended to a

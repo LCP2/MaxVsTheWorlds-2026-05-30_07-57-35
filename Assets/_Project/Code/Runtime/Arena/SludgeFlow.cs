@@ -14,6 +14,7 @@ namespace MaxWorlds.Arena
     /// each tile's flow moving without one tile's scroll fighting another's different tone.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class SludgeFlow : MonoBehaviour
     {
         /// <summary>UV units per second the tile's texture scrolls — resolved onto the component at

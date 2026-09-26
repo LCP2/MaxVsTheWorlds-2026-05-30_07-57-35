@@ -28,6 +28,7 @@ namespace MaxWorlds.VFX
     /// statue before it moves. The shards fly and settle behind the result card on realtime.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class BossDebris : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

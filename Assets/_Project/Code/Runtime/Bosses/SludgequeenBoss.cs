@@ -31,6 +31,7 @@ namespace MaxWorlds.Bosses
     /// <see cref="BossCensus"/> off the concrete <c>BigBermudaBoss</c> type to make that possible).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class SludgequeenBoss : MonoBehaviour, IDamageable
     {
         private enum Phase { Dormant, Fight, PhaseTwoTell, PhaseTwo, Dead }

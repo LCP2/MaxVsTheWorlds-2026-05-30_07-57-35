@@ -11,6 +11,7 @@ namespace MaxWorlds.Combat
     /// Delete once the YT-36 enemy is the damage receiver.
     /// </summary>
     [RequireComponent(typeof(Renderer))]
+    [MaxWorlds.Core.PerfSection("combat")]
     public sealed class DamageableDummy : MonoBehaviour, IDamageable
     {
         [SerializeField] private float maxHealth = 40f;

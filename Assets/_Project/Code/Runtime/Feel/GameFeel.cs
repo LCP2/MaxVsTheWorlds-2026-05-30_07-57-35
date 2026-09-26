@@ -20,6 +20,7 @@ namespace MaxWorlds.Feel
     /// * trauma is clamped, so a crowd wipe can't peg the shake.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("feel")]
     public sealed class GameFeel : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
