@@ -199,13 +199,6 @@ namespace MaxWorlds.VFX
         private float[] _wheelRadius;
         private Vector3 _lastPos;
 
-        /// <summary>Any one renderer under <see cref="_model"/> (MV-963) — used only to ask Unity's own,
-        /// already-computed <see cref="Renderer.isVisible"/> ("was this drawn by any camera last
-        /// frame") for the dormant-and-offscreen early-out in <see cref="LateUpdate"/>. Not the eye or
-        /// body specifically; any part of the model culling means the whole model is culling, since they
-        /// all move and cull together.</summary>
-        private Renderer _visibilityProbe;
-
         /// <summary>The eye colour actually written to the GPU last (MV-963) — <see cref="ApplyEyes"/>
         /// skips the Get/SetPropertyBlock round trip per eye when the colour hasn't moved since, which
         /// is most robots most frames once the Lerp toward a steady idle/warn target has settled.</summary>
@@ -469,8 +462,7 @@ namespace MaxWorlds.VFX
             // MV-969: fold everything RobotBodies just built that ISN'T independently animated (an eye,
             // a wheel, the Reef Puffer Mine's inflatable core) into one combined renderer — must run
             // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
-            // exclusion set, and BEFORE _visibilityProbe is picked below, or that probe could land on
-            // one of the parts this is about to destroy.
+            // exclusion set.
             _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable);
             if (_combinedRenderer != null)
             {
@@ -482,10 +474,6 @@ namespace MaxWorlds.VFX
                     break;
                 }
             }
-
-            _visibilityProbe = _combinedRenderer != null
-                ? _combinedRenderer
-                : _model.GetComponentInChildren<Renderer>();
         }
 
         /// <summary>MV-969: <see cref="RobotBodies"/> authors a wheel as TWO OR THREE separate parts
@@ -703,21 +691,23 @@ namespace MaxWorlds.VFX
         /// LateUpdate, so the tell is read AFTER the enemy's state machine has ticked in Update — a
         /// wind-up that started this frame is already on the eye this frame, not next.
         /// </summary>
+        /// <summary>How many times this rig's <see cref="LateUpdate"/> has actually run its body, past
+        /// the early-out below — test-only diagnostic (MV-980), same "cache MISS, not a claim" idiom as
+        /// <see cref="MaxWorlds.VFX.GroundAnchorVfx.AnchorRecomputeCount"/>.</summary>
+        public int LateUpdateBodyRunCount { get; private set; }
+
         private void LateUpdate()
         {
             if (!_built || _enemy == null) return;
 
-            // MV-963: a Dormant robot with nothing of its model on screen right now can't be seen
-            // animating either — the same "nothing here can ever be observed" reasoning
-            // RobotEnemy.IsWellBehindPlayer's own doc comment gives for skipping its frustum test, aimed
-            // at the visual side instead: the wheel spin, the strike lurch, the eye lerp and the chassis
-            // heat write all ran unconditionally for a population that runs into the hundreds by World
-            // 2's midgame, the large majority of it Dormant and off camera. Renderer.isVisible is Unity's
-            // own last-frame culling result — free to read, nothing here recomputes a frustum. A model
-            // with no renderer at all (should never happen past BuildModel) never skips, so a missing
-            // probe can only cost the saving, never a stuck pose.
-            if (_enemy.IsDormant && _visibilityProbe != null && !_visibilityProbe.isVisible) return;
+            // MV-980: a Dormant robot is motionless the whole time it's asleep (its CharacterController
+            // is disabled, see RobotEnemy.BeginDormant) — nothing here has moved since last frame, so
+            // there is nothing to animate, on screen or off. Supersedes MV-963's own narrower
+            // "Dormant AND not currently visible" early-out (Renderer.isVisible is now irrelevant: this
+            // is unconditional for Dormant).
+            if (_enemy.IsDormant) return;
 
+            LateUpdateBodyRunCount++;
             RideTheRamp();
             SpinWheels();
             UpdateBeamVfx();

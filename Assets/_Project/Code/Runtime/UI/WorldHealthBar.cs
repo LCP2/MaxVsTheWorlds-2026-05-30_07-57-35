@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.UI
 {
@@ -484,6 +485,9 @@ namespace MaxWorlds.UI
         private void LateUpdate()
         {
             if (_pivot == null || _source == null) return;
+            // MV-980: a sleeping garrison robot is motionless and untouched — nothing here to resync or
+            // refresh until it wakes (RobotEnemy.Activate/TakeDamage are the only ways out of Dormant).
+            if (_source is RobotEnemy robot && robot.IsDormant) return;
             SyncToBody();
             Refresh();
         }
