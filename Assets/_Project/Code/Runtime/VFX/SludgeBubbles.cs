@@ -33,6 +33,20 @@ namespace MaxWorlds.VFX
         private float[] _baseY;
         private float _time;
 
+        /// <summary>MV-978: the first bubble's own renderer — already zone-tagged by
+        /// <c>MapStaticBatchRoot.TagStatic</c>/<c>TagRendererSimple</c> (a bubble is built as a child of
+        /// the sludge tile <see cref="Attach"/> parents it under, and that whole subtree gets walked and
+        /// tagged the same as everything else), so its <see cref="Renderer.enabled"/> is already the MV-972
+        /// gate's own live verdict for this exact emitter's own zone — the same rule, the same evaluation,
+        /// at zero extra bookkeeping. Null (never gates) for an emitter attached after that one-time tagging
+        /// pass already ran — a runtime hazard puddle's own bubbles (<c>CorrosionPuddle</c>/<c>SludgePuddle</c>),
+        /// too few and short-lived to be worth a live zone lookup of their own.</summary>
+        private Renderer _gateRenderer;
+
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Tick"/> has
+        /// actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int TickCallCount { get; private set; }
+
         /// <summary>
         /// Builds and parents a fresh bubble emitter. <paramref name="halfExtents"/> is the (x, z) half
         /// footprint bubbles may scatter within, scaled down so every bubble stays comfortably inside
@@ -84,6 +98,8 @@ namespace MaxWorlds.VFX
                 _bodies[i] = body.transform;
                 _phase[i] = Hash01(seed, i * 2 + 97) * LoopDuration;
                 _baseY[i] = baseHeight;
+
+                if (_gateRenderer == null) _gateRenderer = rend;
             }
         }
 
@@ -95,6 +111,12 @@ namespace MaxWorlds.VFX
         /// conformance harness, not EditMode).</summary>
         public void Tick(float dt)
         {
+            // MV-978: skip the whole per-frame body while the MV-972 gate has already turned this
+            // emitter's own renderer off — a bubble rising under a floor nobody can see costs the same
+            // Transform write as one Max is standing next to.
+            if (_gateRenderer != null && !_gateRenderer.enabled) return;
+
+            TickCallCount++;
             _time += dt;
             for (int i = 0; i < _bodies.Length; i++)
             {

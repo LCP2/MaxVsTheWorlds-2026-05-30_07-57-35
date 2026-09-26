@@ -77,6 +77,38 @@ namespace MaxWorlds.UI
         private const int PlayerSortingOrder = 10;
         private const int EnemySortingOrder = 0;
 
+        /// <summary>MV-978: one Canvas GameObject per bar KIND (player vs. enemy — sortingOrder lives on
+        /// the Canvas component, not the RectTransform, so the two must stay on separate canvases to keep
+        /// MV-747's "Max always draws on top" rule), shared by every <see cref="WorldHealthBar"/> of that
+        /// kind instead of each bar spinning up its own. World 2 measured ~30 enemy bars, each its own
+        /// Canvas — its own UI batch root, ~3-5 draws apiece regardless of how little of the plate is
+        /// actually visible. Lazily built and cached; the null-check (Unity's own <c>==</c> override
+        /// treats a destroyed object as null) is what makes this safe across an EditMode test's own scene
+        /// teardown between runs, with no explicit ResetForTests needed.</summary>
+        private static Canvas _sharedPlayerCanvas;
+        private static Canvas _sharedEnemyCanvas;
+
+        private static Canvas SharedCanvas(bool isPlayerBar)
+        {
+            if (isPlayerBar)
+            {
+                if (_sharedPlayerCanvas == null) _sharedPlayerCanvas = BuildSharedCanvas(PlayerSortingOrder, "HealthBarCanvas (Player)");
+                return _sharedPlayerCanvas;
+            }
+            if (_sharedEnemyCanvas == null) _sharedEnemyCanvas = BuildSharedCanvas(EnemySortingOrder, "HealthBarCanvas (Enemy)");
+            return _sharedEnemyCanvas;
+        }
+
+        private static Canvas BuildSharedCanvas(int sortingOrder, string name)
+        {
+            var go = new GameObject(name, typeof(Canvas));
+            var canvas = go.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = sortingOrder;
+            return canvas;
+        }
+
         // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
         private const float SecondaryHeightFraction = 0.62f;
 
@@ -195,8 +227,10 @@ namespace MaxWorlds.UI
         public void SetHeightAboveCentre(float heightAboveCentre) => _heightAboveCentre = heightAboveCentre;
 
         /// <summary>Is the bar currently on screen? Exposed so a test can assert the fade rule
-        /// without reading pixels.</summary>
-        public bool Showing => _pivot != null && _pivot.gameObject.activeSelf;
+        /// without reading pixels. MV-978: reads the bar's own RectTransform now that it is no longer a
+        /// child of <see cref="_pivot"/> (see <see cref="SharedCanvas"/>) — <see cref="_pivot"/> itself is
+        /// left always-active as a pure position reference.</summary>
+        public bool Showing => _canvas != null && _canvas.gameObject.activeSelf;
 
         /// <summary>MV-788: the whole plate's current opacity (0..1) — 1 while held/always-shown, then
         /// ramping to 0 over <see cref="TriggerFadeSeconds"/> once <see cref="TriggerHoldSeconds"/> has
@@ -208,6 +242,11 @@ namespace MaxWorlds.UI
         /// higher than any enemy's. Exposed so a test can assert the ORDERING directly rather than
         /// re-deriving it from on-screen geometry, per the acceptance criterion's own wording.</summary>
         public int SortingOrder => _canvasComponent != null ? _canvasComponent.sortingOrder : 0;
+
+        /// <summary>MV-978: this bar's own RectTransform — no longer a child of the unit it floats over
+        /// (see <see cref="SharedCanvas"/>'s own doc for why), so a test that used to walk the unit's own
+        /// hierarchy for it (<c>GetComponentInChildren&lt;Canvas&gt;</c>) reaches it through here instead.</summary>
+        public RectTransform BarRectTransform => _canvas;
 
         /// <summary>
         /// Hang a bar over <paramref name="owner"/>.
@@ -256,7 +295,7 @@ namespace MaxWorlds.UI
         public void SetForceHidden(bool hidden)
         {
             _forceHidden = hidden;
-            if (hidden && _pivot != null) _pivot.gameObject.SetActive(false);
+            if (hidden && _canvas != null) _canvas.gameObject.SetActive(false);
         }
 
         /// <summary>Hide the bar strip but keep the name label (MV-571). A condition-locked gate has
@@ -305,14 +344,18 @@ namespace MaxWorlds.UI
             _pivot = pivotGo.transform;
             _pivot.SetParent(_scaleAnchor, false);
 
-            var canvasGo = new GameObject("Canvas", typeof(Canvas));
-            var canvas = canvasGo.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = _isPlayerBar ? PlayerSortingOrder : EnemySortingOrder;
+            // MV-978: parented under the ONE shared world-space canvas for this bar's kind (player vs.
+            // enemy — see SharedCanvas), not a fresh Canvas GameObject per bar. sortingOrder lives on the
+            // CANVAS component, so Max's higher order and every enemy's shared lower one still apply
+            // exactly as before; only their per-instance RectTransform hierarchy (built below, same as
+            // ever) is what makes each bar its own plate. _pivot stays a child of the unit purely as a
+            // world-position/scale reference (SyncToBody, Refresh's camera-facing block below) — see
+            // SharedCanvas's own doc for why the rendered plate itself can no longer live there.
+            Canvas canvas = SharedCanvas(_isPlayerBar);
             _canvasComponent = canvas;
+            var canvasGo = new GameObject("Bar", typeof(RectTransform));
+            canvasGo.transform.SetParent(canvas.transform, false);
             _canvas = (RectTransform)canvasGo.transform;
-            _canvas.SetParent(_pivot, false);
             _canvas.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
 
             // MV-788: one CanvasGroup over the whole plate (bar + label + number + water gauge) so the
@@ -403,6 +446,14 @@ namespace MaxWorlds.UI
             // part that keeps this shear-free; see the comment in Build()).
             _pivot.localPosition = new Vector3(0f, _heightAboveCentre + _clutterLift, 0f);
             _canvas.localScale = Vector3.one * WorldBar.CanvasScaleFor(_worldWidth, BarPixelWidth);
+
+            // MV-978: the camera-less base placement — _canvas is no longer a child of _pivot (see
+            // SharedCanvas's own doc), so it no longer inherits _pivot's position/rotation for free the
+            // way it used to. Set unconditionally, every call, exactly where _pivot itself now sits;
+            // Refresh()'s own camera-facing block overrides both with the billboarded result whenever a
+            // camera is actually available, same as this used to only ever need a camera for the EXTRA
+            // screen-lift/facing on top of an already-correct base position.
+            _canvas.SetPositionAndRotation(_pivot.position, _pivot.rotation);
         }
 
         private void OnEnable() => _active.Add(this);
@@ -411,6 +462,23 @@ namespace MaxWorlds.UI
         {
             _active.Remove(this);
             _clutterLift = 0f;   // a pooled robot must not come back already lifted from its last cluster
+
+            // MV-978: the bar's own RectTransform is no longer a child of this unit (see SharedCanvas),
+            // so deactivating a pooled robot no longer cascades to hide its bar for free the way it used
+            // to when the whole plate was a descendant — hide it explicitly here instead. Refresh()
+            // (which runs again once the robot is reactivated) decides when it comes back, same as ever.
+            if (_canvas != null) _canvas.gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-978: the bar's own RectTransform lives under a canvas shared with every other bar
+        /// of this kind (see <see cref="SharedCanvas"/>), not as a descendant of this unit any more, so it
+        /// is no longer destroyed automatically the way a child object would be if this unit itself is
+        /// ever actually destroyed (rather than pooled/deactivated) — explicit here instead.</summary>
+        private void OnDestroy()
+        {
+            if (_canvas == null) return;
+            if (Application.isPlaying) Destroy(_canvas.gameObject);
+            else DestroyImmediate(_canvas.gameObject);
         }
 
         private void LateUpdate()
@@ -651,14 +719,14 @@ namespace MaxWorlds.UI
                     // Diffed (MV-963): most non-leaders were ALREADY hidden by last resolve and stay
                     // hidden — only a bar whose group/cap standing just changed this frame is an actual
                     // state transition (and Canvas rebuild) rather than a same-value no-op call.
-                    if (bar._pivot.gameObject.activeSelf) bar._pivot.gameObject.SetActive(false);
+                    if (bar._canvas.gameObject.activeSelf) bar._canvas.gameObject.SetActive(false);
                     continue;
                 }
 
                 // MV-963: the activation Refresh() deliberately deferred for every groupable candidate —
                 // this is the one place a groupable bar's pivot is ever turned ON, decided once the
                 // leader/cap question is actually settled.
-                if (!bar._pivot.gameObject.activeSelf) bar._pivot.gameObject.SetActive(true);
+                if (!bar._canvas.gameObject.activeSelf) bar._canvas.gameObject.SetActive(true);
                 bar.ApplyGroupDisplay(info.Count, info.HealthCurrentSum, info.NormalizedSum / info.Count);
             }
         }
@@ -751,11 +819,11 @@ namespace MaxWorlds.UI
             // single frame.
             if (!show)
             {
-                if (_pivot.gameObject.activeSelf) _pivot.gameObject.SetActive(false);
+                if (_canvas.gameObject.activeSelf) _canvas.gameObject.SetActive(false);
             }
-            else if (!_groupable && !_pivot.gameObject.activeSelf)
+            else if (!_groupable && !_canvas.gameObject.activeSelf)
             {
-                _pivot.gameObject.SetActive(true);
+                _canvas.gameObject.SetActive(true);
             }
 
             // Re-read every frame, diffed like the HP figure below (MV-312). A pooled robot's Kind is
@@ -805,12 +873,18 @@ namespace MaxWorlds.UI
             if (_camera != null)
             {
                 // Lift the bar up the SCREEN, not just up the world (YT-149). SyncToBody has already
-                // re-set the pivot to its world-up anchor this frame, so this rides on top of it and
-                // cannot accumulate. See ScreenClearance for why the camera's up axis rather than
+                // re-set _pivot to its world-up anchor this frame, so this reads a fresh value every time
+                // and cannot accumulate. See ScreenClearance for why the camera's up axis rather than
                 // world up — it is what keeps his head out from under the bar when he runs up-screen.
-                _pivot.position += _camera.transform.up * ScreenClearance;
-                _pivot.rotation = Quaternion.LookRotation(
-                    _pivot.position - _camera.transform.position, Vector3.up);
+                //
+                // MV-978: applied to _canvas directly (world-space position/rotation), not to _pivot the
+                // way this used to rely on parent-child inheritance for — _canvas no longer has _pivot as
+                // an ancestor (see SharedCanvas's own doc), so this bar's own screen-facing plate has to
+                // be placed explicitly instead of riding along for free.
+                Vector3 facePosition = _pivot.position + _camera.transform.up * ScreenClearance;
+                _canvas.position = facePosition;
+                _canvas.rotation = Quaternion.LookRotation(
+                    facePosition - _camera.transform.position, Vector3.up);
             }
         }
 

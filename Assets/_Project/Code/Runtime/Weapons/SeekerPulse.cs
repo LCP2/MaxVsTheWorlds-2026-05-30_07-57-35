@@ -438,10 +438,13 @@ namespace MaxWorlds.Weapons
             Material coreMat = VfxMaterials.AdditiveTinted(CoreColor);
             Mesh coreMesh = GetCoreMesh(tuning);
 
-            // Item 2: "drawn twice for intensity" -- two renderers sharing the SAME cached mesh, not a
-            // second Mesh instance, so this never trips AC1(e)'s no-new-mesh-after-first check.
+            // MV-978: was drawn twice ("Bolt" + "BoltGlow", item 2's own "drawn twice for intensity") --
+            // an identical mesh, an identical additive material, submitted as two separate draw calls for
+            // every one of these fired at once. A single additive draw already reads as a bright core at
+            // the play camera's own distance; the second pass bought little the readability rule (craft
+            // bible: readability > richness) needed. "Bolt" itself, and every existing test that reaches
+            // for it by name (MV770/MV805/MV810/MV825), is unchanged.
             BuildBoltPart(parent, "Bolt", coreMesh, coreMat);
-            BuildBoltPart(parent, "BoltGlow", coreMesh, coreMat);
 
             // Item 3: the sheath's own material is plain white+additive, not AdditiveTinted -- its
             // colour and alpha (including item 6's flicker) come entirely from a MaterialPropertyBlock

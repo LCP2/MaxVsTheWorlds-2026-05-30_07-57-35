@@ -25,15 +25,25 @@ namespace MaxWorlds.Rendering
         private float[] _barBaseY;
         private float _timer = -1f; // negative: not running
 
+        /// <summary>MV-978: the first bar's own renderer — already zone-tagged the same "walk the whole
+        /// Stormdrain Dressing subtree" pass every other fitting in this file's own kind gets, so its
+        /// <see cref="Renderer.enabled"/> is already the MV-972 gate's live verdict for this grate's zone.</summary>
+        private Renderer _gateRenderer;
+
         /// <summary>Whether a shudder is currently mid-flight — read-only, for a caller (or a test) that
         /// needs to know without reaching into the timer itself.</summary>
         public bool IsShuddering => _timer >= 0f;
+
+        /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Update"/>
+        /// has actually run its per-frame body (not counting an early-out while gated invisible).</summary>
+        public int UpdateCallCount { get; private set; }
 
         public void Configure(Transform[] bars)
         {
             _bars = bars;
             _barBaseY = new float[bars.Length];
             for (int i = 0; i < bars.Length; i++) _barBaseY[i] = bars[i].localPosition.y;
+            if (bars.Length > 0) _gateRenderer = bars[0].GetComponent<Renderer>();
         }
 
         /// <summary>Starts (or restarts) the shudder — called once per RATTLE.</summary>
@@ -42,7 +52,9 @@ namespace MaxWorlds.Rendering
         private void Update()
         {
             if (_timer < 0f) return;
+            if (_gateRenderer != null && !_gateRenderer.enabled) return;
 
+            UpdateCallCount++;
             _timer += Time.deltaTime;
             Apply(_timer / Duration);
             if (_timer >= Duration) _timer = -1f;
