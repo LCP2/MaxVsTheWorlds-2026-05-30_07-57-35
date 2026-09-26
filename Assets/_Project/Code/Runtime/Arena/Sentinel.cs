@@ -622,7 +622,12 @@ namespace MaxWorlds.Arena
             // MV-946: below the floor or outside the world bounds for more than the grace window ->
             // back to solid ground. No damage, no death -- this is recovery, not a hazard.
             Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _controller.isGrounded, dt);
-            if (recoverTo.HasValue) Recover(recoverTo.Value);
+            if (recoverTo.HasValue)
+            {
+                // MV-955: evidence for a live fall that could never be reproduced in EditMode.
+                FallEventLog.Record("sentinel", EnemyNavigation.Map, _fallRecovery.FirstOutOfPlayPosition, recoverTo.Value, dt);
+                Recover(recoverTo.Value);
+            }
 
             // MV-580: the walk cycle. Driven off the sentinel's OWN world position, after the movement
             // above has already updated it this frame — so a mover that just stepped shows legs that

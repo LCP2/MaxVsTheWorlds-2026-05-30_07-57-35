@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 
@@ -41,6 +42,7 @@ namespace MaxWorlds.Dev
         private string _cachedFrameRateLine;
         private string _cachedPopulationLine;
         private string _cachedFrameCostLine;
+        private string _cachedFallsLine;
         private float _perfBuiltAt = float.NegativeInfinity;
 
         public IReadOnlyList<string> Lines => _lines;
@@ -208,6 +210,20 @@ namespace MaxWorlds.Dev
                 ? $"thermal {s.ThermalStateName} lowPower={s.IsLowPowerModeEnabled}"
                 : "thermal n/a");
 
+        /// <summary>MV-955: the FALLS section — every <see cref="FallEventLog"/> entry recorded since
+        /// the process started, oldest first. Same 0.25s cache cadence as every other line here; a fall
+        /// itself is rare, so rebuilding this only costs anything on the same glance-rate schedule the
+        /// perf lines already pay.</summary>
+        private static string FormatFallsLine()
+        {
+            if (FallEventLog.Events.Count == 0) return "[MV-955] FALLS: none recorded";
+
+            var sb = new System.Text.StringBuilder("[MV-955] FALLS:");
+            foreach (FallEventRecord e in FallEventLog.Events)
+                sb.Append("\n  ").Append(FallEventLog.FormatLine(e));
+            return sb.ToString();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -272,6 +288,9 @@ namespace MaxWorlds.Dev
                 // on this one, the overlay Lee actually reads off TestFlight. Same 0.25s cache as every
                 // other line here (MV-933: rebuilt at most 4x/s).
                 _cachedFrameCostLine = FrameCost.FormatLine();
+                // MV-955: same cadence, same cache -- the FALLS section, right after the frame-cost
+                // line every other debug readout already sits under.
+                _cachedFallsLine = FormatFallsLine();
                 _perfBuiltAt = now;
             }
 
@@ -282,7 +301,7 @@ namespace MaxWorlds.Dev
             string perfBlock = _cachedPerfLine == null
                 ? null
                 : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" +
-                  _cachedPopulationLine + "\n" + _cachedFrameCostLine;
+                  _cachedPopulationLine + "\n" + _cachedFrameCostLine + "\n" + _cachedFallsLine;
             return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
         }
 
