@@ -70,7 +70,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         private WorldHealthBar Bar => _go.GetComponent<WorldHealthBar>();
-        private RectTransform Canvas => (RectTransform)_go.GetComponentInChildren<Canvas>(true).transform;
+        // MV-978: the bar's own RectTransform no longer lives under _go (see WorldHealthBar.SharedCanvas's
+        // own doc) — reached through the component's own public accessor instead of walking the hierarchy.
+        private RectTransform Canvas => _go.GetComponent<WorldHealthBar>().BarRectTransform;
+
+        /// <summary>MV-978: every helper below that used to walk <paramref name="go"/>'s own hierarchy for
+        /// the bar's Images/Texts now walks its own RectTransform instead — see <see cref="Canvas"/>'s own
+        /// comment for why.</summary>
+        private static Transform BarRoot(GameObject go)
+        {
+            var bar = go.GetComponent<WorldHealthBar>();
+            return bar != null && bar.BarRectTransform != null ? bar.BarRectTransform : go.transform;
+        }
 
         /// <summary>A Max-like unit: a life bar with a water gauge stacked above (YT-121).</summary>
         private FakeUnit NewUnitWithWater(System.Func<float> water)
@@ -362,7 +373,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private static UnityEngine.UI.Image FindImageOn(GameObject go, string name)
         {
-            foreach (UnityEngine.UI.Image i in go.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            foreach (UnityEngine.UI.Image i in BarRoot(go).GetComponentsInChildren<UnityEngine.UI.Image>(true))
                 if (i.name == name) return i;
             Assert.Fail($"no '{name}' image on {go.name}'s bar");
             return null;
@@ -381,7 +392,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(fill.fillAmount, Is.EqualTo(0.25f).Within(0.01f));
 
             bool printed = false;
-            foreach (UnityEngine.UI.Text t in _go.GetComponentsInChildren<UnityEngine.UI.Text>(true))
+            foreach (UnityEngine.UI.Text t in BarRoot(_go).GetComponentsInChildren<UnityEngine.UI.Text>(true))
                 if (t.text == "25") printed = true;
 
             Assert.That(printed, Is.True, "the bar shows no numeric HP — the ticket asks for the figure");
@@ -393,7 +404,7 @@ namespace MaxWorlds.Tests.EditMode
             NewUnit(Vector3.one).Hp = 50f;
 
             bool named = false;
-            foreach (UnityEngine.UI.Text t in _go.GetComponentsInChildren<UnityEngine.UI.Text>(true))
+            foreach (UnityEngine.UI.Text t in BarRoot(_go).GetComponentsInChildren<UnityEngine.UI.Text>(true))
                 if (t.text == "TEST UNIT") named = true;
 
             Assert.That(named, Is.True, "the bar does not say what it is sitting on");
@@ -481,7 +492,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private UnityEngine.UI.Image FindImage(string name)
         {
-            foreach (UnityEngine.UI.Image i in _go.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            foreach (UnityEngine.UI.Image i in BarRoot(_go).GetComponentsInChildren<UnityEngine.UI.Image>(true))
                 if (i.name == name) return i;
             Assert.Fail($"no '{name}' image on the bar");
             return null;

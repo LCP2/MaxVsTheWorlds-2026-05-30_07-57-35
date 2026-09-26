@@ -154,6 +154,12 @@ namespace MaxWorlds.Arena
         /// inside a zone that is already active. Never consulted for a gameplay decision.</summary>
         public int ApplyAreaGateCallCount { get; private set; }
 
+        /// <summary>MV-978 diagnostic: how many times <see cref="RecordRendererCensus"/> has actually run
+        /// — read by a test to prove a zone change no longer triggers the ~30k-renderer
+        /// <c>GetComponentsInChildren</c> walk that used to re-run on every <see cref="ApplyAreaGate"/>
+        /// call (see that method's own doc). Never consulted for a gameplay decision.</summary>
+        public int RendererCensusRunCount { get; private set; }
+
         /// <summary>Every GameObject <c>MapRuntime.Build</c> classified as never moving (MV-882's own
         /// list; MV-934's <see cref="CombineZoneGeometry"/> is what actually folds these into combined
         /// meshes now, but this stays the declared classification an EditMode test asserts against).</summary>
@@ -213,6 +219,20 @@ namespace MaxWorlds.Arena
                 if (!zones.Contains(zone.id)) zones.Add(zone.id);
                 r.enabled = visible;
             }
+        }
+
+        /// <summary>MV-978: <see cref="RegisterGatedActor"/> for an actor that spawns at runtime with no
+        /// home zone id of its own to hand in — a <c>CorrosionPuddle</c> dropped wherever a Pipe Turret's
+        /// shot lands. Resolves <paramref name="worldPos"/>'s own zone the same one-time way
+        /// <see cref="RegisterAtPosition"/> already does for a renderer spawned the same way, then
+        /// defers to the ordinary actor registration for the visibility verdict and the 22 m chase
+        /// override.</summary>
+        public void RegisterGatedActorAtPosition(IZoneGatedActor actor, Vector3 worldPos)
+        {
+            if (actor == null || _map == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+            RegisterGatedActor(actor, zone.id);
         }
 
         /// <summary>MV-972: a renderer some OTHER system just permanently hid, independent of
@@ -282,10 +302,44 @@ namespace MaxWorlds.Arena
             int startArea = _areaDirector != null ? _areaDirector.PhysicalArea : 1;
             ApplyAreaGate($"area{startArea}", ResolveMaxPosition());
 
+            // MV-978: every Replicator this map built already carries its own AreaIndex (stamped by
+            // WorldRunner) — register each with the gate here so Update/LateUpdate stop running for one
+            // sitting outside the active set, regardless of whether WorldRunner's own stamp happened
+            // before or after this Start (Unity gives no ordering guarantee between two different
+            // components' Start calls, only "every Awake before any Start" — see this class's own doc).
+            if (_map != null)
+            {
+                Transform replicatorRoot = transform.parent != null ? transform.parent : transform;
+                foreach (Replicator replicator in replicatorRoot.GetComponentsInChildren<Replicator>(true))
+                    if (replicator.AreaIndex > 0)
+                        RegisterGatedActor(replicator, $"area{replicator.AreaIndex}");
+            }
+
+            // MV-978: the renderer population census is a Development-build diagnostic readout only
+            // (Mv503DiagnosticOverlay's "?" perf block) — walking ~30k renderers via GetComponentsInChildren
+            // used to re-run on every ApplyAreaGate call (every zone change, and the throttled 4x/sec
+            // dynamic-gate tick), a main-thread spike this ticket measured on every zone change. Recorded
+            // once here, at world build; RefreshRendererCensusIfDevelopment (called only from the overlay's
+            // own throttled, visibility-gated refresh, never from ApplyAreaGate) is the only other trigger.
+            RecordRendererCensus();
+
             // Re-evaluate on area change only (AC4) — never per frame. This is the exact signal
             // Replicator.OnAreaEntered already consumes for the same reason (see the ticket).
             if (_areaDirector != null)
                 _areaDirector.PlayerCrossedIntoArea += OnPlayerCrossedIntoArea;
+        }
+
+        /// <summary>MV-978: the renderer census's only live-refresh path outside world build — called by
+        /// <see cref="MaxWorlds.Dev.Mv503DiagnosticOverlay"/> from its own 0.25s-throttled perf-line
+        /// rebuild, itself only reached while the overlay is actually open. Guarded to Development
+        /// builds/the Editor (never TestFlight's release config) on top of that, matching the ticket's
+        /// own "only in Development builds or when the '?' overlay is open thereafter" rule — a stray
+        /// call from anywhere else costs nothing worse than one redundant walk, but must never become a
+        /// second path back into the per-frame hot loop.</summary>
+        public void RefreshRendererCensusIfDevelopment()
+        {
+            if (!Application.isEditor && !Debug.isDebugBuild) return;
+            RecordRendererCensus();
         }
 
         private void OnDestroy()
@@ -501,13 +555,13 @@ namespace MaxWorlds.Arena
                 }
             }
 
-            // MV-925 item 4: re-recorded on every call (not just once in Start), and item 2's own
-            // self-heal check (Update, above) reads _activeZoneIds every frame — both need this call's
-            // own result, not whatever the last call computed. Reference-equal to _activeScratch
+            // MV-925 item 4 (superseded by MV-978): used to re-record the census on every call — see
+            // RecordRendererCensus's own doc for why that walk moved off this hot path. Item 2's own
+            // self-heal check (Update, above) still reads _activeZoneIds every frame — it needs this
+            // call's own result, not whatever the last call computed. Reference-equal to _activeScratch
             // (MV-972: reused, not reallocated) — always fully repopulated above before either is read.
             _currentGateZoneId = currentZoneId;
             _activeZoneIds = _activeScratch;
-            RecordRendererCensus();
         }
 
         /// <summary>MV-932: generalises the area-gate registration that used to run for World 2's
@@ -803,7 +857,7 @@ namespace MaxWorlds.Arena
                 // by — WorldMaterials.Apply / RuntimeSurfaceDirector.Sweep must leave it alone the same
                 // way they leave any other KeepsOwnMaterial renderer alone, or this repaints grey.
                 go.AddComponent<KeepsOwnMaterial>();
-                if (isSludge) go.AddComponent<SludgeFlow>().Configure(entry.Key.material, sludgeScrollSpeed);
+                if (isSludge) go.AddComponent<SludgeFlow>().Configure(mr, entry.Key.material, sludgeScrollSpeed);
 
                 _rendererZones[mr] = new List<string>(1) { entry.Key.zoneId };
             }
@@ -927,6 +981,7 @@ namespace MaxWorlds.Arena
         /// ones that happen to already sit under this map's own parent.</summary>
         private void RecordRendererCensus()
         {
+            RendererCensusRunCount++;
             Transform areaRoot = transform.parent != null ? transform.parent : transform;
 
             Transform sludgeHost = null;
@@ -1478,7 +1533,7 @@ namespace MaxWorlds.Arena
             Color tone = SludgeToneAt(map, e.CenterXz);
             Material material = MaterialLibrary.Tinted(SurfaceKind.Prop, tone);
             Tint(body, material);
-            body.AddComponent<SludgeFlow>().Configure(material, SludgeScrollSpeed);
+            body.AddComponent<SludgeFlow>().Configure(body.GetComponent<Renderer>(), material, SludgeScrollSpeed);
 
             int seed = Mathf.RoundToInt(e.x * 977f + e.z * 733f);
             int bubbleCount = Mathf.Max(1, Mathf.RoundToInt((e.width * e.depth) / SludgeBubbleDensityArea));

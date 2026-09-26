@@ -77,9 +77,13 @@ namespace MaxWorlds.Tests.EditMode
             m.Invoke(gate, null);
         }
 
+        // MV-978: the bar's own visuals no longer live under `go` (see WorldHealthBar.SharedCanvas's own
+        // doc) — walk its own RectTransform instead of the unit's hierarchy.
         private static Image FindImageOn(GameObject go, string name)
         {
-            foreach (Image i in go.GetComponentsInChildren<Image>(true))
+            var bar = go.GetComponent<WorldHealthBar>();
+            Transform root = bar != null && bar.BarRectTransform != null ? bar.BarRectTransform : go.transform;
+            foreach (Image i in root.GetComponentsInChildren<Image>(true))
                 if (i.name == name) return i;
             Assert.Fail($"no '{name}' image on {go.name}'s bar");
             return null;

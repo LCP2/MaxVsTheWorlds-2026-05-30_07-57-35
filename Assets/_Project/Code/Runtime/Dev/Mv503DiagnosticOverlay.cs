@@ -312,6 +312,11 @@ namespace MaxWorlds.Dev
                 // used to exist only behind Bootstrap's own F1/top-strip "Full" overlay — never visible
                 // on this one, the overlay Lee actually reads off TestFlight. Same 0.25s cache as every
                 // other line here (MV-933: rebuilt at most 4x/s).
+                // MV-978: the renderer population census (mapGeometry/replicators/robots/sludge counts
+                // FrameCost.FormatLine below reads) no longer refreshes on every area-gate call — it's a
+                // ~30k-renderer walk, and this is its only other trigger, throttled and visibility-gated
+                // exactly like every other line on this same cache tick.
+                MapStaticBatchRoot.Active?.RefreshRendererCensusIfDevelopment();
                 _cachedFrameCostLine = FrameCost.FormatLine();
                 // MV-968: same cadence, same cache — the windowed engine-phase breakdown and top
                 // sections PerfTelemetry resolves, replacing the since-boot FrameCost averages this
