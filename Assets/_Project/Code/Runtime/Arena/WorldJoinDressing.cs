@@ -380,5 +380,292 @@ namespace MaxWorlds.Arena
             var rend = spill.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = PortalSpillMaterial();
         }
+
+        // ================================================================== World 2 -> World 3 (MV-967)
+        //
+        // "The Outfall Breach": segment A (outfall, d 0-10, Stormdrain flavoured), segment B (breach,
+        // d 10-16, the hull tearing through), segment C (hull, d 16-30, full Reef dressing), and the
+        // World 3 arrival shell (segment C's dressing continued, scaled to its own shorter length). The
+        // exit wall for this row is always E and the arrival wall always W (WorldTransitions.For(1)), so
+        // AcrossDir's own +Z result for one and -Z for the other are exactly opposite — NorthSign below
+        // corrects for that so "north" always means the design image's own top-of-plan wall (+Z) on
+        // either side of the transition.
+
+        private static float NorthSign(Wall wall) => AcrossDir(wall).z >= 0f ? 1f : -1f;
+
+        /// <summary>Segment A (outfall), B (breach) and C (hull) — MV-964's own three fixed-distance
+        /// stretches for the World 2 -> World 3 row, dressed per the ticket's own d-ranges.</summary>
+        public static void DressExitReef(Transform segA, Transform segB, Transform segC,
+            Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry)
+        {
+            if (segA != null) DressOutfall(segA, doorMouth, wall, wallHeight, entry.SegmentAEnd);
+            if (segB != null) DressBreach(segB, doorMouth, wall, wallHeight, entry.SegmentAEnd, entry.SegmentBEnd);
+            if (segC != null) DressHullSegment(segC, doorMouth, wall, wallHeight, entry.SegmentBEnd, entry.CorridorLength, isArrival: false);
+        }
+
+        /// <summary>The World 3 arrival shell — segment C's own hull dressing continued (MV-967's own
+        /// instruction), scaled to the shell's shorter length.</summary>
+        public static void DressArrivalReef(Transform arrivalRoot, Vector2 doorMouth, Wall wall, float wallHeight, float shellLength)
+        {
+            if (arrivalRoot != null) DressHullSegment(arrivalRoot, doorMouth, wall, wallHeight, 0f, shellLength, isArrival: true);
+        }
+
+        // ------------------------------------------------------------------ segment A: outfall (d 0-10)
+
+        private static void DressOutfall(Transform segA, Vector2 doorMouth, Wall wall, float wallHeight, float dEnd)
+        {
+            DressBaysAndJoints(segA, doorMouth, wall, 0f, dEnd);
+
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+
+            // Two flush standing-water pools, as drawn.
+            Bar(segA, "Outfall Pool A", doorMouth, wall, 2.0f, 5.0f, north * 0.15f, 2.0f, 0.03f, 0.015f,
+                StormdrainKit.StandingWater, SurfaceKind.Foliage);
+            Bar(segA, "Outfall Pool B", doorMouth, wall, 6.0f, 8.0f, -north * 0.15f, 1.6f, 0.03f, 0.015f,
+                StormdrainKit.StandingWater, SurfaceKind.Foliage);
+
+            // A sludge channel along the N wall base.
+            float wallHug = halfWidth - 0.225f;
+            Bar(segA, "Outfall Sludge Channel", doorMouth, wall, 0f, dEnd, north * wallHug, 0.45f, 0.03f, 0.015f,
+                StormdrainKit.Sludge, SurfaceKind.Foliage);
+
+            // Rust pipe along the N wall at 0.6 x wallHeight, with RustDark collars every 3 m.
+            DressOutfallPipe(segA, doorMouth, wall, wallHeight, north, dEnd);
+
+            // Valve wheel on the N wall at d 6.
+            BuildValveWheel(segA, doorMouth, wall, 6f, 0.6f * wallHeight, north);
+
+            // Hazard striping on both door jambs at d 0.
+            BuildJambStripes(segA, doorMouth, wall);
+        }
+
+        private static void DressOutfallPipe(Transform segA, Vector2 doorMouth, Wall wall, float wallHeight,
+            float north, float dEnd)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float y = 0.6f * wallHeight;
+            float acrossOffset = north * (halfWidth - 0.35f);
+            Vector3 dir = OutwardDir(wall);
+            Vector3 across = AcrossDir(wall);
+            Quaternion lie = Quaternion.LookRotation(dir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+
+            Vector3 pipeCenter = new Vector3(doorMouth.x, y, doorMouth.y) + dir * (dEnd * 0.5f) + across * acrossOffset;
+            StormdrainKit.Tube(segA, "Outfall Rust Pipe", pipeCenter, 0.15f, dEnd, lie, StormdrainKit.Rust);
+
+            for (float d = 0f; d <= dEnd + 0.01f; d += 3f)
+            {
+                Vector3 at = new Vector3(doorMouth.x, y, doorMouth.y) + dir * d + across * acrossOffset;
+                StormdrainKit.Tube(segA, $"Outfall Rust Collar d{d:0.0}", at, 0.2f, 0.2f, lie, StormdrainKit.RustDark);
+            }
+        }
+
+        private static void BuildValveWheel(Transform segA, Vector2 doorMouth, Wall wall, float d, float y, float north)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            Vector3 across = AcrossDir(wall);
+            Vector3 intoRoom = -north * across;
+            Vector3 pos = At(doorMouth, wall, d, north * (halfWidth - 0.02f), y);
+            Quaternion rot = Quaternion.LookRotation(intoRoom, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+            StormdrainKit.Tube(segA, $"Valve Wheel d{d:0.0}", pos, 0.28f, 0.06f, rot, StormdrainKit.Rust);
+        }
+
+        private static void BuildJambStripes(Transform segA, Vector2 doorMouth, Wall wall)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            Vector3 across = AcrossDir(wall);
+            Vector3 baseCentre = new Vector3(doorMouth.x, 0.02f, doorMouth.y) + OutwardDir(wall) * 0.2f;
+            StormdrainKit.BuildHazardBanding(segA, baseCentre + across * (halfWidth - 0.3f), 0.5f, 0.06f, alongX: false, depth: 0.5f);
+            StormdrainKit.BuildHazardBanding(segA, baseCentre - across * (halfWidth - 0.3f), 0.5f, 0.06f, alongX: false, depth: 0.5f);
+        }
+
+        // ------------------------------------------------------------------ segment B: breach (d 10-16)
+
+        private static void DressBreach(Transform segB, Vector2 doorMouth, Wall wall, float wallHeight,
+            float dStart, float dEnd)
+        {
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+
+            // The floor tone goes from Stormdrain ground to StandingWater across the segment.
+            Bar(segB, "Breach Floor Sheen", doorMouth, wall, dStart, dEnd, 0f, 2.6f, 0.02f, 0.005f,
+                Color.Lerp(StormdrainKit.GroundBase, StormdrainKit.StandingWater, 0.6f), SurfaceKind.Foliage);
+
+            // Crack lines radiating across the floor from d 10.4 to d 13.8.
+            float[] crackD = { 10.4f, 11.5f, 12.4f, 13.2f, 13.8f };
+            float[] crackAcross = { 0.0f, 0.85f, -0.9f, 0.55f, -0.35f };
+            for (int i = 0; i < crackD.Length; i++)
+            {
+                Vector3 at = At(doorMouth, wall, crackD[i], crackAcross[i], 0f);
+                StormdrainKit.BuildCrack(segB, at, crackD[i] * 0.37f + i);
+            }
+
+            // A ReefShipWall hull plate jammed diagonally through the N wall, with a ReefCircuitCyan
+            // seam along it — stays inside the wall band, never the 2.0 m centre lane.
+            float plateD = 13f;   // centred in the ticket's own d 11-15 span, regardless of segment bounds
+            Vector3 dir = OutwardDir(wall);
+            Vector3 across = AcrossDir(wall);
+            Vector3 plateCenter = new Vector3(doorMouth.x, wallHeight * 0.5f, doorMouth.y)
+                + dir * plateD + across * (north * (halfWidth - 0.15f));
+
+            GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            plate.name = "Hull Breach Plate";
+            plate.transform.SetParent(segB, false);
+            plate.transform.position = plateCenter;
+            plate.transform.rotation = Quaternion.Euler(0f, 18f, 0f);
+            plate.transform.localScale = new Vector3(4f, wallHeight * 0.8f, 0.4f);
+            StormdrainKit.Strip(plate);
+            var plateRend = plate.GetComponent<MeshRenderer>();
+            if (plateRend != null) plateRend.sharedMaterial = WorldMaterials.M_ShipWall;
+
+            GameObject seam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            seam.name = "Hull Breach Seam";
+            seam.transform.SetParent(segB, false);
+            seam.transform.position = plateCenter + Vector3.up * (wallHeight * 0.22f) + across * (north * 0.05f);
+            seam.transform.rotation = plate.transform.rotation;
+            seam.transform.localScale = new Vector3(3.6f, 0.08f, 0.05f);
+            StormdrainKit.Strip(seam);
+            var seamRend = seam.GetComponent<MeshRenderer>();
+            if (seamRend != null) seamRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+
+            // The first ReefBioGlow growth, emissive, on the concrete floor.
+            float[] glowD = { 12f, 13f, 14f };
+            float[] glowAcross = { 0.7f, -0.6f, 0.5f };
+            for (int i = 0; i < glowD.Length; i++)
+                BuildBioGlow(segB, $"Bio Glow d{glowD[i]:0.0}", At(doorMouth, wall, glowD[i], glowAcross[i], 0.08f), 0.22f);
+        }
+
+        private static GameObject BuildBioGlow(Transform parent, string name, Vector3 pos, float diameter)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = Vector3.one * diameter;
+            StormdrainKit.Strip(go);
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = WorldMaterials.M_BioGlow;
+            return go;
+        }
+
+        // ------------------------------------------------------------------ segment C: hull (d 16-30)
+        // and the World 3 arrival shell (segment C's own dressing, continued and scaled).
+
+        private static void DressHullSegment(Transform host, Vector2 doorMouth, Wall wall, float wallHeight,
+            float dStart, float dEnd, bool isArrival)
+        {
+            DressDeckAndWalls(host, doorMouth, wall, dStart, dEnd);
+            DressHullStripLights(host, doorMouth, wall, dStart, dEnd);
+
+            float span = dEnd - dStart;
+            if (isArrival)
+            {
+                DressObservationWindows(host, doorMouth, wall, wallHeight, new[] { dStart + span * 0.5f });
+                DressAccentLamps(host, doorMouth, wall, wallHeight, new[] { dStart + span * 0.3f, dStart + span * 0.7f });
+                DressHullBioGlow(host, doorMouth, wall, new[] { dStart + span * 0.2f, dStart + span * 0.5f, dStart + span * 0.8f });
+            }
+            else
+            {
+                DressObservationWindows(host, doorMouth, wall, wallHeight, new[] { 19f, 25f });
+                DressAccentLamps(host, doorMouth, wall, wallHeight, new[] { 18f, 22f, 26f });
+                DressHullBioGlow(host, doorMouth, wall, new[] { 17.2f, 20.8f, 23.5f, 27.4f, 28.8f });
+            }
+        }
+
+        /// <summary>Re-skins the shell's own floor and walls with the ReefShipFloor/ReefShipWall
+        /// materials, and lays a 1 m seam grid plus one centreline seam on the deck plate.</summary>
+        private static void DressDeckAndWalls(Transform host, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
+        {
+            foreach (MeshRenderer r in host.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (r.transform.parent != host) continue;   // the shell's own Floor/Wall boxes only
+                if (r.name.EndsWith("Floor")) r.sharedMaterial = WorldMaterials.M_ShipFloor;
+                else if (r.name.Contains("Wall 1") || r.name.Contains("Wall 2")) r.sharedMaterial = WorldMaterials.M_ShipWall;
+            }
+
+            Bar(host, "Deck Centerline Seam", doorMouth, wall, dStart, dEnd, 0f, 0.06f, 0.02f, -0.015f, WorldMaterials.ReefMetalDark);
+            for (float d = dStart + 1f; d < dEnd; d += 1f)
+                Bar(host, $"Deck Seam d{d:0.0}", doorMouth, wall, d - 0.03f, d + 0.03f, 0f, 2.8f, 0.02f, -0.02f, WorldMaterials.ReefMetalDark);
+        }
+
+        /// <summary>ReefKit.DressHull-style base strip lights along both walls, built in contiguous 2 m
+        /// chunks (not one long bar per wall) so every 3 m slice AND every 4 m emission window has its
+        /// own renderer — AC1a and AC1c both read a renderer's own bounds, not a shared one spanning the
+        /// whole segment.</summary>
+        private static void DressHullStripLights(Transform host, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
+        {
+            const float pitch = 2f;
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float wallHug = halfWidth - 0.08f;
+
+            for (float d = dStart; d < dEnd; d += pitch)
+            {
+                float segEnd = Mathf.Min(d + pitch, dEnd);
+                foreach (float side in new[] { north, -north })
+                {
+                    string label = side > 0f ? "N" : "S";
+                    GameObject strip = Bar(host, $"Hull Strip {label} d{d:0.0}", doorMouth, wall, d, segEnd,
+                        side * wallHug, 0.12f, 0.1f, 0.05f, WorldMaterials.ReefCircuitCyan);
+                    var rend = strip.GetComponent<Renderer>();
+                    if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+                }
+            }
+        }
+
+        /// <summary>Observation windows on the N wall only, 2.5 m wide, 0.25-0.85 x wallHeight, each with
+        /// its own ocean backdrop behind it (ReefKit.BuildObservationWindow + BuildOceanBackdrop).</summary>
+        private static void DressObservationWindows(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float[] ds)
+        {
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float yMin = 0.25f * wallHeight;
+            float yMax = 0.85f * wallHeight;
+            float yMid = (yMin + yMax) * 0.5f;
+            float height = yMax - yMin;
+
+            foreach (float d in ds)
+            {
+                Vector3 pos = At(doorMouth, wall, d, north * (halfWidth + 0.02f), yMid);
+                GameObject window = ReefKit.BuildObservationWindow(host, pos, new Vector3(2.5f, height, 0.1f));
+                ReefKit.BuildOceanBackdrop(window.transform);
+            }
+        }
+
+        /// <summary>ReefCircuitPurple accent lamps at the S wall top — the S wall carries nothing taller
+        /// than 0.2 x wallHeight above its own top edge, so these sit just under it, never above.</summary>
+        private static void DressAccentLamps(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float[] ds)
+        {
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float y = wallHeight * 0.92f;
+
+            foreach (float d in ds)
+            {
+                Vector3 pos = At(doorMouth, wall, d, -north * (halfWidth - 0.05f), y);
+                var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                go.name = $"Accent Lamp d{d:0.0}";
+                go.transform.SetParent(host, false);
+                go.transform.localPosition = pos;
+                go.transform.localScale = Vector3.one * 0.2f;
+                StormdrainKit.Strip(go);
+                var rend = go.GetComponent<Renderer>();
+                if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Purple;
+            }
+        }
+
+        /// <summary>ReefBioGlow growth clumps at alternating wall bases.</summary>
+        private static void DressHullBioGlow(Transform host, Vector2 doorMouth, Wall wall, float[] ds)
+        {
+            float north = NorthSign(wall);
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+
+            for (int i = 0; i < ds.Length; i++)
+            {
+                float side = (i % 2 == 0) ? north : -north;
+                Vector3 pos = At(doorMouth, wall, ds[i], side * (halfWidth - 0.15f), 0.1f);
+                BuildBioGlow(host, $"Hull Bio Glow d{ds[i]:0.0}", pos, 0.24f);
+            }
+        }
     }
 }
