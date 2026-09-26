@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
@@ -90,14 +91,28 @@ namespace MaxWorlds.Tests.EditMode
         /// offender, or the assertion itself (AC5). Offenders are collected in a thread-safe bag and
         /// sorted before the assertion so the reported order stays deterministic despite the now-
         /// unordered completion of parallel reads.
+        ///
+        /// MV-979 — five consecutive `qa.yml` runs on `main` (2026-09-27) failed this exact test with
+        /// no assertion message and no offender list ("No cdata in stack trace"), consistent with the
+        /// MV-553 "Timeout value of 180000 ms was exceeded" NUnit default. Suite wall time has grown
+        /// from ~230s (MV-533) to ~500s since, so the same 180s per-test default is now hit more often.
+        /// A source-shape scan has no product meaning tied to its wall time, so the timeout is widened
+        /// explicitly rather than re-optimising a scan that a 54-run local sample never saw run slow.
+        /// The <c>[MV527-guard]</c> log line is emitted before the assertion so it appears on pass and
+        /// on fail, to settle whether a future red run is the scan itself or something upstream of it.
         /// </summary>
         [Test]
+        [Timeout(900000)]
         public void NoUpdateMethodInRuntime_CallsFindObjectsByType_WithoutCaching()
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
             string runtimeRoot = Path.Combine(Application.dataPath, "_Project", "Code", "Runtime");
             Assert.IsTrue(Directory.Exists(runtimeRoot), $"Runtime root not found: {runtimeRoot}");
 
             var offenders = new ConcurrentBag<string>();
+            int prefilteredCount = 0;
+            int scannedCount = 0;
 
             string[] files = Directory.GetFiles(runtimeRoot, "*.cs", SearchOption.AllDirectories);
             Parallel.ForEach(files, path =>
@@ -105,6 +120,7 @@ namespace MaxWorlds.Tests.EditMode
                 string fileName = Path.GetFileName(path);
                 if (Array.IndexOf(Allowlist, fileName) >= 0) return;
 
+                Interlocked.Increment(ref prefilteredCount);
                 string rawText = File.ReadAllText(path);
 
                 // MV-533: StripComments' regex scan over ~17,000 comment matches in this tree is what
@@ -115,6 +131,8 @@ namespace MaxWorlds.Tests.EditMode
                 // strings are absent from the raw text they cannot appear in the stripped code either.
                 if (!rawText.Contains("FindObjectsByType") && !rawText.Contains("FindFirstObjectByType"))
                     return;
+
+                Interlocked.Increment(ref scannedCount);
 
                 // Strip comments first — several of this ticket's own fix-site comments explain what
                 // USED to be a per-frame FindObjectsByType call, in prose, right inside the very Update
@@ -136,6 +154,11 @@ namespace MaxWorlds.Tests.EditMode
             });
 
             List<string> sortedOffenders = offenders.OrderBy(o => o, StringComparer.Ordinal).ToList();
+
+            stopwatch.Stop();
+            Debug.Log($"[MV527-guard] files={files.Length} prefiltered={prefilteredCount} " +
+                       $"scanned={scannedCount} elapsedMs={stopwatch.ElapsedMilliseconds}");
+
             Assert.IsEmpty(sortedOffenders,
                 "Update/LateUpdate/FixedUpdate must not call FindObjectsByType/FindFirstObjectByType " +
                 "every frame — that's the MV-527 regression (source-shape check, not a behavioural one). " +
