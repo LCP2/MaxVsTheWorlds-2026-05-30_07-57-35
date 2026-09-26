@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using MaxWorlds.Arena;
-using MaxWorlds.Intro;
 using MaxWorlds.Save;
 
 namespace MaxWorlds.UI
@@ -29,33 +28,29 @@ namespace MaxWorlds.UI
         /// by <see cref="MaxWorlds.Save.SaveSystem.RecordResult"/> by the time this is wired up (the
         /// Result screen only shows after a Victory seals), so reloading the scene is enough —
         /// <see cref="MaxWorlds.Arena.BackyardPath"/> resolves the new world from the save on its own
-        /// next <c>Awake</c>. Same reload mechanism as <see cref="QuitToMenu"/>, but the active slot is
-        /// left set so the reload drops straight into the next run instead of reopening Home.
+        /// next <c>Awake</c>.
         ///
-        /// MV-845: a <c>WorldIndex</c> of exactly 1 means the save just advanced OUT of World 1 — the
-        /// one transition with a joining sequence (a door opens in a30's east fence, Max walks out down
-        /// a corridor) — so the reload is deferred to <see cref="WorldJoinSequence"/>'s hand-off instead
-        /// of firing immediately. Every other advance (2, 3, ...) reloads straight away, same as before
-        /// this ticket. Retires <see cref="WorldTransitionCinematic"/>'s (MV-704) use here; that class
-        /// is left in place for anything else that might want it.</summary>
+        /// MV-964: the door/corridor walk itself has already happened by the time the Result card (and
+        /// this button) ever shows — <see cref="MaxWorlds.VFX.WorldFinaleGate"/> opens the door and
+        /// <see cref="MaxWorlds.Intro.WorldJoinSequence"/> walks Max through it the instant the world's
+        /// last boss dies, well before Victory seals. All this does is tell the DESTINATION world's own
+        /// boot that an arrival shell/walk-in is pending, then reload — exactly the plain reload every
+        /// other advance already used, generalised off <see cref="WorldTransitions"/> instead of a
+        /// World-1-only hardcode (MV-845's <c>LeavingWorldOneForTwo</c>).</summary>
         public static void StartNextWorld()
         {
             Time.timeScale = 1f;
             // MV-841: the Result screen's clock/kill count cover one world each — the next world
             // starts its own tally, not a carry from the one just cleared.
             RunProgressState.Reset();
-            if (LeavingWorldOneForTwo() && WorldJoinSequence.TryPlay(ReloadActiveScene)) return;
-            ReloadActiveScene();
-        }
 
-        private static bool LeavingWorldOneForTwo()
-        {
             int slot = SaveSystem.ActiveSlot;
-            return slot >= 0 && SaveSystem.Load(slot).WorldIndex == 1;
-        }
+            if (slot >= 0)
+            {
+                int fromWorld = SaveSystem.Load(slot).WorldIndex - 1;
+                if (WorldTransitions.For(fromWorld) != null) WorldTransitions.PendingArrivalFrom = fromWorld;
+            }
 
-        private static void ReloadActiveScene()
-        {
             Scene scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
         }

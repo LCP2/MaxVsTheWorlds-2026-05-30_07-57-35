@@ -263,10 +263,11 @@ namespace MaxWorlds.Tests.EditMode
                 "other seal condition has already landed");
 
             // AC5: walking through the open gateway. WorldFinaleGate.IsBeyondFence is the pure geometry
-            // check the real Update() loop drives off Max's live position.
-            Assert.IsTrue(WorldFinaleGate.IsBeyondFence(new Vector3(0f, 0f, 10f), fenceZ: 9f, centerX: 0f, halfWidth: 3f),
+            // check (MV-964: generalised to any wall; WorldJoinSequence's own crossing check is the real
+            // game's equivalent, driven off Max's live position instead of a fixed test point).
+            Assert.IsTrue(WorldFinaleGate.IsBeyondFence(new Vector3(0f, 0f, 10f), Wall.N, wallCoord: 9f, doorCenter: new Vector2(0f, 0f), halfWidth: 3f),
                 "AC5 geometry: standing past the fence line, within its half-width, must read as beyond it");
-            Assert.IsFalse(WorldFinaleGate.IsBeyondFence(new Vector3(10f, 0f, 10f), fenceZ: 9f, centerX: 0f, halfWidth: 3f),
+            Assert.IsFalse(WorldFinaleGate.IsBeyondFence(new Vector3(10f, 0f, 10f), Wall.N, wallCoord: 9f, doorCenter: new Vector2(0f, 0f), halfWidth: 3f),
                 "AC5 geometry: standing outside the doorway's half-width must not read as beyond it");
 
             trace.Add("--- Max walks through the open fence ---");

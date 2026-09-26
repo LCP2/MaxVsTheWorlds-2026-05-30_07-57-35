@@ -1,16 +1,15 @@
 using UnityEngine;
-using UnityEngine.Rendering;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Rendering;
+using MaxWorlds.Intro;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// The world's own finale exit (MV-915) — a barrier across the doorway out of the world's LAST boss
+    /// The world's own finale exit (MV-915) — the trigger for the doorway out of the world's LAST boss
     /// area (role "boss", index == <c>dials.areaCount</c>), separate from <see cref="BackyardExitGate"/>
     /// on purpose.
     ///
@@ -27,8 +26,13 @@ namespace MaxWorlds.VFX
     /// <see cref="IsFinalBossAreaDefeat"/>) — the same event <c>BossVictoryPayoff</c> drops the Weapon
     /// Core on, so the orb and the open wall land in the same frame. It no longer waits on
     /// <see cref="HudSignals.RunComplete"/>, which required every robot in the area (not just its
-    /// boss(es)) to be dead first — a real World 1 save could clear both Big Bermudas and never see the
-    /// wall open while any other robot in a30 lingered.
+    /// boss(es)) to be dead first.
+    ///
+    /// MV-964: no longer a barrier that sinks in place — opening now hands off to
+    /// <see cref="WorldJoinSequence"/> to cut the REAL door <see cref="WorldTransitions"/> authors for
+    /// this world in its actual exit wall and build the corridor behind it, in the same frame the Weapon
+    /// Core drops. Max keeps full control until he actually walks through it; <see cref="WorldJoinSequence"/>'s
+    /// own crossing check takes over from there, so this class no longer tracks Max's position at all.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("map/gate")]
@@ -58,58 +62,27 @@ namespace MaxWorlds.VFX
             return areaDirector != null && WorldLibrary.Count > areaDirector.ActiveWorldIndex + 1;
         }
 
-        private static readonly Color BarWarn = new Color(0.85f, 0.20f, 0.16f);   // shut: reads as blocked
-        private const float PanelHeight = 3f;
-        private const float PanelThickness = 0.3f;
-        private const float SinkDuration = 0.6f;   // realtime seconds the shut panel takes to clear the doorway
-
-        private float _fenceZ;
-        private float _centerX;
-        private float _halfWidth;
-
-        private Collider _blocker;
-        private Transform _panel;
-        private bool _sinking;
-        private float _sinkT;
-
         /// <summary>The gate's own resolved state — open once this area's own final boss has actually
         /// died, not an authored flag (MV-915 AC4; MV-956 changed the trigger from RunComplete).</summary>
         public bool IsOpen { get; private set; }
 
-        private Transform _max;
-        private bool _crossed;
+        private WorldConfig _cfg;
+        private MapData _map;
+        private WorldTransitionEntry _entry;
+        private int _fromWorldIndex;
 
         private void Awake()
         {
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null || path.Cfg?.dials == null || path.Map == null) { enabled = false; return; }
 
-            int finalArea = path.Cfg.dials.areaCount;
-            var zone = path.Map.Zone($"area{finalArea}");
-            if (zone == null) { enabled = false; return; }
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            if (areaDirector == null) { enabled = false; return; }
 
-            _fenceZ = zone.ZMax - 0.3f;         // just inside the arena's own back wall
-            _centerX = zone.x;
-            _halfWidth = Mathf.Max(1.5f, zone.width * 0.25f);
-
-            gameObject.AddComponent<KeepsOwnMaterial>();
-            BuildBarrier();
-        }
-
-        private void BuildBarrier()
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "Barrier";
-            go.transform.SetParent(transform, worldPositionStays: false);
-            go.transform.localPosition = new Vector3(_centerX, PanelHeight * 0.5f, _fenceZ);
-            go.transform.localScale = new Vector3(_halfWidth * 2f, PanelHeight, PanelThickness);
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, BarWarn);
-            r.shadowCastingMode = ShadowCastingMode.Off;
-
-            _blocker = go.GetComponent<Collider>();   // the Cube's own BoxCollider — this IS the block
-            _panel = go.transform;
+            _cfg = path.Cfg;
+            _map = path.Map;
+            _fromWorldIndex = areaDirector.ActiveWorldIndex;
+            _entry = WorldTransitions.For(_fromWorldIndex);
         }
 
         private void OnEnable() => HudSignals.BossDefeated += OnBossDefeated;
@@ -127,9 +100,8 @@ namespace MaxWorlds.VFX
         /// check <c>BossVictoryPayoff.IsFinalBossAreaDefeat</c> makes before dropping the Weapon Core —
         /// kept local rather than shared (same reasoning as <see cref="HasNextWorld"/>: two lines, and
         /// the two classes must never depend on one another). Deliberately independent of this
-        /// component's own <see cref="Awake"/>-resolved zone geometry: that only exists to place the
-        /// barrier, and requires a real <see cref="BackyardPath"/>/<see cref="MapData"/> in the scene,
-        /// which a test driving pure boss-death/seal logic has no reason to build.</summary>
+        /// component's own <see cref="Awake"/>-resolved geometry: a test driving pure boss-death/seal
+        /// logic has no reason to build a real scene.</summary>
         private static bool IsFinalBossAreaDefeat()
         {
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
@@ -145,55 +117,29 @@ namespace MaxWorlds.VFX
         {
             if (IsOpen) return;
             IsOpen = true;
-            if (_blocker != null) _blocker.enabled = false;   // clear the way the instant it's earned
-            _sinking = true;
-            _sinkT = 0f;
+
+            // Geometry-independent tests (Mv915/MV956/MV959/Mv921) build this component with no
+            // BackyardPath in the scene at all -- Awake already bailed on those, leaving these null, so
+            // there is nothing to hand off to and IsOpen alone is the whole observable effect, same as
+            // before this ticket.
+            if (_entry != null && _cfg != null && _map != null)
+                WorldJoinSequence.OpenExitDoor(_cfg, _map, _entry, _fromWorldIndex);
         }
 
-        private void Update()
+        /// <summary>True once <paramref name="pos"/> is standing past a wall's own doorway — within its
+        /// half-width of the door's centre and beyond the wall's own line, outward. Pure so a test (or
+        /// <see cref="WorldJoinSequence"/>'s own crossing check) can drive the geometry directly, no
+        /// scene required (MV-915 AC5; generalised to any wall, MV-964).</summary>
+        public static bool IsBeyondFence(Vector3 pos, Wall wall, float wallCoord, Vector2 doorCenter, float halfWidth)
         {
-            if (_sinking) TickSink();
-
-            if (!IsOpen || _crossed) return;
-
-            Transform max = MaxTransform();
-            if (max == null) return;
-
-            if (IsBeyondFence(max.position, _fenceZ, _centerX, _halfWidth))
+            switch (wall)
             {
-                _crossed = true;
-                HudSignals.EmitFinaleGateCrossed();
+                case Wall.N: return pos.z >= wallCoord && Mathf.Abs(pos.x - doorCenter.x) <= halfWidth;
+                case Wall.S: return pos.z <= wallCoord && Mathf.Abs(pos.x - doorCenter.x) <= halfWidth;
+                case Wall.E: return pos.x >= wallCoord && Mathf.Abs(pos.z - doorCenter.y) <= halfWidth;
+                case Wall.W: return pos.x <= wallCoord && Mathf.Abs(pos.z - doorCenter.y) <= halfWidth;
+                default: return false;
             }
-        }
-
-        private void TickSink()
-        {
-            _sinkT += Time.deltaTime;
-            float t = Mathf.Clamp01(_sinkT / SinkDuration);
-            if (_panel != null) _panel.localPosition = new Vector3(_centerX, PanelHeight * (0.5f - t), _fenceZ);
-            if (t >= 1f)
-            {
-                _sinking = false;
-                if (_panel != null) _panel.gameObject.SetActive(false);
-            }
-        }
-
-        private Transform MaxTransform()
-        {
-            if (_max == null)
-            {
-                GameObject g = GameObject.FindGameObjectWithTag("Player");
-                if (g != null) _max = g.transform;
-            }
-            return _max;
-        }
-
-        /// <summary>True once <paramref name="pos"/> is standing past the open gateway — within its
-        /// half-width of centre and beyond the fence line. Pure so a test can drive the geometry
-        /// directly without a scene (MV-915 AC5).</summary>
-        public static bool IsBeyondFence(Vector3 pos, float fenceZ, float centerX, float halfWidth)
-        {
-            return pos.z >= fenceZ && Mathf.Abs(pos.x - centerX) <= halfWidth;
         }
     }
 }

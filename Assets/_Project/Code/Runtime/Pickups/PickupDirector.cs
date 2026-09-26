@@ -346,6 +346,20 @@ namespace MaxWorlds.Pickups
             HudSignals.EmitWeaponCoreDropped();
         }
 
+        /// <summary>MV-964: banks any Weapon Core still on the ground exactly as if Max had walked over
+        /// it — <see cref="MaxWorlds.Intro.WorldJoinSequence"/> calls this the instant Max crosses the
+        /// world's finale door, so a core he never walked over in the open can't block progress into the
+        /// corridor. A thin public wrapper around the same private <see cref="Collect"/> every ordinary
+        /// walk-over pickup already resolves through — never a second collection path.</summary>
+        public void CollectGroundedWeaponCore()
+        {
+            for (int i = _live.Count - 1; i >= 0; i--)
+            {
+                Pickup p = _live[i];
+                if (p != null && p.Kind == PickupKind.WeaponCore) Collect(i, p);
+            }
+        }
+
         /// <summary>MV-948: shed #1 drops a Device (if any category's still locked), then only every
         /// OTHER destroyed shed after that (#3, #5, #7...) does — spreading ability-family unlocks out
         /// so a player spends more cells on PRIMARY/SECONDARY in between, instead of opening every

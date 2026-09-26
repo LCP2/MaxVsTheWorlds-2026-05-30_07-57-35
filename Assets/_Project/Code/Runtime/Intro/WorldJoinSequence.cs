@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
@@ -13,264 +13,352 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Intro
 {
     /// <summary>
-    /// MV-845: the World 1 -> World 2 joining sequence. Replaces <see cref="WorldTransitionCinematic"/>
-    /// (MV-704's grate-collapse/shaft vignette) for this one transition — that class is left in place
-    /// in case anything else ever wants it, but <see cref="MaxWorlds.UI.RunFlow.StartNextWorld"/> no
-    /// longer calls it for W1 -> W2.
+    /// MV-964: the one door-and-corridor sequence every world's finale exit uses, generalised off a
+    /// <see cref="WorldTransitionEntry"/> instead of a hardcoded World 1 -> World 2 door/world-x table
+    /// (MV-845/849's own hardcodes). Two independent installations of this same class run the two halves
+    /// of one transition, in two different scene loads:
     ///
-    /// Unlike <see cref="WorldTransitionCinematic"/> this is not an offscreen vignette built on its own
-    /// fake set — it is real gameplay space: a door opens in a30's actual east wall, a corridor is
-    /// built east of it, and Max is walked through both with his own <see cref="CharacterController"/>
-    /// so he collides with whatever is actually there. World 1's look holds throughout; the gradual
-    /// blend to World 2's presentation along the corridor is MV-849's, not this ticket's.
+    ///  * <see cref="OpenExitDoor"/> — called by <see cref="MaxWorlds.VFX.WorldFinaleGate"/> the instant
+    ///    the world's own last boss dies. Cuts the real door in the exit wall and builds the corridor
+    ///    behind it immediately, but leaves Max in full control -- <see cref="Tick"/>'s own
+    ///    <c>AwaitingCrossing</c> phase just watches for him to actually walk through, at which point
+    ///    control is taken away for the scripted walk to the corridor's end and the fade that follows.
+    ///  * <see cref="TryPlayArrival"/> — installed on the destination world's own boot when
+    ///    <see cref="WorldTransitions.PendingArrivalFrom"/> is set. Builds the arrival shell outside the
+    ///    destination stub's wall and walks Max in through it.
+    ///
+    /// <see cref="Initialize"/> is the third, test-facing entry point (MV-845's own idiom): builds the
+    /// exit geometry and skips straight to the suspended walk, as if Max had already crossed -- a test
+    /// drives it with <see cref="Tick"/> exactly as before this ticket, it just no longer has to walk him
+    /// to the door first (that leg is ordinary, un-scripted gameplay now, not this class's job).
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("intro")]
     public sealed class WorldJoinSequence : MonoBehaviour
     {
-        private const string DoorAreaId = "a30";
-        private const float DoorWidth = 3f;
-        private const float CorridorLength = 30f;
-        private const float CorridorHalfWidth = 1.5f;
-
-        /// <summary>x offset from the door past which the screen starts fading — a30's east wall plus
-        /// 27 m lands on x = 365 for World 1's own a30 (XMax 338), the ticket's own figure.</summary>
-        private const float FadeStartOffset = 27f;
-
         private const float FadeDuration = 0.4f;
-
-        /// <summary>"Max walks... to 1 m inside the door" (AC4).</summary>
-        private const float DoorInsideOffset = 1f;
-
-        /// <summary>"If no path to the door exists, place him 2 m inside the door first" (AC4) — the
-        /// timeout fallback's landing point.</summary>
-        private const float FallbackInsideOffset = 2f;
-
-        /// <summary>How long a walk leg is given to make progress before it's treated as "no path
-        /// exists" and Max is placed at the leg's fallback point instead (AC4's contingency — there is
-        /// no authored route to a door that isn't part of the map graph, so this is what actually
-        /// stands in for "pathing failed").</summary>
+        private const float HoldAtEndSeconds = 0.3f;
         private const float WalkTimeoutSeconds = 8f;
-
         private const float ArrivalEpsilon = 0.2f;
-
-        /// <summary>MV-849: t = 0 at this world x, ramping to 1 at <see cref="BlendEndX"/> — the
-        /// ticket's own two numbers, not derived from the door, so x = 351 (the AC1 test point)
-        /// lands exactly on t = 0.5.</summary>
-        private const float BlendStartX = 340f;
-        private const float BlendEndX = 362f;
-
-        /// <summary>"a hard material swap at the midpoint is acceptable" (MV-849) — colours stay
-        /// continuous across it because the property block keeps driving them regardless of which
-        /// material is underneath.</summary>
-        private const float MaterialSwapT = 0.5f;
-
-        /// <summary>"At t = 1 hold 0.3 s, then the existing fade" (MV-849).</summary>
-        private const float BlendHoldSeconds = 0.3f;
-
-        /// <summary>Matches <see cref="PlayerController"/>'s own turn rate so the scripted walk turns
-        /// exactly as fast as ordinary player-driven movement does.</summary>
         private const float RotationSpeedDegPerSec = 720f;
 
-        private static System.Action s_pendingOnFinished;
-        private static WorldConfig s_pendingCfg;
-        private static MapData s_pendingMap;
-        private static PlayerController s_pendingPlayer;
+        /// <summary>MV-849: the corridor's lighting/fog reach the destination world's look this fraction
+        /// of the way along it — arriving a little early reads better than the blend still finishing
+        /// right as the fade-to-black starts.</summary>
+        private const float LightingBlendFraction = 0.73f;
 
-        /// <summary>Start the sequence once, only if a world map and Max are both actually resolvable
-        /// (mirrors <see cref="WorldTransitionCinematic.TryPlay"/>'s same bail — no map/no player falls
-        /// straight through to the caller's own fallback). Returns true if it started; on true, the
-        /// sequence owns calling <paramref name="onFinished"/> exactly once, later.</summary>
-        public static bool TryPlay(System.Action onFinished)
+        /// <summary>AC4 (MV-845): the scripted walk stops this far short of the corridor's own far end —
+        /// the far end itself is the closed, re-skinned gate into the next world, never reached in this
+        /// session.</summary>
+        private const float WalkEndClearance = 3f;
+
+        // ------------------------------------------------------------------ static installation
+
+        private enum Mode { Exit, Arrival }
+        private enum Phase { AwaitingCrossing, WalkToEnd, HoldAtEnd, FadeOut, FadeIn, ArrivalWalk, Done }
+
+        /// <summary>MV-964: the world's finale door just opened -- cut the real gap, build the corridor
+        /// behind it, and leave Max in full control until he actually walks through (see
+        /// <see cref="TickAwaitingCrossing"/>). A no-op if the sequence is already running (defensive;
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate.IsOpen"/> already guards against a second call) or if
+        /// there is no live player to walk through it.</summary>
+        public static void OpenExitDoor(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex)
         {
-            if (FindFirstObjectByType<WorldJoinSequence>() != null) return false;
+            if (FindFirstObjectByType<WorldJoinSequence>() != null) return;
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player == null) return;
+
+            var seq = new GameObject("WorldJoinSequence").AddComponent<WorldJoinSequence>();
+            seq._mode = Mode.Exit;
+            seq.BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player);
+            seq._phase = Phase.AwaitingCrossing;
+        }
+
+        /// <summary>The destination world's own boot: if a corridor walk is pending
+        /// (<see cref="WorldTransitions.PendingArrivalFrom"/>), build the arrival shell outside its stub
+        /// and walk Max in through it. Consumes the flag whether or not it actually starts a sequence, so
+        /// a boot that can't resolve one (no player/map yet) never leaves it dangling for a later,
+        /// unrelated boot to misinterpret.</summary>
+        public static bool TryPlayArrival()
+        {
+            int? from = WorldTransitions.PendingArrivalFrom;
+            if (from == null) return false;
+            WorldTransitions.PendingArrivalFrom = null;
+
+            WorldTransitionEntry entry = WorldTransitions.For(from.Value);
+            if (entry == null) return false;
 
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null || path.Cfg == null || path.Map == null) return false;
-
             var player = FindFirstObjectByType<PlayerController>();
             if (player == null) return false;
+            if (FindFirstObjectByType<WorldJoinSequence>() != null) return false;
 
-            s_pendingOnFinished = onFinished;
-            s_pendingCfg = path.Cfg;
-            s_pendingMap = path.Map;
-            s_pendingPlayer = player;
-            new GameObject("WorldJoinSequence").AddComponent<WorldJoinSequence>();
+            var seq = new GameObject("WorldJoinSequence (Arrival)").AddComponent<WorldJoinSequence>();
+            seq.InitializeArrival(path.Cfg, path.Map, entry, from.Value, player, null);
             return true;
         }
 
-        private void Awake()
-        {
-            System.Action onFinished = s_pendingOnFinished; s_pendingOnFinished = null;
-            WorldConfig cfg = s_pendingCfg; s_pendingCfg = null;
-            MapData map = s_pendingMap; s_pendingMap = null;
-            PlayerController player = s_pendingPlayer; s_pendingPlayer = null;
-            Initialize(cfg, map, player, onFinished);
-        }
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InstallArrival() => TryPlayArrival();
 
         // ------------------------------------------------------------------ state
 
-        private enum Phase { WalkToDoor, WalkCorridor, Fade, Done }
+        private Mode _mode;
+        private Phase _phase;
+        private float _phaseElapsed;
+
+        private WorldTransitionEntry _entry;
+        private int _fromWorldIndex;
+        private Vector2 _doorMouth;
+        private Wall _wall;
 
         private System.Action _onFinished;
         private PlayerController _player;
         private CharacterController _cc;
         private Transform _playerT;
 
-        private float _doorX;
-        private float _doorZ;
-        private float _fadeStartX;
-        private float _corridorEndX;
-
-        private Phase _phase;
-        private float _phaseElapsed;
         private bool _restored;
-
         private HudController _hud;
         private readonly List<RobotEnemy> _frozenRobots = new List<RobotEnemy>(16);
 
-        private Material _wallMaterialForCorridor;
+        private AreaGate _doorGate;
+        private Transform _segmentARoot;
+        private Transform _segmentBRoot;
+        private Transform _segmentCRoot;
+        private Transform _arrivalRoot;
+
         private Transform _fade;
         private MaterialPropertyBlock _fadeMpb;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        // --- MV-849: corridor -> World 2 blend ---
-        private Renderer _corridorFloorRenderer;
-        private Renderer _corridorWallSRenderer;
-        private Renderer _corridorWallNRenderer;
-        private Renderer _corridorEndCapRenderer;
-        private MaterialPropertyBlock _corridorMpb;
         private BackyardLighting _lighting;
-        private bool _corridorMaterialsSwapped;
-        private float _blendHoldElapsed;
 
-        /// <summary>The corridor floor's renderer, exposed so a test can read back its resolved
-        /// property-block colour (AC1) without re-deriving it from the private build.</summary>
-        public Renderer CorridorFloorRenderer => _corridorFloorRenderer;
+        /// <summary>One of the three fixed-distance corridor segments the exit side builds (MV-964 §5),
+        /// exposed so the two corridor-dressing tickets can parent their art to the right one. Null for
+        /// an arrival-side instance, and null for a segment before it's built.</summary>
+        public Transform CorridorSegmentRoot(char segment) => segment switch
+        {
+            'A' => _segmentARoot,
+            'B' => _segmentBRoot,
+            'C' => _segmentCRoot,
+            _ => null,
+        };
+
+        /// <summary>The arrival shell's root, for the same dressing purpose. Null for an exit-side
+        /// instance.</summary>
+        public Transform ArrivalRoot => _arrivalRoot;
 
         /// <summary>Running until it hands off. A test reads this to prove it reaches the end.</summary>
         public bool IsPlaying => _phase != Phase.Done;
 
-        // ------------------------------------------------------------------ build
+        // ------------------------------------------------------------------ build (exit)
 
-        /// <summary>The Awake work, exposed so an EditMode test can build the sequence directly — a
-        /// MonoBehaviour without <c>[ExecuteAlways]</c> only ever receives <c>Awake</c> once Unity is
-        /// actually in Play Mode, which this project's EditMode-only test suite never enters
-        /// (MV-299/311/330).</summary>
-        public void Initialize(WorldConfig cfg, MapData map, PlayerController player, System.Action onFinished)
+        /// <summary>The test-facing entry point (MV-845's own idiom: a MonoBehaviour without
+        /// <c>[ExecuteAlways]</c> only ever receives <c>Awake</c> once Unity is actually in Play Mode,
+        /// which this EditMode-only suite never enters, MV-299/311/330). Builds the door and corridor and
+        /// skips straight to the suspended walk, as if Max had already crossed the threshold — the real
+        /// game's own "walk up to the door under full control" leg is ordinary, un-scripted gameplay now,
+        /// not something a test needs to simulate.</summary>
+        public void Initialize(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
+            PlayerController player, System.Action onFinished = null)
         {
+            _mode = Mode.Exit;
+            _onFinished = onFinished;
+            BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player);
+            BeginSuspendedWalk();
+        }
+
+        private void BuildExit(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
+            PlayerController player)
+        {
+            _entry = entry;
+            _fromWorldIndex = fromWorldIndex;
+            _wall = entry.ExitWall;
+            _player = player;
+            _playerT = player.transform;
+            _cc = player.GetComponent<CharacterController>();
+
+            float wallHeight = ResolveWallHeight(fromMap);
+            float wallThickness = ResolveWallThickness(fromMap);
+
+            WorldArea exitArea = entry.ExitArea(fromCfg);
+            _doorMouth = exitArea != null ? entry.ExitDoorMouth(fromCfg)
+                : new Vector2(_playerT.position.x, _playerT.position.z);
+
+            _lighting = FindFirstObjectByType<BackyardLighting>();
+            if (_lighting == null) _lighting = new GameObject("BackyardLighting").AddComponent<BackyardLighting>();
+
+            CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth, out Material wallMaterial);
+            _doorGate = BuildDoor(_doorMouth, _wall, wallHeight, wallThickness, wallMaterial, transform, "World Join Door");
+            _doorGate.ForceOpen();
+
+            BuildExitCorridor(wallHeight, wallThickness);
+
+            int toWorld = fromWorldIndex + 1;
+            Vector2 farMouth = PointAtXZ(_doorMouth, _wall, entry.CorridorLength);
+            AreaGate farGate = BuildDoor(farMouth, _wall, wallHeight, wallThickness, null, transform, "World Join Far Gate");
+            ApplyDestinationSkin(farGate, toWorld);
+
+            BuildFade();
+        }
+
+        /// <summary>Floor + both side walls, built as three fixed-distance segments so the corridor reads
+        /// right (World-from's colours giving way to World-to's) before the dressing tickets land any
+        /// real art (MV-964 §5). Static per-segment materials — no per-frame property-block driving —
+        /// since colour now changes by PLACE, not by how far Max has personally walked.</summary>
+        private void BuildExitCorridor(float wallHeight, float wallThickness)
+        {
+            Transform root = new GameObject("World Join Corridor").transform;
+            root.SetParent(transform, worldPositionStays: false);
+
+            int toWorld = _fromWorldIndex + 1;
+            BiomePalette from = BiomePalette.ForWorld(_fromWorldIndex);
+            BiomePalette to = BiomePalette.ForWorld(toWorld);
+            string keyPrefix = $"join{_fromWorldIndex}";
+
+            _segmentARoot = BuildSegment(root, "A", wallHeight, wallThickness, 0f, _entry.SegmentAEnd,
+                IntroBuild.Lit($"{keyPrefix}_A_floor", from.ColorFor(SurfaceKind.Ground)),
+                IntroBuild.Lit($"{keyPrefix}_A_wall", from.ColorFor(SurfaceKind.Wall)));
+
+            _segmentBRoot = BuildSegment(root, "B", wallHeight, wallThickness, _entry.SegmentAEnd, _entry.SegmentBEnd,
+                IntroBuild.Lit($"{keyPrefix}_B_floor", Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f)),
+                IntroBuild.Lit($"{keyPrefix}_B_wall", Color.Lerp(from.ColorFor(SurfaceKind.Wall), to.ColorFor(SurfaceKind.Wall), 0.5f)));
+
+            _segmentCRoot = BuildSegment(root, "C", wallHeight, wallThickness, _entry.SegmentBEnd, _entry.CorridorLength,
+                IntroBuild.Lit($"{keyPrefix}_C_floor", to.ColorFor(SurfaceKind.Ground)),
+                IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
+        }
+
+        // ------------------------------------------------------------------ build (arrival)
+
+        /// <summary>Builds the arrival shell outside the destination stub's own wall, cuts the real gap
+        /// into the stub, and walks Max in through it (MV-964 §4.7). Suspends gameplay for the whole
+        /// beat -- there is nothing for Max to control yet, the world has only just booted.</summary>
+        public void InitializeArrival(WorldConfig toCfg, MapData toMap, WorldTransitionEntry entry, int fromWorldIndex,
+            PlayerController player, System.Action onFinished)
+        {
+            _mode = Mode.Arrival;
+            _entry = entry;
+            _fromWorldIndex = fromWorldIndex;
+            _wall = entry.ArrivalWall;
             _onFinished = onFinished;
             _player = player;
             _playerT = player.transform;
             _cc = player.GetComponent<CharacterController>();
 
-            float wallHeight = map != null && map.wallHeight > 0f ? map.wallHeight : MapData.DefaultWallHeight;
-            float wallThickness = map != null ? map.wallThickness : 0.4f;
+            float wallHeight = ResolveWallHeight(toMap);
+            float wallThickness = ResolveWallThickness(toMap);
+            int toWorld = fromWorldIndex + 1;
 
-            WorldArea door = cfg?.Area(DoorAreaId);
-            if (door != null)
-            {
-                _doorX = door.XMax;
-                _doorZ = door.WallSpan(Wall.E).Mid;
-            }
-            else
-            {
-                // Should not happen via TryPlay (it already checked), but a caller that hands Initialize
-                // a door-less config directly gets a sequence that still runs its full phase machine
-                // rather than silently doing nothing.
-                _doorX = _playerT.position.x + DoorWidth;
-                _doorZ = _playerT.position.z;
-            }
+            WorldArea stub = entry.ArrivalArea(toCfg);
+            _doorMouth = stub != null ? entry.ArrivalDoorMouth(toCfg)
+                : new Vector2(_playerT.position.x, _playerT.position.z);
 
-            _fadeStartX = _doorX + FadeStartOffset;
-            _corridorEndX = _doorX + CorridorLength;
-
-            _corridorMpb = new MaterialPropertyBlock();
             _lighting = FindFirstObjectByType<BackyardLighting>();
             if (_lighting == null) _lighting = new GameObject("BackyardLighting").AddComponent<BackyardLighting>();
 
             SuspendGameplay();
-            OpenDoor(wallHeight, wallThickness);
-            BuildCorridor(wallHeight, wallThickness);
-            BuildFade();
 
-            _phase = Phase.WalkToDoor;
+            CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth, out Material wallMaterial);
+            _doorGate = BuildDoor(_doorMouth, _wall, wallHeight, wallThickness, wallMaterial, transform, "World Arrival Door");
+            ApplyDestinationSkin(_doorGate, toWorld);
+            _doorGate.ForceOpen();
+
+            BuildArrivalShell(wallHeight, wallThickness, toWorld);
+            BuildFade();
+            ApplyFadeAlpha(1f);   // fully black -- the world has just booted, nothing to see yet
+
+            float startAlong = entry.ArrivalShellLength - 1f;   // AC (MV-964 §4.7): "1 m from its far end"
+            Vector3 start = PointAt(_doorMouth, _wall, startAlong, _playerT.position.y);
+            TeleportPlayer(start);
+            _playerT.rotation = Quaternion.LookRotation(-OutwardDir(_wall), Vector3.up);   // facing the stub
+
+            _phase = Phase.FadeIn;
             _phaseElapsed = 0f;
         }
 
-        private void SuspendGameplay()
+        private void BuildArrivalShell(float wallHeight, float wallThickness, int toWorld)
         {
-            if (_player != null) _player.enabled = false;
-
-            _hud = FindFirstObjectByType<HudController>();
-            if (_hud != null) _hud.gameObject.SetActive(false);
-
-            // Snapshot first -- disabling a RobotEnemy fires its own OnDisable, which removes it from
-            // the very list RobotEnemy.Active is backed by, so iterating that list live while disabling
-            // its members would mutate it mid-enumeration.
-            _frozenRobots.Clear();
-            _frozenRobots.AddRange(RobotEnemy.Active);
-            foreach (RobotEnemy r in _frozenRobots)
-                if (r != null) r.enabled = false;
+            BiomePalette palette = BiomePalette.ForWorld(toWorld);
+            _arrivalRoot = BuildSegment(transform, "Arrival", wallHeight, wallThickness, 0f, _entry.ArrivalShellLength,
+                IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground)),
+                IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
         }
 
-        private void RestoreGameplay()
+        // ------------------------------------------------------------------ shared geometry
+
+        private static float ResolveWallHeight(MapData map) =>
+            map != null && map.wallHeight > 0f ? map.wallHeight : MapData.DefaultWallHeight;
+
+        private static float ResolveWallThickness(MapData map) =>
+            map != null ? map.wallThickness : MapData.DefaultWallThickness;
+
+        private static void ApplyDestinationSkin(AreaGate gate, int toWorld)
         {
-            if (_restored) return;
-            _restored = true;
-            if (_player != null) _player.enabled = true;
-            if (_hud != null) _hud.gameObject.SetActive(true);
-            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.enabled = true;
-            _frozenRobots.Clear();
+            if (toWorld == 1) gate.ApplyStormdrainGateSkin();
+            else if (toWorld >= 2) gate.ApplyReefSkin();
         }
 
-        /// <summary>Cuts a3 0's real east wall open and drops an <see cref="AreaGate"/> in the gap,
-        /// forced open immediately -- reusing AreaGate's own hinge-swing visual rather than hand-rolling
-        /// a second one. AreaGate's swing itself runs on its own fixed, shared 0.5 s timing (a private
-        /// constant every other gate in the game also uses); this ticket's "opens over 1.0 s" is read as
-        /// the beat's overall feel, not a reason to retune a constant every other gate in the game
-        /// shares -- doing that would be exactly the kind of scope creep the tight-slice rule exists to
-        /// stop.</summary>
-        private void OpenDoor(float wallHeight, float wallThickness)
+        /// <summary>The world-outward direction for a wall — N/E extend toward +Z/+X, S/W toward -Z/-X
+        /// (matches <see cref="WorldArea.WallCoord"/>'s own "which side is out" convention).</summary>
+        private static Vector3 OutwardDir(Wall wall) => wall switch
         {
-            CutWallGap(wallHeight);
+            Wall.N => Vector3.forward,
+            Wall.S => Vector3.back,
+            Wall.E => Vector3.right,
+            Wall.W => Vector3.left,
+            _ => Vector3.forward,
+        };
 
-            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "World Join Door";
-            body.transform.SetParent(transform, worldPositionStays: false);
-
-            float sealWidth = DoorWidth + wallThickness * 2f;
-            body.transform.localPosition = new Vector3(_doorX, wallHeight * 0.5f, _doorZ);
-            // An E/W-wall doorway runs along Z -- spin 90 deg the same way MapRuntime.BuildAreaGate
-            // does for one, so AreaGate.StartHingeSwing (which reads localScale.x as "the width") finds
-            // its hinge pivot on the right edge instead of the thin one.
-            body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-            body.transform.localScale = new Vector3(sealWidth, wallHeight, wallThickness + 0.04f);
-
-            var rend = body.GetComponent<MeshRenderer>();
-            rend.sharedMaterial = _wallMaterialForCorridor != null
-                ? _wallMaterialForCorridor
-                : IntroBuild.Lit("join_door", new Color(0.35f, 0.33f, 0.30f));
-
-            var gate = body.AddComponent<AreaGate>();
-            gate.AwayFromPlayerDirection = Vector3.right; // the corridor is +X of the door
-            gate.ForceOpen();
+        private static Vector3 AcrossDir(Wall wall)
+        {
+            Vector3 d = OutwardDir(wall);
+            return new Vector3(-d.z, 0f, d.x);
         }
 
-        /// <summary>Finds the live wall segment covering a30's real east edge and splits it around the
-        /// door span, so the wall stays solid everywhere else (AC2) and Max's own CharacterController
-        /// can actually walk through the gap instead of colliding with it. A no-op if no such wall is
-        /// found (e.g. an EditMode test that never built real map geometry) -- the walk logic below
-        /// doesn't depend on this having run.</summary>
-        private void CutWallGap(float wallHeight)
+        /// <summary>The point <paramref name="along"/> metres outward from <paramref name="doorMouth"/>,
+        /// along <paramref name="wall"/>'s own outward axis (XZ only).</summary>
+        private static Vector2 PointAtXZ(Vector2 doorMouth, Wall wall, float along)
         {
-            var probe = new Vector3(_doorX, wallHeight * 0.5f, _doorZ);
+            Vector3 dir = OutwardDir(wall);
+            bool travelAlongZ = dir.x == 0f;
+            float delta = along * (travelAlongZ ? dir.z : dir.x);
+            return travelAlongZ ? new Vector2(doorMouth.x, doorMouth.y + delta) : new Vector2(doorMouth.x + delta, doorMouth.y);
+        }
+
+        private static Vector3 PointAt(Vector2 doorMouth, Wall wall, float along, float y)
+        {
+            Vector2 xz = PointAtXZ(doorMouth, wall, along);
+            return new Vector3(xz.x, y, xz.y);
+        }
+
+        /// <summary>How far outward (metres) <paramref name="pos"/> has travelled past
+        /// <paramref name="doorMouth"/>'s own wall line — negative means still short of it.</summary>
+        private static float AlongDistance(Vector3 pos, Vector2 doorMouth, Wall wall)
+        {
+            Vector3 dir = OutwardDir(wall);
+            bool travelAlongZ = dir.x == 0f;
+            float raw = travelAlongZ ? pos.z - doorMouth.y : pos.x - doorMouth.x;
+            return raw * (travelAlongZ ? dir.z : dir.x);
+        }
+
+        /// <summary>Finds the live structural wall segment covering the door's own probe point and splits
+        /// it around the door span, so the wall stays solid everywhere else and Max's own
+        /// CharacterController can actually walk through the gap. Axis-generic (MV-964): splits along X
+        /// for an N/S wall, along Z for an E/W one. A no-op if no such wall is found (e.g. an EditMode
+        /// test that never built real map geometry).</summary>
+        private static void CutWallGap(Vector2 doorMouth, Wall wall, float wallHeight, float doorWidth, out Material wallMaterial)
+        {
+            wallMaterial = null;
+            bool alongX = wall == Wall.N || wall == Wall.S;
+            var probe = new Vector3(doorMouth.x, wallHeight * 0.5f, doorMouth.y);
 
             StructuralWall found = null;
-            foreach (StructuralWall wall in FindObjectsByType<StructuralWall>(FindObjectsSortMode.None))
+            foreach (StructuralWall w in FindObjectsByType<StructuralWall>(FindObjectsSortMode.None))
             {
-                var col = wall.GetComponent<Collider>();
-                if (col != null && col.bounds.Contains(probe)) { found = wall; break; }
+                var col = w.GetComponent<Collider>();
+                if (col != null && col.bounds.Contains(probe)) { found = w; break; }
             }
             if (found == null) return;
 
@@ -279,96 +367,115 @@ namespace MaxWorlds.Intro
             var wallRenderer = wallGo.GetComponent<MeshRenderer>();
             if (wallCollider == null) return;
 
-            _wallMaterialForCorridor = wallRenderer != null ? wallRenderer.sharedMaterial : null;
+            wallMaterial = wallRenderer != null ? wallRenderer.sharedMaterial : null;
 
             Bounds b = wallCollider.bounds;
-            float doorMin = _doorZ - DoorWidth * 0.5f;
-            float doorMax = _doorZ + DoorWidth * 0.5f;
+            float coord = alongX ? doorMouth.x : doorMouth.y;
+            float doorMin = coord - doorWidth * 0.5f;
+            float doorMax = coord + doorWidth * 0.5f;
+            float bMin = alongX ? b.min.x : b.min.z;
+            float bMax = alongX ? b.max.x : b.max.z;
 
-            ResizeWallZ(wallGo, b.min.z, doorMin); // shrink the found wall into the south remainder
+            ResizeWallAxis(wallGo, alongX, bMin, doorMin);
 
-            if (b.max.z - doorMax > 0.05f)
+            if (bMax - doorMax > 0.05f)
             {
                 GameObject clone = Instantiate(wallGo, wallGo.transform.parent);
-                clone.name = wallGo.name + " (MV-845 north of door)";
-                ResizeWallZ(clone, doorMax, b.max.z);
+                clone.name = wallGo.name + " (MV-964 far side of door)";
+                ResizeWallAxis(clone, alongX, doorMax, bMax);
             }
         }
 
-        private static void ResizeWallZ(GameObject wallGo, float zMin, float zMax)
+        private static void ResizeWallAxis(GameObject wallGo, bool alongX, float min, float max)
         {
-            float length = zMax - zMin;
+            float length = max - min;
             if (length <= 0.02f) { wallGo.SetActive(false); return; }
 
             var collider = wallGo.GetComponent<BoxCollider>();
-            Vector3 size = new Vector3(collider.size.x, collider.size.y, length);
+            Vector3 size = alongX
+                ? new Vector3(length, collider.size.y, collider.size.z)
+                : new Vector3(collider.size.x, collider.size.y, length);
 
             Vector3 pos = wallGo.transform.position;
-            wallGo.transform.position = new Vector3(pos.x, pos.y, (zMin + zMax) * 0.5f);
+            wallGo.transform.position = alongX
+                ? new Vector3((min + max) * 0.5f, pos.y, pos.z)
+                : new Vector3(pos.x, pos.y, (min + max) * 0.5f);
             collider.size = size;
 
             var mf = wallGo.GetComponent<MeshFilter>();
             if (mf != null) mf.sharedMesh = CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size));
         }
 
-        /// <summary>Floor + side walls + a closed far end, 3 m wide by 30 m long, east of the door
-        /// (AC3). Built with real, un-stripped colliders (this is gameplay space Max is about to
-        /// actually walk through, not an offscreen vignette set) and dressed in whatever material the
-        /// real wall/floor already used, so it reads as World 1 throughout.</summary>
-        private void BuildCorridor(float wallHeight, float wallThickness)
+        private static AreaGate BuildDoor(Vector2 doorMouth, Wall wall, float wallHeight, float wallThickness,
+            Material wallMaterial, Transform parent, string name)
         {
-            Transform root = new GameObject("World Join Corridor").transform;
-            root.SetParent(transform, worldPositionStays: false);
+            bool doorAlongX = wall == Wall.N || wall == Wall.S;
+            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = name;
+            body.transform.SetParent(parent, worldPositionStays: false);
 
-            Material floorMat = FindMaterial("Map Floor") ??
-                                 IntroBuild.Lit("join_corridor_floor", new Color(0.45f, 0.44f, 0.40f));
-            Material wallMat = _wallMaterialForCorridor ??
-                                IntroBuild.Lit("join_corridor_wall", new Color(0.35f, 0.33f, 0.30f));
+            float sealWidth = WorldTransitionEntry.DoorWidth + wallThickness * 2f;
+            body.transform.position = new Vector3(doorMouth.x, wallHeight * 0.5f, doorMouth.y);
+            // A door on an E/W wall runs along Z -- spin 90 deg the same way MapRuntime.BuildAreaGate
+            // does for one, so AreaGate.StartHingeSwing (which reads localScale.x as "the width") finds
+            // its hinge pivot on the right edge instead of the thin one.
+            body.transform.rotation = doorAlongX ? Quaternion.identity : Quaternion.Euler(0f, 90f, 0f);
+            body.transform.localScale = new Vector3(sealWidth, wallHeight, wallThickness + 0.04f);
 
-            float midX = (_doorX + _corridorEndX) * 0.5f;
-            float length = _corridorEndX - _doorX;
-            float fullWidth = CorridorHalfWidth * 2f;
+            var rend = body.GetComponent<MeshRenderer>();
+            rend.sharedMaterial = wallMaterial != null ? wallMaterial : IntroBuild.Lit("join_door", new Color(0.35f, 0.33f, 0.30f));
 
-            _corridorFloorRenderer = SolidBox(root, "Corridor Floor",
-                new Vector3(midX, -0.05f, _doorZ), new Vector3(length, 0.1f, fullWidth), floorMat)
-                .GetComponent<Renderer>();
-            _corridorWallSRenderer = SolidBox(root, "Corridor Wall S",
-                new Vector3(midX, wallHeight * 0.5f, _doorZ - CorridorHalfWidth - wallThickness * 0.5f),
-                new Vector3(length, wallHeight, wallThickness), wallMat)
-                .GetComponent<Renderer>();
-            _corridorWallNRenderer = SolidBox(root, "Corridor Wall N",
-                new Vector3(midX, wallHeight * 0.5f, _doorZ + CorridorHalfWidth + wallThickness * 0.5f),
-                new Vector3(length, wallHeight, wallThickness), wallMat)
-                .GetComponent<Renderer>();
-            _corridorEndCapRenderer = SolidBox(root, "Corridor End Cap",
-                new Vector3(_corridorEndX + wallThickness * 0.5f, wallHeight * 0.5f, _doorZ),
-                new Vector3(wallThickness, wallHeight, fullWidth + wallThickness * 2f), wallMat)
-                .GetComponent<Renderer>();
+            var gate = body.AddComponent<AreaGate>();
+            gate.AwayFromPlayerDirection = OutwardDir(wall);
+            return gate;
         }
 
-        private static GameObject SolidBox(Transform parent, string name, Vector3 worldCenter, Vector3 size, Material mat)
+        /// <summary>Floor + both side walls between <paramref name="alongMin"/> and
+        /// <paramref name="alongMax"/> (metres outward from <see cref="_doorMouth"/>), parented under
+        /// their own root so a dressing ticket can attach art to exactly this stretch.</summary>
+        private Transform BuildSegment(Transform parent, string label, float wallHeight, float wallThickness,
+            float alongMin, float alongMax, Material floorMat, Material wallMat)
         {
+            Transform segRoot = new GameObject($"Corridor Segment {label}").transform;
+            segRoot.SetParent(parent, worldPositionStays: false);
+
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            BuildBox(segRoot, $"Segment {label} Floor", alongMin, alongMax, 0f, WorldTransitionEntry.CorridorWidth, 0.1f, -0.05f, floorMat);
+            BuildBox(segRoot, $"Segment {label} Wall 1", alongMin, alongMax, halfWidth + wallThickness * 0.5f, wallThickness, wallHeight, wallHeight * 0.5f, wallMat);
+            BuildBox(segRoot, $"Segment {label} Wall 2", alongMin, alongMax, -(halfWidth + wallThickness * 0.5f), wallThickness, wallHeight, wallHeight * 0.5f, wallMat);
+
+            return segRoot;
+        }
+
+        /// <summary>A world-axis-aligned box spanning [<paramref name="alongMin"/>, <paramref name="alongMax"/>]
+        /// outward from <see cref="_doorMouth"/> along its wall's own travel axis, offset
+        /// <paramref name="acrossOffset"/> across it. <see cref="OutwardDir"/>/<see cref="AcrossDir"/> are
+        /// always purely axial (never diagonal — every exit/arrival wall is N, E, S or W), so this size
+        /// formula is exact for either orientation without ever rotating the box itself.</summary>
+        private GameObject BuildBox(Transform parent, string name, float alongMin, float alongMax,
+            float acrossOffset, float acrossSize, float height, float centerY, Material mat)
+        {
+            Vector3 dir = OutwardDir(_wall);
+            Vector3 across = AcrossDir(_wall);
+            float mid = (alongMin + alongMax) * 0.5f;
+            float length = alongMax - alongMin;
+
+            Vector3 center = new Vector3(_doorMouth.x, centerY, _doorMouth.y) + dir * mid + across * acrossOffset;
+            Vector3 size = new Vector3(
+                Mathf.Abs(dir.x) * length + Mathf.Abs(across.x) * acrossSize,
+                height,
+                Mathf.Abs(dir.z) * length + Mathf.Abs(across.z) * acrossSize);
+
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
             go.transform.SetParent(parent, worldPositionStays: true);
-            go.transform.position = worldCenter;
+            go.transform.position = center;
             go.transform.localScale = size;
             var r = go.GetComponent<MeshRenderer>();
             if (mat != null) r.sharedMaterial = mat;
             return go;
         }
 
-        private static Material FindMaterial(string objectName)
-        {
-            GameObject go = GameObject.Find(objectName);
-            var r = go != null ? go.GetComponent<MeshRenderer>() : null;
-            return r != null ? r.sharedMaterial : null;
-        }
-
-        /// <summary>A screen-space fade quad parented to the live gameplay camera -- same idiom as
-        /// <see cref="WorldTransitionCinematic"/>'s own fade, just simpler (one direction, one alpha
-        /// target). A no-op if there's no <see cref="Camera.main"/> to hang it off (an EditMode test
-        /// with no camera set up) -- the phase timer still runs the fade's duration regardless.</summary>
         private void BuildFade()
         {
             Camera cam = Camera.main;
@@ -407,158 +514,160 @@ namespace MaxWorlds.Intro
             r.enabled = c.a > 0.001f;
         }
 
+        // ------------------------------------------------------------------ suspend / restore
+
+        private void SuspendGameplay()
+        {
+            if (_player != null) _player.enabled = false;
+
+            _hud = FindFirstObjectByType<HudController>();
+            if (_hud != null) _hud.gameObject.SetActive(false);
+
+            // Snapshot first -- disabling a RobotEnemy fires its own OnDisable, which removes it from
+            // the very list RobotEnemy.Active is backed by, so iterating that list live while disabling
+            // its members would mutate it mid-enumeration.
+            _frozenRobots.Clear();
+            _frozenRobots.AddRange(RobotEnemy.Active);
+            foreach (RobotEnemy r in _frozenRobots)
+                if (r != null) r.enabled = false;
+        }
+
+        private void RestoreGameplay()
+        {
+            if (_restored) return;
+            _restored = true;
+            if (_player != null) _player.enabled = true;
+            if (_hud != null) _hud.gameObject.SetActive(true);
+            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.enabled = true;
+            _frozenRobots.Clear();
+        }
+
         // ------------------------------------------------------------------ running it
 
         private void Update() => Tick(Time.unscaledDeltaTime);
 
         /// <summary>Advance the sequence by <paramref name="dt"/> seconds. Public so a test can drive it
-        /// without a live Input System/frame loop.</summary>
+        /// without a live frame loop.</summary>
         public void Tick(float dt)
         {
-            if (_phase == Phase.Done) return;
-            if (SkipRequested()) Skip();
-
             switch (_phase)
             {
-                case Phase.WalkToDoor: TickWalkToDoor(dt); break;
-                case Phase.WalkCorridor: TickWalkCorridor(dt); break;
-                case Phase.Fade: TickFade(dt); break;
+                case Phase.AwaitingCrossing: TickAwaitingCrossing(); break;
+                case Phase.WalkToEnd: TickWalkToEnd(dt); break;
+                case Phase.HoldAtEnd: TickHoldAtEnd(dt); break;
+                case Phase.FadeOut: TickFadeOut(dt); break;
+                case Phase.FadeIn: TickFadeIn(dt); break;
+                case Phase.ArrivalWalk: TickArrivalWalk(dt); break;
+                case Phase.Done: break;
             }
         }
 
-        private static bool SkipRequested()
+        /// <summary>MV-964 §4.2: Max keeps full control (and robots keep behaving) until he's a metre
+        /// past the door line -- this is the only phase that doesn't already have gameplay suspended.</summary>
+        private void TickAwaitingCrossing()
         {
-            var kb = Keyboard.current;
-            if (kb != null && kb.anyKey.wasPressedThisFrame) return true;
-            var ptr = Pointer.current;
-            if (ptr != null && ptr.press.wasPressedThisFrame) return true;
-            var ts = Touchscreen.current;
-            if (ts != null && ts.primaryTouch.press.wasPressedThisFrame) return true;
-            return false;
+            if (_playerT == null) return;
+            if (AlongDistance(_playerT.position, _doorMouth, _wall) >= 1f) BeginSuspendedWalk();
         }
 
-        /// <summary>Any tap/key skips straight to the fade (AC6) -- teleports Max to the fade's start
-        /// point so the cut is covered by black rather than a visible jump. A no-op once already fading
-        /// or done.</summary>
-        public void Skip()
+        /// <summary>MV-964 §4.2: the moment Max crosses, gameplay suspends, any Weapon Core still on the
+        /// ground is banked as if he'd walked over it, and the door swings shut behind him.</summary>
+        private void BeginSuspendedWalk()
         {
-            if (_phase == Phase.Fade || _phase == Phase.Done) return;
-            TeleportPlayer(new Vector3(_fadeStartX, _playerT.position.y, _doorZ));
-            EnterFade();
+            SuspendGameplay();
+            PickupDirector.EnsureInstalled().CollectGroundedWeaponCore();
+            if (_doorGate != null) _doorGate.Reclose();
+            TeleportPlayer(PointAt(_doorMouth, _wall, 1f, _playerT.position.y));
+
+            _phase = Phase.WalkToEnd;
+            _phaseElapsed = 0f;
         }
 
-        private void TickWalkToDoor(float dt)
+        private void TickWalkToEnd(float dt)
         {
+            ApplyCorridorLighting();
+
+            Vector3 target = PointAt(_doorMouth, _wall, _entry.CorridorLength - WalkEndClearance, _playerT.position.y);
             _phaseElapsed += dt;
-            var target = new Vector3(_doorX + DoorInsideOffset, _playerT.position.y, _doorZ);
-
-            if (_phaseElapsed >= WalkTimeoutSeconds)
-            {
-                TeleportPlayer(new Vector3(_doorX + FallbackInsideOffset, _playerT.position.y, _doorZ));
-                EnterCorridor();
-                return;
-            }
-
-            if (StepToward(target, dt)) EnterCorridor();
-        }
-
-        private void TickWalkCorridor(float dt)
-        {
-            ApplyCorridorBlend(_playerT.position.x);
-
-            // MV-849: once the blend is fully done, hold here for a beat before cutting to the
-            // fade -- an instant cut the moment the colours finish lerping reads as the corridor
-            // FINISHING, not as a scene the player is standing inside.
-            if (BlendT(_playerT.position.x) >= 1f)
-            {
-                _blendHoldElapsed += dt;
-                if (_blendHoldElapsed >= BlendHoldSeconds) EnterFade();
-                return;
-            }
-
-            _phaseElapsed += dt;
-            var target = new Vector3(_fadeStartX, _playerT.position.y, _doorZ);
 
             if (_phaseElapsed >= WalkTimeoutSeconds)
             {
                 TeleportPlayer(target);
-                EnterFade();
+                EnterHoldAtEnd();
                 return;
             }
 
-            if (StepToward(target, dt)) EnterFade();
+            if (StepToward(target, dt)) EnterHoldAtEnd();
         }
 
-        /// <summary>0 at <see cref="BlendStartX"/>, 1 at <see cref="BlendEndX"/> (MV-849).</summary>
-        private static float BlendT(float playerX)
-            => Mathf.Clamp01((playerX - BlendStartX) / (BlendEndX - BlendStartX));
-
-        /// <summary>Blend the corridor's own surfaces and the whole scene's lighting from Backyard
-        /// toward Stormdrain as Max crosses the corridor (MV-849). Lighting is global (fog/ambient
-        /// have no per-region variant in this rig), which is deliberate — it's what changes Max's
-        /// own shading, per the ticket, since he carries no per-world skin of his own.</summary>
-        private void ApplyCorridorBlend(float playerX)
+        /// <summary>Fog and lighting follow Max down the corridor (MV-964 §4.4), reaching the destination
+        /// world's look at <see cref="LightingBlendFraction"/> of the way along it.</summary>
+        private void ApplyCorridorLighting()
         {
-            float t = BlendT(playerX);
-            BiomePalette backyard = BiomePalette.Backyard;
-            BiomePalette stormdrain = BiomePalette.Stormdrain;
-
-            Color floorColor = Color.Lerp(backyard.ColorFor(SurfaceKind.Ground), stormdrain.ColorFor(SurfaceKind.Ground), t);
-            Color wallColor = Color.Lerp(backyard.ColorFor(SurfaceKind.Wall), stormdrain.ColorFor(SurfaceKind.Wall), t);
-
-            SetPropertyColor(_corridorFloorRenderer, floorColor);
-            SetPropertyColor(_corridorWallSRenderer, wallColor);
-            SetPropertyColor(_corridorWallNRenderer, wallColor);
-            SetPropertyColor(_corridorEndCapRenderer, wallColor);
-
-            if (t >= MaterialSwapT && !_corridorMaterialsSwapped)
-            {
-                _corridorMaterialsSwapped = true;
-                Material floorMat = IntroBuild.Lit("join_corridor_floor_w2", stormdrain.ColorFor(SurfaceKind.Ground));
-                Material wallMat = IntroBuild.Lit("join_corridor_wall_w2", stormdrain.ColorFor(SurfaceKind.Wall));
-                SetSharedMaterial(_corridorFloorRenderer, floorMat);
-                SetSharedMaterial(_corridorWallSRenderer, wallMat);
-                SetSharedMaterial(_corridorWallNRenderer, wallMat);
-                SetSharedMaterial(_corridorEndCapRenderer, wallMat);
-            }
-
-            if (_lighting != null)
-                _lighting.Apply(BackyardLook.Lerp(BackyardLook.Default, BackyardLook.Stormdrain, t));
+            if (_lighting == null) return;
+            float along = AlongDistance(_playerT.position, _doorMouth, _wall);
+            float t = Mathf.Clamp01(along / (LightingBlendFraction * _entry.CorridorLength));
+            _lighting.Apply(BackyardLook.Lerp(BackyardLook.ForWorld(_fromWorldIndex), BackyardLook.ForWorld(_fromWorldIndex + 1), t));
         }
 
-        private void SetPropertyColor(Renderer r, Color c)
+        private void EnterHoldAtEnd() { _phase = Phase.HoldAtEnd; _phaseElapsed = 0f; }
+
+        private void TickHoldAtEnd(float dt)
         {
-            if (r == null) return;
-            r.GetPropertyBlock(_corridorMpb);
-            _corridorMpb.SetColor(BaseColorId, c);
-            r.SetPropertyBlock(_corridorMpb);
+            _phaseElapsed += dt;
+            if (_phaseElapsed >= HoldAtEndSeconds) { _phase = Phase.FadeOut; _phaseElapsed = 0f; }
         }
 
-        private static void SetSharedMaterial(Renderer r, Material m)
-        {
-            if (r == null || m == null) return;
-            r.sharedMaterial = m;
-        }
-
-        private void TickFade(float dt)
+        private void TickFadeOut(float dt)
         {
             _phaseElapsed += dt;
             float alpha = FadeDuration > 0f ? Mathf.Clamp01(_phaseElapsed / FadeDuration) : 1f;
             ApplyFadeAlpha(alpha);
-            if (alpha >= 1f) Finish();
+            if (alpha >= 1f)
+            {
+                // MV-964 §4.5: the signal fires only once the screen is fully black -- RunTracker seals
+                // on it and the Result card shows over that same black, not over the live corridor.
+                HudSignals.EmitFinaleGateCrossed();
+                Finish();
+            }
         }
 
-        private void EnterCorridor() { _phase = Phase.WalkCorridor; _phaseElapsed = 0f; _blendHoldElapsed = 0f; }
-        private void EnterFade() { _phase = Phase.Fade; _phaseElapsed = 0f; }
+        private void TickFadeIn(float dt)
+        {
+            _phaseElapsed += dt;
+            float alpha = FadeDuration > 0f ? 1f - Mathf.Clamp01(_phaseElapsed / FadeDuration) : 0f;
+            ApplyFadeAlpha(alpha);
+            if (alpha <= 0f) { _phase = Phase.ArrivalWalk; _phaseElapsed = 0f; }
+        }
+
+        private const float ArrivalInsideOffset = 1.5f;
+
+        private void TickArrivalWalk(float dt)
+        {
+            Vector3 target = PointAt(_doorMouth, _wall, -ArrivalInsideOffset, _playerT.position.y);
+            _phaseElapsed += dt;
+
+            if (_phaseElapsed >= WalkTimeoutSeconds)
+            {
+                TeleportPlayer(target);
+                FinishArrival();
+                return;
+            }
+
+            if (StepToward(target, dt)) FinishArrival();
+        }
+
+        private void FinishArrival()
+        {
+            if (_doorGate != null) _doorGate.Reclose();
+            Finish();
+        }
 
         /// <summary>Steps Max toward <paramref name="target"/> at his normal walk speed via his own
-        /// <see cref="CharacterController"/> (so he collides with whatever's actually there, the same
-        /// as ordinary player movement) and turns him to face the travel direction -- Max has no
-        /// animator to trigger a walk clip on (he's a greybox capsule stand-in, same as everywhere else
-        /// in this project), so his "walk animation" here is this same locomotion every other scripted
-        /// or player-driven movement in the game already uses. Returns true once he's within
-        /// <see cref="ArrivalEpsilon"/> of the target, measured AFTER the move (not from the requested
-        /// step), so a collision-shortened step is never mistaken for arrival.</summary>
+        /// <see cref="CharacterController"/> (so he collides with whatever's actually there) and turns
+        /// him to face the travel direction. Returns true once he's within <see cref="ArrivalEpsilon"/>
+        /// of the target, measured AFTER the move, so a collision-shortened step is never mistaken for
+        /// arrival.</summary>
         private bool StepToward(Vector3 target, float dt)
         {
             Vector3 pos = _playerT.position;
@@ -598,16 +707,25 @@ namespace MaxWorlds.Intro
 
         // ------------------------------------------------------------------ handoff
 
-        /// <summary>Give the screen back exactly as it was borrowed, hand control to
-        /// <see cref="_onFinished"/>, and remove the sequence entirely.</summary>
+        /// <summary>The exit side deliberately does NOT restore gameplay or destroy itself here — the
+        /// screen must stay black (the Result card shows over it) until the scene reloads, either via
+        /// NEXT WORLD or HOME. The arrival side, by contrast, is the live scene from here on: control and
+        /// the HUD come back for real.</summary>
         private void Finish()
         {
             if (_phase == Phase.Done) return;
             _phase = Phase.Done;
-            RestoreGameplay();
+
+            if (_mode == Mode.Arrival)
+            {
+                RestoreGameplay();
+                _onFinished?.Invoke();
+                if (Application.isPlaying) Destroy(gameObject);
+                else DestroyImmediate(gameObject);
+                return;
+            }
+
             _onFinished?.Invoke();
-            if (Application.isPlaying) Destroy(gameObject);
-            else DestroyImmediate(gameObject);
         }
 
         private void OnDestroy()

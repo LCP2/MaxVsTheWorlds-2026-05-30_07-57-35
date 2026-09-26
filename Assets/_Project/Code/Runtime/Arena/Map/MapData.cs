@@ -318,8 +318,13 @@ namespace MaxWorlds.Arena
         public float wallHeight = DefaultWallHeight;
 
         /// <summary>MV-297: 40% of the previous 1 m default (was already cut once, 1.0 → 0.6, at the
-        /// authored-map level by MV-246/YT-112 — this is the code-level default following suit).</summary>
-        public float wallThickness = 0.4f;
+        /// authored-map level by MV-246/YT-112 — this is the code-level default following suit). Named
+        /// as a constant (MV-964) so code that only has a <see cref="WorldConfig"/> in hand — no built
+        /// <see cref="MapData"/> — a world config never authors its own wall thickness — can fall back
+        /// to the exact same number <see cref="WorldMapLoader"/> would.</summary>
+        public const float DefaultWallThickness = 0.4f;
+
+        public float wallThickness = DefaultWallThickness;
 
         /// <summary>The world's <see cref="WorldDials.deckHeight"/> (MV-697), carried here so
         /// <see cref="ZoneAt(float, float, float)"/> can tell "standing on the deck" from "standing on
