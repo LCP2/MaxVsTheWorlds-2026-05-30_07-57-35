@@ -554,6 +554,12 @@ namespace MaxWorlds.Enemies
         private CharacterController _cc;
         private IDamageable _targetDamageable;
 
+        /// <summary>MV-952: extends MV-946's fall recovery (Max, Sentinels) to robots — nothing
+        /// previously returned a robot that fell out of the world, so it kept falling forever with
+        /// every Sentinel and Max recovering around it. Re-seeded in <see cref="ResetState"/> from this
+        /// life's own spawn position, same as <see cref="Sentinel"/>'s own field re-seeded in Init.</summary>
+        private FallRecoveryState _fallRecovery;
+
         /// <summary>Max's own transform — fixed the moment it's acquired, and what every distance
         /// comparison in <see cref="RetargetIfNeeded"/> measures against even while <see cref="target"/>
         /// is pointed at a Sentinel (MV-362).</summary>
@@ -1182,6 +1188,10 @@ namespace MaxWorlds.Enemies
             _dormantFarAccumulator = 0f;
             _dormantFarStaggered = false;
             _lastTickPosition = transform.position;
+            // MV-952: a pooled robot must not carry the last life's fall-recovery memory forward — this
+            // life's own spawn position (already stamped onto transform.position by EnemySpawner before
+            // SetActive) is the only "last grounded" point that means anything to it.
+            _fallRecovery = new FallRecoveryState(transform.position);
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -1419,6 +1429,12 @@ namespace MaxWorlds.Enemies
             FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
             if (!skipGravity) ApplyGravity(dt);
             FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
+
+            // MV-952: below the floor or outside the world bounds for more than the grace window ->
+            // back to solid ground, the same recovery MV-946 already gives Max and every Sentinel. No
+            // damage, no death, and never counted as a kill -- this is recovery, not a hazard.
+            Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
+            if (recoverTo.HasValue) RecoverFromFall(recoverTo.Value);
 
             // MV-697: applied after every state's own movement, regardless of state -- except a
             // reduced Dormant-far tick where nothing has moved this robot since _lastTickPosition was
@@ -2636,6 +2652,21 @@ namespace MaxWorlds.Enemies
             if (_cc.isGrounded && _verticalVel < 0f) _verticalVel = -2f;
             _verticalVel -= gravity * dt;
             CharacterControllerMotion.SafeMove(_cc, Vector3.up * _verticalVel * dt); // MV-386
+        }
+
+        /// <summary>MV-952: teleports this robot back to solid ground once <see cref="_fallRecovery"/>
+        /// trips — same disable/set/enable shape <see cref="MaxWorlds.Player.PlayerController"/> and
+        /// <see cref="Sentinel"/> already use so <see cref="_cc"/>'s cached internal state doesn't fight
+        /// the jump. Clears the accumulated fall speed too, so the very next tick doesn't read as still
+        /// falling and immediately start re-accumulating gravity from a large negative <see cref="_verticalVel"/>.
+        /// Named distinctly from <see cref="State.Recover"/>/<see cref="TickRecover"/> above — that state
+        /// is this robot's post-attack wind-down, an unrelated mechanic that happens to share the word.</summary>
+        private void RecoverFromFall(Vector3 position)
+        {
+            _cc.enabled = false;
+            transform.position = position;
+            _cc.enabled = true;
+            _verticalVel = 0f;
         }
 
         // --- IDamageable ---
