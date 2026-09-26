@@ -75,13 +75,22 @@ namespace MaxWorlds.Bosses
         }
 
         private readonly List<PartFlight> _flights = new List<PartFlight>(8);
-        private BigBermudaBoss _boss;
         private BackyardPathLayout _layout;
         private Transform _max;
 
         private bool _running;
         private bool _finished;
         private float _elapsed;
+
+        /// <summary>MV-956: the position of whichever boss <see cref="HudSignals.BossKilled"/> most
+        /// recently reported — captured synchronously, always immediately before <see cref="OnDefeated"/>
+        /// runs off the same death (<see cref="BossCensus.ReportDefeated"/> emits <c>BossKilled</c> then,
+        /// only if the area just emptied, <c>BossDefeated</c>). This replaces a scene-wide
+        /// <c>FindFirstObjectByType&lt;BigBermudaBoss&gt;()</c> lookup that resolved to whichever boss
+        /// the scene happened to find first — wrong the moment an area authors more than one boss (a30's
+        /// two Big Bermudas): the orb must land where the boss that ACTUALLY died last fell, not at some
+        /// other boss's position.</summary>
+        private Vector3 _lastKilledPos;
 
         /// <summary>MV-698: guards the finale drop to exactly once per run — separate from
         /// <see cref="_running"/> on purpose. The fling-and-walk-out beat above only ever plays for the
@@ -91,13 +100,19 @@ namespace MaxWorlds.Bosses
         /// whether the fling beat already fired earlier in the same run.</summary>
         private bool _weaponCoreDropped;
 
-        private void Awake()
+        private void OnEnable()
         {
-            _boss = FindFirstObjectByType<BigBermudaBoss>();
+            HudSignals.BossKilled += OnBossKilled;
+            HudSignals.BossDefeated += OnDefeated;
         }
 
-        private void OnEnable() => HudSignals.BossDefeated += OnDefeated;
-        private void OnDisable() => HudSignals.BossDefeated -= OnDefeated;
+        private void OnDisable()
+        {
+            HudSignals.BossKilled -= OnBossKilled;
+            HudSignals.BossDefeated -= OnDefeated;
+        }
+
+        private void OnBossKilled(Vector3 pos) => _lastKilledPos = pos;
 
         private void OnDestroy()
         {
@@ -114,7 +129,7 @@ namespace MaxWorlds.Bosses
             _running = true;
             _elapsed = 0f;
             _layout = ResolveLayout();
-            FlingParts(BossPos() + Vector3.up * 1.4f);
+            FlingParts(_lastKilledPos + Vector3.up * 1.4f);
         }
 
         /// <summary>MV-698: World 1's finale drop. The area that just cleared
@@ -123,7 +138,11 @@ namespace MaxWorlds.Bosses
         /// "boss" AND the last area by index — and there must be a next world for the drop to matter;
         /// World 1 v4's mid-run bosses (a12, a20) and a final world's own last victory both fall through
         /// this untouched. Never spawns a <see cref="PickupKind.Device"/> — this is a distinct kind
-        /// with its own visual, not a shed grant.</summary>
+        /// with its own visual, not a shed grant.
+        ///
+        /// MV-956: spawns at <see cref="_lastKilledPos"/> — THIS boss's own death spot, whichever of
+        /// a30's two Big Bermudas actually died last — never a scene-wide boss lookup that could resolve
+        /// to the OTHER boss's position.</summary>
         private void MaybeDropWeaponCore()
         {
             if (_weaponCoreDropped) return;
@@ -131,7 +150,7 @@ namespace MaxWorlds.Bosses
             if (!HasNextWorld()) return;
 
             _weaponCoreDropped = true;
-            PickupDirector.EnsureInstalled().SpawnWeaponCore(BossPos() + Vector3.up * 1.4f);
+            PickupDirector.EnsureInstalled().SpawnWeaponCore(_lastKilledPos + Vector3.up * 1.4f);
         }
 
         private static bool IsFinalBossAreaDefeat()
@@ -268,12 +287,6 @@ namespace MaxWorlds.Bosses
                 if (g != null) _max = g.transform;
             }
             return _max;
-        }
-
-        private Vector3 BossPos()
-        {
-            if (_boss == null) _boss = FindFirstObjectByType<BigBermudaBoss>();
-            return _boss != null ? _boss.transform.position : _layout.ArenaCenter;
         }
 
         private BackyardPathLayout ResolveLayout()

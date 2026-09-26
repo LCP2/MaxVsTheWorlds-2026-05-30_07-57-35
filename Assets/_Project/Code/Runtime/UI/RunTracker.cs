@@ -22,11 +22,14 @@ namespace MaxWorlds.UI
     ///
     /// MV-591 — a boss falling is no longer what ends the run. World 1 v4 authors bosses mid-run (a12,
     /// a20) as well as the final one (a30), so a boss's own payoff finishing is necessary but not
-    /// sufficient: the run only seals once <see cref="HudSignals.RunComplete"/> ALSO says the final
-    /// area itself is empty (every robot dead, nothing queued, no boss left there). Whichever of the
-    /// two lands later is what triggers <see cref="Seal"/> and the results card — so the existing
-    /// loot-and-walk-to-the-door beat plays out exactly as before for every boss, mid-run or final; it
-    /// just no longer ends the game on its own.
+    /// sufficient on its own — the existing loot-and-walk-to-the-door beat plays out exactly as before
+    /// for every boss, mid-run or final; it just no longer ends the game by itself.
+    ///
+    /// MV-956: a run whose finale drops a Weapon Core (there is a next world to advance into) seals on
+    /// collecting that core and crossing <c>WorldFinaleGate</c> once it opens — never on
+    /// <see cref="HudSignals.RunComplete"/>, which required every robot in the final area dead, not just
+    /// its boss(es). A run with no next world (the last world's own last victory) has no core to await,
+    /// so it still falls back to <see cref="HudSignals.RunComplete"/> — see <see cref="TrySeal"/>.
     /// </summary>
     public sealed class RunTracker : MonoBehaviour
     {
@@ -62,9 +65,9 @@ namespace MaxWorlds.UI
         // MV-915: a FOURTH condition, riding the same "live only for the run that actually dropped a
         // Weapon Core" latch as the third — _payoffFinished (BossVictoryPayoff's own walk-out beat) is
         // scoped to whichever boss area clears FIRST in the whole run (a12, mid-run), so by the time
-        // World 1's real finale (a30) empties, _payoffFinished is already long since true and would let
-        // Victory seal the instant RunComplete lands, with no walk-out of its own. WorldFinaleGate only
-        // opens on RunComplete for the world's actual last boss area, so gating on it here is what makes
+        // World 1's real finale (a30) empties, _payoffFinished is already long since true. WorldFinaleGate
+        // only ever exists for the world's actual last boss area (MV-956: it opens on that area's own
+        // BossDefeated, the same event the Weapon Core drops on), so gating on it here is what makes
         // "walk through the open gate" a real, necessary beat for the finale specifically, without
         // touching a12/a20's own (unrelated) payoff timing at all.
         private bool _finaleGateAwaited;
@@ -176,7 +179,8 @@ namespace MaxWorlds.UI
         }
 
         // A boss's payoff beat played out (Max reached the gate, or it timed out) — one half of the
-        // seal condition. Fires for every boss, mid-run or final; only matters once RunComplete agrees.
+        // seal condition. Fires for every boss, mid-run or final; only matters once TrySeal's other
+        // condition (the finale's core+gate, or RunComplete with no next world) agrees.
         private void OnBossPayoffFinished()
         {
             _payoffFinished = true;
@@ -201,12 +205,31 @@ namespace MaxWorlds.UI
         /// <c>WorldFinaleGate</c> once it opened — <see cref="_payoffFinished"/> is scoped to whichever
         /// boss area clears FIRST in the run (a12, mid-run) and is long since true by the time the real
         /// finale (a30) empties, so without this the results card would cut in the instant the last
-        /// robot dies, with no walk-out of its own for the world's actual finale.</summary>
+        /// robot dies, with no walk-out of its own for the world's actual finale.
+        ///
+        /// MV-956: a run whose finale actually dropped a Weapon Core (<see cref="_weaponCoreAwaited"/>)
+        /// never needs <see cref="_runComplete"/> at all — collecting the core and crossing the open
+        /// gate (both riding the same <c>BossDefeated</c>-driven latch as the drop itself, see
+        /// <c>BossVictoryPayoff.MaybeDropWeaponCore</c>/<c>WorldFinaleGate.OnBossDefeated</c>) is by
+        /// itself proof the finale happened, and requiring the level ALSO be fully cleared was the World
+        /// 1 bug this ticket fixes (a real save could clear every boss and still have a robot elsewhere
+        /// in a30 keep the world un-completable forever). A run with no next world to advance into (the
+        /// last world's own last victory) never sets <see cref="_weaponCoreAwaited"/> and still falls
+        /// back to <see cref="_runComplete"/> — there is no other terminal signal for that case.</summary>
         private void TrySeal()
         {
-            if (_sealed || !_payoffFinished || !_runComplete) return;
-            if (_weaponCoreAwaited && !_weaponCoreCollected) return;
-            if (_finaleGateAwaited && !_finaleGateCrossed) return;
+            if (_sealed || !_payoffFinished) return;
+
+            if (_weaponCoreAwaited)
+            {
+                if (!_weaponCoreCollected) return;
+                if (_finaleGateAwaited && !_finaleGateCrossed) return;
+            }
+            else if (!_runComplete)
+            {
+                return;
+            }
+
             Seal(RunOutcome.Victory);
             ShowResults();
         }

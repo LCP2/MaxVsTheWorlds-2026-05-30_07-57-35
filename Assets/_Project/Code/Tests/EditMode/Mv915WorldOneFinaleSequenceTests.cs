@@ -229,6 +229,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0f, LastHealth(trace), 0.001f,
                 "AC3: the combined boss health bar must resolve to 0 once both bosses are down");
 
+            // MV-956: the fence now opens on THIS death (a30's last boss falling), never on RunComplete --
+            // asserted here, before anything reports the area/world as empty, since nothing in this test
+            // ever will (no RunComplete is fired at all below, and Victory still seals -- MV-956's whole
+            // point is that no robot-clearing is required anywhere in the finale).
+            Assert.IsTrue(gate.IsOpen,
+                "MV-956: WorldFinaleGate must open the instant a30's last boss dies, not wait for RunComplete");
+
             List<Pickup> core = LivePickups().Where(p => p.Kind == PickupKind.WeaponCore).ToList();
             Assert.AreEqual(1, core.Count,
                 "AC3: exactly one half-orb (Weapon Core) must be granted on the area's last boss falling");
@@ -241,21 +248,15 @@ namespace MaxWorlds.Tests.EditMode
                 "AC3: once the collected core's morph applies (THE RIG's own open ceremony), the active " +
                 "primary weapon must resolve to the laser (LPPE)");
 
-            // AC4: the exit fence stays CLOSED while a30 still holds robots, and opens exactly when the
-            // area is reported fully empty. HudSignals.RunComplete already encodes precisely "the final
-            // area has no robots left and no boss alive" (WorldRunner) -- driving it directly here is the
-            // same "exercise the domain event, not re-derive the robot count" idiom MV698's own test uses
-            // for BossPayoffFinished/RunComplete.
-            Assert.IsFalse(gate.IsOpen, "AC4: the fence must still read CLOSED -- a30's robots are not dead yet");
-            trace.Add("--- last a30 robot dies (RunComplete) ---");
-            // BossVictoryPayoff's own walk-out beat armed itself off a12's death, above -- in the real
-            // game its Update() loop would already have fired BossPayoffFinished (either Max satisfying
-            // IsAtDoor near a12, or its resultsTimeout fallback) well before a30 is even reached; this
-            // test doesn't tick Update(), so drive that half of RunTracker's seal condition directly,
-            // the same "exercise the domain event" idiom MV698's own test uses.
+            // AC4: the boss payoff beat (a12's own walk-out, unrelated to a30) finishing is RunTracker's
+            // other seal condition. In the real game its Update() loop would already have fired
+            // BossPayoffFinished (either Max satisfying IsAtDoor near a12, or its resultsTimeout fallback)
+            // well before a30 is even reached; this test doesn't tick Update(), so drive that half of
+            // RunTracker's seal condition directly, the same "exercise the domain event" idiom MV698's
+            // own test uses. MV-956: no HudSignals.EmitRunComplete() anywhere in this test -- Victory
+            // must seal without it.
+            trace.Add("--- boss payoff walk-out beat finishes (a12's own, unrelated to a30) ---");
             HudSignals.EmitBossPayoffFinished();
-            HudSignals.EmitRunComplete();
-            Assert.IsTrue(gate.IsOpen, "AC4: the fence must read OPEN the instant the final area is reported empty");
 
             Assert.AreEqual(0, SaveSystem.Load(0).WorldIndex,
                 "Victory must not seal before Max actually crosses the open gate, even though every " +
