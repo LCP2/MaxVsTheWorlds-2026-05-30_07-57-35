@@ -228,6 +228,12 @@ namespace MaxWorlds.Intro
             _segmentCRoot = BuildSegment(root, "C", wallHeight, wallThickness, _entry.SegmentBEnd, _entry.CorridorLength,
                 IntroBuild.Lit($"{keyPrefix}_C_floor", to.ColorFor(SurfaceKind.Ground)),
                 IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
+
+            // MV-965: garden/kerb+grate/culvert set-dressing on top of the three flat-coloured shells
+            // above — a separate pass, same reason StormdrainDressing/BackyardDressing are separate from
+            // MapRuntime.Build, only ever relevant to the World 1 -> World 2 row this ticket covers.
+            if (_fromWorldIndex == 0)
+                WorldJoinDressing.DressExit(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
         }
 
         // ------------------------------------------------------------------ build (arrival)
@@ -284,6 +290,10 @@ namespace MaxWorlds.Intro
             _arrivalRoot = BuildSegment(transform, "Arrival", wallHeight, wallThickness, 0f, _entry.ArrivalShellLength,
                 IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground)),
                 IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
+
+            // MV-965: same dressing pass as the exit side's segment C, continued into the arrival shell.
+            if (toWorld == 1)
+                WorldJoinDressing.DressArrival(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
         }
 
         // ------------------------------------------------------------------ shared geometry
