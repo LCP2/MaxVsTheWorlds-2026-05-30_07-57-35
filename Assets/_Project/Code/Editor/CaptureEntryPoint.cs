@@ -121,6 +121,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv939W2Colors() => RunFromMenu(CapturePresets.All["mv939w2colors"]);
         public static void CaptureMv939W2Colors() => Run(CapturePresets.All["mv939w2colors"]);
 
+        [MenuItem("MaxWorlds/Capture/World 1 -> World 2 Corridor (MV-965)")]
+        public static void MenuMv965Corridor() => RunFromMenu(CapturePresets.All["mv965corridor"]);
+        public static void CaptureMv965Corridor() => Run(CapturePresets.All["mv965corridor"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

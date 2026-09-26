@@ -13,6 +13,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
@@ -336,6 +337,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv857MaxWorld2Colors());
             Add(BuildMv913MissileLauncherCheck());
             Add(BuildMv939W2ColorCheck());
+            Add(BuildMv965Corridor());
             return d;
         }
 
@@ -2774,6 +2776,125 @@ namespace MaxWorlds.Dev
                     foreach (var go in fittings) if (go != null) Destroy(go);
                     if (shedGo != null) Destroy(shedGo);
                 },
+            };
+        }
+
+        // ---- Mv965Corridor (MV-965 AC3) --------------------------------------------------------
+
+        /// <summary>Frames the World 1 -> World 2 join corridor's own three segments (the garden, the
+        /// kerb + grate, and the culvert) at d = 4, 11 and 22 m from the door — MV-965's own dressing
+        /// pass, shot on the real corridor MV-964 built rather than a mock-up. Drives
+        /// <see cref="WorldJoinSequence.OpenExitDoor"/> directly (the same call
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate"/> makes once World 1's boss dies) since this is a
+        /// design-fidelity check, not a playthrough — the boss fight itself is out of scope for three
+        /// still frames. The three shots are composited into one file (MV-965's own AC3) in
+        /// <c>Cleanup</c>, after the director has already written each one individually.</summary>
+        private static CapturePreset BuildMv965Corridor()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            float[] shotD = { 4f, 11f, 22f };
+
+            Vector2 doorMouth = default;
+            Wall wall = Wall.N;
+
+            Vector3 OutwardDir(Wall w) => w switch
+            {
+                Wall.N => Vector3.forward,
+                Wall.S => Vector3.back,
+                Wall.E => Vector3.right,
+                Wall.W => Vector3.left,
+                _ => Vector3.forward,
+            };
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Cfg == null || path.Map == null)
+                    throw new CaptureAbortException("World 1 built no BackyardPath to open the corridor from");
+
+                WorldTransitionEntry entry = WorldTransitions.For(0);
+                if (entry == null) throw new CaptureAbortException("World 1 has no WorldTransitions entry into World 2");
+
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 0);
+                for (int i = 0; i < 4; i++) yield return null;
+
+                if (FindFirstObjectByType<WorldJoinSequence>() == null)
+                    throw new CaptureAbortException("WorldJoinSequence failed to build the exit corridor");
+
+                doorMouth = entry.ExitDoorMouth(path.Cfg);
+                wall = entry.ExitWall;
+            }
+
+            IEnumerator FrameAt(Camera cam, float d)
+            {
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 pos = new Vector3(doorMouth.x, 1f, doorMouth.y) + OutwardDir(wall) * d;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(pos - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            Texture2D LoadPng(string path)
+            {
+                var tex = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                tex.LoadImage(File.ReadAllBytes(path));
+                return tex;
+            }
+
+            void Composite()
+            {
+                try
+                {
+                    string p0 = Path.Combine(outDir, "MV-965-corridor-d4.png");
+                    string p1 = Path.Combine(outDir, "MV-965-corridor-d11.png");
+                    string p2 = Path.Combine(outDir, "MV-965-corridor-d22.png");
+                    if (!File.Exists(p0) || !File.Exists(p1) || !File.Exists(p2)) return;
+
+                    Texture2D t0 = LoadPng(p0), t1 = LoadPng(p1), t2 = LoadPng(p2);
+                    int w = t0.width, h = t0.height;
+                    var combined = new Texture2D(w * 3, h, TextureFormat.RGB24, false);
+                    combined.SetPixels(0, 0, w, h, t0.GetPixels());
+                    combined.SetPixels(w, 0, w, h, t1.GetPixels());
+                    combined.SetPixels(w * 2, 0, w, h, t2.GetPixels());
+                    combined.Apply();
+                    File.WriteAllBytes(Path.Combine(outDir, "MV-965-corridor.png"), combined.EncodeToPNG());
+                    DestroyImmediate(t0); DestroyImmediate(t1); DestroyImmediate(t2); DestroyImmediate(combined);
+                }
+                catch (Exception e) { Debug.LogWarning("[MV965Capture] composite failed: " + e.Message); }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv965corridor",
+                LogTag = "[MV965Capture]",
+                Flag = "-mv965shot",
+                ArmFile = "Temp/mv965.arm",
+                HeadlessMarker = "Temp/mv965.headless",
+                DoneFileName = "_mv965_done.txt",
+                Width = 1200,
+                Height = 800,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 0;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-965-corridor-d4", cam => FrameAt(cam, shotD[0])),
+                    new CaptureShot("MV-965-corridor-d11", cam => FrameAt(cam, shotD[1])),
+                    new CaptureShot("MV-965-corridor-d22", cam => FrameAt(cam, shotD[2])),
+                },
+                Cleanup = Composite,
             };
         }
     }
