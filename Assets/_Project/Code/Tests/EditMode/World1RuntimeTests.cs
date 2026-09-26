@@ -427,7 +427,10 @@ namespace MaxWorlds.Tests.EditMode
         // --- their composition, so some of each area's robots fell back to an unauthored ring spot. ---
         // --- MV-641: V12c's composition edits (a2/a3/a5/a9 robot counts) drop the total to 687. -------
         // --- MV-655: V12d's redraw (cover/shed repositioning under the new per-robot cover gap) -------
-        // --- drops the total to 659. ---------------------------------------------------------------
+        // --- drops the total to 659. -----------------------------------------------------------------
+        // --- MV-956: clearing a30's top-left corner (Lee's design, 2026-09-26) removes 15 garrison ----
+        // --- entries so Max fights the relocated final boss and the remaining garrison together, -------
+        // --- dropping the total to 644. ---------------------------------------------------------------
 
         [Test]
         public void World1_EveryAreasGarrisonCountMatchesItsComposedTotal()
@@ -451,7 +454,7 @@ namespace MaxWorlds.Tests.EditMode
                 totalGarrisoned += garrisoned;
             }
 
-            Assert.AreEqual(659, totalGarrisoned, "world1_config.json must author exactly 659 garrison positions across a1..a30");
+            Assert.AreEqual(644, totalGarrisoned, "world1_config.json must author exactly 644 garrison positions across a1..a30");
         }
 
         // --- AC5 (MV-564: v4's 30-area redraw re-authored areas 1-4's composition) --------------------

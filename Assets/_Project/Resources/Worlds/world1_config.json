@@ -8634,12 +8634,12 @@
    "targetThreatBudget": 88.84,
    "composition": {
     "rusher": 0,
-    "bruiser": 8,
-    "heavy": 7,
-    "brute": 6,
-    "gunner": 6,
-    "launcher": 5,
-    "blinker": 5,
+    "bruiser": 5,
+    "heavy": 4,
+    "brute": 3,
+    "gunner": 4,
+    "launcher": 3,
+    "blinker": 3,
     "bolter": 8
    },
    "cover": [
@@ -8838,8 +8838,8 @@
    "bosses": [
     {
      "id": "a30_boss1",
-     "x": 323.0,
-     "z": 119.4,
+     "x": 316.0,
+     "z": 127.0,
      "size": {
       "w": 3.6,
       "d": 3.6
@@ -8857,29 +8857,14 @@
    ],
    "boss": {
     "id": "a30_boss1",
-    "x": 323.0,
-    "z": 119.4,
+    "x": 316.0,
+    "z": 127.0,
     "size": {
      "w": 3.6,
      "d": 3.6
     }
    },
    "garrison": [
-    {
-     "kind": "gunner",
-     "x": 297.5,
-     "z": 130.5
-    },
-    {
-     "kind": "gunner",
-     "x": 299.5,
-     "z": 130.5
-    },
-    {
-     "kind": "bruiser",
-     "x": 301.5,
-     "z": 130.5
-    },
     {
      "kind": "gunner",
      "x": 313.5,
@@ -8927,21 +8912,6 @@
     },
     {
      "kind": "launcher",
-     "x": 297.5,
-     "z": 128.5
-    },
-    {
-     "kind": "launcher",
-     "x": 299.5,
-     "z": 128.5
-    },
-    {
-     "kind": "bruiser",
-     "x": 301.5,
-     "z": 128.5
-    },
-    {
-     "kind": "launcher",
      "x": 313.5,
      "z": 128.5
     },
@@ -8982,26 +8952,6 @@
     },
     {
      "kind": "bruiser",
-     "x": 304.5,
-     "z": 126.5
-    },
-    {
-     "kind": "heavy",
-     "x": 306.5,
-     "z": 126.5
-    },
-    {
-     "kind": "brute",
-     "x": 309.5,
-     "z": 126.5
-    },
-    {
-     "kind": "heavy",
-     "x": 311.5,
-     "z": 126.5
-    },
-    {
-     "kind": "bruiser",
      "x": 313.5,
      "z": 126.5
     },
@@ -9031,21 +8981,6 @@
      "z": 126.5
     },
     {
-     "kind": "heavy",
-     "x": 304.5,
-     "z": 124.5
-    },
-    {
-     "kind": "brute",
-     "x": 306.5,
-     "z": 124.5
-    },
-    {
-     "kind": "brute",
-     "x": 308.5,
-     "z": 124.5
-    },
-    {
      "kind": "blinker",
      "x": 332.5,
      "z": 124.5
@@ -9054,16 +8989,6 @@
      "kind": "brute",
      "x": 334.5,
      "z": 124.5
-    },
-    {
-     "kind": "blinker",
-     "x": 297.5,
-     "z": 117.5
-    },
-    {
-     "kind": "blinker",
-     "x": 299.5,
-     "z": 117.5
     },
     {
      "kind": "bolter",
