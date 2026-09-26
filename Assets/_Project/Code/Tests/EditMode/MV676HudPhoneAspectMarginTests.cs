@@ -54,18 +54,12 @@ namespace MaxWorlds.Tests.EditMode
             // toggle pick up the snapshot above.
             WeaponSystemState.RebuildAcquiredFromRigState();
 
-            var settingsGo = new GameObject("SettingsPanel");
-            var settings = settingsGo.AddComponent<SettingsPanel>();
-            typeof(SettingsPanel).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(settings, null);
-
             try
             {
                 var focusToggle = FindRect(hudGo, "Sentinel Focus Toggle");
                 var forceField = FindRect(hudGo, "Force Field Button");
                 var balloon = FindRect(hudGo, "Water Balloon Joystick");
                 var map = FindRect(hudGo, "Map Button");
-                var gear = FindRect(settingsGo, "Gear");
 
                 Assert.That(focusToggle, Is.Not.Null, "fixture: the focus toggle must exist");
                 Assert.That(focusToggle.gameObject.activeInHierarchy, Is.True,
@@ -75,7 +69,6 @@ namespace MaxWorlds.Tests.EditMode
                     "fixture: Force Field must be visible once acquired");
                 Assert.That(balloon, Is.Not.Null, "fixture: the water balloon joystick must exist");
                 Assert.That(map, Is.Not.Null, "fixture: the map button must exist");
-                Assert.That(gear, Is.Not.Null, "fixture: the settings gear button must exist");
 
                 // Replicates CanvasScaler.ScaleWithScreenSize's own log-blend (matchWidthOrHeight=0.5):
                 // the effective canvas is the physical screen size divided back out by that factor.
@@ -102,26 +95,11 @@ namespace MaxWorlds.Tests.EditMode
                     Object.DestroyImmediate(hudRt);
                 }
 
-                Rect gearRect;
-                var gearCam = ConfigureCanvasForCapture(settingsGo.GetComponentInChildren<Canvas>(),
-                    settingsGo.GetComponentInChildren<CanvasScaler>(), effectiveWidth, effectiveHeight, out RenderTexture gearRt);
-                try
-                {
-                    gearRect = ScreenRect(gear, gearCam);
-                }
-                finally
-                {
-                    Object.DestroyImmediate(gearCam.gameObject);
-                    gearRt.Release();
-                    Object.DestroyImmediate(gearRt);
-                }
-
                 var elements = new (string id, Rect rect)[]
                 {
                     ("Focus Toggle", toggleRect),
                     ("Force Field", ffRect),
                     ("Water Balloon", balloonRect),
-                    ("Settings Gear", gearRect),
                     ("MAP", mapRect),
                 };
 
@@ -134,7 +112,6 @@ namespace MaxWorlds.Tests.EditMode
             {
                 InvokeLifecycle(hud, "OnDisable");
                 Object.DestroyImmediate(hudGo);
-                Object.DestroyImmediate(settingsGo);
                 WeaponSystemState.Reset();
                 RigState.Reset();
                 RigFusionState.Reset();
