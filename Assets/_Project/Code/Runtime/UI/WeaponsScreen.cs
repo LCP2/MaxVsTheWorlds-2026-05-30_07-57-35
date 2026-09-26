@@ -2759,9 +2759,11 @@ namespace MaxWorlds.UI
             subtitle.fontStyle = FontStyle.Bold;
             subtitle.text = "MAX'S WORKBENCH";
 
+            // MV-962: right-to-left CLOSE, 24 gap, PARTS chip, 40 gap, QUIT TO MENU — QUIT used to sit
+            // directly beside CLOSE, so reaching for CLOSE (dismiss) risked tapping QUIT (abandons the
+            // run) instead. Moving QUIT past the PARTS chip puts real distance between them.
             float cursor = -16f;
-            cursor = BuildCloseButton(bar, cursor) - 16f;
-            cursor = BuildQuitButton(bar, cursor) - 16f;
+            cursor = BuildCloseButton(bar, cursor) - 24f;
 
             // MV-519: cells are the only currency now — the SUPERCELLS tray this used to sit beside is
             // gone (a Supercell grants its cells on pickup, never banked/cashed here), so the CELLS chip
@@ -2786,6 +2788,9 @@ namespace MaxWorlds.UI
             cellsBorder.type = Image.Type.Sliced;
             cellsBorder.raycastTarget = false;
             _cellsBorder = cellsBorder;
+
+            cursor = cursor - DominantCellsChipWidth - 40f;
+            BuildQuitButton(bar, cursor);
         }
 
         /// <summary>MV-519 AC9: wide/tall enough that a typical cell count best-fits near its own
@@ -2799,19 +2804,23 @@ namespace MaxWorlds.UI
         /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
         private float BuildCloseButton(RectTransform bar, float rightEdge)
         {
-            const float w = 104f, h = 56f;
+            const float w = 220f, h = 92f;
             var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), SupercellColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
             bg.rectTransform.sizeDelta = new Vector2(w, h);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
+            // MV-962: Lee was hitting QUIT (right beside CLOSE) when reaching for CLOSE. Moving QUIT away
+            // fixes the main cause; padding the raycast beyond the drawn pill (248x120 total) makes CLOSE
+            // itself an easier target without drawing a bigger shape.
+            bg.raycastPadding = new Vector4(-14f, -14f, -14f, -14f);
 
             var button = bg.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(Close);
 
-            var label = AddText(bg.rectTransform, 24, PanelColor, TextAnchor.MiddleCenter);
+            var label = AddText(bg.rectTransform, 32, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             // MV-445 defect 6: was U+2715 (heavy multiplication X, a dingbat) — HudFont's LegacyRuntime.ttf
             // has no coverage for it (same class of gap as the draft band's own ASCII-hyphen note), so it
