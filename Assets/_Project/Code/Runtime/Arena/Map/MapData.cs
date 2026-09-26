@@ -53,7 +53,37 @@ namespace MaxWorlds.Arena
         /// instead of the raw internal index.</summary>
         public int overlayOfIndex;
 
-        public ZoneKind Kind => MapEnums.Zone(type);
+        /// <summary>Parsed once on first read and cached (MV-963) — <c>type</c> is authored once,
+        /// at load, and never mutated afterward, so re-parsing it on every read (3x <c>string.Replace</c>
+        /// + <c>Enum.TryParse</c>, previously done every single access from every hot-path caller) was
+        /// pure waste. -1 means "not yet parsed".</summary>
+        private int _kindCache = -1;
+
+        public ZoneKind Kind
+        {
+            get
+            {
+                if (_kindCache < 0) _kindCache = (int)MapEnums.Zone(type);
+                return (ZoneKind)_kindCache;
+            }
+        }
+
+        /// <summary>The 1-based area number embedded in this zone's own id ("area7" -&gt; 7), or 0 if
+        /// the id doesn't follow that convention (the compost clearing, an unrecognised zone). Parsed
+        /// once and cached (MV-963) — same reasoning as <see cref="Kind"/>: <c>id</c> never changes
+        /// after load, so callers that used to re-derive this from the raw string on every access
+        /// (<see cref="MaxWorlds.Enemies.RobotEnemy.IsWellBehindPlayer"/> alone did it twice per call)
+        /// now read a field.</summary>
+        private int _areaIndexCache = int.MinValue;
+
+        public int AreaIndex
+        {
+            get
+            {
+                if (_areaIndexCache == int.MinValue) _areaIndexCache = MapEnums.AreaIndexOf(id);
+                return _areaIndexCache;
+            }
+        }
 
         public float XMin => x - width * 0.5f;
         public float XMax => x + width * 0.5f;
@@ -206,10 +236,50 @@ namespace MaxWorlds.Arena
         /// keyed gate.</summary>
         public string[] Keys => MapEnums.Ids(opensOn);
 
-        public EntityKind Kind => MapEnums.Entity(kind);
-        public CoverShape Shape => MapEnums.Shape(shape);
-        public CoverDressing Dressing => MapEnums.Dressing(dressing);
-        public CoverKind CoverKind => MapEnums.CoverBehaviour(coverKind);
+        // Parsed once on first read and cached (MV-963), same reasoning as MapZone.Kind above: each of
+        // these strings is authored once, at load, and never mutated afterward, so re-running
+        // MapEnums' string.Replace + Enum.TryParse chain on every single access — this record's Kind
+        // alone was read from every entity, every frame, by every whole-map scan below — was pure waste.
+        private int _kindCache = -1;
+        private int _shapeCache = -1;
+        private int _dressingCache = -1;
+        private int _coverKindCache = -1;
+
+        public EntityKind Kind
+        {
+            get
+            {
+                if (_kindCache < 0) _kindCache = (int)MapEnums.Entity(kind);
+                return (EntityKind)_kindCache;
+            }
+        }
+
+        public CoverShape Shape
+        {
+            get
+            {
+                if (_shapeCache < 0) _shapeCache = (int)MapEnums.Shape(shape);
+                return (CoverShape)_shapeCache;
+            }
+        }
+
+        public CoverDressing Dressing
+        {
+            get
+            {
+                if (_dressingCache < 0) _dressingCache = (int)MapEnums.Dressing(dressing);
+                return (CoverDressing)_dressingCache;
+            }
+        }
+
+        public CoverKind CoverKind
+        {
+            get
+            {
+                if (_coverKindCache < 0) _coverKindCache = (int)MapEnums.CoverBehaviour(coverKind);
+                return (CoverKind)_coverKindCache;
+            }
+        }
 
         public Vector3 Size => new Vector3(width, height, depth);
         public Vector2 CenterXz => new Vector2(x, z);
@@ -380,6 +450,48 @@ namespace MaxWorlds.Arena
         /// cross-level targeting filter needs.</summary>
         public bool IsOnDeck(float px, float py, float pz) => py >= deckHeight - 0.5f && IsOverDeckSurface(px, pz);
 
+        /// <summary>Every Deck/Hatch entity in the map (MV-963), built once on first access and cached —
+        /// <see cref="entities"/> never changes after load, so filtering the whole array down to the
+        /// handful of Deck/Hatch rects on EVERY <see cref="DeckEntityAt"/> call (reached, per-frame, from
+        /// <see cref="ZoneAt(float, float, float)"/>, <see cref="IsOnDeck"/>, <see cref="IsWalkable"/>,
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.IsWellBehindPlayer"/>) was pure waste. Null-safe:
+        /// <see cref="entities"/> is <see cref="Array.Empty{T}"/>'d by default, never actually null, but
+        /// a hand-built test fixture can still leave it null.</summary>
+        private MapEntity[] _deckEntitiesCache;
+
+        private MapEntity[] DeckEntities()
+        {
+            if (_deckEntitiesCache != null) return _deckEntitiesCache;
+
+            if (entities == null) return _deckEntitiesCache = Array.Empty<MapEntity>();
+
+            var list = new List<MapEntity>();
+            foreach (MapEntity e in entities)
+            {
+                if (e == null) continue;
+                EntityKind kind = e.Kind;
+                if (kind == EntityKind.Deck || kind == EntityKind.Hatch) list.Add(e);
+            }
+            return _deckEntitiesCache = list.ToArray();
+        }
+
+        /// <summary>Every Sludge entity in the map (MV-963), same cache-once idiom as
+        /// <see cref="DeckEntities"/> — what <see cref="MapGeometry.SpeedMultiplierAt"/> walks instead of
+        /// the whole, unfiltered <see cref="entities"/> array on every mover, every frame.</summary>
+        private MapEntity[] _sludgeEntitiesCache;
+
+        public MapEntity[] SludgeEntities()
+        {
+            if (_sludgeEntitiesCache != null) return _sludgeEntitiesCache;
+
+            if (entities == null) return _sludgeEntitiesCache = Array.Empty<MapEntity>();
+
+            var list = new List<MapEntity>();
+            foreach (MapEntity e in entities)
+                if (e != null && e.Kind == EntityKind.Sludge) list.Add(e);
+            return _sludgeEntitiesCache = list.ToArray();
+        }
+
         /// <summary>The Deck/Hatch entity (never a ramp — MV-833's own rule) whose rect contains
         /// (<paramref name="px"/>, <paramref name="pz"/>), or null if none does. Factored out of
         /// <see cref="IsOverDeckSurface"/> (MV-864) so <see cref="ResolveWalkableSurfacePoint"/> and
@@ -387,14 +499,10 @@ namespace MaxWorlds.Arena
         /// rect this already answers yes/no against, rather than a separately-derived one.</summary>
         private MapEntity DeckEntityAt(float px, float pz)
         {
-            if (entities == null) return null;
+            MapEntity[] decks = DeckEntities();
 
-            foreach (MapEntity e in entities)
+            foreach (MapEntity e in decks)
             {
-                if (e == null) continue;
-                EntityKind kind = e.Kind;
-                if (kind != EntityKind.Deck && kind != EntityKind.Hatch) continue;
-
                 float halfW = e.width * 0.5f, halfD = e.depth * 0.5f;
                 if (px >= e.x - halfW && px <= e.x + halfW && pz >= e.z - halfD && pz <= e.z + halfD)
                     return e;
@@ -591,6 +699,18 @@ namespace MaxWorlds.Arena
 
         public static CoverKind CoverBehaviour(string s) =>
             Parse(s, CoverKind.Solid, nameof(CoverBehaviour));
+
+        /// <summary>The 1-based area number of an "area&lt;N&gt;" zone id, or 0 for anything else (the
+        /// compost clearing, an unrecognised id, standing in the void) — moved here from
+        /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> (MV-963) so <see cref="MapZone.AreaIndex"/>
+        /// can share it. Ordinal <c>StartsWith</c> (a ternary/culture-aware compare on every zone id was
+        /// measured cost, MV-963) and <c>AsSpan</c> instead of <c>Substring</c> so a caller that only has
+        /// the raw string — the one case this can't be cached for — never allocates either.</summary>
+        public static int AreaIndexOf(string zoneId)
+        {
+            if (string.IsNullOrEmpty(zoneId) || !zoneId.StartsWith("area", System.StringComparison.Ordinal)) return 0;
+            return int.TryParse(zoneId.AsSpan(4), out int n) ? n : 0;
+        }
 
         /// <summary>A comma-separated list of entity ids, as written by hand: <c>"a, b"</c> and
         /// <c>"a,b"</c> and <c>"a"</c> all say what they look like they say. Ids themselves are taken

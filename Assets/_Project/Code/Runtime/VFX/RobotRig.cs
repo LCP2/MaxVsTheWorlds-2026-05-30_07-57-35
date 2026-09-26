@@ -182,6 +182,23 @@ namespace MaxWorlds.VFX
         private float[] _wheelRadius;
         private Vector3 _lastPos;
 
+        /// <summary>Any one renderer under <see cref="_model"/> (MV-963) — used only to ask Unity's own,
+        /// already-computed <see cref="Renderer.isVisible"/> ("was this drawn by any camera last
+        /// frame") for the dormant-and-offscreen early-out in <see cref="LateUpdate"/>. Not the eye or
+        /// body specifically; any part of the model culling means the whole model is culling, since they
+        /// all move and cull together.</summary>
+        private Renderer _visibilityProbe;
+
+        /// <summary>The eye colour actually written to the GPU last (MV-963) — <see cref="ApplyEyes"/>
+        /// skips the Get/SetPropertyBlock round trip per eye when the colour hasn't moved since, which
+        /// is most robots most frames once the Lerp toward a steady idle/warn target has settled.</summary>
+        private Color? _lastAppliedEyeColor;
+
+        /// <summary>The chassis emission colour actually written last (MV-963) — same skip-when-
+        /// unchanged idiom as <see cref="_lastAppliedEyeColor"/>, for the one <see cref="_bodyMat"/>
+        /// write every robot's <see cref="LateUpdate"/> otherwise made unconditionally.</summary>
+        private Color? _lastAppliedBodyHeat;
+
         /// <summary>MV-746: the World 3 Puffer Mine's inflatable-body transform (see
         /// <see cref="RobotBodies.Body.Inflatable"/>), or null for every other kind — see
         /// <see cref="UpdateReefInflate"/>.</summary>
@@ -398,6 +415,7 @@ namespace MaxWorlds.VFX
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
             _restModelScale = _model.localScale;
+            _visibilityProbe = _model.GetComponentInChildren<Renderer>();
 
             _wheels = body.Wheels;
             _wheelRadius = new float[_wheels.Length];
@@ -419,6 +437,17 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (!_built || _enemy == null) return;
+
+            // MV-963: a Dormant robot with nothing of its model on screen right now can't be seen
+            // animating either — the same "nothing here can ever be observed" reasoning
+            // RobotEnemy.IsWellBehindPlayer's own doc comment gives for skipping its frustum test, aimed
+            // at the visual side instead: the wheel spin, the strike lurch, the eye lerp and the chassis
+            // heat write all ran unconditionally for a population that runs into the hundreds by World
+            // 2's midgame, the large majority of it Dormant and off camera. Renderer.isVisible is Unity's
+            // own last-frame culling result — free to read, nothing here recomputes a frustum. A model
+            // with no renderer at all (should never happen past BuildModel) never skips, so a missing
+            // probe can only cost the saving, never a stuck pose.
+            if (_enemy.IsDormant && _visibilityProbe != null && !_visibilityProbe.isVisible) return;
 
             RideTheRamp();
             SpinWheels();
@@ -446,7 +475,15 @@ namespace MaxWorlds.VFX
             float teleportPop = 1f - _teleportExpand;
             Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
                        + TeleportFlashColor * (teleportPop * 0.8f);
-            if (_bodyMat != null && _bodyMat.HasProperty(EmissionId)) _bodyMat.SetColor(EmissionId, heat);
+            // MV-963: skip the write once heat has settled (the steady state for the vast majority of
+            // robots, most frames — no wind-up, no flash, no teleport pop) instead of re-assigning the
+            // shared material's emission colour to the same value every tick.
+            if (_bodyMat != null && _bodyMat.HasProperty(EmissionId) &&
+                (!_lastAppliedBodyHeat.HasValue || _lastAppliedBodyHeat.Value != heat))
+            {
+                _lastAppliedBodyHeat = heat;
+                _bodyMat.SetColor(EmissionId, heat);
+            }
         }
 
         /// <summary>MV-746: the World 3 Puffer Mine's own tell — its inflatable core grows from rest
@@ -585,7 +622,12 @@ namespace MaxWorlds.VFX
             Vector3 p = _model.localPosition;
             // Toward the target rather than snapping, so stepping off the bottom of the ramp settles
             // instead of dropping a frame's worth of height in one go.
-            p.y = Mathf.MoveTowards(p.y, local, 3.5f * Mathf.Max(Time.deltaTime, 1e-4f));
+            float newY = Mathf.MoveTowards(p.y, local, 3.5f * Mathf.Max(Time.deltaTime, 1e-4f));
+            // MV-963: the overwhelming common case (not emerging, already settled at rest) computes the
+            // exact same Y it already has — skip the write rather than re-assigning an unchanged
+            // Transform every robot, every frame.
+            if (Mathf.Approximately(p.y, newY)) return;
+            p.y = newY;
             _model.localPosition = p;
         }
 
@@ -629,9 +671,13 @@ namespace MaxWorlds.VFX
             // pull-back naturally clears the instant the wind-up ends without this needing its own gate.
             float pullback = strikes ? -strikeWindupPullback * _enemy.TelegraphProgress : 0f;
             float punch = strikes ? strikePunchDistance * _strikePunch : 0f;
+            float newZ = pullback + punch;
 
             Vector3 p = _model.localPosition;
-            p.z = pullback + punch;
+            // MV-963: same skip-when-unchanged idiom as RideTheRamp — a kind that never strikes, or one
+            // at rest between attacks, computes the same 0 (or settled) Z it already has every tick.
+            if (Mathf.Approximately(p.z, newZ)) return;
+            p.z = newZ;
             _model.localPosition = p;
         }
 
@@ -748,6 +794,13 @@ namespace MaxWorlds.VFX
         {
             if (_eyes == null) return;
             c.a = 1f;
+
+            // MV-963: skip the Get/SetPropertyBlock round trip per eye once the Lerp toward whatever
+            // target LateUpdate is easing at has settled — the steady idle/warn state most robots sit
+            // in most frames — rather than re-writing the identical colour every one of them.
+            if (_lastAppliedEyeColor.HasValue && _lastAppliedEyeColor.Value == c) return;
+            _lastAppliedEyeColor = c;
+
             for (int i = 0; i < _eyes.Length; i++)
             {
                 var r = _eyes[i];

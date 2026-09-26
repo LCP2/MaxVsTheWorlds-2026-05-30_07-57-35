@@ -24,6 +24,12 @@ namespace MaxWorlds.Arena
         private float _alpha = 1f;
         private MaterialPropertyBlock _mpb;
 
+        /// <summary>The alpha last actually written to the grate's property block (MV-963) — distinct
+        /// from <see cref="_alpha"/>'s starting value (1f) so the very first <see cref="ApplyAlpha"/>
+        /// call always writes once, then never again while the fade has settled (the common steady
+        /// state: every deck the player isn't standing under, every frame the fade has finished).</summary>
+        private float _lastAppliedAlpha = float.NaN;
+
         public void Configure(Renderer grate, GameObject[] rails, Rect footprint, float deckTopY)
         {
             _grate = grate;
@@ -56,6 +62,12 @@ namespace MaxWorlds.Arena
 
         private void ApplyAlpha()
         {
+            // MV-963: once the fade has settled (the steady state for every deck Max isn't currently
+            // under), _alpha stops changing frame to frame but this used to keep writing the identical
+            // property block anyway — a Get/SetPropertyBlock pair, every deck, every frame, forever.
+            if (_alpha == _lastAppliedAlpha) return;
+            _lastAppliedAlpha = _alpha;
+
             if (_grate != null)
             {
                 _grate.GetPropertyBlock(_mpb);

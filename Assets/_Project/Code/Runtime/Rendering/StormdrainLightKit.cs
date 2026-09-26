@@ -441,6 +441,12 @@ namespace MaxWorlds.Rendering
         private float _time;
         private MaterialPropertyBlock _mpb;
 
+        /// <summary>The colour last actually written (MV-963) — a game paused on the result screen
+        /// (<c>dt == 0</c>) used to keep re-writing the identical property block on every fitting, every
+        /// frame, forever; comparing against this catches that steady state without needing to special-
+        /// case <c>dt</c> itself.</summary>
+        private Color? _lastAppliedColor;
+
         public float Phase { get; private set; }
 
         public void Configure(Vector3 worldPos, float period, Renderer renderer, Color baseTone)
@@ -466,6 +472,9 @@ namespace MaxWorlds.Rendering
             float t = Mathf.Repeat(_time / _period + Phase, 1f);
             float intensity = 0.55f + 0.45f * Mathf.Sin(t * Mathf.PI * 2f);
             Color c = _baseTone * intensity;
+
+            if (_lastAppliedColor.HasValue && _lastAppliedColor.Value == c) return;
+            _lastAppliedColor = c;
 
             _renderer.GetPropertyBlock(_mpb);
             _mpb.SetColor("_BaseColor", c);

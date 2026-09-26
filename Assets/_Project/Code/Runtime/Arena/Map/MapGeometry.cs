@@ -315,19 +315,20 @@ namespace MaxWorlds.Arena
         /// own Y clears that same bar, which falls out of this being a plain Y compare rather than a
         /// separate ramp case.
         ///
-        /// Walks <c>map.entities</c> directly rather than through <see cref="SlowZones"/> — every mover
-        /// samples this once a frame (<see cref="MapSlowZones"/>), and <see cref="SlowZones"/>'s List
-        /// allocation on every one of those calls is exactly the per-frame GC cost this codebase has
-        /// spent several tickets (MV-611 among them) removing from a robot's hot path.</summary>
+        /// Walks <see cref="MapData.SludgeEntities"/> — a cached, Sludge-only array built once per map
+        /// (MV-963) — rather than <c>map.entities</c> directly: every mover samples this once a frame
+        /// (<see cref="MapSlowZones"/>), and re-filtering the WHOLE, unfiltered entity array down to the
+        /// handful of sludge rects on every one of those calls was exactly the per-frame cost this
+        /// codebase has spent several tickets (MV-611 among them) removing from a robot's hot path.
+        /// <see cref="SlowZones"/>'s own List allocation is the same waste this already avoided.</summary>
         public static float SpeedMultiplierAt(MapData map, float x, float y, float z)
         {
             float multiplier = 1f;
             if (map?.entities == null) return multiplier;
             if (y >= map.deckHeight - 0.5f) return multiplier;
 
-            foreach (MapEntity e in map.entities)
+            foreach (MapEntity e in map.SludgeEntities())
             {
-                if (e == null || e.Kind != EntityKind.Sludge) continue;
                 var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
                 if (footprint.Contains(new Vector2(x, z)))
                     multiplier = Mathf.Min(multiplier, e.SludgeSpeedMultiplier);
