@@ -69,10 +69,13 @@ namespace MaxWorlds.Rendering
         /// single threshold can separate the two in either direction for that data. A box built as a
         /// boundary wall carries <see cref="StructuralWall"/>, put there by the one place that knows
         /// for certain what it is (<c>MapRuntime.Build</c>), so that marker is checked before shape
-        /// ever has to guess.</summary>
+        /// ever has to guess. Same reasoning for <see cref="StructuralFloor"/> (MV-954): the map's own
+        /// floor slab grew thick enough (2.0 m, for a physics reason unrelated to how it looks) that
+        /// the flat-shape check below stopped recognising it as ground.</summary>
         public static SurfaceKind KindOf(Renderer r)
         {
             if (r.GetComponentInParent<StructuralWall>() != null) return SurfaceKind.Wall;
+            if (r.GetComponentInParent<StructuralFloor>() != null) return SurfaceKind.Ground;
 
             var filter = r.GetComponent<MeshFilter>();
             var mesh = filter != null ? filter.sharedMesh : null;

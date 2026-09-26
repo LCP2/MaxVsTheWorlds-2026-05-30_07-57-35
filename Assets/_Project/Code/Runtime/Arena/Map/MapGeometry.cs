@@ -186,7 +186,14 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class MapGeometry
     {
-        public const float FloorThickness = 0.1f;
+        /// <summary>MV-954: was 0.1 m — half the minimum wall thickness (0.4 m), and thin enough that
+        /// <see cref="MaxWorlds.Core.CharacterControllerMotion"/>'s own worst-case sub-step could clear
+        /// it in a single swept <c>Move()</c> during a stall-inflated frame (see the derivation on
+        /// <see cref="MaxWorlds.Core.CharacterControllerMotion.MaxSafeStep"/>). 2.0 m is that derivation's
+        /// own minimum, extending DOWNWARD only — <see cref="Floor"/> keeps the top surface at exactly
+        /// y = 0, so nothing above ground sees any difference. Never re-derive this without re-checking
+        /// that comment; the two constants are only sound together.</summary>
+        public const float FloorThickness = 2.0f;
 
         /// <summary>Floor reaches this far past the outermost wall, so the world never visibly ends at
         /// a wall's outside face from the fixed camera angle.</summary>

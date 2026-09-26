@@ -38,6 +38,18 @@ namespace MaxWorlds.Core
         /// that's already at the thin end.</summary>
         public const float MaxSafeStep = 0.2f;
 
+        /// <summary>MV-954: the worst downward speed this game's own gravity model is assumed capable
+        /// of producing — 2 seconds of uninterrupted freefall at <c>gravity</c> (20 m/s², the same value
+        /// <see cref="MaxWorlds.Player.PlayerController"/>/<see cref="MaxWorlds.Enemies.RobotEnemy"/>/the
+        /// bosses all use), the same "2s of falling during a stall" assumption
+        /// <c>CharacterControllerMotionTunnelingTests</c> already builds its own worst-case displacement
+        /// from (MV-386). Nothing in the game actually clamps <c>_verticalVel</c> to this — it is a
+        /// documented WORST-CASE ASSUMPTION for the derivation below, not an enforced ceiling, chosen
+        /// generously above the ~24 m/s a fall starting from the tallest authored deck (2.5 m) would
+        /// actually reach before <see cref="MaxWorlds.Arena.FallSafetyNet"/>'s own grace window (0.5 s)
+        /// recovers it.</summary>
+        public const float TerminalFallSpeed = 40f;
+
         /// <summary>How many times <see cref="SafeMove"/> has called <c>CharacterController.Move</c>
         /// (test-only instrumentation, MV-870) — every call counts as 1 regardless of whether it got
         /// split into several steps, so a test can read the MEASURED number of physics sweeps a caller
@@ -53,7 +65,23 @@ namespace MaxWorlds.Core
         /// took a 93-robot scene from 17fps to 5.6fps (this ticket's own evidence). Capping the COUNT
         /// (not the per-step size) means one call's physics cost is now bounded regardless of distance;
         /// distances beyond <c>MaxSubSteps * MaxSafeStep</c> (0.8 m) trade step precision for that
-        /// bound instead of adding more queries.</summary>
+        /// bound instead of adding more queries.
+        ///
+        /// <b>MV-954 re-derivation</b> (after <see cref="MaxWorlds.Arena.MapGeometry.FloorThickness"/>
+        /// went from 0.1 m to 2.0 m — a floor that thin could be cleared by a single oversized vertical
+        /// sub-step during a stall; see that constant's own comment): worst case, a fall already at
+        /// <see cref="TerminalFallSpeed"/> (40 m/s) hits one frame stretched to
+        /// <c>Time.maximumDeltaTime</c> (0.1 s, MV-883) — 40 * 0.1 = 4.0 m requested in a single
+        /// <see cref="SafeMove"/> call. Split across these 4 sub-steps that is 1.0 m each, exactly half
+        /// the floor's 2.0 m thickness — the bound this ticket's AC sets ("no single sub-step's vertical
+        /// travel can exceed half the thinnest walkable slab's collider thickness"). Both this constant
+        /// and <see cref="MaxSafeStep"/> stay as they were: MV-926 sized this one against a MEASURED perf
+        /// regression, and raising it to buy more margin here would reopen that regression for every
+        /// ordinary <see cref="SafeMove"/> call, not just a falling one — the floor thickness absorbed
+        /// the whole fix instead. A deck's own top-collider slab
+        /// (<see cref="MaxWorlds.Arena.MapGeometry.DeckThickness"/>, 0.15 m) is thinner still and is NOT
+        /// covered by this derivation — out of this ticket's scope (the observed defect and the AC are
+        /// both about the floor); a known gap left for a follow-up ticket.</summary>
         public const int MaxSubSteps = 4;
 
         /// <summary>MV-926: whether <see cref="SafeMove"/> has already logged its one-time oversized-move
