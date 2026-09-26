@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -331,7 +332,7 @@ namespace MaxWorlds.Pickups
         /// <see cref="PickupKind.Device"/> — a shed-free area has no shed to justify handing out an
         /// ability FAMILY unlock, which is what a Device grants. Only a destroyed shed
         /// (<see cref="OnFactoryDestroyed"/>) may do that.</summary>
-        public void PlacePartsCache(Vector3 pos) => SpawnCellCache(pos);
+        public List<Pickup> PlacePartsCache(Vector3 pos) => SpawnCellCache(pos);
 
         /// <summary>Places World 1's finale drop (MV-698) at <paramref name="pos"/> — the one
         /// <see cref="PickupKind.WeaponCore"/> <c>BossVictoryPayoff</c> requests when the world's final
@@ -383,18 +384,25 @@ namespace MaxWorlds.Pickups
         /// <summary>The "nothing left to unlock" cell-cache reward — one Supercell plus a
         /// <see cref="ShedCellCacheAmount"/> ring of power cells — shared by <see cref="OnFactoryDestroyed"/>'s
         /// own fallback branch and <see cref="PlacePartsCache"/> (MV-646). Never spawns a Device.</summary>
-        private void SpawnCellCache(Vector3 pos)
+        /// <summary>MV-972: returns every pickup it actually created — <see cref="MapRuntime.BuildProps"/>'s
+        /// own map-authored <c>EntityKind.Pickup</c> case needs these to tag them with the area gate
+        /// itself (the gate doesn't exist yet at that call time; see <see cref="SpawnDrop"/>'s own doc).</summary>
+        private List<Pickup> SpawnCellCache(Vector3 pos)
         {
-            SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
+            var created = new List<Pickup>(1 + ShedCellCacheAmount);
+            Pickup supercell = SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
+            if (supercell != null) created.Add(supercell);
             for (int i = 0; i < ShedCellCacheAmount; i++)
             {
                 float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                SpawnDrop(PickupKind.PowerCell, pos + off);
+                Pickup cell = SpawnDrop(PickupKind.PowerCell, pos + off);
+                if (cell != null) created.Add(cell);
             }
+            return created;
         }
 
-        private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
+        private Pickup SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
                                AbilityKind ability = default)
         {
             if (kind == PickupKind.PowerCell)
@@ -403,7 +411,7 @@ namespace MaxWorlds.Pickups
                 // collected — AddPowerCell refuses it in Collect below, and nothing ever removed a
                 // refused pickup from _live, so every subsequent cell sat on the lawn forever. Not
                 // spawning it costs the player nothing they could have had anyway.
-                if (PickupWallet.PowerCells >= PickupWallet.Capacity) return;
+                if (PickupWallet.PowerCells >= PickupWallet.Capacity) return null;
                 RecycleOldestCellIfAtCap();
             }
 
@@ -428,6 +436,15 @@ namespace MaxWorlds.Pickups
                 _cellNodes[p] = _cellOrder.AddLast(p);
                 _cellAge[p] = 0f;
             }
+
+            // MV-972: a pickup never moves once dropped, so a one-time zone tag (no chase override
+            // needed) is enough — same registration a robot-death/shed-destroyed/World-1-finale drop
+            // all funnel through here for. A no-op for a map-authored EntityKind.Pickup, spawned while
+            // MapRuntime.Build is still running: the gate doesn't exist yet at that call time, so
+            // MapRuntime.BuildProps tags those itself, straight off this method's own return value.
+            MapStaticBatchRoot.Active?.RegisterAtPosition(p.GetComponentsInChildren<Renderer>(true), pos);
+
+            return p;
         }
 
         /// <summary>MV-626, change 2: evicts the single oldest live cell when the cap is about to be

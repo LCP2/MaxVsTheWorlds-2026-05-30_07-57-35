@@ -222,7 +222,13 @@ namespace MaxWorlds.Factories
             // MV-913: GetComponentsInChildren, not GetComponent — Missile's MissileLauncherRig renders
             // through CHILD parts (base/arm/tip), not a renderer on this root, so a root-only lookup used
             // to leave a "destroyed" launcher's whole generated body still visible.
-            foreach (var rend in GetComponentsInChildren<Renderer>()) rend.enabled = false;
+            foreach (var rend in GetComponentsInChildren<Renderer>())
+            {
+                rend.enabled = false;
+                // MV-972: same "never come back" guard MowerHutch.ApplyDestructionEffects gives its own
+                // destroyed body — the area gate must not re-enable a destroyed fitting.
+                MapStaticBatchRoot.Active?.MarkPermanentlyHidden(rend);
+            }
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
         }

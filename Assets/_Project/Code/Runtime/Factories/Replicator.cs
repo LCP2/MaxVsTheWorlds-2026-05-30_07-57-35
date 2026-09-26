@@ -399,7 +399,17 @@ namespace MaxWorlds.Factories
         private void BuildBody()
         {
             var rend = GetComponent<Renderer>();
-            if (rend != null) rend.enabled = false;
+            if (rend != null)
+            {
+                rend.enabled = false;
+                // MV-972: this can run at any point relative to MapStaticBatchRoot.Start()'s own
+                // _dressedHidden snapshot — Awake ordering for a component added during MapRuntime.Build
+                // is not guaranteed relative to that snapshot the way it is in a live scene boot (measured
+                // directly: an EditMode build left this renderer enabled at snapshot time, only disabled
+                // here afterward) — so this must protect itself live rather than trust the snapshot alone.
+                // A no-op if the batch root doesn't exist yet; the snapshot covers that ordering instead.
+                MapStaticBatchRoot.Active?.MarkPermanentlyHidden(rend);
+            }
 
             Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
             FactoryBodies.ReplicatorParts parts = FactoryBodies.BuildReplicator(bodyRoot, transform.lossyScale);

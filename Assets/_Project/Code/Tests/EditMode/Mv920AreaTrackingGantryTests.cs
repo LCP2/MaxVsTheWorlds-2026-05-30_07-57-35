@@ -98,7 +98,7 @@ namespace MaxWorlds.Tests.EditMode
                 // resolves to (AreaAccumulationDirector.AreaIndexOf("stub") == 0) — checked directly here,
                 // against the gate's own attribution, rather than through the director at all.
                 batchRoot.ApplyAreaGate("stub");
-                AssertInvariant1(map, rendererZones, batchRoot, ComputeActiveSet(map, "stub"), "stub");
+                AssertInvariant1(map, rendererZones, batchRoot, ComputeActiveSet(map, "stub", null), "stub");
 
                 List<int> walk = RealWorldGantryWalk();
 
@@ -118,7 +118,16 @@ namespace MaxWorlds.Tests.EditMode
 
                 playerGo.transform.position = ProbePositionFor(map, map.Zone("area1"));
                 InvokePrivate(areaDirector, "Update");
-                RecordAreaCheckpoint(map, rendererZones, batchRoot, areaDirector, 1, proportions);
+
+                // MV-972: AreaAccumulationDirector.Update() never fires PlayerCrossedIntoArea for THIS
+                // checkpoint specifically — Configure() already pre-set _physicalArea to 1 directly (no
+                // event), so from the tracker's own point of view Max never "crosses" into area1, he
+                // starts there. The gate's own last real application was therefore still the explicit
+                // "stub" call two lines above this loop — re-apply it for area1 here, with Max's real
+                // position, so the checkpoint below asserts against the SAME state a live crossing would
+                // have left (and so it exercises the MV-972 22m neighbour range for area1 at all).
+                batchRoot.ApplyAreaGate("area1", playerGo.transform.position);
+                RecordAreaCheckpoint(map, rendererZones, batchRoot, areaDirector, 1, proportions, playerGo.transform.position);
 
                 for (int i = 1; i < walk.Count; i++)
                 {
@@ -138,7 +147,7 @@ namespace MaxWorlds.Tests.EditMode
 
                     if (firstVisited.Add(toIndex))
                     {
-                        RecordAreaCheckpoint(map, rendererZones, batchRoot, areaDirector, toIndex, proportions);
+                        RecordAreaCheckpoint(map, rendererZones, batchRoot, areaDirector, toIndex, proportions, playerGo.transform.position);
 
                         // ---- AC4/AC5, checked at the exact instant each area first becomes the live gate
                         // ---- (a re-entry afterward would need a direct, ungated jump back to it, which is
@@ -203,10 +212,10 @@ namespace MaxWorlds.Tests.EditMode
         /// world-wide (AC2/AC3) at the exact moment it first becomes the live gate.</summary>
         private static void RecordAreaCheckpoint(MapData map, Dictionary<Renderer, List<string>> rendererZones,
             MapStaticBatchRoot batchRoot, AreaAccumulationDirector areaDirector, int areaIndex,
-            Dictionary<int, float> proportions)
+            Dictionary<int, float> proportions, Vector3 maxPosition)
         {
             string zoneId = $"area{areaIndex}";
-            HashSet<string> active = ComputeActiveSet(map, zoneId);
+            HashSet<string> active = ComputeActiveSet(map, zoneId, maxPosition);
             AssertInvariant1(map, rendererZones, batchRoot, active, zoneId);
 
             int tagged = 0, enabled = 0;
@@ -245,16 +254,40 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>Reimplementation of <see cref="MapStaticBatchRoot.ApplyAreaGate"/>'s own active-set
         /// computation, for assertion purposes only — that method keeps its local <c>active</c> set
-        /// private and exposes no way to read it back.</summary>
-        private static HashSet<string> ComputeActiveSet(MapData map, string currentZoneId)
+        /// private and exposes no way to read it back.
+        ///
+        /// MV-972: a linked neighbour is now range-gated too (within 22 m, XZ, of the doorway the link
+        /// actually cuts) — every checkpoint below drives the REAL production path
+        /// (<c>AreaAccumulationDirector.Update</c> firing <c>PlayerCrossedIntoArea</c>), which supplies
+        /// Max's real position since this test's own "Player"-tagged object exists, so the gate really
+        /// does apply the new distance rule live. This helper has to match it or invariant 1 below
+        /// reports a false positive (a genuinely far, correctly-disabled neighbour, misread as a bug)
+        /// the moment the walk's own probe position sits &gt;22m from a link's own doorway — see
+        /// <paramref name="maxPosition"/>.</summary>
+        private static HashSet<string> ComputeActiveSet(MapData map, string currentZoneId, Vector3? maxPosition)
         {
+            const float neighbourGateRangeSq = 22f * 22f; // MapStaticBatchRoot.NeighbourGateRangeMetres
+
             var active = new HashSet<string> { currentZoneId };
             if (map?.links != null)
                 foreach (MapLink link in map.links)
                 {
                     if (link == null) continue;
-                    if (link.from == currentZoneId) active.Add(link.to);
-                    else if (link.to == currentZoneId) active.Add(link.from);
+                    string neighbour = link.from == currentZoneId ? link.to
+                                      : link.to == currentZoneId ? link.from
+                                      : null;
+                    if (neighbour == null) continue;
+
+                    if (maxPosition.HasValue &&
+                        MapGeometry.Doorway(map, link, out bool runsAlongX, out float coord, out Span hole))
+                    {
+                        Vector2 doorMouth = runsAlongX ? new Vector2(hole.Mid, coord) : new Vector2(coord, hole.Mid);
+                        float dx = maxPosition.Value.x - doorMouth.x;
+                        float dz = maxPosition.Value.z - doorMouth.y;
+                        if (dx * dx + dz * dz > neighbourGateRangeSq) continue;
+                    }
+
+                    active.Add(neighbour);
                 }
 
             if (map?.zones != null)
