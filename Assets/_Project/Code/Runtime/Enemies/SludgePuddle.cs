@@ -162,7 +162,7 @@ namespace MaxWorlds.Enemies
                 else { triangles[t] = 0; triangles[t + 1] = c; triangles[t + 2] = b; }
             }
 
-            var mesh = new Mesh { name = "SludgePuddleFan", hideFlags = HideFlags.HideAndDontSave };
+            var mesh = new Mesh { name = FanMeshName, hideFlags = HideFlags.HideAndDontSave };
             mesh.SetVertices(vertices);
             mesh.uv = uv;
             mesh.SetTriangles(triangles, 0);
@@ -206,8 +206,41 @@ namespace MaxWorlds.Enemies
             if (_remaining <= 0f)
             {
                 _active.Remove(this);
+                DestroyOwnedMeshes();
                 if (Application.isPlaying) Destroy(gameObject);
                 else DestroyImmediate(gameObject);
+            }
+        }
+
+        /// <summary>MV-966: <see cref="BuildFanBlob"/> marks every mesh <see cref="BuildFanMesh"/>
+        /// returns <c>HideAndDontSave</c> — deliberately exempt from Unity's own unused-asset sweep, so
+        /// destroying this puddle's GameObject alone (the base blob AND the flow blob, both built by
+        /// <see cref="BuildVisual"/>) left both meshes orphaned in memory forever, one per puddle spawned
+        /// over a run. Walked and destroyed explicitly, once, right before the GameObject itself goes.
+        ///
+        /// Only ever touches a mesh whose name is exactly the one <see cref="BuildFanMesh"/> itself
+        /// stamps — a bitflag test against <see cref="HideFlags.HideAndDontSave"/> looked equivalent
+        /// but is NOT: Unity's own built-in primitive meshes carry a hideFlags value that overlaps
+        /// enough of that combo's bits to false-match. <see cref="MaxWorlds.VFX.SludgeBubbles.Attach"/>
+        /// builds this same puddle's bubbles as child <c>GameObject.CreatePrimitive(PrimitiveType.Sphere)</c>
+        /// instances, and their <see cref="MeshFilter.sharedMesh"/> is UNITY'S OWN SHARED built-in Sphere
+        /// mesh — destroying that (this ticket's own regression, caught by cc-verify: every later
+        /// CreatePrimitive(Sphere) in the same Editor session then failed with "New-Sphere.fbx could
+        /// not be loaded from the resource file") would break every other sphere primitive built for
+        /// the rest of the process, not just this puddle's own. An exact name match is unambiguous.</summary>
+        private const string FanMeshName = "SludgePuddleFan";
+
+        private void DestroyOwnedMeshes()
+        {
+            foreach (MeshFilter mf in GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null || mf.sharedMesh == null) continue;
+                if (mf.sharedMesh.name != FanMeshName) continue;
+                if (Application.isPlaying) Destroy(mf.sharedMesh);
+                // Mesh is asset-like even when runtime-built — the Editor's DestroyImmediate refuses
+                // it without the explicit allowDestroyingAssets flag (logs an error otherwise, which
+                // an EditMode test then fails on as an unhandled log message).
+                else DestroyImmediate(mf.sharedMesh, true);
             }
         }
 

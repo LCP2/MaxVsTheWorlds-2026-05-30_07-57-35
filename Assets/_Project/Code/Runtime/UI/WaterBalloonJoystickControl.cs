@@ -82,8 +82,8 @@ namespace MaxWorlds.UI
 
         private void OnDestroy()
         {
-            if (_arcGo != null) Destroy(_arcGo);
-            if (_circleGo != null) Destroy(_circleGo);
+            DestroyAimVisual(_arcGo);
+            DestroyAimVisual(_circleGo);
         }
 
         protected override void OnDisable()
@@ -233,13 +233,12 @@ namespace MaxWorlds.UI
             float distance = Mathf.Max(0.15f, maxDistance * DistanceFraction);
 
             _arcGo.transform.SetPositionAndRotation(_origin.position, Quaternion.LookRotation(Direction, Vector3.up));
-            _arcGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.Build(distance);
+            WaterBalloonAimMesh.BuildInto(RetainedMesh(_arcGo), distance);
 
             Vector3 landing = _origin.position + Direction * distance;
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
-            _circleGo.GetComponent<MeshFilter>().sharedMesh =
-                WaterBalloonAimMesh.BuildLandingCircle(PlayerAbilities.SplashRadius);
+            WaterBalloonAimMesh.BuildLandingCircleInto(RetainedMesh(_circleGo), PlayerAbilities.SplashRadius);
 
             ApplyArmedTint(_arcGo, IsArmed, AbilityReady);
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);

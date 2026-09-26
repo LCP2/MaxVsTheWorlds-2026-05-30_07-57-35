@@ -65,7 +65,7 @@ namespace MaxWorlds.UI
 
         private void OnDestroy()
         {
-            if (_circleGo != null) Destroy(_circleGo);
+            DestroyAimVisual(_circleGo);
         }
 
         protected override void ShowAimVisuals()
@@ -129,7 +129,7 @@ namespace MaxWorlds.UI
 
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(point.x, 0.01f, point.z), Quaternion.identity);
-            _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(PlacementRadius);
+            WaterBalloonAimMesh.BuildLandingCircleInto(RetainedMesh(_circleGo), PlacementRadius);
 
             bool validSpot = onWalkableSurface && (_abilities == null || _abilities.IsValidSentinelPlacement(point));
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady && validSpot);

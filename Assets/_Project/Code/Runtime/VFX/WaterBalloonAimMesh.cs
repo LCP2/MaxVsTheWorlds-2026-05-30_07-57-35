@@ -37,6 +37,21 @@ namespace MaxWorlds.VFX
         /// </summary>
         public static Mesh Build(float distance, int segments = 20)
         {
+            var mesh = new Mesh { name = $"WaterBalloonArc {distance:0.0}m" };
+            BuildInto(mesh, distance, segments);
+            return mesh;
+        }
+
+        /// <summary>MV-966: same arc as <see cref="Build"/>, written into an already-existing
+        /// <paramref name="target"/> mesh instead of allocating a new one — <paramref name="distance"/>
+        /// only ever moves <see cref="Build"/>'s own vertex positions/colours; vertex count and the
+        /// triangle list are identical for any two calls sharing the same <paramref name="segments"/>.
+        /// <see cref="AbilityJoystickControlBase.OnDrag"/> calls <see cref="AbilityJoystickControlBase.RebuildAimVisual"/>
+        /// on every drag-move event — this is what lets <see cref="MaxWorlds.UI.WaterBalloonJoystickControl"/>
+        /// retain one mesh for the lifetime of the control instead of allocating (and, until this
+        /// ticket, leaking) a fresh one every single one of those events.</summary>
+        public static void BuildInto(Mesh target, float distance, int segments = 20)
+        {
             distance = Mathf.Max(0.01f, distance);
             segments = Mathf.Max(2, segments);
 
@@ -63,12 +78,11 @@ namespace MaxWorlds.VFX
                 tris.Add(b); tris.Add(c); tris.Add(d);
             }
 
-            var mesh = new Mesh { name = $"WaterBalloonArc {distance:0.0}m" };
-            mesh.SetVertices(verts);
-            mesh.SetColors(cols);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateBounds();
-            return mesh;
+            target.Clear();
+            target.SetVertices(verts);
+            target.SetColors(cols);
+            target.SetTriangles(tris, 0);
+            target.RecalculateBounds();
         }
 
         /// <summary>
@@ -79,6 +93,13 @@ namespace MaxWorlds.VFX
         /// </summary>
         public static Mesh BuildLandingCircle(float radius, int segments = 40) =>
             AimReticleMesh.Build(radius, 180f, segments);
+
+        /// <summary>MV-966: same ring as <see cref="BuildLandingCircle"/>, written into an
+        /// already-existing <paramref name="target"/> mesh — see <see cref="AimReticleMesh.BuildInto"/>
+        /// for why this is safe to reuse across a control's whole lifetime instead of rebuilding fresh
+        /// every drag-move event.</summary>
+        public static void BuildLandingCircleInto(Mesh target, float radius, int segments = 40) =>
+            AimReticleMesh.BuildInto(target, radius, 180f, segments);
 
         /// <summary>
         /// The same parabola <see cref="Build"/> draws, evaluated at a single fraction <paramref name="t"/>

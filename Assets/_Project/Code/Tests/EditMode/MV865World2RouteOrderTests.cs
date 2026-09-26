@@ -112,7 +112,12 @@ namespace MaxWorlds.Tests.EditMode
 
                 foreach (int index in order.Where(i => i > 1)) director.EnterArea(index);
 
-                RobotEnemy[] placedRobots = Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None);
+                // MV-966: Include, not the default Exclude — EnterArea alone never moves the physical
+                // tracker ParkByReach keys off (only SetCurrentArea/a live position crossing does), so
+                // every garrison this walk pre-places for an area still ahead of area1 starts PARKED
+                // (inactive). This test counts placement by AreaIndex/Level, not aliveness or art
+                // coverage, so Include alone is enough — nothing here ever kills a robot.
+                RobotEnemy[] placedRobots = Object.FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
                 foreach (WorldArea area in cfg.areas)
                 {

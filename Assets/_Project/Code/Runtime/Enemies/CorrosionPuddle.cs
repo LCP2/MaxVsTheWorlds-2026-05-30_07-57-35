@@ -203,7 +203,7 @@ namespace MaxWorlds.Enemies
                 else { triangles[t] = 0; triangles[t + 1] = c; triangles[t + 2] = b; }
             }
 
-            var mesh = new Mesh { name = "CorrosionPuddleFan", hideFlags = HideFlags.HideAndDontSave };
+            var mesh = new Mesh { name = FanMeshName, hideFlags = HideFlags.HideAndDontSave };
             mesh.SetVertices(vertices);
             mesh.uv = uv;
             mesh.SetTriangles(triangles, 0);
@@ -291,8 +291,35 @@ namespace MaxWorlds.Enemies
             _remaining -= dt;
             if (_remaining <= 0f)
             {
+                DestroyOwnedMeshes();
                 if (Application.isPlaying) Destroy(gameObject);
                 else DestroyImmediate(gameObject);
+            }
+        }
+
+        /// <summary>MV-966: same fix as <see cref="SludgePuddle.DestroyOwnedMeshes"/> — <see cref="BuildFanMesh"/>
+        /// marks every mesh it returns <c>HideAndDontSave</c>, and <see cref="BuildVisual"/> builds six
+        /// of them per puddle (the rim, the base, and four churn lobes), none of which Unity's own
+        /// unused-asset sweep will ever touch. Walked and destroyed explicitly, once, right before the
+        /// GameObject itself goes.
+        ///
+        /// Only ever touches a mesh whose name is exactly the one <see cref="BuildFanMesh"/> itself
+        /// stamps — same guard, and same reason, as <see cref="SludgePuddle.DestroyOwnedMeshes"/>'s own
+        /// doc comment: this puddle's own bubbles and additive overlay quads are child
+        /// <c>GameObject.CreatePrimitive</c> instances whose <see cref="MeshFilter.sharedMesh"/> is one
+        /// of Unity's own shared built-in meshes, and a hideFlags bitflag test false-matches those.</summary>
+        private const string FanMeshName = "CorrosionPuddleFan";
+
+        private void DestroyOwnedMeshes()
+        {
+            foreach (MeshFilter mf in GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null || mf.sharedMesh == null) continue;
+                if (mf.sharedMesh.name != FanMeshName) continue;
+                if (Application.isPlaying) Destroy(mf.sharedMesh);
+                // Mesh is asset-like even when runtime-built — the Editor's DestroyImmediate refuses
+                // it without the explicit allowDestroyingAssets flag.
+                else DestroyImmediate(mf.sharedMesh, true);
             }
         }
 

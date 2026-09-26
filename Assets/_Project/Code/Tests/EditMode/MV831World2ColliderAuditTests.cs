@@ -206,7 +206,11 @@ namespace MaxWorlds.Tests.EditMode
             // Garrison/ambient robots live under their own "Area Robots" root (AreaAccumulationDirector.
             // Bodies()), a sibling of the map root, not a child of it — a robot's CharacterController is
             // exactly what MV-831 is chasing, so this must reach the whole scene, not just root's subtree.
-            foreach (Collider c in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None))
+            // MV-966: Include, not the default Exclude — a robot outside Max's reach is now PARKED
+            // (its whole GameObject deactivated) rather than merely Dormant-but-active, and a parked
+            // robot's collider is exactly as in-scope for this audit as a merely-dormant one always
+            // was (IsExempt below still only exempts an AWAKE, VISIBLE robot).
+            foreach (Collider c in Object.FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (c == null || !c.enabled || c.isTrigger) continue;
                 if (IsExempt(c)) continue;
@@ -271,6 +275,13 @@ namespace MaxWorlds.Tests.EditMode
             var robot = go.GetComponent<RobotEnemy>();
             if (robot != null)
             {
+                // MV-966: a dead-and-pooled robot is inactive for the same structural reason a PARKED
+                // (alive, resting, out of Max's reach) one now is — Include (below) has to see both to
+                // catch a parked robot's collider at all, but a corpse sitting wherever it died is
+                // stray clutter, not authored placement needing art coverage, and was never findable
+                // here before this ticket either (the default active-only query already excluded it).
+                if (!robot.IsAlive) return true;
+
                 bool anyVisible = go.GetComponentsInChildren<Renderer>(true).Any(r => r.enabled);
                 if (anyVisible) return true; // awake and visible — exempt per the ticket's own rule
             }

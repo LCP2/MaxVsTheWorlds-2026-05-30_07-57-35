@@ -288,6 +288,65 @@ namespace MaxWorlds.Enemies
             return _map.AreLinked($"area{from}", $"area{to}");
         }
 
+        /// <summary>MV-966, Change 1: every area index reachable from <paramref name="physicalArea"/>
+        /// for parking purposes — itself, every area an authored <see cref="MapLink"/> joins to it
+        /// (<see cref="IsLinkedArea"/>), and every area sharing a zone's exact footprint with one of
+        /// those (a deck overlay and the floor it roofs, <see cref="MapZone.ShareFootprint"/>). The same
+        /// "current + linked + footprint-sharing" active set <see cref="MaxWorlds.Arena.Map.MapStaticBatchRoot.ApplyAreaGate"/>
+        /// already computes for renderer gating, generalised here to area indices for
+        /// <see cref="ParkByReach"/>.</summary>
+        private HashSet<int> ReachableAreas(int physicalArea)
+        {
+            var reachable = new HashSet<int> { physicalArea };
+            if (_map?.zones == null) return reachable;
+
+            var activeZones = new List<MapZone>();
+            MapZone current = _map.Zone($"area{physicalArea}");
+            if (current != null) activeZones.Add(current);
+
+            foreach (MapZone z in _map.zones)
+            {
+                if (z == null || z.AreaIndex <= 0 || z.AreaIndex == physicalArea) continue;
+                if (!IsLinkedArea(physicalArea, z.AreaIndex)) continue;
+                reachable.Add(z.AreaIndex);
+                activeZones.Add(z);
+            }
+
+            foreach (MapZone z in _map.zones)
+            {
+                if (z == null || z.AreaIndex <= 0 || reachable.Contains(z.AreaIndex)) continue;
+                foreach (MapZone match in activeZones)
+                {
+                    if (!MapZone.ShareFootprint(z, match)) continue;
+                    reachable.Add(z.AreaIndex);
+                    break;
+                }
+            }
+
+            return reachable;
+        }
+
+        /// <summary>MV-966, Change 1: parks (deactivates) every <see cref="RobotEnemy.IsResting"/> robot
+        /// whose area isn't in <see cref="ReachableAreas"/> and unparks every one that now is —
+        /// evaluated synchronously on every zone crossing (<see cref="SetCurrentArea"/>/<see cref="Update"/>),
+        /// so a robot's own wake check never runs the same frame its area falls out of reach. Awake
+        /// robots (mid-Chase, Search, Alert...) are left alone regardless of area — an already-engaged
+        /// robot is never yanked off the field mid-pursuit. Scans <see cref="Object.FindObjectsByType{T}(FindObjectsInactive, FindObjectsSortMode)"/>
+        /// rather than <see cref="RobotEnemy.Active"/> (same reasoning as <see cref="RestoreArea"/>):
+        /// an already-parked robot is inactive, which <see cref="RobotEnemy.Active"/> never contains,
+        /// and outside Play mode it is never populated at all.</summary>
+        private void ParkByReach(int physicalArea)
+        {
+            if (_map == null) return;
+            HashSet<int> reachable = ReachableAreas(physicalArea);
+
+            foreach (RobotEnemy robot in Object.FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (robot == null || !robot.IsAlive || !robot.IsResting) continue;
+                robot.SetParked(!reachable.Contains(robot.AreaIndex));
+            }
+        }
+
         /// <summary>MV-937: true if (<paramref name="px"/>, <paramref name="pz"/>) sits within
         /// <paramref name="margin"/> of <paramref name="zone"/>'s own rectangular bounds — i.e. <paramref name="zone"/>'s
         /// footprint inflated by <paramref name="margin"/> on every side, exactly what
@@ -416,6 +475,7 @@ namespace MaxWorlds.Enemies
             if (areaIndex == _physicalArea) return;
             _physicalArea = areaIndex;
             _lastBlockedAreaJump = default;
+            ParkByReach(areaIndex);
             PlayerCrossedIntoArea?.Invoke(areaIndex);
         }
 
@@ -461,6 +521,7 @@ namespace MaxWorlds.Enemies
                 if (IsLinkedArea(_physicalArea, area))
                 {
                     _physicalArea = area;
+                    ParkByReach(area);
                     PlayerCrossedIntoArea?.Invoke(area);
                 }
                 else
@@ -639,6 +700,13 @@ namespace MaxWorlds.Enemies
 
             Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount, _worldCfg);
             var pending = new List<RobotEnemy>(slots.Length);
+
+            // MV-966, Change 2: this garrison's own area is usually still several rooms ahead of
+            // wherever Max is actually standing right now (that's the whole point of the MV-514 head
+            // start) — computed once, outside the loop, since every slot below shares the same
+            // areaIndex.
+            bool reachableNow = ReachableAreas(_physicalArea).Contains(areaIndex);
+
             for (int i = 0; i < slots.Length; i++)
             {
                 if (!previewQueue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
@@ -665,6 +733,13 @@ namespace MaxWorlds.Enemies
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state.
                 e.BeginDormant();
+
+                // MV-966, Change 2: parked immediately rather than left active-and-ticking until the
+                // next zone crossing sweeps it — a whole area's garrison (up to 102 robots, World 2's
+                // a16) otherwise sits fully awake-priced for however long it takes Max to walk close
+                // enough for a crossing to ever re-evaluate it.
+                if (!reachableNow) e.SetParked(true);
+
                 pending.Add(e);
 
                 LetThePlayerThrough(e.gameObject);
@@ -1083,6 +1158,14 @@ namespace MaxWorlds.Enemies
             return CreateInstance(archetype);
         }
 
+        /// <summary>MV-966, Change 4: exposes this director's own pool (<see cref="Take"/>) to a
+        /// Sludger's on-death split (<see cref="RobotEnemy.SpawnSludgerSplit"/>) so a split robot is
+        /// pooled/returned on death exactly like a garrison robot — via the same <c>Died</c>
+        /// subscription <see cref="CreateInstance"/> wires up on every instance this pool ever hands
+        /// out — instead of its own separate, never-pooled, never-destroyed
+        /// <c>GameObject.CreatePrimitive</c> build.</summary>
+        public RobotEnemy TakeForSplit(EnemyKind kind, in EnemyArchetype archetype) => Take(kind, archetype);
+
         private RobotEnemy CreateInstance(in EnemyArchetype a)
         {
             RobotEnemy e;
@@ -1097,6 +1180,15 @@ namespace MaxWorlds.Enemies
                 go.name = $"RobotEnemy {a.Kind} (area spawn)";
                 go.transform.SetParent(Bodies(), false);
                 go.transform.localScale = a.BodyScale;
+
+                // MV-966: CreatePrimitive auto-attaches a BoxCollider/CapsuleCollider that nothing ever
+                // removed — same idiom as MapRuntime.BuildFactory's own mobile-shed strip. The
+                // CharacterController below is meant to be the only collider a robot carries; leaving
+                // the stray one in place meant every moving robot re-synced a second, Rigidbody-less
+                // collider in PhysX every tick, across a population that runs into the hundreds by
+                // World 2's midgame.
+                var stray = go.GetComponent<Collider>();
+                if (stray != null) Object.DestroyImmediate(stray);
 
                 var cc = go.AddComponent<CharacterController>();
                 float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);

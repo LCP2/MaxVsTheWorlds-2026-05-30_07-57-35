@@ -201,6 +201,14 @@ namespace MaxWorlds.Enemies
         /// individually, never off another robot waking).</summary>
         public bool IsDormant => Current == State.Dormant;
 
+        /// <summary>MV-966: true for either of this robot's two long-lived "not chasing anyone" states
+        /// — <see cref="State.Dormant"/> (every kind but a Grate Lurker) or <see cref="State.Submerged"/>
+        /// (a Grate Lurker's own resting phase, MV-688). The set <see cref="AreaAccumulationDirector"/>
+        /// is allowed to park/unpark by area reach (Change 1) — every other state means this robot has
+        /// already noticed something and is mid-engagement, and Change 1's own "awake robots chasing
+        /// Max are never parked" leaves those alone regardless of area.</summary>
+        public bool IsResting => Current == State.Dormant || Current == State.Submerged;
+
         /// <summary>True only when this robot is alive, awake, AND physically present to be hit
         /// (MV-733) — every future "can I engage this robot" caller belongs on this one property
         /// rather than re-testing <see cref="Current"/> itself, which is what let
@@ -1112,6 +1120,12 @@ namespace MaxWorlds.Enemies
         private void OnEnable()
         {
             _active.Add(this);
+            // MV-966: SetParked(false) stamps this so a park/unpark round-trip comes back exactly as
+            // it left — health, position, Dormant/Submerged sub-state, garrison slot — instead of
+            // ResetState() (built for POOLED reuse, a genuinely fresh life) stomping all of that back
+            // to a full-health Chase the moment AreaAccumulationDirector.ParkByReach brings this robot
+            // back into reach.
+            if (_skipResetOnNextEnable) { _skipResetOnNextEnable = false; return; }
             ResetState(); // reset for pooling reuse
         }
 
@@ -1119,6 +1133,32 @@ namespace MaxWorlds.Enemies
         {
             _active.Remove(this);
             _separationGrid.Remove(GetInstanceID());   // MV-611: else a dead/pooled robot stays a phantom neighbour forever
+        }
+
+        private bool _skipResetOnNextEnable;
+
+        /// <summary>MV-966, Change 1: takes this robot off the field, or brings it back, without
+        /// touching anything it's carrying — the one thing plain <c>gameObject.SetActive</c> almost
+        /// gives for free except for <see cref="OnEnable"/>'s own <see cref="ResetState"/> call, which
+        /// would otherwise stomp a live robot's health/position/sub-state back to a fresh full-health
+        /// Chase the instant it's brought back into reach. Guarded both ways so a redundant call
+        /// (already parked / already active) never toggles <c>SetActive</c> for no reason. Called only
+        /// by <see cref="AreaAccumulationDirector"/> on a robot it has already confirmed is
+        /// <see cref="IsAlive"/> and <see cref="IsResting"/> — an awake, chasing robot is never parked
+        /// regardless of area.</summary>
+        public void SetParked(bool parked)
+        {
+            if (parked)
+            {
+                if (!gameObject.activeSelf) return;
+                gameObject.SetActive(false);
+            }
+            else
+            {
+                if (gameObject.activeSelf) return;
+                _skipResetOnNextEnable = true;
+                gameObject.SetActive(true);
+            }
         }
 
         /// <summary>Reset to a fresh, alive Chase state. Called from Awake/OnEnable and
@@ -1181,13 +1221,6 @@ namespace MaxWorlds.Enemies
             IsConverted = false;
             _convertedElapsed = 0f;
             _team = Team.Enemy;
-            // MV-870: a pooled robot must not carry the last life's Dormant-far throttle state or
-            // position forward — a stale accumulator/stagger would misfire the very next time this
-            // body goes Dormant-and-far, and a stale _lastTickPosition sits wherever the last life
-            // died, not this life's fresh spawn point.
-            _dormantFarAccumulator = 0f;
-            _dormantFarStaggered = false;
-            _lastTickPosition = transform.position;
             // MV-952: a pooled robot must not carry the last life's fall-recovery memory forward — this
             // life's own spawn position (already stamped onto transform.position by EnemySpawner before
             // SetActive) is the only "last grounded" point that means anything to it.
@@ -1283,72 +1316,27 @@ namespace MaxWorlds.Enemies
         /// test can drive an exact, controlled sequence of ticks — the same seam every per-state
         /// Tick* method below already has.
         ///
-        /// A robot that is <see cref="State.Dormant"/> AND <see cref="IsWellBehindPlayer"/> can't be
-        /// seen, can't see, and can't change anything the player will ever observe —
-        /// <see cref="TickDormant"/> already returns immediately for it (MV-611), but everything else
-        /// below (the gravity sweep, the deck clamp, the separation-grid write, every timer) used to
-        /// still run every frame regardless, for a population that runs into the hundreds by World 2's
-        /// midgame. This throttles its WHOLE tick to <see cref="DormantFarTickInterval"/> (4 Hz)
-        /// instead: the skipped frames' dt is never dropped, only deferred — it accumulates and is
-        /// handed, in one lump, to everything that runs on the tick that finally fires, so every timer
-        /// below ends up exactly where it would have been ticking every frame. The instant this robot
-        /// stops qualifying — wakes, leaves Dormant, or the player catches up — <c>farDormant</c> below
-        /// reads false and this method runs a full, unthrottled tick that very frame (AC4), folding in
-        /// whatever hadn't reached the threshold yet rather than dropping it.</summary>
+        /// MV-966: used to throttle a Dormant-and-well-behind robot's WHOLE tick to 4 Hz here
+        /// (MV-870's own accumulator/stagger dance) rather than skip it outright, because the old
+        /// index-based <see cref="IsWellBehindPlayer"/> test couldn't be trusted to mean "off the field
+        /// for good" — World 2's downward-numbered deck route (15→12→11→10) never even read as
+        /// "behind" in the first place (this ticket's own root cause). <see cref="AreaAccumulationDirector.ParkByReach"/>
+        /// now parks (deactivates) any Dormant/Submerged robot outside Max's reach on every zone
+        /// crossing, which means Unity simply never calls this method for it at all — a stronger
+        /// guarantee than any per-frame throttle, so the throttle itself is gone.</summary>
         private void Tick(float dt)
         {
             if (Current == State.Dead) return;
 
-            // MV-963: invalidate IsWellBehindPlayer's per-tick cache once, up front, so however many
-            // times this tick's own body reads it (up to 3x for a Dormant robot: here, TickBody's
-            // skipSightForFarDormant, TickDormant) resolve to a single zone lookup instead of one each.
-            _wellBehindPlayerCacheValid = false;
-
-            bool farDormant = Current == State.Dormant && IsWellBehindPlayer;
-            if (farDormant)
-            {
-                if (!_dormantFarStaggered)
-                {
-                    // A whole garrison can go Dormant-and-far on the same frame -- the player crosses
-                    // one doorway and an entire placed room qualifies at once. Without this they would
-                    // all flush their reduced tick on the same frame forever after, trading "every
-                    // frame" for "every 15th frame" rather than actually smoothing the cost out.
-                    // Bounded to [0, DormantFarTickInterval) so this robot's own first flush lands
-                    // somewhere inside its own first window instead of lining up with every other one.
-                    _dormantFarAccumulator = Mathf.Abs(GetInstanceID() % 1000) / 1000f * DormantFarTickInterval;
-                    _dormantFarStaggered = true;
-                }
-                _dormantFarAccumulator += dt;
-                if (_dormantFarAccumulator < DormantFarTickInterval) return;
-                dt = _dormantFarAccumulator;
-                _dormantFarAccumulator = 0f;
-            }
-            else if (_dormantFarAccumulator > 0f)
-            {
-                // Left Dormant, or the player caught up, with unflushed time still sitting in the
-                // accumulator -- fold it into this full-rate tick rather than dropping it.
-                dt += _dormantFarAccumulator;
-                _dormantFarAccumulator = 0f;
-                _dormantFarStaggered = false;
-            }
-            else
-            {
-                _dormantFarStaggered = false; // re-arm: the NEXT Dormant-far spell gets its own stagger
-            }
-
             // MV-940: which FrameCost.RobotSubPhase bucket the rest of this tick's cost is charged to —
             // diagnostic-only breakdown nested inside the outer Bucket.Robot charge Update() already
-            // wraps this whole call in (see RobotSubPhase's own doc comment). Behind matches exactly the
-            // farDormant condition above, the same IsWellBehindPlayer-while-Dormant definition
-            // PopulationReadout's "behind" count uses.
+            // wraps this whole call in (see RobotSubPhase's own doc comment).
             FrameCost.RobotSubPhase subPhase =
-                farDormant ? FrameCost.RobotSubPhase.Behind
-                : Current == State.Dormant ? FrameCost.RobotSubPhase.Dormant
-                : FrameCost.RobotSubPhase.AwakeAiRoute;
+                Current == State.Dormant ? FrameCost.RobotSubPhase.Dormant : FrameCost.RobotSubPhase.AwakeAiRoute;
             FrameCost.BeginRobotSub(subPhase);
             try
             {
-                TickBody(dt, farDormant);
+                TickBody(dt);
             }
             finally
             {
@@ -1358,7 +1346,7 @@ namespace MaxWorlds.Enemies
 
         /// <summary>MV-940: split out of <see cref="Tick"/> purely so the sub-phase try/finally above
         /// has a single call to wrap — no behaviour here changed by this split.</summary>
-        private void TickBody(float dt, bool farDormant)
+        private void TickBody(float dt)
         {
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
@@ -1385,14 +1373,7 @@ namespace MaxWorlds.Enemies
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
-            //
-            // MV-611: a DORMANT robot whose own area is well behind the player can never see him or be
-            // seen — the raycast is dead weight for exactly the residue population (concealed knots,
-            // garrison never looked at, stragglers run past) that accumulates as the player advances.
-            // Every other state still ticks sight live every frame; cover/chase correctness depends on
-            // it being fresh, and only a robot standing still, unaware, and behind is ever this stale.
-            bool skipSightForFarDormant = Current == State.Dormant && IsWellBehindPlayer;
-            if (target != null && !skipSightForFarDormant)
+            if (target != null)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
             // Water Balloon's halt (WV-231): a true freeze, not just a movement stop — the state
@@ -1424,15 +1405,8 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
 
-            // MV-870: on a reduced Dormant-far tick, this robot's CharacterController still reports
-            // its grounded state as of the last real Move() call even though no Move() happened this
-            // tick -- reading _cc.isGrounded here is exactly "grounded on its last real move" (AC2).
-            // A robot already resting on the floor doesn't need a fresh sweep to prove that again; one
-            // still falling (or on a full-rate tick, farDormant is false and this never skips) keeps
-            // getting one.
-            bool skipGravity = farDormant && _cc.isGrounded;
             FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
-            if (!skipGravity) ApplyGravity(dt);
+            ApplyGravity(dt);
             FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
             // MV-952: below the floor or outside the world bounds for more than the grace window ->
@@ -1446,28 +1420,19 @@ namespace MaxWorlds.Enemies
                 RecoverFromFall(recoverTo.Value);
             }
 
-            // MV-697: applied after every state's own movement, regardless of state -- except a
-            // reduced Dormant-far tick where nothing has moved this robot since _lastTickPosition was
-            // last recorded (AC2): the deck clamp and the grid write below would both be no-ops, so
-            // skip re-running either just to confirm that.
-            bool positionUnchangedSinceLastTick =
-                farDormant && (transform.position - _lastTickPosition).sqrMagnitude < 1e-8f;
-            if (!positionUnchangedSinceLastTick)
-            {
-                FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
-                ClampToDeckFootprint();
-                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
+            // MV-697: applied after every state's own movement, regardless of state.
+            FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
+            ClampToDeckFootprint();
+            FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
-                // MV-611: keeps this robot's own entry in the shared neighbour grid current every
-                // tick, REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found
-                // by another robot's separation query exactly as it was when _active was scanned
-                // directly; only TickChase's own QUERY is state-gated (nothing but a chaser needs to
-                // ask). O(1) amortized — see SeparationGrid.UpdatePosition's own doc comment.
-                FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Separation);
-                _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
-                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Separation);
-            }
-            _lastTickPosition = transform.position;
+            // MV-611: keeps this robot's own entry in the shared neighbour grid current every
+            // tick, REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found
+            // by another robot's separation query exactly as it was when _active was scanned
+            // directly; only TickChase's own QUERY is state-gated (nothing but a chaser needs to
+            // ask). O(1) amortized — see SeparationGrid.UpdatePosition's own doc comment.
+            FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Separation);
+            _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
+            FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Separation);
         }
 
         /// <summary>Spray knockback (YT-64): a shove that decays over ~0.2s. Applied on top of the
@@ -1624,22 +1589,21 @@ namespace MaxWorlds.Enemies
         /// frustum too is what makes waking mean "the player's own view fell on it".</summary>
         private void TickDormant()
         {
-            // MV-611: a robot two or more areas behind the player's own can never be the one the
-            // camera falls on (the fixed ~72 degree top-down rig never reaches back that far) — skip
-            // the frustum test entirely rather than run it every frame only to read false forever.
-            if (IsWellBehindPlayer) return;
-
-            // MV-936: the residue population that ISN'T well behind (a garrison in or near the
-            // player's own area, the case IsWellBehindPlayer above deliberately never throttles) used
-            // to run the frustum test below flat out, every one of them, every single frame — fine for
-            // a handful, but W2's midgame residue runs into the hundreds (this ticket's own evidence:
-            // 103 dormant robots, robot bucket 138ms while Max stood on a deck above them). This
-            // spreads each robot's OWN check across DormantWakeCheckPeriod frames — a fixed, bounded
-            // amount of latency (at most that many frames before it can notice the player's camera has
-            // fallen on it) in exchange for dividing the steady-state population cost by the same
-            // factor. Never applies to the FIRST check after a robot starts caring (leaving
-            // IsWellBehindPlayer, or being newly placed) — that one always runs immediately, so a robot
-            // is never left looking like it silently stopped checking at all.
+            // MV-936: this residue population used to run the frustum test below flat out, every one
+            // of them, every single frame — fine for a handful, but W2's midgame residue runs into the
+            // hundreds (this ticket's own evidence: 103 dormant robots, robot bucket 138ms while Max
+            // stood on a deck above them). This spreads each robot's OWN check across
+            // DormantWakeCheckPeriod frames — a fixed, bounded amount of latency (at most that many
+            // frames before it can notice the player's camera has fallen on it) in exchange for
+            // dividing the steady-state population cost by the same factor. Never applies to the FIRST
+            // check after a robot starts caring (waking from Dormant, or being newly placed) — that one
+            // always runs immediately, so a robot is never left looking like it silently stopped
+            // checking at all.
+            //
+            // MV-966: a robot outside Max's reach is now PARKED (deactivated) by
+            // AreaAccumulationDirector.ParkByReach the instant it stops being reachable, so this method
+            // simply never runs for it at all — the old "well behind the player" early return that used
+            // to guard this frustum test is gone; there is nothing left to guard against.
             if (!DormantWakeCheckDueThisTick()) return;
 
             // MV-944: a robot on the other combat level from Max never wakes to him at all — floor and
@@ -1666,9 +1630,8 @@ namespace MaxWorlds.Enemies
         private bool _dormantWakeCheckPrimed;
 
         /// <summary>This robot's own slot in the round-robin (MV-936), assigned once from its instance
-        /// ID the first time it's needed — same per-instance spread idiom <see cref="Tick"/>'s own
-        /// <c>_dormantFarAccumulator</c> stagger uses, so a whole garrison placed (or coming into
-        /// range) on the same call doesn't re-synchronise onto "every Nth call, together".</summary>
+        /// ID the first time it's needed, so a whole garrison placed (or coming into range) on the same
+        /// call doesn't re-synchronise onto "every Nth call, together".</summary>
         private int _dormantWakeCheckBucket;
 
         /// <summary>How many not-well-behind <see cref="TickDormant"/> calls this robot has made since
@@ -1701,24 +1664,14 @@ namespace MaxWorlds.Enemies
         /// Fails CLOSED (false) whenever the area can't be resolved — no map, no player, an unrecognised
         /// zone — so a missing signal never freezes a robot that might otherwise need to wake. Public
         /// (MV-869) so the population/Replicator probe line's "behind" bucket can read it directly,
-        /// unchanged, off the live <see cref="Active"/> registry.</summary>
-        public bool IsWellBehindPlayer
-        {
-            get
-            {
-                if (_wellBehindPlayerCacheValid) return _wellBehindPlayerCache;
-                _wellBehindPlayerCache = ComputeIsWellBehindPlayer();
-                _wellBehindPlayerCacheValid = true;
-                return _wellBehindPlayerCache;
-            }
-        }
-
-        /// <summary>Per-tick cache for <see cref="IsWellBehindPlayer"/> (MV-963) — invalidated once, at
-        /// the top of <see cref="Tick"/>. A caller outside a tick (the population/Replicator probe line,
-        /// per this property's own doc comment) still gets a fresh value every time, since the cache is
-        /// only ever considered valid for the duration of the tick that set it.</summary>
-        private bool _wellBehindPlayerCacheValid;
-        private bool _wellBehindPlayerCache;
+        /// unchanged, off the live <see cref="Active"/> registry.
+        ///
+        /// MV-966: no longer read anywhere on the tick hot path — <see cref="AreaAccumulationDirector.ParkByReach"/>
+        /// replaced the throttle this used to drive (see <see cref="Tick"/>'s own doc comment) with
+        /// full parking, which needs no per-tick "how far behind" measurement at all. Kept only for
+        /// <c>PopulationReadout</c>'s diagnostic line, so no longer cached per-tick either — this is now
+        /// a plain, uncached computation on every read.</summary>
+        public bool IsWellBehindPlayer => ComputeIsWellBehindPlayer();
 
         private bool ComputeIsWellBehindPlayer()
         {
@@ -1814,27 +1767,6 @@ namespace MaxWorlds.Enemies
         /// for a robot well behind the player, rather than merely reading it as false.</summary>
         private int _frustumTestCount;
 
-        /// <summary>How often (seconds) a Dormant robot well behind the player (<see cref="IsWellBehindPlayer"/>)
-        /// gets a full tick (MV-870) — see <see cref="Tick"/>'s own doc comment.</summary>
-        private const float DormantFarTickInterval = 0.25f;
-
-        /// <summary>Seconds accumulated toward this robot's next reduced tick while it is Dormant AND
-        /// well behind the player (MV-870) — read back to 0 the instant a reduced tick fires. Stays 0
-        /// for a robot that has never been in that state, or that left it since its last reduced tick.</summary>
-        private float _dormantFarAccumulator;
-
-        /// <summary>Whether this robot's CURRENT spell of being Dormant-and-far has already had its
-        /// per-robot stagger applied to <see cref="_dormantFarAccumulator"/> (MV-870) — cleared the
-        /// moment it leaves that state, so the NEXT spell gets its own independent stagger rather than
-        /// reusing whatever was left over from the last one.</summary>
-        private bool _dormantFarStaggered;
-
-        /// <summary>This robot's position as of the end of its last tick, whatever rate it ran at
-        /// (MV-870) — lets a reduced Dormant-far tick tell whether ClampToDeckFootprint/
-        /// <see cref="_separationGrid"/>.UpdatePosition would have anything to do, without re-running
-        /// either just to find out.</summary>
-        private Vector3 _lastTickPosition;
-
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
         /// before it joins the chase for real. Idempotent — a robot no longer Dormant ignores a
         /// second call, which is what lets <see cref="AreaAccumulationDirector.ActivateGarrisonFor"/>
@@ -1874,8 +1806,10 @@ namespace MaxWorlds.Enemies
             if (!_lurkerAwake)
             {
                 // Same universal "dormant until seen" gate as TickDormant — the grate itself is this
-                // Lurker's visible body while submerged, so seeing the grate is what wakes it.
-                if (IsWellBehindPlayer) return;
+                // Lurker's visible body while submerged, so seeing the grate is what wakes it. MV-966:
+                // a Submerged Lurker outside Max's reach is parked (see TickDormant's own doc comment)
+                // and this method never runs for it, so there is no separate "well behind" gate here
+                // any more either.
                 if (!AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) return;
                 _lurkerAwake = true;
             }
@@ -2755,50 +2689,46 @@ namespace MaxWorlds.Enemies
         /// puddle at the death point. MV-924 raised the split count from two (either side on X) to
         /// <see cref="SludgerSplitCount"/> four, one at each compass point (+X, -X, +Z, -Z) — all four
         /// still <see cref="SludgerSplitOffset"/> from the death point and so still inside the puddle.
-        /// Built standalone rather than through <see cref="EnemySpawner"/> — a Sludger dies wherever the
-        /// fight is, not next to a shed's mouth — the same construction
-        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss.CreateAdd"/> already uses for a boss-flung add.
         /// Spawned AWAKE (no Dormant/emergence beat, per the ticket) and tagged
         /// <see cref="TagNoReplicate"/> so a fresh batch can't immediately walk back into the box that
         /// quadrupled it. The splits themselves are never counted as authored composition (the ticket's
-        /// own wording) — only <see cref="ActiveCount"/>, same as any other live robot.</summary>
+        /// own wording) — only <see cref="ActiveCount"/>, same as any other live robot.
+        ///
+        /// MV-966: pulled from <see cref="AreaAccumulationDirector.TakeForSplit"/> — the same pool
+        /// garrison robots come from — and returns to it on death via the <c>Died</c> subscription that
+        /// pool already wires up on every instance it hands out, rather than the old standalone
+        /// <c>GameObject.CreatePrimitive</c> build (never pooled, never destroyed, only
+        /// <c>SetActive(false)</c> on death — up to 324 extra robots orphaned over a World 2 run). A
+        /// Sludger dying with no <see cref="AreaAccumulationDirector"/> in the scene (a bare EditMode
+        /// fixture) simply spawns no splits — there is no pool to draw one from or return it to.</summary>
         private void SpawnSludgerSplit()
         {
             Vector3 deathPos = transform.position;
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            WorldConfig worldCfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
-            EnemyArchetype rusherArchetype = EnemyArchetype.For(EnemyKind.Rusher, worldCfg);
-
-            for (int i = 0; i < SludgerSplitCount; i++)
+            if (areaDirector != null)
             {
-                Vector3 offset;
-                switch (i)
+                WorldConfig worldCfg = areaDirector.ActiveWorldConfig;
+                EnemyArchetype rusherArchetype = EnemyArchetype.For(EnemyKind.Rusher, worldCfg);
+
+                for (int i = 0; i < SludgerSplitCount; i++)
                 {
-                    case 0: offset = new Vector3(SludgerSplitOffset, 0f, 0f); break;
-                    case 1: offset = new Vector3(-SludgerSplitOffset, 0f, 0f); break;
-                    case 2: offset = new Vector3(0f, 0f, SludgerSplitOffset); break;
-                    default: offset = new Vector3(0f, 0f, -SludgerSplitOffset); break;
+                    Vector3 offset;
+                    switch (i)
+                    {
+                        case 0: offset = new Vector3(SludgerSplitOffset, 0f, 0f); break;
+                        case 1: offset = new Vector3(-SludgerSplitOffset, 0f, 0f); break;
+                        case 2: offset = new Vector3(0f, 0f, SludgerSplitOffset); break;
+                        default: offset = new Vector3(0f, 0f, -SludgerSplitOffset); break;
+                    }
+                    Vector3 pos = deathPos + offset;
+
+                    RobotEnemy e = areaDirector.TakeForSplit(EnemyKind.Rusher, rusherArchetype);
+                    e.transform.SetPositionAndRotation(pos, Quaternion.identity);
+                    e.gameObject.SetActive(true);
+                    e.SetHealthFraction(0.5f);
+                    e.TagNoReplicate(SludgerSplitNoReplicateSeconds);
+                    IgnorePlayerCollision(e.gameObject);
                 }
-                Vector3 pos = deathPos + offset;
-
-                var go = GameObject.CreatePrimitive(
-                    rusherArchetype.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
-                go.name = $"RobotEnemy {rusherArchetype.Kind} (sludger split)";
-                go.transform.position = pos;
-                go.transform.localScale = rusherArchetype.BodyScale;
-
-                var cc = go.AddComponent<CharacterController>();
-                float lateral = Mathf.Max(rusherArchetype.BodyScale.x, rusherArchetype.BodyScale.z);
-                cc.height = rusherArchetype.ColliderHeight / Mathf.Max(rusherArchetype.BodyScale.y, 1e-4f);
-                cc.radius = rusherArchetype.ColliderRadius / Mathf.Max(lateral, 1e-4f);
-                cc.center = Vector3.zero;
-
-                var e = go.AddComponent<RobotEnemy>();
-                e.Apply(rusherArchetype);
-                e.SetHealthFraction(0.5f);
-                e.TagNoReplicate(SludgerSplitNoReplicateSeconds);
-                go.AddComponent<RobotRig>();
-                IgnorePlayerCollision(go);
             }
 
             // Deterministic-from-position seed (MV-769), not Random — same idiom as

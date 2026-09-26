@@ -21,9 +21,19 @@ namespace MaxWorlds.Tests.EditMode
     /// <c>EnemyKind</c> is only <c>{ Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter }</c>
     /// — no <c>Sludger</c> member and no <c>SludgePuddle</c> class exist yet, so this file fails to
     /// COMPILE at that commit (CS0117/CS0246) before a single assertion runs.
+    ///
+    /// MV-966: a split now draws from <see cref="AreaAccumulationDirector.TakeForSplit"/> (the same
+    /// pool garrison robots come from) instead of building its own standalone
+    /// <c>GameObject.CreatePrimitive</c> — so a bare, unconfigured director has to exist in the scene
+    /// for <c>SpawnSludgerSplit</c> to have a pool to draw from at all. <see cref="AreaAccumulationDirector.Take"/>
+    /// only ever touches its own pool dictionary and <c>Bodies()</c>, never <c>Configure</c>'s
+    /// map/world-config state, so adding the component alone (no <c>Configure</c>/<c>ConfigureWorld</c>
+    /// call) is enough.
     /// </summary>
     public sealed class MV705SludgeDroneTests
     {
+        private GameObject _directorGo;
+
         [SetUp]
         public void SetUp()
         {
@@ -32,6 +42,8 @@ namespace MaxWorlds.Tests.EditMode
             SludgePuddle.ResetRegistry();
             foreach (var stray in Object.FindObjectsByType<SludgePuddle>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(stray.gameObject);
+            _directorGo = new GameObject("MV705 Area Director");
+            _directorGo.AddComponent<AreaAccumulationDirector>();
         }
 
         [TearDown]
@@ -40,10 +52,18 @@ namespace MaxWorlds.Tests.EditMode
             RobotEnemy.ResetRegistry();
             SludgePuddle.ResetRegistry();
             DevTuning.Reset();
-            foreach (var r in Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+            // MV-966: Include, not the default Exclude — the Sludger itself, and every pooled split
+            // Rusher, is INACTIVE by the time this runs (Die() deactivates on the way out), so the
+            // default active-only query left them all leaking, inactive, into whichever test ran next
+            // (this ticket's own MV831 fix is what first made that leak visible, but the leak predates
+            // this ticket).
+            foreach (var r in Object.FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 Object.DestroyImmediate(r.gameObject);
             foreach (var p in Object.FindObjectsByType<SludgePuddle>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(p.gameObject);
+            GameObject bodies = GameObject.Find("Area Robots");
+            if (bodies != null) Object.DestroyImmediate(bodies);
+            if (_directorGo != null) Object.DestroyImmediate(_directorGo);
         }
 
         // ------------------------------------------------------------------ helpers
