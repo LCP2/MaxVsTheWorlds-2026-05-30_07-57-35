@@ -27,6 +27,7 @@ namespace MaxWorlds.VFX
     /// did. Everything else here is read-only.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("factories")]
     public sealed class FactoryDoorway : MonoBehaviour, IFactoryDoor
     {
         // --- Shape. Metres, and chosen to be read from 30 m up at ~72 deg (the only angle we have). ---

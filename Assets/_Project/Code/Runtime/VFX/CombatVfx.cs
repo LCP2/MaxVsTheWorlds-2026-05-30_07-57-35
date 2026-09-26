@@ -22,6 +22,7 @@ namespace MaxWorlds.VFX
     /// Installs itself at runtime, so the scene file stays untouched (code-driven scenes).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class CombatVfx : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

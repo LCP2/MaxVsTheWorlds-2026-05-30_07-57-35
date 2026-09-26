@@ -36,6 +36,7 @@ namespace MaxWorlds.VFX
     /// <see cref="BigBermudaRig.Follow"/>.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class SludgequeenRig : MonoBehaviour
     {
         /// <summary>Give <paramref name="boss"/> its own rig, bound to it alone — same per-instance

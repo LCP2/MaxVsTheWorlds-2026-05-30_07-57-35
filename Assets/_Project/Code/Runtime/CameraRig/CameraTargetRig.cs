@@ -11,6 +11,7 @@ namespace MaxWorlds.CameraRig
     /// subject directly — so Cinemachine's position damping smooths the motion
     /// while this script supplies the lead offset.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("camera")]
     public sealed class CameraTargetRig : MonoBehaviour
     {
         [Tooltip("The thing the camera ultimately tracks (Max). Placeholder for the slice.")]

@@ -13,6 +13,7 @@ namespace MaxWorlds.VFX
     /// MV-684: the hand-rolled accumulate/clamp/lerp is now the <see cref="AnimSequence"/> substrate's
     /// proof consumer — a single linear step over <c>duration</c>, evaluated the same way.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class TeleportGhostCollapse : MonoBehaviour
     {
         private AnimSequence _sequence;

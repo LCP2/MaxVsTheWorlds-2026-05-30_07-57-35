@@ -21,6 +21,7 @@ namespace MaxWorlds.Combat
     /// SAME robot within <see cref="ShockWindowSeconds"/> of the last one stuns it. Tracked here, not on
     /// <see cref="SeekerPulse"/>, since the combo spans many short-lived pulse instances fired over time.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("combat")]
     public sealed class PulseLaser : MonoBehaviour
     {
         public const float DefaultPulseInterval = 0.22f;

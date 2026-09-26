@@ -30,6 +30,7 @@ namespace MaxWorlds.UI
     /// panel (UpgradeScreen/HomeScreen/ResultScreen).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class WeaponsScreen : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

@@ -19,6 +19,7 @@ namespace MaxWorlds.VFX
     /// Self-installing; reads state and signals, writes nothing.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class AmbienceVfx : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

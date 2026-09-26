@@ -36,6 +36,7 @@ namespace MaxWorlds.VFX
     /// ability that doesn't exist yet), swapped in and radiated the same swap-in-once idiom as the cell.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("pickups")]
     public sealed class PickupArtDirector : MonoBehaviour
     {
         private const string ArtPrefix = "PartArt:";   // child name carries the key it was built for

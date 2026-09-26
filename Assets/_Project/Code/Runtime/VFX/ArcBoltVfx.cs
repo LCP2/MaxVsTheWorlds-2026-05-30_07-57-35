@@ -13,6 +13,7 @@ namespace MaxWorlds.VFX
     /// (<see cref="MaxWorlds.Combat.PulseLaser.TryArc"/>), so this is pure presentation with no
     /// collision or steering of its own.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class ArcBoltVfx : MonoBehaviour
     {
         public const int Segments = 7;

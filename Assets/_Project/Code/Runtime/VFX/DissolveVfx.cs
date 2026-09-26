@@ -22,6 +22,7 @@ namespace MaxWorlds.VFX
     /// When real models land (YT-51) this needs no change: it copies whatever mesh the enemy has.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class DissolveVfx : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

@@ -17,6 +17,7 @@ namespace MaxWorlds.Arena
     /// population and, through <see cref="MaxWorlds.Feel.GameFeel"/>'s damage/kill trauma, pinned the
     /// camera shake on permanently once enough robots were dying in the flood at once.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class StormdrainFloodRunner : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

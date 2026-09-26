@@ -15,6 +15,7 @@ namespace MaxWorlds.Pickups
     /// pools it and does the walk-over check, so there is one Max lookup and one pool, not one per drop.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("pickups")]
     public sealed class Pickup : MonoBehaviour
     {
         private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f); // cyan power cell

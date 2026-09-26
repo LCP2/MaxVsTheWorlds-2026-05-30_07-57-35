@@ -19,6 +19,7 @@ namespace MaxWorlds.Player
     /// earn by disengaging — and it is far too slow to stand in a pack and out-heal it.
     /// </summary>
     [RequireComponent(typeof(PlayerController))]
+    [MaxWorlds.Core.PerfSection("player")]
     public sealed class PlayerHealth : MonoBehaviour, IDamageable, IHealthReadout
     {
         [SerializeField] private float maxHealth = 500f;  // MV-658: baked from Lee's 2026-09-02 tuning pass (was 200, MV-315)

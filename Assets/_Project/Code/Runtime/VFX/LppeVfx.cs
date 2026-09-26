@@ -14,6 +14,7 @@ namespace MaxWorlds.VFX
     /// Every magnitude below is a resolved value read off <see cref="CombatVfxTuning"/>, never a
     /// literal buried in an Emit() call (spec: "so the numbers are tunable rather than buried").
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class LppeVfx : MonoBehaviour
     {
         // MV-805: retinted into the same orange family as SeekerPulse's own bolt colour (was a cool

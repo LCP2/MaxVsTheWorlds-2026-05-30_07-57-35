@@ -25,6 +25,7 @@ namespace MaxWorlds.Intro
     /// blend to World 2's presentation along the corridor is MV-849's, not this ticket's.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("intro")]
     public sealed class WorldJoinSequence : MonoBehaviour
     {
         private const string DoorAreaId = "a30";

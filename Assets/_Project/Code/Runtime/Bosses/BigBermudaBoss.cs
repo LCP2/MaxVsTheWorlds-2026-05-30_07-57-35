@@ -24,6 +24,7 @@ namespace MaxWorlds.Bosses
     /// <see cref="MaxWorlds.Bosses.BossVictoryPayoff"/>. Greybox body; VFX are code-driven.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class BigBermudaBoss : MonoBehaviour, IDamageable
     {
         private enum Phase { Dormant, Intro, Fight, Dead }

@@ -24,6 +24,7 @@ namespace MaxWorlds.Weapons
     /// <see cref="ShoulderRack.Tick"/> and <see cref="SeekerPulse.Tick"/> already use — so an EditMode
     /// test can drive the homing flight to detonation deterministically without a live PlayerLoop.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class PlayerRocket : MonoBehaviour
     {
         /// <summary>MV-842: how long a rocket flies its fixed launch arc — pitched up, yawed off the

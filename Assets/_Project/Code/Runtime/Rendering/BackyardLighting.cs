@@ -17,6 +17,7 @@ namespace MaxWorlds.Rendering
     /// angle set by the Cinemachine rig (YT-33) is deliberately left alone.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rendering")]
     public sealed class BackyardLighting : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

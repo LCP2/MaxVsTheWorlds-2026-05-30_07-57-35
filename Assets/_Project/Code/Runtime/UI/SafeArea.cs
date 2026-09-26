@@ -15,6 +15,7 @@ namespace MaxWorlds.UI
     /// layout is unchanged; the inset only appears on hardware that reports a notch.
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class SafeArea : MonoBehaviour
     {
         /// <summary>Test seam: when set, used instead of <see cref="Screen.safeArea"/> so a

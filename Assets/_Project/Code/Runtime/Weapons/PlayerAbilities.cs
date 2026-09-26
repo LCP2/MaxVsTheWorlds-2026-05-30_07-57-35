@@ -33,6 +33,7 @@ namespace MaxWorlds.Weapons
     /// </summary>
     [RequireComponent(typeof(PlayerController))]
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class PlayerAbilities : MonoBehaviour
     {
         [Header("Water Balloon")]

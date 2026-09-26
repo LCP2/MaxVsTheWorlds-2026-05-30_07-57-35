@@ -29,6 +29,7 @@ namespace MaxWorlds.VFX
     /// overwritten with his skin.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class AimReticle : MonoBehaviour
     {
         /// <summary>Below the contact shadow, which is below the anchor ring, which is below the

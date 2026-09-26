@@ -86,6 +86,7 @@ namespace MaxWorlds.Weapons
             ring.gameObject.AddComponent<RingLifetime>().Begin(ring, point, Mathf.Max(0.3f, maxRadius), RingLifetimeSeconds);
         }
 
+        [MaxWorlds.Core.PerfSection("weapons")]
         private sealed class RingLifetime : MonoBehaviour
         {
             private GroundRing _ring;

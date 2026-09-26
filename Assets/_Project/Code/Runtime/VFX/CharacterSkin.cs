@@ -53,6 +53,7 @@ namespace MaxWorlds.VFX
     ///    so a respawn is skinned on the very frame it appears.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class CharacterSkin : MonoBehaviour
     {
         /// <summary>Every live skin. A plain list so the damage signal can find the body it hit

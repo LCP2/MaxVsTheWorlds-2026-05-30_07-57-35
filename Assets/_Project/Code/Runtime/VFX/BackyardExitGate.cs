@@ -29,6 +29,7 @@ namespace MaxWorlds.VFX
     /// BossSpectacle flags — so this is built to read in well under a second.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class BackyardExitGate : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

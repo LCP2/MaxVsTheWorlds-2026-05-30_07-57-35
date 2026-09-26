@@ -11,6 +11,7 @@ namespace MaxWorlds.Enemies
     /// Ticking lives here rather than on <see cref="EnemySpawner"/> so a level with two factories
     /// (YT-92) doesn't double the elapsed-time rate by having two Updates advance the same clock.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("robot")]
     public sealed class DifficultyDirectorRunner : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

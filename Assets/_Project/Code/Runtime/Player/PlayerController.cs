@@ -17,6 +17,7 @@ namespace MaxWorlds.Player
     /// device pass.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("player")]
     public sealed class PlayerController : MonoBehaviour
     {
         [Header("Move")]

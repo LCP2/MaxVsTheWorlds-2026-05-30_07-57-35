@@ -30,6 +30,7 @@ namespace MaxWorlds.Enemies
     /// mesh would be a second, drifting copy of an answer we author.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
+    [MaxWorlds.Core.PerfSection("robot")]
     public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IHealthReadout, IZoneGatedActor
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the

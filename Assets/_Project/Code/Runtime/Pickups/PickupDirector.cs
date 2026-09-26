@@ -51,6 +51,7 @@ namespace MaxWorlds.Pickups
     /// falls back to a part plus a bigger "cell cache" instead.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("pickups")]
     public sealed class PickupDirector : MonoBehaviour
     {
         /// <summary>Walk-over magnet radius, metres — planar distance from Max at which a pickup is

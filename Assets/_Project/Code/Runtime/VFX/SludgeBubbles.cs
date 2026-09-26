@@ -20,6 +20,7 @@ namespace MaxWorlds.VFX
     /// rendered pixels).
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class SludgeBubbles : MonoBehaviour
     {
         private const float RiseHeight = 0.12f;

@@ -33,6 +33,7 @@ namespace MaxWorlds.VFX
     /// read it. Delete this file once the actual bug is found and fixed.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class RobotSkinDiagnostics : MonoBehaviour
     {
         /// <summary>How long after spawn the follow-up line fires — enough to catch a rig that built

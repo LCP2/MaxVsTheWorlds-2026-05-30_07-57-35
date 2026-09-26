@@ -19,6 +19,7 @@ namespace MaxWorlds.Feel
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(1000)]   // after CinemachineBrain
+    [MaxWorlds.Core.PerfSection("feel")]
     public sealed class ScreenShake : MonoBehaviour
     {
         [Header("Shake")]

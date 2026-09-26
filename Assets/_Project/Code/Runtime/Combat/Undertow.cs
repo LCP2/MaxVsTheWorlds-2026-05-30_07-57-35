@@ -21,6 +21,7 @@ namespace MaxWorlds.Combat
     /// charged fires the <b>cavitation shot</b> (<see cref="CavitationBubble"/>) instead of a final tick.
     /// An early release (never charged) fires one ordinary lance tick — "never a wasted shot", per spec.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("combat")]
     public sealed class Undertow : MonoBehaviour
     {
         // -------------------------------------------------------------------------------- lance

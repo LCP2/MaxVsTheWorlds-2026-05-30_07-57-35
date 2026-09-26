@@ -19,6 +19,7 @@ namespace MaxWorlds.Enemies
     /// in the roster, leaves a <see cref="CorrosionPuddle"/> behind at the impact point instead of
     /// just disappearing.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class CorrosiveGlob : MonoBehaviour
     {
         private const float FlightHeight = 1.0f;

@@ -72,6 +72,7 @@ namespace MaxWorlds.VFX
     /// Delete this file and the game plays identically — Max just goes back to being a capsule.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class MaxRig : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

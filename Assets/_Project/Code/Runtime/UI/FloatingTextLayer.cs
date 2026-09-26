@@ -10,6 +10,7 @@ namespace MaxWorlds.UI
     /// timing/fade curves are the unit-tested <see cref="FloatingTextMotion"/>. Text objects
     /// are pooled so a busy fight doesn't churn GC. Built entirely in code by the HUD.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("healthbars")]
     public sealed class FloatingTextLayer : MonoBehaviour
     {
         private sealed class Item

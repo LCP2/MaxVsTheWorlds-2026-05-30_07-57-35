@@ -9,6 +9,7 @@ namespace MaxWorlds.VFX
     /// one tell shares a colour family. This is the shape that does: a bent line hovering over the
     /// stunned robot for the stun's own duration.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class ShockZigzagVfx : MonoBehaviour
     {
         /// <summary><c>RobotEnemy.ShockTell</c>, to the digit — the zigzag and the body flash read as

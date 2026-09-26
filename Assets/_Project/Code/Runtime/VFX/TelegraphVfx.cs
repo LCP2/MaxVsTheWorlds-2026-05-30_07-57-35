@@ -22,6 +22,7 @@ namespace MaxWorlds.VFX
     /// a MaterialPropertyBlock. A crowd of telegraphing enemies costs a handful of quads.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("vfx")]
     public sealed class TelegraphVfx : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

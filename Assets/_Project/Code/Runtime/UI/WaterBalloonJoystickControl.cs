@@ -25,6 +25,7 @@ namespace MaxWorlds.UI
     /// the arc + landing circle look like".
     /// </summary>
     [RequireComponent(typeof(Image))]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class WaterBalloonJoystickControl : AbilityJoystickControlBase
     {
         private Transform _origin;

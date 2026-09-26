@@ -8,6 +8,7 @@ namespace MaxWorlds.CameraRig
     /// real player movement lands in YT-34. Delete this component (and the
     /// placeholder subject) once Max is the follow target.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("camera")]
     public sealed class PlaceholderSubjectMover : MonoBehaviour
     {
         [SerializeField] private float speed = 1.2f;

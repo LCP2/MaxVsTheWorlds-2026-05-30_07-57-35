@@ -25,6 +25,7 @@ namespace MaxWorlds.Enemies
     /// <see cref="HomingMissile"/> — not pooled, since a swarm never has more than a handful of these
     /// live at once.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class CorrosionPuddle : MonoBehaviour
     {
         /// <summary>MV-789's own authored rate — deliberately the same numbers as

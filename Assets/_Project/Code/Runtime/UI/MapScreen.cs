@@ -24,6 +24,7 @@ namespace MaxWorlds.UI
     /// shed) shows up with no code change, and there is nothing here to keep in sync by hand.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("hud")]
     public sealed class MapScreen : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

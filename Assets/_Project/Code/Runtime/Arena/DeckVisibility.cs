@@ -8,6 +8,7 @@ namespace MaxWorlds.Arena
     /// never blocks him seeing himself — restored the moment he leaves. Driven purely from Max's own
     /// position; no camera change, per the ticket's own scope.</summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class DeckVisibility : MonoBehaviour
     {
         private const float FadeSeconds = 0.15f;

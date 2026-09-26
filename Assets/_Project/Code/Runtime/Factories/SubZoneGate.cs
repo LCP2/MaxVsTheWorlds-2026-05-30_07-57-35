@@ -18,6 +18,7 @@ namespace MaxWorlds.Factories
     /// A gate nobody gave a key to opens on the first <see cref="Unlock"/> it hears, which is what a
     /// hand-built test fixture (and the old one-factory slice) expects of it.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("factories")]
     public sealed class SubZoneGate : MonoBehaviour
     {
         [SerializeField] private float sinkDepth = 3f;

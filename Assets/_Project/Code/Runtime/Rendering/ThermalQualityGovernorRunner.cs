@@ -12,6 +12,7 @@ namespace MaxWorlds.Rendering
     /// assembly, which this one cannot see) can read the resolved tier without either side needing to
     /// know about the other beyond that one static hook.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("rendering")]
     internal sealed class ThermalQualityGovernorRunner : MonoBehaviour
     {
         private static ThermalQualityGovernorRunner _instance;

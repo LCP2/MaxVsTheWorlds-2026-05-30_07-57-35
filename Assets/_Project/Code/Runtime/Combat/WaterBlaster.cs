@@ -31,6 +31,7 @@ namespace MaxWorlds.Combat
     /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
     /// into fire gating or damage.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("combat")]
     public sealed class WaterBlaster : MonoBehaviour
     {
         /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280, widened MV-289): the

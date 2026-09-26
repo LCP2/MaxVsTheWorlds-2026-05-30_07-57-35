@@ -67,6 +67,7 @@ namespace MaxWorlds.Arena
     /// and zero once the yard has been explored, because the sweep retires itself.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class DiscoveryDirector : MonoBehaviour
     {
         private Discoverable[] _landmarks = new Discoverable[0];

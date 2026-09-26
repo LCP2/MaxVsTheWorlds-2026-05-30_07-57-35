@@ -30,6 +30,7 @@ namespace MaxWorlds.VFX
     /// public and both read-only from here; no gameplay file is touched.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("factories")]
     public sealed class FactoryLife : MonoBehaviour
     {
         /// <summary>

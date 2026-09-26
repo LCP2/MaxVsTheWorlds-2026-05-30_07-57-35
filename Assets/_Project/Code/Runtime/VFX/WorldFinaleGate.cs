@@ -31,6 +31,7 @@ namespace MaxWorlds.VFX
     /// wall open while any other robot in a30 lingered.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("map/gate")]
     public sealed class WorldFinaleGate : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

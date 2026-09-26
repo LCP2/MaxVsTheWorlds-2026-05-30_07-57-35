@@ -84,6 +84,7 @@ namespace MaxWorlds.VFX
     /// intro/defeat beats come off the same <see cref="HudSignals"/> YT-55's spectacle uses.
     /// </summary>
     [DisallowMultipleComponent]
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class BigBermudaRig : MonoBehaviour
     {
         /// <summary>
