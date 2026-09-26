@@ -234,6 +234,9 @@ namespace MaxWorlds.Intro
             // MapRuntime.Build, only ever relevant to the World 1 -> World 2 row this ticket covers.
             if (_fromWorldIndex == 0)
                 WorldJoinDressing.DressExit(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+            // MV-967: outfall/breach/hull set-dressing for the World 2 -> World 3 row.
+            else if (_fromWorldIndex == 1)
+                WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
         }
 
         // ------------------------------------------------------------------ build (arrival)
@@ -294,6 +297,9 @@ namespace MaxWorlds.Intro
             // MV-965: same dressing pass as the exit side's segment C, continued into the arrival shell.
             if (toWorld == 1)
                 WorldJoinDressing.DressArrival(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+            // MV-967: same idea for the World 3 arrival shell — segment C's hull dressing continued.
+            else if (toWorld == 2)
+                WorldJoinDressing.DressArrivalReef(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
         }
 
         // ------------------------------------------------------------------ shared geometry
