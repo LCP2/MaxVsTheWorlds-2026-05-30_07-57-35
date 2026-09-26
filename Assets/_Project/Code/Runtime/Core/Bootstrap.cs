@@ -142,6 +142,11 @@ namespace MaxWorlds.Core
             // there. Does not touch Time.fixedDeltaTime (the 50 Hz tick rate is unchanged — MV-883 AC3).
             Time.maximumDeltaTime = 0.1f;
 
+            // MV-973: no Rigidbodies, no triggers, no gameplay FixedUpdate — see
+            // PhysicsSimulationDriver's own doc comment for why the automatic fixed-step simulation
+            // this stops was pure overhead.
+            PhysicsSimulationDriver.Install();
+
 #if UNITY_WEBGL && !UNITY_EDITOR
             // On WebGL the browser owns the frame loop — Unity drives itself from
             // requestAnimationFrame. Pinning Application.targetFrameRate makes Unity run its own
@@ -159,6 +164,10 @@ namespace MaxWorlds.Core
 
         private void Update()
         {
+            // MV-973: replaces the sync the automatic fixed-step simulation used to provide for free —
+            // must run before any gameplay system this frame raycasts/overlaps against moved geometry.
+            PhysicsSimulationDriver.Tick(Time.deltaTime);
+
             _timingProbe.Tick();
             FrameCost.MarkFrameRendered();
             TickTelemetrySession();
