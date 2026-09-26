@@ -478,7 +478,11 @@ namespace MaxWorlds.Arena
             if (zone == null) return point;
 
             bool onDeck = fromPosition.y >= deckHeight - 0.5f;
-            if (!onDeck) return new Vector3(point.x, fromPosition.y, point.z);
+            // MV-953: floor level (0) directly -- never fromPosition.y. That used to read as floor level
+            // only because Max's own Y coincidentally already sat there; when he fell through the world
+            // (World 1 g20, a20->a21) it was -50, and every following Sentinel -- no gravity of its own --
+            // got dragged straight down with him.
+            if (!onDeck) return new Vector3(point.x, 0f, point.z);
 
             MapEntity deck = DeckEntityAt(fromPosition.x, fromPosition.z);
             return deck != null ? ClampIntoDeckRect(deck, point, deckEdgeMargin) : point;
