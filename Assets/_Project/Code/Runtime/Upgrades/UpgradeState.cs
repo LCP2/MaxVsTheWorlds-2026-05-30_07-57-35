@@ -95,5 +95,18 @@ namespace MaxWorlds.Upgrades
             s_installed.Clear();
             Changed?.Invoke();
         }
+
+        /// <summary>Restore an exact installed set from a captured checkpoint (MV-951) — a cold-boot
+        /// RESUME needs to land on exactly this set, not accrue on top of whatever
+        /// <c>HomeScreen.OnResume</c>'s own <see cref="Reset"/> call just cleared it to. Fires
+        /// <see cref="Changed"/> once at the end, not once per part, so a dependent system (the
+        /// blaster's reticle) rebuilds a single time against the final set.</summary>
+        public static void RestoreInstalled(IEnumerable<PartKind> kinds)
+        {
+            s_installed.Clear();
+            if (kinds != null)
+                foreach (PartKind kind in kinds) s_installed.Add(kind);
+            Changed?.Invoke();
+        }
     }
 }

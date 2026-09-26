@@ -5,6 +5,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
+using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Save
@@ -173,7 +174,11 @@ namespace MaxWorlds.Save
 
             var categories = new List<string>(RigState.SnapshotUnlockedCategories());
             data.CheckpointUnlockedCategories = categories.ToArray();
-            data.CheckpointAreaIndex = areaIndex;
+            // MV-951: a capture must never write an area index lower than the checkpoint it was
+            // restored from — WorldRunner.ResumeCheckpoint/Continue land CurrentArea one area BEHIND
+            // the checkpoint (standing at the gate looking in), so a pause/focus capture taken before
+            // that gate breaks again would otherwise regress the save by one area every single resume.
+            data.CheckpointAreaIndex = Math.Max(data.CheckpointAreaIndex, areaIndex);
             data.CheckpointPowerCells = PickupWallet.PowerCells;
             data.CheckpointPowerCellsSecondary = PickupWallet.PowerCellsSecondary;
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
@@ -182,6 +187,23 @@ namespace MaxWorlds.Save
             data.CheckpointFloodLevel01 = StormdrainFlood.Level01;
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
+
+            // MV-951: HomeScreen.OnResume wipes AbilityCreditBank/UpgradeState/PendingMorphingModule
+            // as part of the same transient-state reset it always did for a fresh PLAY — harmless only
+            // once something restores them afterward, which nothing did before this ticket.
+            data.CheckpointAbilityCredits = AbilityCreditBank.Banked;
+            var installedParts = new List<string>();
+            foreach (PartKind kind in UpgradeState.Installed) installedParts.Add(kind.ToString());
+            data.CheckpointInstalledParts = installedParts.ToArray();
+            data.WeaponCorePending = PendingMorphingModule.WeaponCorePending;
+
+            // MV-951: MapRuntime.Build unconditionally zeroes the Invasion Level clock on every cold
+            // boot (a new scene build) — a resumed run must not appear back at area 5 fighting area-1
+            // toughness/spawn-rate.
+            data.CheckpointEscalationElapsed = MaxWorlds.Enemies.DifficultyDirector.Elapsed;
+            data.CheckpointEscalationShedSkipSeconds = MaxWorlds.Enemies.DifficultyDirector.ShedSkipSeconds;
+            data.CheckpointEscalationShedsDestroyed = MaxWorlds.Enemies.DifficultyDirector.ShedsDestroyed;
+
             data.HasRunInProgress = true;
 
             Save(slot, data);
@@ -220,6 +242,18 @@ namespace MaxWorlds.Save
             StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
+
+            // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
+            // PendingMorphingModule.WeaponCorePending all get wiped by HomeScreen.OnResume's own
+            // transient-state reset right before this runs, same reasoning as RigState/PickupWallet.
+            AbilityCreditBank.RestoreBanked(data.CheckpointAbilityCredits);
+            var installedParts = new List<PartKind>();
+            foreach (string name in data.CheckpointInstalledParts ?? Array.Empty<string>())
+                if (Enum.TryParse(name, out PartKind kind)) installedParts.Add(kind);
+            UpgradeState.RestoreInstalled(installedParts);
+            PendingMorphingModule.RestoreWeaponCorePending(data.WeaponCorePending);
+            MaxWorlds.Enemies.DifficultyDirector.RestoreClock(
+                data.CheckpointEscalationElapsed, data.CheckpointEscalationShedSkipSeconds, data.CheckpointEscalationShedsDestroyed);
 
             // MV-950: the two Apply* calls above already fixed FactoryCensus.Destroyed/
             // ReplicatorsDestroyed (gameplay state) — but the HUD's ArenaProgress banner and the
@@ -276,6 +310,11 @@ namespace MaxWorlds.Save
             data.CheckpointFloodLevel01 = 0f;
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
+            data.CheckpointAbilityCredits = 0;
+            data.CheckpointInstalledParts = Array.Empty<string>();
+            data.CheckpointEscalationElapsed = 0f;
+            data.CheckpointEscalationShedSkipSeconds = 0f;
+            data.CheckpointEscalationShedsDestroyed = 0;
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a

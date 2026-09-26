@@ -355,6 +355,38 @@ namespace MaxWorlds.Enemies
             FillArea(areaIndex);
         }
 
+        /// <summary>MV-951: strips every robot already standing in an area BEFORE
+        /// <paramref name="checkpointAreaIndex"/> — both spawned (<see cref="FillArea"/>'s own instant
+        /// release) and pre-placed dormant garrison (<see cref="PlacePendingGarrison"/>) — so a
+        /// cold-boot RESUME into a later area never leaves those earlier, already-cleared areas
+        /// populated behind the player. <see cref="Configure"/> always fills area 1 (and pre-places
+        /// area 2's garrison) synchronously at scene Awake, before the Home screen even knows which
+        /// slot — if any — is about to RESUME, so this runs as a separate cleanup pass once the
+        /// checkpoint area is actually known, right before <see cref="RestoreArea"/> re-solves it.
+        /// Every affected area is also marked filled (<see cref="_filledAreas"/>) so nothing ever
+        /// re-populates it — Lee's rule: an area Max has already cleared never comes back, cold-boot
+        /// RESUME included, the same guarantee <see cref="RestoreArea"/> itself already gives the
+        /// checkpoint area. Call once, from <see cref="MaxWorlds.Arena.WorldRunner.ResumeCheckpoint"/>,
+        /// before <see cref="RestoreArea"/>. A no-op below area 2 (nothing precedes area 1).</summary>
+        public void ClearAreasBeforeCheckpoint(int checkpointAreaIndex)
+        {
+            if (checkpointAreaIndex <= 1 || _queue == null) return;
+
+            var stale = new List<RobotEnemy>();
+            foreach (KeyValuePair<RobotEnemy, int> kv in _areaByRobot)
+                if (kv.Value < checkpointAreaIndex) stale.Add(kv.Key);
+
+            foreach (RobotEnemy robot in stale)
+                if (robot != null) robot.Despawn();
+
+            for (int area = 1; area < checkpointAreaIndex; area++)
+            {
+                _queue.RemoveQueued(area);
+                _pendingGarrisonByArea.Remove(area);
+                _filledAreas.Add(area);
+            }
+        }
+
         /// <summary>Establishes both <see cref="CurrentArea"/> and the physical-position tracker AT
         /// <paramref name="areaIndex"/> — called once, right after a death respawn places Max back in an
         /// earlier arena (MV-427), and once from a cold-boot RESUME landing mid-world

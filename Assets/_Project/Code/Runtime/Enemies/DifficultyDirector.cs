@@ -100,6 +100,12 @@ namespace MaxWorlds.Enemies
         /// <summary>How many factory sheds this run has destroyed — only ever goes up.</summary>
         public static int ShedsDestroyed => _shedsDestroyed;
 
+        /// <summary>Accumulated shed skip-ahead seconds (see <see cref="ReportShedDestroyed"/>) — paired
+        /// with <see cref="Elapsed"/> by <see cref="MaxWorlds.Save.SaveSystem.CaptureCheckpoint"/> (MV-951)
+        /// so a checkpoint captures the Invasion Level's whole effective clock, not just its real-time
+        /// half.</summary>
+        public static float ShedSkipSeconds => _shedSkipSeconds;
+
         /// <summary>Back to a fresh run's clock. Called when a level starts building, so a scene
         /// loaded a second time — in the game or in a test — climbs from zero, not from wherever
         /// the last run left off.</summary>
@@ -113,6 +119,18 @@ namespace MaxWorlds.Enemies
         /// <summary>Advance the clock by one frame's worth of time. Negative/garbage dt is clamped
         /// to zero rather than allowed to run the level backwards.</summary>
         public static void Tick(float dt) => _elapsed += Mathf.Max(0f, dt);
+
+        /// <summary>Restore the escalation clock from a captured checkpoint (MV-951) — same reasoning
+        /// as <see cref="MaxWorlds.Arena.StormdrainFlood.RestoreLevel01"/>: <c>MapRuntime.Build</c>'s own
+        /// <see cref="Reset"/> above always runs before a cold-boot RESUME even knows there is a
+        /// checkpoint to land in, so the clock has to be set back explicitly, after the fact, rather
+        /// than left at zero.</summary>
+        public static void RestoreClock(float elapsed, float shedSkipSeconds, int shedsDestroyed)
+        {
+            _elapsed = Mathf.Max(0f, elapsed);
+            _shedSkipSeconds = Mathf.Max(0f, shedSkipSeconds);
+            _shedsDestroyed = Mathf.Max(0, shedsDestroyed);
+        }
 
         /// <summary>A factory shed just went down — skip the clock forward a step (YT-210), so
         /// clearing a source shortens the run and raises the stakes rather than lowering them.

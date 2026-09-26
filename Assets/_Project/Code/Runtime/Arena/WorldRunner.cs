@@ -321,6 +321,11 @@ namespace MaxWorlds.Arena
             bool gateIsConditionGated = IsConditionGatedArea(areaIndex);
             RespawnPlan plan = RespawnPlanner.Resolve(areaIndex, gateIsConditionGated);
 
+            // MV-951: Configure() (BackyardPath.Awake, before this Home-screen RESUME even ran) always
+            // fills area 1 — and pre-places area 2's garrison — regardless of which area this checkpoint
+            // is about to land in. Every area before the checkpoint must end up with no population at
+            // all, not just the checkpoint area RestoreArea itself re-solves below.
+            _areaDirector.ClearAreasBeforeCheckpoint(plan.RestoreAreaIndex);
             _areaDirector.RestoreArea(plan.RestoreAreaIndex);
 
             if (_pickupDirector == null) _pickupDirector = FindFirstObjectByType<PickupDirector>();

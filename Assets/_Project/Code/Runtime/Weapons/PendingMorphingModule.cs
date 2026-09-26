@@ -81,6 +81,17 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
+        /// <summary>Restore the banked-Weapon-Core flag from a captured checkpoint (MV-951) — the
+        /// persisted twin, <see cref="MaxWorlds.Save.SaveSlotData.WeaponCorePending"/>, was never
+        /// written true and never restored before this ticket, so a cold-boot RESUME after collecting
+        /// the World 1 finale's Weapon Core but before opening THE RIG silently lost the banked morph.</summary>
+        public static void RestoreWeaponCorePending(bool pending)
+        {
+            if (s_weaponCorePending == pending) return;
+            s_weaponCorePending = pending;
+            Changed?.Invoke();
+        }
+
         /// <summary>Back to a fresh run's baseline: nothing pending. Test isolation and a new run.</summary>
         public static void Reset()
         {

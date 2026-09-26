@@ -42,5 +42,16 @@ namespace MaxWorlds.Weapons
             Banked = 0;
             Changed?.Invoke(Banked);
         }
+
+        /// <summary>Restore an exact banked count from a captured checkpoint (MV-951) — a cold-boot
+        /// RESUME needs to land on a specific number, not accrue on top of whatever
+        /// <c>HomeScreen.OnResume</c>'s own <see cref="Reset"/> call just zeroed it to.</summary>
+        public static void RestoreBanked(int count)
+        {
+            int clamped = Math.Max(0, count);
+            if (Banked == clamped) return;
+            Banked = clamped;
+            Changed?.Invoke(Banked);
+        }
     }
 }
