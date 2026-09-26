@@ -77,6 +77,30 @@ namespace MaxWorlds.VFX
             return m;
         }
 
+        /// <summary>MV-969: the alpha-blended sibling of <see cref="AdditiveTinted"/> — one material
+        /// per (texture, colour) pair, tint AND alpha baked in rather than pushed through a
+        /// MaterialPropertyBlock. Only for a mark whose colour is fixed for its whole life
+        /// (<see cref="GroundAnchorVfx"/>'s always-on player/enemy/shadow anchors, never eased or
+        /// flashed) — ninety live anchors sharing three baked materials is what lets the SRP batcher
+        /// fold them into a handful of draws; ninety per-renderer property blocks is what was costing
+        /// ~180 non-batched transparent draws. Never use this for a colour that animates: that still
+        /// needs <see cref="AlphaBlend"/> plus a property block, or this mints a new material every
+        /// frame the colour moves.</summary>
+        public static Material AlphaBlendTinted(Texture2D tex, Color color)
+        {
+            string key = $"alphatint:{tex.name}:{Mathf.RoundToInt(color.r * 255f):X2}" +
+                         $"{Mathf.RoundToInt(color.g * 255f):X2}{Mathf.RoundToInt(color.b * 255f):X2}" +
+                         $"{Mathf.RoundToInt(color.a * 255f):X2}";
+            if (s_materials.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            Material m = Get(key, tex, additive: false);
+            if (m == null) return null;
+
+            m.SetColor("_BaseColor", color);
+            m.SetColor("_Color", color);
+            return m;
+        }
+
         // --- textures ---
 
         /// <summary>Round droplet: opaque core, soft falloff. The workhorse water particle.</summary>

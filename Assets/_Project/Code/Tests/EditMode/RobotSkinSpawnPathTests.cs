@@ -120,18 +120,25 @@ namespace MaxWorlds.Tests.EditMode
             bool foundTintedBody = false;
             foreach (var r in e.GetComponentsInChildren<MeshRenderer>(true))
             {
-                if (r.sharedMaterial == null) continue;
-                if (r.sharedMaterial.name != expectedBodyName) continue;
+                // MV-969: RobotRig now folds every static part into ONE combined renderer carrying one
+                // material PER SUBMESH — sharedMaterial (singular) only ever sees submesh 0, which is
+                // why this scans sharedMaterials (plural). An eye or a wheel still carries exactly one
+                // material, so this loop is unchanged for those.
+                foreach (Material mat in r.sharedMaterials)
+                {
+                    if (mat == null) continue;
+                    if (mat.name != expectedBodyName) continue;
 
-                foundTintedBody = true;
-                Color actual = r.sharedMaterial.GetColor("_BaseColor");
-                // A Material property is a real GPU-facing value (colour-space conversion on the
-                // round trip), so this checks CLOSE, not bit-exact — exact equality here would be
-                // testing float rounding, not the archetype fallthrough this test exists to catch.
-                Assert.That(Vector4.Distance(expected, actual), Is.LessThan(0.01f),
-                    $"the {kind} body material is named for its role but doesn't carry that role's " +
-                    $"colour — a fallthrough at the point the tint is written, not at the mapping " +
-                    $"(expected {expected}, was {actual})");
+                    foundTintedBody = true;
+                    Color actual = mat.GetColor("_BaseColor");
+                    // A Material property is a real GPU-facing value (colour-space conversion on the
+                    // round trip), so this checks CLOSE, not bit-exact — exact equality here would be
+                    // testing float rounding, not the archetype fallthrough this test exists to catch.
+                    Assert.That(Vector4.Distance(expected, actual), Is.LessThan(0.01f),
+                        $"the {kind} body material is named for its role but doesn't carry that role's " +
+                        $"colour — a fallthrough at the point the tint is written, not at the mapping " +
+                        $"(expected {expected}, was {actual})");
+                }
             }
 
             Assert.IsTrue(foundTintedBody,

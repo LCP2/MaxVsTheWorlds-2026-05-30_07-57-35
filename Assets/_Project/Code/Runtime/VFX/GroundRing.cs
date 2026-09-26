@@ -58,6 +58,37 @@ namespace MaxWorlds.VFX
             return ring;
         }
 
+        /// <summary>MV-969: a ring/shadow whose tint never changes for its whole life — build it from
+        /// an already-baked material (<see cref="VfxMaterials.AlphaBlendTinted"/>) instead of the
+        /// shared, colourless one <see cref="Create"/> uses. Pair with the colourless <see cref="Show"/>
+        /// overload below. This is for <see cref="GroundAnchorVfx"/>'s per-actor anchors specifically —
+        /// always exactly one of three fixed colours (<see cref="GroundAnchorTuning.PlayerRing"/>,
+        /// <see cref="GroundAnchorTuning.EnemyRing"/>, <see cref="GroundAnchorTuning.ContactShadow"/>)
+        /// — never for a mark that eases or flashes (a danger telegraph, a pickup glow): those still
+        /// need <see cref="Create"/> plus the colour-taking <see cref="Show"/>, which drives its tint
+        /// through a MaterialPropertyBlock every frame it changes.</summary>
+        public static GroundRing CreateFixedTint(string name, Material tintedMaterial)
+        {
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = name;
+
+            var col = quad.GetComponent<Collider>();
+            if (col != null)
+            {
+                if (Application.isPlaying) Destroy(col);
+                else DestroyImmediate(col);
+            }
+
+            var ring = quad.AddComponent<GroundRing>();
+            ring._renderer = quad.GetComponent<MeshRenderer>();
+            ring._renderer.sharedMaterial = tintedMaterial;
+            ring._renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            ring._renderer.receiveShadows = false;
+            quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            ring.Hide();
+            return ring;
+        }
+
         public bool Visible => gameObject.activeSelf;
 
         /// <summary>Place and tint the ring. <paramref name="radius"/> is in world units.</summary>
@@ -72,6 +103,18 @@ namespace MaxWorlds.VFX
             _renderer.GetPropertyBlock(_mpb);
             _mpb.SetColor(BaseColorId, color);
             _renderer.SetPropertyBlock(_mpb);
+        }
+
+        /// <summary>MV-969: place-only, for a ring built with <see cref="CreateFixedTint"/> — its
+        /// colour is already baked into <see cref="_renderer"/>'s material, so there is no property
+        /// block to write every frame.</summary>
+        public void Show(Vector3 groundPos, float radius)
+        {
+            if (!gameObject.activeSelf) gameObject.SetActive(true);
+
+            transform.position = new Vector3(groundPos.x, groundPos.y + Lift, groundPos.z);
+            transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            transform.localScale = new Vector3(radius * 2f, radius * 2f, 1f);
         }
 
         public void Hide()

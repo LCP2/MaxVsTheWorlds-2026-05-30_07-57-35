@@ -46,6 +46,29 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static Transform Model(GameObject robot) => robot.transform.Find("RobotModel");
 
+        /// <summary>MV-969: total triangle count across every renderer under <paramref name="model"/> —
+        /// a resolved value that survives RobotRig folding most of a robot's parts into one combined
+        /// renderer (see CombineStaticParts), where a plain renderer COUNT used to be the proxy for
+        /// "has a real silhouette, not a primitive". Renderer count now measures the opposite of what
+        /// it used to (fewer is the point of this ticket), so this counts the geometry itself instead.</summary>
+        private static int TotalTriangles(Transform model)
+        {
+            int total = 0;
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+                if (mf.sharedMesh != null) total += mf.sharedMesh.triangles.Length / 3;
+            return total;
+        }
+
+        /// <summary>The triangle count of a bare Unity primitive — built fresh and torn down immediately,
+        /// never a hardcoded constant, so this tracks whatever Unity's own primitive actually is rather
+        /// than a number that could silently drift from it.</summary>
+        private static int PrimitiveTriangles(PrimitiveType type)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            try { return go.GetComponent<MeshFilter>().sharedMesh.triangles.Length / 3; }
+            finally { Object.DestroyImmediate(go); }
+        }
+
         /// <summary>The eye tell's lens renderer(s) (MV-451: parts are generated geometry now, named
         /// generically "Part" — there is no "Eye" transform to find by name any more), read the same
         /// way RobotRig itself keeps them, off its private field.</summary>
@@ -76,8 +99,9 @@ namespace MaxWorlds.Tests.PlayMode
             // MV-451: parts are generated geometry now, named generically "Part" (see CharacterPart) —
             // there is no "Pod"/"Leg"/"Head"/"Claw" to look up by name any more. Which kind built which
             // distinctly-sized body is RobotBodySizeTests' claim now (EditMode, runs against every kind).
-            var parts = model.GetComponentsInChildren<MeshRenderer>();
-            Assert.Greater(parts.Length, 6,
+            // MV-969: RobotRig now combines most of that geometry into one renderer (CombineStaticParts),
+            // so a renderer COUNT no longer tells "primitive" from "real body" — a triangle count does.
+            Assert.Greater(TotalTriangles(model), PrimitiveTriangles(PrimitiveType.Capsule),
                 "the rusher is barely more than the capsule it replaced. A body you read at a glance " +
                 "needs a silhouette, and a silhouette needs corners.");
             Assert.Greater(Eyes(rig).Length, 0, "the rusher built no eye tell.");
@@ -99,9 +123,9 @@ namespace MaxWorlds.Tests.PlayMode
             var model = Model(_robot);
             Assert.IsNotNull(model, "the bruiser never built a model.");
 
-            // MV-451: see TheRusherIsASkitterBot_NotACapsule — no more named parts to look for.
-            var parts = model.GetComponentsInChildren<MeshRenderer>();
-            Assert.Greater(parts.Length, 6,
+            // MV-451/MV-969: see TheRusherIsASkitterBot_NotACapsule — no more named parts to look for,
+            // and renderer count no longer tells "primitive" from "real body" now RobotRig combines.
+            Assert.Greater(TotalTriangles(model), PrimitiveTriangles(PrimitiveType.Cube),
                 "the bruiser is barely more than the cube it replaced. A body you read at a glance " +
                 "needs a silhouette, and a silhouette needs corners.");
             Assert.AreEqual(2, Eyes(rig).Length,
@@ -125,11 +149,18 @@ namespace MaxWorlds.Tests.PlayMode
 
                 foreach (var r in Model(robot).GetComponentsInChildren<MeshRenderer>(includeInactive: true))
                 {
-                    Assert.IsNotNull(r.sharedMaterial, $"'{r.name}' has no material — it draws nothing.");
-                    string shader = r.sharedMaterial.shader.name;
-                    Assert.That(shader,
-                        Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds").Or.StartWith("Sprites"),
-                        $"'{r.name}' ({kind}) is wearing '{shader}': magenta in the build, correct in the editor.");
+                    // MV-969: a combined renderer carries one material per submesh — check every one of
+                    // them, not just submesh 0, or a magenta submesh 1+ would sail through unnoticed.
+                    Material[] mats = r.sharedMaterials;
+                    Assert.IsNotEmpty(mats, $"'{r.name}' has no material — it draws nothing.");
+                    foreach (Material mat in mats)
+                    {
+                        Assert.IsNotNull(mat, $"'{r.name}' has a null material slot — it draws nothing.");
+                        string shader = mat.shader.name;
+                        Assert.That(shader,
+                            Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds").Or.StartWith("Sprites"),
+                            $"'{r.name}' ({kind}) is wearing '{shader}': magenta in the build, correct in the editor.");
+                    }
                 }
 
                 Object.Destroy(robot);

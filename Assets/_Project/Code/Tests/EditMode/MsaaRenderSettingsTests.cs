@@ -61,8 +61,13 @@ namespace MaxWorlds.Tests.EditMode
                 "MSAA must resolve to disabled (1x) on Mobile — 4x at native res + HDR is what generates " +
                 "the heat; FXAA (BackyardLighting.EnablePostProcessingOnCamera) is the AA pass this tier keeps.");
 
-            Assert.IsTrue(SsaoOf(MobileRendererAsset).isActive,
-                "SSAO renderer feature was switched off — dropping MSAA must not touch this dial");
+            // MV-969: SSAO is now the mobile tier's own OFF dial, not a thing that must survive
+            // untouched — a depth copy plus AO passes every frame, mostly invisible under Stormdrain's
+            // fog, was itself a measured cost on the device (root-cause review 2026-09-26). PC keeps it
+            // (see PcTier_KeepsMsaaEnabled_WithoutDroppingSsao, unchanged).
+            Assert.IsFalse(SsaoOf(MobileRendererAsset).isActive,
+                "SSAO renderer feature is active on Mobile — MV-969 turned this off for GPU cost, and " +
+                "nothing about MSAA should turn it back on");
         }
     }
 }

@@ -151,7 +151,14 @@ namespace MaxWorlds.Rendering
 
             if (pulsing)
             {
-                var pulse = root.AddComponent<LightFittingPulse>();
+                // MV-969: on the LENS, not the lamp's root. MapRuntime.HasAnimatedAncestor excludes
+                // everything under a LightFittingPulse from the per-zone combine pass, and this
+                // component only ever repaints the one renderer passed to Configure below (the lens) —
+                // putting it on root used to take the bracket, back plate, bezel, both guard bars and
+                // the bloom/pool quads down with it, none of which this ever touches. On the lens, only
+                // the lens itself is excluded and the other seven renderers combine like the rest of
+                // the zone.
+                var pulse = lens.gameObject.AddComponent<LightFittingPulse>();
                 pulse.Configure(groundAt, HazardPulsePeriod, lens.GetComponent<Renderer>(), lensTone);
             }
 
