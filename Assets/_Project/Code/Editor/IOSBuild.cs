@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 namespace MaxWorlds.Editor
@@ -160,6 +161,84 @@ namespace MaxWorlds.Editor
             File.WriteAllBytes(IconAssetPath, MakeAppIcon(MarketingIconSize).EncodeToPNG());
             AssetDatabase.ImportAsset(IconAssetPath, ImportAssetOptions.ForceSynchronousImport);
             Debug.Log($"[IOSBuild] Wrote {MarketingIconSize}x{MarketingIconSize} app icon to {IconAssetPath}");
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // MV-970 item 5: retrieval with no tools. Application.persistentDataPath/telemetry (the CSVs
+        // PerfSessionRecorder writes) is otherwise unreachable on a TestFlight build — no dev tools, no
+        // cable. These two Info.plist keys are what makes it show up in Files -> On My iPhone -> MAX ->
+        // telemetry, AirDrop-able straight off the device.
+        // -----------------------------------------------------------------------------------------
+
+        public const string FileSharingPlistKey = "UIFileSharingEnabled";
+        public const string OpenInPlacePlistKey = "LSSupportsOpeningDocumentsInPlace";
+
+        /// <summary>
+        /// Plain string insertion into the generated Info.plist's root &lt;dict&gt; — same idiom as
+        /// <see cref="IOSAppIconPostprocessor.AddMarketingIconEntry"/> above it in the same build phase,
+        /// deliberately NOT the <c>com.unity.ios.xcode</c> PlistDocument API: that package isn't in
+        /// <c>Packages/manifest.json</c>, and adding a Unity package outside a ticket that asks for it is
+        /// off-limits for this worker (CC_AUTONOMY.md guardrails). Idempotent — a key already present is
+        /// left untouched, so a build that runs this twice (or a re-run over an already-patched project)
+        /// never duplicates an entry.
+        /// </summary>
+        public static string ApplyTelemetryPlistKeys(string plistXml)
+        {
+            if (plistXml == null) throw new ArgumentNullException(nameof(plistXml));
+            string result = EnsureBoolKeyTrue(plistXml, FileSharingPlistKey);
+            result = EnsureBoolKeyTrue(result, OpenInPlacePlistKey);
+            return result;
+        }
+
+        private static string EnsureBoolKeyTrue(string plistXml, string key)
+        {
+            if (plistXml.Contains($"<key>{key}</key>")) return plistXml;
+
+            int dictOpen = plistXml.IndexOf("<dict>", StringComparison.Ordinal);
+            if (dictOpen < 0)
+            {
+                throw new InvalidOperationException(
+                    $"[IOSBuild] Info.plist has no <dict> root — refusing to guess where to insert {key}.");
+            }
+
+            int insertAt = dictOpen + "<dict>".Length;
+            string entry = $"\n\t<key>{key}</key>\n\t<true/>";
+            return plistXml.Insert(insertAt, entry);
+        }
+    }
+
+    /// <summary>
+    /// Applies <see cref="IOSBuild.ApplyTelemetryPlistKeys"/> to the generated Xcode project's Info.plist
+    /// — same build phase and callback order as <see cref="IOSAppIconPostprocessor"/>, which this class
+    /// otherwise doesn't touch (kept a separate class, not folded into that one, since an app-icon
+    /// failure and a missing Info.plist are unrelated build problems that shouldn't share a stack trace).
+    /// </summary>
+    public sealed class IOSTelemetryPlistPostprocessor : IPostprocessBuildWithReport
+    {
+        public int callbackOrder => 100;
+
+        public void OnPostprocessBuild(BuildReport report)
+        {
+            if (report.summary.platform != BuildTarget.iOS) return;
+
+            string plistPath = Path.Combine(report.summary.outputPath, "Info.plist");
+            if (!File.Exists(plistPath))
+            {
+                throw new BuildFailedException(
+                    $"[IOSBuild] No Info.plist at {plistPath} — can't enable telemetry file sharing.");
+            }
+
+            string original = File.ReadAllText(plistPath);
+            string patched = IOSBuild.ApplyTelemetryPlistKeys(original);
+            if (patched == original)
+            {
+                Debug.Log("[IOSBuild] Info.plist already carries the telemetry file-sharing keys.");
+                return;
+            }
+
+            File.WriteAllText(plistPath, patched);
+            Debug.Log("[IOSBuild] Info.plist: UIFileSharingEnabled + LSSupportsOpeningDocumentsInPlace " +
+                      "set to true (MV-970) — telemetry folder now reachable from Files on device.");
         }
     }
 }

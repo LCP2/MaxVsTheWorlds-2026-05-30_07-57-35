@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 using UnityEngine;
 
@@ -38,6 +39,21 @@ namespace MaxWorlds.Core
         /// one-tick-site reasoning as <see cref="ActiveMeter"/>, so the overlay never samples a second,
         /// possibly-disagreeing measurement path.</summary>
         public static FrameTimingProbe ActiveTimingProbe { get; private set; }
+
+        /// <summary>MV-970: the current play session's <see cref="PerfSessionRecorder"/> — Bootstrap ticks
+        /// it every frame and flushes it, and other systems (the overlay's open/close, an app pause) call
+        /// <see cref="PerfSessionRecorder.RecordEvent"/> on it directly, same "one instance, exposed
+        /// statically" idiom as <see cref="ActiveMeter"/>. Null before Awake and in a test that never
+        /// installs Bootstrap.</summary>
+        public static PerfSessionRecorder ActiveSessionRecorder { get; private set; }
+
+        /// <summary>MV-970 item 4: flush cadence — every 5s, plus on pause/quit (see
+        /// <see cref="OnApplicationPause"/>/<see cref="OnApplicationQuit"/>) — never per frame, so a
+        /// session's disk writes stay batched.</summary>
+        private const float TelemetryFlushIntervalSeconds = 5f;
+
+        private PerfSessionRecorder _sessionRecorder;
+        private float _lastTelemetryFlushAt;
 
         /// <summary>MV-766: the world/palette/look diagnostic line, resolved and formatted by
         /// <c>MaxWorlds.Arena.BackyardPath.BuildWorldProbeLine</c>. Wired in as a plain
@@ -106,6 +122,14 @@ namespace MaxWorlds.Core
             // build, not just in the Editor.
             PerfTelemetry.InstallPlayerLoopHooks();
 
+            // MV-970: one recorder per process lifetime, same as everything else installed in this
+            // method — writes into Application.persistentDataPath/telemetry, the folder IOSBuild's
+            // Info.plist patch (MV-970 item 5) makes reachable from Files on a TestFlight device.
+            string telemetryDir = Path.Combine(Application.persistentDataPath, "telemetry");
+            _sessionRecorder = new PerfSessionRecorder(telemetryDir, Application.version, DateTime.UtcNow);
+            ActiveSessionRecorder = _sessionRecorder;
+            _sessionRecorder.RecordEvent(DateTime.UtcNow, "app_start", Application.platform.ToString());
+
             QualitySettings.vSyncCount = 0;
 
             // MV-883: a floor-guard, not a fix. Without this, a slow rendered frame makes Unity run
@@ -137,6 +161,7 @@ namespace MaxWorlds.Core
         {
             _timingProbe.Tick();
             FrameCost.MarkFrameRendered();
+            TickTelemetrySession();
 
             if (!_meter.Tick(Time.realtimeSinceStartup)) return;
             if (!logFps) return;
@@ -148,6 +173,39 @@ namespace MaxWorlds.Core
             // Frame time as well as rate: at a genuinely bad frame rate the millisecond figure is
             // what tells you whether you're looking at a stall or a throttle.
             Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({_meter.FrameMs:0.0} ms/frame)");
+        }
+
+        /// <summary>MV-970: reads back the LATEST (never windowed/averaged) PerfTelemetry frame — a
+        /// session CSV row must reflect what that one frame actually cost, same "resolved value, not a
+        /// smoothed one" reasoning the spikes file needs to name the exact frame that was slow.</summary>
+        private void TickTelemetrySession()
+        {
+            if (_sessionRecorder == null) return;
+
+            PerfTelemetry.TryGetLatestTopSection(out string topSectionName, out double topSectionMs);
+            var sample = new TelemetryFrameSample(
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.Initialization),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.EarlyUpdate),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.FixedUpdate),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.PreUpdate),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.Update),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.PreLateUpdate),
+                PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.PostLateUpdate),
+                PerfTelemetry.LatestFixedSteps(),
+                PerfTelemetry.LatestCpuMainThreadMs,
+                PerfTelemetry.LatestCpuRenderThreadMs,
+                PerfTelemetry.LatestGpuMs,
+                topSectionName ?? "",
+                topSectionMs,
+                "");
+
+            var utcNow = DateTime.UtcNow;
+            _sessionRecorder.RecordFrame(utcNow, Time.unscaledDeltaTime, sample);
+
+            float now = Time.realtimeSinceStartup;
+            if (now - _lastTelemetryFlushAt < TelemetryFlushIntervalSeconds) return;
+            _lastTelemetryFlushAt = now;
+            _sessionRecorder.Flush();
         }
 
         /// <summary>MV-876: counts fixed-timestep steps against rendered frames — the other hypothesis
@@ -163,7 +221,22 @@ namespace MaxWorlds.Core
             if (ActiveMeter == _meter) ActiveMeter = null;
             if (ActiveTimingProbe == _timingProbe) ActiveTimingProbe = null;
             FrameCost.UnsubscribeRenderEvents();
+
+            _sessionRecorder?.Flush();
+            if (ActiveSessionRecorder == _sessionRecorder) ActiveSessionRecorder = null;
         }
+
+        /// <summary>MV-970 item 3/4: an app-pause/resume event, and the flush point a backgrounded app
+        /// can never reach a later frame to hit — iOS can kill a suspended process with no further
+        /// callback, so anything not on disk by the time this returns is lost.</summary>
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            if (_sessionRecorder == null) return;
+            _sessionRecorder.RecordEvent(DateTime.UtcNow, pauseStatus ? "app_pause" : "app_resume", "");
+            if (pauseStatus) _sessionRecorder.Flush();
+        }
+
+        private void OnApplicationQuit() => _sessionRecorder?.Flush();
 
         /// <summary>Real players only ever see the iOS TestFlight/App Store build — the WebGL Pages
         /// link, the cc-verify Windows standalone and the Editor are all dev/QA surfaces, which is
