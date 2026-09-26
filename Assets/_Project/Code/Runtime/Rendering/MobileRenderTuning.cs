@@ -19,9 +19,19 @@ namespace MaxWorlds.Rendering
         public const float DefaultRenderScale = 1f;
         public const float DefaultShadowDistance = 55f;
         public const bool DefaultSoftShadowsSupported = true;
+        public const bool DefaultMainLightShadowsSupported = true;
+        public const LightRenderingMode DefaultAdditionalLightsRenderingMode = LightRenderingMode.PerPixel;
 
         private static readonly FieldInfo SoftShadowsField = typeof(UniversalRenderPipelineAsset)
             .GetField("m_SoftShadowsSupported", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // MV-958: same "internal setter, no public runtime API" story as m_SoftShadowsSupported above —
+        // supportsMainLightShadows and additionalLightsRenderingMode both expose an internal-only set.
+        private static readonly FieldInfo MainLightShadowsField = typeof(UniversalRenderPipelineAsset)
+            .GetField("m_MainLightShadowsSupported", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        private static readonly FieldInfo AdditionalLightsRenderingModeField = typeof(UniversalRenderPipelineAsset)
+            .GetField("m_AdditionalLightsRenderingMode", BindingFlags.NonPublic | BindingFlags.Instance);
 
         public static void ApplyRenderScale(float value)
         {
@@ -39,6 +49,18 @@ namespace MaxWorlds.Rendering
         {
             var urp = UniversalRenderPipeline.asset;
             if (urp != null && SoftShadowsField != null) SoftShadowsField.SetValue(urp, on);
+        }
+
+        public static void ApplyMainLightShadows(bool on)
+        {
+            var urp = UniversalRenderPipeline.asset;
+            if (urp != null && MainLightShadowsField != null) MainLightShadowsField.SetValue(urp, on);
+        }
+
+        public static void ApplyAdditionalLightsRenderingMode(LightRenderingMode mode)
+        {
+            var urp = UniversalRenderPipeline.asset;
+            if (urp != null && AdditionalLightsRenderingModeField != null) AdditionalLightsRenderingModeField.SetValue(urp, mode);
         }
     }
 }

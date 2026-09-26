@@ -4,6 +4,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Dev
 {
@@ -178,36 +179,41 @@ namespace MaxWorlds.Dev
             public readonly bool ThermalHasReading;
             public readonly string ThermalStateName;
             public readonly bool IsLowPowerModeEnabled;
+            public readonly string ThermalTierTag;
 
             public FrameRateSnapshot(int resolvedTargetFrameRate, int modalGateOpenCount, bool thermalHasReading,
-                string thermalStateName, bool isLowPowerModeEnabled)
+                string thermalStateName, bool isLowPowerModeEnabled, string thermalTierTag)
             {
                 ResolvedTargetFrameRate = resolvedTargetFrameRate;
                 ModalGateOpenCount = modalGateOpenCount;
                 ThermalHasReading = thermalHasReading;
                 ThermalStateName = thermalStateName;
                 IsLowPowerModeEnabled = isLowPowerModeEnabled;
+                ThermalTierTag = thermalTierTag;
             }
         }
 
         /// <summary>Reads back the RESOLVED <see cref="Application.targetFrameRate"/> — never the
-        /// authored constant (MV-910 AC1) — alongside <see cref="ModalFrameRateGate.OpenCount"/> and
-        /// the iOS-only thermal reading.</summary>
+        /// authored constant (MV-910 AC1) — alongside <see cref="ModalFrameRateGate.OpenCount"/>, the
+        /// iOS-only thermal reading, and (MV-958) the tier <see cref="ThermalQualityGovernor.Active"/>
+        /// has actually applied in response to it — Nominal off-iOS, where no runner ever installs one.</summary>
         public static FrameRateSnapshot BuildFrameRateSnapshot() =>
             new FrameRateSnapshot(
                 Application.targetFrameRate,
                 ModalFrameRateGate.OpenCount,
                 IosDeviceStateProbe.HasReading,
                 IosDeviceStateProbe.ThermalStateName,
-                IosDeviceStateProbe.IsLowPowerModeEnabled);
+                IosDeviceStateProbe.IsLowPowerModeEnabled,
+                ThermalQualityGovernor.TierTag(ThermalQualityGovernor.Active?.AppliedTier ?? ThermalTier.Nominal));
 
         /// <summary>MV-910 — "thermal n/a" (never a false reading) is what
         /// <see cref="FrameRateSnapshot.ThermalHasReading"/> false formats to off-iOS, same convention
-        /// as <see cref="FormatTimingLine"/> above.</summary>
+        /// as <see cref="FormatTimingLine"/> above. MV-958 adds the governor's own tier right after the
+        /// state name, e.g. "thermal serious tier S".</summary>
         private static string FormatFrameRateLine(FrameRateSnapshot s) =>
             $"[MV-910] target {s.ResolvedTargetFrameRate} fps  modalGate {s.ModalGateOpenCount}  " +
             (s.ThermalHasReading
-                ? $"thermal {s.ThermalStateName} lowPower={s.IsLowPowerModeEnabled}"
+                ? $"thermal {s.ThermalStateName} tier {s.ThermalTierTag} lowPower={s.IsLowPowerModeEnabled}"
                 : "thermal n/a");
 
         /// <summary>MV-955: the FALLS section — every <see cref="FallEventLog"/> entry recorded since
