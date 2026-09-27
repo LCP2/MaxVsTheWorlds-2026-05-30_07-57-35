@@ -371,10 +371,19 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-972: <see cref="IZoneGatedActor.SetZoneGateVisible"/> — the area gate's own
         /// verdict, combined with (never overwriting) whatever this robot's own intrinsic visibility
         /// already is via <see cref="RefreshBodyVisibility"/>. Called only from
-        /// <see cref="MapStaticBatchRoot.ApplyAreaGate"/> — on a zone change and at most 4x/second.</summary>
+        /// <see cref="MapStaticBatchRoot.ApplyAreaGate"/> — on a zone change and at most 4x/second.
+        ///
+        /// MV-981 change 4: always calls <see cref="RefreshBodyVisibility"/>, even when
+        /// <paramref name="visible"/> matches the cached <see cref="_zoneGateVisible"/> already — a
+        /// pooled robot's own renderer state can drift out of sync with this cached flag between calls
+        /// (a fresh <see cref="_bodyRenderers"/> array from a rebuilt rig, a park/unpark round-trip)
+        /// without this value ever changing, and the old early-return left the renderers wrong until the
+        /// NEXT gate tick that actually flips it. This call is cheap by construction (a plain loop over
+        /// an already-cached array, see that method's own doc), so paying it unconditionally here is the
+        /// same trade <see cref="MapStaticBatchRoot.ApplyAreaGate"/> already makes calling this at most
+        /// 4x/second for every registered actor.</summary>
         void IZoneGatedActor.SetZoneGateVisible(bool visible)
         {
-            if (_zoneGateVisible == visible) return;
             _zoneGateVisible = visible;
             RefreshBodyVisibility();
         }
@@ -1161,6 +1170,13 @@ namespace MaxWorlds.Enemies
             _active.Remove(this);
             _separationGrid.Remove(GetInstanceID());   // MV-611: else a dead/pooled robot stays a phantom neighbour forever
         }
+
+        /// <summary>MV-981: this robot is pooled/parked for the lifetime of a loaded map (see
+        /// <see cref="MapStaticBatchRoot"/>'s own "never pruned" doc on <c>_gatedActors</c>) rather than
+        /// destroyed, but scene teardown/reload still runs Unity's own <c>OnDestroy</c> — unregistering
+        /// here means a stale entry can never outlive this robot the way a <c>CorrosionPuddle</c>'s did
+        /// (MV-981's root cause), regardless of what eventually destroys it.</summary>
+        private void OnDestroy() => MapStaticBatchRoot.Active?.UnregisterGatedActor(this);
 
         private bool _skipResetOnNextEnable;
 
