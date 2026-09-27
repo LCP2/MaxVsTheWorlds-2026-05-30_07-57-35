@@ -1199,7 +1199,6 @@ namespace MaxWorlds.Rendering
                 floorTopY - PanelJointSunk - PanelJointThickness * 0.5f, worldRect.center.y);
             GameObject go = Box(parent, "Panel Joint", center,
                 new Vector3(worldRect.width, PanelJointThickness, worldRect.height), PanelJoint);
-            ZeroOutline(go);
             return go;
         }
 
@@ -1212,7 +1211,6 @@ namespace MaxWorlds.Rendering
             Vector3 center = new Vector3(worldRect.center.x, floorTopY - BayThickness * 0.5f, worldRect.center.y);
             GameObject go = Box(parent, "Bay", center,
                 new Vector3(worldRect.width, BayThickness, worldRect.height), tone);
-            ZeroOutline(go);
             return go;
         }
 
@@ -1234,7 +1232,6 @@ namespace MaxWorlds.Rendering
             // MV-799: a crack never floats brighter than the bay it sits on, so it carries that bay's
             // own lit-ground multiplier (1 = unlit, the pre-MV-799 behaviour).
             Paint(go, SurfaceKind.Dirt, Crack * toneScale);
-            ZeroOutline(go);
             return go;
         }
 
@@ -1301,7 +1298,6 @@ namespace MaxWorlds.Rendering
                 BuildBlobMesh(radius, segments, StainSegmentMinT, StainSegmentMaxT, seed);
             go.AddComponent<MeshRenderer>();
             Paint(go, kind, tone);
-            ZeroOutline(go);
             return go;
         }
 
@@ -1346,16 +1342,8 @@ namespace MaxWorlds.Rendering
             return mesh;
         }
 
-        /// <summary>MV-784, change 5: nothing at floor level carries the world's inverted-hull outline —
-        /// on a floor stain it draws an ink border and turns the floor into sticker art. Reaches back
-        /// into the resolved material the same way the water smoothness override already does, rather
-        /// than adding a per-kind branch to <see cref="MaterialLibrary.Build"/> that every other surface
-        /// would have to keep not tripping.</summary>
-        private static void ZeroOutline(GameObject go)
-        {
-            Material mat = go.GetComponent<Renderer>()?.sharedMaterial;
-            if (mat != null && mat.HasProperty("_OutlineOn")) mat.SetFloat("_OutlineOn", 0f);
-        }
+        // MV-976: ZeroOutline (MV-784, change 5) is gone — world scenery carries no outline pass at
+        // all now, so there is nothing left for a floor stain to opt out of.
 
         // ---------------------------------------------------------------- sludge dressing
 
@@ -1833,7 +1821,6 @@ namespace MaxWorlds.Rendering
                 BuildBlobMesh(radius, SludgeFoamSegments, StainSegmentMinT, StainSegmentMaxT, seed);
             go.AddComponent<MeshRenderer>();
             Paint(go, SurfaceKind.Foliage, tone);
-            ZeroOutline(go);
             return go;
         }
 

@@ -55,16 +55,6 @@ Shader "MaxWorlds/StylizedSurface"
         _WindStrength   ("Wind Strength (m)", Range(0, 0.5)) = 0
         _WindSpeed      ("Wind Speed", Range(0, 4)) = 1.1
         _WindHeight     ("Wind Full-Bend Height (m)", Range(0.2, 8)) = 2.5
-
-        [Header(Outline MV778)]
-        // Opt-in per material (MaterialLibrary.Build sets this to 1 for every SurfaceKind except
-        // Ground) — the floor has no silhouette to draw, and an inverted hull on a large floor quad
-        // is a full-screen black rectangle, not an edge.
-        _OutlineOn      ("Outline On", Float) = 0
-        _OutlineColor   ("Outline Color", Color) = (0.05, 0.05, 0.06, 1)
-        // Screen-space width, same convention as StylizedCharacter's own outline — see that shader's
-        // comment on why this must not be an object-space extrusion.
-        _OutlineWidth   ("Outline Width (screen)", Range(0, 0.02)) = 0.009
     }
 
     SubShader
@@ -93,9 +83,6 @@ Shader "MaxWorlds/StylizedSurface"
             float  _WindStrength;
             float  _WindSpeed;
             float  _WindHeight;
-            float  _OutlineOn;
-            float4 _OutlineColor;
-            float  _OutlineWidth;
         CBUFFER_END
 
         /// Wind (YT-78). Bends a plant; leaves everything else exactly where it stands.
@@ -135,63 +122,12 @@ Shader "MaxWorlds/StylizedSurface"
         }
         ENDHLSL
 
-        // --- Outline (MV-778): the same inverted-hull technique StylizedCharacter already carries,
-        // copied rather than shared because the two shaders' vertex inputs and CBUFFERs differ. Push
-        // the shell outward in SCREEN space and draw only its back faces, so what's left behind is a
-        // rim around the silhouette. Opt-in per material via _OutlineOn — see the Properties block —
-        // so the ground (which has this shader's sibling, not this one, but is defended here too in
-        // case a future material shares this shader) never draws a full-screen black quad.
-        Pass
-        {
-            Name "Outline"
-            Tags { "LightMode" = "SRPDefaultUnlit" }
-
-            Cull Front
-            ZWrite On
-
-            HLSLPROGRAM
-            #pragma vertex OutlineVert
-            #pragma fragment OutlineFrag
-
-            struct OutlineAttributes
-            {
-                float4 positionOS : POSITION;
-                float3 normalOS   : NORMAL;
-            };
-
-            struct OutlineVaryings
-            {
-                float4 positionCS : SV_POSITION;
-            };
-
-            OutlineVaryings OutlineVert(OutlineAttributes IN)
-            {
-                OutlineVaryings OUT;
-                float3 positionWS = TransformObjectToWorld(IN.positionOS.xyz);
-                float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
-                float4 positionCS = TransformWorldToHClip(positionWS);
-
-                // Screen-space offset scaled by _OutlineOn: 0 collapses the shell back onto the base
-                // mesh instead of drawing a visible line, which is what makes this opt-in per material
-                // cheaply — no keyword, no second shader variant.
-                float3 normalVS = TransformWorldToViewDir(normalWS, true);
-                float2 dir = normalize(normalVS.xy + 1e-6);
-                positionCS.xy += dir * _OutlineWidth * _OutlineOn * positionCS.w;
-
-                OUT.positionCS = positionCS;
-                return OUT;
-            }
-
-            half4 OutlineFrag(OutlineVaryings IN) : SV_Target
-            {
-                // Belt and braces alongside the zero-width collapse above: a material with the pass
-                // compiled in but _OutlineOn at 0 draws nothing at all, rather than a degenerate sliver.
-                clip(_OutlineOn - 0.5);
-                return half4(_OutlineColor.rgb, 1);
-            }
-            ENDHLSL
-        }
-
+        // MV-976: world scenery no longer wears an outline pass at all — see StylizedCharacter.shader
+        // for the inverted-hull technique, which Max, robots and bosses keep. Zeroing _OutlineOn used
+        // to collapse this pass's own draw to nothing, but URP still ISSUED it: every world-scenery
+        // renderer drew twice, and the pass's clip() defeated Apple's hidden-surface removal on an
+        // opaque draw. Dropping the pass from the variant, not just the value, is what stops the
+        // second draw call from happening at all.
         Pass
         {
             Name "ForwardLit"
