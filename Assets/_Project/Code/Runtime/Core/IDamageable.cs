@@ -97,4 +97,14 @@ namespace MaxWorlds.Core
         /// extends to the longer of the two, it never shortens an existing halt.</summary>
         void ApplyHalt(float seconds);
     }
+
+    /// <summary>Something that can be concealed/asleep and shouldn't be treated as present for
+    /// ambient, non-combat systems (MV-983) — <see cref="MaxWorlds.VFX.GroundAnchorVfx"/> reads this
+    /// to skip a sleeping garrison robot's ring/shadow, same optional-interface shape as
+    /// <see cref="IKnockbackable"/>/<see cref="IHaltable"/> so a director stays decoupled from any
+    /// concrete actor type rather than special-casing one by name.</summary>
+    public interface IDormant
+    {
+        bool IsDormant { get; }
+    }
 }

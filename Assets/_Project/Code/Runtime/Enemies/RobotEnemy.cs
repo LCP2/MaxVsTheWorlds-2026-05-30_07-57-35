@@ -31,7 +31,7 @@ namespace MaxWorlds.Enemies
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [MaxWorlds.Core.PerfSection("robot")]
-    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IHealthReadout, IZoneGatedActor
+    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IDormant, IHealthReadout, IZoneGatedActor
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
         // existing members would silently re-label every one of them.
@@ -1606,12 +1606,12 @@ namespace MaxWorlds.Enemies
             _stateTimer = 0f;
             SetTell(idleTell);
             // MV-980: no CharacterController.Move while asleep — Tick() already skips every frame's
-            // gravity/knockback SafeMove for a Dormant robot; disabling the controller itself is what
-            // also drops it out of GroundAnchorVfx's OverlapSphere discovery (that director keys
-            // explicitly off CharacterController — see its own class doc). Re-enabled the instant it
-            // wakes, in Activate().
+            // gravity/knockback SafeMove for a Dormant robot. MV-983: the controller itself stays
+            // ENABLED — disabling it made it (the robot's only collider since MV-966) invisible to
+            // every OverlapSphere-based hit query (WaterBlaster, rockets, Sentinel bolts, ...), so a
+            // sleeping robot could never be damaged or woken by a hit. GroundAnchorVfx now skips a
+            // dormant actor directly via IDormant instead of relying on the collider being off.
             if (_cc == null) _cc = GetComponent<CharacterController>();
-            if (_cc != null) _cc.enabled = false;
         }
 
         /// <summary>Wires this Lurker to its home grate and every grate in its own area (MV-688) —
@@ -1809,7 +1809,6 @@ namespace MaxWorlds.Enemies
             Current = State.Alert;
             _stateTimer = 0f;
             SetTell(windupTell);
-            if (_cc != null) _cc.enabled = true; // MV-980: re-enable movement the instant it wakes
         }
 
         /// <summary>The beat itself: a pulsing tell (same idiom as <see cref="TickTelegraph"/>'s
