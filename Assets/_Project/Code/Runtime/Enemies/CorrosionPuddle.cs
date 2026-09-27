@@ -66,6 +66,13 @@ namespace MaxWorlds.Enemies
 
         void IZoneGatedActor.SetZoneGateVisible(bool visible) => _zoneTickEnabled = visible;
 
+        /// <summary>MV-981: this puddle self-destroys on expiry (<see cref="Tick"/>) with nothing ever
+        /// unregistering it from the gate's <c>_gatedActors</c> map — the root cause of World 2's strobe
+        /// and near-total robot invisibility. Every path that ends this puddle's life goes through
+        /// <c>Destroy(gameObject)</c>/<c>DestroyImmediate</c>, so unregistering here (Unity's own
+        /// teardown callback) catches every one of them, not just the expiry path.</summary>
+        private void OnDestroy() => MapStaticBatchRoot.Active?.UnregisterGatedActor(this);
+
         /// <summary>Call counter for MV-978's own EditMode test — how many times <see cref="Tick"/> has
         /// actually run its per-frame body (not counting an early-out while gated invisible).</summary>
         public int TickCallCount { get; private set; }

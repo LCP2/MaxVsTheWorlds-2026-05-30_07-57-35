@@ -197,6 +197,20 @@ namespace MaxWorlds.Arena
             actor.SetZoneGateVisible(visible);
         }
 
+        /// <summary>MV-981: drops <paramref name="actor"/> out of <see cref="_gatedActors"/> — call this
+        /// from any <see cref="IZoneGatedActor"/> implementer's own <c>OnDestroy</c> that can actually be
+        /// destroyed (a <c>CorrosionPuddle</c> on expiry; a robot/Replicator on scene teardown). Without
+        /// this, a destroyed actor's dictionary entry outlives it, and the next <see cref="ApplyAreaGate"/>
+        /// reads <c>actor.ZoneGatePosition</c> off a Unity object that no longer exists — a
+        /// <c>MissingReferenceException</c> that used to abort the whole gate pass (MV-981's own root
+        /// cause). Safe to call on an actor never registered, or after <see cref="Active"/> has already
+        /// gone null (scene teardown order is not guaranteed).</summary>
+        public void UnregisterGatedActor(IZoneGatedActor actor)
+        {
+            if (actor == null) return;
+            _gatedActors.Remove(actor);
+        }
+
         /// <summary>MV-972: tags every renderer under <paramref name="worldPos"/>'s own resolved zone —
         /// for anything spawned well after <see cref="MapRuntime.Build"/> returns that never moves once
         /// placed (a pickup dropped by a dying robot or a destroyed shed), so it doesn't need
@@ -538,30 +552,65 @@ namespace MaxWorlds.Arena
                 r.enabled = pair.Value.Exists(_activeScratch.Contains);
             }
 
-            if (_gatedActors.Count > 0)
-            {
-                foreach (KeyValuePair<IZoneGatedActor, string> kv in _gatedActors)
-                {
-                    IZoneGatedActor actor = kv.Key;
-                    bool visible = _activeScratch.Contains(kv.Value);
-                    if (!visible && maxPosition.HasValue)
-                    {
-                        Vector3 ap = actor.ZoneGatePosition;
-                        float dx = ap.x - maxPosition.Value.x;
-                        float dz = ap.z - maxPosition.Value.z;
-                        visible = dx * dx + dz * dz <= NeighbourGateRangeSq;
-                    }
-                    actor.SetZoneGateVisible(visible);
-                }
-            }
-
             // MV-925 item 4 (superseded by MV-978): used to re-record the census on every call — see
             // RecordRendererCensus's own doc for why that walk moved off this hot path. Item 2's own
             // self-heal check (Update, above) still reads _activeZoneIds every frame — it needs this
             // call's own result, not whatever the last call computed. Reference-equal to _activeScratch
             // (MV-972: reused, not reallocated) — always fully repopulated above before either is read.
+            //
+            // MV-981: set BEFORE the actor loop below, not after. A stale puddle registration used to
+            // throw out of that loop and abort the whole call before this line ever ran — freezing
+            // _currentGateZoneId on the previous zone forever, which is what actually produced the
+            // reported strobe (TickDynamicGate/TickGateSelfHeal re-fighting each other over a zone this
+            // field never advanced past). Now this call's own zone/active-set result lands regardless of
+            // what the actor loop below does to any one actor.
             _currentGateZoneId = currentZoneId;
             _activeZoneIds = _activeScratch;
+
+            if (_gatedActors.Count > 0)
+            {
+                // MV-981: a destroyed actor (a CorrosionPuddle past its lifetime, unregistered on
+                // OnDestroy — see UnregisterGatedActor) can still momentarily be in here if something
+                // else destroys it directly rather than going through that path; Unity's fake-null
+                // (MV-657's own reasoning) makes `actor == null` true for it despite the interface
+                // reference not literally being null. Collected and dropped after the loop rather than
+                // removed mid-enumeration, and each actor's own visibility call is wrapped so one
+                // actor throwing (a defensive backstop, not the expected path any more) can never abort
+                // every actor after it in enumeration order — which is exactly how MV-981's puddle bug
+                // left ~95% of World 2's robots permanently invisible.
+                List<IZoneGatedActor> deadActors = null;
+                foreach (KeyValuePair<IZoneGatedActor, string> kv in _gatedActors)
+                {
+                    IZoneGatedActor actor = kv.Key;
+                    if (actor is Object o && o == null)
+                    {
+                        (deadActors ??= new List<IZoneGatedActor>()).Add(actor);
+                        continue;
+                    }
+
+                    try
+                    {
+                        bool visible = _activeScratch.Contains(kv.Value);
+                        if (!visible && maxPosition.HasValue)
+                        {
+                            Vector3 ap = actor.ZoneGatePosition;
+                            float dx = ap.x - maxPosition.Value.x;
+                            float dz = ap.z - maxPosition.Value.z;
+                            visible = dx * dx + dz * dz <= NeighbourGateRangeSq;
+                        }
+                        actor.SetZoneGateVisible(visible);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogException(ex);
+                        (deadActors ??= new List<IZoneGatedActor>()).Add(actor);
+                    }
+                }
+
+                if (deadActors != null)
+                    foreach (IZoneGatedActor dead in deadActors)
+                        _gatedActors.Remove(dead);
+            }
         }
 
         /// <summary>MV-932: generalises the area-gate registration that used to run for World 2's

@@ -382,6 +382,10 @@ namespace MaxWorlds.Factories
         private void OnDestroy()
         {
             if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnAreaEntered;
+            // MV-981: same "grep every IZoneGatedActor implementer" fix as CorrosionPuddle/RobotEnemy —
+            // this box is never destroyed by ordinary gameplay (see MapStaticBatchRoot.MarkPermanentlyHidden's
+            // own doc), but scene teardown still runs this callback.
+            MapStaticBatchRoot.Active?.UnregisterGatedActor(this);
         }
 
         /// <summary>Construct the health model, stop the attached spawner's own cadence, and build the
