@@ -177,6 +177,12 @@ namespace MaxWorlds.VFX
             {
                 if (!(s_hits[i] is CharacterController cc)) continue;
                 if (!cc.TryGetComponent<IDamageable>(out var actor) || !actor.IsAlive) continue;
+                // MV-983: a sleeping garrison robot's CharacterController stays enabled now (so weapon
+                // hit tests can still find it — see RobotEnemy.BeginDormant), so discovery alone no
+                // longer keeps it off this director's rings. Skip it directly via the same optional,
+                // type-agnostic interface pattern as IKnockbackable/IHaltable, rather than special-casing
+                // RobotEnemy — see the class doc's own "one rule for every actor" reasoning.
+                if (actor is IDormant dormant && dormant.IsDormant) continue;
 
                 float footprint = GroundAnchorTuning.FootprintRadius(cc);
                 if (footprint <= 0f) continue;
