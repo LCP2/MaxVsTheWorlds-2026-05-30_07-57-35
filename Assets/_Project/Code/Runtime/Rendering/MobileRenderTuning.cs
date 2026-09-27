@@ -1,4 +1,5 @@
 using System.Reflection;
+using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
 namespace MaxWorlds.Rendering
@@ -16,7 +17,22 @@ namespace MaxWorlds.Rendering
     /// </summary>
     public static class MobileRenderTuning
     {
-        public const float DefaultRenderScale = 1f;
+        // MV-974: Lee's chosen baseline for the iOS player only — TestFlight 0.9.10 measured 17-43ms
+        // GPU/frame at native retina resolution (m_RenderScale: 1 in Mobile_RPAsset.asset). WebGL and
+        // the Editor keep supersampling off but stay at native (1) — only iOS ships under-resolution.
+        public const float IosRenderScale = 0.85f;
+
+        /// <summary>The authored baseline before any <see cref="DevTuning"/> override or
+        /// <see cref="ThermalQualityGovernor"/> throttling — <see cref="IosRenderScale"/> on the iOS
+        /// player, 1 (Mobile_RPAsset.asset's own authored value) everywhere else. Takes the platform as
+        /// a parameter, same "testable without a compile define" shape as
+        /// <see cref="MaxWorlds.Core.Bootstrap.ShouldShowDebugOverlay"/>, so an EditMode test can force
+        /// the iOS path without an iOS editor build target.</summary>
+        public static float DefaultRenderScaleFor(RuntimePlatform platform) =>
+            platform == RuntimePlatform.IPhonePlayer ? IosRenderScale : 1f;
+
+        /// <summary>The resolved baseline for whichever platform this process is actually running on.</summary>
+        public static float DefaultRenderScale => DefaultRenderScaleFor(Application.platform);
         // MV-969: mirrors Mobile_RPAsset.asset's own reduction from 55m to 25m — see this class's own
         // doc comment on why these consts have to track that file's authored values.
         public const float DefaultShadowDistance = 25f;

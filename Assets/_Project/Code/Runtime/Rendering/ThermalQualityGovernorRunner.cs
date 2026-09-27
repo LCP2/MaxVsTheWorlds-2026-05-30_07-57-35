@@ -25,6 +25,14 @@ namespace MaxWorlds.Rendering
             var go = new GameObject(nameof(ThermalQualityGovernorRunner));
             Object.DontDestroyOnLoad(go);
             _instance = go.AddComponent<ThermalQualityGovernorRunner>();
+
+            // MV-974: the governor's own Nominal-tier reset (see ThermalQualityGovernor.Apply) only
+            // runs on a THERMAL STATE CHANGE — a session that never leaves Nominal would otherwise
+            // leave Mobile_RPAsset's authored renderScale (1, native) in effect at launch. Applied
+            // once here instead; DevTuning still wins if the Settings panel already dialled an
+            // override this session (e.g. a relaunch after Save, MV-662).
+            if (!DevTuning.MobileRenderScale.HasValue)
+                MobileRenderTuning.ApplyRenderScale(MobileRenderTuning.DefaultRenderScale);
         }
 
         private void Awake() => ThermalQualityGovernor.Active = _governor;
