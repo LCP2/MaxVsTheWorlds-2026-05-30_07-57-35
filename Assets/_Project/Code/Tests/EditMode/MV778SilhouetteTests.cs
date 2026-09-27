@@ -67,17 +67,19 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(wallHost.gameObject);
             }
 
-            // ---- 3. the outline is on for a wall, off for the ground ----
+            // ---- 3. MV-976 withdrew the world's outline pass entirely (Lee's call, released): neither
+            // a wall nor the ground carries an _OutlineOn property any more, because the pass itself is
+            // gone from the shader variant, not merely zeroed. See MV976WorldOutlineTests for the
+            // per-pass assertion this ticket actually added.
             Material wallMat = MaterialLibrary.Surface(SurfaceKind.Wall);
             Assert.IsNotNull(wallMat, "the wall surface has no material at all");
-            Assert.IsTrue(wallMat.HasProperty("_OutlineOn"), "the wall's shader carries no _OutlineOn property");
-            Assert.AreEqual(1f, wallMat.GetFloat("_OutlineOn"), "every wall must opt into the world outline pass");
+            Assert.IsFalse(wallMat.HasProperty("_OutlineOn"),
+                "MV-976 removed the outline pass from world scenery — the wall's shader must no longer carry _OutlineOn");
 
             Material groundMat = MaterialLibrary.Surface(SurfaceKind.Ground);
             Assert.IsNotNull(groundMat, "the ground surface has no material at all");
-            float groundOutline = groundMat.HasProperty("_OutlineOn") ? groundMat.GetFloat("_OutlineOn") : 0f;
-            Assert.AreEqual(0f, groundOutline,
-                "the floor has no silhouette to draw and must never carry an outline");
+            Assert.IsFalse(groundMat.HasProperty("_OutlineOn"),
+                "the ground never carried the outline pass, and still doesn't");
 
             // ---- 4. the axis-break rotation is a function of position: differs by position, repeats by
             // re-dressing the same position ----
