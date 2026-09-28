@@ -42,8 +42,8 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>Same wall-outward math <see cref="WorldJoinSequence"/> itself uses internally, kept
-        /// deliberately separate here rather than exposed from production code — a30's exit wall is N,
-        /// so this resolves to "how far north of the door line".</summary>
+        /// deliberately separate here rather than exposed from production code — a30's exit wall is E
+        /// (MV-997), so this resolves to "how far east of the door line".</summary>
         private static float AlongDistance(Vector3 pos, Vector2 doorMouth, Wall wall) => wall switch
         {
             Wall.N => pos.z - doorMouth.y,

@@ -21,6 +21,20 @@ namespace MaxWorlds.Tests.EditMode
     {
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
+        /// <summary>The point <paramref name="along"/> metres outward from <paramref name="doorMouth"/>
+        /// along <paramref name="wall"/>'s own outward axis — same wall-outward math
+        /// <see cref="WorldJoinSequence"/> itself uses internally, kept deliberately separate here rather
+        /// than exposed from production code. Written generic over the wall (MV-997: World 1's exit wall
+        /// moved from N to E) so this test never has to hardcode a compass direction again.</summary>
+        private static Vector3 PointAlong(Vector2 doorMouth, Wall wall, float along) => wall switch
+        {
+            Wall.N => new Vector3(doorMouth.x, 0f, doorMouth.y + along),
+            Wall.S => new Vector3(doorMouth.x, 0f, doorMouth.y - along),
+            Wall.E => new Vector3(doorMouth.x + along, 0f, doorMouth.y),
+            Wall.W => new Vector3(doorMouth.x - along, 0f, doorMouth.y),
+            _ => new Vector3(doorMouth.x, 0f, doorMouth.y),
+        };
+
         private GameObject _camGo;
         private GameObject _playerGo;
         private WorldJoinSequence _sequence;
@@ -86,10 +100,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(expectedB.b, resolvedB.b, 0.01f, "segment B's floor blue channel is not the 50/50 lerp.");
 
             // --- MV-964 §4.4: fog/lighting still follow Max continuously, reaching World 2's look at
-            // 73% of the corridor's own length (unchanged from MV-849). World 1's exit wall is N, so
-            // "along" is simply how far north of the door line Max has walked. ---
+            // 73% of the corridor's own length (unchanged from MV-849). ---
             float midAlong = 0.365f * entry.CorridorLength;   // t = along / (0.73 * length) = 0.5
-            _playerGo.transform.position = new Vector3(doorMouth.x, 0f, doorMouth.y + midAlong);
+            _playerGo.transform.position = PointAlong(doorMouth, entry.ExitWall, midAlong);
             _sequence.Tick(0f);
 
             Color expectedFog = Color.Lerp(BackyardLook.ForWorld(0).FogColor, BackyardLook.ForWorld(1).FogColor, 0.5f);

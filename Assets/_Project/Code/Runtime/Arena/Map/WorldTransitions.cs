@@ -2,6 +2,31 @@ using UnityEngine;
 
 namespace MaxWorlds.Arena
 {
+    /// <summary>MV-997: an extra doorway cut into a boundary wall for a world's own finale exit --
+    /// unlike an ordinary <see cref="MapLink"/> doorway, this has no "to" zone inside this map at all:
+    /// the corridor it opens onto lives entirely outside this <see cref="WorldConfig"/>, built later by
+    /// <see cref="MaxWorlds.Intro.WorldJoinSequence"/>. Resolved once by <see cref="WorldTransitions.ApplyExitDoorway"/>
+    /// before <see cref="MapRuntime.Build"/> ever runs <see cref="MapGeometry.Walls"/>, and consumed
+    /// there exactly like any other link's hole -- so the wall's collider, its mesh, and every dressing
+    /// kit that reads <see cref="MapGeometry.Faces"/>/<see cref="MapGeometry.Walls"/> (the fence line,
+    /// <c>StormdrainDressing</c>'s own wall props) all cut the identical gap for free, with no separate
+    /// "and also skip this bit" pass anywhere.</summary>
+    public readonly struct ExitDoorway
+    {
+        public readonly Wall Wall;
+        public readonly float Coord;
+        public readonly Span Hole;
+
+        public ExitDoorway(Wall wall, float coord, Span hole)
+        {
+            Wall = wall; Coord = coord; Hole = hole;
+        }
+
+        /// <summary>Matches <see cref="WallSegment.AlongX"/>'s own convention: true for a wall sitting
+        /// on a constant-Z line (N/S), false for one on a constant-X line (E/W).</summary>
+        public bool AlongX => Wall == Wall.N || Wall == Wall.S;
+    }
+
     /// <summary>
     /// MV-964: one authored row per world that has a next world to walk into — which wall its finale
     /// door cuts, where along that wall, how long the corridor is, and where it lands in the next
@@ -121,9 +146,10 @@ namespace MaxWorlds.Arena
     {
         private static readonly WorldTransitionEntry[] Entries =
         {
-            // World 1 (Backyard) -> World 2 (Stormdrain): a30's own N wall (its boss is authored
-            // centred against it) into World 2's entry stub, W wall.
-            new WorldTransitionEntry(fromWorld: 0, exitWall: Wall.N, exitDoorPos: 0.5f, corridorLength: 30f,
+            // World 1 (Backyard) -> World 2 (Stormdrain): a30's own E wall into World 2's entry stub,
+            // W wall (MV-997: was N -- every arrival enters heading east, so every exit must too, or
+            // the corridor's own direction change breaks the continuity it exists for).
+            new WorldTransitionEntry(fromWorld: 0, exitWall: Wall.E, exitDoorPos: 0.5f, corridorLength: 30f,
                 segmentAEnd: 9f, segmentBEnd: 13f,
                 arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
 
@@ -149,5 +175,29 @@ namespace MaxWorlds.Arena
         /// arrival in progress" — PLAY, RESUME, a Home world button and a respawn all boot with this
         /// null, exactly as before this ticket.</summary>
         public static int? PendingArrivalFrom { get; set; }
+
+        /// <summary>MV-997: resolves this world's own finale exit doorway (if any) against the real
+        /// config and stamps it onto <paramref name="map"/> — BEFORE <see cref="MapRuntime.Build"/> ever
+        /// runs <see cref="MapGeometry.Walls"/> — so the exit door becomes real map geometry present
+        /// from boot instead of a runtime <c>CutWallGap</c>. A no-op (<c>map.exitDoorway</c> stays null)
+        /// for the last world (no <see cref="WorldTransitions"/> row) or a <paramref name="cfg"/> the
+        /// entry can't resolve a real exit area against.</summary>
+        public static void ApplyExitDoorway(MapData map, WorldConfig cfg, int worldIndex)
+        {
+            if (map == null || cfg == null) return;
+            WorldTransitionEntry entry = For(worldIndex);
+            if (entry == null) return;
+
+            WorldArea exitArea = entry.ExitArea(cfg);
+            if (exitArea == null) return;
+
+            Vector2 doorMouth = entry.ExitDoorMouth(cfg);
+            bool alongX = exitArea.WallRunsAlongX(entry.ExitWall);
+            float coord = exitArea.WallCoord(entry.ExitWall);
+            float along = alongX ? doorMouth.x : doorMouth.y;
+            float half = WorldTransitionEntry.DoorWidth * 0.5f;
+
+            map.exitDoorway = new ExitDoorway(entry.ExitWall, coord, new Span(along - half, along + half));
+        }
     }
 }

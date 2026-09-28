@@ -70,6 +70,7 @@ namespace MaxWorlds.VFX
         private MapData _map;
         private WorldTransitionEntry _entry;
         private int _fromWorldIndex;
+        private AreaGate _exitGate;
 
         private void Awake()
         {
@@ -83,6 +84,9 @@ namespace MaxWorlds.VFX
             _map = path.Map;
             _fromWorldIndex = areaDirector.ActiveWorldIndex;
             _entry = WorldTransitions.For(_fromWorldIndex);
+            // MV-997: the real, closed map gate MapRuntime already built for this world's exit door --
+            // Open() forces THIS open rather than handing WorldJoinSequence a runtime CutWallGap.
+            _exitGate = path.ExitGate;
         }
 
         private void OnEnable() => HudSignals.BossDefeated += OnBossDefeated;
@@ -123,7 +127,7 @@ namespace MaxWorlds.VFX
             // there is nothing to hand off to and IsOpen alone is the whole observable effect, same as
             // before this ticket.
             if (_entry != null && _cfg != null && _map != null)
-                WorldJoinSequence.OpenExitDoor(_cfg, _map, _entry, _fromWorldIndex);
+                WorldJoinSequence.OpenExitDoor(_cfg, _map, _entry, _fromWorldIndex, _exitGate);
         }
 
         /// <summary>True once <paramref name="pos"/> is standing past a wall's own doorway — within its

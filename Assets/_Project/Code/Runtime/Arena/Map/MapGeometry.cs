@@ -376,6 +376,17 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-997: the world's own finale exit doorway -- has no "to" zone in this map at all (see
+            // MapData.exitDoorway's own doc), so it can't go through the ordinary link-driven Doorway()
+            // path above. Cut straight into the matching line the same way any other hole does; Solids/
+            // Cap below don't care where a hole came from, so the wall's collider, its mesh, and every
+            // dressing kit that reads Faces()/Walls() all cut the identical gap for free.
+            if (map.exitDoorway.HasValue)
+            {
+                ExitDoorway ed = map.exitDoorway.Value;
+                Line(ed.AlongX ? alongX : alongZ, ed.Coord).Holes.Add(ed.Hole);
+            }
+
             foreach (WallLine line in alongX)
                 foreach (var run in Solids(line, t))
                     walls.Add(new WallSegment(

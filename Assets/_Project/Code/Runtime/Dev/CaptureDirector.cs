@@ -2820,7 +2820,7 @@ namespace MaxWorlds.Dev
                 WorldTransitionEntry entry = WorldTransitions.For(0);
                 if (entry == null) throw new CaptureAbortException("World 1 has no WorldTransitions entry into World 2");
 
-                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 0);
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 0, path.ExitGate);
                 for (int i = 0; i < 4; i++) yield return null;
 
                 if (FindFirstObjectByType<WorldJoinSequence>() == null)
@@ -2937,7 +2937,7 @@ namespace MaxWorlds.Dev
                 WorldTransitionEntry entry = WorldTransitions.For(1);
                 if (entry == null) throw new CaptureAbortException("World 2 has no WorldTransitions entry into World 3");
 
-                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 1);
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 1, path.ExitGate);
                 for (int i = 0; i < 4; i++) yield return null;
 
                 if (FindFirstObjectByType<WorldJoinSequence>() == null)
