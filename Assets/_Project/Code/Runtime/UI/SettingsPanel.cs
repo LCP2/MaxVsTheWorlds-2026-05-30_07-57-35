@@ -748,6 +748,11 @@ namespace MaxWorlds.UI
             Add("SFX volume", "x", 0f, 1f, SfxDirector.DefaultSfxVolume,
                 () => DevTuning.Or(DevTuning.SfxVolume, SfxDirector.DefaultSfxVolume),
                 v => DevTuning.SfxVolume = v, tab: TabFeel);
+
+            // MV-1008: master volume for the procedural music loop (MusicDirector), beside SFX volume.
+            Add("Music volume", "x", 0f, 1f, MusicDirector.DefaultMusicVolume,
+                () => DevTuning.Or(DevTuning.MusicVolume, MusicDirector.DefaultMusicVolume),
+                v => DevTuning.MusicVolume = v, tab: TabFeel);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
