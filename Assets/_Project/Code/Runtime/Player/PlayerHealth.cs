@@ -4,6 +4,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Player
@@ -120,6 +121,10 @@ namespace MaxWorlds.Player
         private PulseLaser _pulseLaser;
         private PlayerAbilities _abilities;
 
+        /// <summary>MV-1005: Max's own red hit-flash/spark/low-HP-smoke read — built in
+        /// <see cref="Initialize"/>, same component every Sentinel carries.</summary>
+        private DamageFeedbackVfx _damageFeedback;
+
         /// <summary>Max's abilities component, for the Force Field absorb hook below — resolved lazily
         /// and cached, same reason/shape as <see cref="PrimaryEnergyNormalized"/>'s <see cref="_blaster"/> read.</summary>
         private PlayerAbilities Abilities
@@ -154,6 +159,12 @@ namespace MaxWorlds.Player
                                   isPlayerBar: true, desaturateWhenHealthy: true,
                                   shieldActive: () => Abilities != null && Abilities.ForceFieldActive,
                                   shieldFraction: () => Abilities != null ? Abilities.ForceFieldAbsorbFraction : 0f);
+
+            // MV-1005: get-or-add, since a re-Initialize (Revive/tests) must never stack a second one.
+            _damageFeedback = GetComponent<DamageFeedbackVfx>();
+            if (_damageFeedback == null) _damageFeedback = gameObject.AddComponent<DamageFeedbackVfx>();
+            _damageFeedback.Initialize();
+            _damageFeedback.Init(() => Normalized);
         }
 
         /// <summary>MV-760: the equipped primary's tank, 0..1, for the floating gauge — the LPPE's
@@ -212,6 +223,11 @@ namespace MaxWorlds.Player
             HudSignals.EmitPlayerHit(info.Point, info.Direction, IsContactHit(_timeSinceDamage));
 
             _health = Mathf.Max(0f, _health - amount);
+            // MV-1005: red flash/sparks — adds to, doesn't replace, the EmitPlayerHit above; runs after
+            // the HP write so its low-HP smoke gate reads the POST-hit value. Not "?." — Unity's
+            // fake-null only resolves through its own overloaded == / !=, never the null-conditional
+            // operator (see the matching note in Sentinel.TakeDamage).
+            if (_damageFeedback != null) _damageFeedback.OnHit(info.Point);
             _timeSinceDamage = 0f;
             Changed?.Invoke(_health);
             if (_health <= 0f) Died?.Invoke();
