@@ -68,14 +68,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void Model_RealFactoryDestroyClearsArenaAndEngagesBoss()
+        public void Model_RealFactoryDestroyClearsArena()
         {
             var m = new HudModel(subZonesTotal: 1, factoriesTotal: 1);
             m.RegisterFactoryDestroyed();
             Assert.AreEqual(1, m.Arena.FactoriesDestroyed);
             Assert.AreEqual(1, m.Arena.SubZonesCleared);
             Assert.IsTrue(m.Arena.Complete);
-            Assert.IsTrue(m.Boss.Active);
         }
 
         [Test]
@@ -107,11 +106,9 @@ namespace MaxWorlds.Tests.EditMode
             m.RegisterFactoryDestroyed();
             Assert.AreEqual(1, m.Arena.FactoriesDestroyed);
             Assert.IsFalse(m.Arena.Complete, "the arena read as cleared with a factory still standing");
-            Assert.IsFalse(m.Boss.Active, "the boss bar engaged with a factory still standing");
 
             m.RegisterFactoryDestroyed();
             Assert.IsTrue(m.Arena.Complete, "the arena never cleared, with every factory down");
-            Assert.IsTrue(m.Boss.Active);
         }
 
         // ---- the gate takes as many keys as the level gives it (YT-92) ----

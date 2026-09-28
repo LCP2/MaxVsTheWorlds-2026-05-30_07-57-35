@@ -370,13 +370,23 @@ namespace MaxWorlds.Tests.EditMode
 
         // ---- HUD boss bar driven by a real boss ----
 
+        /// <summary>MV-999: HudModel no longer carries a kill-driven stand-in boss at all — a
+        /// real factory being registered and destroyed, followed by kills, must never engage the
+        /// boss bar absent an actual boss signal. Fails on 8c86feb, where completing the arena
+        /// engages the stand-in "BIG BERMUDA" the instant the factory falls.</summary>
         [Test]
-        public void Model_ExternalBossStopsKillAndArenaStandIn()
+        public void Model_NoStandInBossEngagesAfterRealFactoryDestroyedAndKills()
         {
-            var m = new HudModel(subZonesTotal: 1, factoriesTotal: 1);
-            m.UseExternalBoss();
-            m.RegisterFactoryDestroyed();      // arena completes...
-            Assert.IsFalse(m.Boss.Active);     // ...but the stand-in boss must NOT engage
+            var m = new HudModel();
+            m.RegisterFactory();
+            Assert.IsFalse(m.Boss.Active);
+            m.RegisterFactoryDestroyed();
+            Assert.IsFalse(m.Boss.Active);
+            for (int i = 0; i < 10; i++)
+            {
+                m.RegisterKill();
+                Assert.IsFalse(m.Boss.Active);
+            }
         }
 
         [Test]

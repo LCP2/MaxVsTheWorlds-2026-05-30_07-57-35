@@ -8,14 +8,19 @@ namespace MaxWorlds.UI
     /// live <c>PlayerHealth</c>. (The primary never depletes since MV-290, so there is no
     /// Energy readout left to bind at all.)
     ///
-    /// Because the real economy, destructible factories, and boss fight are later tickets,
-    /// this model is driven off one signal — <see cref="RegisterKill"/> — so every HUD
-    /// element visibly animates on the WebGL build from actual play: kills tick
-    /// factories/sub-zones, charge the Ultimate, and (once the arena is cleared) engage and
-    /// drain the slice boss. The kill→milestone maths lives here so it is unit-testable.
+    /// Because the real economy and destructible factories were later tickets, this model is
+    /// driven off one signal — <see cref="RegisterKill"/> — so every HUD element visibly
+    /// animates on the WebGL build from actual play: kills tick factories/sub-zones and charge
+    /// the Ultimate. The kill→milestone maths lives here so it is unit-testable.
     ///
     /// MV-287: kills no longer grant XP or an automatic per-run power level — offensive power
     /// comes only from chosen upgrades (Parts), never from levelling.
+    ///
+    /// MV-999: the boss bar is driven ONLY by a real boss's own signals
+    /// (<see cref="EngageBossExternal"/> / <see cref="SetBossHealth"/> / <see cref="DefeatBossExternal"/>
+    /// via <c>BossCensus</c>). There is no kill-driven stand-in boss any more — every world now
+    /// authors a real boss, and the stand-in was firing a phantom "BIG BERMUDA" bar in worlds
+    /// that have none.
     /// </summary>
     public sealed class HudModel
     {
@@ -23,9 +28,6 @@ namespace MaxWorlds.UI
         private readonly int _sparksPerKill;
         private readonly int _killsPerFactory;
         private readonly float _ultimateChargePerKill;
-        private readonly float _bossDamagePerKill;
-        private readonly string _bossName;
-        private readonly int _bossPhases;
 
         public ArenaProgress Arena { get; }
         public BossState Boss { get; }
@@ -38,7 +40,6 @@ namespace MaxWorlds.UI
         public float UltimateCharge { get; private set; }
 
         public int Kills { get; private set; }
-        private bool _bossTriggered;
 
         /// <summary>Once a real destructible factory (YT-37) registers, the kill-driven factory
         /// stand-in switches off and the arena advances only on real destruction signals.</summary>
@@ -47,10 +48,6 @@ namespace MaxWorlds.UI
         /// <summary>How many real factories have registered — the tracker's total once the level has
         /// built itself (YT-92).</summary>
         private int _realFactories;
-
-        /// <summary>Once a real boss (YT-27) registers, the boss bar is driven by its actual HP
-        /// rather than engaged/drained by the kill + arena stand-in.</summary>
-        private bool _externalBoss;
 
         /// <summary>SPARKS shown on the kill-reward floating text. Cosmetic only since MV-287 —
         /// no longer feeds a level/power system, just names the number on the popup.</summary>
@@ -68,17 +65,11 @@ namespace MaxWorlds.UI
             int sparksPerKill = 6,
             int killsPerFactory = 4,
             float ultimateChargePerKill = 0.12f,
-            float bombCooldown = 5f,
-            string bossName = "BIG BERMUDA",
-            int bossPhases = 3,
-            float bossDamagePerKill = 0.08f)
+            float bombCooldown = 5f)
         {
             _sparksPerKill = Mathf.Max(0, sparksPerKill);
             _killsPerFactory = Mathf.Max(1, killsPerFactory);
             _ultimateChargePerKill = Mathf.Max(0f, ultimateChargePerKill);
-            _bossDamagePerKill = Mathf.Max(0f, bossDamagePerKill);
-            _bossName = bossName;
-            _bossPhases = Mathf.Max(1, bossPhases);
 
             Arena = new ArenaProgress(subZonesTotal, factoriesTotal);
             Boss = new BossState();
@@ -87,20 +78,13 @@ namespace MaxWorlds.UI
 
         /// <summary>
         /// Advance the whole slice progression by one kill. Charges the Ultimate, destroys a
-        /// factory every N kills, clears a sub-zone each time all factories fall, engages the
-        /// boss once the arena is fully cleared, and drains the boss thereafter.
+        /// factory every N kills, and clears a sub-zone each time all factories fall. Never
+        /// touches the boss bar — that is driven only by a real boss's own signals (MV-999).
         /// </summary>
         public void RegisterKill()
         {
             Kills++;
             UltimateCharge = Mathf.Clamp01(UltimateCharge + _ultimateChargePerKill);
-
-            if (Boss.Active)
-            {
-                // A real boss (YT-27) owns its own HP; kills only drain the stand-in boss.
-                if (!_externalBoss) Boss.Damage(_bossDamagePerKill);
-                return;
-            }
 
             // Kill-driven factory stand-in — only while no real factory feeds the tracker.
             if (!_externalFactories && Kills % _killsPerFactory == 0 && Arena.FactoriesDestroyed < Arena.FactoriesTotal)
@@ -111,8 +95,6 @@ namespace MaxWorlds.UI
                     Arena.ClearSubZone();
                 }
             }
-
-            MaybeEngageBoss();
         }
 
         /// <summary>Switch the arena tracker to real factory-destruction signals (YT-37): the
@@ -135,8 +117,8 @@ namespace MaxWorlds.UI
             Arena.SetFactoriesTotal(_realFactories);
         }
 
-        /// <summary>A real factory was destroyed. Advances the arena, clears the sub-zone once
-        /// all factories are down, and engages the boss when the arena is fully cleared.</summary>
+        /// <summary>A real factory was destroyed. Advances the arena and clears the sub-zone
+        /// once all factories are down. Never touches the boss bar (MV-999).</summary>
         public void RegisterFactoryDestroyed()
         {
             _externalFactories = true;
@@ -146,36 +128,20 @@ namespace MaxWorlds.UI
             {
                 Arena.ClearSubZone();
             }
-            MaybeEngageBoss();
         }
 
         /// <summary>MV-950: seed the arena's destroyed-factory count from a checkpoint restore
         /// (<see cref="MaxWorlds.Factories.FactoryCensus.CheckpointRestored"/>) — deliberately NOT
         /// via <see cref="RegisterFactoryDestroyed"/>, which replays the live-kill path (sub-zone
-        /// clear, boss engage) for factories a resume must treat as already-old news, not a fresh
-        /// kill just landed.</summary>
+        /// clear) for factories a resume must treat as already-old news, not a fresh kill just
+        /// landed.</summary>
         public void RestoreFactoriesDestroyed(int count) => Arena.RestoreFactoriesDestroyed(count);
 
-        private void MaybeEngageBoss()
-        {
-            if (_externalBoss) return; // a real boss engages itself via signals
-            if (Arena.Complete && !_bossTriggered)
-            {
-                _bossTriggered = true;
-                Boss.Engage(_bossName, _bossPhases);
-            }
-        }
-
-        // --- Real boss (YT-27) drives the boss bar via signals instead of the stand-in ---
-
-        /// <summary>A real boss exists — never engage/drain the stand-in boss.</summary>
-        public void UseExternalBoss() => _externalBoss = true;
+        // --- Real boss (YT-27) drives the boss bar via signals; there is no stand-in (MV-999) ---
 
         /// <summary>Engage the boss bar from a real boss (name + phase count for the segments).</summary>
         public void EngageBossExternal(string name, int phases)
         {
-            _externalBoss = true;
-            _bossTriggered = true;
             Boss.Engage(name, phases);
         }
 

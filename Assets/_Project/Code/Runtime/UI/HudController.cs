@@ -346,7 +346,6 @@ namespace MaxWorlds.UI
             FactoryCensus.CheckpointRestored += OnCheckpointRestored;
             HudSignals.WorldFactoryWording += OnWorldFactoryWording;
             HudSignals.PressureWording += OnPressureWording;
-            HudSignals.BossRegistered += OnBossRegistered;
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossHealthChanged += OnBossHealth;
             HudSignals.BossSpawnLevelChanged += OnBossSpawnLevel;
@@ -385,7 +384,6 @@ namespace MaxWorlds.UI
             FactoryCensus.CheckpointRestored -= OnCheckpointRestored;
             HudSignals.WorldFactoryWording -= OnWorldFactoryWording;
             HudSignals.PressureWording -= OnPressureWording;
-            HudSignals.BossRegistered -= OnBossRegistered;
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossHealthChanged -= OnBossHealth;
             HudSignals.BossSpawnLevelChanged -= OnBossSpawnLevel;
@@ -569,7 +567,7 @@ namespace MaxWorlds.UI
             screen.Open();
         }
 
-        private void OnBossRegistered() => _model.UseExternalBoss();
+        // MV-999: no OnBossRegistered handler — there is no stand-in boss left to suppress.
         private void OnBossEngaged(string name, int phases) => _model.EngageBossExternal(name, phases);
         private void OnBossHealth(float normalized) => _model.SetBossHealth(normalized);
         private void OnBossSpawnLevel(int level, float progress01) => _model.SetBossSpawnLevel(level, progress01);
