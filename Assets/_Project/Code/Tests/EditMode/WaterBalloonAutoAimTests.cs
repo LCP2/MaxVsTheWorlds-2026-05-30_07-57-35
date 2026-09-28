@@ -7,75 +7,94 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-373: Water Balloon auto-fire has to choose its own landing point (a placed weapon's
-    /// auto-fire is otherwise incoherent) — <see cref="WaterBalloonAutoAim.TryFindBestDirection"/> is
-    /// the pure formula behind that choice, tested here against known layouts with no live scene.
+    /// auto-fire is otherwise incoherent) — <see cref="WaterBalloonAutoAim.TryFindBestLanding"/> is the
+    /// pure formula behind that choice, tested here against known layouts with no live scene.
+    ///
+    /// MV-992 replaced the old <c>TryFindBestDirection</c> (which only ever scored a landing point at
+    /// the full throw distance, a thin ring) with this method — every candidate lands at its OWN
+    /// position, so a robot standing close to Max is a real candidate too, not just one on the LOB's
+    /// outer edge. The tests below that predate MV-992 are updated for the new signature/semantics
+    /// rather than kept as new tests; MV-992 adds exactly one net-new test,
+    /// <see cref="FindsBestLandingWithinTheRadius_MV992"/>.
     /// </summary>
     public sealed class WaterBalloonAutoAimTests
     {
         [Test]
-        public void PicksThePointCoveringTheMostRobots_MV373()
+        public void PicksTheLandingCoveringTheMostRobots_MV373()
         {
-            // A tight 3-robot cluster on the throw-range circle (radius 10) around a bearing of 0°,
-            // plus one lone robot on a completely different bearing. The splash (radius 2) at the
-            // cluster's centre bearing catches all three cluster members; any other candidate — the
-            // cluster's own edges, or the lone robot — catches at most two.
+            // Three robots on a line 1m apart (9m, 10m, 11m out) plus one lone robot far off on an
+            // unrelated bearing. Splash 1.05m: landing on the MIDDLE robot (10m) catches all three
+            // (its neighbours are exactly 1m away); landing on either end robot only catches two.
             var targets = new List<Vector3>
             {
-                new Vector3(10f, 0f, 0f),            // cluster centre bearing
-                new Vector3(9.90268f, 0f, 1.39173f),  // cluster +8°
-                new Vector3(9.90268f, 0f, -1.39173f), // cluster -8°
-                new Vector3(0f, 0f, 10f),             // lone robot, unrelated bearing
+                new Vector3(9f, 0f, 0f),
+                new Vector3(10f, 0f, 0f),
+                new Vector3(11f, 0f, 0f),
+                new Vector3(0f, 0f, 20f), // lone robot, unrelated bearing
             };
 
-            bool found = WaterBalloonAutoAim.TryFindBestDirection(
-                Vector3.zero, throwDistance: 10f, splashRadius: 2f, targets, out Vector3 direction);
+            bool found = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 25f, splashRadius: 1.05f, targets,
+                out Vector3 direction, out float distance);
 
             Assert.IsTrue(found, "there are robots within reach — auto-fire must find a target");
             Assert.That(Vector3.Distance(direction, Vector3.right), Is.LessThan(0.01f),
-                "the cluster's own centre bearing catches all three robots — a direct hit on the lone " +
-                "robot, or either edge of the cluster, would catch fewer");
-        }
-
-        [Test]
-        public void PrefersACatchOfThreeOverADirectHitOnOne_MV373()
-        {
-            // Same layout, aimed a different way: confirm the winning direction actually outscores
-            // aiming straight at the lone robot (a "direct hit on one" the design note calls out by name).
-            var targets = new List<Vector3>
-            {
-                new Vector3(10f, 0f, 0f),
-                new Vector3(9.90268f, 0f, 1.39173f),
-                new Vector3(9.90268f, 0f, -1.39173f),
-                new Vector3(0f, 0f, 10f),
-            };
-
-            WaterBalloonAutoAim.TryFindBestDirection(
-                Vector3.zero, throwDistance: 10f, splashRadius: 2f, targets, out Vector3 direction);
-
-            Assert.That(Vector3.Distance(direction, Vector3.forward), Is.GreaterThan(0.01f),
-                "must not settle for the lone robot's own bearing when a 3-robot cluster is reachable");
+                "the middle robot's own landing catches all three in-line robots — either end robot, " +
+                "or the lone robot, would catch fewer");
+            Assert.That(distance, Is.EqualTo(10f).Within(0.01f),
+                "the landing must be at the winning robot's own position");
         }
 
         [Test]
         public void ReturnsFalseWhenNoRobotsAreActive_MV373()
         {
-            bool found = WaterBalloonAutoAim.TryFindBestDirection(
-                Vector3.zero, throwDistance: 10f, splashRadius: 2f, new List<Vector3>(), out _);
+            bool found = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 10f, splashRadius: 2f, new List<Vector3>(), out _, out _);
 
             Assert.IsFalse(found, "no robots at all — auto-fire must not fire or spend a cell");
         }
 
         [Test]
-        public void ReturnsFalseWhenNothingIsWithinReachOfAnyCandidate_MV373()
+        public void ReturnsFalseWhenNoTargetIsWithinMaxDistance_MV373()
         {
-            // A robot standing right next to the thrower is far short of a 10m-throw-distance landing
-            // point in every direction, and no candidate's splash (radius 1) reaches back to it.
-            var targets = new List<Vector3> { new Vector3(1f, 0f, 0f) };
+            // Only robot in the scene sits well outside the LOB radius entirely.
+            var targets = new List<Vector3> { new Vector3(20f, 0f, 0f) };
 
-            bool found = WaterBalloonAutoAim.TryFindBestDirection(
-                Vector3.zero, throwDistance: 10f, splashRadius: 1f, targets, out _);
+            bool found = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 10f, splashRadius: 2f, targets, out _, out _);
 
-            Assert.IsFalse(found, "the only robot is nowhere near any reachable landing point");
+            Assert.IsFalse(found, "the only robot is outside the LOB radius entirely");
+        }
+
+        [Test]
+        public void FindsBestLandingWithinTheRadius_MV992()
+        {
+            // MV-992: LOB is a RADIUS — a robot well inside it (3m, with an 8m maxDistance) must be
+            // targetable, landing at its own position, not ignored the way the old ring-only scan did
+            // (see the fail-first proof quoted in this ticket's fix comment). A robot outside the
+            // radius (9m) must not be. Two non-overlapping robots (2m and 6m, splash 1.2m so they can't
+            // both be caught by one landing) must resolve to the NEAREST one.
+            var closeRobot = new List<Vector3> { new Vector3(3f, 0f, 0f) };
+            bool foundClose = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 8f, splashRadius: 1.2f, closeRobot,
+                out Vector3 closeDirection, out float closeDistance);
+            Assert.IsTrue(foundClose, "a robot well inside the 8m LOB radius must be targetable");
+            Assert.That(closeDistance, Is.EqualTo(3f).Within(0.01f),
+                "the landing must be at the robot's own position, not the full LOB distance");
+            Assert.That(Vector3.Distance(closeDirection, Vector3.right), Is.LessThan(0.01f));
+
+            var farRobot = new List<Vector3> { new Vector3(9f, 0f, 0f) };
+            bool foundFar = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 8f, splashRadius: 1.2f, farRobot, out _, out _);
+            Assert.IsFalse(foundFar, "a robot outside the 8m LOB radius must not be targeted");
+
+            var nonOverlapping = new List<Vector3> { new Vector3(6f, 0f, 0f), new Vector3(2f, 0f, 0f) };
+            bool foundNearest = WaterBalloonAutoAim.TryFindBestLanding(
+                Vector3.zero, maxDistance: 8f, splashRadius: 1.2f, nonOverlapping,
+                out Vector3 nearestDirection, out float nearestDistance);
+            Assert.IsTrue(foundNearest);
+            Assert.That(nearestDistance, Is.EqualTo(2f).Within(0.01f),
+                "non-overlapping candidates each catch only themselves (a tie) — ties go to the nearest");
         }
     }
 }

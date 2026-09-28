@@ -26,6 +26,12 @@ namespace MaxWorlds.Weapons
         public static float WaterBalloonDistance(int level, float baseDistance, float perLevel) =>
             baseDistance + perLevel * Mathf.Max(0, level - 1);
 
+        /// <summary>MV-992: the shortest distance a Water Balloon may actually land at — LOB is a
+        /// RADIUS (0 to the full throw distance), not a fixed lob, so a target standing almost on top
+        /// of Max still gets a landing point that reads as a thrown balloon rather than one dropped at
+        /// his own feet.</summary>
+        public const float MinThrowDistance = 1.5f;
+
         /// <summary>The splash's size relative to the large ("second") robot's own footprint radius at
         /// Splash Area Level 1 (<c>waterBalloonSplashMult</c>, spec §6a: "an area ≈ 2× the large
         /// robot's footprint") — 2.0 means the splash's radius is twice the robot's, i.e. its diameter
