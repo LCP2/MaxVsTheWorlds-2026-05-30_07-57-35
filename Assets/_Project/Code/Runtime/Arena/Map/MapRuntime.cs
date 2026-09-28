@@ -26,6 +26,12 @@ namespace MaxWorlds.Arena
 
         /// <summary>The bosses this map built (MV-561), in the order it authored them.</summary>
         public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
+
+        /// <summary>MV-997: this world's own finale exit gate, if <see cref="MapData.exitDoorway"/> was
+        /// set before <see cref="MapRuntime.Build"/> ran — closed until <see cref="MaxWorlds.VFX.WorldFinaleGate"/>
+        /// opens it on the world's final boss death. Null for a map with no exit doorway (the last
+        /// world, or any fixture that never called <see cref="WorldTransitions.ApplyExitDoorway"/>).</summary>
+        public AreaGate ExitGate;
     }
 
     /// <summary>MV-972: a world-placed actor that spawns/respawns after <see cref="MapRuntime.Build"/>
@@ -1245,6 +1251,14 @@ namespace MaxWorlds.Arena
                 TagWallZones(map, wallGo, w, rendererZones);
                 AddStatic(map, wallGo, staticGeometry, rendererZones, autoTag: false);
             }
+
+            // MV-997: the world's own finale exit door -- real map geometry from boot, not a runtime
+            // CutWallGap. MapGeometry.Walls has already left the physical gap (collider and mesh, via
+            // exitDoorway's own hole in the wall loop above); this builds the closed AreaGate that fills
+            // it, before CombineZoneGeometry (deferred to MapStaticBatchRoot.Start) ever folds the wall's
+            // visible geometry into a combined mesh.
+            if (map.exitDoorway.HasValue)
+                built.ExitGate = BuildExitDoorGate(map, root, map.exitDoorway.Value);
 
             BuildProps(map, root, staticGeometry, built, rendererZones);
             PlaceActors(map, root, built, rendererZones);
@@ -2516,6 +2530,61 @@ namespace MaxWorlds.Arena
             built.Actors[e.id] = body;
             return body;
         }
+
+        /// <summary>MV-997: the world's own finale exit door — mechanically identical to
+        /// <see cref="BuildAreaGate"/>'s ordinary link-gate case (same seal-width overlap, same E/W spin
+        /// rule), but keyed off a doorway with no "to" zone at all, so there is no <see cref="MapLink"/>/
+        /// <see cref="MapEntity"/> to read a width or an away-from-player direction off. Stays shut here
+        /// — <see cref="MaxWorlds.VFX.WorldFinaleGate"/> forces it open on the world's own final boss
+        /// death, exactly like an ordinary <c>opensWith</c> condition gate.
+        ///
+        /// Never dressed here: World 2's per-world sweep (<c>BackyardPath.ApplyWorldMaterials</c>)
+        /// already re-skins EVERY <see cref="AreaGate"/> it finds in the scene with
+        /// <see cref="AreaGate.ApplyStormdrainGateSkin"/>, and this gate already exists (built here, well
+        /// before that sweep runs) so it is swept for free. World 1 and World 3 apply no gate skin at
+        /// all, which is exactly "its normal garden gate" (MV-997's own ticket text).</summary>
+        private static AreaGate BuildExitDoorGate(MapData map, Transform root, ExitDoorway doorway)
+        {
+            bool alongX = doorway.AlongX;
+            float mid = doorway.Hole.Mid;
+            float sealWidth = doorway.Hole.Length + map.wallThickness * 2f;
+
+            Vector3 center = alongX
+                ? new Vector3(mid, map.wallHeight * 0.5f, doorway.Coord)
+                : new Vector3(doorway.Coord, map.wallHeight * 0.5f, mid);
+
+            GameObject body = Spawn(root, "World Exit Door", PrimitiveType.Cube, center,
+                new Vector3(sealWidth, map.wallHeight, map.wallThickness + AntiZFightMargin));
+
+            // Same "spin 90 for an E/W-wall doorway" rule BuildAreaGate follows below -- AreaGate.
+            // StartHingeSwing reads localScale.x as the width, so the box is spun rather than rebuilt
+            // with x/z swapped.
+            if (!alongX) body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
+            MarkDiscoverable(body);
+            var gate = body.AddComponent<AreaGate>();
+            gate.AwayFromPlayerDirection = ExitOutwardDir(doorway.Wall);
+
+            // Shut, this gate blocks sight exactly like an ordinary one (YT-107) -- see BuildAreaGate's
+            // own doc on why Cover goes on the THRESHOLD object, not the visible leaf.
+            CoverLayer.Assign(gate.ThresholdObject);
+
+            return gate;
+        }
+
+        /// <summary>World-outward direction for a wall (N/E extend toward +Z/+X, S/W toward -Z/-X) --
+        /// the same convention <see cref="MaxWorlds.Intro.WorldJoinSequence"/> and
+        /// <see cref="MaxWorlds.Arena.WorldJoinDressing"/> each already keep their own private copy of;
+        /// a third copy here follows the same "duplicate a two-line geometry helper rather than share
+        /// it" idiom this codebase already uses twice for this exact function.</summary>
+        private static Vector3 ExitOutwardDir(Wall wall) => wall switch
+        {
+            Wall.N => Vector3.forward,
+            Wall.S => Vector3.back,
+            Wall.E => Vector3.right,
+            Wall.W => Vector3.left,
+            _ => Vector3.forward,
+        };
 
         /// <summary>
         /// The hand-placed Mower Hutch the slice scene has carried since the first scaffold stands

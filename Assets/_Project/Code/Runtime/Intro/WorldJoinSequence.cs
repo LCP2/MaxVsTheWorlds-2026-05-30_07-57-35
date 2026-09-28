@@ -19,7 +19,8 @@ namespace MaxWorlds.Intro
     /// of one transition, in two different scene loads:
     ///
     ///  * <see cref="OpenExitDoor"/> — called by <see cref="MaxWorlds.VFX.WorldFinaleGate"/> the instant
-    ///    the world's own last boss dies. Cuts the real door in the exit wall and builds the corridor
+    ///    the world's own last boss dies. MV-997: the door itself is real map geometry <c>MapRuntime</c>
+    ///    already built closed at boot, so this just forces THAT gate open and builds the corridor
     ///    behind it immediately, but leaves Max in full control -- <see cref="Tick"/>'s own
     ///    <c>AwaitingCrossing</c> phase just watches for him to actually walk through, at which point
     ///    control is taken away for the scripted walk to the corridor's end and the fade that follows.
@@ -62,7 +63,8 @@ namespace MaxWorlds.Intro
         /// <see cref="TickAwaitingCrossing"/>). A no-op if the sequence is already running (defensive;
         /// <see cref="MaxWorlds.VFX.WorldFinaleGate.IsOpen"/> already guards against a second call) or if
         /// there is no live player to walk through it.</summary>
-        public static void OpenExitDoor(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex)
+        public static void OpenExitDoor(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
+            AreaGate exitGate = null)
         {
             if (FindFirstObjectByType<WorldJoinSequence>() != null) return;
             var player = FindFirstObjectByType<PlayerController>();
@@ -70,7 +72,7 @@ namespace MaxWorlds.Intro
 
             var seq = new GameObject("WorldJoinSequence").AddComponent<WorldJoinSequence>();
             seq._mode = Mode.Exit;
-            seq.BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player);
+            seq.BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player, exitGate);
             seq._phase = Phase.AwaitingCrossing;
         }
 
@@ -161,16 +163,16 @@ namespace MaxWorlds.Intro
         /// game's own "walk up to the door under full control" leg is ordinary, un-scripted gameplay now,
         /// not something a test needs to simulate.</summary>
         public void Initialize(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
-            PlayerController player, System.Action onFinished = null)
+            PlayerController player, System.Action onFinished = null, AreaGate exitGate = null)
         {
             _mode = Mode.Exit;
             _onFinished = onFinished;
-            BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player);
+            BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player, exitGate);
             BeginSuspendedWalk();
         }
 
         private void BuildExit(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
-            PlayerController player)
+            PlayerController player, AreaGate exitGate)
         {
             _entry = entry;
             _fromWorldIndex = fromWorldIndex;
@@ -189,9 +191,13 @@ namespace MaxWorlds.Intro
             _lighting = FindFirstObjectByType<BackyardLighting>();
             if (_lighting == null) _lighting = new GameObject("BackyardLighting").AddComponent<BackyardLighting>();
 
-            CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth, out Material wallMaterial);
-            _doorGate = BuildDoor(_doorMouth, _wall, wallHeight, wallThickness, wallMaterial, transform, "World Join Door");
-            _doorGate.ForceOpen();
+            // MV-997: the door is real map geometry now, built closed by MapRuntime at boot -- open THAT
+            // gate rather than cutting a fresh gap at runtime. CutWallGap stays for the arrival side only
+            // (InitializeArrival, below), whose shell is still built outside the destination stub's own
+            // wall. exitGate is null only for a fixture/test with no real map geometry at all, in which
+            // case there is nothing here to open and the sequence just has no visible door.
+            _doorGate = exitGate;
+            if (_doorGate != null) _doorGate.ForceOpen();
 
             BuildExitCorridor(wallHeight, wallThickness);
 

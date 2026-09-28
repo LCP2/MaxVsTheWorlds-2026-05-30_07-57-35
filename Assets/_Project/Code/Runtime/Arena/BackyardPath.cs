@@ -90,6 +90,12 @@ namespace MaxWorlds.Arena
         /// never null, if the map failed to load.</summary>
         public IReadOnlyDictionary<string, GameObject> Actors => _build?.Actors ?? (IReadOnlyDictionary<string, GameObject>)NoActors;
 
+        /// <summary>MV-997: this world's own finale exit gate (real map geometry, built closed) — read
+        /// by <see cref="MaxWorlds.VFX.WorldFinaleGate"/>, which forces it open on this world's own final
+        /// boss death instead of cutting a fresh gap at runtime. Null for the last world (no
+        /// <see cref="WorldTransitions"/> row) or if the map failed to load.</summary>
+        public AreaGate ExitGate => _build?.ExitGate;
+
         /// <summary>The world index this instance's <see cref="Awake"/> actually resolved (MV-766)
         /// — read by the world probe instead of calling <see cref="ActiveWorldIndex"/> a second
         /// time, so the probe reports what THIS run resolved rather than re-deriving it from
@@ -115,6 +121,11 @@ namespace MaxWorlds.Arena
                 _cfg = null;
                 return;
             }
+
+            // MV-997: stamp the world's own finale exit doorway onto the map BEFORE MapRuntime.Build
+            // ever runs MapGeometry.Walls -- this is what makes the exit door real map geometry from
+            // boot, not a runtime CutWallGap. A no-op for the last world (WorldTransitions.For is null).
+            WorldTransitions.ApplyExitDoorway(_map, cfg, worldIndex);
 
             _layout = MapLayoutBridge.ToLayout(_map);
             _build = MapRuntime.Build(_map, transform);

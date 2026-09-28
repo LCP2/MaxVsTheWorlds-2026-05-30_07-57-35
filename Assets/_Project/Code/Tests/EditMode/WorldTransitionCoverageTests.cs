@@ -67,6 +67,14 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.IsFalse(arrival.Overlaps(area.Footprint),
                         $"world {i + 1}'s arrival shell overlaps area '{area.id}'");
                 }
+
+                // e. MV-997: the exit corridor's travel direction must continue straight into the next
+                // world's own arrival direction — Max walks OUT of the exit wall's own outward side and
+                // must walk IN through the arrival wall's own outward side, i.e. the arrival wall is the
+                // exit wall's opposite (N/S, E/W). A cut like World 1's old N exit into a W-wall arrival
+                // (a 90-degree turn, "going up" into "going right") is exactly what this AC forbids.
+                Assert.AreEqual(WallEnums.Opposite(entry.ExitWall), entry.ArrivalWall,
+                    $"world {i}'s exit corridor doesn't run straight into world {i + 1}'s own arrival direction");
             }
 
             Assert.IsNull(WorldTransitions.For(WorldLibrary.Count - 1),

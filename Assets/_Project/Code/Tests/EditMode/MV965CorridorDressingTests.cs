@@ -65,6 +65,44 @@ namespace MaxWorlds.Tests.EditMode
             return go.AddComponent<PlayerController>();
         }
 
+        /// <summary>How far outward <paramref name="worldPos"/> sits from <paramref name="doorMouth"/>
+        /// along <paramref name="wall"/>'s own outward axis — same wall-outward math
+        /// <see cref="WorldJoinSequence"/> itself uses internally, kept deliberately separate here rather
+        /// than exposed from production code. Written generic over the wall (MV-997: World 1's exit wall
+        /// moved from N to E) so this test never has to hardcode a compass axis again.</summary>
+        private static float AlongOf(Vector3 worldPos, Vector2 doorMouth, Wall wall) => wall switch
+        {
+            Wall.N => worldPos.z - doorMouth.y,
+            Wall.S => doorMouth.y - worldPos.z,
+            Wall.E => worldPos.x - doorMouth.x,
+            Wall.W => doorMouth.x - worldPos.x,
+            _ => 0f,
+        };
+
+        /// <summary>How far <paramref name="worldPos"/> sits off the door's own centreline, across
+        /// <paramref name="wall"/>'s outward axis. Only ever compared by magnitude in this file, so the
+        /// sign convention just needs to be consistent, not camera-relative.</summary>
+        private static float AcrossOf(Vector3 worldPos, Vector2 doorMouth, Wall wall) => wall switch
+        {
+            Wall.N => worldPos.x - doorMouth.x,
+            Wall.S => worldPos.x - doorMouth.x,
+            Wall.E => worldPos.z - doorMouth.y,
+            Wall.W => worldPos.z - doorMouth.y,
+            _ => 0f,
+        };
+
+        /// <summary>The [min, max) span of <paramref name="bounds"/>'s own outward extent along
+        /// <paramref name="wall"/>'s axis, in the same "metres outward from the door mouth" terms
+        /// <see cref="AlongOf"/> uses for a single point.</summary>
+        private static (float min, float max) AlongSpan(Bounds bounds, Vector2 doorMouth, Wall wall) => wall switch
+        {
+            Wall.N => (bounds.min.z - doorMouth.y, bounds.max.z - doorMouth.y),
+            Wall.S => (doorMouth.y - bounds.max.z, doorMouth.y - bounds.min.z),
+            Wall.E => (bounds.min.x - doorMouth.x, bounds.max.x - doorMouth.x),
+            Wall.W => (doorMouth.x - bounds.max.x, doorMouth.x - bounds.min.x),
+            _ => (0f, 0f),
+        };
+
         [Test]
         public void CorridorAndArrivalShellCarryDressing_DensityColliderFreedomAndEmission()
         {
@@ -101,8 +139,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(arrivalRoot, "the arrival shell must have been built");
 
             // ---- AC1a: every one of the ten 3 m slices of the exit corridor holds a dressing renderer
-            // outside the 2.0 m centre lane. World 1's exit wall is N, so "along" is world Z past the
-            // door line and "across" is world X off the door's own centreline. ----
+            // outside the 2.0 m centre lane. ----
             var corridorRenderers = new List<Renderer>();
             corridorRenderers.AddRange(segA.GetComponentsInChildren<Renderer>(true));
             corridorRenderers.AddRange(segB.GetComponentsInChildren<Renderer>(true));
@@ -116,8 +153,8 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (Renderer r in corridorRenderers)
                 {
                     Vector3 c = r.bounds.center;
-                    float along = c.z - doorMouth.y;
-                    float across = c.x - doorMouth.x;
+                    float along = AlongOf(c, doorMouth, entry.ExitWall);
+                    float across = AcrossOf(c, doorMouth, entry.ExitWall);
                     if (along >= sliceMin && along < sliceMax && Mathf.Abs(across) >= 1.0f) { found = true; break; }
                 }
                 Assert.IsTrue(found, $"no dressing renderer found outside the centre lane in slice [{sliceMin}, {sliceMax})");
@@ -143,8 +180,7 @@ namespace MaxWorlds.Tests.EditMode
                 {
                     Material mat = r.sharedMaterial;
                     if (mat == null || !mat.IsKeywordEnabled("_EMISSION")) continue;
-                    float dMin = r.bounds.min.z - doorMouth.y;
-                    float dMax = r.bounds.max.z - doorMouth.y;
+                    (float dMin, float dMax) = AlongSpan(r.bounds, doorMouth, entry.ExitWall);
                     if (dMin < w1 && dMax > w0) { found = true; break; }
                 }
                 Assert.IsTrue(found, $"no emissive renderer found in window [{w0}, {w1})");
