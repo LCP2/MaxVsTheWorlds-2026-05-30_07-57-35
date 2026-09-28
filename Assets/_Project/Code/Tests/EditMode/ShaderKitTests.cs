@@ -59,18 +59,17 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ForceFieldShieldMaterial_ExposesTheHexPanelControls()
+        public void ForceFieldShieldMaterial_HasNoHexLatticeButKeepsTheShimmerBand()
         {
-            // 16 Aug DECISION (MV-391): the shield must read as a faceted hex-panel dome, not a
-            // flat coloured disc — this is the tripwire for that pattern silently regressing back
-            // to a plain Fresnel-only fill.
+            // MV-990 (Lee, TestFlight): the hex-panel lattice obscured the rising shimmer pulse he
+            // actually wants, so it was deleted from the shader — this is the tripwire against it
+            // silently coming back, and against the shimmer band it was covering up going with it.
             var shader = Shader.Find("MaxWorlds/ForceFieldShield");
             Assert.IsNotNull(shader, "'MaxWorlds/ForceFieldShield' not found");
             var mat = new Material(shader);
 
-            Assert.IsTrue(mat.HasProperty("_PanelScale"), "no hex panel scale control");
-            Assert.IsTrue(mat.HasProperty("_PanelSeamWidth"), "no hex seam width control");
-            Assert.IsTrue(mat.HasProperty("_PanelSeamBoost"), "no hex seam glow control");
+            Assert.IsFalse(mat.HasProperty("_PanelSeamBoost"), "hex lattice control still present");
+            Assert.IsTrue(mat.HasProperty("_ShimmerBandSpeed"), "shimmer band control missing");
             Object.DestroyImmediate(mat);
         }
 

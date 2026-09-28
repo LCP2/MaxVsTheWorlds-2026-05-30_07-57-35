@@ -250,21 +250,6 @@ namespace MaxWorlds.Core
         /// <summary>Fresnel rim brightness multiplier (<c>_RimStrength</c>).</summary>
         public static float? ForceFieldRimStrength { get; set; }
 
-        /// <summary>Hex panels across the dome (<c>_PanelScale</c>).</summary>
-        public static float? ForceFieldPanelScale { get; set; }
-
-        /// <summary>Hex seam thickness, in hex-cell units (<c>_PanelSeamWidth</c>).</summary>
-        public static float? ForceFieldPanelSeamWidth { get; set; }
-
-        /// <summary>How much brighter a seam glows versus the fill (<c>_PanelSeamBoost</c>).</summary>
-        public static float? ForceFieldPanelSeamBoost { get; set; }
-
-        /// <summary>Secondary brightness-breath speed on the seam glow only (<c>_PulseSpeed</c>).</summary>
-        public static float? ForceFieldPulseSpeed { get; set; }
-
-        /// <summary>Secondary brightness-breath strength (<c>_PulseStrength</c>).</summary>
-        public static float? ForceFieldPulseStrength { get; set; }
-
         /// <summary>Travelling shimmer band's sweeps per second (<c>_ShimmerBandSpeed</c>).</summary>
         public static float? ForceFieldShimmerBandSpeed { get; set; }
 
@@ -435,9 +420,7 @@ namespace MaxWorlds.Core
             ForceFieldCooldownSeconds.HasValue || ForceFieldRadius.HasValue ||
             ForceFieldActivationCost.HasValue || ForceFieldPopDamage.HasValue ||
             ForceFieldPopKnockbackSpeed.HasValue ||
-            ForceFieldRimPower.HasValue || ForceFieldRimStrength.HasValue || ForceFieldPanelScale.HasValue ||
-            ForceFieldPanelSeamWidth.HasValue || ForceFieldPanelSeamBoost.HasValue ||
-            ForceFieldPulseSpeed.HasValue || ForceFieldPulseStrength.HasValue ||
+            ForceFieldRimPower.HasValue || ForceFieldRimStrength.HasValue ||
             ForceFieldShimmerBandSpeed.HasValue || ForceFieldShimmerBandWidth.HasValue ||
             ForceFieldAlphaCeiling.HasValue || ForceFieldHoldUp.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
@@ -511,11 +494,6 @@ namespace MaxWorlds.Core
             ForceFieldPopKnockbackSpeed = null;
             ForceFieldRimPower = null;
             ForceFieldRimStrength = null;
-            ForceFieldPanelScale = null;
-            ForceFieldPanelSeamWidth = null;
-            ForceFieldPanelSeamBoost = null;
-            ForceFieldPulseSpeed = null;
-            ForceFieldPulseStrength = null;
             ForceFieldShimmerBandSpeed = null;
             ForceFieldShimmerBandWidth = null;
             ForceFieldAlphaCeiling = null;
@@ -614,11 +592,6 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(ForceFieldPopKnockbackSpeed), () => ForceFieldPopKnockbackSpeed, v => ForceFieldPopKnockbackSpeed = v),
             (PrefsPrefix + nameof(ForceFieldRimPower), () => ForceFieldRimPower, v => ForceFieldRimPower = v),
             (PrefsPrefix + nameof(ForceFieldRimStrength), () => ForceFieldRimStrength, v => ForceFieldRimStrength = v),
-            (PrefsPrefix + nameof(ForceFieldPanelScale), () => ForceFieldPanelScale, v => ForceFieldPanelScale = v),
-            (PrefsPrefix + nameof(ForceFieldPanelSeamWidth), () => ForceFieldPanelSeamWidth, v => ForceFieldPanelSeamWidth = v),
-            (PrefsPrefix + nameof(ForceFieldPanelSeamBoost), () => ForceFieldPanelSeamBoost, v => ForceFieldPanelSeamBoost = v),
-            (PrefsPrefix + nameof(ForceFieldPulseSpeed), () => ForceFieldPulseSpeed, v => ForceFieldPulseSpeed = v),
-            (PrefsPrefix + nameof(ForceFieldPulseStrength), () => ForceFieldPulseStrength, v => ForceFieldPulseStrength = v),
             (PrefsPrefix + nameof(ForceFieldShimmerBandSpeed), () => ForceFieldShimmerBandSpeed, v => ForceFieldShimmerBandSpeed = v),
             (PrefsPrefix + nameof(ForceFieldShimmerBandWidth), () => ForceFieldShimmerBandWidth, v => ForceFieldShimmerBandWidth = v),
             (PrefsPrefix + nameof(ForceFieldAlphaCeiling), () => ForceFieldAlphaCeiling, v => ForceFieldAlphaCeiling = v),

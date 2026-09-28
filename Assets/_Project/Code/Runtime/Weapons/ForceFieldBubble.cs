@@ -20,13 +20,12 @@ namespace MaxWorlds.Weapons
     /// it" half only.
     ///
     /// MV-391 (16 Aug DECISION): the visual is a subtle, mostly-transparent BLUE/CYAN energy-shield
-    /// dome with a hexagonal/faceted panel pattern and a glowing rim (a
-    /// <c>MaxWorlds/ForceFieldShield</c>-shaded sphere — see that shader for the Fresnel rim and hex
-    /// panelling), matching the SG2/SG3 reference look — not the opaque orange sphere that originally
-    /// shipped, and not the plain white ring the first fix landed as (which still read as "a circle
-    /// around Max" from the fixed top-down camera; the hex-panel seams are what break that read into
-    /// a faceted 3D shell). The opaque-orange bug itself was never the colour values below; it was
-    /// that this renderer carried no <see cref="SelfDrivenTint"/> marker, so
+    /// dome with a glowing rim (a <c>MaxWorlds/ForceFieldShield</c>-shaded sphere — see that shader
+    /// for the Fresnel rim and the travelling shimmer band), matching the SG2/SG3 reference look —
+    /// not the opaque orange sphere that originally shipped. MV-990 removed the hex-panel lattice
+    /// this shader used to draw over the dome: it obscured the shimmer's rising-pulse cue, which is
+    /// what Lee actually wants read at a glance. The opaque-orange bug itself was never the colour
+    /// values below; it was that this renderer carried no <see cref="SelfDrivenTint"/> marker, so
     /// <c>RuntimeSurfaceDirector</c>'s sweep (MV-350's fix, now catching a VFX prop MV-350 itself
     /// flagged as still outstanding) claimed it a frame after spawn and stamped it with a generic
     /// opaque world-prop material, hiding Max completely. The marker is what actually fixes that; the
@@ -47,8 +46,7 @@ namespace MaxWorlds.Weapons
 
         // Rim: the glowing edge. Bright cyan when fresh, warming toward the same amber as the fill
         // as the field nears popping — the DECISION's "colour-shift-on-decay" cue, expressed on the
-        // edge (and hex seams, driven by the same _RimColor in the shader) that actually reads at a
-        // glance.
+        // edge that actually reads at a glance.
         private static readonly Color FullRimColor = new Color(0.55f, 0.9f, 1f, 1f);
         private static readonly Color EmptyRimColor = new Color(1f, 0.45f, 0.18f, 1f);
 
@@ -58,11 +56,6 @@ namespace MaxWorlds.Weapons
         // MV-455 shimmer tuning — mirrors ForceFieldShield.shader's Properties block 1:1.
         private static readonly int RimPowerId = Shader.PropertyToID("_RimPower");
         private static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
-        private static readonly int PanelScaleId = Shader.PropertyToID("_PanelScale");
-        private static readonly int PanelSeamWidthId = Shader.PropertyToID("_PanelSeamWidth");
-        private static readonly int PanelSeamBoostId = Shader.PropertyToID("_PanelSeamBoost");
-        private static readonly int PulseSpeedId = Shader.PropertyToID("_PulseSpeed");
-        private static readonly int PulseStrengthId = Shader.PropertyToID("_PulseStrength");
         private static readonly int ShimmerBandSpeedId = Shader.PropertyToID("_ShimmerBandSpeed");
         private static readonly int ShimmerBandWidthId = Shader.PropertyToID("_ShimmerBandWidth");
         private static readonly int AlphaCeilingId = Shader.PropertyToID("_AlphaCeiling");
@@ -172,11 +165,6 @@ namespace MaxWorlds.Weapons
             if (mat == null) return;
             SetIfOverridden(mat, RimPowerId, DevTuning.ForceFieldRimPower);
             SetIfOverridden(mat, RimStrengthId, DevTuning.ForceFieldRimStrength);
-            SetIfOverridden(mat, PanelScaleId, DevTuning.ForceFieldPanelScale);
-            SetIfOverridden(mat, PanelSeamWidthId, DevTuning.ForceFieldPanelSeamWidth);
-            SetIfOverridden(mat, PanelSeamBoostId, DevTuning.ForceFieldPanelSeamBoost);
-            SetIfOverridden(mat, PulseSpeedId, DevTuning.ForceFieldPulseSpeed);
-            SetIfOverridden(mat, PulseStrengthId, DevTuning.ForceFieldPulseStrength);
             float leveledShimmerSpeed = AbilityTuning.ForceFieldShimmerBandSpeed(_forceFieldLevel,
                 AbilityTuning.DefaultForceFieldShimmerBandSpeed, AbilityTuning.ForceFieldShimmerBandSpeedCeiling,
                 WeaponCatalog.MaxLevel(AbilityKind.ForceField));
