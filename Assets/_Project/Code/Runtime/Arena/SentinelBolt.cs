@@ -31,6 +31,12 @@ namespace MaxWorlds.Arena
         /// rather than re-typed, so this bolt can never drift bigger than Max's own when his is retuned.</summary>
         private const float SizeScale = 0.7f;
 
+        /// <summary>MV-1004: World 2 only (Lee, device, 2026-09-28: "make the Sentinels' laser in
+        /// World 2 a bit thicker") — widens the bolt's CROSS-SECTION (and its trail's
+        /// <c>widthMultiplier</c>) by this factor on top of <see cref="SizeScale"/>; length and the
+        /// ground glow are unaffected. See <see cref="BuildVisual"/>.</summary>
+        private const float ThicknessScaleWorld2 = 1.6f;
+
         private Vector3 _from;
         private Vector3 _to;
         private float _flightSeconds;
@@ -41,8 +47,11 @@ namespace MaxWorlds.Arena
 
         /// <summary>Fires one bolt from <paramref name="muzzle"/> straight to
         /// <paramref name="impactPoint"/> — the hitscan's own already-resolved hit point — at
-        /// <paramref name="speed"/> m/s. No target is tracked: this never re-aims mid-flight.</summary>
-        public static SentinelBolt Fire(Vector3 muzzle, Vector3 impactPoint, float speed)
+        /// <paramref name="speed"/> m/s. No target is tracked: this never re-aims mid-flight.
+        /// <paramref name="worldIndex"/> is the firing <see cref="Sentinel"/>'s own already-resolved
+        /// world (MV-1004) — defaulted to -1 (never World 2) so every pre-existing caller/test that
+        /// doesn't pass one keeps today's uniform <see cref="SizeScale"/> thickness.</summary>
+        public static SentinelBolt Fire(Vector3 muzzle, Vector3 impactPoint, float speed, int worldIndex = -1)
         {
             var go = new GameObject("SentinelBolt");
             go.transform.position = muzzle;
@@ -50,7 +59,7 @@ namespace MaxWorlds.Arena
             go.transform.rotation = dir.sqrMagnitude > 1e-6f
                 ? Quaternion.LookRotation(dir.normalized, Vector3.up)
                 : Quaternion.identity;
-            BuildVisual(go.transform);
+            BuildVisual(go.transform, worldIndex);
 
             var bolt = go.AddComponent<SentinelBolt>();
             bolt.Init(muzzle, impactPoint, speed);
@@ -138,18 +147,24 @@ namespace MaxWorlds.Arena
         /// <summary>Same build idiom as <see cref="MaxWorlds.Weapons.SeekerPulse.BuildVisual"/>: the
         /// same cached lathed bolt mesh (MV-810 -- was its own <c>GameObject.CreatePrimitive</c> capsule,
         /// rebuilt and its collider destroyed on every single shot), an additive unlit material, a short
-        /// trail — just smaller and red instead of cyan-white.</summary>
-        private static void BuildVisual(Transform parent)
+        /// trail — just smaller and red instead of cyan-white. MV-1004: <paramref name="worldIndex"/> ==
+        /// 1 (World 2) widens the mesh's cross-section and the trail width by
+        /// <see cref="ThicknessScaleWorld2"/> on top of <see cref="SizeScale"/> — length (mesh-local Y,
+        /// the lathe's own revolve axis, which the 90° X rotation below aligns to the parent's travel
+        /// direction) and the ground glow (set in <see cref="Init"/>, off <see cref="SizeScale"/> alone)
+        /// are untouched, matching the ticket's "cross-section x1.6 while length is unchanged".</summary>
+        private static void BuildVisual(Transform parent, int worldIndex)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
             Material boltMat = VfxMaterials.AdditiveTinted(BoltColor);
             CombatVfxTuning.LppeBoltTuning t = CombatVfxTuning.LppeBolt();
+            float crossScale = SizeScale * (worldIndex == 1 ? ThicknessScaleWorld2 : 1f);
 
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
             trail.time = t.TrailLifetime;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
-            trail.widthMultiplier = t.TrailWidth * SizeScale;
+            trail.widthMultiplier = t.TrailWidth * crossScale;
             trail.minVertexDistance = 0.02f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
@@ -159,7 +174,7 @@ namespace MaxWorlds.Arena
             var bolt = new GameObject("Bolt");
             bolt.transform.SetParent(parent, false);
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            bolt.transform.localScale = Vector3.one * SizeScale;
+            bolt.transform.localScale = new Vector3(crossScale, SizeScale, crossScale);
             bolt.AddComponent<MeshFilter>().sharedMesh = GetBoltMesh();
             var meshRenderer = bolt.AddComponent<MeshRenderer>();
             if (boltMat != null) meshRenderer.sharedMaterial = boltMat;
