@@ -136,11 +136,21 @@ namespace MaxWorlds.Arena
 
         private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
 
+        /// <summary>MV-1004: World 2's own Warm slot (Lee, device, 2026-09-28: "Sentinels in World 2:
+        /// make them red / dark red") — read instead of <see cref="BodyColor"/> only when
+        /// <see cref="_worldIndex"/> resolves to World 2 (index 1); Worlds 1 and 3 keep
+        /// <see cref="BodyColor"/> unchanged. See <see cref="BuildBody"/>.</summary>
+        private static readonly Color BodyColorWorld2 = new Color(0.45f, 0.07f, 0.07f);
+
         /// <summary>MV-580: the second of the sentinel's own two body tones (the Warm slot in
         /// <see cref="RobotPalette"/>) — a lighter, cooler tint of <see cref="BodyColor"/> rather than
         /// the enemy roster's shared <see cref="CharacterSkin.RobotCool"/>, so the sentinel reads as
         /// one machine built in Max's own colour family, not a robot wearing the enemy shed's grey.</summary>
         private static readonly Color BodyAccent = new Color(0.62f, 0.78f, 0.90f);
+
+        /// <summary>MV-1004: World 2's own Accent slot — see <see cref="BodyColorWorld2"/>'s doc for the
+        /// gating rule.</summary>
+        private static readonly Color BodyAccentWorld2 = new Color(0.78f, 0.18f, 0.14f);
 
         /// <summary>MV-580: the eye, nowhere near the enemy roster's tell colours — gold idle, warn
         /// orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on this body never
@@ -149,6 +159,17 @@ namespace MaxWorlds.Arena
         /// that the beam fires a red bolt — the eye still has to move with whatever the turret actually
         /// fires, or the comment becomes a lie about live code.</summary>
         private static readonly Color EyeColor = SentinelBolt.BoltColor;
+
+        /// <summary>MV-1004: World 2's own eye colour — a red eye disappears on World 2's own red body
+        /// (<see cref="BodyColorWorld2"/>/<see cref="BodyAccentWorld2"/>), so World 2 alone gets a pale
+        /// gold lens instead of matching <see cref="SentinelBolt.BoltColor"/>. The World 2 bolt itself
+        /// stays hazard red (ticket: "the bolt colour: stays hazard red") — only the eye moves.</summary>
+        private static readonly Color EyeColorWorld2 = new Color(1.0f, 0.86f, 0.62f);
+
+        /// <summary>Resolved once in <see cref="BuildBody"/> from <see cref="_worldIndex"/> — what
+        /// <see cref="ApplyEyeColor"/> actually paints. Never re-resolved per frame (MV-1004: "resolve
+        /// the world once at Sentinel build").</summary>
+        private Color _eyeColor;
 
         /// <summary>MV-580: the body's silhouette is <see cref="RobotBodies.Build"/>'s Gunner — the
         /// closest existing body to Lee's reference (a squat, domed, multi-legged walker) of anything
@@ -419,8 +440,13 @@ namespace MaxWorlds.Arena
         {
             _model = ParentScale.MakeMetreSpace(new GameObject("Model").transform, transform);
 
-            var warm = NewMaterial("Sentinel_Warm", BodyColor);
-            var accent = NewMaterial("Sentinel_Accent", BodyAccent);
+            // MV-1004: World 2 only (resolved once above, in Init, before this runs) — Worlds 1/3 keep
+            // Max's own blue/hazard-red eye unchanged.
+            bool isWorld2 = _worldIndex == 1;
+            _eyeColor = isWorld2 ? EyeColorWorld2 : EyeColor;
+
+            var warm = NewMaterial("Sentinel_Warm", isWorld2 ? BodyColorWorld2 : BodyColor);
+            var accent = NewMaterial("Sentinel_Accent", isWorld2 ? BodyAccentWorld2 : BodyAccent);
             var dark = NewMaterial("Sentinel_Dark", CharacterSkin.RobotDark);
             var gold = NewMaterial("Sentinel_Gold", CharacterSkin.RobotGold);
             _ownedMaterials = new[] { warm, accent, dark, gold };
@@ -484,7 +510,7 @@ namespace MaxWorlds.Arena
                 var eye = _body.Eyes[i];
                 if (eye == null) continue;
                 eye.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", EyeColor);
+                mpb.SetColor("_BaseColor", _eyeColor);
                 eye.SetPropertyBlock(mpb);
             }
         }
@@ -810,7 +836,7 @@ namespace MaxWorlds.Arena
             Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
 
             if (_worldIndex == 0) FireWaterBeam(muzzle, end);
-            else SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed);
+            else SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed, _worldIndex);
         }
 
         /// <summary>MV-914: World 1's restored water beam. Reuses <see cref="WaterVfx"/> rather than a
