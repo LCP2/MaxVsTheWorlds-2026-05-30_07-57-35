@@ -133,8 +133,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, emptyCandidates.Count,
                 "with the only engageable, in-area robot removed, nothing may survive the scan");
 
-            bool found = WaterBalloonAutoAim.TryFindBestDirection(
-                playerPosition, throwDistance: 10f, splashRadius: 2f, emptyCandidates, out _);
+            bool found = WaterBalloonAutoAim.TryFindBestLanding(
+                playerPosition, maxDistance: 10f, splashRadius: 2f, emptyCandidates, out _, out _);
             Assert.IsFalse(found, "no candidates survived the scan — auto-fire must not throw or spend a cell");
         }
     }

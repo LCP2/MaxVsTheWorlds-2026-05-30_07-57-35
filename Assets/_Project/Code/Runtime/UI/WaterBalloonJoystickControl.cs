@@ -115,15 +115,15 @@ namespace MaxWorlds.UI
 
             BuildAutoAimTargets(_origin.position, RobotEnemy.Active, s_autoAimTargets);
 
-            if (!WaterBalloonAutoAim.TryFindBestDirection(
+            if (!WaterBalloonAutoAim.TryFindBestLanding(
                     _origin.position, PlayerAbilities.ThrowDistance, PlayerAbilities.SplashRadius,
-                    s_autoAimTargets, out Vector3 direction))
+                    s_autoAimTargets, out Vector3 direction, out float distance))
             {
                 _autoRetryCooldown = AutoRetryIntervalSeconds;
                 return;
             }
 
-            StartCoroutine(AutoAimAndFire(direction));
+            StartCoroutine(AutoAimAndFire(direction, distance));
         }
 
         /// <summary>MV-733: the auto-fire target scan, pulled out as its own testable static method —
@@ -162,13 +162,19 @@ namespace MaxWorlds.UI
         /// <summary>Snaps the knob to the auto-chosen point, holds it there long enough to read, then
         /// throws — "the joystick will automatically move" (Lee's design direction). Bails without
         /// firing or touching the visuals if a manual drag claimed the control mid-reveal, so the
-        /// player's own touch always wins.</summary>
-        private IEnumerator AutoAimAndFire(Vector3 direction)
+        /// player's own touch always wins.
+        ///
+        /// MV-992: the reveal shows the REAL landing — <paramref name="distance"/> is whatever
+        /// <see cref="WaterBalloonAutoAim.TryFindBestLanding"/> actually picked, not the full LOB
+        /// distance <see cref="Fire"/>'s manual-drag path always throws at — so this calls
+        /// <see cref="PlayerAbilities.TryThrowWaterBalloon"/> directly with that distance rather than
+        /// going through the base <see cref="Fire"/> override, which only ever throws full-LOB.</summary>
+        private IEnumerator AutoAimAndFire(Vector3 direction, float distance)
         {
             _autoAiming = true;
             SetArmed(true);
             ShowAimVisuals();
-            SetAimDirection(direction, 1f);
+            SetAimDirection(direction, distance / PlayerAbilities.ThrowDistance);
             RebuildAimVisual();
 
             yield return new WaitForSeconds(AutoAimRevealSeconds);
@@ -179,7 +185,7 @@ namespace MaxWorlds.UI
                 yield break;
             }
 
-            Fire(direction);
+            _abilities?.TryThrowWaterBalloon(direction, distance);
             HideAimVisuals();
             SetArmed(false);
             _autoAiming = false;

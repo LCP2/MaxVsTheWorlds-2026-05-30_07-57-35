@@ -160,8 +160,16 @@ namespace MaxWorlds.Weapons
         /// <summary>Throw a Water Balloon toward <paramref name="aimDirection"/> (WV-240 drives this
         /// from the joystick release). Range track raises throw DISTANCE; Splash Area and Repeat Fire
         /// (MV-370) raise splash radius and fire rate independently. Returns false (no cooldown
-        /// started, no cell spent) if on cooldown, aimless, or the bank has no cell to spend.</summary>
-        public bool TryThrowWaterBalloon(Vector3 aimDirection)
+        /// started, no cell spent) if on cooldown, aimless, or the bank has no cell to spend.
+        ///
+        /// MV-992: <paramref name="distance"/> lets a caller land SHORT of the full LOB — auto-fire's
+        /// LOB is a RADIUS (<see cref="WaterBalloonAutoAim.TryFindBestLanding"/> picks the actual
+        /// candidate distance), not a fixed lob that only ever lands at the full throw distance. Left
+        /// null (the manual drag path), behaviour is unchanged: full LOB distance. Clamped to
+        /// [<see cref="AbilityTuning.MinThrowDistance"/>, <see cref="ThrowDistance"/>] either way, so a
+        /// caller can never request a landing closer than a thrown balloon can credibly land, or
+        /// farther than the ability actually reaches.</summary>
+        public bool TryThrowWaterBalloon(Vector3 aimDirection, float? distance = null)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon)) return false;
             if (_waterBalloonCooldown > 0f) return false;
@@ -177,14 +185,12 @@ namespace MaxWorlds.Weapons
 
             _waterBalloonCooldown = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
 
-            int level = WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range);
-            float baseDistance = DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance);
-            float perLevel = DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
-            float distance = AbilityTuning.WaterBalloonDistance(level, baseDistance, perLevel);
+            float maxDistance = ThrowDistance;
+            float landingDistance = Mathf.Clamp(distance ?? maxDistance, AbilityTuning.MinThrowDistance, maxDistance);
 
-            Vector3 landing = transform.position + dir * distance;
+            Vector3 landing = transform.position + dir * landingDistance;
 
-            float flightSeconds = waterBalloonFlightSpeed > 0f ? distance / waterBalloonFlightSpeed : 0f;
+            float flightSeconds = waterBalloonFlightSpeed > 0f ? landingDistance / waterBalloonFlightSpeed : 0f;
             if (flightSeconds <= 0f)
             {
                 Land(landing);
