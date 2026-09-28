@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
@@ -217,6 +218,7 @@ namespace MaxWorlds.Save
             data.CheckpointFloodLevel01 = StormdrainFlood.Level01;
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
+            data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
 
             // MV-951: HomeScreen.OnResume wipes AbilityCreditBank/UpgradeState/PendingMorphingModule
             // as part of the same transient-state reset it always did for a fresh PLAY — harmless only
@@ -254,7 +256,12 @@ namespace MaxWorlds.Save
         ///
         /// MV-922: same treatment for World 1's own factory, the Mower Hutch shed — before this, a
         /// resume restored the area but every shed behind the player came back alive and the
-        /// destroyed-factory count restarted from zero (<see cref="FactoryCensus.ApplyCheckpointDestroyedShedIds"/>).</summary>
+        /// destroyed-factory count restarted from zero (<see cref="FactoryCensus.ApplyCheckpointDestroyedShedIds"/>).
+        ///
+        /// MV-995: same treatment again for an already-defeated boss — before this, a cold-boot RESUME's
+        /// fresh <c>MapRuntime.BuildBoss</c> rebuild brought every authored boss back Dormant with no
+        /// memory of a prior fight, so a boss the player had already beaten woke up and fought again the
+        /// moment Max walked back into its area (<see cref="BossCensus.ApplyCheckpointDefeatedAreas"/>).</summary>
         public static bool RestoreCheckpoint(int slot)
         {
             SaveSlotData data = Load(slot);
@@ -272,6 +279,7 @@ namespace MaxWorlds.Save
             StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
+            BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
 
             // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
             // PendingMorphingModule.WeaponCorePending all get wiped by HomeScreen.OnResume's own
@@ -372,6 +380,7 @@ namespace MaxWorlds.Save
             data.CheckpointFloodLevel01 = 0f;
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
+            data.CheckpointDefeatedBossAreas = Array.Empty<int>();
             data.CheckpointAbilityCredits = 0;
             data.CheckpointInstalledParts = Array.Empty<string>();
             data.CheckpointEscalationElapsed = 0f;

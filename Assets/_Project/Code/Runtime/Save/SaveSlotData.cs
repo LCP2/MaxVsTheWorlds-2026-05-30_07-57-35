@@ -134,6 +134,13 @@ namespace MaxWorlds.Save
         /// <c>FactoryCensus.CheckpointRestored</c> so every counter now agrees.</summary>
         public string[] CheckpointDestroyedShedIds = Array.Empty<string>();
 
+        /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
+        /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
+        /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player
+        /// already beat (<c>BossCensus.ApplyCheckpointDefeatedAreas</c>). Empty for a save predating this
+        /// field, or one with no defeated boss yet — a RESUME then behaves exactly as before this ticket.</summary>
+        public int[] CheckpointDefeatedBossAreas = Array.Empty<int>();
+
         /// <summary><c>AbilityCreditBank.Banked</c> at the checkpoint (MV-951) — restored the same way
         /// <see cref="CheckpointDeathsTaken"/> is, so a cold-boot RESUME doesn't lose a banked-but-unspent
         /// ability credit to <c>HomeScreen.OnResume</c>'s own transient-state wipe.</summary>
