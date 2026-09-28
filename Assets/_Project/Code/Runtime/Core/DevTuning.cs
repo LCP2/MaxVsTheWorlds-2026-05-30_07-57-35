@@ -378,6 +378,11 @@ namespace MaxWorlds.Core
         /// panel's "SFX volume" knob. Default <see cref="MaxWorlds.Audio.SfxDirector.DefaultSfxVolume"/> (0.8).</summary>
         public static float? SfxVolume { get; set; }
 
+        /// <summary>Master volume for the procedural music loop (MV-1008), 0..1 — the Settings panel's
+        /// "Music volume" knob, beside <see cref="SfxVolume"/>. Default
+        /// <see cref="MaxWorlds.Audio.MusicDirector.DefaultMusicVolume"/> (0.5).</summary>
+        public static float? MusicVolume { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -433,7 +438,7 @@ namespace MaxWorlds.Core
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
-            SfxVolume.HasValue;
+            SfxVolume.HasValue || MusicVolume.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -524,6 +529,7 @@ namespace MaxWorlds.Core
             MobileShadowDistance = null;
             MobileSoftShadows = null;
             SfxVolume = null;
+            MusicVolume = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -622,6 +628,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MobileShadowDistance), () => MobileShadowDistance, v => MobileShadowDistance = v),
             (PrefsPrefix + nameof(MobileSoftShadows), () => MobileSoftShadows, v => MobileSoftShadows = v),
             (PrefsPrefix + nameof(SfxVolume), () => SfxVolume, v => SfxVolume = v),
+            (PrefsPrefix + nameof(MusicVolume), () => MusicVolume, v => MusicVolume = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never
