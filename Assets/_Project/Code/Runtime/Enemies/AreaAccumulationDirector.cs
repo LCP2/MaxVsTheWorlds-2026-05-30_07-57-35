@@ -164,6 +164,15 @@ namespace MaxWorlds.Enemies
         /// advances from the live <see cref="MapZone"/> under Max's feet in <see cref="Update"/>.</summary>
         private int _physicalArea = 1;
 
+        /// <summary>Every value <see cref="_physicalArea"/> has ever taken, in order (MV-1002) — what
+        /// <see cref="PredecessorOf"/> answers "which area did Max physically come from" out of,
+        /// instead of the raw index arithmetic (<c>deathArea - 1</c>) that used to assume a world's
+        /// area indices match its play order. Seeded to the starting area in <see cref="Configure"/>;
+        /// appended to alongside every real change to <see cref="_physicalArea"/> (both the ordinary
+        /// crossing in <see cref="Update"/> and the authoritative reset in <see cref="SetCurrentArea"/>
+        /// — a death respawn is itself a real "where Max is now" fact for any death after it).</summary>
+        private readonly List<int> _physicalAreaHistory = new List<int>();
+
         /// <summary>MV-887: the 1-based area <see cref="_physicalArea"/> currently reads — the area
         /// renderer gate's own starting point (<see cref="MaxWorlds.Arena.MapStaticBatchRoot"/>),
         /// read once at its own Start() rather than assuming "area1" the way <see cref="Configure"/>
@@ -177,6 +186,20 @@ namespace MaxWorlds.Enemies
         /// reflects where Max physically is right now. What <see cref="MaxWorlds.Arena.Sentinel.DestroyAllActive"/>
         /// subscribes to instead of <see cref="AreaGate.Opened"/> (MV-396).</summary>
         public event System.Action<int> PlayerCrossedIntoArea;
+
+        /// <summary>MV-1002: the area Max was physically standing in immediately before the LAST time
+        /// he crossed into <paramref name="areaIndex"/> — a real crossing-history lookup, not raw index
+        /// arithmetic, so a death respawn can fall back to wherever Max actually came from even when a
+        /// world's area INDEX order isn't its play order (see <see cref="_physicalAreaHistory"/>).
+        /// Returns 0 ("unknown") if <paramref name="areaIndex"/> was never physically crossed into —
+        /// the caller's own fallback case (e.g. death in the very first area entered after a cold
+        /// boot, before any crossing is tracked).</summary>
+        public int PredecessorOf(int areaIndex)
+        {
+            for (int i = _physicalAreaHistory.Count - 1; i >= 1; i--)
+                if (_physicalAreaHistory[i] == areaIndex) return _physicalAreaHistory[i - 1];
+            return 0;
+        }
 
         /// <summary>Robots this director currently considers live on the field.</summary>
         public int ActiveCount => _queue?.ActiveCount ?? 0;
@@ -237,6 +260,8 @@ namespace MaxWorlds.Enemies
             _rushersQueuedThisLevel = 0;
             CurrentArea = 1;
             _physicalArea = 1;
+            _physicalAreaHistory.Clear();
+            _physicalAreaHistory.Add(1);
             FillArea(1);
         }
 
@@ -481,6 +506,7 @@ namespace MaxWorlds.Enemies
 
             if (areaIndex == _physicalArea) return;
             _physicalArea = areaIndex;
+            _physicalAreaHistory.Add(areaIndex);
             _lastBlockedAreaJump = default;
             ParkByReach(areaIndex);
             PlayerCrossedIntoArea?.Invoke(areaIndex);
@@ -528,6 +554,7 @@ namespace MaxWorlds.Enemies
                 if (IsLinkedArea(_physicalArea, area))
                 {
                     _physicalArea = area;
+                    _physicalAreaHistory.Add(area);
                     ParkByReach(area);
                     PlayerCrossedIntoArea?.Invoke(area);
                 }

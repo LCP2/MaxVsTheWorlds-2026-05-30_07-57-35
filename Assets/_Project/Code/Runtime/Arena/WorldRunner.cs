@@ -540,7 +540,8 @@ namespace MaxWorlds.Arena
             // role), not of where it sits in the sequence — a boss area's gate opens on a shed
             // condition, never combat, and re-closing it would be unreopenable (a softlock).
             bool deathGateIsConditionGated = IsConditionGatedArea(deathArea);
-            RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated);
+            int predecessor = ResolveRespawnPredecessor(deathArea);
+            RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated, predecessor);
 
             DeathRunState.RecordDeath();
             _pendingRespawn = plan;
@@ -605,16 +606,49 @@ namespace MaxWorlds.Arena
         /// is a real numbered entry in <see cref="WorldConfig.areas"/>, translated to the same
         /// "area&lt;N&gt;" zone id as everything else by <see cref="WorldMapLoader"/> — there is no
         /// synthetic index past the end of the sequence for "the boss room"). Deliberately reads live
-        /// position (<see cref="MapData.ZoneAt"/>), not <see cref="AreaAccumulationDirector.CurrentArea"/>:
-        /// that tracker is advanced ahead of the player for population purposes (MV-245) and never
-        /// enters a boss zone at all (<c>BackyardPath.WireAreaGatesToPopulation</c> explicitly skips
-        /// it), so a death fought against a boss still needs to read where Max actually is.</summary>
+        /// position (<see cref="MapData.ZoneAt(float,float,float)"/>), not
+        /// <see cref="AreaAccumulationDirector.CurrentArea"/>: that tracker is advanced ahead of the
+        /// player for population purposes (MV-245) and never enters a boss zone at all
+        /// (<c>BackyardPath.WireAreaGatesToPopulation</c> explicitly skips it), so a death fought
+        /// against a boss still needs to read where Max actually is.
+        ///
+        /// MV-1002: the HEIGHT-AWARE 3-arg overload, not the 2-arg <c>ZoneAt(x,z)</c> this used to call
+        /// — a deck overlay shares its exact XZ footprint with the floor it sits over (by construction,
+        /// <see cref="WorldMapLoader"/> copies the floor's origin/size onto it), so the 2-arg lookup
+        /// always resolved to whichever of the pair happens to iterate first (the floor, since it's
+        /// authored first) regardless of Max's actual elevation — a death standing on World 2's a15
+        /// deck was silently attributed to a13, the floor beneath it, never a15 itself.</summary>
         private int ResolveDeathArea()
         {
             if (_player == null || _map == null) return 0;
 
-            MapZone zone = _map.ZoneAt(_player.position.x, _player.position.z);
+            MapZone zone = _map.ZoneAt(_player.position.x, _player.position.y, _player.position.z);
             return zone == null ? 0 : AreaAccumulationDirector.AreaIndexOf(zone.id);
+        }
+
+        /// <summary>MV-1002: the real physical-crossing predecessor of <paramref name="deathAreaIndex"/>
+        /// (see <see cref="AreaAccumulationDirector.PredecessorOf"/>'s own doc comment for why raw
+        /// index arithmetic is wrong), deck-aware — a death on a deck overlay
+        /// (<see cref="WorldArea.overlays"/> non-null) uses its BASE FLOOR area's own predecessor
+        /// instead of the deck's immediate one: dying anywhere in a floor/deck vertical pair (they
+        /// share one footprint) behaves like dying at the floor itself, skipping past whatever setpiece
+        /// area sits directly between the floor and its deck (World 2: a13's own predecessor, not a14
+        /// "Replicator Nest", for a death on a15 "Trolley Yard (deck)"). Returns 0 ("unknown") when no
+        /// crossing has been recorded yet, so <see cref="RespawnPlanner.Resolve"/>'s own
+        /// <c>deathAreaIndex - 1</c> fallback applies.</summary>
+        private int ResolveRespawnPredecessor(int deathAreaIndex)
+        {
+            if (_areaDirector == null || _cfg == null) return 0;
+
+            int lookupArea = deathAreaIndex;
+            WorldArea deathWorldArea = _cfg.AreaByIndex(deathAreaIndex);
+            if (deathWorldArea != null && !string.IsNullOrEmpty(deathWorldArea.overlays))
+            {
+                WorldArea baseFloor = _cfg.Area(deathWorldArea.overlays);
+                if (baseFloor != null) lookupArea = baseFloor.index;
+            }
+
+            return _areaDirector.PredecessorOf(lookupArea);
         }
 
         private void RespawnPlayer(in RespawnPlan plan)
