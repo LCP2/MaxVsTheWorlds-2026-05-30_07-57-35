@@ -149,6 +149,15 @@ namespace MaxWorlds.UI
         /// disabled mid-aim.</summary>
         public static event Action TeleportAimEnded;
 
+        /// <summary>Force Field was raised — a real activation (<c>PlayerAbilities.TryActivateForceField</c>),
+        /// not the dev-tuning "hold up" affordance (MV-1007: the audio cue is a gameplay tell, and the
+        /// tuning path already fires repeatedly while a slider is dragged). (worldPos)</summary>
+        public static event Action<Vector3> ForceFieldRaised;
+
+        /// <summary>Force Field popped — budget exhausted, <c>PlayerAbilities.PopForceField</c>
+        /// (MV-1007). (worldPos)</summary>
+        public static event Action<Vector3> ForceFieldPopped;
+
         /// <summary>A mobile shed (MV-548, shed roadmap stage 3) began its lift-off. (worldPos) — the
         /// hook a future VFX/audio pass hangs the dust-burst and rumble on, same decoupling as
         /// <see cref="FactoryDestroyed"/>; this greybox slice fires it and drives the body's own tint
@@ -311,5 +320,11 @@ namespace MaxWorlds.UI
 
         public static void EmitTeleportAimEnded()
             => TeleportAimEnded?.Invoke();
+
+        public static void EmitForceFieldRaised(Vector3 worldPos)
+            => ForceFieldRaised?.Invoke(worldPos);
+
+        public static void EmitForceFieldPopped(Vector3 worldPos)
+            => ForceFieldPopped?.Invoke(worldPos);
     }
 }

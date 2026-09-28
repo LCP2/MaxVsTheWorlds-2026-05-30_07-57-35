@@ -476,6 +476,10 @@ namespace MaxWorlds.Weapons
             _forceFieldBubble = go.AddComponent<ForceFieldBubble>();
             _forceFieldBubble.Init(transform, _cc, ForceFieldRadius, level);
 
+            // MV-1007: the audio cue for a real activation only — not ForceActivateForceFieldForTuning,
+            // which the Settings panel's "Force field hold" slider can retrigger on every drag.
+            MaxWorlds.UI.HudSignals.EmitForceFieldRaised(transform.position);
+
             return true;
         }
 
@@ -558,6 +562,8 @@ namespace MaxWorlds.Weapons
         {
             _forceFieldAbsorbRemaining = 0f;
             _forceFieldCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.ForceField);
+
+            MaxWorlds.UI.HudSignals.EmitForceFieldPopped(transform.position);   // MV-1007
 
             if (_forceFieldBubble != null)
             {
