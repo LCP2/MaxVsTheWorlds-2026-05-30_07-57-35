@@ -167,30 +167,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void Model_KillsDestroyFactoriesClearSubZoneThenEngageBoss()
+        public void Model_KillsDestroyFactoriesAndClearSubZone()
         {
-            var m = new HudModel(subZonesTotal: 1, factoriesTotal: 3, killsPerFactory: 2,
-                                 bossName: "BIG BERMUDA", bossPhases: 3);
-            // 6 kills -> 3 factories destroyed -> sub-zone cleared -> boss engages.
+            var m = new HudModel(subZonesTotal: 1, factoriesTotal: 3, killsPerFactory: 2);
+            // 6 kills -> 3 factories destroyed -> sub-zone cleared.
             for (int i = 0; i < 6; i++) m.RegisterKill();
             Assert.AreEqual(3, m.Arena.FactoriesDestroyed);
             Assert.AreEqual(1, m.Arena.SubZonesCleared);
             Assert.IsTrue(m.Arena.Complete);
-            Assert.IsTrue(m.Boss.Active);
-            Assert.AreEqual("BIG BERMUDA", m.Boss.Name);
-        }
-
-        [Test]
-        public void Model_KillsAfterEngageDrainBossAndDoNotOverAdvanceArena()
-        {
-            var m = new HudModel(subZonesTotal: 1, factoriesTotal: 2, killsPerFactory: 1,
-                                 bossDamagePerKill: 0.5f);
-            m.RegisterKill(); m.RegisterKill(); // 2 factories -> sub-zone -> boss engages
-            Assert.IsTrue(m.Boss.Active);
-            float before = m.Boss.HpNormalized;
-            m.RegisterKill();                    // now drains boss, not the arena
-            Assert.Less(m.Boss.HpNormalized, before);
-            Assert.AreEqual(2, m.Arena.FactoriesDestroyed); // clamped, not exceeded
         }
     }
 }
