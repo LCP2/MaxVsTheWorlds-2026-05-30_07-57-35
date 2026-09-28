@@ -889,33 +889,33 @@ namespace MaxWorlds.Arena
         /// <summary>MV-832: the fix for Sentinels shooting through walls, into a neighbouring area, or
         /// not firing at all. Candidates now come from <see cref="RobotEnemy.Active"/> — never a
         /// <c>Physics.OverlapSphereNonAlloc</c> against every layer, which a room full of walls/cover/
-        /// deck slabs could fill before a single robot was ever returned (the "never fires" bug). A
-        /// robot is a candidate only if it is alive, not <see cref="RobotEnemy.IsDormant"/>,
-        /// <see cref="RobotEnemy.IsDamageable"/>, within <see cref="_range"/> measured flat (XZ), and
-        /// has a clear <see cref="LineOfSight"/> from the muzzle — so a wall or solid cover now actually
-        /// stops the turret choosing a target it can't shoot. If any candidate stands in Max's own
-        /// zone (or a zone that shares its footprint — MV-697's floor/deck overlay pairs), the pool
-        /// narrows to those; otherwise every candidate is eligible. <see cref="_currentTarget"/> is kept
-        /// as long as it is still in the (possibly narrowed) pool — re-picked only once it drops out.</summary>
+        /// deck slabs could fill before a single robot was ever returned (the "never fires" bug). MV-1006
+        /// dropped the line-of-sight requirement entirely — a Sentinel's shot is intended to pass through
+        /// cover — so a robot is a candidate if it is alive, <see cref="RobotEnemy.IsDamageable"/>, within
+        /// <see cref="_range"/> measured flat (XZ), and either awake or <see cref="RobotEnemy.IsDormant"/>
+        /// in the Sentinel's own area (see <see cref="IsEligibleTarget"/>). If any candidate stands in
+        /// Max's own zone (or a zone that shares its footprint — MV-697's floor/deck overlay pairs), the
+        /// pool narrows to those; otherwise every candidate is eligible. <see cref="_currentTarget"/> is
+        /// kept as long as it is still in the (possibly narrowed) pool — re-picked only once it drops
+        /// out.</summary>
         private RobotEnemy NearestRobotInRange()
         {
-            Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             float rangeSq = _range * _range;
 
             // MV-867 FOCUS: while Max is actively EMITTING with a locked target, every sentinel fires
             // at that one robot and reach for this shot is Max's own lock range (MaxLockRangeSq), not
             // the sentinel's own _range - a target the sentinel's 7m base would otherwise reject is not
-            // a reason to hold fire. If there's no clear line of sight to it, the sentinel holds fire
-            // for the shot instead - it does NOT drop through to the sticky rule below (spec: "silent,
-            // not busy"). FOCUS ON with Max not emitting, or with no current target, falls straight
-            // through to the ordinary MV-832 sticky-nearest rule at the sentinel's own range below,
-            // same as FOCUS off.
+            // a reason to hold fire. MV-1006: eligibility no longer checks line of sight at all, so the
+            // only way this branch withholds fire is IsEligibleTarget's other checks (level, range,
+            // Dormant-outside-own-area). FOCUS ON with Max not emitting, or with no current target, falls
+            // straight through to the ordinary MV-832 sticky-nearest rule at the sentinel's own range
+            // below, same as FOCUS off.
             if (FocusEnabled && IsMaxEmitting())
             {
                 RobotEnemy focusTarget = ResolveMaxCurrentTarget();
                 if (focusTarget != null)
                 {
-                    if (IsEligibleTarget(focusTarget, muzzle, MaxLockRangeSq()))
+                    if (IsEligibleTarget(focusTarget, MaxLockRangeSq()))
                     {
                         _currentTarget = focusTarget;
                         return focusTarget;
@@ -937,7 +937,7 @@ namespace MaxWorlds.Arena
             for (int i = 0; i < active.Count; i++)
             {
                 RobotEnemy robot = active[i];
-                if (robot == null || !IsEligibleTarget(robot, muzzle, rangeSq)) continue;
+                if (robot == null || !IsEligibleTarget(robot, rangeSq)) continue;
 
                 Vector3 pos = robot.transform.position;
                 s_candidateRobots.Add(robot);
@@ -1015,23 +1015,31 @@ namespace MaxWorlds.Arena
             return lockRange * lockRange;
         }
 
-        /// <summary>Alive, awake (not <see cref="RobotEnemy.IsDormant"/>), able to take damage right
-        /// now (<see cref="RobotEnemy.IsDamageable"/> — false for a Grate Lurker outside its Emerged
-        /// beat), within <paramref name="rangeSq"/> measured flat (XZ, ignoring elevation so a deck
-        /// doesn't itself extend a Sentinel's reach), ON THE SAME COMBAT LEVEL AS THIS SENTINEL (MV-944:
-        /// floor and deck fight separately — checked here so it also covers the FOCUS branch above, which
-        /// calls this directly rather than going through the zone-narrowed candidate loop below), and has
-        /// a clear <see cref="LineOfSight"/> from <paramref name="muzzle"/>.</summary>
-        private bool IsEligibleTarget(RobotEnemy robot, Vector3 muzzle, float rangeSq)
+        /// <summary>Alive, able to take damage right now (<see cref="RobotEnemy.IsDamageable"/> — false
+        /// for a Grate Lurker outside its Emerged beat), within <paramref name="rangeSq"/> measured flat
+        /// (XZ, ignoring elevation so a deck doesn't itself extend a Sentinel's reach), and ON THE SAME
+        /// COMBAT LEVEL AS THIS SENTINEL (MV-944: floor and deck fight separately — checked here so it
+        /// also covers the FOCUS branch above, which calls this directly rather than going through the
+        /// zone-narrowed candidate loop below). MV-1006: NO line-of-sight check — a Sentinel's shot
+        /// passes straight through cover. An awake robot is eligible anywhere in range; a
+        /// <see cref="RobotEnemy.IsDormant"/> robot is eligible only inside the Sentinel's own area
+        /// (its own zone, or one that shares its footprint — <see cref="InZone"/>), so a sleeping robot
+        /// elsewhere in range stays untouched.</summary>
+        private bool IsEligibleTarget(RobotEnemy robot, float rangeSq)
         {
-            if (!robot.IsAlive || robot.IsDormant || !robot.IsDamageable) return false;
+            if (!robot.IsAlive || !robot.IsDamageable) return false;
             if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, robot.transform.position)) return false;
 
             Vector3 rp = robot.transform.position;
             Vector3 flat = new Vector3(rp.x - transform.position.x, 0f, rp.z - transform.position.z);
             if (flat.sqrMagnitude > rangeSq) return false;
 
-            return LineOfSight.Clear(muzzle, rp, robot.transform);
+            if (!robot.IsDormant) return true;
+
+            MapData map = EnemyNavigation.Map;
+            if (map == null) return false;
+            MapZone ownZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
+            return ownZone != null && InZone(map, ownZone, rp);
         }
 
         /// <summary>True if <paramref name="position"/> resolves (level-aware, MV-697) to
