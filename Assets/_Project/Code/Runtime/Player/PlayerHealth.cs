@@ -151,7 +151,9 @@ namespace MaxWorlds.Player
             // tank; MV-760 widens it from "the RCDA's tank" to "whichever primary is actually equipped").
             WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
                                   secondary: PrimaryEnergyNormalized, secondaryColor: PrimaryGaugeColor,
-                                  isPlayerBar: true, desaturateWhenHealthy: true);
+                                  isPlayerBar: true, desaturateWhenHealthy: true,
+                                  shieldActive: () => Abilities != null && Abilities.ForceFieldActive,
+                                  shieldFraction: () => Abilities != null ? Abilities.ForceFieldAbsorbFraction : 0f);
         }
 
         /// <summary>MV-760: the equipped primary's tank, 0..1, for the floating gauge — the LPPE's
