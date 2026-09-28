@@ -6,6 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
+using MaxWorlds.Audio;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
@@ -766,6 +767,13 @@ namespace MaxWorlds.UI
             Add("Soft shadows", "on/off", 0f, 1f, 1f,
                 () => DevTuning.Or(DevTuning.MobileSoftShadows, 1f),
                 v => { DevTuning.MobileSoftShadows = v; MobileRenderTuning.ApplySoftShadows(v >= 0.5f); }, tab: TabWeapons);
+
+            // MV-1007: master volume for every synthesised sound effect (SfxDirector). Grouped on FEEL
+            // alongside the camera/handling knobs — same "a feel call, not a run-structure call" reason
+            // the shield/knockback knobs above sit here rather than on ARENA or WEAPONS.
+            Add("SFX volume", "x", 0f, 1f, SfxDirector.DefaultSfxVolume,
+                () => DevTuning.Or(DevTuning.SfxVolume, SfxDirector.DefaultSfxVolume),
+                v => DevTuning.SfxVolume = v, tab: TabFeel);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has

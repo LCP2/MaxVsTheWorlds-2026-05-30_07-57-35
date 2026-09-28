@@ -389,6 +389,10 @@ namespace MaxWorlds.Core
         /// (<c>supportsSoftShadows</c>) — stored as 0/1, same idiom as <see cref="GateRequiresClear"/>.</summary>
         public static float? MobileSoftShadows { get; set; }
 
+        /// <summary>Master volume for every synthesised sound effect (MV-1007), 0..1 — the Settings
+        /// panel's "SFX volume" knob. Default <see cref="MaxWorlds.Audio.SfxDirector.DefaultSfxVolume"/> (0.8).</summary>
+        public static float? SfxVolume { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -445,7 +449,8 @@ namespace MaxWorlds.Core
             WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
-            MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue;
+            MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
+            SfxVolume.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -540,6 +545,7 @@ namespace MaxWorlds.Core
             MobileRenderScale = null;
             MobileShadowDistance = null;
             MobileSoftShadows = null;
+            SfxVolume = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -642,6 +648,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MobileRenderScale), () => MobileRenderScale, v => MobileRenderScale = v),
             (PrefsPrefix + nameof(MobileShadowDistance), () => MobileShadowDistance, v => MobileShadowDistance = v),
             (PrefsPrefix + nameof(MobileSoftShadows), () => MobileSoftShadows, v => MobileSoftShadows = v),
+            (PrefsPrefix + nameof(SfxVolume), () => SfxVolume, v => SfxVolume = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never
