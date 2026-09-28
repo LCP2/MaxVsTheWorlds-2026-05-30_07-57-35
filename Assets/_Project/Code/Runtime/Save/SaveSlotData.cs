@@ -71,6 +71,15 @@ namespace MaxWorlds.Save
         /// in — a resume restarts the player at this area's entry, not mid-area.</summary>
         public int CheckpointAreaIndex;
 
+        /// <summary>The 0-based world (<c>AreaAccumulationDirector.ActiveWorldIndex</c>) the checkpoint
+        /// above was captured IN (MV-985) — -1 means unknown, either a save from before this field
+        /// existed or a slot with no checkpoint. Without this, a RESUME after <c>RunFlow.QuitToMenu</c>
+        /// (which always rebuilds World 1 behind the Home screen — see <c>BackyardPath.ActiveWorldIndex</c>)
+        /// replayed a World 2 checkpoint's area index against World 1's own areas. Resume's target world
+        /// is this field when it is set, falling back to <see cref="WorldIndex"/> only for a pre-existing
+        /// save that never recorded it (<c>SaveSystem.ResolveResumePlan</c>).</summary>
+        public int CheckpointWorldIndex = -1;
+
         /// <summary>THE RIG's node ids at the checkpoint, parallel to <see cref="CheckpointRigNodeLevels"/>
         /// — <c>JsonUtility</c> can't serialize a <c>Dictionary</c>, hence the parallel-array split of
         /// <see cref="MaxWorlds.Weapons.RigState.SnapshotLevels"/>.</summary>

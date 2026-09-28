@@ -154,9 +154,17 @@ namespace MaxWorlds.Arena
 
         /// <summary>Which world the active save is up to (MV-687) — 0 with no active profile (tests,
         /// captures, a scene with no Home screen involved), matching the pre-MV-687 always-World-1
-        /// behaviour.</summary>
-        private static int ActiveWorldIndex()
+        /// behaviour. MV-985: honours <see cref="SaveSystem.PendingResume"/> first, ahead of the save's
+        /// own <see cref="SaveSlotData.WorldIndex"/> — set by <c>HomeScreen.OnResume</c> just before it
+        /// reloads the scene for a checkpoint in a DIFFERENT world than the one already built, so this
+        /// Awake resolves the checkpoint's world, not <see cref="SaveSlotData.WorldIndex"/> (which names
+        /// the world that plays NEXT, not the one a RESUME is landing back in). Public and static so an
+        /// EditMode test can drive it directly with nothing but <see cref="SaveSystem.PendingResume"/>
+        /// set.</summary>
+        public static int ActiveWorldIndex()
         {
+            if (SaveSystem.PendingResume.HasValue) return SaveSystem.PendingResume.Value.WorldIndex;
+
             int slot = SaveSystem.ActiveSlot;
             return slot >= 0 ? SaveSystem.Load(slot).WorldIndex : 0;
         }
