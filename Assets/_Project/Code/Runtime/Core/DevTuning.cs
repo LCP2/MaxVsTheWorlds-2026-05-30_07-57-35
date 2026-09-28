@@ -383,6 +383,16 @@ namespace MaxWorlds.Core
         /// <see cref="MaxWorlds.Audio.MusicDirector.DefaultMusicVolume"/> (0.5).</summary>
         public static float? MusicVolume { get; set; }
 
+        /// <summary>Bitmask of muted SFX cues (MV-1009): bit <c>1 &lt;&lt; (int)cue</c> set means that
+        /// cue is OFF. Default 0 (every cue ON) — every <see cref="MaxWorlds.Audio.SfxCueLibrary.Cue"/>
+        /// ordinal fits inside a float's 24-bit mantissa with headroom to grow. See
+        /// <see cref="MaxWorlds.Audio.SfxDirector.IsCueMuted"/>.</summary>
+        public static float? MutedSfxCuesMask { get; set; }
+
+        /// <summary>Music on/off (MV-1009), 0/1 like <see cref="GateRequiresClear"/>. Default 1 (on) —
+        /// the Settings panel's SOUND-tab Music toggle, beside <see cref="MusicVolume"/>.</summary>
+        public static float? MusicOn { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -438,7 +448,8 @@ namespace MaxWorlds.Core
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
-            SfxVolume.HasValue || MusicVolume.HasValue;
+            SfxVolume.HasValue || MusicVolume.HasValue ||
+            MutedSfxCuesMask.HasValue || MusicOn.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -530,6 +541,8 @@ namespace MaxWorlds.Core
             MobileSoftShadows = null;
             SfxVolume = null;
             MusicVolume = null;
+            MutedSfxCuesMask = null;
+            MusicOn = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -629,6 +642,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MobileSoftShadows), () => MobileSoftShadows, v => MobileSoftShadows = v),
             (PrefsPrefix + nameof(SfxVolume), () => SfxVolume, v => SfxVolume = v),
             (PrefsPrefix + nameof(MusicVolume), () => MusicVolume, v => MusicVolume = v),
+            (PrefsPrefix + nameof(MutedSfxCuesMask), () => MutedSfxCuesMask, v => MutedSfxCuesMask = v),
+            (PrefsPrefix + nameof(MusicOn), () => MusicOn, v => MusicOn = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

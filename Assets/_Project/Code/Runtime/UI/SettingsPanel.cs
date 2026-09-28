@@ -143,6 +143,11 @@ namespace MaxWorlds.UI
 
         private readonly List<Knob> _knobs = new List<Knob>();
 
+        // SOUND tab (MV-1009): the Music switch and one switch per SfxCueLibrary.Cue, kept apart from
+        // _knobs since they render as pills (BuildToggleRow), not sliders.
+        private ToggleRow _musicToggleRow;
+        private readonly List<ToggleRow> _cueToggleRows = new List<ToggleRow>();
+
         /// <summary>One tunable value: where its number comes from, where it goes, and what 100%
         /// means. <see cref="Apply"/> aside — most knobs read through <see cref="DevTuning"/> at the
         /// point of use and pick a new number up next frame; only the ones cached into an object at
@@ -158,7 +163,19 @@ namespace MaxWorlds.UI
             public Action<float> Set;
             public Slider Slider;
             public Text Value;
-            public int Tab;   // see TabEnemies..TabFeel below
+            public int Tab;   // see TabEnemies..TabSound below
+        }
+
+        /// <summary>One ON/OFF pill toggle: the SOUND tab's Music switch and its per-cue switches
+        /// (MV-1009). Same "state lives behind Get/Set, the widget just reflects it" shape as
+        /// <see cref="Knob"/>, but rendered as <see cref="BuildToggleRow"/>'s pill rather than a slider.</summary>
+        private sealed class ToggleRow
+        {
+            public string Name;
+            public Func<bool> Get;
+            public Action<bool> Set;
+            public Image Bg;
+            public Text Label;
         }
 
         // Tabs (YT-138, restructured WV-234): the panel outgrew a flat GAMEPLAY/WEAPONS/BOSS split at
@@ -171,7 +188,8 @@ namespace MaxWorlds.UI
         private const int TabWeapons = 2;
         private const int TabArena = 3;
         private const int TabFeel = 4;
-        private static readonly string[] TabNames = { "ENEMIES", "ECONOMY", "WEAPONS", "ARENA", "FEEL" };
+        private const int TabSound = 5;
+        private static readonly string[] TabNames = { "ENEMIES", "ECONOMY", "WEAPONS", "ARENA", "FEEL", "SOUND" };
         private GameObject[] _pages;
         private Button[] _tabButtons;
         private int _tab;
@@ -187,6 +205,13 @@ namespace MaxWorlds.UI
         // Built once, a frame after the scene loads (the objects it reads defaults from wake in their
         // own Awake first). Always — there is no gate any more.
         private void Start() => Build();
+
+        /// <summary>Test-only entry point (MV-1009): builds the panel's uGUI without waiting for
+        /// <see cref="Start"/>, which EditMode never calls automatically. <see cref="Build"/> itself has
+        /// no Play-mode dependency — it's plain GameObject/Component construction, the same kind of
+        /// MonoBehaviour Awake/AddComponent path <c>ProcSfxTests</c> already exercises directly in
+        /// EditMode for <see cref="MaxWorlds.Audio.SfxDirector"/>.</summary>
+        public void BuildForTests() => Build();
 
         private void OnDestroy()
         {
@@ -742,17 +767,40 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.MobileSoftShadows, 1f),
                 v => { DevTuning.MobileSoftShadows = v; MobileRenderTuning.ApplySoftShadows(v >= 0.5f); }, tab: TabWeapons);
 
-            // MV-1007: master volume for every synthesised sound effect (SfxDirector). Grouped on FEEL
-            // alongside the camera/handling knobs — same "a feel call, not a run-structure call" reason
-            // the shield/knockback knobs above sit here rather than on ARENA or WEAPONS.
+            // MV-1009: master volume for every synthesised sound effect (SfxDirector) — moved here from
+            // FEEL (MV-1007) so the panel carries exactly one SFX-volume slider, on the tab that now
+            // owns every other sound knob too.
             Add("SFX volume", "x", 0f, 1f, SfxDirector.DefaultSfxVolume,
                 () => DevTuning.Or(DevTuning.SfxVolume, SfxDirector.DefaultSfxVolume),
-                v => DevTuning.SfxVolume = v, tab: TabFeel);
+                v => DevTuning.SfxVolume = v, tab: TabSound);
 
-            // MV-1008: master volume for the procedural music loop (MusicDirector), beside SFX volume.
+            // MV-1009: master volume for the procedural music loop (MusicDirector) — moved here from
+            // FEEL (MV-1008), beside SFX volume, same reason as above.
             Add("Music volume", "x", 0f, 1f, MusicDirector.DefaultMusicVolume,
                 () => DevTuning.Or(DevTuning.MusicVolume, MusicDirector.DefaultMusicVolume),
-                v => DevTuning.MusicVolume = v, tab: TabFeel);
+                v => DevTuning.MusicVolume = v, tab: TabSound);
+
+            // ---- SOUND tab (MV-1009): Music on/off, then one ON/OFF switch per SfxDirector-registered
+            // cue. Sourced from SfxCueLibrary.AllCues (not a hand-typed list), so a cue added later gets
+            // a row automatically as long as it's given a label in SfxCueLibrary.DisplayNames. ----
+            _musicToggleRow = new ToggleRow
+            {
+                Name = "Music",
+                Get = () => MusicDirector.IsMusicOn,
+                Set = MusicDirector.SetMusicOn,
+            };
+
+            _cueToggleRows.Clear();
+            foreach (var cue in SfxCueLibrary.AllCues)
+            {
+                var capturedCue = cue;
+                _cueToggleRows.Add(new ToggleRow
+                {
+                    Name = SfxCueLibrary.DisplayNames[capturedCue],
+                    Get = () => !SfxDirector.IsCueMuted(capturedCue),
+                    Set = on => SfxDirector.SetCueMuted(capturedCue, !on),
+                });
+            }
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
@@ -913,19 +961,44 @@ namespace MaxWorlds.UI
                 _pages[t] = page.gameObject;
 
                 var rows = _knobs.FindAll(k => k.Tab == t);
+                // SOUND (MV-1009): 2 sliders (above) + Music toggle + ALL ON/ALL OFF + one toggle per
+                // registered cue, all sharing this same grid so the tab scrolls into columns exactly
+                // like every other tab once it outgrows 5 rows.
+                int extraRows = t == TabSound ? 1 + 2 + _cueToggleRows.Count : 0;
+                int totalRows = rows.Count + extraRows;
                 // The page's height is a fixed RowH*5 (below), so every tab must fit within 5 rows —
                 // pick the fewest columns that keeps rowsPerCol <= 5, rather than the old fixed
                 // 2/3/4-column ladder, since WV-234's ENEMIES tab (23 knobs) needs a 5th column.
-                int cols = Mathf.Clamp(Mathf.CeilToInt(rows.Count / 5f), 2, 6);
+                int cols = Mathf.Clamp(Mathf.CeilToInt(totalRows / 5f), 2, 6);
                 float colW = (PanelW - Pad * 2f - ColGap * (cols - 1)) / cols;
-                int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / (float)cols));
+                int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(totalRows / (float)cols));
                 maxRows = Mathf.Max(maxRows, rowsPerCol);
-                for (int i = 0; i < rows.Count; i++)
+
+                int idx = 0;
+                for (int i = 0; i < rows.Count; i++, idx++)
                 {
-                    int col = i / rowsPerCol;
-                    int row = i % rowsPerCol;
+                    int col = idx / rowsPerCol;
+                    int row = idx % rowsPerCol;
                     float x = Pad + col * (colW + ColGap);
                     BuildKnobRow(rows[i], page, x, -row * RowH, colW);
+                }
+
+                if (t == TabSound)
+                {
+                    void PlaceNext(Action<RectTransform, float, float, float> build)
+                    {
+                        int col = idx / rowsPerCol;
+                        int row = idx % rowsPerCol;
+                        float x = Pad + col * (colW + ColGap);
+                        build(page, x, -row * RowH, colW);
+                        idx++;
+                    }
+
+                    PlaceNext((p, x, ry, w) => BuildToggleRow(_musicToggleRow, p, x, ry, w));
+                    PlaceNext((p, x, ry, w) => BuildActionRow("ALL ON", () => SetAllCueToggles(true), p, x, ry, w));
+                    PlaceNext((p, x, ry, w) => BuildActionRow("ALL OFF", () => SetAllCueToggles(false), p, x, ry, w));
+                    foreach (var toggle in _cueToggleRows)
+                        PlaceNext((p, x, ry, w) => BuildToggleRow(toggle, p, x, ry, w));
                 }
             }
 
@@ -1090,6 +1163,66 @@ namespace MaxWorlds.UI
             var text = AddText(rt, label, LabelFont, TextColor, TextAnchor.MiddleCenter);
             Stretch(text.rectTransform);
             return btn;
+        }
+
+        // MV-1009: pill dimensions/colours match HudController.BuildWaterBalloonAutoFireToggle's idiom
+        // (ticket-specified colours verbatim), sized up for the Settings panel's own legibility floor:
+        // >= 88 ref units tall (tap floor) and >= 28pt label, both bigger than that HUD instance's 52/20.
+        private const float ToggleH = 96f;
+        private const int ToggleLabelFont = 28;
+        private static readonly Color ToggleOnColor = new Color(0.30f, 0.85f, 0.35f);
+        private static readonly Color ToggleOffColor = new Color(0.55f, 0.20f, 0.20f);
+
+        /// <summary>One ON/OFF pill row (MV-1009) — the SOUND tab's Music switch and per-cue switches.
+        /// Row GameObject is named after the toggle, same convention <see cref="BuildKnobRow"/> uses for
+        /// knobs, so a test can resolve it by name.</summary>
+        private void BuildToggleRow(ToggleRow t, RectTransform parent, float x, float y, float w)
+        {
+            var row = NewRect(t.Name, parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            Place(row, x, y, w, RowH);
+
+            var bg = AddImage(row, HudTextures.RoundedBox(32, 0.5f), ToggleOnColor, "BG");
+            var bgRect = bg.rectTransform;
+            Place(bgRect, 0f, -8f, w, ToggleH);
+            bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+            t.Bg = bg;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.targetGraphic = bg;
+            button.onClick.AddListener(() => { t.Set(!t.Get()); RefreshToggleRow(t); });
+
+            var label = AddText(bgRect, "", ToggleLabelFont, TextColor, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            label.fontStyle = FontStyle.Bold;
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.raycastTarget = false;
+            t.Label = label;
+
+            RefreshToggleRow(t);
+        }
+
+        private static void RefreshToggleRow(ToggleRow t)
+        {
+            bool on = t.Get();
+            if (t.Bg != null) t.Bg.color = on ? ToggleOnColor : ToggleOffColor;
+            if (t.Label != null) t.Label.text = $"{t.Name}\n{(on ? "ON" : "OFF")}";
+        }
+
+        /// <summary>A one-shot action button sized into the same row grid as the toggles beside it
+        /// (MV-1009's ALL ON / ALL OFF).</summary>
+        private void BuildActionRow(string label, Action onClick, RectTransform parent, float x, float y, float w)
+        {
+            var btn = BuildButton(parent, label, x, -8f + y, w, ToggleH, primary: true);
+            btn.onClick.AddListener(() => onClick());
+        }
+
+        /// <summary>ALL ON / ALL OFF (MV-1009): flips the Music switch and every cue switch together.</summary>
+        private void SetAllCueToggles(bool on)
+        {
+            if (_musicToggleRow != null) { _musicToggleRow.Set(on); RefreshToggleRow(_musicToggleRow); }
+            foreach (var t in _cueToggleRows) { t.Set(on); RefreshToggleRow(t); }
         }
 
         // ------------------------------------------------------------------ behaviour

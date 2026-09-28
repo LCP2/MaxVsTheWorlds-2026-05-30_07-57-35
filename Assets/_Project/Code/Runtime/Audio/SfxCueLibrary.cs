@@ -40,6 +40,35 @@ namespace MaxWorlds.Audio
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
 
+        /// <summary>Plain-word label for each cue, in this enum's declared order (MV-1007's cue-table
+        /// order) — the Settings panel SOUND tab's source of truth for row names (MV-1009), so a cue
+        /// added later gets a labelled toggle automatically as long as it's given a label here.</summary>
+        public static readonly IReadOnlyDictionary<Cue, string> DisplayNames = new Dictionary<Cue, string>
+        {
+            { Cue.DamageDealt, "Hose hit" },
+            { Cue.LppePulseFired, "Laser zap" },
+            { Cue.PlayerHit, "Max hit" },
+            { Cue.Pickup, "Pickup" },
+            { Cue.SupercellCollected, "Supercell chime" },
+            { Cue.EnemyKilled, "Robot destroyed" },
+            { Cue.FactoryDestroyed, "Factory explosion" },
+            { Cue.FittingDestroyed, "Fitting destroyed" },
+            { Cue.RocketMuzzle, "Rocket launch" },
+            { Cue.RocketImpact, "Rocket impact" },
+            { Cue.MissileImpact, "Missile impact" },
+            { Cue.ShockPulseLanded, "Shock pulse" },
+            { Cue.MaxTeleported, "Max teleport" },
+            { Cue.BlinkerTeleported, "Blinker teleport" },
+            { Cue.BossEngaged, "Boss horn" },
+            { Cue.BossDefeated, "Boss defeated" },
+            { Cue.WeaponCoreCollected, "Weapon Core fanfare" },
+            { Cue.FinaleGateCrossed, "Finale gate crossed" },
+            { Cue.HoseLoop, "Hose loop" },
+            { Cue.ForceFieldUp, "Force Field up" },
+            { Cue.ForceFieldPop, "Force Field pop" },
+            { Cue.UiClick, "UI click" },
+        };
+
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
         /// (the rows marked "—") gets a generous cap — real scarcity there comes from
         /// <see cref="SfxDirector"/>'s 16-voice pool, not a per-cue throttle.</summary>
