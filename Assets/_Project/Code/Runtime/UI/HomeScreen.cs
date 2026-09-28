@@ -559,9 +559,12 @@ namespace MaxWorlds.UI
 
             float[] cardX = { 40f, 650f, 1260f };
             const float cardTop = 390f, cardW = 580f, cardH = 440f;
+            // MV-986: keyed by world index, filled at most once per world across this Build() call —
+            // several slots can name the same world.
+            var worldInfoCache = new Dictionary<int, (string Name, int AreaCount)>();
             for (int i = 0; i < SaveSystem.SlotCount && i < cardX.Length; i++)
             {
-                BuildCard(stage.rectTransform, i, cardX[i], cardTop, cardW, cardH);
+                BuildCard(stage.rectTransform, i, cardX[i], cardTop, cardW, cardH, worldInfoCache);
             }
 
             if (ShowDevWorldShortcuts) BuildDevWorldShortcuts(stage.rectTransform);
@@ -626,7 +629,8 @@ namespace MaxWorlds.UI
             btn.onClick.AddListener(OnSettingsTapped);
         }
 
-        private void BuildCard(RectTransform stage, int slot, float x, float y, float w, float h)
+        private void BuildCard(RectTransform stage, int slot, float x, float y, float w, float h,
+            Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
         {
             var card = AddImage(stage, HudTextures.RoundedBox(64, 0.5f), CardColor, $"Card {slot + 1}");   // radius 32
             card.type = Image.Type.Sliced;
@@ -665,14 +669,11 @@ namespace MaxWorlds.UI
             }
 
             var status = AddText(cardRt, 26f, Dim, TextAnchor.UpperLeft, FontStyle.Normal);
-            PlaceTL(status.rectTransform, 28f, 124f, 520f, 68f);
-            // MV-524: a slot carrying a checkpoint names which area it's parked in — the ticket's own
-            // fallback naming (no WorldConfig loaded here to resolve the area's authored display name).
-            // MV-960: no leading "NAME - " — the name is already shown separately above (Summarise).
-            string summary = data.HasData ? Summarise(data) : "Empty";
-            status.text = data.HasRunInProgress
-                ? $"{summary}\nRun in progress - Area {data.CheckpointAreaIndex}"   // ASCII hyphen, see Summarise
-                : summary;
+            status.gameObject.name = "Status";
+            // MV-986: raised (was y 124, h 68) to fit three lines and still end at/above y 204, clear
+            // of RESUME/PLAY at y 210.
+            PlaceTL(status.rectTransform, 28f, 96f, 520f, 108f);
+            status.text = Summarise(data, worldInfoCache);
 
             if (data.HasRunInProgress)
             {
@@ -778,16 +779,76 @@ namespace MaxWorlds.UI
             _confirmRoot = null;
         }
 
-        /// <summary>"best: N deaths" (MV-427; supersedes YT-218's peak-Domination-% example, which
-        /// stopped discriminating once a death no longer ends the run) — nothing else survives between
-        /// runs, so the personal best is the whole story a slot card has to tell. MV-960: no longer
-        /// prefixes the name — the card already shows it separately above this text.</summary>
-        private static string Summarise(SaveSlotData data)
+        /// <summary>The card's three-line status block (MV-986; supersedes MV-427's single "best: N
+        /// deaths" line, which named neither the world, the area of N, nor how long a run in progress
+        /// had been played). <paramref name="worldInfoCache"/> is filled at most once per world index
+        /// across one <see cref="Build"/> call (see call site).</summary>
+        private static string Summarise(SaveSlotData data, Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
         {
-            if (data.BestDeathsToVictory < 0) return "no finished run yet";
-            string deaths = data.BestDeathsToVictory == 1 ? "1 death" : $"{data.BestDeathsToVictory} deaths";
-            return $"best: {deaths}";
+            if (!data.HasData) return "Empty";
+
+            if (data.HasRunInProgress)
+            {
+                int worldIndex = data.CheckpointWorldIndex >= 0 ? data.CheckpointWorldIndex : data.WorldIndex;
+                (string name, int areaCount) = WorldInfo(worldIndex, worldInfoCache);
+                string line1 = $"World {worldIndex + 1}: {name} - Area {data.CheckpointAreaIndex} of {areaCount}";
+                string line2 = $"Played {FormatPlayedTime(data.CheckpointElapsedSeconds)} - {DeathsPhrase(data.CheckpointDeathsTaken)}";
+                return $"{line1}\n{line2}\n{BestLine(data.BestDeathsToVictory)}";
+            }
+
+            (string nextName, _) = WorldInfo(data.WorldIndex, worldInfoCache);
+            string next = $"Next: World {data.WorldIndex + 1}: {nextName}";
+            string furthest = $"Furthest: World {data.FurthestWorldIndex + 1}";
+            return $"{next}\n{BestLine(data.BestDeathsToVictory)}\n{furthest}";
         }
+
+        /// <summary>Loads <paramref name="worldIndex"/>'s config at most once per <see cref="Build"/>
+        /// call (several slots can name the same world) and pulls the card-facing name/area count out
+        /// of it.</summary>
+        private static (string Name, int AreaCount) WorldInfo(int worldIndex,
+            Dictionary<int, (string Name, int AreaCount)> cache)
+        {
+            if (cache.TryGetValue(worldIndex, out var cached)) return cached;
+
+            string name = string.Empty;
+            int areaCount = 0;
+            MaxWorlds.Arena.WorldConfig cfg = MaxWorlds.Arena.WorldLibrary.Load(MaxWorlds.Arena.WorldLibrary.KeyForIndex(worldIndex));
+            if (cfg != null)
+            {
+                name = WorldDisplayName(cfg.world);
+                if (cfg.dials != null) areaCount = cfg.dials.areaCount;
+            }
+
+            var info = (name, areaCount);
+            cache[worldIndex] = info;
+            return info;
+        }
+
+        /// <summary>A world config's <c>world</c> field is authored "World N &#x2014; Name" (em dash);
+        /// the card shows only the part after it, trimmed, and never the em dash itself (card text is
+        /// ASCII-only).</summary>
+        private static string WorldDisplayName(string configWorldString)
+        {
+            if (string.IsNullOrEmpty(configWorldString)) return string.Empty;
+            int dash = configWorldString.IndexOf('—');
+            return dash < 0 ? configWorldString.Trim() : configWorldString.Substring(dash + 1).Trim();
+        }
+
+        /// <summary>Whole minutes, rounded down: under a minute reads as "under 1 min" rather than
+        /// "0 min"; under an hour as plain minutes; an hour or more gains an "H h MM min" prefix with
+        /// the minutes zero-padded.</summary>
+        private static string FormatPlayedTime(float elapsedSeconds)
+        {
+            int totalMinutes = Mathf.FloorToInt(elapsedSeconds / 60f);
+            if (totalMinutes < 1) return "under 1 min";
+            if (totalMinutes < 60) return $"{totalMinutes} min";
+            return $"{totalMinutes / 60} h {totalMinutes % 60:00} min";
+        }
+
+        private static string DeathsPhrase(int deaths) => deaths == 1 ? "1 death" : $"{deaths} deaths";
+
+        private static string BestLine(int bestDeaths) =>
+            bestDeaths < 0 ? "No finished run yet" : $"Best: {DeathsPhrase(bestDeaths)}";
 
         // ------------------------------------------------------------------ helpers (ResultScreen/UpgradeScreen idiom)
 
