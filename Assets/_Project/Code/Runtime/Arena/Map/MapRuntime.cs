@@ -217,7 +217,15 @@ namespace MaxWorlds.Arena
         /// <see cref="IZoneGatedActor"/>'s live chase override, just a one-time zone tag exactly like a
         /// map-authored piece gets at build time. Applies the current gate's own verdict to these
         /// renderers immediately, for the same "don't flash visible for a frame" reason
-        /// <see cref="RegisterGatedActor"/> does.</summary>
+        /// <see cref="RegisterGatedActor"/> does.
+        ///
+        /// MV-988: a renderer that is ALREADY disabled at the moment it is handed in here — a pickup's
+        /// greybox <c>Visual</c>, hidden by <c>PickupArtDirector.HideGreybox</c> in the same call chain
+        /// that drops it via <c>Pickup.Place</c>, just before <c>PickupDirector.SpawnDrop</c> calls this
+        /// method — is folded into <see cref="_dressedHidden"/> exactly like <see cref="Start"/>'s own
+        /// snapshot does for map-authored dressing, instead of being stamped <c>visible</c> here and then
+        /// re-enabled by every later <see cref="ApplyAreaGate"/> zone change. Without this, the greybox
+        /// box redraws alongside the designed art the moment its zone next gates on.</summary>
         public void RegisterAtPosition(Renderer[] renderers, Vector3 worldPos)
         {
             if (_map == null || _rendererZones == null || renderers == null) return;
@@ -231,6 +239,13 @@ namespace MaxWorlds.Arena
                 if (!_rendererZones.TryGetValue(r, out List<string> zones))
                     _rendererZones[r] = zones = new List<string>(1);
                 if (!zones.Contains(zone.id)) zones.Add(zone.id);
+
+                if (!r.enabled)
+                {
+                    _dressedHidden ??= new HashSet<Renderer>();
+                    _dressedHidden.Add(r);
+                    continue;
+                }
                 r.enabled = visible;
             }
         }
