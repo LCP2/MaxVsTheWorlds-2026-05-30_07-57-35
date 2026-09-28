@@ -179,6 +179,14 @@ namespace MaxWorlds.VFX
 
         private MaterialPropertyBlock _bodyMpb;
 
+        /// <summary>MV-994: the "Wheel"/"RobotStatic" meshes <see cref="CombineWheelGroups"/> and
+        /// <see cref="CombineStaticParts"/> build for this robot alone — unlike <see cref="_bodyMat"/>
+        /// et al, these are never shared across robots (each is a per-instance combine of that robot's
+        /// own parts), so nothing else owns them and nothing else destroys them. Tracked here so
+        /// <see cref="OnDestroy"/> can free them; without this a runtime <see cref="Mesh"/> outlives its
+        /// GameObject and leaks for the rest of the process.</summary>
+        private readonly List<Mesh> _ownedMeshes = new List<Mesh>(4);
+
         private bool _built;
         private Color _tellColor = EyeIdle;
         private float _flash;
@@ -449,7 +457,7 @@ namespace MaxWorlds.VFX
             // (Charger's tyre+hub, Bruiser's tread+hub+dust-cap) — see CombineWheelGroups' own doc for
             // why this has to run before _wheelRadius is measured (off the FINAL, post-combine mesh)
             // and before CombineStaticParts (whose exclude set is built from whatever _wheels holds).
-            _wheels = CombineWheelGroups(feet, body.Wheels);
+            _wheels = CombineWheelGroups(feet, body.Wheels, _ownedMeshes);
             _wheelRadius = new float[_wheels.Length];
             for (int i = 0; i < _wheels.Length; i++)
             {
@@ -463,7 +471,7 @@ namespace MaxWorlds.VFX
             // a wheel, the Reef Puffer Mine's inflatable core) into one combined renderer — must run
             // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
             // exclusion set.
-            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable);
+            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _ownedMeshes);
             if (_combinedRenderer != null)
             {
                 Material[] mats = _combinedRenderer.sharedMaterials;
@@ -490,7 +498,7 @@ namespace MaxWorlds.VFX
         /// <see cref="CombineStaticParts"/> so its exclude set only ever walks these deduplicated
         /// pivots. A wheel authored as a single part (no co-located sibling) passes through unchanged —
         /// nothing here forces a group of one through the combine machinery.</summary>
-        private static Transform[] CombineWheelGroups(Transform root, Transform[] wheels)
+        private static Transform[] CombineWheelGroups(Transform root, Transform[] wheels, List<Mesh> ownedMeshes)
         {
             if (wheels == null || wheels.Length == 0) return wheels ?? System.Array.Empty<Transform>();
 
@@ -553,6 +561,7 @@ namespace MaxWorlds.VFX
 
                 var finalMesh = new Mesh { name = "Wheel" };
                 finalMesh.CombineMeshes(perMaterialCombine.ToArray(), mergeSubMeshes: false, useMatrices: true);
+                ownedMeshes.Add(finalMesh);
                 foreach (Mesh bucketMesh in perMaterialMeshes)
                     if (Application.isPlaying) Object.Destroy(bucketMesh); else Object.DestroyImmediate(bucketMesh);
 
@@ -608,7 +617,7 @@ namespace MaxWorlds.VFX
         /// comment). Destroying happens here, well before that cache is ever populated (it's built lazily
         /// on first use, never during <see cref="Awake"/>), so it always sees the post-combine hierarchy.
         /// </summary>
-        private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels, Transform inflatable)
+        private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels, Transform inflatable, List<Mesh> ownedMeshes)
         {
             var exclude = new HashSet<Renderer>();
             if (eyes != null)
@@ -664,6 +673,7 @@ namespace MaxWorlds.VFX
             // submesh (so sharedMaterials below lines up 1:1 with submesh index) instead of flattening
             // everything into one submesh that could only ever wear one material.
             finalMesh.CombineMeshes(perMaterialCombine.ToArray(), mergeSubMeshes: false, useMatrices: true);
+            ownedMeshes.Add(finalMesh);
 
             foreach (Mesh bucketMesh in perMaterialMeshes)
                 if (Application.isPlaying) Object.Destroy(bucketMesh); else Object.DestroyImmediate(bucketMesh);
@@ -1092,5 +1102,20 @@ namespace MaxWorlds.VFX
         // under every OTHER live robot still wearing it. Nothing here owns them any more; they live for
         // the process, the same "cached forever, never explicitly torn down" lifetime VfxMaterials' own
         // particle-material cache already uses.
+
+        /// <summary>MV-994: unlike the shared character materials (see the comment above), the "Wheel"
+        /// and "RobotStatic" meshes in <see cref="_ownedMeshes"/> are built fresh per robot and belong to
+        /// no one else — Unity does not free a runtime <see cref="Mesh"/> just because its GameObject
+        /// died, so without this every robot spawned over a run leaked one or more meshes until the next
+        /// scene load.</summary>
+        private void OnDestroy()
+        {
+            foreach (Mesh mesh in _ownedMeshes)
+            {
+                if (mesh == null) continue;
+                if (Application.isPlaying) Destroy(mesh); else DestroyImmediate(mesh);
+            }
+            _ownedMeshes.Clear();
+        }
     }
 }
