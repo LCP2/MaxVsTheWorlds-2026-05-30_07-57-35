@@ -299,7 +299,7 @@
       "y": 420,
       "icon": "ff",
       "label": "FORCE FIELD",
-      "maxLevel": 5,
+      "maxLevel": 8,
       "kind": "cap",
       "parent": null,
       "startLevel": 0

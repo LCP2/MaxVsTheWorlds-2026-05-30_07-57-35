@@ -553,7 +553,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4), "MV-339 widened Teleport from 2 levels to 4");
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(5), "MV-422: e_ff's RIG maxLevel rose to 5");
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(8), "MV-989: e_ff's World 1 RIG maxLevel rose to 8");
         }
 
         [Test]

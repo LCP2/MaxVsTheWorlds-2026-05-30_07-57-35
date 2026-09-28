@@ -199,10 +199,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ForceFieldIsAFiveLevelTrack_MV422()
+        public void ForceFieldIsAnEightLevelTrackOnWorldOne_MV989()
         {
-            // MV-422's RIG restructure raised e_ff's own maxLevel from 3 to 5 (radius now levels too).
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(5));
+            // MV-989 (Lee, TestFlight: "too weak, gets burnt too quickly") raised World 1's e_ff
+            // maxLevel from 5 to 8 — was 3 (MV-422's own prior figure) before that.
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(8));
         }
 
         [Test]
