@@ -71,6 +71,21 @@ namespace MaxWorlds.UI
         private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color ReplicatorMarkerColor = new Color(0.3f, 1f, 1f, 0.95f); // MV-706: matches the Replicator's own cyan LED
 
+        /// <summary>MV-991: the shield-% readout above Max's own name label — big enough (double
+        /// <see cref="LabelFontSize"/>) that his eyes catch it without hunting the corner HUD button
+        /// for the same number.</summary>
+        private const int ShieldFontSize = 36;
+        private const float ShieldLabelPixelHeight = 44f;
+        private static readonly Color ShieldOutlineColor = new Color(0.05f, 0.05f, 0.06f);
+
+        // MV-991: cyan matches ForceFieldBubble.FullRimColor exactly — the readout and the bubble it
+        // describes must never disagree about what "healthy" looks like.
+        private static readonly Color ShieldCyanColor = new Color(0.55f, 0.9f, 1.0f);
+        private static readonly Color ShieldAmberColor = new Color(1.0f, 0.8f, 0.25f);
+        private static readonly Color ShieldRedColor = new Color(0.95f, 0.25f, 0.2f);
+        private const float ShieldHighThreshold = 0.50f;
+        private const float ShieldMidThreshold = 0.25f;
+
         /// <summary>MV-747: Max's bar always wins Unity's canvas draw order over any enemy nameplate,
         /// regardless of whether their screen rects happen to intersect on a given frame — simpler and
         /// stronger than detecting the intersection every frame, and it can never regress into
@@ -148,6 +163,7 @@ namespace MaxWorlds.UI
         private Text _nameText;
         private Text _numberText;
         private Text _replicatorMarker;
+        private Text _shieldText;
         private Camera _camera;
         private CanvasGroup _canvasGroup;
 
@@ -160,6 +176,12 @@ namespace MaxWorlds.UI
         /// <summary>MV-788: Max's own bar and an AreaGate's additionally desaturate their healthy-band
         /// colour — see <see cref="HealthBarColor.At"/>'s own doc comment for why those two specifically.</summary>
         private bool _desaturateWhenHealthy;
+
+        /// <summary>MV-991: Force Field readout hooks — null for every call site except Max's own
+        /// (see <see cref="MaxWorlds.Player.PlayerHealth.Initialize"/>), so the shield text simply
+        /// never has anything to show for a robot or an AreaGate.</summary>
+        private System.Func<bool> _shieldActive;
+        private System.Func<float> _shieldFraction;
 
         /// <summary>MV-788: seconds since this bar's last damage/target trigger — seeded already past
         /// <see cref="TriggerHoldSeconds"/> + <see cref="TriggerFadeSeconds"/> so a freshly built,
@@ -264,7 +286,9 @@ namespace MaxWorlds.UI
                                             bool isPlayerBar = false,
                                             bool groupable = false,
                                             System.Func<bool> isTarget = null,
-                                            bool desaturateWhenHealthy = false)
+                                            bool desaturateWhenHealthy = false,
+                                            System.Func<bool> shieldActive = null,
+                                            System.Func<float> shieldFraction = null)
         {
             if (owner == null || source == null) return null;
 
@@ -282,6 +306,8 @@ namespace MaxWorlds.UI
             bar._groupable = groupable;
             bar._isTarget = isTarget;
             bar._desaturateWhenHealthy = desaturateWhenHealthy;
+            bar._shieldActive = shieldActive;
+            bar._shieldFraction = shieldFraction;
             bar.Build();
             return bar;
         }
@@ -417,6 +443,22 @@ namespace MaxWorlds.UI
             // ticket names, so this stands in for it rather than adding a new non-ASCII allow-list entry.
             _replicatorMarker.text = "^^";
             _replicatorMarker.gameObject.SetActive(false);
+
+            // MV-991: the Force Field shield % — directly above the name label, only ever fed by
+            // Max's own Attach() call (shieldFraction/shieldActive stay null everywhere else, so a
+            // robot or an AreaGate never even has a reason to activate this GameObject). Shares the
+            // replicator marker's vertical slot: the two can never both be relevant on the same bar,
+            // since Max never carries a replicator marker and a robot never carries a shield readout.
+            _shieldText = NewText(_canvas, ShieldFontSize, ShieldCyanColor, TextAnchor.LowerCenter);
+            var st = _shieldText.rectTransform;
+            st.anchorMin = st.anchorMax = new Vector2(0.5f, 1f);
+            st.pivot = new Vector2(0.5f, 0f);
+            st.sizeDelta = new Vector2(LabelPixelWidth, ShieldLabelPixelHeight);
+            st.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
+            var shieldOutline = _shieldText.gameObject.AddComponent<Outline>();
+            shieldOutline.effectColor = ShieldOutlineColor;
+            shieldOutline.effectDistance = new Vector2(2f, -2f);
+            _shieldText.gameObject.SetActive(false);
 
             // The number sits ON the bar, Brawl-Stars style, so the figure and the length it
             // describes are one object rather than two things to look between.
@@ -789,6 +831,16 @@ namespace MaxWorlds.UI
                 ? 1f
                 : Mathf.Clamp01(1f - (secondsSinceTrigger - TriggerHoldSeconds) / TriggerFadeSeconds);
 
+        /// <summary>MV-991: the shield readout's colour ramp — cyan (healthy) down through amber to
+        /// red, per the ticket's exact thresholds. Pure, like <see cref="HealthBarColor.At"/>, so a
+        /// test can pin it without a live Force Field.</summary>
+        internal static Color ShieldColorFor(float fraction)
+        {
+            if (fraction >= ShieldHighThreshold) return ShieldCyanColor;
+            if (fraction >= ShieldMidThreshold) return ShieldAmberColor;
+            return ShieldRedColor;
+        }
+
         private void Refresh()
         {
             float n = Mathf.Clamp01(_source.HealthNormalized);
@@ -841,6 +893,23 @@ namespace MaxWorlds.UI
             {
                 _shownName = name;
                 _nameText.text = name;
+            }
+
+            // MV-991: independent of the bar's own show/fade state — a shield readout only cares
+            // whether the Force Field itself is up, same "hidden means the GameObject is off, not
+            // just blank" contract as every other conditional element on this bar.
+            if (_shieldFraction != null)
+            {
+                bool shieldOn = _shieldActive != null && _shieldActive();
+                if (_shieldText.gameObject.activeSelf != shieldOn)
+                    _shieldText.gameObject.SetActive(shieldOn);
+                if (shieldOn)
+                {
+                    float fraction = Mathf.Clamp01(_shieldFraction());
+                    int pct = Mathf.CeilToInt(fraction * 100f);
+                    _shieldText.text = pct + "%";
+                    _shieldText.color = ShieldColorFor(fraction);
+                }
             }
 
             if (!show) return;
