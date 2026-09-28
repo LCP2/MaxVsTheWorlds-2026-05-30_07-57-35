@@ -169,6 +169,7 @@ namespace MaxWorlds.Audio
 
         private void PlayCue(Cue cue, Vector3 worldPos)
         {
+            if (IsCueMuted(cue)) return;   // MV-1009: OFF cues never start a voice, checked first — zero cost
             if (!TryConsumeRateLimit(cue)) return;
             if (!_clips.TryGetValue(cue, out var clip) || clip == null) return;
 
@@ -188,6 +189,21 @@ namespace MaxWorlds.Audio
         }
 
         private static float MasterVolume() => Mathf.Clamp01(DevTuning.Or(DevTuning.SfxVolume, DefaultSfxVolume));
+
+        /// <summary>Whether the Settings panel's SOUND tab has this cue toggled OFF (MV-1009).</summary>
+        public static bool IsCueMuted(Cue cue)
+        {
+            int mask = (int)DevTuning.Or(DevTuning.MutedSfxCuesMask, 0f);
+            return (mask & (1 << (int)cue)) != 0;
+        }
+
+        /// <summary>Flips one cue's mute bit (MV-1009) — the SOUND tab's per-cue toggle setter.</summary>
+        public static void SetCueMuted(Cue cue, bool muted)
+        {
+            int mask = (int)DevTuning.Or(DevTuning.MutedSfxCuesMask, 0f);
+            mask = muted ? (mask | (1 << (int)cue)) : (mask & ~(1 << (int)cue));
+            DevTuning.MutedSfxCuesMask = mask;
+        }
 
         private bool TryConsumeRateLimit(Cue cue)
         {
@@ -228,6 +244,15 @@ namespace MaxWorlds.Audio
             {
                 _waterBlaster = FindFirstObjectByType<WaterBlaster>();
                 if (_waterBlaster == null) return;
+            }
+
+            if (IsCueMuted(Cue.HoseLoop))
+            {
+                // MV-1009: muted must stop it immediately, not just gate future starts — an
+                // already-playing loop must not ring out its own fade after the toggle flips OFF.
+                _hoseLoopVolume = 0f;
+                if (_hoseLoopSource.isPlaying) _hoseLoopSource.Stop();
+                return;
             }
 
             float target = _waterBlaster.IsEmitting ? 1f : 0f;

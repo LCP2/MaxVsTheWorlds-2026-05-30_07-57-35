@@ -150,8 +150,15 @@ namespace MaxWorlds.Audio
             _intensityBlend = Mathf.MoveTowards(_intensityBlend, target, Time.unscaledDeltaTime / BossCrossfadeSeconds);
 
             float master = Mathf.Clamp01(DevTuning.Or(DevTuning.MusicVolume, DefaultMusicVolume));
+            if (!IsMusicOn) master = 0f;   // MV-1009: OFF stops the music source immediately, same frame
             _mainSource.volume = master * _sceneFade;
             _intensitySource.volume = master * _sceneFade * _intensityBlend;
         }
+
+        /// <summary>The Settings panel's SOUND-tab Music toggle state (MV-1009). Default ON.</summary>
+        public static bool IsMusicOn => DevTuning.Or(DevTuning.MusicOn, 1f) >= 0.5f;
+
+        /// <summary>The Music toggle's setter.</summary>
+        public static void SetMusicOn(bool on) => DevTuning.MusicOn = on ? 1f : 0f;
     }
 }
