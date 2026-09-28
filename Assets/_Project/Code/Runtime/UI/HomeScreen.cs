@@ -106,6 +106,18 @@ namespace MaxWorlds.UI
         {
             if (SaveSystem.ActiveSlot >= 0)
             {
+                // MV-985: HomeScreen.OnResume left a cross-world resume pending just before triggering
+                // this very reload (the checkpoint's world differed from what was already built) — this
+                // is that reload's first Start(), so finish the resume it deferred, exactly once, instead
+                // of falling through to the plain "a slot is already live" mark below.
+                if (SaveSystem.PendingResume.HasValue && SaveSystem.PendingResume.Value.Slot == SaveSystem.ActiveSlot)
+                {
+                    int pendingSlot = SaveSystem.PendingResume.Value.Slot;
+                    SaveSystem.PendingResume = null;
+                    ApplyResume(pendingSlot);
+                    return;
+                }
+
                 // A slot is already live: either a defensive re-add, or exactly the Replay-triggered
                 // reload YT-216 targets (sub-3-second AC) — this is the earliest point that reload
                 // hands control back, so it's the "controllable" mark for that path.
@@ -411,12 +423,45 @@ namespace MaxWorlds.UI
         /// <summary>RESUME tapped on a slot carrying a checkpoint (MV-524 part 3) — restores it and
         /// drops the player back at that area's entry, rather than the fresh run <see cref="OnPlay"/>
         /// always starts. Never runs <see cref="IntroCinematic"/> (an in-progress profile is by
-        /// definition not a first launch).</summary>
+        /// definition not a first launch).
+        ///
+        /// MV-985: the checkpoint's own world (<see cref="SaveSlotData.CheckpointWorldIndex"/>) can
+        /// differ from whichever world is already built behind this screen — e.g. after
+        /// <see cref="MaxWorlds.UI.RunFlow.QuitToMenu"/>, which always rebuilds World 1
+        /// (<see cref="MaxWorlds.Arena.BackyardPath.ActiveWorldIndex"/> reads World 0 with no active
+        /// slot). <see cref="SaveSystem.ResolveResumePlan"/> is what decides: if the target world is
+        /// already up, <see cref="ApplyResume"/> runs immediately exactly as before this ticket;
+        /// otherwise this reloads the scene the same way <see cref="OnWorldDevStart"/> does, having left
+        /// <see cref="SaveSystem.PendingResume"/> set so the freshly-booted scene builds the CHECKPOINT'S
+        /// world (not this slot's <see cref="SaveSlotData.WorldIndex"/>) and <see cref="Start"/> finishes
+        /// the resume on its very first frame.</summary>
         private void OnResume(int slot)
         {
             SaveSlotData data = SaveSystem.Load(slot);
             if (!data.HasRunInProgress) return;   // guards a stray tap on what should be non-interactable
 
+            var path = FindFirstObjectByType<MaxWorlds.Arena.BackyardPath>();
+            int builtWorldIndex = path != null ? path.ResolvedWorldIndex : 0;
+            SaveSystem.ResumePlan plan = SaveSystem.ResolveResumePlan(slot, builtWorldIndex);
+
+            if (!plan.NeedsReload)
+            {
+                ApplyResume(slot);
+                return;
+            }
+
+            SaveSystem.ActiveSlot = slot;
+            SaveSystem.PendingResume = new SaveSystem.PendingResumePlan(slot, plan.WorldIndex);
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
+        }
+
+        /// <summary>The actual restore, shared by <see cref="OnResume"/>'s immediate (same-world) path
+        /// and <see cref="Start"/>'s post-reload (cross-world, MV-985) path — everything that used to run
+        /// unconditionally inside <see cref="OnResume"/> once past its <c>HasRunInProgress</c> guard.</summary>
+        private void ApplyResume(int slot)
+        {
             SaveSystem.ActiveSlot = slot;
 
             // The same transient-state wipe StartSlot does for a fresh PLAY — arena-scoped state a
@@ -438,7 +483,7 @@ namespace MaxWorlds.UI
             // IsAcquired actually read).
             WeaponSystemState.RebuildAcquiredFromRigState();
 
-            int areaIndex = data.CheckpointAreaIndex;
+            int areaIndex = SaveSystem.Load(slot).CheckpointAreaIndex;
             Close();
 
             var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();

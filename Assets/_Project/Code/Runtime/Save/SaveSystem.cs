@@ -35,6 +35,30 @@ namespace MaxWorlds.Save
         /// <summary>Slot the player picked this process; -1 until the Home screen hands off.</summary>
         public static int ActiveSlot { get; set; } = -1;
 
+        /// <summary>Which slot/world <see cref="MaxWorlds.UI.HomeScreen.OnResume"/> asked for, spanning
+        /// the reload it triggers when the checkpoint's world isn't the one already built (MV-985) — same
+        /// idiom as <see cref="MaxWorlds.Arena.WorldTransitions.PendingArrivalFrom"/>. Set just before the
+        /// reload; <see cref="MaxWorlds.Arena.BackyardPath.ActiveWorldIndex"/> honours it ahead of the
+        /// save's own <see cref="SaveSlotData.WorldIndex"/> so the freshly-booted scene builds the
+        /// checkpoint's world, not <see cref="ActiveSlot"/>'s. Consumed and cleared by whatever finds it
+        /// set on the next <c>Start()</c> (<c>HomeScreen</c>'s own "ActiveSlot already set" path). Null
+        /// means "no cross-world resume in flight" — PLAY, RESUME onto the already-built world, a Home
+        /// world button and a respawn all boot with this null, exactly as before this ticket.</summary>
+        public static PendingResumePlan? PendingResume { get; set; }
+
+        /// <summary>See <see cref="PendingResume"/>.</summary>
+        public readonly struct PendingResumePlan
+        {
+            public readonly int Slot;
+            public readonly int WorldIndex;
+
+            public PendingResumePlan(int slot, int worldIndex)
+            {
+                Slot = slot;
+                WorldIndex = worldIndex;
+            }
+        }
+
         private static string s_directoryOverride;
 
         /// <summary>Where slot files live. Defaults to the device's persistent data path; a test points
@@ -153,10 +177,12 @@ namespace MaxWorlds.Save
         /// <summary>Capture a mid-run checkpoint into <paramref name="slot"/>'s save (MV-557, part 1 of
         /// MV-524): snapshots <see cref="RigState"/>'s node levels and unlocked categories,
         /// <see cref="PickupWallet.PowerCells"/> and <see cref="DeathRunState.DeathsTaken"/> at
-        /// <paramref name="areaIndex"/>. Preserves the slot's existing identity/personal-best fields.
-        /// Not called from anywhere yet — <see cref="AreaAccumulationDirector.EnterArea"/> and an
-        /// <c>OnApplicationPause</c> handler are the trigger wiring, MV-524 parts 2/3.</summary>
-        public static void CaptureCheckpoint(int slot, int areaIndex)
+        /// <paramref name="areaIndex"/>, and (MV-985) <paramref name="worldIndex"/> — the world actually
+        /// being played, into <see cref="SaveSlotData.CheckpointWorldIndex"/>. Preserves the slot's
+        /// existing identity/personal-best fields.
+        /// <see cref="AreaAccumulationDirector.EnterArea"/> and an <c>OnApplicationPause</c> handler are
+        /// the trigger wiring, MV-524 parts 2/3.</summary>
+        public static void CaptureCheckpoint(int slot, int areaIndex, int worldIndex = -1)
         {
             SaveSlotData data = Load(slot);
             if (!data.HasData) data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
@@ -179,6 +205,10 @@ namespace MaxWorlds.Save
             // the checkpoint (standing at the gate looking in), so a pause/focus capture taken before
             // that gate breaks again would otherwise regress the save by one area every single resume.
             data.CheckpointAreaIndex = Math.Max(data.CheckpointAreaIndex, areaIndex);
+            // MV-985: which world areaIndex above actually belongs to — the world PLAYED, from the
+            // caller's own AreaAccumulationDirector.ActiveWorldIndex, not this slot's WorldIndex (which
+            // names the world that plays NEXT and can be a different one already).
+            data.CheckpointWorldIndex = worldIndex;
             data.CheckpointPowerCells = PickupWallet.PowerCells;
             data.CheckpointPowerCellsSecondary = PickupWallet.PowerCellsSecondary;
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
@@ -273,10 +303,41 @@ namespace MaxWorlds.Save
         /// slot (<see cref="ActiveSlot"/> &lt; 0 — a capture/press-kit/perf-capture run, or a test) or
         /// for the empty entry stub (<paramref name="areaIndex"/> &lt;= 0 — nothing worth
         /// checkpointing yet).</summary>
-        public static void CaptureActiveCheckpoint(int areaIndex)
+        public static void CaptureActiveCheckpoint(int areaIndex, int worldIndex = -1)
         {
             if (ActiveSlot < 0 || areaIndex <= 0) return;
-            CaptureCheckpoint(ActiveSlot, areaIndex);
+            CaptureCheckpoint(ActiveSlot, areaIndex, worldIndex);
+        }
+
+        /// <summary>What RESUME on <paramref name="slot"/> needs to do (MV-985), given
+        /// <paramref name="builtWorldIndex"/> — the world the scene behind the Home screen is already
+        /// built as (<see cref="MaxWorlds.Arena.BackyardPath.ResolvedWorldIndex"/>). The target world is
+        /// the checkpoint's own <see cref="SaveSlotData.CheckpointWorldIndex"/> when it was recorded,
+        /// falling back to <see cref="SaveSlotData.WorldIndex"/> only for a pre-existing save that never
+        /// captured one. <see cref="ResumePlan.NeedsReload"/> is false exactly when that target already
+        /// matches what's built — the common case, since a checkpoint is almost always in the world
+        /// that's already up — so <see cref="MaxWorlds.UI.HomeScreen.OnResume"/> only reloads for the
+        /// cross-world case this ticket fixes.</summary>
+        public static ResumePlan ResolveResumePlan(int slot, int builtWorldIndex)
+        {
+            SaveSlotData data = Load(slot);
+            int targetWorld = data.CheckpointWorldIndex >= 0 ? data.CheckpointWorldIndex : data.WorldIndex;
+            return new ResumePlan(targetWorld != builtWorldIndex, targetWorld, data.CheckpointAreaIndex);
+        }
+
+        /// <summary>See <see cref="ResolveResumePlan"/>.</summary>
+        public readonly struct ResumePlan
+        {
+            public readonly bool NeedsReload;
+            public readonly int WorldIndex;
+            public readonly int AreaIndex;
+
+            public ResumePlan(bool needsReload, int worldIndex, int areaIndex)
+            {
+                NeedsReload = needsReload;
+                WorldIndex = worldIndex;
+                AreaIndex = areaIndex;
+            }
         }
 
         /// <summary>Clear <paramref name="slot"/>'s captured run (MV-524 part 3) — what choosing PLAY
@@ -299,6 +360,7 @@ namespace MaxWorlds.Save
         {
             data.HasRunInProgress = false;
             data.CheckpointAreaIndex = 0;
+            data.CheckpointWorldIndex = -1;
             data.CheckpointRigNodeIds = Array.Empty<string>();
             data.CheckpointRigNodeLevels = Array.Empty<int>();
             data.CheckpointUnlockedCategories = Array.Empty<string>();
@@ -323,6 +385,7 @@ namespace MaxWorlds.Save
         {
             ActiveSlot = -1;
             s_directoryOverride = null;
+            PendingResume = null;
         }
     }
 }

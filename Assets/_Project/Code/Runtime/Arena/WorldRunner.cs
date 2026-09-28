@@ -303,7 +303,7 @@ namespace MaxWorlds.Arena
         private void CapturePauseCheckpoint()
         {
             if (_areaDirector == null) return;
-            SaveSystem.CaptureActiveCheckpoint(_areaDirector.CurrentArea);
+            SaveSystem.CaptureActiveCheckpoint(_areaDirector.CurrentArea, _areaDirector.ActiveWorldIndex);
         }
 
         /// <summary>RESUME tapped on the Home screen (MV-524 part 3): drop the player at

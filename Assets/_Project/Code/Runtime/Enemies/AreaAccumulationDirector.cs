@@ -294,7 +294,7 @@ namespace MaxWorlds.Enemies
             if (areaIndex <= CurrentArea) return;
             CurrentArea = areaIndex;
             FillArea(areaIndex);
-            SaveSystem.CaptureActiveCheckpoint(areaIndex);
+            SaveSystem.CaptureActiveCheckpoint(areaIndex, ActiveWorldIndex);
 
             // MV-993: a forced telemetry row + flush right on entry, chasing the a20->a21 crossing hard
             // crash — see Bootstrap.RecordAreaEntry's own doc comment for why this can't wait for the
