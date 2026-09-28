@@ -531,6 +531,7 @@ namespace MaxWorlds.Pickups
             if (_max == null || _live.Count == 0) return;
 
             Vector3 m = _max.position;
+            MapData map = EnemyNavigation.Map;
             float r2 = CollectRadius * CollectRadius;
             float magnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
                 MaxWorlds.Weapons.RigState.Level("e_mag"),
@@ -544,17 +545,23 @@ namespace MaxWorlds.Pickups
             for (int i = _live.Count - 1; i >= 0; i--)
             {
                 Pickup p = _live[i];
-                float dx = p.transform.position.x - m.x;
-                float dz = p.transform.position.z - m.z;
+                Vector3 pPos = p.transform.position;
+                float dx = pPos.x - m.x;
+                float dz = pPos.z - m.z;
                 float d2 = dx * dx + dz * dz;
-                if (d2 <= r2) { Collect(i, p); continue; }
+                // MV-1001: both the walk-over collect and the Magneto pull below are planar (XZ-only)
+                // distance checks, so without this a Max on the floor could collect — or Magneto-pull —
+                // a drop sitting on the deck above him, and vice versa. CombatLevel.SameLevel is the
+                // same floor-vs-deck comparison MV-944 already gives every targeting/damage site.
+                bool sameLevel = CombatLevel.SameLevel(map, m, pPos);
+                if (d2 <= r2 && sameLevel) { Collect(i, p); continue; }
                 _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
                 // Part Magneto (MV-422, e_mag) / Cell Magneto (MV-848, e_cmg): a caught pickup flies to
                 // Max from range instead of waiting for a manual walk-over. Only power cells — devices
                 // stay a deliberate walk-over pickup. MV-439: Part Magneto never pulls once the PARTS
                 // reserve is full — an owned ability must not actively destroy the player's resources.
-                if (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2))
+                if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2)))
                 {
                     Vector3 pos = p.transform.position;
                     Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
