@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.UI;
@@ -34,6 +35,17 @@ namespace MaxWorlds.Bosses
         private static readonly Dictionary<MonoBehaviour, float> SpawnProgressByBoss = new Dictionary<MonoBehaviour, float>(4);
         private static bool _engaged;
 
+        /// <summary>MV-995: every area index whose boss(es) have ALL been defeated at some point this
+        /// scene's lifetime — populated in <see cref="ReportDefeated"/> alongside
+        /// <see cref="LastDefeatedAreaIndex"/>, and (on a RESUME) seeded directly from a checkpoint's own
+        /// <c>SaveSlotData.CheckpointDefeatedBossAreas</c> by <see cref="ApplyCheckpointDefeatedAreas"/> —
+        /// so a boss that hasn't even <see cref="Register"/>-ed yet (a cold-boot RESUME's freshly-built
+        /// boss stands Dormant until Max walks into its wake area, well after the checkpoint restore
+        /// runs) still has somewhere to ask "was my area already beaten" the instant it tries to
+        /// <see cref="Register"/> itself. Unlike <c>AreaByBoss</c>, entries here are never removed — a
+        /// defeat is permanent for the rest of the scene's life, cleared only by <see cref="Reset"/>.</summary>
+        private static readonly HashSet<int> DefeatedAreas = new HashSet<int>(4);
+
         /// <summary>MV-721: sum of <c>Max</c> for every boss that has died so far in the CURRENT fight
         /// (i.e. since the engage latch last re-armed), with an implicit <c>Current</c> of 0 for each.
         /// <see cref="EmitCombinedHealth"/> folds this into its denominator so a death only ever removes
@@ -67,6 +79,7 @@ namespace MaxWorlds.Bosses
             _engaged = false;
             _deadMaxThisFight = 0f;
             LastDefeatedAreaIndex = 0;
+            DefeatedAreas.Clear();
         }
 
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
@@ -143,6 +156,7 @@ namespace MaxWorlds.Bosses
             if (!AnyLivingIn(areaIndex))
             {
                 LastDefeatedAreaIndex = areaIndex;
+                DefeatedAreas.Add(areaIndex);
                 HudSignals.EmitBossHealth(0f);
                 HudSignals.EmitBossDefeated();
             }
@@ -187,6 +201,59 @@ namespace MaxWorlds.Bosses
             foreach (KeyValuePair<MonoBehaviour, int> kv in AreaByBoss)
                 if (kv.Value == areaIndex && Living.Contains(kv.Key)) return true;
             return false;
+        }
+
+        /// <summary>Has <paramref name="areaIndex"/>'s boss already been beaten (MV-995) — either earlier
+        /// THIS fight (<see cref="ReportDefeated"/>) or on a prior run, restored via
+        /// <see cref="ApplyCheckpointDefeatedAreas"/>? This is what a boss's own <c>Wake()</c> must check
+        /// BEFORE calling <see cref="Register"/>, since a cold-boot RESUME rebuilds every authored boss
+        /// fresh and Dormant — the checkpoint restore that knows an area was already cleared runs well
+        /// before Max ever walks into that boss's wake area and triggers this check for real.</summary>
+        public static bool IsAreaDefeated(int areaIndex) => DefeatedAreas.Contains(areaIndex);
+
+        /// <summary>The area indices <see cref="DefeatedAreas"/> holds right now, sorted (MV-995) — what
+        /// <see cref="MaxWorlds.Save.SaveSystem.CaptureCheckpoint"/> persists into
+        /// <c>SaveSlotData.CheckpointDefeatedBossAreas</c> so a later RESUME can restore the same set via
+        /// <see cref="ApplyCheckpointDefeatedAreas"/>.</summary>
+        public static int[] DefeatedAreaIndices()
+        {
+            var result = new int[DefeatedAreas.Count];
+            DefeatedAreas.CopyTo(result);
+            Array.Sort(result);
+            return result;
+        }
+
+        /// <summary>Re-applies a checkpoint's already-recorded boss defeats (MV-995), called once by
+        /// <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> on RESUME. Unconditionally seeds
+        /// <see cref="IsAreaDefeated"/> for every area in <paramref name="areaIndices"/> — the seed is
+        /// what actually stops a fresh, still-Dormant boss from ever engaging once it wakes for real,
+        /// since at restore time it normally hasn't <see cref="Register"/>-ed itself yet. Also silently
+        /// removes any boss that IS already Living in one of these areas (belt-and-braces for the rare
+        /// case one has already woken) — no <see cref="HudSignals"/>, no <c>BossVictoryPayoff</c>, no
+        /// drops: this is restoring history, not scoring a fresh kill. A no-op for an empty/null set.</summary>
+        public static void ApplyCheckpointDefeatedAreas(IReadOnlyList<int> areaIndices)
+        {
+            if (areaIndices == null || areaIndices.Count == 0) return;
+
+            foreach (int areaIndex in areaIndices)
+            {
+                DefeatedAreas.Add(areaIndex);
+
+                var toRemove = new List<MonoBehaviour>();
+                foreach (KeyValuePair<MonoBehaviour, int> kv in AreaByBoss)
+                    if (kv.Value == areaIndex) toRemove.Add(kv.Key);
+
+                foreach (MonoBehaviour boss in toRemove)
+                {
+                    Living.Remove(boss);
+                    CurrentByBoss.Remove(boss);
+                    MaxByBoss.Remove(boss);
+                    AreaByBoss.Remove(boss);
+                    SpawnLevelByBoss.Remove(boss);
+                    SpawnProgressByBoss.Remove(boss);
+                    if (boss != null) UnityEngine.Object.DestroyImmediate(boss.gameObject);
+                }
+            }
         }
 
         private static void EmitCombinedHealth()

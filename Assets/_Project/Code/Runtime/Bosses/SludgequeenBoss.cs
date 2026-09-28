@@ -194,10 +194,24 @@ namespace MaxWorlds.Bosses
 
         private void Wake()
         {
+            int areaIndex = ResolveAreaIndex();
+
+            // MV-995: same reasoning as BigBermudaBoss.Wake -- a cold-boot RESUME rebuilds every
+            // authored boss fresh and Dormant, so an area already beaten before the checkpoint was saved
+            // must not fight again. BossCensus.IsAreaDefeated is seeded from the checkpoint well before
+            // this can run.
+            if (BossCensus.IsAreaDefeated(areaIndex))
+            {
+                _phase = Phase.Dead;
+                gameObject.SetActive(false);
+                Destroy(gameObject);
+                return;
+            }
+
             _phase = Phase.Fight;
             if (!_active.Contains(this)) _active.Add(this);
             // 2 phases -> HUD bar shows the 50% segment, same as BigBermudaBoss.
-            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, ResolveAreaIndex());
+            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, areaIndex);
         }
 
         private int ResolveAreaIndex()

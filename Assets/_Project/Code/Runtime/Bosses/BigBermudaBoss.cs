@@ -237,11 +237,27 @@ namespace MaxWorlds.Bosses
         // reached yet, were still up.
         private void Wake()
         {
+            int areaIndex = ResolveAreaIndex();
+
+            // MV-995: a cold-boot RESUME rebuilds every authored boss fresh and Dormant, with no memory
+            // of a prior run's fight -- so a boss whose area was already beaten before the checkpoint was
+            // saved would otherwise wake up and fight again the first time Max walks back into its own
+            // area. BossCensus.IsAreaDefeated is seeded from the checkpoint before this can ever run
+            // (SaveSystem.RestoreCheckpoint, well before Max is repositioned into the area at all) --
+            // silently remove this instance instead of engaging: no Register, no HudSignals, no HUD bar.
+            if (BossCensus.IsAreaDefeated(areaIndex))
+            {
+                _phase = Phase.Dead;
+                gameObject.SetActive(false);
+                Destroy(gameObject);
+                return;
+            }
+
             _phase = Phase.Intro;
             _introTimer = introTime;
             // 2 phases -> HUD bar shows the 50% segment. MV-542: routed through BossCensus so a 2+
             // boss fight engages the bar once and shows the COMBINED health, not a per-boss re-engage.
-            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, ResolveAreaIndex());
+            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, areaIndex);
         }
 
         /// <summary>Which area this boss stands in (MV-591). Resolved from its own world position, so
