@@ -41,12 +41,30 @@ namespace MaxWorlds.Arena
         /// opens on a condition (<c>all-sheds-destroyed</c> / <c>sheds-destroyed-before</c>) rather
         /// than combat — the caller (<see cref="WorldRunner"/>) knows this from the area's own
         /// <c>WorldArea.role</c>, not from where the area sits in the sequence. Whether a gate may be
-        /// re-closed is a property of the AREA, not its index.</summary>
-        public static RespawnPlan Resolve(int deathAreaIndex, bool deathGateIsConditionGated)
+        /// re-closed is a property of the AREA, not its index. Equivalent to calling the 3-arg
+        /// overload with no known predecessor — see its own doc comment (MV-1002).</summary>
+        public static RespawnPlan Resolve(int deathAreaIndex, bool deathGateIsConditionGated) =>
+            Resolve(deathAreaIndex, deathGateIsConditionGated, predecessorAreaIndex: 0);
+
+        /// <summary>MV-1002: <paramref name="predecessorAreaIndex"/> is the area Max actually came from
+        /// — a real physical-crossing lookup the caller resolves via
+        /// <see cref="AreaAccumulationDirector.PredecessorOf"/>, deck-aware (a death on a deck overlay
+        /// resolves the predecessor of its BASE FLOOR area instead of the deck's own immediate
+        /// predecessor). <c>deathAreaIndex - 1</c> is a RAW INDEX and is only ever correct when a
+        /// world's area indices happen to match its play order — World 2's gantry decks are late
+        /// indices over much-earlier floors, so that arithmetic can land Max somewhere he never stood
+        /// in. Worse than merely a wrong landing spot: <see cref="AreaAccumulationDirector.SetCurrentArea"/>
+        /// resets <c>CurrentArea</c> there UNCHECKED, and every area's incoming gate only ever fires
+        /// <c>EnterArea</c> once (its <c>Opened</c> event already fired pre-death) — so if that wrong
+        /// area isn't directly <c>MapLink</c>-adjacent to the real route ahead, <c>Update</c>'s one-hop
+        /// fallback latches there forever (<c>LogBlockedAreaJump</c>) and no area past it is ever
+        /// <c>FillArea</c>'d again. Falls back to the old <c>deathAreaIndex - 1</c> arithmetic only when
+        /// <paramref name="predecessorAreaIndex"/> is 0 ("unknown" — no crossing recorded yet, e.g.
+        /// death in the very first area entered after a cold boot).</summary>
+        public static RespawnPlan Resolve(int deathAreaIndex, bool deathGateIsConditionGated, int predecessorAreaIndex)
         {
-            // Area 1 has no previous arena — fall back to the entry stub (index 0). Every other area
-            // falls back exactly one area, boss areas included.
-            int respawnArea = Mathf.Max(0, deathAreaIndex - 1);
+            // Area 1 has no previous arena — fall back to the entry stub (index 0).
+            int respawnArea = predecessorAreaIndex > 0 ? predecessorAreaIndex : Mathf.Max(0, deathAreaIndex - 1);
             return new RespawnPlan(respawnArea, deathAreaIndex, recloseGate: !deathGateIsConditionGated);
         }
     }
