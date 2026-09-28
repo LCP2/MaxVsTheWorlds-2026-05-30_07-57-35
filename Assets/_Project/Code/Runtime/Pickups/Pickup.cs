@@ -165,6 +165,12 @@ namespace MaxWorlds.Pickups
         /// safe and fixes both without depending on Unity's OnEnable timing at all.</summary>
         public void Place(Vector3 groundPos)
         {
+            // MV-1001: the old code hard-coded _baseY = FloatHeight, so every drop hovered above the
+            // FLOOR regardless of groundPos.y — a robot killed on an upper deck dropped loot that hung
+            // in the air over the ground level underneath it. GroundMarkHeights.SurfaceAt reads the
+            // same deck-vs-floor surface every other ground mark already resolves against (MV-898/
+            // MV-1000), keyed off groundPos.y itself, so a drop from a deck death lands on that deck.
+            _baseY = GroundMarkHeights.SurfaceAt(groundPos).y + FloatHeight;
             transform.position = new Vector3(groundPos.x, _baseY, groundPos.z);
             gameObject.SetActive(true);
             // MV-698: the glow ring is a flat ground quad, not a child riding the pickup's own
