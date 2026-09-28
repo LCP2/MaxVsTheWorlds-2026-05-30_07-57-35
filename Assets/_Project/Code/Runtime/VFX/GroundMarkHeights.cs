@@ -1,7 +1,12 @@
+using UnityEngine;
+using MaxWorlds.Arena;
+using MaxWorlds.Enemies;
+
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// The single source of truth for how high every GAMEPLAY ground mark draws (MV-866).
+    /// The single source of truth for how high every GAMEPLAY ground mark draws (MV-866), and for
+    /// WHERE on the map "the ground" actually is for one (MV-1000).
     ///
     /// Floor dressing is scenery and always sits below every gameplay mark. World 2's stormdrain
     /// dressing (<see cref="MaxWorlds.Rendering.StormdrainKit"/>: CrackLift, StainLift +
@@ -31,5 +36,20 @@ namespace MaxWorlds.VFX
         public const float ContactShadowLift = 0.046f;
         public const float AnchorRingLift = 0.052f;
         public const float DangerTelegraphLift = 0.060f;
+
+        /// <summary>The XZ-flattened surface a ground mark at <paramref name="p"/> should sit on: the
+        /// deck top when <paramref name="p"/> is over an authored deck at deck height, the area floor
+        /// otherwise — never a fixed floor plane (MV-898's fix for <see cref="GroundAnchorVfx"/>,
+        /// extended here to every ground-mark call site so the two can never drift apart again;
+        /// MV-1000 found <see cref="TelegraphVfx"/> still flattening to a fixed y=0 after MV-898 only
+        /// touched <see cref="GroundAnchorVfx"/>). Falls back to the floor when there is no map to
+        /// consult (an EditMode fixture with no <see cref="MaxWorlds.Arena.BackyardPath"/> in the
+        /// scene).</summary>
+        public static Vector3 SurfaceAt(Vector3 p)
+        {
+            MapData map = EnemyNavigation.Map;
+            float y = map != null ? map.SurfaceHeightAt(p) : 0f;
+            return new Vector3(p.x, y, p.z);
+        }
     }
 }

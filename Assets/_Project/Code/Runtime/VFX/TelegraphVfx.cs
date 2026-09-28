@@ -111,7 +111,12 @@ namespace MaxWorlds.VFX
             }
         }
 
-        private static Vector3 Ground(Vector3 p) => new Vector3(p.x, 0f, p.z);
+        /// <summary>MV-1000: flattens to the surface the robot/zone is actually on (deck top or area
+        /// floor), not a fixed y=0 plane — the fix MV-898 gave <see cref="GroundAnchorVfx"/> but never
+        /// reached here, which is why a telegraph ring for a robot standing on a World 2 deck drew on
+        /// the floor below it. Shared with <see cref="GroundAnchorVfx"/> via
+        /// <see cref="GroundMarkHeights.SurfaceAt"/> so the two can never drift apart again.</summary>
+        private static Vector3 Ground(Vector3 p) => GroundMarkHeights.SurfaceAt(p);
 
         private GroundRing Next()
         {

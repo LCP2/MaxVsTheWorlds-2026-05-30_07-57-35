@@ -253,17 +253,10 @@ namespace MaxWorlds.VFX
         /// <summary>Flatten to the surface the owner is actually standing on (MV-898): the deck top
         /// when its XZ position is over an authored deck at deck height, the area floor otherwise —
         /// never a fixed floor plane, which is what left every ring and shadow on World 2's raised
-        /// decks drawing 2.5 m below the actor they belonged to. <see cref="MapData.SurfaceHeightAt"/>
-        /// is the same "on a deck" test <see cref="MapData.SnapToWalkableSurface"/> already uses for a
-        /// following Sentinel, so a mark and the Sentinel standing on it never disagree about which
-        /// level they're on. Falls back to the floor when there is no map to consult (an EditMode
-        /// fixture with no <see cref="MaxWorlds.Arena.BackyardPath"/> in the scene).</summary>
-        private static Vector3 Ground(Vector3 p)
-        {
-            MapData map = EnemyNavigation.Map;
-            float y = map != null ? map.SurfaceHeightAt(p) : 0f;
-            return new Vector3(p.x, y, p.z);
-        }
+        /// decks drawing 2.5 m below the actor they belonged to. Shared with <see cref="TelegraphVfx"/>
+        /// via <see cref="GroundMarkHeights.SurfaceAt"/> (MV-1000) so the two can never drift apart
+        /// again the way they did between MV-898 and MV-1000.</summary>
+        private static Vector3 Ground(Vector3 p) => GroundMarkHeights.SurfaceAt(p);
 
         /// <summary>One-time construction for a newly-discovered actor's contact shadow (MV-935: no
         /// longer pool-reused across actors by discovery order — see <see cref="AnchorSlot"/>).
