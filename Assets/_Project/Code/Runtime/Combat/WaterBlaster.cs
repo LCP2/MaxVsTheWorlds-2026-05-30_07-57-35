@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -232,6 +233,26 @@ namespace MaxWorlds.Combat
         private WaterVfx _vfx;
         private AimReticle _reticle;
 
+        /// <summary>MV-996 field diagnostic: how long (seconds of continuous spraying) each nearby
+        /// robot has gone with zero damage landing — see <see cref="MeasureMvHitCandidates"/>. Cleared
+        /// the instant a robot is hit, leaves reach, dies, or stops being a candidate, so it never
+        /// carries stale dwell time into a pooled robot's next life.</summary>
+        private readonly Dictionary<RobotEnemy, float> _mvHitNoDamageSeconds = new Dictionary<RobotEnemy, float>();
+
+        /// <summary>MV-996: last <see cref="Time.time"/> an MVHIT row was actually written for a robot —
+        /// enforces <see cref="MvHitLogIntervalSeconds"/> per robot.</summary>
+        private readonly Dictionary<RobotEnemy, float> _mvHitLastLoggedAt = new Dictionary<RobotEnemy, float>();
+
+        /// <summary>MV-996: how long a robot must sit in reach with zero damage landing before it's
+        /// worth a row — Lee's report was a sustained failure across a whole engagement, not a single
+        /// unlucky tick, so this filters out the ordinary one-tick misses (falloff, a target stepping
+        /// out of cone) that happen in completely healthy play.</summary>
+        private const float MvHitDwellSeconds = 1.5f;
+
+        /// <summary>MV-996: rate limit so a genuinely stuck robot doesn't flood the events CSV for
+        /// however long the player keeps spraying at it.</summary>
+        private const float MvHitLogIntervalSeconds = 10f;
+
         /// <summary>Starting size of <see cref="_hits"/> (MV-666). Not a hard cap any more —
         /// <see cref="OverlapSphereGrowing"/> doubles it on saturation — so this only tunes how many
         /// re-queries a very crowded room costs on its first tick.</summary>
@@ -431,6 +452,11 @@ namespace MaxWorlds.Combat
                 }
             }
 
+            // MV-996: field diagnostic for Lee's v0.11.0 report (two Bolters the spray passed straight
+            // through) — reads s_buffer built just above to see which nearby robots this tick left
+            // undamaged, not gated on hitSomething below.
+            MeasureMvHitCandidates(origin, dir, reach, cone, count);
+
             // MV-862 FOCUS: the nearest RobotEnemy this tick's spray actually hit, for CurrentTarget —
             // the cone can wash several targets at once, so "the robot it's hitting" (singular) needs a
             // tie-break, and nearest matches the pick a player aiming AT something specific would mean.
@@ -490,6 +516,119 @@ namespace MaxWorlds.Combat
                 Vector3 end = origin + dir * reach;
                 _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, tickDamage * 0.5f);
             }
+        }
+
+        /// <summary>MV-996 field diagnostic: for every currently-active robot within spray reach that
+        /// this tick's <see cref="s_buffer"/> did NOT hit, accumulate dwell time and log an MVHIT event
+        /// once it has gone <see cref="MvHitDwellSeconds"/> with zero damage landing (Lee's v0.11.0
+        /// report: two Bolters the spray visibly passed through, only fixed by a RESUME). Reads
+        /// <see cref="RobotEnemy.Active"/> rather than only this tick's own <c>_hits</c> contents, so a
+        /// robot whose collider the OverlapSphere query itself never returns (H1's own suspect — a
+        /// stale disabled CharacterController) is still measured, not silently invisible to this too.
+        /// Dead, converted (Team.Player) and momentarily-undamageable (a submerged Grate Lurker) robots
+        /// are never candidates — none of those is the bug this ticket chases, and tracking them would
+        /// just spam the CSV with entirely expected refusals.</summary>
+        private void MeasureMvHitCandidates(Vector3 origin, Vector3 dir, float reach, float cone, int overlapCount)
+        {
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy robot = active[i];
+                if (robot == null) continue;
+
+                if (!robot.IsAlive || robot.Team == Team.Player || !robot.IsDamageable)
+                {
+                    _mvHitNoDamageSeconds.Remove(robot);
+                    continue;
+                }
+
+                Vector3 testPoint = robot.transform.position;
+                if ((testPoint - origin).sqrMagnitude > reach * reach || s_buffer.Contains(robot))
+                {
+                    _mvHitNoDamageSeconds.Remove(robot);
+                    continue;
+                }
+
+                float dwell = (_mvHitNoDamageSeconds.TryGetValue(robot, out float existing) ? existing : 0f) + fireInterval;
+                _mvHitNoDamageSeconds[robot] = dwell;
+                if (dwell < MvHitDwellSeconds) continue;
+
+                float lastLogged = _mvHitLastLoggedAt.TryGetValue(robot, out float logged)
+                    ? logged : -MvHitLogIntervalSeconds;
+                if (Time.time - lastLogged < MvHitLogIntervalSeconds) continue;
+                _mvHitLastLoggedAt[robot] = Time.time;
+
+                LogMvHit(robot, origin, dir, testPoint, reach, cone, overlapCount);
+            }
+        }
+
+        /// <summary>Writes the one MVHIT row (MV-996 Change 1), resolving which filter is rejecting this
+        /// robot in the same order <see cref="FireTick"/> itself tests them — overlap, cone, line of
+        /// sight, combat level — so the logged reason is the FIRST one that would actually reject it,
+        /// not merely any filter that happens to be true. No-op with no active session recorder (tests,
+        /// capture/press-kit runs) — same "safe to call unconditionally" contract as
+        /// <see cref="Bootstrap.RecordAreaEntry"/>'s own call sites.</summary>
+        private void LogMvHit(RobotEnemy robot, Vector3 origin, Vector3 dir, Vector3 testPoint,
+            float reach, float cone, int overlapCount)
+        {
+            var recorder = Bootstrap.ActiveSessionRecorder;
+            if (recorder == null) return;
+
+            bool overlapReturnedIt = false;
+            for (int i = 0; i < overlapCount; i++)
+            {
+                if (_hits[i] != null && _hits[i].TryGetComponent<RobotEnemy>(out var hitRobot) && hitRobot == robot)
+                {
+                    overlapReturnedIt = true;
+                    break;
+                }
+            }
+
+            string filter;
+            if (!overlapReturnedIt)
+            {
+                filter = "overlap-miss";
+            }
+            else if (!SprayHit.InCone(origin, dir, testPoint, reach, cone))
+            {
+                filter = "cone";
+            }
+            else if (!LineOfSight.Clear(origin, testPoint, robot.transform))
+            {
+                string blockerName = "unknown";
+                Vector3 delta = testPoint - origin;
+                float dist = delta.magnitude;
+                if (dist > 1e-3f && Physics.Raycast(origin, delta / dist, out RaycastHit hit, dist,
+                        CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+                {
+                    blockerName = hit.transform.name;
+                }
+                filter = $"los:{blockerName}";
+            }
+            else if (!CombatLevel.SameLevel(EnemyNavigation.Map, origin, testPoint))
+            {
+                filter = "level";
+            }
+            else
+            {
+                // Every filter this diagnostic knows how to name passed — whatever refused the damage
+                // (e.g. TakeDamage's own internal gate) is outside this list.
+                filter = "unknown";
+            }
+
+            CharacterController cc = robot.GetComponent<CharacterController>();
+            Vector3 ccCentre = cc != null ? cc.bounds.center : testPoint;
+            string zoneId = robot.AreaIndex > 0 ? $"area{robot.AreaIndex}" : "none";
+
+            string context = $"kind={robot.Kind} zone={zoneId} dormant={robot.IsDormant} " +
+                // MV-966's SetParked disables the whole GameObject, which removes it from
+                // RobotEnemy.Active (see OnDisable) — a parked robot can therefore never appear as a
+                // candidate here, so this is always false by construction, not a missed read.
+                "parked=false " +
+                $"cc.enabled={(cc != null ? cc.enabled.ToString() : "no-cc")} ccCentre={ccCentre} " +
+                $"transformPos={testPoint} filter={filter}";
+
+            recorder.RecordEvent(DateTime.UtcNow, "MVHIT", context);
         }
 
         /// <summary>DELUGE's arc (MV-426): for every target this tick's spray directly hit, find the
