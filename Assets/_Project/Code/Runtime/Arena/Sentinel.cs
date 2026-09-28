@@ -294,6 +294,11 @@ namespace MaxWorlds.Arena
         private DestructibleHealth _health;
         private float _timeSinceDamage;
 
+        /// <summary>MV-1005: the red hit-flash/spark/low-HP-smoke read Max's own machine gets on
+        /// every landed hit — built in <see cref="Init"/> right after <see cref="BuildBody"/>, since
+        /// it needs the body renderers to already exist.</summary>
+        private DamageFeedbackVfx _damageFeedback;
+
         /// <summary>MV-946: the same fall/out-of-bounds safety net Max carries
         /// (<see cref="MaxWorlds.Player.PlayerController"/>) — seeded with this sentinel's own deploy
         /// point, ticked every <see cref="TickSentinel"/>.</summary>
@@ -395,6 +400,10 @@ namespace MaxWorlds.Arena
             BuildBody();
             IgnorePlayerCollision();
             WorldHealthBar.Attach(gameObject, this, 1.9f, 1.2f, alwaysShow: true);
+
+            _damageFeedback = gameObject.AddComponent<DamageFeedbackVfx>();
+            _damageFeedback.Initialize();
+            _damageFeedback.Init(() => Normalized);
             Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (see GateSolidityTests)
 
             // MV-604: subscribed here, not in OnEnable — Unity does not reliably call OnEnable for a
@@ -600,6 +609,10 @@ namespace MaxWorlds.Arena
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             if (info.Amount > 0f) _timeSinceDamage = 0f; // MV-398: (re)starts the regen delay below
             _health.TakeDamage(info.Amount);
+            // MV-1005: red flash/sparks on real HP loss. Not "?." — a killing hit's Die() has already
+            // DestroyImmediate'd this GameObject by the time we get here, and Unity's fake-null only
+            // resolves through its own overloaded == / !=, never through the null-conditional operator.
+            if (info.Amount > 0f && _damageFeedback != null) _damageFeedback.OnHit(info.Point);
         }
 
         /// <summary>HP after <paramref name="dt"/> seconds of passive regen (MV-398) — same
