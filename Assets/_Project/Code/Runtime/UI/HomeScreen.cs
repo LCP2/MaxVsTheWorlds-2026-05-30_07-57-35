@@ -594,7 +594,7 @@ namespace MaxWorlds.UI
 
         private void BuildSettingsButton(RectTransform stage)
         {
-            const float w = 220f, h = 90f;
+            const float w = 290f, h = 90f;
             var go = new GameObject("SETTINGS", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(stage, false);
             var rt = (RectTransform)go.transform;
@@ -622,6 +622,7 @@ namespace MaxWorlds.UI
             Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             label.rectTransform.sizeDelta = new Vector2(w - 76f - 16f, 40f);
             label.rectTransform.anchoredPosition = new Vector2(76f, 0f);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
             label.text = "SETTINGS";
 
             var btn = go.GetComponent<Button>();
