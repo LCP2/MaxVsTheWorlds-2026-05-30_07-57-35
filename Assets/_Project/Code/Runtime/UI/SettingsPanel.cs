@@ -321,11 +321,9 @@ namespace MaxWorlds.UI
             // pushes straight onto any bubble that's already up, so a slider moved mid-tune is
             // visible immediately rather than only on the next activation.
             //
-            // MV-583 bakes Lee's 26 Aug 2026 tuning session (SG1) as the new authored defaults —
-            // Rim power/Seam width/Shimmer speed read 100%/100%/99% (i.e. unchanged) and are left
-            // alone; the other six below are baked via the panel's own PosToValue(min, max, OLD
-            // default, SG1-reading/200) per the ticket's own instruction to trust that over any
-            // hand-derived cross-check.
+            // MV-990 removed the hex-panel lattice this shader used to draw (and, with it, the
+            // panel scale/seam width/seam boost/pulse speed/pulse strength knobs that tuned it) —
+            // it obscured the shimmer band's rising-pulse cue, which is what Lee actually wants.
             Add("Shield rim power", "x", 0.5f, 8f, 8f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 2.4)
                 () => DevTuning.Or(DevTuning.ForceFieldRimPower, 8f),
                 v => { DevTuning.ForceFieldRimPower = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
@@ -334,30 +332,6 @@ namespace MaxWorlds.UI
             Add("Shield rim strength", "x", 0f, 6f, 0f,
                 () => DevTuning.Or(DevTuning.ForceFieldRimStrength, 0f),
                 v => { DevTuning.ForceFieldRimStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
-
-            // SG1: 0% (slider minimum) -> PosToValue(2, 20, 7, 0) = 2.
-            Add("Shield panel scale", "x", 2f, 20f, 2f,
-                () => DevTuning.Or(DevTuning.ForceFieldPanelScale, 2f),
-                v => { DevTuning.ForceFieldPanelScale = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
-
-            Add("Shield seam width", "x", 0.02f, 0.5f, 0.09f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 0.1)
-                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamWidth, 0.09f),
-                v => { DevTuning.ForceFieldPanelSeamWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
-
-            // SG1: 31% -> PosToValue(0, 4, 0.35, 0.31) = Lerp(0, 0.35, 0.31) = 0.1085.
-            Add("Shield seam boost", "x", 0f, 4f, 4f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 0.1085)
-                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 4f),
-                v => { DevTuning.ForceFieldPanelSeamBoost = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
-
-            // SG1: 200% (slider maximum) -> PosToValue(0, 4, 1.2, 1) = 4.
-            Add("Shield pulse speed", "x", 0f, 4f, 1.77f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 4)
-                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 1.77f),
-                v => { DevTuning.ForceFieldPulseSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
-
-            // SG1: 200% (slider maximum) -> PosToValue(0, 1, 0.08, 1) = 1.
-            Add("Shield pulse strength", "x", 0f, 1f, 0f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 1)
-                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 0f),
-                v => { DevTuning.ForceFieldPulseStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // MV-583 change 4: shimmer speed now scales with Force Field's level instead of reading
             // this fixed default (see AbilityTuning.ForceFieldShimmerBandSpeed /
