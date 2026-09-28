@@ -9,28 +9,35 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-832: Sentinels picked the nearest robot from an all-layers <c>Physics.OverlapSphereNonAlloc</c>
-    /// with a 16-slot buffer — no line-of-sight check (shot straight through walls into a neighbouring
-    /// room), no area check (ignored Max's own room in favour of a nearer one next door), and no
-    /// Dormant/<see cref="RobotEnemy.IsDamageable"/> gate (wasted shots waking sleeping garrisons or
-    /// hitting an invulnerable Grate Lurker) — and in a room dense enough with non-robot colliders, the
-    /// buffer could fill before a single robot was ever returned, so the turret never fired at all.
-    /// Fixed by sourcing candidates from <see cref="RobotEnemy.Active"/> directly, filtered by
-    /// alive/awake/damageable/range/<see cref="LineOfSight"/>, then narrowed to Max's own zone (or a
-    /// zone sharing its footprint, MV-697) whenever anything qualifies there.
+    /// with a 16-slot buffer — no area check (ignored Max's own room in favour of a nearer one next
+    /// door), and no Dormant/<see cref="RobotEnemy.IsDamageable"/> gate (wasted shots waking sleeping
+    /// garrisons or hitting an invulnerable Grate Lurker) — and in a room dense enough with non-robot
+    /// colliders, the buffer could fill before a single robot was ever returned, so the turret never
+    /// fired at all. Fixed by sourcing candidates from <see cref="RobotEnemy.Active"/> directly, filtered
+    /// by alive/awake/damageable/range, then narrowed to Max's own zone (or a zone sharing its
+    /// footprint, MV-697) whenever anything qualifies there.
+    ///
+    /// MV-1006 later dropped the line-of-sight gate this suite originally covered (AC1/AC2 below were
+    /// "a wall blocks the shot") — Sentinels are now specified to fire through barriers, so a robot on
+    /// the far side of a wall is no longer, by itself, a reason to reject it. AC1/AC2 are updated in
+    /// place rather than culled: the zone-narrowing behaviour they exercise (Max's own area beats a
+    /// nearer robot elsewhere) is untouched by MV-1006 and still needs a regression guard, so the
+    /// geometry stays and only the LOS-era assertions change. See
+    /// <c>MV1006SentinelFiresThroughBarriersTests</c> for the barrier-specific coverage.
     ///
     /// One test, per CC_AUTONOMY's "at most one new test per ticket" rule — this is that one, covering
     /// the ticket's AC1-AC4 (AC5 is the pre-existing <c>SentinelTargetingTests</c> suite, untouched by
-    /// this change; AC6 is <c>cc-verify.bat</c>). AC1/AC2 are built so the OLD nearest-by-raw-distance
-    /// <c>NearestRobotInRange</c> gets them wrong: R2 sits CLOSER in straight-line distance (4 m) than
-    /// R1 (6 m) despite being through the wall, so a fix that merely re-ordered without adding the real
-    /// LOS/area/damage gates would still fail this test.
+    /// this change; AC6 is <c>cc-verify.bat</c>). AC1 is built so the OLD nearest-by-raw-distance
+    /// <c>NearestRobotInRange</c> gets it wrong: R2 sits CLOSER in straight-line distance (4 m) than
+    /// R1 (6 m) despite being in a different area, so a fix that merely re-ordered without adding the
+    /// real area/damage gates would still fail this test.
     ///
     /// Actually run (not just reasoned about) against the pre-fix <c>NearestRobotInRange</c> — reflection
     /// targets the method by name, which existed under both implementations, so this same file runs
     /// unmodified against either one. At base commit 287c461 (<c>Sentinel.cs</c> stashed back to that
     /// commit, test re-run, then restored) it failed at AC1 with:
     /// <c>Expected: same as R1; But was: R2</c> — the old physics-overlap rule picked the nearer-but-
-    /// blocked R2 exactly as predicted. Passes clean against the fix below.
+    /// wrong-area R2 exactly as predicted. Passes clean against the fix below.
     /// </summary>
     public sealed class MV832SentinelTargetingTests
     {
@@ -119,59 +126,69 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void NearestRobotInRange_RespectsWallsAreasAndDamageability()
         {
-            // ---------------------------------------------------------------- AC1 + AC2: line of sight
+            // ---------------------------------------------------------------- AC1 + AC2: area narrowing
             // Sentinel and Max sit right against the shared wall (x=0). R2 is only 4 m away in RAW
-            // distance but on the far side of the wall (blocked); R1 is 6 m away but in the clear —
-            // the old nearest-by-distance rule picks R2 (4 m < 6 m); the fix must pick R1 instead.
+            // distance but in a different area (zone B); R1 is 6 m away but shares Max's own area (zone
+            // A) — the old nearest-by-distance rule picks R2 (4 m < 6 m); the fix must pick R1 instead,
+            // because zone-narrowing (MV-832) prefers Max's own area whenever anything qualifies there.
             InstallTwoZoneMap();
             var maxGo = new GameObject("MV832-Max", typeof(CharacterController));
             _spawned.Add(maxGo);
             maxGo.transform.position = new Vector3(-1f, 0f, 0f);
 
             Sentinel sentinel = NewSentinel(new Vector3(-1f, 0f, 0f), range: 20f, followTarget: maxGo.transform);
-            RobotEnemy r1 = NewRobot(new Vector3(-1f, 0f, 6f));   // zone A, 6 m, clear sight
+            RobotEnemy r1 = NewRobot(new Vector3(-1f, 0f, 6f));   // zone A, 6 m, Max's own area
             RobotEnemy r2 = NewRobot(new Vector3(3f, 0f, 0f));    // zone B, 3 m past the wall, 4 m raw distance
             Physics.SyncTransforms();
 
             RobotEnemy chosen = InvokeNearestRobotInRange(sentinel);
             Assert.AreSame(r1, chosen,
-                "AC1: R1 (farther, but clear sight and Max's own zone) must be chosen over R2 " +
-                "(nearer in raw distance, but through the wall) — this fails against the old " +
-                "nearest-by-distance NearestRobotInRange, which picks R2");
+                "AC1: R1 (farther, but in Max's own zone) must be chosen over R2 (nearer in raw " +
+                "distance, but in a different zone) — this fails against the old nearest-by-distance " +
+                "NearestRobotInRange, which picks R2");
 
-            // AC2: with R1 gone, only R2 remains — and it's still behind the wall, so nothing qualifies.
+            // AC2: with R1 gone, R2 is the only candidate left. MV-1006 dropped the line-of-sight gate
+            // (Sentinels fire through barriers by design), and with no other candidate in Max's own zone
+            // there is nothing left to narrow the pool to — so R2 now qualifies and gets chosen. This is
+            // the intended MV-1006 behaviour, not a regression: a robot through a wall, in a different
+            // area, is still eligible once no candidate remains in Max's own area.
             GameObject r1Go = r1.gameObject;
             _spawned.Remove(r1Go);
             Object.DestroyImmediate(r1Go);
             Physics.SyncTransforms();
 
             RobotEnemy chosenAfterR1Removed = InvokeNearestRobotInRange(sentinel);
-            Assert.IsNull(chosenAfterR1Removed,
-                "AC2: with R1 gone, R2 sits behind a wall and must never be chosen, and no bolt fires");
+            Assert.AreSame(r2, chosenAfterR1Removed,
+                "AC2 (MV-1006): with R1 gone, R2 — through the wall in a different zone — must now be " +
+                "chosen; MV-1006 removed the line-of-sight gate, so a barrier alone no longer excludes it");
 
             // ---------------------------------------------------------------- AC3: Dormant / non-damageable
-            // A Dormant robot at 2 m and a Lurker (IsDamageable false while Submerged, its spawn default)
-            // at 1.5 m must both be skipped in favour of the only real candidate, 5 m away. Clears the
-            // registry first — R2 (AC1/AC2, still alive behind the wall) must not leak into this section's
-            // candidate pool; NearestRobotInRange reads RobotEnemy.Active, not a physics query, so
-            // clearing the registry (not the GameObject) is enough to retire it.
+            // A Lurker (IsDamageable false while Submerged, its spawn default) at 1.5 m, and a Dormant
+            // robot at 2 m OUTSIDE the sentinel's own zone, must both be skipped in favour of the only
+            // real candidate, 5 m away. MV-1006 made a Dormant robot eligible when it shares the
+            // Sentinel's own area — covered by MV1006SentinelFiresThroughBarriersTests — so this section
+            // now deliberately places the sentinel in zone A (x=-1) and the Dormant robot in zone B
+            // (x=2, still the closer raw distance) to keep proving the "closer but irrelevant" case
+            // stays irrelevant. Clears the registry first — R1/R2 (AC1/AC2) must not leak into this
+            // section's candidate pool; NearestRobotInRange reads RobotEnemy.Active, not a physics query,
+            // so clearing the registry (not the GameObject) is enough to retire them.
             RobotEnemy.ResetRegistry();
-            Sentinel sentinelAc3 = NewSentinel(Vector3.zero, range: 20f, followTarget: null);
+            Sentinel sentinelAc3 = NewSentinel(new Vector3(-1f, 0f, 0f), range: 20f, followTarget: null);
 
-            RobotEnemy dormant = NewRobot(new Vector3(2f, 0f, 0f));
+            RobotEnemy dormant = NewRobot(new Vector3(2f, 0f, 0f)); // zone B — not the sentinel's own zone A
             dormant.BeginDormant();
             Assert.IsTrue(dormant.IsDormant, "test setup: BeginDormant must actually land in State.Dormant");
 
             RobotEnemy lurker = NewRobot(new Vector3(1.5f, 0f, 0f), EnemyKind.Lurker);
             Assert.IsFalse(lurker.IsDamageable, "test setup: a freshly-spawned Lurker defaults to Submerged/undamageable");
 
-            RobotEnemy eligible = NewRobot(new Vector3(5f, 0f, 0f));
+            RobotEnemy eligible = NewRobot(new Vector3(5f, 0f, 0f)); // awake — any area in range still counts
             Physics.SyncTransforms();
 
             RobotEnemy chosenAc3 = InvokeNearestRobotInRange(sentinelAc3);
             Assert.AreSame(eligible, chosenAc3,
-                "AC3: a Dormant robot and an undamageable Lurker must never be chosen, even far closer " +
-                "than the only real candidate");
+                "AC3: an undamageable Lurker, and a Dormant robot outside the sentinel's own zone, must " +
+                "never be chosen, even far closer than the only real candidate");
 
             // ---------------------------------------------------------------- AC4: the "never fires" probe
             // 40 non-robot colliders inside range, plus one awake/visible robot at 5 m — the old
