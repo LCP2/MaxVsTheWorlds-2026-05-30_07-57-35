@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.VFX;
 
@@ -17,7 +18,7 @@ namespace MaxWorlds.Enemies
     /// pouring out of a source.
     /// </summary>
     [MaxWorlds.Core.PerfSection("robot")]
-    public sealed class EnemySpawner : MonoBehaviour
+    public sealed class EnemySpawner : MonoBehaviour, IExitZoneSource
     {
         [SerializeField] private RobotEnemy prefab;
 
@@ -242,6 +243,58 @@ namespace MaxWorlds.Enemies
         /// <summary>Route this factory's robots through a real door. Called by the art layer, which
         /// owns the door; gameplay never constructs one.</summary>
         public void UseDoor(IFactoryDoor door) => _door = door;
+
+        // --- Exit zone (MV-998) — no robot may come to rest inside the mouth this factory emits
+        // through. Registered/unregistered off OnEnable/OnDisable, same "no scene scan" idiom as
+        // RobotEnemy._active, so RobotEnemy's rest gate and the DormantWakeScheduler safety sweep can
+        // ask FactoryExitZones without either side knowing EnemySpawner exists. ---
+
+        private void OnEnable() => FactoryExitZones.Register(this);
+        private void OnDisable() => FactoryExitZones.Unregister(this);
+
+        /// <summary>How far <see cref="ResolveMusterPoint"/> clamps a muster point back into whichever
+        /// zone this factory's own position sits in — same number/reasoning as
+        /// <see cref="MaxWorlds.Weapons.PlayerAbilities.SentinelDeckEdgeMargin"/>.</summary>
+        private const float MusterEdgeMargin = 0.5f;
+
+        /// <summary>The live direction this factory's mouth currently faces — the door's own outward
+        /// face if it has one, otherwise straight at Max, falling back to the factory's own front face
+        /// with no target found (the exact same fallback chain <see cref="SpawnKind"/> uses for
+        /// <c>mouth</c>/<c>dir</c>), so a resting robot is judged against the mouth as it actually is
+        /// right now — never <see cref="FactoryExitZone"/>'s own generic (and possibly wrong-facing)
+        /// fallback — and never as it was when the robot rested.</summary>
+        private Vector3 MouthDirection
+        {
+            get
+            {
+                Vector3 mouth = _door != null ? _door.OutwardDirection : ToTarget();
+                Vector3 flat = new Vector3(mouth.x, 0f, mouth.z);
+                return flat.sqrMagnitude > 0.0001f ? flat.normalized : -transform.forward;
+            }
+        }
+
+        private float MouthHalfAngle => _door != null ? _door.FanHalfAngleDeg : mouthHalfAngle;
+
+        public bool ExitZoneContains(Vector3 point) =>
+            FactoryExitZone.InsideHutchZone(point, transform.position, MouthDirection, MouthHalfAngle, spawnRadius);
+
+        public Vector3 MusterPointFor(Vector3 restingPoint, int slotIndex)
+        {
+            Vector3 dir = MouthDirection;
+            Vector3 exit = FactoryMouth.ExitPoint(transform.position, dir, spawnRadius, restingPoint.y);
+            return ResolveMusterPoint(exit, dir, slotIndex);
+        }
+
+        /// <summary>The raw formula muster point (<see cref="FactoryMouth.MusterPoint"/>), snapped onto
+        /// walkable floor inside this factory's own area when a level map is loaded
+        /// (<see cref="EnemyNavigation.Map"/> is null in a bare-fixture test, which is exactly when the
+        /// raw point is already correct — nothing to clamp against).</summary>
+        private Vector3 ResolveMusterPoint(Vector3 exitPoint, Vector3 dir, int slotIndex)
+        {
+            Vector3 raw = FactoryMouth.MusterPoint(exitPoint, dir, slotIndex);
+            MapData map = EnemyNavigation.Map;
+            return map != null ? map.SnapToWalkableSurface(transform.position, raw, MusterEdgeMargin) : raw;
+        }
 
         /// <summary>A robot is due — the cadence has come round and there is room on the field. The
         /// door watches this to know when to start hauling itself up, so that it is open by the time
@@ -508,7 +561,14 @@ namespace MaxWorlds.Enemies
             // by beelining at Max instead. MV-828 D3: a twin skips this altogether — it is already in
             // Chase from ResetState, and PlaceAtOutRamp overrides this door position a moment later
             // anyway, so there is nothing here for it to walk out of.
-            if (!asTwin) e.BeginEmergence(exit);
+            if (!asTwin)
+            {
+                // MV-998: this robot must not come to rest right back at the mouth it just walked out
+                // of — hand it a muster point (past the exit zone) alongside the exit point, so
+                // TickEmerge walks it on there before it's allowed to go Dormant.
+                Vector3 muster = ResolveMusterPoint(exit, dir, _emitted);
+                e.BeginEmergence(exit, muster);
+            }
 
             // Re-applied on every spawn, not just on creation: Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death (YT-74).

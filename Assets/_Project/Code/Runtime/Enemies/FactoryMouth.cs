@@ -107,5 +107,35 @@ namespace MaxWorlds.Enemies
             v.y = 0f;
             return v.sqrMagnitude < 1e-6f ? Vector3.zero : v.normalized;
         }
+
+        /// <summary>MV-998: how far past <see cref="ExitPoint"/> a robot musters before it is allowed to
+        /// rest — see <see cref="MusterPoint"/>.</summary>
+        public const float MusterDistance = 4.0f;
+
+        /// <summary>MV-998: sideways spacing between the three lateral muster slots, so consecutive
+        /// robots don't converge on the same spot — see <see cref="MusterPoint"/>.</summary>
+        public const float MusterLateralSpacing = 1.5f;
+
+        /// <summary>
+        /// MV-998: the spot a robot walks on to, past <paramref name="exitPoint"/>, before it is allowed
+        /// to rest. No robot may come to rest inside a factory's exit zone (the mouth it just emerged
+        /// from, or a Replicator's ramp) — this is that muster spot: <see cref="MusterDistance"/> further
+        /// out along <paramref name="exitDirection"/>, spread across three lateral slots
+        /// (<paramref name="slotIndex"/> mod 3) so consecutive robots/replacements don't all converge on
+        /// the exact same point.
+        /// </summary>
+        public static Vector3 MusterPoint(Vector3 exitPoint, Vector3 exitDirection, int slotIndex)
+        {
+            Vector3 dir = Flatten(exitDirection);
+            if (dir == Vector3.zero) dir = Vector3.back;
+            Vector3 lateral = new Vector3(-dir.z, 0f, dir.x); // perpendicular, flat, unit length
+
+            int slot = ((slotIndex % 3) + 3) % 3;             // 0,1,2 regardless of sign
+            float offset = (slot - 1) * MusterLateralSpacing; // -1.5, 0, +1.5
+
+            Vector3 p = exitPoint + dir * MusterDistance + lateral * offset;
+            p.y = exitPoint.y;
+            return p;
+        }
     }
 }

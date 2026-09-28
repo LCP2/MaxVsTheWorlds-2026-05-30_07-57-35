@@ -43,7 +43,9 @@ namespace MaxWorlds.Enemies
         // hatch instead of walking the ordinary Chase route.
         // Submerged (MV-688) follows it too — a Grate Lurker's whole RATTLE/EMERGED/SUBMERGING cycle
         // shares this one value; TickLurkerSubmerged/_lurkerPhase (LurkerCycle.Phase) track which beat.
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert, ReplicatorSeeking, Submerged }
+        // Mustering (MV-998) follows it too — the walk-out beat between clearing a factory's exit zone
+        // (a hutch mouth, a Replicator ramp) and actually resting; see BeginDormant/TryMusterAwayFromExitZone.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert, ReplicatorSeeking, Submerged, Mustering }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -217,7 +219,8 @@ namespace MaxWorlds.Enemies
         /// <see cref="State.Submerged"/> robot it could never actually hit.</summary>
         public bool IsEngageable => IsAlive &&
             Current != State.Dormant && Current != State.Submerged &&
-            Current != State.Emerging && Current != State.Teleport;
+            Current != State.Emerging && Current != State.Teleport &&
+            Current != State.Mustering;
 
         /// <summary>Whether this robot can currently take damage (MV-688) — true for every kind in
         /// every state except a Grate Lurker outside its <see cref="LurkerCycle.Phase.Emerged"/> beat:
@@ -923,7 +926,27 @@ namespace MaxWorlds.Enemies
         /// anyway. The walk is well under a second; this only ever catches a blocked doorway.</summary>
         private const float EmergeTimeout = 1.5f;
 
+        /// <summary>MV-998: longest a robot may spend walking to a muster point before it settles for
+        /// wherever it got to. Deliberately much longer than <see cref="EmergeTimeout"/> — that budget
+        /// covers the short (~2 m) doorway clearance alone; this covers the full
+        /// <see cref="FactoryMouth.MusterDistance"/> (4 m) walk PAST it, which a whole factory's worth of
+        /// robots mustering at once (the exact scenario this ticket exists for) can genuinely take a
+        /// while to clear through mutual CharacterController jostling — correctness (never resting back
+        /// inside the zone) matters far more here than speed.</summary>
+        private const float MusterTimeout = 8f;
+
         private Vector3 _emergeTarget;
+
+        /// <summary>MV-998: where this robot walks to, past a factory's exit zone, before it is allowed
+        /// to rest — see <see cref="BeginMuster"/>/<see cref="TryMusterAwayFromExitZone"/>.</summary>
+        private Vector3 _musterTarget;
+        private bool _hasMusterTarget;
+
+        /// <summary>MV-998: bounds how many times in a row <see cref="BeginDormant"/> may re-route this
+        /// robot away from an exit zone before giving up and resting anyway — a pathological zone (or
+        /// two overlapping ones) must never oscillate a robot forever. Reset the moment it actually
+        /// lands in <see cref="State.Dormant"/>.</summary>
+        private int _musterAttempts;
 
         /// <summary>Tracks whether the current lost-sight hunt has run its course — reached the spot
         /// it is hunting, or stopped getting any closer to it. This is what "it has lost him" means
@@ -1274,6 +1297,11 @@ namespace MaxWorlds.Enemies
             // life's own spawn position (already stamped onto transform.position by EnemySpawner before
             // SetActive) is the only "last grounded" point that means anything to it.
             _fallRecovery = new FallRecoveryState(transform.position);
+            // MV-998: a pooled robot must not carry the last life's muster-in-progress state forward —
+            // BeginEmergence/BeginDormant re-stamp _musterTarget/_hasMusterTarget fresh whenever they
+            // actually matter, but _musterAttempts otherwise keeps counting toward a life that's over.
+            _hasMusterTarget = false;
+            _musterAttempts = 0;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -1448,6 +1476,7 @@ namespace MaxWorlds.Enemies
                 switch (Current)
                 {
                     case State.Emerging: TickEmerge(dt);   break;
+                    case State.Mustering: TickMuster(dt);  break;
                     case State.Chase:    TickChase(dt);    break;
                     case State.Search:   TickSearch(dt);   break;
                     case State.Telegraph: TickTelegraph(dt); break;
@@ -1537,10 +1566,19 @@ namespace MaxWorlds.Enemies
         /// building it came out of — and having it hold that beat is what makes the factory read as
         /// producing robots rather than as a place they appear.
         /// </summary>
-        public void BeginEmergence(Vector3 exitPoint)
+        public void BeginEmergence(Vector3 exitPoint) => BeginEmergence(exitPoint, null);
+
+        /// <summary>MV-998: <paramref name="musterPoint"/>, when given, is where this robot walks on to
+        /// once it clears the doorway — <see cref="EnemySpawner.SpawnKind"/>'s own pre-computed spot,
+        /// past its factory's exit zone (Change 1) — before it is allowed to rest. Null for every other
+        /// caller (a direct test, or a twin that never goes through this state at all) preserves the
+        /// exact old behaviour: hand off to <see cref="BeginDormant"/> the instant it clears the door.</summary>
+        public void BeginEmergence(Vector3 exitPoint, Vector3? musterPoint)
         {
             if (Current == State.Dead) return;
             _emergeTarget = exitPoint;
+            _musterTarget = musterPoint ?? exitPoint;
+            _hasMusterTarget = musterPoint.HasValue;
             Current = State.Emerging;
             _stateTimer = 0f;
             SetTell(idleTell);
@@ -1552,19 +1590,51 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
 
             // Out of the doorway, or it has taken long enough that something is in the way — a piece
-            // of cover, another robot, a corner of the shed. Either way it stops pushing and hands off
-            // to Dormant (MV-603), not straight into Chase: a shed spawn is still unseen the instant
-            // it clears the door, and it must wait for its own AmbushWake tick exactly like a placed
-            // garrison/concealed member does, rather than start hunting Max unseen.
+            // of cover, another robot, a corner of the shed. Either way it stops pushing and moves on
+            // to mustering (MV-998) rather than resting right here: a shed spawn that parks in its own
+            // doorway blocks the next one out just as badly as one that stopped mid-walk.
             if (to.sqrMagnitude <= EmergeArriveRadius * EmergeArriveRadius || _stateTimer >= EmergeTimeout)
             {
-                BeginDormant();
+                BeginMuster();
                 return;
             }
 
             // Deliberately slower than a chase. It is heaving itself out of a shed, not sprinting;
             // the step up to full speed as it clears the door is what sells the hand-off.
             FaceAndMove(to.normalized, EffectiveMoveSpeed * emergeSpeedScale, dt);
+        }
+
+        /// <summary>MV-998 (Change 1): the walk-out beat between clearing the doorway and actually
+        /// resting — a spawned robot must not go Dormant AT the mouth it just emerged from, or the next
+        /// robot out finds the doorway still occupied. Skips straight to <see cref="BeginDormant"/> when
+        /// <see cref="BeginEmergence(Vector3, Vector3?)"/> was never given a muster point, so nothing
+        /// outside <see cref="EnemySpawner"/>'s own spawn path changes behaviour.</summary>
+        private void BeginMuster()
+        {
+            if (!_hasMusterTarget) { BeginDormant(); return; }
+            Current = State.Mustering;
+            _stateTimer = 0f;
+        }
+
+        private void TickMuster(float dt)
+        {
+            Vector3 to = _musterTarget - transform.position;
+            to.y = 0f;
+
+            // Same "close enough, or it's taken too long" arrival test as TickEmerge — a muster point
+            // blocked by another robot/piece of cover must not strand this one mustering forever. Its
+            // own, much longer MusterTimeout — see that constant's own doc comment.
+            if (to.sqrMagnitude <= EmergeArriveRadius * EmergeArriveRadius || _stateTimer >= MusterTimeout)
+            {
+                BeginDormant();
+                return;
+            }
+
+            // Full speed, not emergeSpeedScale: the deliberate "heaving itself out of a shed" pace is
+            // for the doorway beat only (TickEmerge) — this robot has already cleared it and is just
+            // relocating a further FactoryMouth.MusterDistance (4 m) clear, which the same EmergeTimeout
+            // budget this shares with TickEmerge would not otherwise leave enough time to cover.
+            FaceAndMove(to.normalized, EffectiveMoveSpeed, dt);
         }
 
         /// <summary>Rebases this robot's health/damage to a fresh archetype (MV-514) WITHOUT the reset
@@ -1602,6 +1672,14 @@ namespace MaxWorlds.Enemies
             // (AreaAccumulationDirector's garrison seeding) calls this one method regardless of kind, so
             // this is the one place that has to branch rather than every call site needing its own.
             if (Kind == EnemyKind.Lurker) { BeginSubmerged(); return; }
+
+            // MV-998: no robot may come to rest inside a factory's exit zone — a hutch's own zone
+            // follows the live player-facing mouth direction, so this can trip for a garrison placement
+            // or a Replicator twin settling near its ramp, not only a fresh spawn (which already carries
+            // its own pre-walked muster point via BeginMuster and won't normally trip this).
+            if (TryMusterAwayFromExitZone()) return;
+
+            _musterAttempts = 0;
             Current = State.Dormant;
             _stateTimer = 0f;
             SetTell(idleTell);
@@ -1613,6 +1691,34 @@ namespace MaxWorlds.Enemies
             // dormant actor directly via IDormant instead of relying on the collider being off.
             if (_cc == null) _cc = GetComponent<CharacterController>();
         }
+
+        /// <summary>MV-998: the shared "don't rest inside a factory's exit zone" gate — consulted both
+        /// when a robot is ABOUT to go Dormant (here) and, defensively, on every scheduler wake-tick for
+        /// a robot already resting (<see cref="CentralWakeCheck"/>'s own Change 3 safety sweep), since a
+        /// hutch's zone swings with the live player-facing mouth direction and can sweep back over a
+        /// robot that rested safely a moment ago. Bounded to two consecutive musters
+        /// (<see cref="_musterAttempts"/>) so a pathological/overlapping zone can never oscillate a
+        /// robot forever. Cheap and allocation-free when nothing is registered or nothing claims this
+        /// spot — the overwhelming common case, and the one MV-980's zero-cost pass depends on staying
+        /// that way.</summary>
+        private bool TryMusterAwayFromExitZone()
+        {
+            if (_musterAttempts >= 2) return false;
+            if (!FactoryExitZones.TryMusterOut(transform.position, MusterSlot(), out Vector3 muster)) return false;
+
+            _musterAttempts++;
+            _musterTarget = muster;
+            _hasMusterTarget = true;
+            Current = State.Mustering;
+            _stateTimer = 0f;
+            SetTell(idleTell);
+            return true;
+        }
+
+        /// <summary>A cheap, allocation-free, per-instance-stable lateral muster slot for callers (the
+        /// safety sweep, a garrison placement) that have no spawn-order index of their own to spread
+        /// against — see <see cref="FactoryMouth.MusterPoint"/>.</summary>
+        private int MusterSlot() => (GetInstanceID() & 0x7fffffff) % 3;
 
         /// <summary>Wires this Lurker to its home grate and every grate in its own area (MV-688) —
         /// called once at placement, before <see cref="BeginDormant"/>/<see cref="BeginSubmerged"/>.
@@ -1680,6 +1786,12 @@ namespace MaxWorlds.Enemies
             if (target == null) AcquireTarget();
             if (target != null) _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
             TickDormant();
+
+            // MV-998 Change 3 (the safety sweep): still Dormant after the wake test above? make sure
+            // it isn't resting inside a factory's exit zone. Same central, bounded (<=10 Hz) pass
+            // DormantWakeScheduler already runs this from — no extra per-frame cost, and
+            // TryMusterAwayFromExitZone is itself a no-op the instant nothing claims this spot.
+            if (Current == State.Dormant) TryMusterAwayFromExitZone();
         }
 
         /// <summary>How many areas behind the player's own a robot's area must be before it counts as

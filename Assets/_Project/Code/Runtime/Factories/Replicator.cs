@@ -29,7 +29,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("replicator")]
-    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor
+    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor, IExitZoneSource
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
@@ -531,6 +531,29 @@ namespace MaxWorlds.Factories
                 foot.y = GroundY;
                 return foot;
             }
+        }
+
+        // --- Exit zone (MV-998) — no robot may come to rest on this box's own ramps. Registered/
+        // unregistered off OnEnable/OnDisable, same idiom as EnemySpawner's own exit zone. ---
+
+        private void OnEnable() => FactoryExitZones.Register(this);
+        private void OnDisable() => FactoryExitZones.Unregister(this);
+
+        /// <summary>Same margin/reasoning as <see cref="EnemySpawner"/>'s own muster-point resolution.</summary>
+        private const float MusterEdgeMargin = 0.5f;
+
+        public bool ExitZoneContains(Vector3 point) =>
+            FactoryExitZone.InsideReplicatorZone(point, OutRampFootPosition, HatchPosition);
+
+        /// <summary>MV-998 (Change 2): a twin (or anything else resting near this box) walks
+        /// <see cref="FactoryMouth.MusterDistance"/> out along <see cref="OutputOutwardNormal"/> before
+        /// it is allowed to rest — same "past the ramp, not still standing on it" idiom
+        /// <see cref="EnemySpawner"/>'s own hutch muster point uses.</summary>
+        public Vector3 MusterPointFor(Vector3 restingPoint, int slotIndex)
+        {
+            Vector3 raw = FactoryMouth.MusterPoint(OutRampFootPosition, OutputOutwardNormal, slotIndex);
+            MapData map = EnemyNavigation.Map;
+            return map != null ? map.SnapToWalkableSurface(transform.position, raw, MusterEdgeMargin) : raw;
         }
 
         /// <summary>MV-808: where twin <paramref name="twinIndex"/> (0 or 1) actually lands — the
