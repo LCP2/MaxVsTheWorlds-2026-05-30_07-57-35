@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace MaxWorlds.Core
 {
@@ -130,6 +131,10 @@ namespace MaxWorlds.Core
             ActiveSessionRecorder = _sessionRecorder;
             _sessionRecorder.RecordEvent(DateTime.UtcNow, "app_start", Application.platform.ToString());
 
+            // MV-993: chasing the a20/a21 crossing hard crash's cumulative-memory hypothesis — a low-
+            // memory warning right before a device kill is exactly the signal this ticket needs on disk.
+            Application.lowMemory += OnLowMemory;
+
             QualitySettings.vSyncCount = 0;
 
             // MV-883: a floor-guard, not a fix. Without this, a slow rendered frame makes Unity run
@@ -182,8 +187,24 @@ namespace MaxWorlds.Core
         {
             if (_sessionRecorder == null) return;
 
+            var sample = BuildTelemetrySample("");
+            var utcNow = DateTime.UtcNow;
+            _sessionRecorder.RecordFrame(utcNow, Time.unscaledDeltaTime, sample);
+
+            float now = Time.realtimeSinceStartup;
+            if (now - _lastTelemetryFlushAt < TelemetryFlushIntervalSeconds) return;
+            _lastTelemetryFlushAt = now;
+            _sessionRecorder.Flush();
+        }
+
+        /// <summary>MV-993: the latest PerfTelemetry reading plus the two memory columns this ticket
+        /// adds — shared by the once-a-second <see cref="TickTelemetrySession"/> row, the area-entry
+        /// forced row (<see cref="RecordAreaEntry"/>) and the <c>Application.lowMemory</c> forced row
+        /// (<see cref="OnLowMemory"/>), so all three read memory the same way.</summary>
+        private static TelemetryFrameSample BuildTelemetrySample(string context)
+        {
             PerfTelemetry.TryGetLatestTopSection(out string topSectionName, out double topSectionMs);
-            var sample = new TelemetryFrameSample(
+            return new TelemetryFrameSample(
                 PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.Initialization),
                 PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.EarlyUpdate),
                 PerfTelemetry.LatestPhaseMs(PerfTelemetry.EnginePhase.FixedUpdate),
@@ -197,14 +218,40 @@ namespace MaxWorlds.Core
                 PerfTelemetry.LatestGpuMs,
                 topSectionName ?? "",
                 topSectionMs,
-                "");
+                context,
+                Profiler.GetTotalReservedMemoryLong() / 1048576.0,
+                Profiler.GetMonoUsedSizeLong() / 1048576.0);
+        }
+
+        /// <summary>MV-993: called from <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.EnterArea"/>
+        /// on every area entry — a forced row AND an immediate flush, so a crash right after crossing
+        /// into a new area (the a20-&gt;a21 boss-gate crossing this ticket chases) still leaves the
+        /// reservedMB/monoMB reading on disk, rather than waiting up to <see cref="TelemetryFlushIntervalSeconds"/>
+        /// for the next scheduled flush. No-op with no active recorder (capture/press-kit/perf-capture
+        /// runs, tests) — same "safe to call unconditionally" contract <see cref="MaxWorlds.Save.SaveSystem.CaptureActiveCheckpoint"/>
+        /// already gives this same call site.</summary>
+        public static void RecordAreaEntry(string areaContext)
+        {
+            var recorder = ActiveSessionRecorder;
+            if (recorder == null) return;
 
             var utcNow = DateTime.UtcNow;
-            _sessionRecorder.RecordFrame(utcNow, Time.unscaledDeltaTime, sample);
+            recorder.RecordInstantRow(utcNow, BuildTelemetrySample(areaContext));
+            recorder.RecordEvent(utcNow, "area_enter", areaContext);
+            recorder.Flush();
+        }
 
-            float now = Time.realtimeSinceStartup;
-            if (now - _lastTelemetryFlushAt < TelemetryFlushIntervalSeconds) return;
-            _lastTelemetryFlushAt = now;
+        /// <summary>MV-993: <c>Application.lowMemory</c> fires when iOS is about to start killing
+        /// background processes for memory pressure — one of the two live hypotheses for the a20/a21
+        /// crossing hard crash (see this ticket), so a reading right here is worth more than the next
+        /// scheduled once-a-second row.</summary>
+        private void OnLowMemory()
+        {
+            if (_sessionRecorder == null) return;
+
+            var utcNow = DateTime.UtcNow;
+            _sessionRecorder.RecordInstantRow(utcNow, BuildTelemetrySample("low_memory"));
+            _sessionRecorder.RecordEvent(utcNow, "low_memory", "");
             _sessionRecorder.Flush();
         }
 
@@ -221,6 +268,7 @@ namespace MaxWorlds.Core
             if (ActiveMeter == _meter) ActiveMeter = null;
             if (ActiveTimingProbe == _timingProbe) ActiveTimingProbe = null;
             FrameCost.UnsubscribeRenderEvents();
+            Application.lowMemory -= OnLowMemory;
 
             _sessionRecorder?.Flush();
             if (ActiveSessionRecorder == _sessionRecorder) ActiveSessionRecorder = null;

@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using Unity.Cinemachine;
 using UnityEngine;
+using UnityEngine.Profiling;
 using static UnityEngine.Object;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
@@ -339,6 +340,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv939W2ColorCheck());
             Add(BuildMv965Corridor());
             Add(BuildMv967Corridor());
+            Add(BuildMv993Crossing());
             return d;
         }
 
@@ -3013,6 +3015,166 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-967-corridor-d22", cam => FrameAt(cam, shotD[2])),
                 },
                 Cleanup = Composite,
+            };
+        }
+
+        // ---- Mv993Crossing (MV-993) ------------------------------------------------------------
+
+        /// <summary>MV-993: reproduces Lee's World 1 a20(Glasshouse)->a21(Seed Store) hard crash
+        /// headlessly, run against the WINDOWS STANDALONE build (not the Editor Play Mode every other
+        /// preset here uses via CaptureEntryPoint) — the ticket specifically wants release-shaped
+        /// memory behaviour, and this whole preset system already arms off either a command-line flag
+        /// or the arm file (<see cref="CaptureDirector.Install"/>), neither of which cares which player
+        /// is running.
+        ///
+        /// Jumps straight to area 20 with Big Bermuda alive (a fresh session has never fought it —
+        /// nothing here fights or kills it), force-opens the g20 boss gate (Lee had already broken it
+        /// before the crash), then teleports Max back and forth across it <see cref="Mv993Crossings"/>
+        /// times in <see cref="Mv993StepsPerCrossing"/> steps each way so every Update-driven system
+        /// (the gate's own self-heal, <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>'s
+        /// position-crossing fallback, <see cref="FallSafetyNet"/>) sees Max's real position tick by
+        /// tick rather than one instantaneous jump. Per crossing: reservedMB (this ticket's own
+        /// PerfTelemetry/PerfSessionRecorder addition), the delta in <see cref="FallEventLog"/>'s count
+        /// (MV-955), and any <c>LogType.Exception</c> logged during that crossing, all folded into the
+        /// done-marker's <see cref="CapturePreset.ExtraReport"/> as one CSV-shaped table.</summary>
+        private const int Mv993Crossings = 20;
+        private const float Mv993InsideMetres = 3f;
+        private const int Mv993StepsPerCrossing = 10;
+
+        private static CapturePreset BuildMv993Crossing()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            var table = new System.Text.StringBuilder();
+            int exceptionCount = 0;
+
+            void OnLog(string condition, string stackTrace, LogType type)
+            {
+                if (type == LogType.Exception) exceptionCount++;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                DevMode.Enabled = true;
+                DevMode.Invincible = true;
+                exceptionCount = 0;
+                Application.logMessageReceived += OnLog;
+
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath/world build finish
+
+                if (!DevModeController.TryJumpToArea("20"))
+                    throw new CaptureAbortException("could not jump to area 20 (The Glasshouse)");
+
+                for (int i = 0; i < 4; i++) yield return null;   // let the gate self-heal / population settle
+
+                var gateGo = GameObject.Find("g20");
+                var gate = gateGo != null ? gateGo.GetComponent<AreaGate>() : null;
+                if (gate == null)
+                    throw new CaptureAbortException("no 'g20' AreaGate found -- the a20->a21 boss gate is missing");
+
+                gate.ForceOpen();
+                for (int i = 0; i < 3; i++) yield return null;   // let the hinge swing / threshold drop settle
+
+                Vector3 dir = gate.AwayFromPlayerDirection.sqrMagnitude > 0.01f
+                    ? gate.AwayFromPlayerDirection.normalized : Vector3.right;
+                Vector3 mouth = gate.transform.position;
+
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+                Transform player = playerGo.transform;
+                var cc = player.GetComponent<CharacterController>();
+                float y = player.position.y;
+
+                Vector3 insideA20 = mouth - dir * Mv993InsideMetres; insideA20.y = y;
+                Vector3 insideA21 = mouth + dir * Mv993InsideMetres; insideA21.y = y;
+
+                // Same disable/set/enable shape every other direct position write in this project uses
+                // (DevModeController.TryJumpToArea, PlayerController.Recover) -- a live CharacterController
+                // caches its own position and would otherwise undo a plain transform.position set.
+                void Teleport(Vector3 pos)
+                {
+                    bool wasEnabled = cc != null && cc.enabled;
+                    if (cc != null) cc.enabled = false;
+                    player.position = pos;
+                    if (cc != null) cc.enabled = wasEnabled;
+                }
+
+                Teleport(insideA20);
+                for (int i = 0; i < 4; i++) yield return null;
+
+                // MV-993 fix (caught by the verifier subagent, not by eye): exceptions logged during
+                // setup -- world build, TryJumpToArea, ForceOpen's own FillArea(21) population burst --
+                // land in exceptionCount before the very first "exBefore = exceptionCount" snapshot
+                // below, so without this line they're silently absorbed into the baseline and never
+                // appear in ANY row, understating the run's real exception count (measured: 53 raw
+                // ArgumentNullExceptions logged across the whole capture, only 2 landing inside a
+                // crossing window -- the other 51 were exactly this setup-phase gap).
+                int setupExceptions = exceptionCount;
+                table.Append($"setup,-,-,{setupExceptions}\n");
+                table.Append("crossing,reservedMB,fallEvents,exceptions\n");
+
+                for (int crossing = 1; crossing <= Mv993Crossings; crossing++)
+                {
+                    int fallBefore = FallEventLog.Events.Count;
+                    int exBefore = exceptionCount;
+
+                    for (int s = 1; s <= Mv993StepsPerCrossing; s++)
+                    {
+                        Teleport(Vector3.Lerp(insideA20, insideA21, s / (float)Mv993StepsPerCrossing));
+                        yield return null;
+                    }
+                    for (int settle = 0; settle < 3; settle++) yield return null;   // settle inside a21
+
+                    // Back a21 -> a20. EnterArea's forward-only advance (see its own doc comment) means
+                    // this leg never re-fires the area-entry telemetry row -- only the very first forward
+                    // crossing into a21 does, which is deliberate, not a gap in this loop.
+                    for (int s = 1; s <= Mv993StepsPerCrossing; s++)
+                    {
+                        Teleport(Vector3.Lerp(insideA21, insideA20, s / (float)Mv993StepsPerCrossing));
+                        yield return null;
+                    }
+                    for (int settle = 0; settle < 3; settle++) yield return null;   // settle inside a20
+
+                    double reservedMB = Profiler.GetTotalReservedMemoryLong() / 1048576.0;
+                    int fallEvents = FallEventLog.Events.Count - fallBefore;
+                    int exceptions = exceptionCount - exBefore;
+                    table.Append($"{crossing},{reservedMB:F1},{fallEvents},{exceptions}\n");
+                }
+
+                table.Append($"total exceptions this run: {exceptionCount} (setup: {setupExceptions})\n");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 12f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = mouth + Vector3.up * 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv993crossing",
+                LogTag = "[MV993Capture]",
+                Flag = "-mv993shot",
+                ArmFile = "Temp/mv993.arm",
+                HeadlessMarker = "Temp/mv993.headless",
+                DoneFileName = "_mv993_done.txt",
+                Width = 1200,
+                Height = 800,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 180,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 0;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-993-crossing-gate", NoSetup) },
+                Cleanup = () => Application.logMessageReceived -= OnLog,
+                ExtraReport = () => table.ToString(),
             };
         }
     }

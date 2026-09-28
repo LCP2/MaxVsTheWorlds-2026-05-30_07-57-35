@@ -29,10 +29,16 @@ namespace MaxWorlds.Core
         public readonly double TopSectionMs;
         public readonly string Context;
 
+        /// <summary>MV-993: <c>Profiler.GetTotalReservedMemoryLong()</c> / <c>GetMonoUsedSizeLong()</c>,
+        /// both already converted to MB by the caller — added to chase the a20/a21 crossing hard crash,
+        /// where cumulative memory growth is one of two live hypotheses (the other being a location-
+        /// specific loop at the boss-gate crossing itself).</summary>
+        public readonly double ReservedMB, MonoMB;
+
         public TelemetryFrameSample(double initMs, double earlyUpdateMs, double fixedUpdateMs, double preUpdateMs,
             double updateMs, double preLateUpdateMs, double postLateUpdateMs, double fixedSteps,
             double cpuMainMs, double cpuRenderMs, double gpuMs, string topSectionName, double topSectionMs,
-            string context)
+            string context, double reservedMB = 0.0, double monoMB = 0.0)
         {
             InitMs = initMs;
             EarlyUpdateMs = earlyUpdateMs;
@@ -51,6 +57,8 @@ namespace MaxWorlds.Core
             TopSectionName = topSectionName;
             TopSectionMs = topSectionMs;
             Context = context;
+            ReservedMB = reservedMB;
+            MonoMB = monoMB;
         }
     }
 
@@ -72,7 +80,7 @@ namespace MaxWorlds.Core
 
         private const string SessionHeader =
             "timestampUtc,initMs,earlyUpdateMs,fixedUpdateMs,preUpdateMs,updateMs,preLateUpdateMs,postLateUpdateMs," +
-            "totalMs,fixedSteps,cpuMainMs,cpuRenderMs,gpuMs,topSectionName,topSectionMs,context";
+            "totalMs,fixedSteps,cpuMainMs,cpuRenderMs,gpuMs,topSectionName,topSectionMs,context,reservedMB,monoMB";
 
         private const string EventHeader = "timestampUtc,eventName,context";
 
@@ -98,6 +106,12 @@ namespace MaxWorlds.Core
         private string _lastTopSectionName = "";
         private double _lastTopSectionMs;
         private string _lastContext = "";
+
+        /// <summary>MV-993: memory is a point-in-time resource reading, not a per-frame cost — tracked
+        /// as "latest", the same convention <see cref="_lastTopSectionName"/> already uses, rather than
+        /// averaged across the window like the phase-cost sums above.</summary>
+        private double _lastReservedMB;
+        private double _lastMonoMB;
 
         private bool _sessionCapped;
         private bool _spikesCapped;
@@ -143,6 +157,8 @@ namespace MaxWorlds.Core
                 _lastTopSectionMs = sample.TopSectionMs;
             }
             if (!string.IsNullOrEmpty(sample.Context)) _lastContext = sample.Context;
+            _lastReservedMB = sample.ReservedMB;
+            _lastMonoMB = sample.MonoMB;
 
             if (sample.TotalMs > SpikeThresholdMs) AppendSpikeRow(utcNow, sample);
 
@@ -158,6 +174,20 @@ namespace MaxWorlds.Core
         {
             _pendingEvents.Append(utcNow.ToString("O", CultureInfo.InvariantCulture)).Append(',')
                 .Append(EscapeCsv(eventName)).Append(',').Append(EscapeCsv(context)).Append('\n');
+        }
+
+        /// <summary>MV-993: an out-of-band session row, written immediately from <paramref name="sample"/>
+        /// rather than waiting for the next <see cref="RowIntervalSeconds"/> window — area entry and
+        /// <c>Application.lowMemory</c> both need the reservedMB/monoMB reading AT that exact moment, not
+        /// smoothed into (or lost before) the next averaged row.</summary>
+        public void RecordInstantRow(DateTime utcNow, in TelemetryFrameSample sample)
+        {
+            RowsWritten++;
+            _pendingSession.Append(FormatRow(utcNow, sample.InitMs, sample.EarlyUpdateMs, sample.FixedUpdateMs,
+                sample.PreUpdateMs, sample.UpdateMs, sample.PreLateUpdateMs, sample.PostLateUpdateMs,
+                sample.FixedSteps, sample.CpuMainMs, sample.CpuRenderMs, sample.GpuMs,
+                sample.TopSectionName ?? "", sample.TopSectionMs, sample.Context ?? "",
+                sample.ReservedMB, sample.MonoMB)).Append('\n');
         }
 
         /// <summary>Writes every buffered row to disk. Caller decides the cadence (Bootstrap: every 5s
@@ -187,7 +217,8 @@ namespace MaxWorlds.Core
             double n = _sampleCount;
             _pendingSession.Append(FormatRow(utcNow, _sumInit / n, _sumEarly / n, _sumFixed / n, _sumPre / n,
                 _sumUpdate / n, _sumPreLate / n, _sumPostLate / n, _sumFixedSteps / n, _sumCpuMain / n,
-                _sumCpuRender / n, _sumGpu / n, _lastTopSectionName, _lastTopSectionMs, _lastContext)).Append('\n');
+                _sumCpuRender / n, _sumGpu / n, _lastTopSectionName, _lastTopSectionMs, _lastContext,
+                _lastReservedMB, _lastMonoMB)).Append('\n');
         }
 
         private void AppendSpikeRow(DateTime utcNow, in TelemetryFrameSample sample)
@@ -195,19 +226,21 @@ namespace MaxWorlds.Core
             _pendingSpikes.Append(FormatRow(utcNow, sample.InitMs, sample.EarlyUpdateMs, sample.FixedUpdateMs,
                 sample.PreUpdateMs, sample.UpdateMs, sample.PreLateUpdateMs, sample.PostLateUpdateMs,
                 sample.FixedSteps, sample.CpuMainMs, sample.CpuRenderMs, sample.GpuMs,
-                sample.TopSectionName ?? "", sample.TopSectionMs, sample.Context ?? "")).Append('\n');
+                sample.TopSectionName ?? "", sample.TopSectionMs, sample.Context ?? "",
+                sample.ReservedMB, sample.MonoMB)).Append('\n');
         }
 
         private static string FormatRow(DateTime utcNow, double initMs, double earlyMs, double fixedMs, double preMs,
             double updateMs, double preLateMs, double postLateMs, double fixedSteps, double cpuMainMs,
-            double cpuRenderMs, double gpuMs, string topSectionName, double topSectionMs, string context)
+            double cpuRenderMs, double gpuMs, string topSectionName, double topSectionMs, string context,
+            double reservedMB, double monoMB)
         {
             double totalMs = initMs + earlyMs + fixedMs + preMs + updateMs + preLateMs + postLateMs;
             return string.Join(",",
                 utcNow.ToString("O", CultureInfo.InvariantCulture),
                 Num(initMs), Num(earlyMs), Num(fixedMs), Num(preMs), Num(updateMs), Num(preLateMs), Num(postLateMs),
                 Num(totalMs), Num(fixedSteps), Num(cpuMainMs), Num(cpuRenderMs), Num(gpuMs),
-                EscapeCsv(topSectionName), Num(topSectionMs), EscapeCsv(context));
+                EscapeCsv(topSectionName), Num(topSectionMs), EscapeCsv(context), Num(reservedMB), Num(monoMB));
         }
 
         private static string Num(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);

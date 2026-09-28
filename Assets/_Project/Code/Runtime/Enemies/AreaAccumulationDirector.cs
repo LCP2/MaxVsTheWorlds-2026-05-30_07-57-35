@@ -270,6 +270,12 @@ namespace MaxWorlds.Enemies
             CurrentArea = areaIndex;
             FillArea(areaIndex);
             SaveSystem.CaptureActiveCheckpoint(areaIndex);
+
+            // MV-993: a forced telemetry row + flush right on entry, chasing the a20->a21 crossing hard
+            // crash — see Bootstrap.RecordAreaEntry's own doc comment for why this can't wait for the
+            // next scheduled once-a-second row. Same "no active recorder = no-op" contract as
+            // CaptureActiveCheckpoint above, safe to call unconditionally.
+            Bootstrap.RecordAreaEntry($"area{areaIndex}");
         }
 
         /// <summary>The 1-based area number of an "area&lt;N&gt;" zone id, or 0 for anything else
