@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 3 \u2014 The Reef",
- "revision": "WORLD 3 v2 2026-09-09 (MV-743): areas a1-a30 re-authored as a designed level \u2014 varied footprints, authored cover/garrison/factories/decks/piers, ship-interior names, restructured double-pass route. Dials/enemyTypes/enemyOverrides unchanged from MV-712.",
+ "revision": "WORLD 3 v3 2026-09-29 (MV-1014): removed the half-built second level \u2014 a7-a12's 12 level-1 garrison entries flattened to level 0 at the same x/z (all already clear of cover/deck footprints), and route[]'s six level-1 revisits deleted, leaving 30 visits, one per area. Nobody ever built a real second level; World 3 is traversed on the ground throughout. Decks/bridges/piers are unchanged (kept as visual raised sections). Otherwise as WORLD 3 v2 2026-09-09 (MV-743): areas a1-a30 re-authored as a designed level \u2014 varied footprints, authored cover/garrison/factories/decks/piers, ship-interior names. Dials/enemyTypes/enemyOverrides unchanged from MV-712.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 1.5,
@@ -782,30 +782,6 @@
   {
    "area": "a19",
    "level": 0
-  },
-  {
-   "area": "a7",
-   "level": 1
-  },
-  {
-   "area": "a8",
-   "level": 1
-  },
-  {
-   "area": "a9",
-   "level": 1
-  },
-  {
-   "area": "a10",
-   "level": 1
-  },
-  {
-   "area": "a11",
-   "level": 1
-  },
-  {
-   "area": "a12",
-   "level": 1
   },
   {
    "area": "a20",
@@ -2192,13 +2168,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 114.0,
      "z": 15.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 114.0,
      "z": 5.0
     }
@@ -2380,13 +2356,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 136.0,
      "z": 5.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 139.25,
      "z": 13.25
     }
@@ -2519,13 +2495,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 158.0,
      "z": 15.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 158.0,
      "z": 5.0
     }
@@ -2684,13 +2660,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 181.0,
      "z": 5.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 184.25,
      "z": 13.25
     }
@@ -2860,13 +2836,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 204.0,
      "z": 15.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 204.0,
      "z": 5.0
     }
@@ -3008,13 +2984,13 @@
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 225.0,
      "z": 5.0
     },
     {
      "kind": "rusher",
-     "level": 1,
+     "level": 0,
      "x": 228.25,
      "z": 13.25
     }
