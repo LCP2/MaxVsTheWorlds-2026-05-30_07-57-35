@@ -136,10 +136,11 @@ namespace MaxWorlds.Bosses
         /// <summary>MV-698: World 1's finale drop. The area that just cleared
         /// (<see cref="BossCensus.LastDefeatedAreaIndex"/>, set synchronously just before
         /// <see cref="HudSignals.BossDefeated"/> fired) must be the world's own final boss area — role
-        /// "boss" AND the last area by index — and there must be a next world for the drop to matter;
-        /// World 1 v4's mid-run bosses (a12, a20) and a final world's own last victory both fall through
-        /// this untouched. Never spawns a <see cref="PickupKind.Device"/> — this is a distinct kind
-        /// with its own visual, not a shed grant.
+        /// "boss" AND the last area by index; World 1 v4's mid-run bosses (a12, a20) fall through this
+        /// untouched. MV-1013: this fires for EVERY world's own finale, including the last one —
+        /// neither the drop nor the finale door it pairs with (<see cref="MaxWorlds.VFX.WorldFinaleGate"/>)
+        /// may require a next world to advance into. Never spawns a <see cref="PickupKind.Device"/> —
+        /// this is a distinct kind with its own visual, not a shed grant.
         ///
         /// MV-956: spawns at <see cref="_lastKilledPos"/> — THIS boss's own death spot, whichever of
         /// a30's two Big Bermudas actually died last — never a scene-wide boss lookup that could resolve
@@ -148,7 +149,6 @@ namespace MaxWorlds.Bosses
         {
             if (_weaponCoreDropped) return;
             if (!IsFinalBossAreaDefeat()) return;
-            if (!HasNextWorld()) return;
 
             _weaponCoreDropped = true;
             PickupDirector.EnsureInstalled().SpawnWeaponCore(_lastKilledPos + Vector3.up * 1.4f);
@@ -163,18 +163,6 @@ namespace MaxWorlds.Bosses
             int areaIndex = BossCensus.LastDefeatedAreaIndex;
             WorldArea area = cfg.AreaByIndex(areaIndex);
             return area != null && area.IsBossRole && areaIndex == cfg.dials.areaCount;
-        }
-
-        /// <summary>MV-921: must ask "is there a next world AFTER the one I'm PLAYING", never "after
-        /// the save's own furthest-progress marker" — replaying an earlier world on a save that has
-        /// gone further must still pay out, since it's the active world (
-        /// <see cref="AreaAccumulationDirector.ActiveWorldIndex"/>, the same source
-        /// <see cref="IsFinalBossAreaDefeat"/> already resolves against via <c>ActiveWorldConfig</c>)
-        /// that decides, not a fresh re-read of <c>SaveSlotData.WorldIndex</c>.</summary>
-        private static bool HasNextWorld()
-        {
-            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            return areaDirector != null && WorldLibrary.Count > areaDirector.ActiveWorldIndex + 1;
         }
 
         private void Update()

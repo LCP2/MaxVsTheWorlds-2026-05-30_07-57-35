@@ -25,21 +25,15 @@ namespace MaxWorlds.UI
     /// sufficient on its own — the existing loot-and-walk-to-the-door beat plays out exactly as before
     /// for every boss, mid-run or final; it just no longer ends the game by itself.
     ///
-    /// MV-956: a run whose finale drops a Weapon Core (there is a next world to advance into) seals on
-    /// collecting that core and crossing <c>WorldFinaleGate</c> once it opens — never on
+    /// MV-956/MV-1013: a run's own finale — EVERY world's, including the last — drops a Weapon Core and
+    /// seals on collecting it and crossing <c>WorldFinaleGate</c> once it opens, never on
     /// <see cref="HudSignals.RunComplete"/>, which required every robot in the final area dead, not just
-    /// its boss(es). A run with no next world (the last world's own last victory) has no core to await,
-    /// so it still falls back to <see cref="HudSignals.RunComplete"/> — see <see cref="TrySeal"/>.
+    /// its boss(es). A boss dying anywhere else (a12, a20 mid-run) plays the same payoff beat but never
+    /// seals Victory on its own — see <see cref="TrySeal"/>.
     /// </summary>
     [MaxWorlds.Core.PerfSection("hud")]
     public sealed class RunTracker : MonoBehaviour
     {
-        /// <summary>Backstop, realtime seconds: if the final area is cleared but the payoff director
-        /// never raises <see cref="HudSignals.BossPayoffFinished"/> (e.g. it isn't in the scene), seal
-        /// and show the card anyway. Longer than the payoff's own timeout, so in the real game the
-        /// walk-out drives the timing and this never fires.</summary>
-        private const float VictorySafetyTimeout = 20f;
-
         /// <summary>MV-698: how long a dropped Weapon Core waits for a walk-over collect before it is
         /// auto-collected — the soft-lock guard the ticket asks for, so a player who never notices (or
         /// never can reach) the drop can't stall the world's finale forever.</summary>
@@ -49,22 +43,20 @@ namespace MaxWorlds.UI
 
         private bool _sealed;              // outcome decided; the clock stops and nothing may override it
         private bool _shown;              // the result card has been built
-        private float _runCompleteRealtime; // when RunComplete landed, for the safety backstop below
 
-        // MV-591: victory now needs BOTH the boss payoff beat AND the final area cleared, not the
-        // payoff alone — otherwise any boss dying anywhere (a12, a20) sealed the whole run.
+        // MV-591/MV-1013: victory needs BOTH the boss payoff beat AND the finale's own weapon-core+gate
+        // latch below — a boss dying anywhere else (a12, a20) sets _payoffFinished but never
+        // _weaponCoreAwaited, so TrySeal never seals on it alone.
         private bool _payoffFinished;
-        private bool _runComplete;
 
-        // MV-698: a THIRD condition, live only for a run whose finale actually dropped a Weapon Core —
-        // every other run's _weaponCoreAwaited stays false and this gate is a no-op, unchanged from
-        // before this ticket.
+        // MV-698: a SECOND condition, live only for a run whose finale actually dropped a Weapon Core —
+        // a mid-run boss's own _weaponCoreAwaited stays false and this gate is a no-op.
         private bool _weaponCoreAwaited;
         private bool _weaponCoreCollected;
         private float _weaponCoreDropRealtime;
 
-        // MV-915: a FOURTH condition, riding the same "live only for the run that actually dropped a
-        // Weapon Core" latch as the third — _payoffFinished (BossVictoryPayoff's own walk-out beat) is
+        // MV-915: a THIRD condition, riding the same "live only for the run that actually dropped a
+        // Weapon Core" latch as the second — _payoffFinished (BossVictoryPayoff's own walk-out beat) is
         // scoped to whichever boss area clears FIRST in the whole run (a12, mid-run), so by the time
         // World 1's real finale (a30) empties, _payoffFinished is already long since true. WorldFinaleGate
         // only ever exists for the world's actual last boss area (MV-956: it opens on that area's own
@@ -86,7 +78,6 @@ namespace MaxWorlds.UI
             HudSignals.FactoryDestroyed += OnFactory;
             FactoryCensus.CheckpointRestored += OnCheckpointRestored;
             HudSignals.BossPayoffFinished += OnBossPayoffFinished;
-            HudSignals.RunComplete += OnRunComplete;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.FinaleGateCrossed += OnFinaleGateCrossed;
@@ -100,7 +91,6 @@ namespace MaxWorlds.UI
             HudSignals.FactoryDestroyed -= OnFactory;
             FactoryCensus.CheckpointRestored -= OnCheckpointRestored;
             HudSignals.BossPayoffFinished -= OnBossPayoffFinished;
-            HudSignals.RunComplete -= OnRunComplete;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.FinaleGateCrossed -= OnFinaleGateCrossed;
@@ -119,18 +109,7 @@ namespace MaxWorlds.UI
             RunProgressState.Sync(_stats.Elapsed, _stats.Kills);
             _stats.RecordDifficultyPeak(DifficultyDirector.Normalized);
 
-            // Backstop: unscaled, because the world is still live at timeScale 1 until the card lands,
-            // but this is a real-time backstop regardless. Only needed if the final area cleared but
-            // the payoff director never called home (e.g. it isn't in the scene).
-            if (_runComplete && !_payoffFinished
-                && Time.unscaledTime - _runCompleteRealtime >= VictorySafetyTimeout)
-            {
-                _payoffFinished = true;
-                TrySeal();
-            }
-
-            // MV-698: same soft-lock-guard shape as the backstop above — a dropped core nobody ever
-            // walks over must not stall Victory forever.
+            // MV-698: a dropped core nobody ever walks over must not stall Victory forever.
             if (_weaponCoreAwaited && !_weaponCoreCollected
                 && Time.unscaledTime - _weaponCoreDropRealtime >= WeaponCoreAutoCollectTimeout)
             {
@@ -154,7 +133,7 @@ namespace MaxWorlds.UI
 
         // MV-698: a Weapon Core landed on the ground — Victory must wait for it (walk-over or the
         // auto-collect timeout above), the same "necessary but not sufficient on its own" shape
-        // _payoffFinished/_runComplete already have.
+        // _payoffFinished already has.
         private void OnWeaponCoreDropped()
         {
             _weaponCoreAwaited = true;
@@ -181,55 +160,36 @@ namespace MaxWorlds.UI
 
         // A boss's payoff beat played out (Max reached the gate, or it timed out) — one half of the
         // seal condition. Fires for every boss, mid-run or final; only matters once TrySeal's other
-        // condition (the finale's core+gate, or RunComplete with no next world) agrees.
+        // condition (the finale's own core+gate) agrees.
         private void OnBossPayoffFinished()
         {
             _payoffFinished = true;
             TrySeal();
         }
 
-        // The final area is empty — every robot dead, none queued, no boss left there. The other half
-        // of the seal condition (MV-591): a boss dying is no longer enough on its own.
-        private void OnRunComplete()
-        {
-            _runComplete = true;
-            _runCompleteRealtime = Time.unscaledTime;
-            TrySeal();
-        }
-
         /// <summary>MV-591: the payoff beat alone used to seal the run, so any boss dying anywhere
-        /// ended the game. Victory now needs the final area cleared AS WELL, and takes whichever of
-        /// the two lands later, so the loot-and-walk-to-the-door beat is unchanged. MV-698 adds a
-        /// third, usually-inert condition: if this run's finale dropped a Weapon Core, it must be
-        /// collected too (walk-over or the auto-collect timeout) before Victory seals. MV-915 adds a
-        /// fourth, riding the same latch as the third: that same run must also have crossed
+        /// ended the game. Victory now needs the run's own finale AS WELL, not just any payoff beat
+        /// finishing. MV-698 adds that finale's own condition: if this run's finale dropped a Weapon
+        /// Core, it must be collected too (walk-over or the auto-collect timeout) before Victory seals.
+        /// MV-915 adds a second, riding the same latch: that same run must also have crossed
         /// <c>WorldFinaleGate</c> once it opened — <see cref="_payoffFinished"/> is scoped to whichever
         /// boss area clears FIRST in the run (a12, mid-run) and is long since true by the time the real
         /// finale (a30) empties, so without this the results card would cut in the instant the last
         /// robot dies, with no walk-out of its own for the world's actual finale.
         ///
-        /// MV-956: a run whose finale actually dropped a Weapon Core (<see cref="_weaponCoreAwaited"/>)
-        /// never needs <see cref="_runComplete"/> at all — collecting the core and crossing the open
-        /// gate (both riding the same <c>BossDefeated</c>-driven latch as the drop itself, see
-        /// <c>BossVictoryPayoff.MaybeDropWeaponCore</c>/<c>WorldFinaleGate.OnBossDefeated</c>) is by
-        /// itself proof the finale happened, and requiring the level ALSO be fully cleared was the World
-        /// 1 bug this ticket fixes (a real save could clear every boss and still have a robot elsewhere
-        /// in a30 keep the world un-completable forever). A run with no next world to advance into (the
-        /// last world's own last victory) never sets <see cref="_weaponCoreAwaited"/> and still falls
-        /// back to <see cref="_runComplete"/> — there is no other terminal signal for that case.</summary>
+        /// MV-1013: <see cref="_weaponCoreAwaited"/> is now the ONLY other condition, for every world
+        /// including the last — a boss dying anywhere that is NOT the world's own final boss area never
+        /// sets it, so <c>TrySeal</c> never seals on a mid-run payoff (a12, a20) alone; a boss dying that
+        /// IS the final boss area always drops a core and opens the finale door (MV-698/MV-956's own
+        /// <c>BossDefeated</c>-driven latch), so there is no longer a "no next world" case that falls
+        /// back to counting every robot in the level dead (<see cref="HudSignals.RunComplete"/>) — that
+        /// was the World 3 bug this ticket fixes.</summary>
         private void TrySeal()
         {
             if (_sealed || !_payoffFinished) return;
-
-            if (_weaponCoreAwaited)
-            {
-                if (!_weaponCoreCollected) return;
-                if (_finaleGateAwaited && !_finaleGateCrossed) return;
-            }
-            else if (!_runComplete)
-            {
-                return;
-            }
+            if (!_weaponCoreAwaited) return;
+            if (!_weaponCoreCollected) return;
+            if (_finaleGateAwaited && !_finaleGateCrossed) return;
 
             Seal(RunOutcome.Victory);
             ShowResults();

@@ -113,7 +113,10 @@ namespace MaxWorlds.Arena
                 : Footprint(area, ArrivalWall, ArrivalDoorPos, ArrivalShellLength, CorridorWidth + wallThickness * 2f);
         }
 
-        private static Vector2 DoorMouth(WorldArea area, Wall wall, float doorPos)
+        /// <summary>Internal rather than private (MV-1013): <see cref="WorldTransitions.ApplyExitDoorway"/>
+        /// needs this same area/wall/pos -&gt; world-space mouth resolution for the last world's own
+        /// finale-only door, which has no full <see cref="WorldTransitionEntry"/> to ask.</summary>
+        internal static Vector2 DoorMouth(WorldArea area, Wall wall, float doorPos)
         {
             Span span = area.WallSpan(wall);
             float along = Mathf.Lerp(span.Min, span.Max, doorPos);
@@ -176,28 +179,68 @@ namespace MaxWorlds.Arena
         /// null, exactly as before this ticket.</summary>
         public static int? PendingArrivalFrom { get; set; }
 
-        /// <summary>MV-997: resolves this world's own finale exit doorway (if any) against the real
-        /// config and stamps it onto <paramref name="map"/> — BEFORE <see cref="MapRuntime.Build"/> ever
-        /// runs <see cref="MapGeometry.Walls"/> — so the exit door becomes real map geometry present
-        /// from boot instead of a runtime <c>CutWallGap</c>. A no-op (<c>map.exitDoorway</c> stays null)
-        /// for the last world (no <see cref="WorldTransitions"/> row) or a <paramref name="cfg"/> the
-        /// entry can't resolve a real exit area against.</summary>
+        /// <summary>MV-1013: the last world's own finale exit door — real map geometry cut at boot
+        /// exactly like a <see cref="WorldTransitionEntry"/>'s, but with no corridor to build behind it:
+        /// there is no next world to walk into, so <see cref="MaxWorlds.VFX.WorldFinaleGate"/> opens this
+        /// gate directly and watches for Max crossing it itself, rather than handing off to
+        /// <see cref="MaxWorlds.Intro.WorldJoinSequence"/>. Kept out of <see cref="Entries"/> on purpose
+        /// — folding a corridor-less row in there would make every corridor-only reader of <see cref="For"/>
+        /// (and <see cref="WorldTransitionCoverageTests"/>, which holds every world WITH a next world to
+        /// its own row) special-case a row with no corridor fields to speak of.</summary>
+        private static readonly (int WorldIndex, Wall Wall, float DoorPos)[] FinaleOnlyDoors =
+        {
+            // World 3 (Reef): a30's E wall (34x34, origin 586,0) — same "exit runs east" convention every
+            // other world's row already follows. NOT the wall's exact centre (0.5, z 17): Anchorhead sits
+            // there too (603, 17, dead centre of the room) with a flanking cover pair on every wall at
+            // its own centreline (a30_c17..c20 in world3_config.json) — a door cut through the centre
+            // would open right behind a solid cover box. 0.3 (z 10.2) clears that piece, the south
+            // corner cluster (c5-c8, z up to 5.8) and both wall ends, with margin to spare against
+            // WorldTransitionCoverageTests' own clearances (2m from cover, 1.9m from a wall end) even
+            // though that test doesn't cover this table.
+            (2, Wall.E, 0.3f),
+        };
+
+        /// <summary>MV-997: resolves this world's own finale exit doorway against the real config and
+        /// stamps it onto <paramref name="map"/> — BEFORE <see cref="MapRuntime.Build"/> ever runs
+        /// <see cref="MapGeometry.Walls"/> — so the exit door becomes real map geometry present from boot
+        /// instead of a runtime <c>CutWallGap</c>. MV-1013: every world gets one now, either from its own
+        /// <see cref="WorldTransitionEntry"/> row (a next world to advance into) or from
+        /// <see cref="FinaleOnlyDoors"/> (the last world, no corridor). A no-op (<c>map.exitDoorway</c>
+        /// stays null) only if neither table carries this <paramref name="worldIndex"/>, or if
+        /// <paramref name="cfg"/> can't resolve a real exit area.</summary>
         public static void ApplyExitDoorway(MapData map, WorldConfig cfg, int worldIndex)
         {
-            if (map == null || cfg == null) return;
-            WorldTransitionEntry entry = For(worldIndex);
-            if (entry == null) return;
+            if (map == null || cfg?.dials == null) return;
 
-            WorldArea exitArea = entry.ExitArea(cfg);
+            Wall wall; float doorPos;
+            WorldTransitionEntry entry = For(worldIndex);
+            if (entry != null) { wall = entry.ExitWall; doorPos = entry.ExitDoorPos; }
+            else if (!TryFinaleOnlyDoor(worldIndex, out wall, out doorPos)) return;
+
+            WorldArea exitArea = cfg.AreaByIndex(cfg.dials.areaCount);
             if (exitArea == null) return;
 
-            Vector2 doorMouth = entry.ExitDoorMouth(cfg);
-            bool alongX = exitArea.WallRunsAlongX(entry.ExitWall);
-            float coord = exitArea.WallCoord(entry.ExitWall);
+            Vector2 doorMouth = WorldTransitionEntry.DoorMouth(exitArea, wall, doorPos);
+            bool alongX = exitArea.WallRunsAlongX(wall);
+            float coord = exitArea.WallCoord(wall);
             float along = alongX ? doorMouth.x : doorMouth.y;
             float half = WorldTransitionEntry.DoorWidth * 0.5f;
 
-            map.exitDoorway = new ExitDoorway(entry.ExitWall, coord, new Span(along - half, along + half));
+            map.exitDoorway = new ExitDoorway(wall, coord, new Span(along - half, along + half));
+        }
+
+        private static bool TryFinaleOnlyDoor(int worldIndex, out Wall wall, out float doorPos)
+        {
+            foreach (var d in FinaleOnlyDoors)
+            {
+                if (d.WorldIndex != worldIndex) continue;
+                wall = d.Wall;
+                doorPos = d.DoorPos;
+                return true;
+            }
+            wall = default;
+            doorPos = default;
+            return false;
         }
     }
 }

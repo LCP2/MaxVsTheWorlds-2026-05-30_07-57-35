@@ -19,8 +19,8 @@ namespace MaxWorlds.VFX
     /// anywhere in the run — a single-boss-arena assumption from before World 1 authored bosses mid-run
     /// (a12, a20) ahead of the real finale (a30). Generalising that class to move/re-arm per area would
     /// change what a12's own boss death already does, which this ticket must not touch. This is a new,
-    /// independent object instead: it only ever exists for the actual finale (a run with a next world to
-    /// advance into), and it is built at the FINAL area's own zone.
+    /// independent object instead: it only ever exists for a world's own actual finale (its final boss
+    /// area), and it is built at that area's own zone.
     ///
     /// MV-956: opens on <see cref="HudSignals.BossDefeated"/> for its OWN final area (see
     /// <see cref="IsFinalBossAreaDefeat"/>) — the same event <c>BossVictoryPayoff</c> drops the Weapon
@@ -33,6 +33,12 @@ namespace MaxWorlds.VFX
     /// this world in its actual exit wall and build the corridor behind it, in the same frame the Weapon
     /// Core drops. Max keeps full control until he actually walks through it; <see cref="WorldJoinSequence"/>'s
     /// own crossing check takes over from there, so this class no longer tracks Max's position at all.
+    ///
+    /// MV-1013: the last world (no <see cref="WorldTransitions"/> row — nowhere to build a corridor
+    /// toward) still gets a real, closed exit door authored the same way (<see cref="WorldTransitions.ApplyExitDoorway"/>'s
+    /// finale-only table) — <see cref="Open"/> just force-opens it directly instead of handing off to
+    /// <see cref="WorldJoinSequence"/>, and THIS class tracks Max's own crossing of it (see <see cref="Update"/>),
+    /// since there is no corridor sequence to do that job for a world with nowhere further to go.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("map/gate")]
@@ -45,21 +51,8 @@ namespace MaxWorlds.VFX
 
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null || path.Cfg?.dials == null || path.Map == null) return;
-            if (!HasNextWorld()) return;   // a final world's own last victory has no next world to gate
 
             new GameObject("WorldFinaleGate").AddComponent<WorldFinaleGate>();
-        }
-
-        /// <summary>Same "is there anywhere left to advance into" check <c>BossVictoryPayoff</c> makes
-        /// before dropping a Weapon Core — kept local rather than shared, since it is two lines and the
-        /// two classes must never depend on one another. MV-921: reads the world actually being PLAYED
-        /// (<see cref="AreaAccumulationDirector.ActiveWorldIndex"/>), not a fresh <c>SaveSlotData.WorldIndex</c>
-        /// read — a save's furthest-progress marker can be further along than the world this run is
-        /// actually replaying, and that must not suppress the finale gate.</summary>
-        private static bool HasNextWorld()
-        {
-            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            return areaDirector != null && WorldLibrary.Count > areaDirector.ActiveWorldIndex + 1;
         }
 
         /// <summary>The gate's own resolved state — open once this area's own final boss has actually
@@ -71,6 +64,15 @@ namespace MaxWorlds.VFX
         private WorldTransitionEntry _entry;
         private int _fromWorldIndex;
         private AreaGate _exitGate;
+
+        /// <summary>MV-1013: this world's own exit doorway geometry (wall/coord/span), read straight off
+        /// <see cref="MapData.exitDoorway"/> — set for every world now (<see cref="WorldTransitions.ApplyExitDoorway"/>'s
+        /// finale-only table covers the last world, which has no <see cref="_entry"/>). Used only by
+        /// <see cref="Update"/>'s own crossing check, for the corridor-less last-world case.</summary>
+        private ExitDoorway? _doorway;
+
+        private Transform _max;
+        private bool _crossed;
 
         private void Awake()
         {
@@ -87,6 +89,7 @@ namespace MaxWorlds.VFX
             // MV-997: the real, closed map gate MapRuntime already built for this world's exit door --
             // Open() forces THIS open rather than handing WorldJoinSequence a runtime CutWallGap.
             _exitGate = path.ExitGate;
+            _doorway = _map.exitDoorway;
         }
 
         private void OnEnable() => HudSignals.BossDefeated += OnBossDefeated;
@@ -102,10 +105,9 @@ namespace MaxWorlds.VFX
 
         /// <summary>The exact same "was the area that just cleared the world's own final boss area"
         /// check <c>BossVictoryPayoff.IsFinalBossAreaDefeat</c> makes before dropping the Weapon Core —
-        /// kept local rather than shared (same reasoning as <see cref="HasNextWorld"/>: two lines, and
-        /// the two classes must never depend on one another). Deliberately independent of this
-        /// component's own <see cref="Awake"/>-resolved geometry: a test driving pure boss-death/seal
-        /// logic has no reason to build a real scene.</summary>
+        /// kept local rather than shared (two lines, and the two classes must never depend on one
+        /// another). Deliberately independent of this component's own <see cref="Awake"/>-resolved
+        /// geometry: a test driving pure boss-death/seal logic has no reason to build a real scene.</summary>
         private static bool IsFinalBossAreaDefeat()
         {
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
@@ -128,6 +130,42 @@ namespace MaxWorlds.VFX
             // before this ticket.
             if (_entry != null && _cfg != null && _map != null)
                 WorldJoinSequence.OpenExitDoor(_cfg, _map, _entry, _fromWorldIndex, _exitGate);
+            else if (_exitGate != null)
+                // MV-1013: the last world's own finale -- a real door (see _doorway), but nowhere to
+                // build a corridor toward, so there is no WorldJoinSequence to hand off to. Force it
+                // open directly; Update() below watches for Max walking through it.
+                _exitGate.ForceOpen();
+        }
+
+        /// <summary>MV-1013: the last world's own crossing check — every OTHER world hands this job to
+        /// <see cref="WorldJoinSequence"/>'s own <c>AwaitingCrossing</c> phase (armed via <see cref="_entry"/>
+        /// in <see cref="Open"/>), so this only ever runs when <see cref="_entry"/> is null and there is
+        /// a real doorway (<see cref="_doorway"/>) to watch. Raises the same
+        /// <see cref="HudSignals.FinaleGateCrossed"/> signal <c>WorldJoinSequence</c> raises once its
+        /// corridor walk ends, so <c>RunTracker</c> cannot tell the two cases apart.</summary>
+        private void Update()
+        {
+            if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;
+
+            Transform max = MaxTransform();
+            if (max == null) return;
+
+            ExitDoorway d = _doorway.Value;
+            Vector2 doorCenter = d.AlongX ? new Vector2(d.Hole.Mid, d.Coord) : new Vector2(d.Coord, d.Hole.Mid);
+            if (!IsBeyondFence(max.position, d.Wall, d.Coord, doorCenter, d.Hole.Length * 0.5f)) return;
+
+            _crossed = true;
+            HudSignals.EmitFinaleGateCrossed();
+        }
+
+        private Transform MaxTransform()
+        {
+            if (_max == null)
+            {
+                GameObject g = GameObject.FindGameObjectWithTag("Player");
+                if (g != null) _max = g.transform;
+            }
+            return _max;
         }
 
         /// <summary>True once <paramref name="pos"/> is standing past a wall's own doorway — within its
