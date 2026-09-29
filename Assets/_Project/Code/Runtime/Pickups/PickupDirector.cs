@@ -228,7 +228,9 @@ namespace MaxWorlds.Pickups
         /// cell total for that area lands on exactly the authored line rather than a compounding
         /// per-kill rate. Falls back to the flat <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
         /// rate when no area context is available (a headless test scene) or a dev-tuning override is
-        /// active, since neither carries an actual solved kill count to normalise against.</summary>
+        /// active, since neither carries an actual solved kill count to normalise against. MV-1029:
+        /// the per-area budget scales by <see cref="CellEconomyTuning.WorldPartsMultiplier"/> for the
+        /// active world before being spread across the kill count — 1.0 everywhere except World 3.</summary>
         private int ResolveCellDrop()
         {
             bool devOverride = DevTuning.CellsPerLargeKill.HasValue;
@@ -247,7 +249,10 @@ namespace MaxWorlds.Pickups
                 _cellAccum = 0f;
             }
 
-            _cellAccum += CellEconomyTuning.CellsForArea(areaIndex) / largeCountForArea;
+            // MV-1029: World 3's per-area budget alone scales up (CellEconomyTuning.WorldPartsMultiplier)
+            // — World 1/2 read a flat 1.0 here, untouched.
+            float worldMultiplier = CellEconomyTuning.WorldPartsMultiplier(_areaDirector.ActiveWorldIndex);
+            _cellAccum += CellEconomyTuning.CellsForArea(areaIndex) * worldMultiplier / largeCountForArea;
             int cells = Mathf.FloorToInt(_cellAccum);
             _cellAccum -= cells;
             return cells;
