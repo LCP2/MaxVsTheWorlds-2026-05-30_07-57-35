@@ -351,6 +351,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv965Corridor());
             Add(BuildMv967Corridor());
             Add(BuildMv993Crossing());
+            Add(BuildMv1018Anchorhead());
             Add(BuildMv1024SentinelColorCheck());
             Add(BuildMv1019ReefFloorCheck());
             return d;
@@ -3533,6 +3534,91 @@ namespace MaxWorlds.Dev
                 ExtraReport = () => sampledPixels > 0
                     ? $"sentinel body mean RGB (n={sampledPixels}px): R={meanR:F1} G={meanG:F1} B={meanB:F1}\n"
                     : "sentinel body mean RGB: FAILED TO SAMPLE (viewport projection landed outside frame)\n",
+            };
+        }
+
+        // ---- MV1018Anchorhead (MV-1018 AC3) ---------------------------------------------------
+
+        /// <summary>Builds a standalone Anchorhead the same way <c>MapRuntime.BuildBoss</c> does for
+        /// its own "anchorhead" id (<see cref="BigBermudaBoss"/> + <see cref="AnchorheadBoss"/>,
+        /// <see cref="AnchorheadRig"/> for the body) and frames it once it has actually woken --
+        /// asleep, its eyes are dark and the design's own "amber eyes" never shows. Same standalone-
+        /// boss shape as <see cref="BuildMv699Sludgequeen"/>'s own capture.</summary>
+        private static CapturePreset BuildMv1018Anchorhead()
+        {
+            const float pitch = 60f;
+            const float distance = 10f;
+
+            // Primary: the committed CI/verify screenshots folder (this ticket's own AC3), same
+            // docs/press/<slug> convention MissileTrail/TeleportCrackle already use. Mirrored to Lee's
+            // design-review folder too, same dual-write those two presets' own MirrorPaths use.
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press", "mv1018-anchorhead"));
+            const string mirrorPath = @"C:\Dev\MaxVsTheWorlds-Images\MV-1018-anchorhead.png";
+
+            GameObject bossGo = null;
+            AnchorheadRig rig = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                bossGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bossGo.name = "MV1018CaptureAnchorhead";
+                bossGo.transform.position = focus;
+                // The camera below approaches from -Z looking toward +Z -- face the rig's own front
+                // (the flukes/eyes) back at it, same reasoning BuildMv699Sludgequeen's own 180-degree
+                // spin uses for its own front-facing CuratorEye.
+                bossGo.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+                var boss = bossGo.AddComponent<BigBermudaBoss>();
+                var anchor = bossGo.AddComponent<AnchorheadBoss>();
+                rig = AnchorheadRig.CreateFor(boss, anchor);
+
+                float wokeAt = Time.time;
+                typeof(BigBermudaBoss).GetMethod("Wake", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(boss, null);
+                // Past the boss's own 1.6s intro AND the rig's 0.9s wake-stutter -- a steady, settled
+                // amber rather than whatever the Perlin-noise flicker lands on mid-stutter.
+                while (Time.time - wokeAt < 1.8f) yield return null;
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 1.8f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
+                // need -- URP's Render Graph has logged a one-off NullReferenceException on exactly
+                // that first call in headless -nographics runs.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1018anchorhead",
+                LogTag = "[MV1018Capture]",
+                Flag = "-mv1018shot",
+                ArmFile = "Temp/mv1018.arm",
+                HeadlessMarker = "Temp/mv1018.headless",
+                DoneFileName = "_mv1018_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV674TeleportCrackle/MV693Replicator/
+                    // MV699Sludgequeen's own presets use: on a fresh profile (no slot picked yet)
+                    // HomeScreen's pick-a-slot modal freezes Time.timeScale at 0 and blocks the wake
+                    // wait above indefinitely.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1018-anchorhead", Setup, new[] { mirrorPath }) },
+                Cleanup = () =>
+                {
+                    if (rig != null) Destroy(rig.gameObject);
+                    if (bossGo != null) Destroy(bossGo);
+                },
             };
         }
     }
