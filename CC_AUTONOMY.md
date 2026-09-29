@@ -91,6 +91,28 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 
 This covers local verifies, CI runs, builds, deploys and test suites alike. It is the most expensive recurring failure on this project - it has happened four times in different disguises, each time patched only for the specific command that caused it. The rule is general on purpose.
 
+### Ad-hoc Unity batchmode launches — quote every path (MV-1011)
+
+The worker clone lives at `C:\Dev\MAx CCs\cc-web` — the path contains a space. Four runs across
+2026-09-26 and 2026-09-28 were lost to what looked like a "Unity batchmode zero-output licensing stall"
+(MV-971, MV-1010) but was actually PowerShell 5.1's `Start-Process -ArgumentList @(...)` silently failing
+to quote array elements containing spaces: `-projectPath`, `-logFile` and `-testResults` were each split
+in two at `MAx CCs`, Unity exited in under a second on a mangled path, and `Start-Process -Wait` then hung
+waiting on the orphaned `Unity.Licensing.Client` child process the failed launch left behind. That is what
+MV-971 and MV-1010 actually were — don't re-derive the diagnosis a fourth time.
+
+1. **Prefer `cc-verify.bat`.** It already quotes correctly (`-projectPath "%PROJECT%"`) and is the
+   reference implementation. A Rule 1 fail-first proof doesn't need a hand-rolled filtered run — running
+   `cc-verify.bat` on base-plus-test-only exits 1 at step `[2/6]` and writes `Logs\editmode-results.xml`
+   containing the failure, which is quotable evidence on its own.
+2. **If an ad-hoc Unity run is genuinely needed, launch it through cmd's `start "" /min /wait` with every
+   path argument double-quoted.** Never use PowerShell `Start-Process -ArgumentList` array form for a
+   Unity launch — PS 5.1 does not quote elements containing spaces, and this clone's path contains one.
+3. **Assert the launch worked before interpreting silence.** If the file named by `-logFile` does not
+   exist within ~30s, the launch was mangled — do not diagnose a stall. Two tells: a stray `C:\Dev\MAx`
+   file appearing, and no `Temp\UnityLockfile` (a run that truly hangs mid-test holds the lockfile; one
+   that never opened the project does not).
+
 ## Play-check — the playability gate (`cc-verify` is NOT enough), and why the worker never waits for it
 
 See CLAUDE.md — Play-check — the playability gate. That file is authoritative; this contract does not restate it.
