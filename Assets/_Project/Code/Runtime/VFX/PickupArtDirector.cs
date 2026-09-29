@@ -229,7 +229,11 @@ namespace MaxWorlds.VFX
             if (art == null)
             {
                 art = Build(pickup, want);
-                HideGreybox(pickup.transform);
+                // MV-1026: HideGreybox used to run unconditionally here, even when Build() refused (a
+                // key WeaponPartArt doesn't recognise) and returned null — leaving neither the greybox
+                // nor any designed art, just a bare ring. A failed build must leave the greybox visible
+                // so the pickup still reads as SOMETHING on the ground.
+                if (art != null) HideGreybox(pickup.transform);
             }
 
             if (!_artState.TryGetValue(pickup, out ArtState state))
@@ -417,8 +421,17 @@ namespace MaxWorlds.VFX
             // neon blob instead. Scaling alpha only for the Stormdrain palette keeps World 1/3 untouched.
             float biomeAlpha = MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain) ? alpha * StormdrainRingAlphaScale : alpha;
 
-            Vector3 groundPos = pickup.position;
-            groundPos.y = 0f;   // the lawn plane (GroundAnchorTuning) — the ring never reads the bob
+            // MV-1026: used to pin every ring to a fixed y=0 floor plane, discarding the pickup's own
+            // surface height. Since MV-1001 put a deck drop's PROP at the deck's own height
+            // (Pickup.Place), a deck drop's ring stayed on the floor below it while its prop sat on the
+            // deck above — the two read as two separate things on screen. GroundMarkHeights.SurfaceAt
+            // resolves the same deck-vs-floor surface every other ground mark already reads (MV-898/
+            // MV-1000/GroundAnchorVfx.Ground) off the pickup's OWN current position, so a scattered or
+            // Magneto-pulled drop's ring still follows wherever the pickup itself actually ended up. The
+            // ring still doesn't ride the bob: Pickup.Update's bob only ever perturbs the pickup's y by
+            // +/-0.12m, nowhere near GroundMarkHeights' ~2m deck-vs-floor threshold, so the resolved
+            // surface never flickers between the two.
+            Vector3 groundPos = GroundMarkHeights.SurfaceAt(pickup.position);
             ring.Show(groundPos, radius, new Color(color.r, color.g, color.b, biomeAlpha));
             return ring;
         }
