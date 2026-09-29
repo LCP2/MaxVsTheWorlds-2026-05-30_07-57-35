@@ -134,13 +134,22 @@ namespace MaxWorlds.Arena
             if (_splicedLock == sentinel) _splicedLock = null;
         }
 
+        /// <summary>MV-1024: same cached-ID pattern every other emissive material in this codebase uses
+        /// (<see cref="MaxWorlds.VFX.RobotRig"/>, <see cref="MaxWorlds.Factories.ShedFitting"/>) —
+        /// avoids a string lookup per material per rebuild.</summary>
+        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+
         private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
 
         /// <summary>MV-1004: World 2's own Warm slot (Lee, device, 2026-09-28: "Sentinels in World 2:
         /// make them red / dark red") — read instead of <see cref="BodyColor"/> only when
         /// <see cref="_worldIndex"/> resolves to World 2 (index 1); Worlds 1 and 3 keep
-        /// <see cref="BodyColor"/> unchanged. See <see cref="BuildBody"/>.</summary>
-        private static readonly Color BodyColorWorld2 = new Color(0.45f, 0.07f, 0.07f);
+        /// <see cref="BodyColor"/> unchanged. See <see cref="BuildBody"/>.
+        ///
+        /// MV-1024: brightened to #D8261C (Lee, TestFlight, 2026-09-29 — the original dark maroon sank
+        /// into the floor under Stormdrain's dim lighting). <see cref="BuildBody"/> also drives this
+        /// same colour into the Warm material's emission slot so it holds its red under that lighting.</summary>
+        private static readonly Color BodyColorWorld2 = new Color(0.847f, 0.149f, 0.110f);
 
         /// <summary>MV-580: the second of the sentinel's own two body tones (the Warm slot in
         /// <see cref="RobotPalette"/>) — a lighter, cooler tint of <see cref="BodyColor"/> rather than
@@ -149,8 +158,8 @@ namespace MaxWorlds.Arena
         private static readonly Color BodyAccent = new Color(0.62f, 0.78f, 0.90f);
 
         /// <summary>MV-1004: World 2's own Accent slot — see <see cref="BodyColorWorld2"/>'s doc for the
-        /// gating rule.</summary>
-        private static readonly Color BodyAccentWorld2 = new Color(0.78f, 0.18f, 0.14f);
+        /// gating rule. MV-1024: brightened to #FF5A43 alongside <see cref="BodyColorWorld2"/>.</summary>
+        private static readonly Color BodyAccentWorld2 = new Color(1.000f, 0.353f, 0.263f);
 
         /// <summary>MV-580: the eye, nowhere near the enemy roster's tell colours — gold idle, warn
         /// orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on this body never
@@ -467,6 +476,11 @@ namespace MaxWorlds.Arena
             _eyeColor = isWorld2 ? EyeColorWorld2 : EyeColor;
 
             var warm = NewMaterial("Sentinel_Warm", isWorld2 ? BodyColorWorld2 : BodyColor);
+            // MV-1024: World 2's Warm material only — holds the brightened body red under Stormdrain's
+            // dim lighting instead of reading as the same dark maroon Lee flagged on device. Same
+            // material-instance NewMaterial already made; no new shader, same _EmissionColor slot
+            // RobotRig's own Stormdrain hazard band already writes to on this shader.
+            if (isWorld2 && warm.HasProperty(EmissionId)) warm.SetColor(EmissionId, BodyColorWorld2 * 0.35f);
             var accent = NewMaterial("Sentinel_Accent", isWorld2 ? BodyAccentWorld2 : BodyAccent);
             var dark = NewMaterial("Sentinel_Dark", CharacterSkin.RobotDark);
             var gold = NewMaterial("Sentinel_Gold", CharacterSkin.RobotGold);

@@ -114,12 +114,14 @@ namespace MaxWorlds.Tests.EditMode
                 var materials2 = (Material[])OwnedMaterialsField.GetValue(sentinel2);
                 Color warm2 = materials2[0].GetColor("_BaseColor");
                 Color accent2 = materials2[1].GetColor("_BaseColor");
-                Assert.That(warm2.r, Is.EqualTo(0.45f).Within(0.01f), $"World 2 Warm red channel: {warm2.r:0.000}");
-                Assert.That(warm2.g, Is.EqualTo(0.07f).Within(0.01f), $"World 2 Warm green channel: {warm2.g:0.000}");
-                Assert.That(warm2.b, Is.EqualTo(0.07f).Within(0.01f), $"World 2 Warm blue channel: {warm2.b:0.000}");
-                Assert.That(accent2.r, Is.EqualTo(0.78f).Within(0.01f), $"World 2 Accent red channel: {accent2.r:0.000}");
-                Assert.That(accent2.g, Is.EqualTo(0.18f).Within(0.01f), $"World 2 Accent green channel: {accent2.g:0.000}");
-                Assert.That(accent2.b, Is.EqualTo(0.14f).Within(0.01f), $"World 2 Accent blue channel: {accent2.b:0.000}");
+                // MV-1024: brightened from (0.45, 0.07, 0.07)/(0.78, 0.18, 0.14) to #D8261C/#FF5A43 —
+                // the original dark maroon sank into the floor under Stormdrain's dim lighting.
+                Assert.That(warm2.r, Is.EqualTo(0.847f).Within(0.01f), $"World 2 Warm red channel: {warm2.r:0.000}");
+                Assert.That(warm2.g, Is.EqualTo(0.149f).Within(0.01f), $"World 2 Warm green channel: {warm2.g:0.000}");
+                Assert.That(warm2.b, Is.EqualTo(0.110f).Within(0.01f), $"World 2 Warm blue channel: {warm2.b:0.000}");
+                Assert.That(accent2.r, Is.EqualTo(1.000f).Within(0.01f), $"World 2 Accent red channel: {accent2.r:0.000}");
+                Assert.That(accent2.g, Is.EqualTo(0.353f).Within(0.01f), $"World 2 Accent green channel: {accent2.g:0.000}");
+                Assert.That(accent2.b, Is.EqualTo(0.263f).Within(0.01f), $"World 2 Accent blue channel: {accent2.b:0.000}");
 
                 var body2 = (RobotBodies.Body)BodyField.GetValue(sentinel2);
                 var eyeMpb = new MaterialPropertyBlock();
