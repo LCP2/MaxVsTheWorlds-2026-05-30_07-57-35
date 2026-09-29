@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -35,6 +36,13 @@ namespace MaxWorlds.Tests.EditMode
     {
         private const float Dt = 1f / 60f;
 
+        // MV-1028: EditMode's single-tick test body never pumps the editor loop far enough for
+        // AddComponent<RobotEnemy>()'s OnEnable to run synchronously (Awake does — same split
+        // MV832SentinelTargetingTests documents), so NewEnemy must seed RobotEnemy.Active itself now that
+        // ShoulderRack reads candidates from that registry instead of a physics query.
+        private static readonly MethodInfo RobotOnEnableMethod =
+            typeof(RobotEnemy).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance);
+
         [SetUp]
         public void SetUp()
         {
@@ -42,6 +50,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
+            RobotEnemy.ResetRegistry();
             // Same World 2 selection MV694ShoulderRackTests uses — s_rkt only lives on World 2's board.
             RigBoard.UseWorld(1);
         }
@@ -53,6 +62,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
+            RobotEnemy.ResetRegistry();
             RigBoard.ResetForTests();
         }
 
@@ -114,6 +124,7 @@ namespace MaxWorlds.Tests.EditMode
             go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
             e.Apply(archetype);
+            RobotOnEnableMethod.Invoke(e, null); // seeds RobotEnemy.Active — see the class doc above
             return e;
         }
     }

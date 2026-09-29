@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -22,6 +23,14 @@ namespace MaxWorlds.Tests.EditMode
     {
         private const float Dt = 1f / 60f;
 
+        // MV-1028: EditMode's single-tick test body never pumps the editor loop far enough for
+        // AddComponent<RobotEnemy>()'s OnEnable to run synchronously (Awake does — MV832SentinelTargetingTests
+        // documents the same split), so NewEnemy must seed RobotEnemy.Active itself now that ShoulderRack
+        // reads candidates from that registry instead of a physics query.
+        private static readonly BindingFlags NonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+        private static readonly MethodInfo RobotOnEnableMethod =
+            typeof(RobotEnemy).GetMethod("OnEnable", NonPublicInstance);
+
         [SetUp]
         public void SetUp()
         {
@@ -29,6 +38,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
+            RobotEnemy.ResetRegistry();
             // MV-732 removed s_rkt/s_sal/s_rld from World 1's rig_board.json — the rack lives only on
             // rig_board.world2.json now, so RigState.RestoreSnapshot (which drops any id RigBoard.Exists
             // says isn't in the ACTIVE board) needs World 2's board selected to accept those ids at all.
@@ -42,6 +52,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
+            RobotEnemy.ResetRegistry();
             // Reset back to World 1 so no later test in the same batch run sees World 2 active.
             RigBoard.ResetForTests();
         }
@@ -117,6 +128,7 @@ namespace MaxWorlds.Tests.EditMode
             go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
             e.Apply(archetype);
+            RobotOnEnableMethod.Invoke(e, null); // seeds RobotEnemy.Active — see the class doc above
             return e;
         }
     }
