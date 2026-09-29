@@ -659,12 +659,30 @@ namespace MaxWorlds.Arena
 
             // Same collider-disable/teleport/re-enable shape MapRuntime.Adopt uses to place Max at
             // level start — a CharacterController caches its own position and would otherwise undo
-            // the teleport.
+            // the teleport. MV-1021: same guard MapRuntime.Adopt now carries — see its own comment.
             var cc = _player.GetComponent<CharacterController>();
             bool was = cc != null && cc.enabled;
             if (cc != null) cc.enabled = false;
+            Vector3 before = _player.position;
             _player.position = point;
-            if (cc != null) cc.enabled = was;
+            if (cc != null && was)
+            {
+                if (CharacterControllerSafety.CanCreate(_player, cc, out string respawnReason))
+                {
+                    cc.enabled = true;
+                }
+                else
+                {
+                    _player.position = before;
+                    cc.enabled = true;
+                    CharacterControllerSafety.LogRefusal("WorldRunner.RespawnPlayer", _player.name,
+                        respawnReason, point, _player.lossyScale);
+                }
+            }
+            else if (cc != null)
+            {
+                cc.enabled = was;
+            }
 
             _playerHealth?.Revive();
         }

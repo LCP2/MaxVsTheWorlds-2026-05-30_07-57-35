@@ -38,6 +38,15 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public static Vector3 Clamp(Vector3 robotPos, Vector3 playerPos, float minDistance)
         {
+            // MV-1021: a non-finite playerPos/robotPos (a one-frame glitch upstream — target lost,
+            // a division by a momentarily-zero distance elsewhere) used to propagate straight through:
+            // `away` went NaN, both magnitude comparisons below are false for NaN operands, and the
+            // "degenerate" branch built its correction from the NaN playerPos anyway. That NaN reached
+            // RobotEnemy's disable/set/enable reposition and fed PhysX a non-finite desc — the crash
+            // this method's own caller chain (ClampBodySeparation) is named in the ticket for. Refusing
+            // here, before any of that maths runs, is cheaper than guarding every caller separately.
+            if (!IsFinite(robotPos) || !IsFinite(playerPos)) return robotPos;
+
             Vector3 away = robotPos - playerPos;
             away.y = 0f;
             float dist = away.magnitude;
@@ -51,5 +60,10 @@ namespace MaxWorlds.Enemies
             corrected.y = robotPos.y;
             return corrected;
         }
+
+        private static bool IsFinite(Vector3 v) =>
+            !float.IsNaN(v.x) && !float.IsInfinity(v.x) &&
+            !float.IsNaN(v.y) && !float.IsInfinity(v.y) &&
+            !float.IsNaN(v.z) && !float.IsInfinity(v.z);
     }
 }

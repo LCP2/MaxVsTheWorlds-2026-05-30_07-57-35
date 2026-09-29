@@ -2313,6 +2313,16 @@ namespace MaxWorlds.Arena
             {
                 var stray = body.GetComponent<BoxCollider>();
                 if (stray != null) Object.DestroyImmediate(stray);
+
+                // MV-1021: body is active (Spawn() makes it so), and AddComponent<CharacterController>
+                // on an active GameObject creates the native PhysX controller synchronously. Deactivate
+                // first so the add itself is always safe, then only bring the body back active once the
+                // resolved transform+size is checked — an authored shed's own e.GroundedCenter/e.Size are
+                // level data (never rejected — see CLAUDE.md's "authored level data is authority"), but
+                // the WORLD-scaled size this controller resolves to is a runtime PhysX invariant, not a
+                // content rule, so refusing an impossible one is this guard's job either way.
+                bool wasActive = body.activeSelf;
+                body.SetActive(false);
                 CharacterController cc = body.AddComponent<CharacterController>();
                 // LOCAL (unscaled) unit-cube extents, exactly like BigBermudaBoss.FitColliderToRenderedBody
                 // — CharacterController.height/radius/center are in local space and Unity scales them by
@@ -2321,6 +2331,21 @@ namespace MaxWorlds.Arena
                 cc.center = Vector3.zero;
                 cc.height = 1f;
                 cc.radius = 0.5f;
+
+                if (CharacterControllerSafety.CanCreate(body.transform, cc, out string mobileReason))
+                {
+                    body.SetActive(wasActive);
+                }
+                else
+                {
+                    // The shed itself must still render and take damage — only the CONTROLLER (and with
+                    // it, TickMobility) is refused. Left disabled forever: nothing else in this project
+                    // ever flips a shed's own CharacterController back on.
+                    cc.enabled = false;
+                    CharacterControllerSafety.LogRefusal("MapRuntime.BuildFactory", body.name,
+                        mobileReason, body.transform.position, body.transform.lossyScale);
+                    body.SetActive(wasActive);
+                }
             }
 
             // RequireComponent brings the EnemySpawner with it — the factory's mouth is part of what a
@@ -2649,9 +2674,31 @@ namespace MaxWorlds.Arena
             if (cc != null) cc.enabled = false;
 
             Vector3 at = actor.transform.position;
-            actor.transform.position = new Vector3(e.x, at.y, e.z);
+            Vector3 target = new Vector3(e.x, at.y, e.z);
+            actor.transform.position = target;
 
-            if (cc != null) cc.enabled = was;
+            // MV-1021: this is how Max gets placed at the map's authored start (e.x/e.z) — re-enabling
+            // unconditionally here would hand PhysX whatever that position resolves to with no check.
+            // `was` still governs WHETHER to re-enable (MV-503's own diagnostic below depends on that);
+            // this only adds a check on TOP of it, before actually flipping enabled back on.
+            if (cc != null && was)
+            {
+                if (CharacterControllerSafety.CanCreate(actor.transform, cc, out string adoptReason))
+                {
+                    cc.enabled = true;
+                }
+                else
+                {
+                    actor.transform.position = at;
+                    cc.enabled = true;
+                    CharacterControllerSafety.LogRefusal("MapRuntime.Adopt", actor.name, adoptReason,
+                        target, actor.transform.lossyScale);
+                }
+            }
+            else if (cc != null)
+            {
+                cc.enabled = was; // false — MV-503's own "restore right back to disabled" path, unchanged
+            }
 
             // MV-503: `was` false means the controller arrived here already disabled, and this restores
             // it right back to disabled rather than to true — one of the two candidate mechanisms for

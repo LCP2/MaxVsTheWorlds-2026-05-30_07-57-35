@@ -517,6 +517,24 @@ namespace MaxWorlds.Bosses
                 RobotEnemy add = TakeAdd(archetype);
                 add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
                 add.transform.position = from;
+
+                // MV-1021: this add's CharacterController has sat enabled (just inactive) since
+                // CreateAdd/OnAddDied — SetActive(true) on an inactive GameObject re-creates the native
+                // PhysX controller for every already-enabled component on it, CharacterController
+                // included, independent of RobotEnemy's own OnEnable. One of the three crash logs named
+                // exactly this call stack. Refused: this add is not thrown at all — it goes straight
+                // back to its own kind's pool (same idiom OnAddDied uses) and the volley is one add short.
+                var cc = add.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(add.transform, cc, out string launchReason))
+                {
+                    CharacterControllerSafety.LogRefusal("BigBermudaBoss.LaunchVolley", add.gameObject.name,
+                        launchReason, from, add.transform.lossyScale);
+                    if (!_addPools.TryGetValue(add.Kind, out Stack<RobotEnemy> pool))
+                        _addPools[add.Kind] = pool = new Stack<RobotEnemy>(4);
+                    pool.Push(add);
+                    continue;
+                }
+
                 add.gameObject.SetActive(true);   // VISIBLE for the throw…
                 add.enabled = false;              // …but its own chase/gravity is off while the boss flies it
                 _inFlight.Add(new AddInFlight { Robot = add, From = from, To = to, T = 0f });
@@ -583,6 +601,17 @@ namespace MaxWorlds.Bosses
             go.name = $"Brood Add {a.Kind}";
             go.transform.SetParent(AddsRoot(), false);
             go.transform.localScale = a.BodyScale;
+
+            // MV-1021: go is active at this point (CreatePrimitive makes it so), and
+            // AddComponent<CharacterController> on an active GameObject creates the native PhysX
+            // controller synchronously — the same trap EnemySpawner.CreateInstance carried. Deactivating
+            // first defers that native create until LaunchVolley's own guard below reactivates it.
+            go.SetActive(false);
+            if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
+            {
+                CharacterControllerSafety.LogRefusal("BigBermudaBoss.CreateAdd", go.name,
+                    createReason, go.transform.position, go.transform.lossyScale);
+            }
 
             var cc = go.AddComponent<CharacterController>();
             float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);

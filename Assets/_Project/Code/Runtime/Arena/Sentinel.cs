@@ -491,11 +491,26 @@ namespace MaxWorlds.Arena
             // is deliberately lower than PlayerController's own (Unity's 0.3 default) so a small prop
             // stops it rather than lets it climb over; slopeLimit/skinWidth are left at Unity's default,
             // matching PlayerController, which never sets either.
+            // MV-1021: gameObject may already be active here (Init() runs on an existing instance) —
+            // AddComponent<CharacterController> on an active GameObject creates the native PhysX
+            // controller synchronously. Deactivate first so the add itself is always safe, then only
+            // bring it back active once the resolved size/pose is checked, same as
+            // MapRuntime.BuildFactory's mobile shed.
+            bool wasActive = gameObject.activeSelf;
+            gameObject.SetActive(false);
             _controller = gameObject.AddComponent<CharacterController>();
             _controller.center = col.center;
             _controller.height = col.height;
             _controller.radius = col.radius;
             _controller.stepOffset = ControllerStepOffset;
+
+            if (!CharacterControllerSafety.CanCreate(transform, _controller, out string bodyReason))
+            {
+                _controller.enabled = false;
+                CharacterControllerSafety.LogRefusal("Sentinel.BuildBody", gameObject.name,
+                    bodyReason, transform.position, transform.lossyScale);
+            }
+            gameObject.SetActive(wasActive);
 
             // The capsule (what robots steer around, and what damage resolves against) and the
             // controller (itself a Collider) would otherwise catch on each other's own body.
@@ -774,9 +789,7 @@ namespace MaxWorlds.Arena
         /// recovery uses so <see cref="_controller"/>'s cached internal state doesn't fight the jump.</summary>
         private void Recover(Vector3 position)
         {
-            _controller.enabled = false;
-            transform.position = position;
-            _controller.enabled = true;
+            CharacterControllerSafety.SafeReposition(_controller, position, "Sentinel.Recover");
         }
 
         /// <summary>MV-624: the sidestep/standoff-follow/separation movement, split out of <see cref="Update"/>

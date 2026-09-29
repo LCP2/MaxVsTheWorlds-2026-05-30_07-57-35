@@ -755,6 +755,19 @@ namespace MaxWorlds.Enemies
                 pos.y += archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;
+
+                // MV-1021: SetActive(true) re-creates the native PhysX controller for this robot's
+                // already-enabled CharacterController. Refused: not activated at all — back to its own
+                // pool, and this garrison slot is skipped rather than crashing the app.
+                var placeCc = e.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(e.transform, placeCc, out string placeReason))
+                {
+                    CharacterControllerSafety.LogRefusal("AreaAccumulationDirector.PlacePendingGarrison",
+                        e.gameObject.name, placeReason, pos, e.transform.lossyScale);
+                    PushToPool(kind, e);
+                    continue;
+                }
+
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
@@ -860,6 +873,17 @@ namespace MaxWorlds.Enemies
                 pos.y += archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;
+
+                // MV-1021: same guard as PlacePendingGarrison — see its own comment.
+                var seedCc = e.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(e.transform, seedCc, out string seedReason))
+                {
+                    CharacterControllerSafety.LogRefusal("AreaAccumulationDirector.SeedGarrison",
+                        e.gameObject.name, seedReason, pos, e.transform.lossyScale);
+                    PushToPool(kind, e);
+                    continue;
+                }
+
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
@@ -964,6 +988,20 @@ namespace MaxWorlds.Enemies
             RobotEnemy e = Take(kind, archetype);
             e.transform.position = position;
             e.transform.rotation = Quaternion.identity;
+
+            // MV-1021: same guard as PlacePendingGarrison/SeedGarrison — see PlacePendingGarrison's own
+            // comment. Refused: requeue this kind the same way an unresolved spawn point already does
+            // a few lines above, rather than crash.
+            var spawnCc = e.GetComponent<CharacterController>();
+            if (!CharacterControllerSafety.CanCreate(e.transform, spawnCc, out string spawnReason2))
+            {
+                CharacterControllerSafety.LogRefusal("AreaAccumulationDirector.Spawn",
+                    e.gameObject.name, spawnReason2, position, e.transform.lossyScale);
+                PushToPool(kind, e);
+                _queue.Requeue(areaIndex, kind);
+                return false;
+            }
+
             e.gameObject.SetActive(true);
             _areaByRobot[e] = areaIndex;
             e.SetAreaIndex(areaIndex); // MV-820: Replicator queueing's own eligibility filter
@@ -1224,6 +1262,17 @@ namespace MaxWorlds.Enemies
                 var stray = go.GetComponent<Collider>();
                 if (stray != null) Object.DestroyImmediate(stray);
 
+                // MV-1021: go is active at this point (CreatePrimitive makes it so) — same trap as
+                // EnemySpawner.CreateInstance. Deactivate first so this call can never be the one that
+                // hands PhysX a bad desc; Spawn/SeedGarrison/PlacePendingGarrison's own guards cover
+                // reactivation.
+                go.SetActive(false);
+                if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
+                {
+                    CharacterControllerSafety.LogRefusal("AreaAccumulationDirector.CreateInstance", go.name,
+                        createReason, go.transform.position, go.transform.lossyScale);
+                }
+
                 var cc = go.AddComponent<CharacterController>();
                 float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);
                 cc.height = a.ColliderHeight / Mathf.Max(a.BodyScale.y, 1e-4f);
@@ -1258,10 +1307,19 @@ namespace MaxWorlds.Enemies
             int area = _areaByRobot.TryGetValue(e, out int a) ? a : 0;
             _areaByRobot.Remove(e);
             _queue?.ReportDestroyed(area);
-            if (!_pools.TryGetValue(e.Kind, out var pool))
+            PushToPool(e.Kind, e);
+        }
+
+        /// <summary>Shared with <see cref="OnEnemyDied"/> — MV-1021's placement guards (Spawn/
+        /// SeedGarrison/PlacePendingGarrison) reuse this same "back to its OWN pool" idiom for a robot
+        /// whose reactivation was refused, so it's picked up on the next Take() of this kind instead of
+        /// sitting alive-but-unpooled.</summary>
+        private void PushToPool(EnemyKind kind, RobotEnemy e)
+        {
+            if (!_pools.TryGetValue(kind, out var pool))
             {
                 pool = new Stack<RobotEnemy>();
-                _pools[e.Kind] = pool;
+                _pools[kind] = pool;
             }
             pool.Push(e);
         }

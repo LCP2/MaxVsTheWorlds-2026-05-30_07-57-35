@@ -361,6 +361,21 @@ namespace MaxWorlds.Bosses
                 add.transform.position = landing;
                 add.transform.rotation = facing;
                 add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
+
+                // MV-1021: SetActive(true) on this freshly-built, still-inactive add re-creates the
+                // native PhysX controller for its already-enabled CharacterController — same trap as
+                // BigBermudaBoss.LaunchVolley. Refused: there is no pool here (every brood Sludger is a
+                // fresh CreateSludger, never reused), so this one is destroyed rather than left an inert
+                // orphan, and the volley is one Sludger short.
+                var cc = add.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(add.transform, cc, out string spawnReason))
+                {
+                    CharacterControllerSafety.LogRefusal("SludgequeenBoss.SpawnBrood", add.gameObject.name,
+                        spawnReason, landing, add.transform.lossyScale);
+                    Destroy(add.gameObject);
+                    continue;
+                }
+
                 add.gameObject.SetActive(true);
             }
         }
@@ -371,6 +386,16 @@ namespace MaxWorlds.Bosses
             go.name = "Brood Sludger";
             go.transform.SetParent(BroodRoot(), false);
             go.transform.localScale = a.BodyScale;
+
+            // MV-1021: go is active at this point (CreatePrimitive makes it so) — same trap as
+            // EnemySpawner.CreateInstance/BigBermudaBoss.CreateAdd. Deactivate first so this add can
+            // never be the one that hands PhysX a bad desc; SpawnBrood's own guard covers reactivation.
+            go.SetActive(false);
+            if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
+            {
+                CharacterControllerSafety.LogRefusal("SludgequeenBoss.CreateSludger", go.name,
+                    createReason, go.transform.position, go.transform.lossyScale);
+            }
 
             var cc = go.AddComponent<CharacterController>();
             float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);

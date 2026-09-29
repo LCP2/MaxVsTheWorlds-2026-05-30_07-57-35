@@ -1351,7 +1351,24 @@ namespace MaxWorlds.Enemies
             // would otherwise spawn back in unable to move at all. ResetState always lands in the awake
             // State.Chase, so unconditionally re-enabling here is always correct.
             if (_cc == null) _cc = GetComponent<CharacterController>();
-            if (_cc != null) _cc.enabled = true;
+            // MV-1021: ResetState runs from OnEnable — every caller that reactivates a pooled/fresh
+            // RobotEnemy (EnemySpawner.SpawnKind, BigBermudaBoss/SludgequeenBoss's own add activation)
+            // lands here, so this is the single choke point where the native PhysX controller actually
+            // gets (re)created for all of them. Guarded centrally rather than trusting every caller to
+            // have validated first — a caller's own pre-check (see EnemySpawner.SpawnKind) still gives a
+            // cleaner refusal (never goes active at all); this is the backstop for the rest.
+            if (_cc != null)
+            {
+                if (CharacterControllerSafety.CanCreate(transform, _cc, out string resetReason))
+                {
+                    _cc.enabled = true;
+                }
+                else
+                {
+                    CharacterControllerSafety.LogRefusal("RobotEnemy.ResetState", gameObject.name,
+                        resetReason, transform.position, transform.lossyScale);
+                }
+            }
             // MV-952: a pooled robot must not carry the last life's fall-recovery memory forward — this
             // life's own spawn position (already stamped onto transform.position by EnemySpawner before
             // SetActive) is the only "last grounded" point that means anything to it.
@@ -2128,9 +2145,9 @@ namespace MaxWorlds.Enemies
                     // Instant reposition, same idiom as TickTeleport's own reappear (MV-293) — the
                     // Blinker's flank MATHS don't apply to a fixed authored grate, but the mechanism
                     // (disable the controller, set the position, re-enable it) is the same one reused.
-                    _cc.enabled = false;
-                    transform.position = LurkerCycle.PickReappearGrate(_grateHome, _areaGrates, LurkerCycle.ReappearRadius);
-                    _cc.enabled = true;
+                    CharacterControllerSafety.SafeReposition(_cc,
+                        LurkerCycle.PickReappearGrate(_grateHome, _areaGrates, LurkerCycle.ReappearRadius),
+                        "RobotEnemy.OnLurkerPhaseChanged");
                     _grateHome = transform.position;
                     SetBodyVisible(false);
                     SetLurkerCollisionSolid(false);
@@ -2785,10 +2802,9 @@ namespace MaxWorlds.Enemies
 
             // CharacterController owns its own internal position state; setting the transform directly
             // while it's enabled fights that on the next Move(). Disable around the jump so the
-            // controller re-reads the new spot instead of resisting it.
-            _cc.enabled = false;
-            transform.position = _teleportTarget;
-            _cc.enabled = true;
+            // controller re-reads the new spot instead of resisting it. MV-1021: routed through the
+            // guard — a refused jump leaves this robot at `from` rather than feeding PhysX a bad desc.
+            CharacterControllerSafety.SafeReposition(_cc, _teleportTarget, "RobotEnemy.TickTeleport");
 
             // The reposition above is instant with nothing to see (MV-330) — HudSignals carries both
             // points so the VFX layer (CombatVfx) can play the surge/vanish/reappear beat without this
@@ -2851,9 +2867,7 @@ namespace MaxWorlds.Enemies
             if (_playerTarget == null) return;
             Vector3 corrected = EnemyBodySeparation.Clamp(transform.position, _playerTarget.position, MinBodyDistance);
             if (corrected == transform.position) return;
-            _cc.enabled = false;
-            transform.position = corrected;
-            _cc.enabled = true;
+            CharacterControllerSafety.SafeReposition(_cc, corrected, "RobotEnemy.ClampBodySeparation");
         }
 
         /// <summary>Remember the last piece of world geometry we walked into, so the chase can steer
@@ -2916,9 +2930,7 @@ namespace MaxWorlds.Enemies
         /// is this robot's post-attack wind-down, an unrelated mechanic that happens to share the word.</summary>
         private void RecoverFromFall(Vector3 position)
         {
-            _cc.enabled = false;
-            transform.position = position;
-            _cc.enabled = true;
+            CharacterControllerSafety.SafeReposition(_cc, position, "RobotEnemy.RecoverFromFall");
             _verticalVel = 0f;
         }
 

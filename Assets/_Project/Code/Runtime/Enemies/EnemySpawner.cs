@@ -554,6 +554,21 @@ namespace MaxWorlds.Enemies
 
             e.transform.position = door;
             e.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+
+            // MV-1021: OnEnable -> ResetState re-enables this robot's CharacterController the instant
+            // SetActive(true) returns, so a non-finite `door` or a degenerate lossyScale reaches PhysX's
+            // create call right here if nothing stops it first — one of the three crash logs' own
+            // stacks. Refused: this robot is not activated at all; it goes straight back to its pool
+            // (same idiom OnEnemyDied uses) and this spawn is skipped rather than crashing the app.
+            var cc = e.GetComponent<CharacterController>();
+            if (!CharacterControllerSafety.CanCreate(e.transform, cc, out string spawnReason))
+            {
+                CharacterControllerSafety.LogRefusal("EnemySpawner.SpawnKind", e.gameObject.name,
+                    spawnReason, door, e.transform.lossyScale);
+                PushToPool(kind, e);
+                return e;
+            }
+
             e.gameObject.SetActive(true);
 
             // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
@@ -679,6 +694,21 @@ namespace MaxWorlds.Enemies
                 var stray = go.GetComponent<Collider>();
                 if (stray != null) Object.DestroyImmediate(stray);
 
+                // MV-1021: go is active at this point (CreatePrimitive makes it so), and
+                // AddComponent<CharacterController> on an active GameObject creates the native PhysX
+                // controller synchronously — this is the exact call stack one of the three crash logs
+                // named. Deactivating first defers that native create until this robot is actually
+                // reactivated by EnemySpawner.SpawnKind's own guard below, so THIS call can never be the
+                // one that hands PhysX a bad desc. Still validated and logged here (not just there) —
+                // the ticket's own "validate the transform BEFORE adding" — so a bad Bodies()/BodyScale
+                // at construction time leaves evidence even though SpawnKind's gate is what refuses it.
+                go.SetActive(false);
+                if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
+                {
+                    CharacterControllerSafety.LogRefusal("EnemySpawner.CreateInstance", go.name,
+                        createReason, go.transform.position, go.transform.lossyScale);
+                }
+
                 var cc = go.AddComponent<CharacterController>();
                 // Undo the BODY's scale so the metres asked for are the metres you get. The parent
                 // contributes nothing now, by construction.
@@ -715,12 +745,20 @@ namespace MaxWorlds.Enemies
         private void OnEnemyDied(RobotEnemy e)
         {
             _live.Remove(e);
-            if (!_pools.TryGetValue(e.Kind, out var pool))
+            PushToPool(e.Kind, e);
+        }
+
+        /// <summary>Shared with <see cref="OnEnemyDied"/> — MV-1021's SpawnKind guard reuses this same
+        /// "back to its OWN pool" idiom for a robot whose reactivation was refused, so it's picked up on
+        /// the next spawn of this kind (no leak) instead of sitting alive-but-unpooled.</summary>
+        private void PushToPool(EnemyKind kind, RobotEnemy e)
+        {
+            if (!_pools.TryGetValue(kind, out var pool))
             {
                 pool = new Stack<RobotEnemy>();
-                _pools[e.Kind] = pool;
+                _pools[kind] = pool;
             }
-            pool.Push(e); // back to its OWN pool; reused on the next spawn of this kind (no leak)
+            pool.Push(e);
         }
     }
 }
