@@ -126,6 +126,13 @@ namespace MaxWorlds.Player
             // RCDA stream regardless. Attaching this unconditionally costs nothing before the morph —
             // it self-gates on ActivePrimary the same way ShoulderRack gates on SecondaryKind.
             if (GetComponent<PulseLaser>() == null) gameObject.AddComponent<PulseLaser>();
+
+            // MV-1012: Undertow self-attaches the same way — World 3's Weapon Core morph flips
+            // WeaponSystemState.ActivePrimary to Undertow, but nothing ever attached a live Undertow
+            // component to fire; WaterBlaster kept firing the RCDA stream regardless. Attaching this
+            // unconditionally costs nothing before the morph — it self-gates on ActivePrimary the same
+            // way PulseLaser gates on ActivePrimary == Lppe.
+            if (GetComponent<Undertow>() == null) gameObject.AddComponent<Undertow>();
         }
 
         private void OnEnable()

@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Feel;
@@ -27,6 +28,12 @@ namespace MaxWorlds.Weapons
             {
                 if (s_hits[i] == null) continue;
                 bool isRobot = s_hits[i].TryGetComponent<RobotEnemy>(out var robot);
+
+                // MV-1012: the lance (Undertow.FireLanceTick) already gates on LineOfSight.Clear, the
+                // same helper WaterBlaster.cs uses -- the implosion had no such check, so it hit and
+                // converted robots straight through solid cover. Skips both the conversion and the
+                // damage/pull/stagger path below for a robot the implosion can't see.
+                if (isRobot && !LineOfSight.Clear(point, robot.transform.position, robot.transform)) continue;
 
                 // MV-716 Override: a port-exposed robot (below 25% HP) within OverrideRadius of the
                 // implosion converts to Max's side INSTEAD of taking this same shot's damage — the whole

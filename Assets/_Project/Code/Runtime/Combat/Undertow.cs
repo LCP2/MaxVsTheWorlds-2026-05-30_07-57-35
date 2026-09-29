@@ -162,6 +162,10 @@ namespace MaxWorlds.Combat
         private void Awake()
         {
             _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+
+            // MV-1012: self-attached from PlayerController.Awake (code-driven scenes, no scene wiring),
+            // same "resolve-or-fall-back" shape PulseLaser.Awake uses for its own aimSource.
+            if (aimSource == null) aimSource = GetComponent<PlayerController>();
         }
 
         private void Update()
@@ -200,7 +204,11 @@ namespace MaxWorlds.Combat
             if (_depleted && _tank.Normalized >= BlasterTuning.RechargeFraction) _depleted = false;
             else if (!_depleted && !_tank.CanSpend(cost)) _depleted = true;
 
-            bool emitting = ShouldEmit(wantsToStream, !_depleted && _tank.CanSpend(cost));
+            // MV-1012: this component is self-attached unconditionally from PlayerController.Awake (see
+            // PulseLaser's own ActivePrimary gate for the same self-attach-then-no-op shape), so it must
+            // gate itself rather than relying on being added/removed.
+            bool emitting = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Undertow
+                && ShouldEmit(wantsToStream, !_depleted && _tank.CanSpend(cost));
             _lastEmitting = emitting;
             if (!emitting) { _tickTimer = 0f; return; }
 
