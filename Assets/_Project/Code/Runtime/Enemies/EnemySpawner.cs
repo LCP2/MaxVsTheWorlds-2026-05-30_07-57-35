@@ -193,6 +193,17 @@ namespace MaxWorlds.Enemies
 
         public void ConfigureWorldConfig(MaxWorlds.Arena.WorldConfig cfg) => _worldConfig = cfg;
 
+        /// <summary>MV-1022: for a mobile shed only — <see cref="Bodies()"/> roots its metre-space
+        /// container here instead of this factory's own (moving) transform, so a live robot riding
+        /// inside is never dragged by the shed's <c>ClampToArea</c>/hutch-separation steps the way a
+        /// child of a moving parent always is, with no physics sweep of its own. Called by
+        /// <see cref="MaxWorlds.Arena.Map.MapRuntime.BuildFactory"/> right after
+        /// <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> for a mobile shed; a static
+        /// shed never calls this and keeps the ordinary body-relative container.</summary>
+        private Transform _mobileRobotsRoot;
+
+        public void ConfigureMobileRobotsRoot(Transform staticRoot) => _mobileRobotsRoot = staticRoot;
+
         // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go
         // quiet: it spits out a short burst, and on a roll one Bruiser standing in as the "elite"
         // crawling out of the wreck, so each kill is a spike of danger rather than the quietest
@@ -661,7 +672,25 @@ namespace MaxWorlds.Enemies
         private Transform Bodies()
         {
             if (_bodies == null)
-                _bodies = ParentScale.MakeMetreSpace(new GameObject("Robots").transform, transform);
+            {
+                var container = new GameObject("Robots").transform;
+                if (_mobileRobotsRoot != null)
+                {
+                    // MV-1022: a static, non-moving parent — world position set explicitly to wherever
+                    // this shed happens to be right now (its spawn-time mouth), not zeroed onto the root
+                    // the way MakeMetreSpace zeroes onto a normal (stationary) parent, since the root
+                    // itself sits at the map's own origin, not the shed's.
+                    container.SetParent(_mobileRobotsRoot, false);
+                    container.position = transform.position;
+                    container.rotation = Quaternion.identity;
+                    container.localScale = ParentScale.Unscale(_mobileRobotsRoot.lossyScale);
+                }
+                else
+                {
+                    ParentScale.MakeMetreSpace(container, transform);
+                }
+                _bodies = container;
+            }
             return _bodies;
         }
 

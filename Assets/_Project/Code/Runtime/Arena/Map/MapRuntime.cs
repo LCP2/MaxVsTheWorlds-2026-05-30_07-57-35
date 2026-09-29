@@ -2356,6 +2356,13 @@ namespace MaxWorlds.Arena
                 hutch.ConfigureMobility(true);
                 MapZone zone = map.ZoneAt(e.x, e.z);
                 if (zone != null) hutch.SetAreaFootprint(zone.Footprint);
+
+                // MV-1022: a mobile shed's own EnemySpawner.Bodies() container must not ride on the
+                // shed's moving body — see ConfigureMobileRobotsRoot's own doc for why. root is this
+                // map's own static build root (never moves, unscaled), the same one this shed's own body
+                // was just spawned under above.
+                EnemySpawner mobileSpawner = body.GetComponent<EnemySpawner>();
+                if (mobileSpawner != null) mobileSpawner.ConfigureMobileRobotsRoot(root);
             }
 
             BuildShedFittings(body, e, hutch);

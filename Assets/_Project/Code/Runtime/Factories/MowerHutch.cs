@@ -68,7 +68,15 @@ namespace MaxWorlds.Factories
         private const float MobilityTriggerRadius = 10f;  // Max within this range wakes a grounded mobile shed
         private const float LiftHeight = 0.75f;            // metres hovered once fully risen
         private const float LiftDuration = 2.5f;           // seconds to rise from grounded to full hover
-        private const float PursuitStandoff = 2f;          // metres kept from Max once in range
+
+        // --- MV-1022: the old PursuitStandoff (2f) was measured CENTRE to CENTRE, so a shed with the
+        // authored 2.25 m footprint (worldRadius 1.125 m) and Max's own 0.5 m EnemyArchetype.PlayerRadius
+        // left only 0.375 m of real daylight between the two capsule surfaces — under the 0.4 m floor
+        // TestFlight's fall/bounce loop at a20/a23 was measured against. Resolved per-shed in
+        // ResolvePursuitStandoff (from THIS shed's own world capsule radius) so the ring it holds is a
+        // fixed surface-to-surface clearance regardless of an area's authored footprint, not a flat
+        // number that only happened to work for one size. ---
+        private const float PursuitSurfaceClearance = 0.5f;   // real gap kept between the two capsule surfaces
 
         // --- MV-618: Lee's playtest read — "much too fast, do no damage, stack on each other".
         // Fixed to Brute pace/contact damage rather than derived from PlayerController.moveSpeed, so a
@@ -90,6 +98,12 @@ namespace MaxWorlds.Factories
         private CharacterController _cc;
         private ShedMobility _mobilityState = ShedMobility.Grounded;
         private float _groundY;
+
+        /// <summary>MV-1022: THIS shed's own resolved centre-to-centre pursuit distance — see
+        /// <see cref="ResolvePursuitStandoff"/>. Defaults to the old flat 2 m so a hutch this is never
+        /// called on (Grounded is a permanent no-op without <see cref="ConfigureMobility"/>) never reads
+        /// an unresolved zero.</summary>
+        private float _pursuitStandoff = 2f;
         private float _liftTimer;
         private bool _tookDamage;
         private Transform _pursuitTarget;
@@ -198,9 +212,27 @@ namespace MaxWorlds.Factories
             if (!_mobile) return;
             _cc = GetComponent<CharacterController>();
             _groundY = transform.position.y;
+            _pursuitStandoff = ResolvePursuitStandoff();
             // MV-618: seeded full so the very first contact ever made isn't an instant free hit —
             // same convention RobotEnemy's own _contactCooldownTimer uses.
             _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
+        }
+
+        /// <summary>MV-1022: this shed's own centre-to-centre pursuit distance, resolved from its
+        /// ACTUAL world capsule size rather than a flat authored constant — <see cref="_cc"/>'s radius
+        /// scaled by <c>lossyScale</c>'s larger XZ axis, the same formula
+        /// <see cref="MaxWorlds.Core.CharacterControllerSafety.CanCreate"/> already uses for PhysX's own
+        /// world-scaled radius, so this and the create-guard can never disagree about how big the shed's
+        /// capsule actually is. Falls back to the old flat 2 m only if this hutch somehow has no
+        /// <see cref="CharacterController"/> (a test fixture that skips the collider, same fallback
+        /// <see cref="MoveBody"/> already has) — never true for a shed <see cref="MaxWorlds.Arena.Map.MapRuntime"/>
+        /// built.</summary>
+        private float ResolvePursuitStandoff()
+        {
+            if (_cc == null) return 2f;
+            Vector3 scale = transform.lossyScale;
+            float shedWorldRadius = _cc.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            return shedWorldRadius + EnemyArchetype.PlayerRadius + PursuitSurfaceClearance;
         }
 
         /// <summary>Bounds a pursuing mobile shed to the area it was authored inside (MV-683), the same
@@ -442,19 +474,47 @@ namespace MaxWorlds.Factories
             // separation both call MoveBody above) rather than inside MoveBody itself — MoveBody has no
             // opinion on area bounds, only on not tunnelling through solid geometry.
             ClampToArea();
+
+            // MV-1022: last, so it catches whatever the state's own movement AND the area leash just did
+            // this tick — the safety net of last resort, not a state the shed is ever meant to reach.
+            ClampToGroundY(dt);
         }
 
         /// <summary>MV-683's leash: holds this hutch's X/Z inside the area it was authored inside
         /// (<see cref="SetAreaFootprint"/>), the one thing real wall collision (<see cref="MoveBody"/>'s
         /// <see cref="CharacterControllerMotion.SafeMove"/>) does NOT stop it walking through — an open
-        /// gate's doorway. A no-op with no footprint set (<see cref="_hasAreaFootprint"/> false).</summary>
+        /// gate's doorway. A no-op with no footprint set (<see cref="_hasAreaFootprint"/> false).
+        ///
+        /// MV-1022: routed through <see cref="MoveBody"/> (a real <see cref="CharacterControllerMotion.SafeMove"/>
+        /// sweep) rather than a raw <c>transform.position</c> write — the only other raw write on a live
+        /// mobile shed was here; every other mover (lift, standoff-close, hutch separation) already went
+        /// through <see cref="MoveBody"/>.</summary>
         private void ClampToArea()
         {
             if (!_hasAreaFootprint) return;
             Vector3 p = transform.position;
             float x = Mathf.Clamp(p.x, _areaFootprint.xMin, _areaFootprint.xMax);
             float z = Mathf.Clamp(p.z, _areaFootprint.yMin, _areaFootprint.yMax);
-            if (x != p.x || z != p.z) transform.position = new Vector3(x, p.y, z);
+            if (x != p.x || z != p.z) MoveBody(new Vector3(x - p.x, 0f, z - p.z));
+        }
+
+        /// <summary>MV-1022: a mobile shed's body must never sink below the ground height it was
+        /// authored at (<see cref="_groundY"/>) while alive — none of this state machine's own Y math
+        /// (Grounded holds it, TickLiftOff only ever raises it toward <see cref="LiftHeight"/>, Pursuit
+        /// never touches Y at all) intends it to drop, but a <see cref="CharacterControllerMotion.SafeMove"/>
+        /// sweep can still resolve a step-down or overlap push against real geometry — the exact
+        /// TestFlight a20/a23 fall/bounce loop this ticket exists to close off, whatever the actual
+        /// mechanism turns out to be. Snapped back to <see cref="_groundY"/> the instant it happens, and
+        /// logged once via <see cref="FallEventLog"/> (MV-955's "next live fall names its own cause" ring
+        /// buffer) so a device-only recurrence still leaves evidence.</summary>
+        private void ClampToGroundY(float dt)
+        {
+            Vector3 p = transform.position;
+            if (p.y >= _groundY) return;
+
+            Vector3 recovered = new Vector3(p.x, _groundY, p.z);
+            FallEventLog.Record("shed", EnemyNavigation.Map, p, recovered, dt);
+            transform.position = recovered;
         }
 
         /// <summary>Grounded's own exit condition (MV-548 state table): the area has to be ACTIVE —
@@ -504,16 +564,16 @@ namespace MaxWorlds.Factories
             // chased, only hit if the hutch's own path toward Max brings it into range.
             TryDealContactDamageToNearby(to, dist, target);
 
-            if (dist <= PursuitStandoff) return;
+            if (dist <= _pursuitStandoff) return;
 
             Vector3 dir = to.normalized;
-            float step = Mathf.Min(PursuitSpeed * dt, dist - PursuitStandoff);
+            float step = Mathf.Min(PursuitSpeed * dt, dist - _pursuitStandoff);
             if (step > 0f) MoveBody(dir * step);
         }
 
         /// <summary>MV-912: widens MV-618's contact damage from "the pursuit target only" to "the
         /// pursuit target (Max) AND every deployed <see cref="Sentinel"/> within the same
-        /// <see cref="PursuitStandoff"/> contact range" — the shed still only ever pursues Max
+        /// <see cref="_pursuitStandoff"/> contact range" — the shed still only ever pursues Max
         /// (<paramref name="target"/>/<paramref name="to"/>/<paramref name="dist"/> are unchanged from
         /// MV-618), a Sentinel is hit only when the hutch's own movement toward Max happens to bring it
         /// into range. One shared <see cref="_contactCooldownTimer"/> for the whole hutch, exactly as
@@ -525,7 +585,7 @@ namespace MaxWorlds.Factories
 
             bool hitAny = false;
 
-            if (target != null && target.IsAlive && dist <= PursuitStandoff)
+            if (target != null && target.IsAlive && dist <= _pursuitStandoff)
             {
                 DealContactDamage(target, to);
                 hitAny = true;
@@ -537,7 +597,7 @@ namespace MaxWorlds.Factories
                 Sentinel sentinel = sentinels[i];
                 if (sentinel == null || !sentinel.IsAlive) continue;
                 Vector3 toSentinel = sentinel.transform.position - transform.position; toSentinel.y = 0f;
-                if (toSentinel.magnitude > PursuitStandoff) continue;
+                if (toSentinel.magnitude > _pursuitStandoff) continue;
                 DealContactDamage(sentinel, toSentinel);
                 hitAny = true;
             }
