@@ -300,7 +300,10 @@ namespace MaxWorlds.Enemies
             Level = 0;
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
-            ResetState();
+            ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
+            // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
+            // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
+            if (a.Splicer) MarkAsSplicer();
         }
 
         /// <summary>Elevation tier (MV-697), set at spawn from the authored garrison entry's
@@ -696,6 +699,56 @@ namespace MaxWorlds.Enemies
             IsChannelingSplice = false;
             Sentinel.ReleaseSpliceLock(_spliceTarget);
             _spliceTarget = null;
+        }
+
+        /// <summary>MV-1016: the real per-frame Splicer path — <see cref="TryBeginSpliceChannel"/> and
+        /// <see cref="TickSpliceChannel"/> were MV-716 scaffolding with no caller until this. Not
+        /// <see cref="IsSplicer"/> is the overwhelming common case and costs one bool check. Already
+        /// channeling just advances it, recomputing line of sight fresh each tick (same "look, once"
+        /// idiom <see cref="TickBody"/>'s own sight tick above uses) — never trusting a stale hit from
+        /// the tick the channel began. Otherwise looks for the nearest un-hijacked <see cref="Sentinel"/>
+        /// on this robot's own combat level (<see cref="NearestUnhijackedSentinelOnLevel"/>) and tries to
+        /// start one. Returns true whenever a channel is in progress at the end of this call (just
+        /// started, or already running) — <see cref="TickBody"/> uses that to skip this tick's ordinary
+        /// state-machine movement, per the spec table's "channeling: does not move".</summary>
+        private bool TickSplicer(float dt)
+        {
+            if (!IsSplicer) return false;
+
+            if (IsChannelingSplice)
+            {
+                bool channelLineOfSight = _spliceTarget != null && LineOfSight.Between(transform, _spliceTarget.transform);
+                TickSpliceChannel(dt, channelLineOfSight);
+                return IsChannelingSplice;
+            }
+
+            Sentinel nearest = NearestUnhijackedSentinelOnLevel();
+            if (nearest == null) return false;
+
+            float distance = Vector3.Distance(transform.position, nearest.transform.position);
+            bool hasLineOfSight = LineOfSight.Between(transform, nearest.transform);
+            return TryBeginSpliceChannel(nearest, distance, hasLineOfSight);
+        }
+
+        /// <summary>The nearest live, un-hijacked <see cref="Sentinel"/> sharing this robot's own combat
+        /// level (floor vs deck, <see cref="CombatLevel.SameLevel"/> — fails open with no live map, same
+        /// as every other caller of it) — what a Splicer picks its channel target from every tick it
+        /// isn't already channeling.</summary>
+        private Sentinel NearestUnhijackedSentinelOnLevel()
+        {
+            Sentinel nearest = null;
+            float nearestSqr = float.MaxValue;
+            IReadOnlyList<Sentinel> active = Sentinel.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                Sentinel s = active[i];
+                if (s == null || !s.IsAlive || s.IsHijacked) continue;
+                if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, s.transform.position)) continue;
+
+                float sqr = (s.transform.position - transform.position).sqrMagnitude;
+                if (sqr < nearestSqr) { nearestSqr = sqr; nearest = s; }
+            }
+            return nearest;
         }
 
         // --- MV-716: Override (Max -> robot) --------------------------------------------------------
@@ -1532,6 +1585,11 @@ namespace MaxWorlds.Enemies
             if (target != null)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
+            // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
+            // "stops moving" per the spec table — so it must be decided before the ordinary state
+            // machine below gets a chance to steer/attack this frame.
+            bool splicerChanneling = TickSplicer(dt);
+
             // Water Balloon's halt (WV-231): a true freeze, not just a movement stop — the state
             // timer doesn't advance either, so a robot caught mid-telegraph resumes exactly where it
             // left off once the halt ends, rather than the wind-up quietly expiring while frozen.
@@ -1540,7 +1598,7 @@ namespace MaxWorlds.Enemies
                 if (_haltTimer > 0f) _haltTimer -= dt;
                 if (_stunTimer > 0f) _stunTimer -= dt;
             }
-            else
+            else if (!splicerChanneling)
             {
                 _stateTimer += dt;
                 switch (Current)
@@ -2879,6 +2937,11 @@ namespace MaxWorlds.Enemies
             // MV-980: a hit wakes a sleeping garrison robot immediately — DormantWakeScheduler's own
             // <=10 Hz pass is a wake-by-SIGHT bound only; taking damage has never waited on it.
             if (IsDormant) Activate();
+            // MV-1016: any real (non-friendly-fire) hit interrupts a Splicer's channel, per the
+            // ticket's own change spec ("damage to the Splicer during the channel cancels it"). A
+            // lethal hit still reaches Die() below, whose own CancelSpliceChannel call is then a no-op
+            // (already cancelled here).
+            if (IsChannelingSplice) CancelSpliceChannel();
             // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
             // applies (20 -> 25 at the ticket's own 1.25x). MV-715: the Dredge Hulk's front-arc armour
             // multiplies it back down for a hit that arrived from in front — see

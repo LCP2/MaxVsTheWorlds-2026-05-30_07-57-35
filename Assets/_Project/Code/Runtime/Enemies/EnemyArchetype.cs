@@ -108,12 +108,20 @@ namespace MaxWorlds.Enemies
         /// than a brand-new named skin. Empty for the base table.</summary>
         public readonly string ColourRole;
 
+        /// <summary>MV-1016: a role stamped on top of this kind by a world's
+        /// <see cref="MaxWorlds.Arena.WorldEnemyOverride.splicer"/> — World 3's gunner only. False for
+        /// every base archetype and every other world's override. <see cref="For"/> is what actually
+        /// wires a spawned <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s <see cref="RobotEnemy.IsSplicer"/>
+        /// from this (via <see cref="RobotEnemy.Apply"/>).</summary>
+        public readonly bool Splicer;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
             float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
             float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f,
-            string displayName = null, string skin = null, string colourRole = null)
+            string displayName = null, string skin = null, string colourRole = null,
+            bool splicer = false)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -127,6 +135,7 @@ namespace MaxWorlds.Enemies
             DisplayName = string.IsNullOrEmpty(displayName) ? kind.ToString().ToUpperInvariant() : displayName;
             Skin = skin ?? string.Empty;
             ColourRole = colourRole ?? string.Empty;
+            Splicer = splicer;
         }
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
@@ -487,7 +496,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage * multiplier,
-            DisplayName, Skin, ColourRole);
+            DisplayName, Skin, ColourRole, Splicer);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -499,7 +508,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole);
+            DisplayName, Skin, ColourRole, Splicer);
 
         /// <summary>The same lookup as <see cref="Of"/>, with this world's own
         /// <see cref="MaxWorlds.Arena.WorldConfig.enemyOverrides"/> applied over the base table
@@ -536,7 +545,8 @@ namespace MaxWorlds.Enemies
             StandoffRange, TeleportCooldown, TouchDamage,
             string.IsNullOrEmpty(ov.displayName) ? DisplayName : ov.displayName,
             string.IsNullOrEmpty(ov.skin) ? Skin : ov.skin,
-            string.IsNullOrEmpty(ov.colourRole) ? ColourRole : ov.colourRole);
+            string.IsNullOrEmpty(ov.colourRole) ? ColourRole : ov.colourRole,
+            Splicer || ov.splicer);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

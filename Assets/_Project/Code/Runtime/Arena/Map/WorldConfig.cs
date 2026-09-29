@@ -195,6 +195,12 @@ namespace MaxWorlds.Arena
         /// (a clearer "it's about to lob" tell) without restating every other stat — same 0-means-
         /// "not authored" idiom as every other field here.</summary>
         public float telegraphTime;
+
+        /// <summary>MV-1016: stamps this kind as a Splicer — a role, not a new <see cref="EnemyKind"/>
+        /// (World 3's gunner, the "MINE URCHIN"). Default false, same "not authored" idiom as every
+        /// other field here; resolved onto <see cref="MaxWorlds.Enemies.EnemyArchetype.Splicer"/> by
+        /// <see cref="MaxWorlds.Enemies.EnemyArchetype.WithOverride"/>.</summary>
+        public bool splicer;
     }
 
     /// <summary>A sludge slow-zone (MV-692) — a rect in AREA-LOCAL metres (like <see cref="WorldArea.origin"/>,
