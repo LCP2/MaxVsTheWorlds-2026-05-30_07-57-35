@@ -308,11 +308,16 @@ namespace MaxWorlds.Weapons
         /// unlocks it and grants <c>s_rkt</c> outright; see <see cref="MaxWorlds.Pickups.PickupDirector"/>),
         /// while ENERGY/MOVE/SUPPORT carry across untouched. Switches <see cref="RigBoard"/>'s active
         /// board to <paramref name="worldIndex"/>'s first (<see cref="RigBoardLibrary.ForWorld"/>) —
-        /// PRIMARY/SECONDARY's ids are redefined by the new file, so those two categories are rebuilt
-        /// from scratch rather than merged; ENERGY/MOVE/SUPPORT keep the same ids in both boards, so their
-        /// levels/unlocks are preserved by carrying them across the switch explicitly. Call directly to
-        /// apply the morph immediately (fixtures, a pre-existing save's silent catch-up); THE RIG's own
-        /// open ceremony goes through <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
+        /// PRIMARY's ids are redefined by every world's own file, so that category is rebuilt from
+        /// scratch rather than merged; ENERGY/MOVE/SUPPORT keep the same ids on every board, so their
+        /// levels/unlocks are preserved by carrying them across the switch explicitly. SECONDARY sits in
+        /// between: World 2 redefines it from World 1's Water Balloon tree to the Shoulder Rack (rebuilt
+        /// from scratch, same as PRIMARY), but World 3's board keeps World 2's Shoulder Rack ids
+        /// unchanged, so MV-1017 carries SECONDARY's levels/unlock across the World 2 -> World 3 morph
+        /// the same way ENERGY/MOVE/SUPPORT already do — see the <c>worldIndex &gt;= 2</c> branch below.
+        /// Call directly to apply the morph immediately (fixtures, a pre-existing save's silent
+        /// catch-up); THE RIG's own open ceremony goes through
+        /// <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
         public static void ApplyWeaponCoreMorph(int worldIndex)
         {
             var preservedLevels = new Dictionary<string, int>();
@@ -321,28 +326,33 @@ namespace MaxWorlds.Weapons
                 string category = RigBoard.Category(kv.Key);
                 if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
                     preservedLevels[kv.Key] = kv.Value;
+                else if (worldIndex >= 2 && category == "SECONDARY")
+                    preservedLevels[kv.Key] = kv.Value;
             }
 
             var preservedCategories = new List<string>();
             foreach (string category in RigState.SnapshotUnlockedCategories())
                 if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
                     preservedCategories.Add(category);
+                else if (worldIndex >= 2 && category == "SECONDARY")
+                    preservedCategories.Add(category);
 
             RigBoard.UseWorld(worldIndex);
 
             preservedLevels["p_dmg"] = 1;
             preservedCategories.Add("PRIMARY");
-            // MV-727: SECONDARY is deliberately NOT added here anymore — it stays locked until the
-            // World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not the instant the morph
-            // lands. MV-694 used to add it here so s_rkt was immediately cell-buyable; this ticket
-            // reverses that.
+            // MV-727: SECONDARY is deliberately NOT added here for the World 1 -> World 2 morph — it
+            // stays locked until the World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not
+            // the instant the morph lands. MV-694 used to add it here so s_rkt was immediately
+            // cell-buyable; this ticket reverses that. MV-1017: the World 2 -> World 3 morph is
+            // different — SECONDARY's own preserved level/unlock (captured above) already carries
+            // whatever the player earned in World 2, so it must not be re-armed as a mystery below.
 
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
-            RigState.ActivateSecondaryMystery();
+            if (worldIndex < 2) RigState.ActivateSecondaryMystery();
 
             // MV-714: World 3 morphs the primary to UNDERTOW via this same call — the existing
-            // per-world primary selection the ticket asks for, not a new path. SECONDARY's own World 3
-            // shape isn't part of this ticket, so it keeps the World 2 Shoulder Rack unchanged here.
+            // per-world primary selection the ticket asks for, not a new path.
             s_activePrimary = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow : WeaponCatalog.PrimaryKind.Lppe;
             s_secondaryKind = SecondaryKind.ShoulderRack;
             RebuildAcquiredFromRigState();   // fires Changed
