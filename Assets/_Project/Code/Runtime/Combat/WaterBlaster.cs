@@ -341,11 +341,9 @@ namespace MaxWorlds.Combat
             // MV-739: this component is baked once into the scene and never torn down, so without a
             // gate here it kept auto-firing the RCDA stream straight through World 2's LPPE morph
             // (MV-689) — WeaponSystemState.ActivePrimary flipped correctly, but nothing downstream
-            // ever actually read it. Gated on "not Lppe" rather than "is Rcda": World 3's UNDERTOW
-            // (MV-714) has no live primary component of its own yet, and that wiring isn't this
-            // ticket's to add — see WeaponSystemState.ApplyWeaponCoreMorph's own MV-714 comment for
-            // the same kind of explicit World-3 carve-out.
-            bool emitting = WeaponSystemState.ActivePrimary != WeaponCatalog.PrimaryKind.Lppe
+            // ever actually read it. MV-1012: now that Undertow has its own live component and gate,
+            // this stands down for ANY non-Rcda primary, not just Lppe.
+            bool emitting = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Rcda
                 && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(costPerTick));
             _lastEmitting = emitting;
 
