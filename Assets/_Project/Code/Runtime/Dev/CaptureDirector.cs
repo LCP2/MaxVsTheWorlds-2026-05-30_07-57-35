@@ -352,6 +352,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv967Corridor());
             Add(BuildMv993Crossing());
             Add(BuildMv1024SentinelColorCheck());
+            Add(BuildMv1019ReefFloorCheck());
             return d;
         }
 
@@ -1542,6 +1543,59 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-742-stormdrain", NoSetup) },
+            };
+        }
+
+        // ---- MV1019ReefFloorCheck (MV-1019 AC3) -----------------------------------------------
+
+        /// <summary>Same boot/frame idiom as <see cref="BuildMv742StormdrainCheck"/>, one world
+        /// further in — World 3's real shipped config, Max's own spawn in area a1, the fixed rig's own
+        /// angle — proof of how the lifted Reef floor/crate palette (MV-1019) actually reads together,
+        /// not a description of one. ONE capture only, per the ticket's own "no art iteration"
+        /// instruction; Lee judges the look on staging.</summary>
+        private static CapturePreset BuildMv1019ReefFloorCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials/ReefKit finish
+
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 3 built no PlayerController to shoot");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = player.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1019reeffloor",
+                LogTag = "[MV1019Capture]",
+                Flag = "-mv1019shot",
+                ArmFile = "Temp/mv1019.arm",
+                HeadlessMarker = "Temp/mv1019.headless",
+                DoneFileName = "_mv1019_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv742StormdrainCheck, one world further in.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 2;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1019-reef-floor", NoSetup) },
             };
         }
 

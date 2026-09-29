@@ -247,10 +247,19 @@ namespace MaxWorlds.Rendering
         /// Reef — World 3's flooded ship interior (MV-713). Colours read straight off the ticket's
         /// material set (shared with <see cref="MaxWorlds.Rendering.WorldMaterials"/>'s named Reef
         /// materials, so the procedural biome sweep and the eight fixed-hex materials agree): hull
-        /// plate #132234/#1E3247 for the floor/wall pair, rust-dark #0C1622 standing in for both
-        /// <see cref="Metal"/> and — a ship has neither — <see cref="Wood"/>/<see cref="Stone"/>/
-        /// <see cref="Dirt"/>, and the bioluminescent growth colour (#5CF2A4) doing <see cref="Foliage"/>'s
-        /// job: the one organic material a sunken hull actually has growing on it.
+        /// plate #1D2C3B/#1E3247 for the floor/wall pair, rust-dark #0C1622 standing in for
+        /// <see cref="Wood"/>/<see cref="Stone"/> (a ship has neither), and the bioluminescent growth
+        /// colour (#5CF2A4) doing <see cref="Foliage"/>'s job: the one organic material a sunken hull
+        /// actually has growing on it.
+        ///
+        /// MV-1019: the floor read near-black against the robots' own colouring (Lee, 2026-09-29 —
+        /// the floor changes, not the robots), so <see cref="GroundBase"/>/<see cref="GroundAccent"/>
+        /// were lifted to values sampled off the Reef concept art, and <see cref="GroundDry"/>/
+        /// <see cref="Metal"/>/<see cref="Dirt"/> — every value that fed a floor-level surface at the
+        /// old near-black #0C1622 — were raised to match the new <see cref="GroundBase"/> rather than
+        /// left as the darkest tone in the biome. <see cref="Wall"/>/<see cref="Prop"/> are untouched
+        /// (walls stay #1E3247; crates get their own named material — see
+        /// <see cref="MaxWorlds.Rendering.WorldMaterials.M_CrateBody"/> — rather than reading Prop).
         ///
         /// No wind, no clump relief, same as <see cref="Stormdrain"/>'s concrete — a riveted deck plate
         /// doesn't sway and doesn't tuft.
@@ -258,16 +267,16 @@ namespace MaxWorlds.Rendering
         public static BiomePalette Reef => new BiomePalette
         {
             Tint = Color.white,
-            GroundBase = new Color(0.0745f, 0.1333f, 0.2039f),    // #132234 — M_ShipFloor
-            GroundAccent = new Color(0.1176f, 0.1961f, 0.2784f),  // #1E3247 — M_ShipWall, as the sunlit deck patch
-            GroundDry = new Color(0.0471f, 0.0863f, 0.1333f),     // #0C1622 — M_MetalDark, grime/wear
-            Wall = new Color(0.1176f, 0.1961f, 0.2784f),          // #1E3247 — M_ShipWall
-            Prop = new Color(0.0471f, 0.0863f, 0.1333f),          // #0C1622 — M_MetalDark
+            GroundBase = new Color(0.1137f, 0.1725f, 0.2314f),    // #1D2C3B — MV-1019, sampled off the concept floor
+            GroundAccent = new Color(0.1804f, 0.2588f, 0.3412f),  // #2E4257 — MV-1019, the lighter panel-seam tone
+            GroundDry = new Color(0.1137f, 0.1725f, 0.2314f),     // MV-1019: raised to match GroundBase, not #0C1622
+            Wall = new Color(0.1176f, 0.1961f, 0.2784f),          // #1E3247 — M_ShipWall, unchanged (MV-1019 leaves walls alone)
+            Prop = new Color(0.0471f, 0.0863f, 0.1333f),          // #0C1622 — unchanged; crates no longer read this (MV-1019)
 
             Wood = new Color(0.1176f, 0.1961f, 0.2784f),          // no timber on a ship — reuse the hull wall tone
             Stone = new Color(0.1176f, 0.1961f, 0.2784f),         // no stone either — same hull tone
-            Dirt = new Color(0.0471f, 0.0863f, 0.1333f),          // rust/grime — M_MetalDark
-            Metal = new Color(0.0471f, 0.0863f, 0.1333f),         // #0C1622 — M_MetalDark
+            Dirt = new Color(0.1137f, 0.1725f, 0.2314f),          // MV-1019: raised to match GroundBase, not #0C1622
+            Metal = new Color(0.1137f, 0.1725f, 0.2314f),         // MV-1019: raised to match GroundBase, not #0C1622
             Foliage = new Color(0.3608f, 0.9490f, 0.6431f),       // #5CF2A4 — M_BioGlow, the growth on the machinery
 
             GroundDetailScale = 0.45f,     // deck plate seams, same coarseness as Stormdrain's slab joints
