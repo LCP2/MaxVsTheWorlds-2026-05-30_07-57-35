@@ -38,7 +38,7 @@ namespace MaxWorlds.Weapons
     public sealed class ShoulderRack : MonoBehaviour
     {
         private const float RangeMeters = 12f;
-        private const float RocketSpeed = 10f;   // MV-1003: was 14 — Lee's tuning call, ~30% slower
+        private const float RocketSpeed = 12f;   // MV-1025: was 10 (MV-1003) — Lee wants the rocket to read as a visual event, not the original 14
 
         /// <summary>MV-842: the fallback muzzle offset off Max's root — "the rack's tube tips on Max
         /// ... if a tip transform is not available, use Max's root + 0.5m to his right + 0.6m up."

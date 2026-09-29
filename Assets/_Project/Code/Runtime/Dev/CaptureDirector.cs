@@ -336,6 +336,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv758LppeSalvo());
             Add(BuildMv759GateDoorsCheck());
             Add(BuildMv770RocketSalvo());
+            Add(BuildMv1025RocketFireEvent());
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv818CoverCheck());
@@ -2055,6 +2056,177 @@ namespace MaxWorlds.Dev
                     if (rackGo != null) Destroy(rackGo);
                     if (targetGo != null) Destroy(targetGo);
                 },
+            };
+        }
+
+        // ---- MV1025RocketFireEvent (MV-1025) --------------------------------------------------
+
+        /// <summary>The ticket's own AC3: "World 2, three rockets mid-flight ... report the flame's
+        /// bounding box in pixels and its peak RGB." Same real-salvo recipe <see cref="BuildMv770RocketSalvo"/>
+        /// already proved out (a live <see cref="ShoulderRack"/> firing at a real target, not a scripted
+        /// VFX call), just waiting for all 3 salvo rockets to be airborne instead of just the first, and
+        /// reading back the flame layers' own pixels instead of only saving the PNG.</summary>
+        private static CapturePreset BuildMv1025RocketFireEvent()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float pitch = 88f;
+            const float distance = 5f;
+            const float maxWaitSeconds = 3f;
+            const int flameSampleHalf = 40; // covers the ~38x11px outer flame plus slop for camera/projection drift
+
+            GameObject rackGo = null;
+            GameObject targetGo = null;
+            // Each rocket's own flame-layer CENTRE in world space (not its body position) — the outer
+            // flame sits Length/2 + OuterFlameLength/2 behind the body along its own forward axis (see
+            // PlayerRocket.BuildExhaustFlame), roughly 31px away at this framing: a sample box centred
+            // on the BODY instead of the flame put that whole distance right at the box edge, which is
+            // what clipped the real flame tip out of the very first capture pass and left only diluted
+            // (alpha < 1) trail pixels behind for Measure to find.
+            var flameWorldPositions = new List<Vector3>();
+
+            var perRocketReports = new List<string>();
+            int bestLength = -1, bestR = -1, bestG = -1, bestB = -1;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo != null) playerGo.SetActive(false);   // same "hide the real Max" dodge BuildMv770RocketSalvo uses
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                Vector3 aimDir = Vector3.left;
+
+                rackGo = new GameObject("MV1025CaptureRack");
+                rackGo.transform.SetPositionAndRotation(focus, Quaternion.LookRotation(aimDir, Vector3.up));
+                rackGo.AddComponent<CharacterController>();
+                rackGo.AddComponent<ShoulderRack>();
+
+                Vector3 targetPos = focus + aimDir * 6f;
+                targetGo = BuildClusterRobot(EnemyKind.Rusher, targetPos);
+                Physics.SyncTransforms();
+
+                float waitStart = Time.time;
+                while (PlayerRocket.Active.Count < 3 && Time.time - waitStart < maxWaitSeconds) yield return null;
+                if (PlayerRocket.Active.Count < 3)
+                    throw new CaptureAbortException(
+                        $"only {PlayerRocket.Active.Count} of 3 salvo rockets were airborne within the capture window");
+
+                // Frame as soon as all 3 are airborne rather than waiting out a further real-time
+                // settle (BuildMv770RocketSalvo's own 0.16s, tuned for ONE rocket) — the third rocket in
+                // a 3-salvo already took ~0.24s (2 * the 0.12s stagger) to leave the tube, and any extra
+                // wait only lets all three diverge further apart at TurnRateDegPerSec, forcing a wider,
+                // more zoomed-out shot that dilutes every rocket's own flame pixels on downsample.
+                for (int i = 0; i < 2; i++) yield return null;
+
+                Vector3 centroid = Vector3.zero;
+                int count = 0;
+                foreach (PlayerRocket r in PlayerRocket.Active) { if (r == null) continue; centroid += r.transform.position; count++; }
+                centroid /= Mathf.Max(count, 1);
+                float maxRadius = 0.5f;
+                foreach (PlayerRocket r in PlayerRocket.Active)
+                {
+                    if (r == null) continue;
+                    Vector3 d = r.transform.position - centroid; d.y = 0f;
+                    maxRadius = Mathf.Max(maxRadius, d.magnitude);
+                }
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                float framingDistance = Mathf.Max(distance, maxRadius * 2.2f + 2f);
+                cam.transform.SetPositionAndRotation(centroid - rot * Vector3.forward * framingDistance, rot);
+                yield return null;
+
+                // Snapshot every live rocket's own flame-centre position on this exact frame — the same
+                // frame Capture()'s manual cam.Render() below fires — so Measure()'s viewport projection
+                // matches what actually landed in the saved PNG.
+                CombatVfxTuning.RocketBodyTuning bodyTuning = CombatVfxTuning.RocketBody();
+                float flameOffset = bodyTuning.Length * 0.5f + bodyTuning.OuterFlameLength * 0.5f;
+                flameWorldPositions.Clear();
+                foreach (PlayerRocket r in PlayerRocket.Active)
+                    if (r != null) flameWorldPositions.Add(r.transform.position - r.transform.forward * flameOffset);
+            }
+
+            void Measure(Texture2D tex)
+            {
+                var cam = Camera.main;
+                if (cam == null || flameWorldPositions.Count == 0) return;
+
+                for (int ri = 0; ri < flameWorldPositions.Count; ri++)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(flameWorldPositions[ri]);
+                    if (vp.z <= 0f) { perRocketReports.Add($"R{ri + 1}: off-camera"); continue; }
+                    int cx = Mathf.RoundToInt(vp.x * tex.width);
+                    int cy = Mathf.RoundToInt(vp.y * tex.height);
+
+                    int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+                    int peakR = -1, peakG = -1, peakB = -1, matched = 0;
+
+                    for (int dy = -flameSampleHalf; dy <= flameSampleHalf; dy++)
+                    {
+                        int y = cy + dy;
+                        if (y < 0 || y >= tex.height) continue;
+                        for (int dx = -flameSampleHalf; dx <= flameSampleHalf; dx++)
+                        {
+                            int x = cx + dx;
+                            if (x < 0 || x >= tex.width) continue;
+
+                            Color32 c = tex.GetPixel(x, y);
+                            // Additive HDR flame pixels clip bright red/white — the outer layer's
+                            // (2.4, 0.35, 0.10) and inner core's (2.2, 1.7, 0.9) both tonemap well past
+                            // ordinary lit-surface brightness. A plain "is this bright" threshold is
+                            // enough to isolate the flame from the gunmetal body/background within each
+                            // rocket's own small sample box.
+                            if (c.r < 200) continue;
+
+                            if (x < minX) minX = x;
+                            if (x > maxX) maxX = x;
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                            if (c.r > peakR) { peakR = c.r; peakG = c.g; peakB = c.b; }
+                            matched++;
+                        }
+                    }
+
+                    if (matched == 0) { perRocketReports.Add($"R{ri + 1}: no bright flame pixel found"); continue; }
+
+                    int w = maxX - minX + 1, h = maxY - minY + 1, length = Mathf.Max(w, h);
+                    perRocketReports.Add($"R{ri + 1}: bbox {w}x{h}px (n={matched}px), length={length}px, peak RGB=({peakR},{peakG},{peakB})");
+                    if (peakR > bestR) { bestLength = length; bestR = peakR; bestG = peakG; bestB = peakB; }
+                }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1025rocketfireevent",
+                LogTag = "[MV1025Capture]",
+                Flag = "-mv1025shot",
+                ArmFile = "Temp/mv1025.arm",
+                HeadlessMarker = "Temp/mv1025.headless",
+                DoneFileName = "_mv1025_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSystem.ActiveSlot = 0;
+                    RigBoard.UseWorld(1);   // s_rkt/s_sal live only on rig_board.world2.json
+                    WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
+                    RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 3 } },
+                        new[] { "SECONDARY" });
+                    PickupWallet.SetPowerCellSecondary(3);
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1025-rockets", Setup, measure: Measure) },
+                Cleanup = () =>
+                {
+                    if (rackGo != null) Destroy(rackGo);
+                    if (targetGo != null) Destroy(targetGo);
+                },
+                ExtraReport = () => (perRocketReports.Count > 0 ? string.Join("\n", perRocketReports) + "\n" : "no rockets sampled\n") +
+                    (bestR >= 0 ? $"best: length={bestLength}px peak RGB=({bestR},{bestG},{bestB})\n" : "best: FAILED TO SAMPLE\n"),
             };
         }
 

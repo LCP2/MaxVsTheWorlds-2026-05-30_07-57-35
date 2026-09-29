@@ -239,20 +239,51 @@ namespace MaxWorlds.VFX
 
 
         /// <summary>The Rack rocket body — was a 0.16m capsule (7.7px, roughly a third the bolt's own
-        /// new length).</summary>
+        /// new length). MV-1025 adds the sustained exhaust flame's two layers, the fire-to-smoke trail
+        /// and the hazard band — <see cref="ExhaustFlameSize"/> stays as-is (it only sizes the one-shot
+        /// muzzle particle <see cref="MaxWorlds.VFX.CombatVfx.OnRocketMuzzle"/> emits, not this
+        /// ticket's sustained flame geometry).</summary>
         public readonly struct RocketBodyTuning
         {
             public readonly float Length;
             public readonly float ExhaustFlameSize;
+            public readonly float OuterFlameLength;
+            public readonly float OuterFlameWidth;
+            public readonly float InnerFlameLength;
+            public readonly float InnerFlameWidth;
+            public readonly float FlameFlickerScale;
+            public readonly float TrailWidth;
+            public readonly float TrailTime;
+            public readonly float HazardBandWidth;
 
-            public RocketBodyTuning(float length, float exhaustFlameSize)
+            public RocketBodyTuning(float length, float exhaustFlameSize, float outerFlameLength,
+                float outerFlameWidth, float innerFlameLength, float innerFlameWidth, float flameFlickerScale,
+                float trailWidth, float trailTime, float hazardBandWidth)
             {
                 Length = length;
                 ExhaustFlameSize = exhaustFlameSize;
+                OuterFlameLength = outerFlameLength;
+                OuterFlameWidth = outerFlameWidth;
+                InnerFlameLength = innerFlameLength;
+                InnerFlameWidth = innerFlameWidth;
+                FlameFlickerScale = flameFlickerScale;
+                TrailWidth = trailWidth;
+                TrailTime = trailTime;
+                HazardBandWidth = hazardBandWidth;
             }
         }
 
-        public static RocketBodyTuning RocketBody() => new RocketBodyTuning(length: 0.5f, exhaustFlameSize: 0.35f);
+        // MV-1025: "Speed rockets back up a little bit but not back to their original speed ... I'm
+        // trying to make them a visual event, as at the moment they are hard to see. Brighter? Red
+        // flames?" (Lee, TestFlight). Every value below is given numerically in the ticket — this is
+        // the whole spec, checked by one capture.
+        public static RocketBodyTuning RocketBody() => new RocketBodyTuning(
+            length: 0.5f, exhaustFlameSize: 0.35f,
+            outerFlameLength: 0.8f, outerFlameWidth: 0.22f,
+            innerFlameLength: 0.4f, innerFlameWidth: 0.10f,
+            flameFlickerScale: 0.2f,
+            trailWidth: 0.30f, trailTime: 0.5f,
+            hazardBandWidth: 0.08f);
 
         /// <summary>The rocket's own impact beat, layered on top of the existing splash ring
         /// (<c>RocketImpactVfx.PlaySplashRing</c>) rather than replacing it.</summary>
