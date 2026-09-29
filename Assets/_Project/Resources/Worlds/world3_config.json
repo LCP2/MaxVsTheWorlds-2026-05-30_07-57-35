@@ -104,7 +104,8 @@
   {
    "kind": "gunner",
    "displayName": "MINE URCHIN",
-   "skin": "reef"
+   "skin": "reef",
+   "splicer": true
   },
   {
    "kind": "launcher",

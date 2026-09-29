@@ -359,6 +359,18 @@ namespace MaxWorlds.Arena
             }
         }
 
+        /// <summary>MV-1016: this Sentinel's currently-engaged target — Max's own transform
+        /// (<see cref="_followTarget"/>) while <see cref="IsHijacked"/>, whichever <see cref="RobotEnemy"/>
+        /// <see cref="NearestRobotInRange"/> picked otherwise. Null whenever nothing is currently in
+        /// range/line of sight to fire at. Set only in <see cref="TickSentinel"/>'s own firing gate (once
+        /// per <see cref="_fireCooldown"/>), the same cadence the shot itself fires on.</summary>
+        public Transform CurrentTargetTransform { get; private set; }
+
+        /// <summary>Max's own <see cref="IDamageable"/> (MV-1016) — lazily resolved off
+        /// <see cref="_followTarget"/> and cached, same idiom as <see cref="_maxPulseLaser"/>/
+        /// <see cref="_maxWaterBlaster"/> above, for a hijacked Sentinel's shot at him.</summary>
+        private IDamageable _followTargetDamageable;
+
         public float Normalized => _health?.Normalized ?? 0f;
         public float HealthNormalized => Normalized;
         public float HealthCurrent => _health?.Current ?? 0f;
@@ -641,7 +653,10 @@ namespace MaxWorlds.Arena
             }
         }
 
-        private void TickSentinel(float dt)
+        /// <summary>MV-1016: public (was private, reflection-driven by convention) so an EditMode test
+        /// can drive the real per-frame path — no private call, no reflection — same reasoning
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/> gives for its own MV-1015 change.</summary>
+        public void TickSentinel(float dt)
         {
             _timeSinceDamage += dt;
             TickHijack(dt);
@@ -693,12 +708,35 @@ namespace MaxWorlds.Arena
             _fireCooldown -= dt;
             if (_fireCooldown > 0f) return;
 
-            RobotEnemy target = NearestRobotInRange();
-            if (target == null) return;
+            // MV-1016: while hijacked, this Sentinel's one and only valid target is Max — never a
+            // robot, whatever NearestRobotInRange would otherwise pick (it is never even called here).
+            Vector3 targetPosition;
+            IDamageable targetDamageable;
+            if (IsHijacked)
+            {
+                Transform maxTransform = HijackedTargetTransform();
+                CurrentTargetTransform = maxTransform;
+                if (maxTransform == null) return;
+
+                if (_followTargetDamageable == null) _followTargetDamageable = maxTransform.GetComponent<IDamageable>();
+                targetDamageable = _followTargetDamageable;
+                targetPosition = maxTransform.position;
+            }
+            else
+            {
+                RobotEnemy target = NearestRobotInRange();
+                CurrentTargetTransform = target != null ? target.transform : null;
+                if (target == null) return;
+
+                targetDamageable = target;
+                targetPosition = target.transform.position;
+            }
 
             // MV-426 OVERCHARGE (f_ovc): "runs off your cells: double rate of fire while you have
-            // charge to spend" — forged AND a power cell banked halves the interval before the next shot.
-            bool overchargeActive = RigFusionState.IsForged("f_ovc") && PickupWallet.PowerCells > 0;
+            // charge to spend" — forged AND a power cell banked halves the interval before the next
+            // shot. MV-1016: never applies while hijacked — OVERCHARGE is Max's own RIG fusion, not
+            // something a Sentinel fighting against him should benefit from.
+            bool overchargeActive = !IsHijacked && RigFusionState.IsForged("f_ovc") && PickupWallet.PowerCells > 0;
             _fireCooldown = AbilityTuning.SentinelFireInterval(_fireInterval, overchargeActive);
 
             int damageLevel = RigState.Level("u_dmg");
@@ -707,16 +745,28 @@ namespace MaxWorlds.Arena
                 AbilityTuning.DefaultSentinelBaseDamage,
                 AbilityTuning.DefaultSentinelDamagePerLevel);
 
-            Vector3 dir = target.transform.position - transform.position; dir.y = 0f;
+            Vector3 dir = targetPosition - transform.position; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
             transform.rotation = Quaternion.LookRotation(dir, Vector3.up); // the turret tracks its target
 
-            if (damage > 0f)
+            if (damage > 0f && targetDamageable != null)
             {
-                target.TakeDamage(new DamageInfo(damage, target.transform.position, dir, Team,
+                targetDamageable.TakeDamage(new DamageInfo(damage, targetPosition, dir, Team,
                     source: DamageSource.Ability));
-                FireBeam(target.transform.position);
+                FireBeam(targetPosition);
             }
+        }
+
+        /// <summary>MV-1016: Max's own transform (<see cref="_followTarget"/>, the same one this
+        /// Sentinel already follows — see <see cref="Init"/>) if he's within <see cref="_range"/> (flat,
+        /// same convention <see cref="NearestRobotInRange"/> uses) and in line of sight; null otherwise.
+        /// What <see cref="TickSentinel"/> fires at while <see cref="IsHijacked"/>.</summary>
+        private Transform HijackedTargetTransform()
+        {
+            if (_followTarget == null) return null;
+            if (FlatSqrDistance(transform.position, _followTarget.position) > _range * _range) return null;
+            if (!LineOfSight.Between(transform, _followTarget)) return null;
+            return _followTarget;
         }
 
         /// <summary>MV-946: teleports this sentinel back to solid ground once <see cref="_fallRecovery"/>
