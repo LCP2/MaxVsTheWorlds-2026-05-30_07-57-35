@@ -220,9 +220,11 @@ namespace MaxWorlds.Player
         /// re-accumulating gravity from a large negative <see cref="_verticalVel"/>.</summary>
         private void Recover(Vector3 position)
         {
-            _cc.enabled = false;
-            transform.position = position;
-            _cc.enabled = true;
+            // MV-1021: routed through the guard — Max is the one case the ticket calls out by name
+            // ("Max is restored to his FallRecoveryState last safe position"), which is exactly what a
+            // refused SafeReposition already does (leaves him at his current transform, controller
+            // re-enabled) since that current position is itself the last spot recovery landed him at.
+            CharacterControllerSafety.SafeReposition(_cc, position, "PlayerController.Recover");
             _verticalVel = 0f;
         }
 

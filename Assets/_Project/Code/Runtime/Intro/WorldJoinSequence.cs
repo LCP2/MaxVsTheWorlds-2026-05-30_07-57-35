@@ -723,8 +723,29 @@ namespace MaxWorlds.Intro
         {
             bool was = _cc != null && _cc.enabled;
             if (_cc != null) _cc.enabled = false;
+            Vector3 before = _playerT.position;
             _playerT.position = worldPos;
-            if (_cc != null) _cc.enabled = was;
+
+            // MV-1021: same guard MapRuntime.Adopt/WorldRunner.RespawnPlayer carry — see MapRuntime's
+            // own comment.
+            if (_cc != null && was)
+            {
+                if (CharacterControllerSafety.CanCreate(_playerT, _cc, out string teleportReason))
+                {
+                    _cc.enabled = true;
+                }
+                else
+                {
+                    _playerT.position = before;
+                    _cc.enabled = true;
+                    CharacterControllerSafety.LogRefusal("WorldJoinSequence.TeleportPlayer", _playerT.name,
+                        teleportReason, worldPos, _playerT.lossyScale);
+                }
+            }
+            else if (_cc != null)
+            {
+                _cc.enabled = was;
+            }
         }
 
         // ------------------------------------------------------------------ handoff

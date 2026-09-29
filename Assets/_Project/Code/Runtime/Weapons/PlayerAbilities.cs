@@ -307,8 +307,10 @@ namespace MaxWorlds.Weapons
             {
                 // Bypasses the CharacterController's own collision sweep for this one move — the whole
                 // point of a warp into an already-open area is that Max does not have to physically fit
-                // through the doorway's exact gap.
-                if (_cc != null) { _cc.enabled = false; transform.position = target; _cc.enabled = true; }
+                // through the doorway's exact gap. MV-1021: routed through the guard — a blink is player-
+                // triggered and can land anywhere the current area/target maths resolves to, exactly the
+                // kind of runtime-computed pose this ticket exists to check before it reaches PhysX.
+                if (_cc != null) CharacterControllerSafety.SafeReposition(_cc, target, "PlayerAbilities.TryTeleport(warp)");
                 else transform.position = target;
             }
             else if (_cc != null)
@@ -321,9 +323,7 @@ namespace MaxWorlds.Weapons
                 // warp above already uses) is what lets him pass through a hedge/pot instead of bouncing
                 // off it mid-sweep.
                 Vector3 landing = ResolveSameRoomLanding(from, target);
-                _cc.enabled = false;
-                transform.position = landing;
-                _cc.enabled = true;
+                CharacterControllerSafety.SafeReposition(_cc, landing, "PlayerAbilities.TryTeleport(sameRoom)");
             }
             else transform.position += offset;
 
