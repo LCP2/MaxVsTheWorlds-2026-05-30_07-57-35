@@ -40,11 +40,18 @@ namespace MaxWorlds.Dev
         public readonly Func<Camera, IEnumerator> Setup;
         public readonly string[] MirrorPaths;
 
-        public CaptureShot(string name, Func<Camera, IEnumerator> setup, string[] mirrorPaths = null)
+        /// <summary>MV-1024: optional pixel readback of the exact <see cref="Texture2D"/> <see cref="CaptureDirector.Capture"/>
+        /// is about to encode to PNG — for a rendered-colour AC (Tier 3, CLAUDE.md's testing policy)
+        /// that needs a measured value in the hand-off report, not a second render and not an
+        /// EditMode test asserting the authored constant.</summary>
+        public readonly Action<Texture2D> Measure;
+
+        public CaptureShot(string name, Func<Camera, IEnumerator> setup, string[] mirrorPaths = null, Action<Texture2D> measure = null)
         {
             Name = name;
             Setup = setup;
             MirrorPaths = mirrorPaths;
+            Measure = measure;
         }
     }
 
@@ -202,6 +209,8 @@ namespace MaxWorlds.Dev
                 tex.ReadPixels(new Rect(0, 0, preset.Width, preset.Height), 0, 0);
                 tex.Apply();
 
+                shot.Measure?.Invoke(tex);
+
                 byte[] png = tex.EncodeToPNG();
                 for (int i = 0; i < liveDirs.Count; i++)
                 {
@@ -341,6 +350,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv965Corridor());
             Add(BuildMv967Corridor());
             Add(BuildMv993Crossing());
+            Add(BuildMv1024SentinelColorCheck());
             return d;
         }
 
@@ -3175,6 +3185,128 @@ namespace MaxWorlds.Dev
                 Shots = new List<CaptureShot> { new CaptureShot("MV-993-crossing-gate", NoSetup) },
                 Cleanup = () => Application.logMessageReceived -= OnLog,
                 ExtraReport = () => table.ToString(),
+            };
+        }
+
+        // ---- MV1024SentinelColorCheck (MV-1024 AC3) -------------------------------------------
+
+        /// <summary>MV-1024's own capture evidence: one deployed World 2 Sentinel beside two robots,
+        /// then a mean-RGB readback of every red-dominant ("body") pixel in a box around the sentinel's
+        /// own projected screen position — sampled off the exact <see cref="Texture2D"/>
+        /// <see cref="CaptureDirector.Capture"/> encodes to the saved PNG (via <see cref="CaptureShot.Measure"/>),
+        /// not a second render. A Tier-3 rendered-pixel measurement (CLAUDE.md's testing policy)
+        /// reported through <see cref="CapturePreset.ExtraReport"/> rather than an EditMode test
+        /// asserting the authored colour constant, which Tier 1 bans.</summary>
+        private static CapturePreset BuildMv1024SentinelColorCheck()
+        {
+            const float pitch = 60f;
+            const float distance = 9f;
+            const int sampleBoxHalf = 40; // wide enough to cover the whole body silhouette (dome + skirt) at this framing
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject sentinelGo = null, robotA = null, robotB = null;
+            Vector3 sampleWorldPos = Vector3.zero;
+            float meanR = -1f, meanG = -1f, meanB = -1f;
+            int sampledPixels = 0;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + self-installing systems settle
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                Vector3 sentinelPos = focus + new Vector3(-1.2f, 0f, 0f);
+
+                sentinelGo = new GameObject("MV1024CaptureSentinel");
+                var sentinel = sentinelGo.AddComponent<Sentinel>();
+                sentinel.Init(sentinelPos, maxHp: 60f, range: 8f, fireInterval: 0.5f,
+                    moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
+
+                robotA = BuildClusterRobot(EnemyKind.Rusher, focus + new Vector3(1.0f, 0f, -0.6f));
+                robotB = BuildClusterRobot(EnemyKind.Gunner, focus + new Vector3(1.2f, 0f, 0.7f));
+                Physics.SyncTransforms();
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the rigs/materials build
+
+                // The body's own vertical centre — half the capsule height Sentinel.BuildBody's own
+                // ColliderHeight sets — so the sample lands on the torso, not the legs or dome head.
+                sampleWorldPos = sentinelGo.transform.position + Vector3.up * 0.6f;
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus; camFocus.y = 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+                yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                // Camera.main is exactly where Setup left it — Capture() never repositions it between
+                // Setup returning and this readback, so this viewport point matches the saved PNG.
+                var cam = Camera.main;
+                if (cam == null) return;
+                Vector3 vp = cam.WorldToViewportPoint(sampleWorldPos);
+                int cx = Mathf.RoundToInt(vp.x * tex.width);
+                int cy = Mathf.RoundToInt(vp.y * tex.height);
+
+                // Only pixels that are actually BODY (red-dominant) count — the box above is generous
+                // enough to also catch the stylised shader's own black silhouette outline, AO-darkened
+                // skirt shadow and background floor, none of which are "the sentinel body's pixels" the
+                // AC asks for. Red-dominant excludes all three: the outline is r=g=b=0, the Stormdrain
+                // floor is a desaturated grey-blue, and the eye/robots beside it are gold/blue/green.
+                double sumR = 0, sumG = 0, sumB = 0;
+                int count = 0;
+                for (int dy = -sampleBoxHalf; dy <= sampleBoxHalf; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= tex.height) continue;
+                    for (int dx = -sampleBoxHalf; dx <= sampleBoxHalf; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= tex.width) continue;
+                        Color32 c = tex.GetPixel(x, y);
+                        if (c.r <= c.g * 1.3f || c.r <= c.b * 1.3f) continue; // not red-dominant -> not body
+                        sumR += c.r; sumG += c.g; sumB += c.b;
+                        count++;
+                    }
+                }
+                if (count == 0) return;
+                meanR = (float)(sumR / count);
+                meanG = (float)(sumG / count);
+                meanB = (float)(sumB / count);
+                sampledPixels = count;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1024sentinelcolor",
+                LogTag = "[MV1024Capture]",
+                Flag = "-mv1024shot",
+                ArmFile = "Temp/mv1024.arm",
+                HeadlessMarker = "Temp/mv1024.headless",
+                DoneFileName = "_mv1024_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same World 2 seeding as BuildMv857MaxWorld2Colors/BuildMv939W2ColorCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1024-sentinel", Setup, measure: Measure) },
+                Cleanup = () =>
+                {
+                    if (sentinelGo != null) Destroy(sentinelGo);
+                    if (robotA != null) Destroy(robotA);
+                    if (robotB != null) Destroy(robotB);
+                },
+                ExtraReport = () => sampledPixels > 0
+                    ? $"sentinel body mean RGB (n={sampledPixels}px): R={meanR:F1} G={meanG:F1} B={meanB:F1}\n"
+                    : "sentinel body mean RGB: FAILED TO SAMPLE (viewport projection landed outside frame)\n",
             };
         }
     }
