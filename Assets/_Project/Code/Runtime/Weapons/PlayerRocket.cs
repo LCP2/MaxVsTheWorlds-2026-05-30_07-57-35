@@ -96,6 +96,19 @@ namespace MaxWorlds.Weapons
         private float _age;
         private bool _detonated;
 
+        /// <summary>MV-1025: the two flame layers' own transforms, resolved once in <see cref="Init"/>
+        /// (after <see cref="BuildVisual"/> has already built them) so <see cref="UpdateFlameFlicker"/>
+        /// can rescale them every frame without a per-frame <see cref="Transform.Find"/>.</summary>
+        private Transform _outerFlame;
+        private Transform _innerFlame;
+
+        /// <summary>MV-1025: "flicker ... random, seeded per rocket" — a <see cref="System.Random"/>
+        /// instance seeded off this rocket's own <see cref="Object.GetInstanceID"/>, not
+        /// <see cref="UnityEngine.Random"/>'s shared global stream, so one rocket's flicker never
+        /// perturbs any other system's random sequence. Allocated once at <see cref="Init"/>, not per
+        /// frame — <see cref="System.Random.NextDouble"/> itself doesn't allocate.</summary>
+        private System.Random _flicker;
+
         /// <summary>MV-944: the exact point this rocket left from, captured once at <see cref="Fire"/>
         /// and never updated — the combat-level reference every level check below uses, rather than this
         /// rocket's own live <c>transform.position</c>. A homing rocket's own Y eases toward its
@@ -182,8 +195,9 @@ namespace MaxWorlds.Weapons
             if (bodyMat != null) nose.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
 
             BuildFins(parent, halfLength, bodyMat);
+            BuildHazardBand(parent, halfLength);
             BuildExhaustFlame(parent, halfLength);
-            BuildSmokeTrail(parent);
+            BuildFireTrail(parent);
         }
 
         /// <summary>Three thin blades at the tail, 120 degrees apart — the silhouette detail that
@@ -204,41 +218,81 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>The amber unlit flame (MV-770) layered behind the existing grey smoke trail — an
-        /// exhaust needs to look like it's BURNING, which a lit grey-tinted capsule never could.</summary>
+        /// <summary>MV-1025: "hard to see ... Brighter? Red flames?" (Lee). Two additive unlit layers
+        /// instead of MV-770's single amber capsule — a wide HDR-red outer flame plus a narrower HDR
+        /// hot yellow-white inner core nested at its base, both anchored off the tail the same way the
+        /// old single flame was. <see cref="_outerFlame"/>/<see cref="_innerFlame"/> hold the built
+        /// transforms so <see cref="UpdateFlameFlicker"/> can rescale them every frame.</summary>
         private static void BuildExhaustFlame(Transform parent, float halfLength)
         {
-            var flame = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            flame.name = "ExhaustFlame";
-            Strip(flame);
-            flame.transform.SetParent(parent, false);
-            flame.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            float flameLength = BodyTuning.ExhaustFlameSize;
-            flame.transform.localPosition = new Vector3(0f, 0f, -halfLength - flameLength * 0.5f);
-            flame.transform.localScale = new Vector3(0.07f, flameLength * 0.5f, 0.07f);
-            Material flameMat = VfxMaterials.AdditiveTinted(ExhaustFlameColor);
-            if (flameMat != null) flame.GetComponent<MeshRenderer>().sharedMaterial = flameMat;
+            var outer = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            outer.name = "ExhaustFlameOuter";
+            Strip(outer);
+            outer.transform.SetParent(parent, false);
+            outer.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            outer.transform.localPosition = new Vector3(0f, 0f, -halfLength - BodyTuning.OuterFlameLength * 0.5f);
+            outer.transform.localScale =
+                new Vector3(BodyTuning.OuterFlameWidth, BodyTuning.OuterFlameLength * 0.5f, BodyTuning.OuterFlameWidth);
+            Material outerMat = VfxMaterials.AdditiveTinted(OuterFlameColor);
+            if (outerMat != null) outer.GetComponent<MeshRenderer>().sharedMaterial = outerMat;
+
+            var inner = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            inner.name = "ExhaustFlameInner";
+            Strip(inner);
+            inner.transform.SetParent(parent, false);
+            inner.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            inner.transform.localPosition = new Vector3(0f, 0f, -halfLength - BodyTuning.InnerFlameLength * 0.5f);
+            inner.transform.localScale =
+                new Vector3(BodyTuning.InnerFlameWidth, BodyTuning.InnerFlameLength * 0.5f, BodyTuning.InnerFlameWidth);
+            Material innerMat = VfxMaterials.AdditiveTinted(InnerFlameColor);
+            if (innerMat != null) inner.GetComponent<MeshRenderer>().sharedMaterial = innerMat;
         }
 
-        /// <summary>The ticket's "rocket smoke trail" — same build idiom
-        /// <see cref="MaxWorlds.Enemies.HomingMissile.BuildTrail"/> and <see cref="SeekerPulse"/>'s own
-        /// bolt trail use, just wider/longer-lived and grey rather than a weapon-coloured bolt smear, so
-        /// it reads as smoke rather than an energy streak.</summary>
-        private static void BuildSmokeTrail(Transform parent)
+        /// <summary>MV-1025: the hazard-red band "behind the nose" — a thin painted ring on the
+        /// otherwise-gunmetal shaft, same lit <see cref="MaterialLibrary"/> path as the body (a physical
+        /// marking, not a light source, so it stays off the additive/unlit VFX path the flame uses).</summary>
+        private static void BuildHazardBand(Transform parent, float halfLength)
+        {
+            var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            band.name = "HazardBand";
+            Strip(band);
+            band.transform.SetParent(parent, false);
+            band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            float bandHalf = BodyTuning.HazardBandWidth * 0.5f;
+            band.transform.localPosition = new Vector3(0f, 0f, halfLength - bandHalf);
+            band.transform.localScale = new Vector3(0.13f, bandHalf, 0.13f);
+            Material hazardMat = MaterialLibrary.Tinted(SurfaceKind.Metal, HazardBandColor);
+            if (hazardMat != null) band.GetComponent<MeshRenderer>().sharedMaterial = hazardMat;
+        }
+
+        /// <summary>MV-1025: replaces the old grey smoke trail with a fire-to-smoke one — red-orange at
+        /// the tail fading through dark red to grey smoke by the time it dissipates, additive/unlit so
+        /// the fresh end actually reads as burning rather than merely tinted.</summary>
+        private static void BuildFireTrail(Transform parent)
         {
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.35f;
+            trail.time = BodyTuning.TrailTime;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
-            trail.widthMultiplier = 0.14f;
+            trail.widthMultiplier = BodyTuning.TrailWidth;
             trail.minVertexDistance = 0.03f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
-            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, SmokeColor);
+            trail.sharedMaterial = VfxMaterials.AdditiveTinted(TrailColorStart);
 
             var gradient = new Gradient();
             gradient.SetKeys(
-                new[] { new GradientColorKey(SmokeColor, 0f), new GradientColorKey(SmokeColor, 1f) },
-                new[] { new GradientAlphaKey(0.55f, 0f), new GradientAlphaKey(0f, 1f) });
+                new[]
+                {
+                    new GradientColorKey(TrailColorStart, 0f),
+                    new GradientColorKey(TrailColorMid, 0.4f),
+                    new GradientColorKey(TrailColorEnd, 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.9f, 0f),
+                    new GradientAlphaKey(0.6f, 0.4f),
+                    new GradientAlphaKey(0f, 1f),
+                });
             trail.colorGradient = gradient;
 
             trail.Clear();
@@ -247,14 +301,26 @@ namespace MaxWorlds.Weapons
         /// <summary>Gunmetal — restyled by MV-702, the [ART] ticket MV-694's own doc pointed at.</summary>
         private static readonly Color BodyColor = new Color(0.35f, 0.36f, 0.4f);
 
-        /// <summary>The smoke trail's colour (MV-702) — pale grey, distinct from every weapon-coloured
-        /// trail in the cast (the LPPE bolt's cyan-white, the missile's own shaft tint).</summary>
-        private static readonly Color SmokeColor = new Color(0.6f, 0.6f, 0.58f);
+        /// <summary>MV-1025 outer flame — HDR red, pushed past 1.0 the same way <c>LppeVfx.MuzzleColor</c>
+        /// is so it actually clears the bloom threshold.</summary>
+        private static readonly Color OuterFlameColor = new Color(2.4f, 0.35f, 0.10f, 1f);
 
-        /// <summary>The exhaust flame's colour (MV-770) — pushed past 1.0 the same way
-        /// <c>LppeVfx.MuzzleColor</c> is, so it actually clears the bloom threshold rather than sitting
-        /// at the same brightness as everything else on screen.</summary>
-        private static readonly Color ExhaustFlameColor = new Color(1.6f, 0.9f, 0.3f, 1f);
+        /// <summary>MV-1025 inner core — HDR hot yellow-white, nested inside the outer flame's base.</summary>
+        private static readonly Color InnerFlameColor = new Color(2.2f, 1.7f, 0.9f, 1f);
+
+        /// <summary>MV-1025 hazard band, behind the nose.</summary>
+        private static readonly Color HazardBandColor = new Color(1.0f, 0.2f, 0.15f);
+
+        /// <summary>MV-1025 fire-to-smoke trail gradient stops (0% / 40% / 100%).</summary>
+        private static readonly Color TrailColorStart = new Color(1.0f, 0.35f, 0.1f);
+        private static readonly Color TrailColorMid = new Color(0.5f, 0.1f, 0.05f);
+        private static readonly Color TrailColorEnd = new Color(0.35f, 0.35f, 0.35f);
+
+        /// <summary>MV-1025: the resolved length-scale each flame layer sits at before a frame's own
+        /// flicker multiplier is applied — precomputed once so <see cref="UpdateFlameFlicker"/> never
+        /// has to re-derive it from <see cref="BodyTuning"/> every frame.</summary>
+        private static readonly float OuterFlameBaseScaleY = BodyTuning.OuterFlameLength * 0.5f;
+        private static readonly float InnerFlameBaseScaleY = BodyTuning.InnerFlameLength * 0.5f;
 
         private static void Strip(GameObject go)
         {
@@ -273,6 +339,33 @@ namespace MaxWorlds.Weapons
             _damage = damage;
             _splashRadius = splashRadius;
             _cluster = cluster;
+
+            _flicker = new System.Random(GetInstanceID());
+            _outerFlame = transform.Find("ExhaustFlameOuter");
+            _innerFlame = transform.Find("ExhaustFlameInner");
+        }
+
+        /// <summary>MV-1025: "each frame, length scale = 1 +/- 0.2 (random, seeded per rocket). No
+        /// allocation per frame." One shared draw per frame, applied to both layers, so they read as
+        /// one burning plume rather than two independently-jittering capsules.</summary>
+        private void UpdateFlameFlicker()
+        {
+            if (_outerFlame == null && _innerFlame == null) return;
+
+            float scale = 1f + ((float)_flicker.NextDouble() * 2f - 1f) * BodyTuning.FlameFlickerScale;
+
+            if (_outerFlame != null)
+            {
+                Vector3 sc = _outerFlame.localScale;
+                sc.y = OuterFlameBaseScaleY * scale;
+                _outerFlame.localScale = sc;
+            }
+            if (_innerFlame != null)
+            {
+                Vector3 sc = _innerFlame.localScale;
+                sc.y = InnerFlameBaseScaleY * scale;
+                _innerFlame.localScale = sc;
+            }
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -284,6 +377,8 @@ namespace MaxWorlds.Weapons
         {
             if (_detonated) return;
             _age += dt;
+
+            UpdateFlameFlicker();
 
             bool launching = _age < LaunchDurationSeconds;
             if (!launching)

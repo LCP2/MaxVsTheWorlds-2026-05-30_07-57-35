@@ -14,16 +14,22 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="PlayerRocket.Fire"/>), not a hand-picked speed, so the resolved flight distance this
     /// test measures is driven by whatever that private constant is actually set to.
     ///
+    /// MV-1025 retuned the same constant again, 10 -> 12 m/s (Lee, TestFlight: "back up a little bit
+    /// but not back to their original speed"), so this test's own resolved-distance band moves with it
+    /// — re-measured at 5.20m (was 4.35m at 10 m/s); see <c>MV1025RocketFireEventSpeedTests</c> for the
+    /// ticket's own new guard on the tuned value itself.
+    ///
     /// The ticket's own AC quoted a straight-line 5.0m ("speed * 0.5s") expectation, which assumes a
     /// rocket flies dead-level at a constant heading. The real, resolved flight (MV-842's launch arc:
-    /// pitched/yawed off the aim line for the first 0.25s, then homing) measures ~4.35m of net
-    /// displacement in 0.5s at 10 m/s instead — this test asserts that measured value, not the ticket's
+    /// pitched/yawed off the aim line for the first 0.25s, then homing) measures ~5.20m of net
+    /// displacement in 0.5s at 12 m/s instead — this test asserts that measured value, not the ticket's
     /// idealised arithmetic, since a resolved-value assertion must match what the engine actually
     /// computes (see the testing policy's Tier 1/2 split).
     ///
-    /// Proven to fail on 8c86feb (unchanged on ShoulderRack.cs/PlayerRocket.cs since; `git diff 8c86feb
-    /// HEAD --stat` on both files is empty): at the pre-fix 14 m/s, the same 0.5s window resolves to
-    /// ~6.04m of displacement, well outside the post-fix 4.35m +/- 0.15m band this test asserts.
+    /// The 5.20m re-measurement is this suite's own real output against the MV-1025 fix, captured by
+    /// running it with the OLD (pre-MV-1025) 4.35m +/- 0.15m band still in place: "expected ~4.35m of
+    /// resolved net displacement in 0.5s at the tuned 10 m/s rocket speed ... measured 5.20m. Expected:
+    /// 4.3499999f +/- 0.150000006f But was: 5.19784164f" — not a hand-derived estimate.
     /// </summary>
     public sealed class MV1003ShoulderRackRocketSpeedTests
     {
@@ -83,9 +89,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(rocket, Is.Not.Null, "the rocket must still be in flight 0.5s after launch");
 
                 float distance = Vector3.Distance(origin, rocket.transform.position);
-                Assert.That(distance, Is.EqualTo(4.35f).Within(0.15f),
-                    $"expected ~4.35m of resolved net displacement in 0.5s at the tuned 10 m/s rocket " +
-                    $"speed (see class doc for why this isn't the ticket's naive 5.0m), measured {distance:0.00}m");
+                Assert.That(distance, Is.EqualTo(5.20f).Within(0.15f),
+                    $"expected ~5.20m of resolved net displacement in 0.5s at the MV-1025-tuned 12 m/s " +
+                    $"rocket speed (see class doc for why this isn't the ticket's naive 6.0m), measured {distance:0.00}m");
             }
             finally
             {

@@ -133,6 +133,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1024SentinelColor() => RunFromMenu(CapturePresets.All["mv1024sentinelcolor"]);
         public static void CaptureMv1024SentinelColor() => Run(CapturePresets.All["mv1024sentinelcolor"]);
 
+        [MenuItem("MaxWorlds/Capture/Rocket Fire Event (MV-1025)")]
+        public static void MenuMv1025RocketFireEvent() => RunFromMenu(CapturePresets.All["mv1025rocketfireevent"]);
+        public static void CaptureMv1025RocketFireEvent() => Run(CapturePresets.All["mv1025rocketfireevent"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
