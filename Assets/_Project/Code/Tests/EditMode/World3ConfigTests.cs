@@ -77,7 +77,7 @@ namespace MaxWorlds.Tests.EditMode
             // --- AC5: MapValidation passes on the whole config, bridges included (belt and suspenders — ---
             // --- ValidateWorldConfig already ran as part of AC1's load; this proves the POST-CONVERSION ---
             // --- MapData also validates, same as World1RuntimeTests does for World 1). ---
-            Assert.GreaterOrEqual(cfg.bridges.Length, 4, "World 3 should author at least 4 bridges");
+            Assert.AreEqual(0, cfg.bridges.Length, "World 3 has no upper levels - no bridges (Lee, 2026-09-30)");
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string mapReason), mapReason);
             Assert.IsTrue(MapValidation.Validate(map, out string validateReason), validateReason);
         }
