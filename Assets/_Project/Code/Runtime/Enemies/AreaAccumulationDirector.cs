@@ -779,7 +779,9 @@ namespace MaxWorlds.Enemies
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state.
-                e.BeginDormant();
+                // MV-1027: authoredSlot true — this is Lee's own Garrison.SeedPositions slot, so the
+                // MV-998 exit-zone rule must never re-route it off the spot he drew.
+                e.BeginDormant(authoredSlot: true);
 
                 // MV-966, Change 2: parked immediately rather than left active-and-ticking until the
                 // next zone crossing sweeps it — a whole area's garrison (up to 102 robots, World 2's
@@ -894,7 +896,9 @@ namespace MaxWorlds.Enemies
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
-                e.BeginDormant();
+                // MV-1027: authoredSlot true — same authored Garrison.SeedPositions slot as
+                // PlacePendingGarrison places, just via this method's own immediate-placement fallback.
+                e.BeginDormant(authoredSlot: true);
 
                 LetThePlayerThrough(e.gameObject);
             }
