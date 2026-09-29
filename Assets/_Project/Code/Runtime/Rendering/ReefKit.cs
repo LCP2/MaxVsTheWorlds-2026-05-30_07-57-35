@@ -169,6 +169,66 @@ namespace MaxWorlds.Rendering
             return go;
         }
 
+        // How thick a crate's orange corner cap reads at, in metres (MV-1019, ticket change item 2:
+        // "orange only on the corner caps"). Thin enough to accent the edge without swallowing the
+        // steel body colour it sits on.
+        private const float CrateCapThickness = 0.10f;
+
+        // How far a cap's outer face sits proud of its crate's own face — the same anti-z-fight
+        // idiom CircuitStripProud uses for a strip against its wall.
+        private const float CrateCapProud = 0.01f;
+
+        /// <summary>Recolours a bare "crate" cover piece with its own Reef material (MV-1019) — a
+        /// blue-grey steel body plus orange accent caps at its four vertical edges. Runs in place of
+        /// leaving the piece to the general shape-classified sweep, which painted it
+        /// <see cref="BiomePalette.Reef"/>'s Prop tone (#0C1622) — darker than the floor it sits on.
+        /// Collider and geometry are untouched: only the body's renderer is re-pointed, and the four
+        /// caps are new, collider-free children, same "collider stays, art swaps" contract every
+        /// other Reef dressing case keeps. <paramref name="addCornerCaps"/> is the caller's own
+        /// <c>CoverShape.Box</c> check (a bool, not the enum itself — <c>MaxWorlds.Rendering</c> has no
+        /// reference to the assembly <c>CoverShape</c> lives in) — a box's corners have edges to
+        /// accent, a cylinder has none.</summary>
+        public static void ApplyCrateSkin(GameObject crateBody, bool addCornerCaps)
+        {
+            if (crateBody == null) return;
+
+            var rend = crateBody.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = WorldMaterials.M_CrateBody;
+
+            if (!addCornerCaps) return;
+
+            Vector3 size = crateBody.transform.localScale;
+            if (size.x <= 0f || size.y <= 0f || size.z <= 0f) return;
+
+            float capX = Mathf.Min(CrateCapThickness, size.x * 0.4f);
+            float capZ = Mathf.Min(CrateCapThickness, size.z * 0.4f);
+            if (capX <= 0f || capZ <= 0f) return;
+
+            var caps = new GameObject("Corner Caps");
+            caps.transform.SetParent(crateBody.transform, false);
+
+            foreach (int sx in new[] { -1, 1 })
+            foreach (int sz in new[] { -1, 1 })
+            {
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cap.name = "CrateCap";
+                cap.transform.SetParent(caps.transform, false);
+                // Positions/scales are expressed as fractions of the parent's own local unit cube
+                // (-0.5..0.5) — the parent's cumulative scale (== size) does the metric conversion,
+                // same idiom BuildCircuitSpine's strips use against their wall.
+                cap.transform.localPosition = new Vector3(
+                    sx * (0.5f - (capX / size.x) * 0.5f),
+                    0f,
+                    sz * (0.5f - (capZ / size.z) * 0.5f));
+                cap.transform.localScale = new Vector3(
+                    capX / size.x + CrateCapProud, 1f + CrateCapProud, capZ / size.z + CrateCapProud);
+                StripColliders(cap);
+
+                var capRend = cap.GetComponent<Renderer>();
+                if (capRend != null) capRend.sharedMaterial = WorldMaterials.M_CrateCap;
+            }
+        }
+
         /// <summary>An observation window panel — new geometry with no World 1 predecessor (the ticket
         /// names it without a "was X" annotation, unlike the other five reskins), wearing
         /// <see cref="WorldMaterials.M_GlassOcean"/>'s near/far gradient. Collider-free: it is a wall

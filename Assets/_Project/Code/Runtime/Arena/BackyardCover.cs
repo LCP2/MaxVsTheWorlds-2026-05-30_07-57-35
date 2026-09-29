@@ -13,8 +13,9 @@ namespace MaxWorlds.Arena
     /// <see cref="Tree"/>, dressed by <see cref="ReefDressing.DressCover"/> into a coolant turret
     /// (<see cref="MaxWorlds.Rendering.ReefKit.BuildCoolantTurret"/>) instead of a Backyard kit model.
     /// A cover piece authored "crate" stays <see cref="None"/> on purpose — a bare box already reads
-    /// as cargo once <see cref="MaxWorlds.Rendering.WorldMaterials"/> sweeps it into the Reef palette,
-    /// so it needs nothing built on top of it.
+    /// as cargo once <see cref="ReefDressing.DressCover"/> re-skins it with its own crate material
+    /// (<see cref="MaxWorlds.Rendering.ReefKit.ApplyCrateSkin"/>, MV-1019), so it needs no separate
+    /// model built on top of it.
     ///
     /// <see cref="Pipe"/> (MV-802, "Pipes as structure") is World 2's own sixth class — a floor-level
     /// main lying along the cover's longer axis, built by

@@ -12,19 +12,22 @@ namespace MaxWorlds.Arena
     /// already knows which world it built and already runs the rest of the Reef-only cosmetic pass
     /// (<c>ApplyReefKit</c>) at the right point in the load order.
     ///
-    /// Only one Backyard cover category has an authored Reef equivalent today: a cover piece dressed
-    /// "machinery" (<see cref="CoverDressing.Machinery"/>) reads as a coolant turret
-    /// (<see cref="ReefKit.BuildCoolantTurret"/>) standing in the same footprint the cover block
-    /// reserves — the same "collider stays, art swaps" contract every <c>DressCover</c> case keeps: the
-    /// block's own box is still what stops the player, a robot or the boss. A cover piece dressed
-    /// "crate" is deliberately left alone (<see cref="CoverDressing.None"/>) — it already re-skins
-    /// itself through <see cref="WorldMaterials"/>'s ordinary shape-classified sweep, and the ticket's
-    /// own instruction is to place nothing where there is no Reef equivalent, not to invent one.
+    /// A cover piece dressed "machinery" (<see cref="CoverDressing.Machinery"/>) reads as a coolant
+    /// turret (<see cref="ReefKit.BuildCoolantTurret"/>) standing in the same footprint the cover
+    /// block reserves — the same "collider stays, art swaps" contract every <c>DressCover</c> case
+    /// keeps: the block's own box is still what stops the player, a robot or the boss. A cover piece
+    /// dressed "crate" (<see cref="CoverDressing.None"/>) keeps its own body — no turret stands in for
+    /// it — but MV-1019 gives it its own Reef material (<see cref="ReefKit.ApplyCrateSkin"/>) instead
+    /// of leaving it to <see cref="WorldMaterials"/>'s ordinary shape-classified sweep, which painted
+    /// it darker than the floor it sits on.
     /// </summary>
     public static class ReefDressing
     {
         /// <summary>Builds a coolant turret in place of every <see cref="CoverDressing.Machinery"/>
-        /// cover piece and hides that piece's own renderer. Returns how many turrets were placed.</summary>
+        /// cover piece (hiding that piece's own renderer) and re-skins every bare
+        /// <see cref="CoverDressing.None"/> "crate" piece with its own Reef material (MV-1019).
+        /// Returns how many turrets were placed — crates are re-skinned in place, not counted, since
+        /// nothing is built or hidden for them.</summary>
         public static int DressCover(Transform parent, IReadOnlyList<CoverPiece> cover)
         {
             int placed = 0;
@@ -34,23 +37,30 @@ namespace MaxWorlds.Arena
 
             foreach (CoverPiece piece in cover)
             {
-                if (piece.Cover.Dressing != CoverDressing.Machinery || piece.Body == null) continue;
+                if (piece.Body == null) continue;
 
-                if (props == null)
+                if (piece.Cover.Dressing == CoverDressing.Machinery)
                 {
-                    // Lazily created: a Reef map with no machinery cover at all (there is none today)
-                    // should leave no empty "dressed nothing" host behind.
-                    props = new GameObject("Reef Props").transform;
-                    props.SetParent(parent, false);
-                    props.gameObject.AddComponent<KeepsOwnMaterial>();
+                    if (props == null)
+                    {
+                        // Lazily created: a Reef map with no machinery cover at all (there is none
+                        // today) should leave no empty "dressed nothing" host behind.
+                        props = new GameObject("Reef Props").transform;
+                        props.SetParent(parent, false);
+                        props.gameObject.AddComponent<KeepsOwnMaterial>();
+                    }
+
+                    ReefKit.BuildCoolantTurret(props, piece.Cover.Center, piece.Cover.Size.y);
+
+                    var renderer = piece.Body.GetComponent<Renderer>();
+                    if (renderer != null) renderer.enabled = false;
+
+                    placed++;
                 }
-
-                ReefKit.BuildCoolantTurret(props, piece.Cover.Center, piece.Cover.Size.y);
-
-                var renderer = piece.Body.GetComponent<Renderer>();
-                if (renderer != null) renderer.enabled = false;
-
-                placed++;
+                else if (piece.Cover.Dressing == CoverDressing.None)
+                {
+                    ReefKit.ApplyCrateSkin(piece.Body, piece.Cover.Shape == CoverShape.Box);
+                }
             }
 
             return placed;

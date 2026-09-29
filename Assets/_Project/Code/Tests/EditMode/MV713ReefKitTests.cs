@@ -32,7 +32,7 @@ namespace MaxWorlds.Tests.EditMode
         public void ReefKit_MatchesTicketAcceptanceCriteria()
         {
             // --- AC1: the eight materials exist with the exact hex values. ---
-            AssertMaterialColor(WorldMaterials.M_ShipFloor, 0x13, 0x22, 0x34, "M_ShipFloor");
+            AssertMaterialColor(WorldMaterials.M_ShipFloor, 0x1D, 0x2C, 0x3B, "M_ShipFloor"); // MV-1019: was 0x132234
             AssertMaterialColor(WorldMaterials.M_ShipWall, 0x1E, 0x32, 0x47, "M_ShipWall");
             AssertMaterialColor(WorldMaterials.M_Circuit_Cyan, 0x3C, 0xDC, 0xF2, "M_Circuit_Cyan");
             AssertMaterialColor(WorldMaterials.M_Circuit_Purple, 0xC4, 0x55, 0xE8, "M_Circuit_Purple");

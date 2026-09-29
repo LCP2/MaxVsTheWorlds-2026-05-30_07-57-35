@@ -104,13 +104,23 @@ namespace MaxWorlds.Rendering
         private static Color HexColor(uint rgb) => new Color(
             ((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
 
-        public static readonly Color ReefShipFloor = HexColor(0x132234);
+        // MV-1019: was 0x132234 — the floor read near-black against the robots' own colouring
+        // (linear luminance ~0.015). Lee: the floor changes, not the robots. Kept in sync with
+        // BiomePalette.Reef.GroundBase, which samples the same concept-art tone.
+        public static readonly Color ReefShipFloor = HexColor(0x1D2C3B);
         public static readonly Color ReefShipWall = HexColor(0x1E3247);
         public static readonly Color ReefCircuitCyan = HexColor(0x3CDCF2);
         public static readonly Color ReefCircuitPurple = HexColor(0xC455E8);
         public static readonly Color ReefBioGlow = HexColor(0x5CF2A4);
         public static readonly Color ReefHazard = HexColor(0xFF8B2E);
         public static readonly Color ReefMetalDark = HexColor(0x0C1622);
+
+        // MV-1019: a bare cargo crate used to read SurfaceKind.Prop off the general biome sweep
+        // (BiomePalette.Reef.Prop, #0C1622) — darker than the floor it sits on. These give it its
+        // own named material instead, per the ticket's own Reef art direction: blue-grey steel body,
+        // hazard-orange corner caps (see ReefKit.ApplyCrateSkin).
+        public static readonly Color ReefCrateBody = HexColor(0x3A4250);
+        public static readonly Color ReefCrateCap = HexColor(0xE07A1F);
 
         /// <summary>The glass gradient's NEAR (top) tone — brighter, closer to the surface.</summary>
         public static readonly Color ReefGlassOceanNear = HexColor(0x0E6FA8);
@@ -131,6 +141,8 @@ namespace MaxWorlds.Rendering
         public static Material M_BioGlow => ReefMaterial("M_BioGlow", ReefBioGlow, emissive: true);
         public static Material M_Hazard => ReefMaterial("M_Hazard", ReefHazard, emissive: true);
         public static Material M_MetalDark => ReefMaterial("M_MetalDark", ReefMetalDark);
+        public static Material M_CrateBody => ReefMaterial("M_CrateBody", ReefCrateBody);
+        public static Material M_CrateCap => ReefMaterial("M_CrateCap", ReefCrateCap);
 
         /// <summary>The observation-window glass — a two-stop vertical gradient (near/far) rather than a
         /// flat colour, built the same way <see cref="MaterialLibrary"/> bakes its own two-tone surfaces

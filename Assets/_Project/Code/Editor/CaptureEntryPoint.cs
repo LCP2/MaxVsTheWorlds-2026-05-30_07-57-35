@@ -137,6 +137,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1025RocketFireEvent() => RunFromMenu(CapturePresets.All["mv1025rocketfireevent"]);
         public static void CaptureMv1025RocketFireEvent() => Run(CapturePresets.All["mv1025rocketfireevent"]);
 
+        [MenuItem("MaxWorlds/Capture/Reef Floor Contrast (MV-1019)")]
+        public static void MenuMv1019ReefFloor() => RunFromMenu(CapturePresets.All["mv1019reeffloor"]);
+        public static void CaptureMv1019ReefFloor() => Run(CapturePresets.All["mv1019reeffloor"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

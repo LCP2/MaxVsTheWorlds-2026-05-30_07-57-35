@@ -136,18 +136,21 @@ namespace MaxWorlds.Tests.EditMode
             Smoothness = 0.06f,
         };
 
+        // MV-1019 lifted GroundBase/GroundAccent/GroundDry/Metal/Dirt (the floor was too dark against
+        // the robots) — this snapshot is updated to match rather than pinning Reef to its pre-MV-1019
+        // values, since this test's own guard is "Stormdrain-only", not "Reef never changes".
         private static readonly BiomePalette ExpectedReef = new BiomePalette
         {
             Tint = Color.white,
-            GroundBase = new Color(0.0745f, 0.1333f, 0.2039f),
-            GroundAccent = new Color(0.1176f, 0.1961f, 0.2784f),
-            GroundDry = new Color(0.0471f, 0.0863f, 0.1333f),
+            GroundBase = new Color(0.1137f, 0.1725f, 0.2314f),
+            GroundAccent = new Color(0.1804f, 0.2588f, 0.3412f),
+            GroundDry = new Color(0.1137f, 0.1725f, 0.2314f),
             Wall = new Color(0.1176f, 0.1961f, 0.2784f),
             Prop = new Color(0.0471f, 0.0863f, 0.1333f),
             Wood = new Color(0.1176f, 0.1961f, 0.2784f),
             Stone = new Color(0.1176f, 0.1961f, 0.2784f),
-            Dirt = new Color(0.0471f, 0.0863f, 0.1333f),
-            Metal = new Color(0.0471f, 0.0863f, 0.1333f),
+            Dirt = new Color(0.1137f, 0.1725f, 0.2314f),
+            Metal = new Color(0.1137f, 0.1725f, 0.2314f),
             Foliage = new Color(0.3608f, 0.9490f, 0.6431f),
             GroundDetailScale = 0.45f,
             GroundMacroScale = 0.05f,
