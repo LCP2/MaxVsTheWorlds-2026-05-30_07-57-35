@@ -129,6 +129,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv967Corridor() => RunFromMenu(CapturePresets.All["mv967corridor"]);
         public static void CaptureMv967Corridor() => Run(CapturePresets.All["mv967corridor"]);
 
+        [MenuItem("MaxWorlds/Capture/Anchorhead (MV-1018)")]
+        public static void MenuMv1018Anchorhead() => RunFromMenu(CapturePresets.All["mv1018anchorhead"]);
+        public static void CaptureMv1018Anchorhead() => Run(CapturePresets.All["mv1018anchorhead"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

@@ -162,6 +162,18 @@ namespace MaxWorlds.Bosses
         /// the volley is dormant (asleep, intro, between waves, dead).</summary>
         public float SpawnWindup01 => _volley != null ? _volley.SpawnWindup01 : 0f;
 
+        /// <summary>Current HP as a 0..1 fraction (MV-1018) — read-only fight state for a companion
+        /// behaviour (<see cref="MaxWorlds.Bosses.AnchorheadBoss"/>) to derive its own phase from,
+        /// same shape as <see cref="SpawnWindup01"/>/<see cref="Enraged"/> above.</summary>
+        public float HealthFraction01 => _health != null ? _health.Normalized : 1f;
+
+        /// <summary>Extra move-speed multiplier (MV-1018), stacked on top of the enrage scale in
+        /// <see cref="TickFight"/>. A skin-specific companion behaviour (today only
+        /// <see cref="MaxWorlds.Bosses.AnchorheadBoss"/>) sets this per its own phase without this
+        /// class needing to know that boss, or any boss, exists. 1 (no change) unless something sets
+        /// it otherwise.</summary>
+        public float ExternalSpeedScale { get; set; } = 1f;
+
         /// <summary>Hands this boss its own authoring area's floor (MV-572) — the rectangle
         /// <see cref="MapRuntime.BuildBoss"/> resolves from the map zone/world area it was built inside.
         /// Called once, right after <c>AddComponent</c>, before this boss ever ticks Dormant.</summary>
@@ -303,7 +315,7 @@ namespace MaxWorlds.Bosses
             _brain.Tick(dt, _health.Normalized);
             BossCensus.ReportSpawnLevel(this, _brain.SpawnLevel, _brain.SpawnLevelProgress01);
 
-            float speedScale = _brain.Enraged ? BossTuning.EnrageMoveScale : 1f;
+            float speedScale = (_brain.Enraged ? BossTuning.EnrageMoveScale : 1f) * ExternalSpeedScale;
             Approach(dt, speedScale);
             FaceTarget();
             TickContactDamage(dt);

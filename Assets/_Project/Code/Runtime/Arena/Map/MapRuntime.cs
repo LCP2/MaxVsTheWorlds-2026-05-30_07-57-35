@@ -2452,11 +2452,23 @@ namespace MaxWorlds.Arena
             var boss = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
             boss.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
 
-            // MV-573: every boss gets its own rig, bound to it alone, right here — the old scene-load
-            // singleton (BigBermudaRig.Install) built exactly one rig per scene and bailed the moment
-            // any rig existed, so only the FIRST boss on a multi-boss map ever grew a body and every
-            // other one stood there as the bare greybox cube above.
-            BigBermudaRig.CreateFor(boss);
+            // MV-1018: Anchorhead (World 3's a30 boss) is selected by its own authored id, not by world
+            // index — BigBermudaBoss stays the base component underneath it either way (HP bar,
+            // BossCensus, victory, the finale orb/door all keep working through it, unchanged); only the
+            // companion behaviour and the generated body differ.
+            if (e.id == "anchorhead")
+            {
+                var anchor = body.AddComponent<AnchorheadBoss>();
+                AnchorheadRig.CreateFor(boss, anchor);
+            }
+            else
+            {
+                // MV-573: every boss gets its own rig, bound to it alone, right here — the old scene-load
+                // singleton (BigBermudaRig.Install) built exactly one rig per scene and bailed the moment
+                // any rig existed, so only the FIRST boss on a multi-boss map ever grew a body and every
+                // other one stood there as the bare greybox cube above.
+                BigBermudaRig.CreateFor(boss);
+            }
 
             // MV-972: tagged AFTER the rig exists, so this also picks up every renderer the rig just
             // built, not just the placeholder body cube — a boss's own wake area keeps it inside one
