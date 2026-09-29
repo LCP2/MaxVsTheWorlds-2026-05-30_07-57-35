@@ -641,6 +641,12 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PowerCellDropRatio, CellEconomyTuning.DefaultPowerCellDropRatio),
                 v => DevTuning.PowerCellDropRatio = v, tab: TabEconomy);
 
+            // MV-1029: World 3's per-area Parts budget alone scales by this — World 1/2 never read it
+            // (CellEconomyTuning.WorldPartsMultiplier). Lee's own on-device tuning knob for the raise.
+            Add("W3 parts x", "x", 1f, 3f, CellEconomyTuning.DefaultWorld3PartsMultiplier,
+                () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
+                v => DevTuning.World3PartsMultiplier = v, tab: TabEconomy);
+
             Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
                 () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
                 v => DevTuning.HydroBurstSeconds = v, tab: TabEconomy);

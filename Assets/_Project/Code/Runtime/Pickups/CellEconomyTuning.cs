@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Pickups
 {
@@ -42,5 +43,21 @@ namespace MaxWorlds.Pickups
         /// scales <see cref="MaxWorlds.Pickups.PickupDirector"/>'s fractional accumulator, not a flat
         /// modulo, so a non-integer ratio still lands on the right long-run average.</summary>
         public const float DefaultPowerCellDropRatio = 1.0f;
+
+        /// <summary>MV-1029 (Lee, TestFlight 29 Sep 2026): "World 3 upgrades are too expensive. I'm
+        /// not accumulating parts quickly enough to upgrade and keep pace with the number of robots."
+        /// World 3 threw more robots at Max than World 1/2 without a matching faucet raise — prices
+        /// stay comparable across worlds (the lever is supply, not cost), so this doubles World 3's
+        /// per-area budget alone. Tunable on device via the Settings panel's "W3 parts x" knob
+        /// (<see cref="MaxWorlds.Core.DevTuning.World3PartsMultiplier"/>).</summary>
+        public const float DefaultWorld3PartsMultiplier = 2f;
+
+        /// <summary>The per-area cell budget's world-scale multiplier (MV-1029) — 1.0 for World 1 and
+        /// World 2 (untouched: "Worlds 1 and 2 must not change"), <see cref="DefaultWorld3PartsMultiplier"/>
+        /// (or its dev-tuning override) for World 3 and any world beyond it. <paramref name="worldIndex"/>
+        /// is 0-based, the same convention <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.ActiveWorldIndex"/>
+        /// reports (World 1 = 0, World 2 = 1, World 3 = 2).</summary>
+        public static float WorldPartsMultiplier(int worldIndex) =>
+            worldIndex >= 2 ? DevTuning.Or(DevTuning.World3PartsMultiplier, DefaultWorld3PartsMultiplier) : 1f;
     }
 }

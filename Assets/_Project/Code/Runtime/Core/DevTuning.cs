@@ -349,6 +349,12 @@ namespace MaxWorlds.Core
         /// moved slider changes the very next kill's drop math.</summary>
         public static float? PowerCellDropRatio { get; set; }
 
+        /// <summary>World 3's per-area parts-faucet multiplier (MV-1029) — overrides
+        /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.DefaultWorld3PartsMultiplier"/>. Read live by
+        /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.WorldPartsMultiplier"/>, so a moved slider
+        /// changes the very next World 3 large kill's drop math. World 1/2 never read this.</summary>
+        public static float? World3PartsMultiplier { get; set; }
+
         // --- gated arena (WV-234, spec §1/§9) ---
 
         /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).</summary>
@@ -443,6 +449,7 @@ namespace MaxWorlds.Core
             GlobalRobotBudget.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
             ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue || PowerCellDropRatio.HasValue ||
+            World3PartsMultiplier.HasValue ||
             GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
             WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
@@ -527,6 +534,7 @@ namespace MaxWorlds.Core
             ToughSubstitutionPct = null;
             CellsPerLargeKill = null;
             PowerCellDropRatio = null;
+            World3PartsMultiplier = null;
             GateBreakSeconds = null;
             GateRequiresClear = null;
             WorldBaseThreat = null;
@@ -628,6 +636,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(ToughSubstitutionPct), () => ToughSubstitutionPct, v => ToughSubstitutionPct = v),
             (PrefsPrefix + nameof(CellsPerLargeKill), () => CellsPerLargeKill, v => CellsPerLargeKill = v),
             (PrefsPrefix + nameof(PowerCellDropRatio), () => PowerCellDropRatio, v => PowerCellDropRatio = v),
+            (PrefsPrefix + nameof(World3PartsMultiplier), () => World3PartsMultiplier, v => World3PartsMultiplier = v),
             (PrefsPrefix + nameof(GateBreakSeconds), () => GateBreakSeconds, v => GateBreakSeconds = v),
             (PrefsPrefix + nameof(GateRequiresClear), () => GateRequiresClear, v => GateRequiresClear = v),
             (PrefsPrefix + nameof(WorldBaseThreat), () => WorldBaseThreat, v => WorldBaseThreat = v),
