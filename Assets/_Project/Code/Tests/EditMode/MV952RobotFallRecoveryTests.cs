@@ -33,7 +33,7 @@ namespace MaxWorlds.Tests.EditMode
         private RobotEnemy _robot;
 
         private static readonly MethodInfo TickMethod =
-            typeof(RobotEnemy).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance);
+            typeof(RobotEnemy).GetMethod("Tick", BindingFlags.Public | BindingFlags.Instance); // MV-1015: Tick is now public
         private static readonly FieldInfo CcField =
             typeof(RobotEnemy).GetField("_cc", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo TargetField =

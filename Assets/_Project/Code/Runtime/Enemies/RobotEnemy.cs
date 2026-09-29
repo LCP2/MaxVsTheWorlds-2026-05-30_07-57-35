@@ -51,6 +51,12 @@ namespace MaxWorlds.Enemies
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
         [SerializeField] private Transform target;
 
+        /// <summary>MV-1015: read-only window onto <see cref="target"/> — what the MV-362 retargeting
+        /// rule (and, since this ticket, a converted robot's own <see cref="RetargetToNearestEnemyRobot"/>
+        /// pass) currently believes this robot should be fighting, for a test to assert against without
+        /// reflection.</summary>
+        public Transform CurrentTarget => target;
+
         [Header("Movement")]
         // Fallback only — Apply() stamps the real number from EnemyArchetype, which is where you
         // tune it. Kept in step with Rusher (60% of Max's 6 m/s) so a robot built without an
@@ -1332,7 +1338,18 @@ namespace MaxWorlds.Enemies
         /// it from their existing standoff band exactly as they would Max.</summary>
         private void RetargetIfNeeded()
         {
-            if (Kind == EnemyKind.Blinker || _playerTarget == null) return;
+            if (Kind == EnemyKind.Blinker) return;
+
+            // MV-1015: a converted robot fights the rest of the swarm, not Max or a Sentinel — its
+            // own retarget pass runs instead of the Max/Sentinel dance below, and runs even with no
+            // Max in the world (a converted robot can still find another robot to fight).
+            if (IsConverted)
+            {
+                RetargetToNearestEnemyRobot();
+                return;
+            }
+
+            if (_playerTarget == null) return;
 
             // The sentinel we were fighting died since the last tick — fall back to Max before
             // re-evaluating, so a dead Sentinel's Transform is never read below.
@@ -1379,6 +1396,46 @@ namespace MaxWorlds.Enemies
             if (target != null) _sight.Spawn(target.position);
         }
 
+        /// <summary>MV-1015 Change 2: a converted robot's own retarget pass, run by
+        /// <see cref="RetargetIfNeeded"/> instead of the ordinary Max/Sentinel dance — the nearest
+        /// living, enemy-team robot (<see cref="Team"/> != <see cref="Core.Team.Player"/>, which also
+        /// excludes every OTHER currently-converted robot) in range
+        /// (<see cref="SentinelTargeting.AggroRadius"/> — the same "how far a robot treats as a live
+        /// threat" radius <see cref="RetargetIfNeeded"/> already reuses for Sentinel engagement) and in
+        /// sight (<see cref="LineOfSight.Between"/>, the same check <see cref="TickBody"/> already runs
+        /// every frame), on the same combat level. Falls back to following Max for movement only when
+        /// no enemy robot qualifies — <see cref="TakeDamage"/>'s own friendly-fire gate (this robot's
+        /// <see cref="Team"/> is <see cref="Core.Team.Player"/> while converted), not this method, is
+        /// what keeps its hits off Max and every Sentinel even while <see cref="target"/> points at
+        /// Max.</summary>
+        private void RetargetToNearestEnemyRobot()
+        {
+            MapData map = EnemyNavigation.Map;
+            RobotEnemy best = null;
+            float bestSq = float.MaxValue;
+            var active = Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy other = active[i];
+                if (other == null || other == this || !other.IsAlive || other.Team != Team.Enemy) continue;
+                if (!CombatLevel.SameLevel(map, transform.position, other.transform.position)) continue;
+                if (!LineOfSight.Between(transform, other.transform)) continue;
+
+                float d = (other.transform.position - transform.position).sqrMagnitude;
+                if (d > SentinelTargeting.AggroRadius * SentinelTargeting.AggroRadius) continue;
+                if (d < bestSq) { bestSq = d; best = other; }
+            }
+
+            if (best != null)
+            {
+                if (target != best.transform) RetargetTo(best.transform, best);
+            }
+            else if (_playerTarget != null && target != _playerTarget)
+            {
+                RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
+            }
+        }
+
         private void Update()
         {
             // MV-881: awake here matches PopulationReadout.BuildLine's own definition (not Dormant AND
@@ -1400,8 +1457,12 @@ namespace MaxWorlds.Enemies
         /// "behind" in the first place (this ticket's own root cause). <see cref="AreaAccumulationDirector.ParkByReach"/>
         /// now parks (deactivates) any Dormant/Submerged robot outside Max's reach on every zone
         /// crossing, which means Unity simply never calls this method for it at all — a stronger
-        /// guarantee than any per-frame throttle, so the throttle itself is gone.</summary>
-        private void Tick(float dt)
+        /// guarantee than any per-frame throttle, so the throttle itself is gone.
+        ///
+        /// MV-1015: public (was private, reflection-driven by convention) so an EditMode test can
+        /// drive the real per-frame path a converted robot actually runs — no private call, no
+        /// reflection — instead of hand-picking which private Tick* method to invoke.</summary>
+        public void Tick(float dt)
         {
             if (Current == State.Dead) return;
 
@@ -1436,6 +1497,15 @@ namespace MaxWorlds.Enemies
         {
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
+
+            // MV-1015: a converted robot's borrowed time counts down regardless of state, same
+            // reasoning as the two timers above — its burnout AoE must fire and free the conversion
+            // slot on schedule even mid-Telegraph/Lunge, not only while it happens to be in Chase.
+            // TickConversion is itself a no-op unless IsConverted, so this costs nothing for every
+            // ordinary robot. Burnout can kill this robot outright (Die()), so nothing below must run
+            // against a body that just went State.Dead this same frame.
+            TickConversion(dt);
+            if (Current == State.Dead) return;
 
             // MV-706: ticks regardless of state, same reasoning as the ram cooldown above — a robot
             // mid-Chase or mid-Lunge still has to shed its "just doubled" tag on schedule.
@@ -2054,7 +2124,7 @@ namespace MaxWorlds.Enemies
             _targetDamageable ??= target.GetComponent<IDamageable>();
             if (_targetDamageable != null && _targetDamageable.IsAlive)
             {
-                _targetDamageable.TakeDamage(new DamageInfo(contactDamage, transform.position, to.normalized, Team.Enemy));
+                _targetDamageable.TakeDamage(new DamageInfo(contactDamage, transform.position, to.normalized, _team));
                 _lurkerHitsThisEmergence++;
             }
         }
@@ -2371,7 +2441,7 @@ namespace MaxWorlds.Enemies
             if (_targetDamageable != null && _targetDamageable.IsAlive)
             {
                 _targetDamageable.TakeDamage(
-                    new DamageInfo(touchDamage, transform.position, to.normalized, Team.Enemy));
+                    new DamageInfo(touchDamage, transform.position, to.normalized, _team));
             }
         }
 
@@ -2513,7 +2583,7 @@ namespace MaxWorlds.Enemies
                 if (_targetDamageable != null && _targetDamageable.IsAlive)
                 {
                     _targetDamageable.TakeDamage(new DamageInfo(
-                        contactDamage * dt, transform.position, _lungeDir, Team.Enemy));
+                        contactDamage * dt, transform.position, _lungeDir, _team));
                 }
             }
 
@@ -2687,7 +2757,7 @@ namespace MaxWorlds.Enemies
                 if (_targetDamageable != null && _targetDamageable.IsAlive)
                 {
                     _targetDamageable.TakeDamage(
-                        new DamageInfo(contactDamage, transform.position, _lungeDir, Team.Enemy));
+                        new DamageInfo(contactDamage, transform.position, _lungeDir, _team));
                 }
             }
         }
