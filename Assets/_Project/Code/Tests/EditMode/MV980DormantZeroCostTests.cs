@@ -38,7 +38,7 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class MV980DormantZeroCostTests
     {
         private static readonly MethodInfo TickMethod =
-            typeof(RobotEnemy).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance);
+            typeof(RobotEnemy).GetMethod("Tick", BindingFlags.Public | BindingFlags.Instance); // MV-1015: Tick is now public
         private static readonly MethodInfo EnsureRigBuiltMethod =
             typeof(RobotRig).GetMethod("EnsureBuilt", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo RigLateUpdateMethod =
