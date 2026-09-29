@@ -46,6 +46,11 @@ namespace MaxWorlds.Tests.EditMode
             typeof(Undertow).GetMethod("Awake", NonPublicInstance);
         private static readonly MethodInfo UndertowUpdate =
             typeof(Undertow).GetMethod("Update", NonPublicInstance);
+        // MV-1028: ShoulderRack now reads candidates from RobotEnemy.Active instead of a physics query,
+        // so the AC2 target must be seeded into that registry the same way — OnEnable doesn't run
+        // automatically here either, per this class's own doc comment.
+        private static readonly MethodInfo RobotEnemyOnEnable =
+            typeof(RobotEnemy).GetMethod("OnEnable", NonPublicInstance);
 
         private GameObject _playerGo;
         private GameObject _targetGo;
@@ -67,6 +72,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
             RigBoard.ResetForTests();
+            RobotEnemy.ResetRegistry();
             if (_playerGo != null) Object.DestroyImmediate(_playerGo);
             if (_targetGo != null) Object.DestroyImmediate(_targetGo);
         }
@@ -213,6 +219,7 @@ namespace MaxWorlds.Tests.EditMode
             _targetGo.AddComponent<CharacterController>();
             RobotEnemy target = _targetGo.AddComponent<RobotEnemy>();
             target.Apply(EnemyArchetype.Rusher);
+            RobotEnemyOnEnable.Invoke(target, null); // seeds RobotEnemy.Active — see the class doc above
 
             const float dt = 1f / 60f;
             int steps = Mathf.CeilToInt(AbilityTuning.DefaultShoulderRackBaseReloadSeconds / dt) + 1;

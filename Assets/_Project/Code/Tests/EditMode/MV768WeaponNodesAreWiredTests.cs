@@ -353,10 +353,10 @@ namespace MaxWorlds.Tests.EditMode
         private static RobotEnemy NewRegisteredEnemy(in EnemyArchetype archetype, Vector3 position) =>
             NewRegisteredEnemy(archetype.Kind.ToString(), position, archetype);
 
-        /// <summary>A collider-backed robot with no <see cref="RobotEnemy.Active"/> registration -- all
-        /// <see cref="ShoulderRack"/>/<see cref="PlayerRocket"/> need, since both query live colliders
-        /// (<c>Physics.OverlapSphereNonAlloc</c>), never the registry. Same shape
-        /// <c>MV694ShoulderRackTests.NewEnemy</c> already uses.</summary>
+        /// <summary>A collider-backed robot, ALSO seeded into <see cref="RobotEnemy.Active"/> (MV-1028:
+        /// <see cref="ShoulderRack"/>'s own fire-decision now reads that registry instead of a physics
+        /// query, the same "never fires in a cluttered room" fix MV-832 gave the Sentinel) --
+        /// <see cref="PlayerRocket"/>'s splash/detonation still queries live colliders directly.</summary>
         private static RobotEnemy NewPhysicsEnemy(in EnemyArchetype archetype, Vector3 position, string name = null)
         {
             var go = new GameObject(name ?? $"Enemy {archetype.Kind}");
@@ -365,6 +365,7 @@ namespace MaxWorlds.Tests.EditMode
             CcField.SetValue(e, cc);
             go.transform.position = position;
             e.Apply(archetype);
+            RobotEnemyOnEnable.Invoke(e, null); // seeds RobotEnemy.Active — see this method's own doc above
             return e;
         }
 

@@ -38,6 +38,11 @@ namespace MaxWorlds.Tests.EditMode
             typeof(RobotEnemy).GetField("_cc", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo RegisterHitMethod =
             typeof(PulseLaser).GetMethod("RegisterHit", BindingFlags.NonPublic | BindingFlags.Instance);
+        // MV-1028: ShoulderRack now reads candidates from RobotEnemy.Active instead of a physics query,
+        // so NewPhysicsEnemy must seed that registry too — OnEnable doesn't run automatically outside
+        // Play mode (see MV1017World3RigBoardTests' class doc for the same fact).
+        private static readonly MethodInfo RobotEnemyOnEnable =
+            typeof(RobotEnemy).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance);
 
         [SetUp]
         public void SetUp()
@@ -244,8 +249,8 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------ helpers
 
-        /// <summary>A collider-backed robot with no <see cref="RobotEnemy.Active"/> registration — same
-        /// shape <c>MV768WeaponNodesAreWiredTests.NewPhysicsEnemy</c> uses.</summary>
+        /// <summary>A collider-backed robot, ALSO seeded into <see cref="RobotEnemy.Active"/> (MV-1028) —
+        /// same shape <c>MV768WeaponNodesAreWiredTests.NewPhysicsEnemy</c> uses.</summary>
         private static RobotEnemy NewPhysicsEnemy(in EnemyArchetype archetype, Vector3 position)
         {
             var go = new GameObject($"Enemy {archetype.Kind}");
@@ -254,6 +259,7 @@ namespace MaxWorlds.Tests.EditMode
             CcField.SetValue(e, cc);
             go.transform.position = position;
             e.Apply(archetype);
+            RobotEnemyOnEnable.Invoke(e, null); // seeds RobotEnemy.Active — see this method's own doc above
             return e;
         }
     }

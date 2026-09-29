@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
@@ -56,7 +57,10 @@ namespace MaxWorlds.Weapons
         private float _forceFieldAbsorbCap;    // this activation's full cap, for the HUD/visual fraction
         private ForceFieldBubble _forceFieldBubble;
 
-        private static readonly Collider[] s_hits = new Collider[32];
+        // MV-1028: no longer readonly — grown on overflow by NonRobotOverlapGrowing, same idiom
+        // WaterBlaster.OverlapSphereGrowing uses, so a room too cluttered for the original fixed size
+        // can no longer silently drop a Replicator or boss out of the query.
+        private static Collider[] s_hits = new Collider[32];
         private static readonly System.Collections.Generic.HashSet<int> s_hitGameObjectIds = new System.Collections.Generic.HashSet<int>();
 
         /// <summary>Seconds left before Water Balloon can be thrown again, 0 when ready.</summary>
@@ -224,28 +228,47 @@ namespace MaxWorlds.Weapons
             float damagePct = DevTuning.Or(DevTuning.WaterBalloonDamagePct, AbilityTuning.DefaultWaterBalloonDamagePct);
             float stopSeconds = DevTuning.Or(DevTuning.WaterBalloonStopDurationSeconds, AbilityTuning.DefaultWaterBalloonStopDurationSeconds);
 
-            // A greybox robot (EnemySpawner's stand-in path, which is what ships today) carries BOTH
-            // its CreatePrimitive collider AND a CharacterController on the same GameObject — two
-            // Colliders OverlapSphereNonAlloc reports separately. Without this dedupe every robot in
-            // range gets hit twice: double splash damage, double halt.
+            // MV-1028: robots come from RobotEnemy.Active, not the capped all-layers overlap below —
+            // the same "never fires" starvation MV-832 fixed for the Sentinel could just as easily
+            // leave a splash landing in a cluttered room hitting nothing. Flat XZ distance +
+            // CombatLevel.SameLevel, the range convention every other RobotEnemy.Active consumer in
+            // Runtime/ uses (ShoulderRack, PlayerRocket, Sentinel).
+            MapData map = EnemyNavigation.Map;
+            float radiusSq = radius * radius;
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy robot = active[i];
+                if (robot == null || !robot.IsAlive) continue;
+                if (!CombatLevel.SameLevel(map, point, robot.transform.position)) continue;
+
+                Vector3 rp = robot.transform.position;
+                float dx = rp.x - point.x, dz = rp.z - point.z;
+                if (dx * dx + dz * dz > radiusSq) continue;
+
+                float damage = AbilityTuning.WaterBalloonDamage(robot.MaxHealth, damagePct);
+                if (damage > 0f)
+                    robot.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player, soak: true));
+                robot.ApplyHalt(stopSeconds);
+            }
+
+            // Anything else in range that ISN'T a RobotEnemy (a Replicator, a boss IDamageable) still
+            // needs the physics query — a greybox robot carries both a CreatePrimitive collider and a
+            // CharacterController on the same GameObject (two Colliders OverlapSphereNonAlloc reports
+            // separately), and robots are now handled above, so any RobotEnemy hit here is skipped
+            // rather than double-halted. The buffer grows on overflow (NonRobotOverlapGrowing) so a
+            // cluttered room can't starve a boss/Replicator out of this query either.
             s_hitGameObjectIds.Clear();
-            int count = Physics.OverlapSphereNonAlloc(point, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            int count = NonRobotOverlapGrowing(point, radius);
             for (int i = 0; i < count; i++)
             {
                 if (s_hits[i] == null) continue;
+                if (s_hits[i].TryGetComponent<RobotEnemy>(out _)) continue;   // handled above
                 if (!s_hitGameObjectIds.Add(s_hits[i].gameObject.GetInstanceID())) continue;
                 if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive || d.Team == Team.Player) continue;
 
-                // Robots are the only source of truth for their own max health (IDamageable
-                // deliberately doesn't carry it). Anything hit that isn't a RobotEnemy takes no
-                // damage from the splash — spec §6a says "robots in the splash", not everything.
-                if (s_hits[i].TryGetComponent<RobotEnemy>(out var robot))
-                {
-                    float damage = AbilityTuning.WaterBalloonDamage(robot.MaxHealth, damagePct);
-                    if (damage > 0f)
-                        d.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player, soak: true));
-                }
-
+                // Non-robot IDamageables take no damage from the splash — spec §6a says "robots in
+                // the splash", not everything — but still get haltable, same as before MV-1028.
                 if (s_hits[i].TryGetComponent<IHaltable>(out var haltable))
                     haltable.ApplyHalt(stopSeconds);
             }
@@ -585,11 +608,39 @@ namespace MaxWorlds.Weapons
             Vector3 center = transform.position;
             float radius = ForceFieldRadius;
 
+            // MV-1028: same fix as Land's Water Balloon splash — robots come from RobotEnemy.Active
+            // (flat XZ distance + CombatLevel.SameLevel), not the capped all-layers overlap that could
+            // starve on a cluttered room the same way MV-832 found for the Sentinel.
+            MapData map = EnemyNavigation.Map;
+            float radiusSq = radius * radius;
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy robot = active[i];
+                if (robot == null || !robot.IsAlive) continue;
+                if (!CombatLevel.SameLevel(map, center, robot.transform.position)) continue;
+
+                Vector3 rp = robot.transform.position;
+                float dx = rp.x - center.x, dz = rp.z - center.z;
+                if (dx * dx + dz * dz > radiusSq) continue;
+
+                Vector3 outward = rp - center; outward.y = 0f;
+                Vector3 dir = outward.sqrMagnitude > 1e-4f ? outward.normalized : transform.forward;
+
+                if (damage > 0f)
+                    robot.TakeDamage(new DamageInfo(damage, center, dir, Team.Player, source: DamageSource.Ability));
+                robot.ApplyKnockback(dir * knockbackSpeed);
+            }
+
+            // Anything else in range that ISN'T a RobotEnemy (a Replicator, a boss IDamageable) still
+            // needs the physics query, grown on overflow (NonRobotOverlapGrowing) so it can't be
+            // starved by a cluttered room either — robots are skipped here since they're handled above.
             s_hitGameObjectIds.Clear();
-            int count = Physics.OverlapSphereNonAlloc(center, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            int count = NonRobotOverlapGrowing(center, radius);
             for (int i = 0; i < count; i++)
             {
                 if (s_hits[i] == null) continue;
+                if (s_hits[i].TryGetComponent<RobotEnemy>(out _)) continue;   // handled above
                 if (!s_hitGameObjectIds.Add(s_hits[i].gameObject.GetInstanceID())) continue;
                 if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive || d.Team == Team.Player) continue;
 
@@ -602,6 +653,24 @@ namespace MaxWorlds.Weapons
                 if (s_hits[i].TryGetComponent<IKnockbackable>(out var kb))
                     kb.ApplyKnockback(dir * knockbackSpeed);
             }
+        }
+
+        /// <summary>Physics.OverlapSphereNonAlloc into <see cref="s_hits"/>, growing the buffer and
+        /// re-querying whenever a call comes back exactly <see cref="s_hits"/>-length — the same
+        /// growing idiom <c>WaterBlaster.OverlapSphereGrowing</c> uses, so a room too cluttered for the
+        /// original fixed size can no longer silently drop a Replicator or boss out of the query. Used
+        /// only for the non-robot remainder of <see cref="Land"/> and <see cref="ApplyForceFieldPop"/> —
+        /// robots themselves are read straight off <see cref="RobotEnemy.Active"/> in both, never from
+        /// this query (MV-1028, the same "never fires" bug MV-832 fixed for the Sentinel).</summary>
+        private static int NonRobotOverlapGrowing(Vector3 center, float radius)
+        {
+            int count;
+            while ((count = Physics.OverlapSphereNonAlloc(
+                       center, radius, s_hits, ~0, QueryTriggerInteraction.Ignore)) == s_hits.Length)
+            {
+                s_hits = new Collider[s_hits.Length * 2];
+            }
+            return count;
         }
 
         // --- The Sentinel (MV-362, restructured MV-422) ---

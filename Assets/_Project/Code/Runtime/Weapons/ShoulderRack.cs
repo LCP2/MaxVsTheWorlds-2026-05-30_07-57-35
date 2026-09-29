@@ -47,8 +47,6 @@ namespace MaxWorlds.Weapons
         private const float MuzzleRightOffset = 0.5f;
         private const float MuzzleUpOffset = 0.6f;
 
-        private static readonly Collider[] s_hits = new Collider[16];
-
         // Starts at the base reload so the very first salvo waits a full reload window rather than
         // firing on the first tick — a field initializer, not Awake, since EditMode never runs Awake
         // (MV694ShoulderRackTests adds this component directly).
@@ -168,23 +166,31 @@ namespace MaxWorlds.Weapons
             AbilityTuning.DefaultShoulderRackReloadFloorSeconds,
             WeaponCatalog.MaxLevel(ShoulderRackTrackKind.Reload));
 
+        /// <summary>MV-1028: the "never fires" bug MV-832 fixed for the Sentinel, reproduced here —
+        /// a 12m <c>Physics.OverlapSphereNonAlloc</c> against every layer into a 16-slot buffer let a
+        /// cluttered World 3 room (pillars, walls, deck slabs, dressing, Sentinels) fill every slot
+        /// before a single robot was ever returned, so the rack almost never found a target despite
+        /// awake robots standing right next to Max. Candidates now come from
+        /// <see cref="RobotEnemy.Active"/>, filtered exactly as before (alive, not dormant,
+        /// <see cref="CombatLevel.SameLevel"/>, within <see cref="RangeMeters"/>) — no physics query,
+        /// no allocation per call.</summary>
         private RobotEnemy NearestAwakeRobotInRange()
         {
-            int count = Physics.OverlapSphereNonAlloc(
-                transform.position, RangeMeters, s_hits, ~0, QueryTriggerInteraction.Ignore);
-
+            float rangeSq = RangeMeters * RangeMeters;
             MapData map = EnemyNavigation.Map;
             RobotEnemy best = null;
             float bestSq = float.MaxValue;
-            for (int i = 0; i < count; i++)
+
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
             {
-                if (s_hits[i] == null) continue;
-                if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot)) continue;
-                if (!robot.IsAlive || robot.IsDormant) continue;
+                RobotEnemy robot = active[i];
+                if (robot == null || !robot.IsAlive || robot.IsDormant) continue;
                 // MV-944: the rack never locks a robot standing on the other combat level.
                 if (!CombatLevel.SameLevel(map, transform.position, robot.transform.position)) continue;
 
                 float d = (robot.transform.position - transform.position).sqrMagnitude;
+                if (d > rangeSq) continue;
                 if (d < bestSq) { bestSq = d; best = robot; }
             }
             return best;
