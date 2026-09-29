@@ -273,7 +273,6 @@ namespace MaxWorlds.UI
 
             SaveSlotData data = SaveSystem.Load(slot);
             data.WorldIndex = worldIndex;
-            data.PrimaryKind = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow : WeaponCatalog.PrimaryKind.Lppe;
             data.WeaponCorePending = false;
             SaveSystem.Save(slot, data);
 
@@ -459,8 +458,38 @@ namespace MaxWorlds.UI
 
         /// <summary>The actual restore, shared by <see cref="OnResume"/>'s immediate (same-world) path
         /// and <see cref="Start"/>'s post-reload (cross-world, MV-985) path — everything that used to run
-        /// unconditionally inside <see cref="OnResume"/> once past its <c>HasRunInProgress</c> guard.</summary>
+        /// unconditionally inside <see cref="OnResume"/> once past its <c>HasRunInProgress</c> guard.
+        ///
+        /// MV-1023: the target world is resolved the same way both those callers already did before
+        /// deciding whether to reload (<see cref="SaveSystem.ResolveResumePlan"/>'s own
+        /// <c>WorldIndex</c> — the checkpoint's own world, falling back to <see cref="SaveSlotData.WorldIndex"/>
+        /// for a pre-MV-985 save) — <c>builtWorldIndex</c> only feeds that method's <c>NeedsReload</c>,
+        /// which this call never reads, so 0 is passed with no effect on the resolved world.</summary>
         private void ApplyResume(int slot)
+        {
+            int worldIndex = SaveSystem.ResolveResumePlan(slot, builtWorldIndex: 0).WorldIndex;
+            ApplyResumeState(slot, worldIndex);
+
+            int areaIndex = SaveSystem.Load(slot).CheckpointAreaIndex;
+            Close();
+
+            var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
+            runner?.ResumeCheckpoint(areaIndex);
+        }
+
+        /// <summary>MV-1023: the resume restore's own public static seam, testable without a scene —
+        /// everything <see cref="ApplyResume"/> used to do unconditionally before its UI/runner tail.
+        /// Applies <paramref name="worldIndex"/>'s loadout (<see cref="WeaponSystemState.ApplyWorldLoadout"/>)
+        /// BEFORE <see cref="SaveSystem.RestoreCheckpoint"/> so <see cref="RigState.RestoreSnapshot"/>
+        /// resolves the checkpoint's node ids against the RIGHT world's board — before this ticket,
+        /// <see cref="RigBoard"/>/<see cref="WeaponSystemState.ActivePrimary"/>/<see cref="WeaponSystemState.SecondaryKind"/>
+        /// were process statics nothing on the resume path touched, so a cold RESUME into World 2/3 kept
+        /// firing World 1's RCDA on World 1's board while <c>RigState</c> quietly held World 2/3 node ids
+        /// nothing could read. A still-pending Weapon Core (<see cref="SaveSlotData.WeaponCorePending"/>,
+        /// restored below) is untouched here — <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/>
+        /// still runs it on the next RIG open/run start exactly as in live play, and its result wins,
+        /// since it runs strictly after this.</summary>
+        public static void ApplyResumeState(int slot, int worldIndex)
         {
             SaveSystem.ActiveSlot = slot;
 
@@ -476,18 +505,13 @@ namespace MaxWorlds.UI
             MaxWorlds.Weapons.PendingMorphingModule.Reset();
             MaxWorlds.Arena.DeathRunState.Reset();
 
+            WeaponSystemState.ApplyWorldLoadout(worldIndex);
             SaveSystem.RestoreCheckpoint(slot);
             // RestoreCheckpoint sets RigState directly, which never touches WeaponSystemState's own
             // acquisition-order list — without this every restored ability reads as unacquired on the
             // Weapons screen despite working correctly in combat (RigState is what AbilityLevel/
             // IsAcquired actually read).
             WeaponSystemState.RebuildAcquiredFromRigState();
-
-            int areaIndex = SaveSystem.Load(slot).CheckpointAreaIndex;
-            Close();
-
-            var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
-            runner?.ResumeCheckpoint(areaIndex);
         }
 
         /// <summary>RESET tapped on an occupied slot (MV-282) — asks for confirmation before wiping

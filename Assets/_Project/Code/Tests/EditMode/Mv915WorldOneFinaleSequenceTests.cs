@@ -243,7 +243,12 @@ namespace MaxWorlds.Tests.EditMode
                 "the World 1 finale drop must never be a Device");
 
             InvokeCollect(pickupDirector, core[0]);
-            WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 0);
+            // MV-1023: the world index passed here is the DESTINATION world (WeaponsScreen.CurrentWorldIndex's
+            // own doc: "already advanced past the world whose finale dropped the core by SaveSystem.RecordResult
+            // by the time THE RIG can next be opened") — World 2, not World 1's own index. MV-1023's
+            // ApplyWorldLoadout made this mapping exact (0/1/2 -> RCDA/LPPE/UNDERTOW); the old inline mapping
+            // treated any value below 2 as LPPE, which let this literal read 0 with no observable difference.
+            WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 1);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
                 "AC3: once the collected core's morph applies (THE RIG's own open ceremony), the active " +
                 "primary weapon must resolve to the laser (LPPE)");

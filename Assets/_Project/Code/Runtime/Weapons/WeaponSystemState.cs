@@ -301,6 +301,25 @@ namespace MaxWorlds.Weapons
 
         // ---------------------------------------------------------------- Weapon Core morph (MV-689)
 
+        /// <summary>MV-1023: the one source of truth for which primary/secondary/board a world plays
+        /// with — World 1 the RCDA/Water Balloon on board 0, World 2 the LPPE/Shoulder Rack on board 1,
+        /// World 3+ UNDERTOW/Shoulder Rack on board 2, exactly the mapping <see cref="ApplyWeaponCoreMorph"/>
+        /// applied inline before this ticket. <see cref="ApplyWeaponCoreMorph"/> now calls this instead
+        /// of setting the three fields itself; so does <see cref="Reset"/> (world 0) and RESUME
+        /// (<see cref="MaxWorlds.UI.HomeScreen.ApplyResumeState"/>), which needs this run BEFORE
+        /// <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> so <see cref="RigState.RestoreSnapshot"/>'s
+        /// own <see cref="RigBoard.Exists"/> check lands on the checkpoint's own world's board, not
+        /// whichever board a stale process static left active. Fires <see cref="Changed"/> once.</summary>
+        public static void ApplyWorldLoadout(int worldIndex)
+        {
+            RigBoard.UseWorld(worldIndex);
+            s_activePrimary = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow
+                : worldIndex >= 1 ? WeaponCatalog.PrimaryKind.Lppe
+                : WeaponCatalog.PrimaryKind.Rcda;
+            s_secondaryKind = worldIndex >= 1 ? SecondaryKind.ShoulderRack : SecondaryKind.WaterBalloon;
+            Changed?.Invoke();
+        }
+
         /// <summary>The Weapon Core morph: PRIMARY swaps to the LPPE (<c>p_dmg</c> re-granted at level
         /// 1, no RCDA levels carried — this is a new gadget) and SECONDARY swaps to the Shoulder Rack,
         /// fully reset and LOCKED (MV-727: reverses MV-694's "immediately cell-buyable" shape — SECONDARY
@@ -337,7 +356,9 @@ namespace MaxWorlds.Weapons
                 else if (worldIndex >= 2 && category == "SECONDARY")
                     preservedCategories.Add(category);
 
-            RigBoard.UseWorld(worldIndex);
+            // MV-1023: one source of truth for the board switch + ActivePrimary/SecondaryKind — see
+            // ApplyWorldLoadout's own doc for why RESUME needs this same mapping available standalone.
+            ApplyWorldLoadout(worldIndex);
 
             preservedLevels["p_dmg"] = 1;
             preservedCategories.Add("PRIMARY");
@@ -351,10 +372,6 @@ namespace MaxWorlds.Weapons
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
             if (worldIndex < 2) RigState.ActivateSecondaryMystery();
 
-            // MV-714: World 3 morphs the primary to UNDERTOW via this same call — the existing
-            // per-world primary selection the ticket asks for, not a new path.
-            s_activePrimary = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow : WeaponCatalog.PrimaryKind.Lppe;
-            s_secondaryKind = SecondaryKind.ShoulderRack;
             RebuildAcquiredFromRigState();   // fires Changed
         }
 
@@ -419,13 +436,14 @@ namespace MaxWorlds.Weapons
         /// re-fit.</summary>
         public static void Reset()
         {
-            RigBoard.UseWorld(0);   // MV-689: undo any lingering Weapon Core morph board switch
+            // MV-689/MV-1023: undo any lingering Weapon Core morph board switch and go back to World
+            // 1's own RCDA/Water Balloon baseline via the same single mapping RESUME/the morph use.
+            // ApplyWorldLoadout already fires Changed once; Reset must not fire it a second time
+            // (WeaponSystemStateTests.ChangedFiresOnAcquireLevelUpAndReset counts exactly one per call).
+            ApplyWorldLoadout(0);
             RigState.Reset();
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;
-            s_activePrimary = WeaponCatalog.PrimaryKind.Rcda;
-            s_secondaryKind = SecondaryKind.WaterBalloon;
-            Changed?.Invoke();
         }
     }
 }

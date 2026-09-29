@@ -11,7 +11,7 @@ namespace MaxWorlds.Tests.EditMode
     /// World 2 legitimately means clearing all 30 areas of World 1 and collecting the Weapon Core,
     /// which makes World 2 untestable in practice — this proves <see cref="HomeScreen.StartSlotWorld2"/>
     /// (the plain, EditMode-testable method behind the button) seeds a fresh World 2 run correctly:
-    /// resolved WorldIndex/PrimaryKind/WeaponCorePending/HasRunInProgress read back through
+    /// resolved WorldIndex/WeaponCorePending/HasRunInProgress read back through
     /// <see cref="SaveSystem.Load"/>, and a SECONDARY column left mystery-locked with nothing owned,
     /// exactly as a real Weapon Core morph leaves it.
     ///
@@ -50,14 +50,14 @@ namespace MaxWorlds.Tests.EditMode
                 HasData = true,
                 DisplayName = "DEXTER",
                 WorldIndex = 0,
-                PrimaryKind = WeaponCatalog.PrimaryKind.Rcda,
             });
 
             HomeScreen.StartSlotWorld2(0);
 
             SaveSlotData after = SaveSystem.Load(0);
             Assert.AreEqual(1, after.WorldIndex, "WORLD 2 must seed WorldIndex = 1 (Stormdrain)");
-            Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, after.PrimaryKind, "WORLD 2 must equip the LPPE, not the RCDA");
+            // MV-1023: SaveSlotData.PrimaryKind was deleted (a dead write nothing ever read) — the
+            // live WeaponSystemState.ActivePrimary assertion below is the one source of truth now.
             Assert.IsFalse(after.WeaponCorePending, "no Weapon Core morph is pending on a dev-shortcut start");
             Assert.IsFalse(after.HasRunInProgress, "a fresh WORLD 2 start must not carry a mid-run checkpoint");
 

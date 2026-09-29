@@ -1,5 +1,4 @@
 using System;
-using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Save
 {
@@ -42,14 +41,6 @@ namespace MaxWorlds.Save
         /// save with no explicit value yet; <c>SaveSystem.RecordResult</c> self-heals it from
         /// <see cref="WorldIndex"/> on its first call for such a save.</summary>
         public int FurthestWorldIndex;
-
-        /// <summary>Which primary this profile is currently equipped with (MV-689) — the RCDA until a
-        /// World 1 finale Weapon Core morph flips it to the LPPE for good. Mirrors
-        /// <see cref="WeaponCatalog.PrimaryKind"/> exactly so a save round-trips it with no converter.
-        /// A pre-existing save with <see cref="WorldIndex"/> &gt;= 1 but this still at
-        /// <see cref="WeaponCatalog.PrimaryKind.Rcda"/> is a save from before this field existed — one
-        /// whose morph never got the chance to persist.</summary>
-        public WeaponCatalog.PrimaryKind PrimaryKind = WeaponCatalog.PrimaryKind.Rcda;
 
         /// <summary>True once a Weapon Core has been collected but THE RIG hasn't been opened yet to
         /// play the morph (MV-689) — the persisted twin of <see cref="MaxWorlds.Weapons.PendingMorphingModule.WeaponCorePending"/>,

@@ -70,7 +70,6 @@ namespace MaxWorlds.Tests.EditMode
                 HasData = true,
                 DisplayName = "DEXTER",
                 WorldIndex = 0,
-                PrimaryKind = WeaponCatalog.PrimaryKind.Rcda,
             });
 
             HomeScreen.StartSlotWorld2(0);
