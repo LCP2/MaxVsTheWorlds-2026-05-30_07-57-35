@@ -1007,6 +1007,19 @@ namespace MaxWorlds.Enemies
         /// lands in <see cref="State.Dormant"/>.</summary>
         private int _musterAttempts;
 
+        /// <summary>MV-1027: true while this robot is resting exactly where Lee's own garrison data
+        /// placed it (<see cref="AreaAccumulationDirector.PlacePendingGarrison"/>/<c>SeedGarrison</c>,
+        /// both via <see cref="BeginDormant(bool)"/>'s <c>authoredSlot</c> argument) — authored level
+        /// data is authority (<c>CC_AUTONOMY.md</c>, "Decide"), so the MV-998 exit-zone rule must never
+        /// re-route it, either at placement (<see cref="BeginDormant(bool)"/>) or on
+        /// <see cref="CentralWakeCheck"/>'s later safety sweep. Cleared on pool reuse
+        /// (<see cref="ResetState"/>); a robot only ever earns this by being placed as authored garrison
+        /// again. Never set for a robot that has walked anywhere since — <see cref="BeginMuster"/>'s own
+        /// <see cref="BeginDormant()"/> call (a spawned robot finishing its walk-out, or a mustered robot
+        /// settling after being routed away) always uses the zero-arg overload, so the exit-zone rule
+        /// stays in force for exactly the population MV-998 was written for.</summary>
+        private bool _authoredSlot;
+
         /// <summary>Tracks whether the current lost-sight hunt has run its course — reached the spot
         /// it is hunting, or stopped getting any closer to it. This is what "it has lost him" means
         /// now (YT-93) — not "it hasn't seen him lately", which is true of every robot the moment it
@@ -1378,6 +1391,10 @@ namespace MaxWorlds.Enemies
             // actually matter, but _musterAttempts otherwise keeps counting toward a life that's over.
             _hasMusterTarget = false;
             _musterAttempts = 0;
+            // MV-1027: a pooled robot must not carry the last life's authored-slot exemption forward —
+            // BeginDormant(authoredSlot:) re-stamps it fresh only when garrison placement actually calls
+            // it again; a plain respawn/ambient reuse must go through the ordinary MV-998 check.
+            _authoredSlot = false;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -1809,8 +1826,16 @@ namespace MaxWorlds.Enemies
         /// <summary>Puts this robot to sleep behind cover (MV-363): world-present and rendered from
         /// the moment it's placed — never spawned later at the moment a gate opens — but not yet
         /// chasing, firing or telegraphing. Called by the spawner right after placement, in place of
-        /// the ordinary fresh-Chase state <see cref="ResetState"/> leaves it in.</summary>
-        public void BeginDormant()
+        /// the ordinary fresh-Chase state <see cref="ResetState"/> leaves it in.
+        ///
+        /// <paramref name="authoredSlot"/> (MV-1027) is true only for a garrison robot going straight
+        /// into its own authored <c>Garrison.SeedPositions</c> slot
+        /// (<see cref="AreaAccumulationDirector.PlacePendingGarrison"/>/<c>SeedGarrison</c>) — authored
+        /// level data is authority, so that placement skips <see cref="TryMusterAwayFromExitZone"/>
+        /// entirely rather than risk walking it off the spot Lee drew. Every other caller (a fresh
+        /// spawn's own <see cref="BeginMuster"/>, a robot settling after being mustered away once
+        /// already) uses the default <c>false</c> and keeps the ordinary MV-998 exit-zone check.</summary>
+        public void BeginDormant(bool authoredSlot = false)
         {
             if (Current == State.Dead) return;
             // MV-688: a Grate Lurker has no ordinary Dormant->Chase life — every placement call site
@@ -1818,11 +1843,18 @@ namespace MaxWorlds.Enemies
             // this is the one place that has to branch rather than every call site needing its own.
             if (Kind == EnemyKind.Lurker) { BeginSubmerged(); return; }
 
-            // MV-998: no robot may come to rest inside a factory's exit zone — a hutch's own zone
-            // follows the live player-facing mouth direction, so this can trip for a garrison placement
-            // or a Replicator twin settling near its ramp, not only a fresh spawn (which already carries
-            // its own pre-walked muster point via BeginMuster and won't normally trip this).
-            if (TryMusterAwayFromExitZone()) return;
+            // MV-1027: an authored garrison slot never gets re-routed, even once, by the exit-zone rule
+            // below — see this method's own doc comment and _authoredSlot's.
+            _authoredSlot = authoredSlot;
+            if (!authoredSlot)
+            {
+                // MV-998: no robot may come to rest inside a factory's exit zone — a hutch's own zone
+                // follows the live player-facing mouth direction, so this can trip for a garrison
+                // placement or a Replicator twin settling near its ramp, not only a fresh spawn (which
+                // already carries its own pre-walked muster point via BeginMuster and won't normally
+                // trip this).
+                if (TryMusterAwayFromExitZone()) return;
+            }
 
             _musterAttempts = 0;
             Current = State.Dormant;
@@ -1936,7 +1968,9 @@ namespace MaxWorlds.Enemies
             // it isn't resting inside a factory's exit zone. Same central, bounded (<=10 Hz) pass
             // DormantWakeScheduler already runs this from — no extra per-frame cost, and
             // TryMusterAwayFromExitZone is itself a no-op the instant nothing claims this spot.
-            if (Current == State.Dormant) TryMusterAwayFromExitZone();
+            // MV-1027: an authored garrison slot is exempt here too — the whole point is that it never
+            // gets swept off the spot Lee drew, not just at the moment it was placed.
+            if (Current == State.Dormant && !_authoredSlot) TryMusterAwayFromExitZone();
         }
 
         /// <summary>How many areas behind the player's own a robot's area must be before it counts as
