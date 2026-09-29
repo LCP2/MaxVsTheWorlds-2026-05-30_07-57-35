@@ -11,10 +11,11 @@ namespace MaxWorlds.Tests.EditMode
     /// Reaching World 3 legitimately means clearing all of World 2 as well as World 1, which makes
     /// World 3 untestable in practice — this proves <see cref="HomeScreen.StartSlotWorld"/>'s new
     /// <c>maxRig: true</c> path (the plain, EditMode-testable method behind the WORLD 3 button) drops
-    /// the tester in with a completely maxed rig on World 2's board (the board World 3 also loads,
-    /// <see cref="RigBoardLibrary.ForWorld"/>'s own rule): every node at its own board-authored
-    /// <see cref="RigBoard.MaxLevel"/>, every category unlocked, and SECONDARY's mystery flag cleared by
-    /// <c>s_rkt</c> being owned rather than a special case.
+    /// the tester in with a completely maxed rig on <paramref name="worldIndex"/>'s own board
+    /// (<see cref="RigBoardLibrary.ForWorld"/>'s own rule — MV-1017: World 3 now resolves its own
+    /// <c>rig_board.world3.json</c> rather than reusing World 2's file): every node at its own
+    /// board-authored <see cref="RigBoard.MaxLevel"/>, every category unlocked, and SECONDARY's mystery
+    /// flag cleared by <c>s_rkt</c> being owned rather than a special case.
     ///
     /// Fails on base commit 16005b0: <c>HomeScreen.StartSlotWorld</c> does not exist there (only the
     /// single-world <c>StartSlotWorld2</c>) — this does not compile against that commit (quoted in the
@@ -25,6 +26,10 @@ namespace MaxWorlds.Tests.EditMode
     /// reads false here regardless of what <see cref="HomeScreen.MaxOutRig"/> attempts — this is the
     /// masking <see cref="MV850ForgeHiddenInWorld2Tests"/> covers directly; this file only needed its own
     /// assertion flipped to stop asserting the now-retired behaviour.
+    ///
+    /// MV-1017: the board total this test asserts (AC2) is read live from <see cref="RigBoard.AllIds"/>/
+    /// <see cref="RigBoard.MaxLevel"/> rather than hard-coded, so World 3's board swap (dropping
+    /// p_rof/p_frk/p_cap, adding p_spr) needs no matching edit here.
     /// </summary>
     public sealed class MV736World3MaxRigTests
     {
@@ -68,15 +73,16 @@ namespace MaxWorlds.Tests.EditMode
             SaveSlotData after = SaveSystem.Load(0);
             Assert.AreEqual(2, after.WorldIndex, "WORLD 3 must seed WorldIndex = 2");
 
-            // AC2: every node on the board (22 ids) sits at its own authored maxLevel — assert the
-            // sum (101: the ticket's original 77, plus MV-840's +2 on e_ff and +5 on u_dmg, plus
-            // MV-844's own +4 on p_dmg's 4 -> 8 level cap, plus MV-846's own new p_cap node at a
-            // 5-level cap, plus MV-848's own new e_cmg node at a 5-level cap, plus MV-989's own
-            // further +3 on e_ff's World 2 cap, 7 -> 10) plus one named node from each of the five
-            // categories, read live from RigBoard rather than hard-coded per-node.
+            // AC2: every node on the board sits at its own authored maxLevel — assert the sum against
+            // a total read live from RigBoard.AllIds/MaxLevel (MV-1017: never hard-coded, so this stays
+            // correct whichever board worldIndex 2 resolves to and however many nodes/levels it
+            // authors), plus one named node from each of the five categories.
+            int expectedSum = 0;
+            foreach (string id in RigBoard.AllIds) expectedSum += RigBoard.MaxLevel(id);
+
             int sum = 0;
             foreach (var kv in RigState.SnapshotLevels()) sum += kv.Value;
-            Assert.AreEqual(101, sum, "every node on the board must be maxed, summing to 101");
+            Assert.AreEqual(expectedSum, sum, "every node on the board must be maxed, summing to the board's own total");
 
             Assert.AreEqual(RigBoard.MaxLevel("p_dmg"), RigState.Level("p_dmg"), "p_dmg (PRIMARY) must be maxed");
             Assert.AreEqual(RigBoard.MaxLevel("s_rkt"), RigState.Level("s_rkt"), "s_rkt (SECONDARY) must be maxed");
