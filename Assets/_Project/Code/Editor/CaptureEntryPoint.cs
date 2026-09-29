@@ -141,6 +141,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1019ReefFloor() => RunFromMenu(CapturePresets.All["mv1019reeffloor"]);
         public static void CaptureMv1019ReefFloor() => Run(CapturePresets.All["mv1019reeffloor"]);
 
+        [MenuItem("MaxWorlds/Capture/Anchorhead (MV-1018)")]
+        public static void MenuMv1018Anchorhead() => RunFromMenu(CapturePresets.All["mv1018anchorhead"]);
+        public static void CaptureMv1018Anchorhead() => Run(CapturePresets.All["mv1018anchorhead"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
