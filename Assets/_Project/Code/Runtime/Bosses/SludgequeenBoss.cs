@@ -131,7 +131,6 @@ namespace MaxWorlds.Bosses
         /// robot — the ticket's own "robots unaffected".</summary>
         public void TickFloodDamage(float dt, Vector3 position, IDamageable receiver)
         {
-            if (!StormdrainFlood.FloodEnabled) return; // MV-836: off by design.
             if (dt <= 0f || receiver == null || !receiver.IsAlive) return;
             if (IsDry(position)) return;
             receiver.TakeDamage(new DamageInfo(SludgequeenTuning.FloodDamagePerSecond * dt, position, Vector3.up, Team.Enemy));
@@ -143,7 +142,6 @@ namespace MaxWorlds.Bosses
         /// <see cref="MaxWorlds.Enemies.SludgePuddle"/>, the same shared-hook shape MV-705 already used.</summary>
         public static float FloodSpeedMultiplierAt(Vector3 worldPosition)
         {
-            if (!StormdrainFlood.FloodEnabled) return 1f; // MV-836: off by design.
             float best = 1f;
             for (int i = 0; i < _active.Count; i++)
             {

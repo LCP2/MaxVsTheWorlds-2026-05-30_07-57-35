@@ -7,10 +7,8 @@ namespace MaxWorlds.Arena
 {
     /// <summary>
     /// MV-838: ticks <see cref="MapSludgeDamageTicker"/> against Max alone (never a robot — MV-795's
-    /// own lesson) once a frame. Self-installing, same pattern as <see cref="StormdrainFloodRunner"/>:
-    /// no scene wiring, so it exists in every scene — including a bare test fixture — with zero setup,
-    /// and deliberately does NOT gate on <see cref="StormdrainFlood.FloodEnabled"/>: sludge damage must
-    /// keep working with the flood switched off (MV-836).
+    /// own lesson) once a frame. Self-installing: no scene wiring, so it exists in every scene —
+    /// including a bare test fixture — with zero setup.
     /// </summary>
     [MaxWorlds.Core.PerfSection("sludge")]
     public sealed class MapSludgeDamageRunner : MonoBehaviour
@@ -30,8 +28,7 @@ namespace MaxWorlds.Arena
         private void Update() => TickSludgeDamage(Time.deltaTime);
 
         /// <summary>The runner's whole per-frame job, pulled out so a test can drive it directly at a
-        /// cadence it controls — same "a caller decides the cadence, a test drives it directly" idiom
-        /// <see cref="StormdrainFloodRunner.TickFlood"/> already uses.</summary>
+        /// cadence it controls.</summary>
         public void TickSludgeDamage(float dt)
         {
             if (_target == null)

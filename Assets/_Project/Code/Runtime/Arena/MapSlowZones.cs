@@ -35,10 +35,7 @@ namespace MaxWorlds.Arena
             // rect rather than a fixed-radius puddle) — same shared-hook idiom, one more source in the
             // Min chain.
             float floodMultiplier = SludgequeenBoss.FloodSpeedMultiplierAt(worldPosition);
-            // MV-774: the World 2 stormdrain's own flood is a FOURTH source — an authored area reading
-            // as flooded by index/band, not a fixed-radius or boss-owned rect — same shared-hook idiom.
-            float stormdrainMultiplier = StormdrainFlood.SpeedMultiplierAt(worldPosition);
-            return Mathf.Min(mapMultiplier, Mathf.Min(puddleMultiplier, Mathf.Min(floodMultiplier, stormdrainMultiplier)));
+            return Mathf.Min(mapMultiplier, Mathf.Min(puddleMultiplier, floodMultiplier));
         }
     }
 }

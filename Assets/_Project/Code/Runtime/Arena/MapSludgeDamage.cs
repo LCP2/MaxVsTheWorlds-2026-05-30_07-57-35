@@ -4,12 +4,10 @@ using MaxWorlds.Core;
 namespace MaxWorlds.Arena
 {
     /// <summary>
-    /// MV-838: map-authored sludge (any <c>sludge[]</c> rect a world author places — the "S" cells) now
-    /// hurts Max the same way <see cref="StormdrainFlood"/>'s parked flood was going to, without ever
-    /// reading <see cref="StormdrainFlood.FloodEnabled"/> — sludge damage must keep working with the
-    /// flood switched off (MV-836). Deliberately its own small static class + ticker, not a re-use of
-    /// <see cref="FloodDamageTicker"/> itself, so this mechanic's own rate can never accidentally
-    /// retune (or get parked) by a future change to the flood's.
+    /// MV-838: map-authored sludge (any <c>sludge[]</c> rect a world author places — the "S" cells)
+    /// hurts Max where he stands. Deliberately its own small static class + ticker, not shared with any
+    /// other damage-over-time hazard, so this mechanic's own rate can never accidentally retune (or get
+    /// parked) by a future change to a different one.
     /// </summary>
     public static class MapSludgeDamage
     {
@@ -18,8 +16,8 @@ namespace MaxWorlds.Arena
         public const float DamagePerSecond = 7.5f;
 
         /// <summary>Same fixed-cadence idiom as every other damage-over-time hazard in this project
-        /// (<see cref="SludgePuddle"/>, <see cref="StormdrainFlood"/>'s own ticker): frame-rate
-        /// independent and testable for any dt.</summary>
+        /// (<see cref="SludgePuddle"/>'s own ticker): frame-rate independent and testable for any
+        /// dt.</summary>
         public const float DamageTickInterval = 0.25f;
 
         /// <summary>True only inside a map-AUTHORED sludge rect, at floor level. Deliberately reuses
@@ -34,9 +32,9 @@ namespace MaxWorlds.Arena
     }
 
     /// <summary>Per-receiver damage-over-time state for standing in floor-level map sludge (MV-838) —
-    /// a struct, not shared global state, same reasoning as <see cref="FloodDamageTicker"/>: whichever
-    /// single receiver this is wired to (Max only — MV-795's lesson against a per-tick DoT ever
-    /// touching robots) carries its own independent 0.25 s clock.</summary>
+    /// a struct, not shared global state, so whichever single receiver this is wired to (Max only —
+    /// MV-795's lesson against a per-tick DoT ever touching robots) carries its own independent 0.25 s
+    /// clock.</summary>
     public struct MapSludgeDamageTicker
     {
         private float _accumulator;

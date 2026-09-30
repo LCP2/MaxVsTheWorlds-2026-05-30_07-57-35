@@ -1169,16 +1169,10 @@ namespace MaxWorlds.Arena
             // over from whatever the last level (or the last test) left it at.
             DifficultyDirector.Reset();
 
-            // MV-774: same reasoning, for the World 2 FLOOD bar's own clock — a fresh run starts dry,
-            // and reads this world's own authored combat-area count so its band-by-index stand-in
-            // (BandForAreaIndex) never carries over a previous world's route length.
-            StormdrainFlood.Reset();
-            StormdrainFlood.Configure(CountCombatAreas(map));
-
-            // Same reasoning, for the pump-housing count the flood's own drain term reads (MV-794) — a
-            // world with no drain dressing at all (World 1, World 3) must read 0, not the last World 2
-            // level's count. StormdrainDressing.Dress (called later, from this world's own dressing
-            // sweep) overwrites this for real when there is a drain to dress.
+            // Pump-housing count a world's dressing pass builds (MV-794) — a world with no drain
+            // dressing at all (World 1, World 3) must read 0, not the last World 2 level's count.
+            // StormdrainDressing.Dress (called later, from this world's own dressing sweep) overwrites
+            // this for real when there is a drain to dress.
             StormdrainDressing.Reset();
 
             // Same reasoning for the Blinker squad jump's cooldown (MV-366) — a fresh run starts its
@@ -2846,21 +2840,6 @@ namespace MaxWorlds.Arena
         {
             GameObject ground = GameObject.Find("Ground");
             if (ground != null) ground.SetActive(false);
-        }
-
-        /// <summary>This world's authored combat-area count, read back off the built zones rather than
-        /// threaded through as a separate <c>WorldConfig</c> parameter: <see cref="WorldMapLoader.TryLoad"/>
-        /// already renames every combat area (1..<c>dials.areaCount</c>) to the "area&lt;N&gt;" convention
-        /// and leaves the entry stub/boss room under their own authored ids (MV-774 reuses that same
-        /// parse via <see cref="AreaAccumulationDirector.AreaIndexOf"/>), so the highest index found IS
-        /// that count.</summary>
-        private static int CountCombatAreas(MapData map)
-        {
-            int max = 0;
-            if (map.zones != null)
-                foreach (MapZone z in map.zones)
-                    max = Mathf.Max(max, AreaAccumulationDirector.AreaIndexOf(z.id));
-            return max;
         }
 
         private static GameObject Find<T>() where T : Component

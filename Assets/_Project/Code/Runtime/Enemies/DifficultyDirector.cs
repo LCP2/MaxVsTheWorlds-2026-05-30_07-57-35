@@ -120,11 +120,10 @@ namespace MaxWorlds.Enemies
         /// to zero rather than allowed to run the level backwards.</summary>
         public static void Tick(float dt) => _elapsed += Mathf.Max(0f, dt);
 
-        /// <summary>Restore the escalation clock from a captured checkpoint (MV-951) — same reasoning
-        /// as <see cref="MaxWorlds.Arena.StormdrainFlood.RestoreLevel01"/>: <c>MapRuntime.Build</c>'s own
-        /// <see cref="Reset"/> above always runs before a cold-boot RESUME even knows there is a
-        /// checkpoint to land in, so the clock has to be set back explicitly, after the fact, rather
-        /// than left at zero.</summary>
+        /// <summary>Restore the escalation clock from a captured checkpoint (MV-951) —
+        /// <c>MapRuntime.Build</c>'s own <see cref="Reset"/> above always runs before a cold-boot RESUME
+        /// even knows there is a checkpoint to land in, so the clock has to be set back explicitly,
+        /// after the fact, rather than left at zero.</summary>
         public static void RestoreClock(float elapsed, float shedSkipSeconds, int shedsDestroyed)
         {
             _elapsed = Mathf.Max(0f, elapsed);

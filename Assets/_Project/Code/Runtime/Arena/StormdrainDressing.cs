@@ -85,10 +85,8 @@ namespace MaxWorlds.Arena
             return Mathf.Min(LitGroundMaxMultiplier, LitGroundBaseMultiplier + sum);
         }
 
-        /// <summary>How many pump housings the last <see cref="Dress"/> call actually built (MV-794) —
-        /// what <see cref="StormdrainFloodRunner"/> reads instead of a hard-coded 0, so
-        /// <see cref="StormdrainFlood"/>'s pump counterweight runs off the real world instead of a
-        /// literal. Pump housings are cosmetic dressing with no destruction lifecycle yet (a follow-up,
+        /// <summary>How many pump housings the last <see cref="Dress"/> call actually built (MV-794).
+        /// Pump housings are cosmetic dressing with no destruction lifecycle yet (a follow-up,
         /// the same status quo Replicators were in before <see cref="MaxWorlds.Factories.FactoryCensus"/>
         /// gave them one) — so "alive" here means "built for this level," which today is every housing
         /// that exists. Reset by <see cref="Reset"/> (called from <c>MapRuntime.Build</c>, same point

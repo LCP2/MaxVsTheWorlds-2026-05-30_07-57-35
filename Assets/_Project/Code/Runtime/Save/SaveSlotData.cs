@@ -101,12 +101,6 @@ namespace MaxWorlds.Save
         /// <see cref="CheckpointElapsedSeconds"/>.</summary>
         public int CheckpointKills;
 
-        /// <summary><c>StormdrainFlood.Level01</c> at the checkpoint (MV-776) — restored on RESUME so
-        /// the flood rewinds to the gate the player last passed, not wherever it had risen to by the
-        /// time they died. World-agnostic (a flat 0..1 fraction, not a World 2 concept), so a later
-        /// world's own flood-like mechanic can reuse this same field with no schema migration.</summary>
-        public float CheckpointFloodLevel01;
-
         /// <summary>Stable ids (<c>Replicator.Id</c>) of every Replicator destroyed by the time this
         /// checkpoint was captured (MV-776) — restored on RESUME by silently re-destroying whichever of
         /// the freshly-rebuilt level's Replicators carry a matching id, so a resume never resurrects a
@@ -145,8 +139,7 @@ namespace MaxWorlds.Save
         /// <summary><c>DifficultyDirector.Elapsed</c> at the checkpoint (MV-951) — the Invasion Level's
         /// real-time clock. <c>MapRuntime.Build</c> always resets it to zero on every cold-boot scene
         /// build, before a RESUME even knows there's a checkpoint to land in, so a resumed run must
-        /// restore it explicitly, the same way <see cref="MaxWorlds.Arena.StormdrainFlood"/>'s own clock
-        /// already does.</summary>
+        /// restore it explicitly rather than left at zero.</summary>
         public float CheckpointEscalationElapsed;
 
         /// <summary><c>DifficultyDirector</c>'s accumulated shed skip-ahead at the checkpoint (MV-951) —
