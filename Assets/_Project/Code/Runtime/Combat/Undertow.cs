@@ -219,9 +219,13 @@ namespace MaxWorlds.Combat
                 if (!_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive || d.Team == Team.Player) continue;
                 if (s_buffer.Contains(d)) continue;
 
-                Vector3 pos = _hits[i].transform.position;
-                if (!SprayHit.InCone(origin, dir, pos, reach, cone)) continue;
-                if (!LineOfSight.Clear(origin, pos, _hits[i].transform)) continue;
+                // MV-1044: an AreaGate needs the same gate-aware hit test WaterBlaster.FireTick has
+                // carried since MV-302/MV-386 — its own leaf collider's testPoint/sight target reject a
+                // shot that isn't dead-centre, and the leaf sits off the Cover layer entirely, so a
+                // Cover-masked line of sight always found the gate's threshold first and read every shot
+                // as blocked. Shared via GateHitResolver rather than copied a second time.
+                GateHitResolver.Resolve(d, origin, dir, _hits[i], out Vector3 pos, out Transform sightTarget);
+                if (!GateHitResolver.Passes(origin, dir, pos, sightTarget, reach, cone)) continue;
 
                 Vector3 to = pos - origin; to.y = 0f;
                 s_buffer.Add(d);
