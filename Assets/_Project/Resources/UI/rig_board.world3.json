@@ -217,6 +217,45 @@
       "$comment": "MV-1017: World 3's own PRIMARY node, priced/levelled exactly like this board's own p_rng (6 levels) — replaces World 2's p_rof (RATE), which UNDERTOW has no fire-rate track for. UNDERTOW's ConeHalfAngle reads this track directly (WeaponTrackKind.Spread)."
     },
     {
+      "id": "p_trp",
+      "category": "PRIMARY",
+      "x": 130,
+      "y": 740,
+      "icon": "trp",
+      "label": "TRAP",
+      "maxLevel": 1,
+      "kind": "cap",
+      "parent": "p_dmg",
+      "startLevel": 0,
+      "$comment": "MV-1035: unlocks the TRAP ability (a HUD button appears) — a fresh PRIMARY-family root sibling of p_rng/p_spr, priced like this board's own p_rng. Placed on the otherwise-empty tier3 row (only s_clu@490,740 shares it) rather than tier2, which is already fully packed between p_rng(175,580)/p_spr(345,580) and SECONDARY's s_rld(490,580) with no 100px gap free to insert a third node."
+    },
+    {
+      "id": "p_tcap",
+      "category": "PRIMARY",
+      "x": 250,
+      "y": 740,
+      "icon": "flw",
+      "label": "HOLD",
+      "maxLevel": 3,
+      "kind": "cap",
+      "parent": "p_trp",
+      "startLevel": 1,
+      "$comment": "MV-1035: robots a trap holds/converts at once (level = capacity, 1 -> 3) — also the live ally cap (RobotEnemy.ConversionCap), replacing the old fixed MaxConvertedRobots=3."
+    },
+    {
+      "id": "p_trad",
+      "category": "PRIMARY",
+      "x": 370,
+      "y": 740,
+      "icon": "rng",
+      "label": "RADIUS",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": "p_trp",
+      "startLevel": 0,
+      "$comment": "MV-1035: trap catch radius, 3.0m + 0.75m/level (3.0 -> 6.0m) — PlayerAbilities.TryDropTrap reads this track directly."
+    },
+    {
       "id": "s_rkt",
       "category": "SECONDARY",
       "x": 610,
@@ -509,6 +548,7 @@
     "fuse": "<path d=\"M0,-15 L4,-4 15,-4 6,3 10,14 0,7 -10,14 -6,3 -15,-4 -4,-4 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
     "rkt": "<path d=\"M0,-17 L7,-2 L7,10 L-7,10 L-7,-2 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-7,10 L-11,17 L-4,10 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><path d=\"M7,10 L11,17 L4,10 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
     "sal": "<path d=\"M-11,10 L-11,-6 L-14,-6\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,10 L0,-12 L-3,-12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M11,10 L11,-6 L8,-6\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-    "rld": "<circle cx=\"0\" cy=\"2\" r=\"12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,2 L0,-5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,2 L7,2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-5,-14 L5,-14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+    "rld": "<circle cx=\"0\" cy=\"2\" r=\"12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,2 L0,-5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,2 L7,2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-5,-14 L5,-14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "trp": "<path d=\"M-14,10 L14,10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M-14,10 L-14,-8 L14,-8 L14,10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"0\" cy=\"1\" r=\"4\" fill=\"#ICON#\" stroke=\"none\"/>"
   }
 }

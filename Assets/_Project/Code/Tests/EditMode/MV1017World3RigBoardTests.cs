@@ -73,6 +73,7 @@ namespace MaxWorlds.Tests.EditMode
             PlayerRocket.DestroyAllActive();
             RigBoard.ResetForTests();
             RobotEnemy.ResetRegistry();
+            RobotEnemy.ConversionCap = 1; // MV-1035: static, mutable — never leak into another test
             if (_playerGo != null) Object.DestroyImmediate(_playerGo);
             if (_targetGo != null) Object.DestroyImmediate(_targetGo);
         }
@@ -92,6 +93,9 @@ namespace MaxWorlds.Tests.EditMode
             var rack = _playerGo.GetComponent<ShoulderRack>();
             Assert.IsNotNull(rack, "test precondition: PlayerController.Awake must self-attach ShoulderRack");
 
+            var abilities = _playerGo.GetComponent<PlayerAbilities>();
+            Assert.IsNotNull(abilities, "test precondition: PlayerController.Awake must self-attach PlayerAbilities");
+
             // --- AC1: no dead PRIMARY/SECONDARY node on World 3's own board.
             RigBoard.UseWorld(2); // rig_board.world3.json
             string[] ids = RigBoard.AllIds
@@ -101,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(ids, Does.Not.Contain("p_rof"), "test precondition: World 3's board must not carry World 2's p_rof");
 
             foreach (string id in ids)
-                AssertNodeMovesARuntimeRead(id, undertow, rack);
+                AssertNodeMovesARuntimeRead(id, undertow, rack, abilities);
 
             // --- AC2: the World 2 -> World 3 morph itself must not re-lock SECONDARY.
             AssertWorld3MorphKeepsSecondaryUnlockedAndTheRackFires(rack);
@@ -109,10 +113,20 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------ AC1
 
-        private static void AssertNodeMovesARuntimeRead(string id, Undertow undertow, ShoulderRack rack)
+        private static void AssertNodeMovesARuntimeRead(string id, Undertow undertow, ShoulderRack rack, PlayerAbilities abilities)
         {
             SeedWorld3WithSecondaryCarriedOver(exceptSRkt: id == "s_rkt");
             EnsureAncestorsReached(id); // e.g. s_clu needs s_rld >= 1 -- s_rkt alone isn't enough
+
+            // MV-1035: p_trp/p_tcap/p_trad are PRIMARY nodes too, but TRAP is a capture ability, not a
+            // weapon stat — by design, nothing about it moves Undertow's own Range/EffectiveDamagePerTick/
+            // ConeHalfAngle tuple. Each still has a real runtime read, just through PlayerAbilities'/
+            // RobotTrap's own resolved numbers instead of Undertow's.
+            if (id == "p_trp" || id == "p_tcap" || id == "p_trad")
+            {
+                AssertTrapNodeMovesARuntimeRead(id, abilities);
+                return;
+            }
 
             if (RigBoard.Category(id) == "PRIMARY")
             {
@@ -133,6 +147,49 @@ namespace MaxWorlds.Tests.EditMode
                     $"{id}: raising it must change something the Shoulder Rack itself reads " +
                     "(IsBought/rocket damage/salvo count/reload seconds/splash radius/cluster) -- a dead SECONDARY node");
             }
+        }
+
+        /// <summary>MV-1035: p_trp's own read is PlayerAbilities.TrapOwned (a HUD button appears);
+        /// p_tcap/p_trad's own reads are a real dropped RobotTrap's own resolved Capacity/Radius — read
+        /// before/after raising the node, each trap destroyed immediately after (DestroyImmediate
+        /// compares equal to null via Unity's own overloaded operator, so TryDropTrap's "none down"
+        /// gate is satisfied again on the very next call without needing the full despawn/cooldown
+        /// path). ConversionCap is raised out of the way so the free-ally-slot clamp in TryDropTrap
+        /// can't mask a real capacity change.</summary>
+        private static void AssertTrapNodeMovesARuntimeRead(string id, PlayerAbilities abilities)
+        {
+            if (id == "p_trp")
+            {
+                Assert.IsFalse(abilities.TrapOwned, "test precondition: p_trp must start unowned");
+                Assert.IsTrue(RaiseToMaxLevel(id));
+                Assert.IsTrue(abilities.TrapOwned,
+                    "p_trp: raising it must move PlayerAbilities.TrapOwned -- a dead PRIMARY node");
+                return;
+            }
+
+            RigState.AcquireCap("p_trp");
+            RobotEnemy.ConversionCap = 99;
+
+            Assert.IsTrue(abilities.TryDropTrap(), "test precondition: a trap must be droppable to read its capacity/radius");
+            RobotTrap before = abilities.ActiveTrap;
+            int capacityBefore = before.Capacity;
+            float radiusBefore = before.Radius;
+            Object.DestroyImmediate(before.gameObject);
+
+            Assert.IsTrue(RaiseToMaxLevel(id), $"test precondition: {id} must be raisable to its own max level");
+
+            Assert.IsTrue(abilities.TryDropTrap());
+            RobotTrap after = abilities.ActiveTrap;
+            int capacityAfter = after.Capacity;
+            float radiusAfter = after.Radius;
+            Object.DestroyImmediate(after.gameObject);
+
+            if (id == "p_tcap")
+                Assert.AreNotEqual(capacityBefore, capacityAfter,
+                    $"{id}: raising it must change the trap's own resolved capacity -- a dead PRIMARY node");
+            else // p_trad
+                Assert.AreNotEqual(radiusBefore, radiusAfter,
+                    $"{id}: raising it must change the trap's own resolved radius -- a dead PRIMARY node");
         }
 
         /// <summary>The same resolved numbers <see cref="ShoulderRack.QueueSalvo"/> and

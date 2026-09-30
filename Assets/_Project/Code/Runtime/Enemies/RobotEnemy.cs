@@ -226,14 +226,14 @@ namespace MaxWorlds.Enemies
         public bool IsEngageable => IsAlive &&
             Current != State.Dormant && Current != State.Submerged &&
             Current != State.Emerging && Current != State.Teleport &&
-            Current != State.Mustering;
+            Current != State.Mustering && !_trapHeld;
 
         /// <summary>Whether this robot can currently take damage (MV-688) — true for every kind in
         /// every state except a Grate Lurker outside its <see cref="LurkerCycle.Phase.Emerged"/> beat:
         /// SUBMERGED/RATTLE/SUBMERGING are all invulnerable, matching the ticket's "killing it while
         /// emerged is the only way to kill it". Every other kind never sets <see cref="_lurkerPhase"/>
         /// away from its default, so this is always true for them.</summary>
-        public bool IsDamageable => Kind != EnemyKind.Lurker || LurkerCycle.IsDamageable(_lurkerPhase);
+        public bool IsDamageable => (Kind != EnemyKind.Lurker || LurkerCycle.IsDamageable(_lurkerPhase)) && !_trapHeld;
 
         /// <summary>Which robot this is (YT-66). Set by <see cref="Apply"/>; the spawner pools by it,
         /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
@@ -597,9 +597,9 @@ namespace MaxWorlds.Enemies
         public float LungeRange => lungeRange;
 
         /// <summary>MV-716: mutable, not a hardcoded constant — a converted robot flips to
-        /// <see cref="Core.Team.Player"/> for <see cref="ConvertedDurationSeconds"/> (see
-        /// <see cref="TryConvert"/>). <see cref="Core.Team.Enemy"/> otherwise, exactly as before this
-        /// ticket.</summary>
+        /// <see cref="Core.Team.Player"/> permanently, until it is killed (MV-1035 removed the old timed
+        /// expiry; see <see cref="TryConvert(bool)"/>). <see cref="Core.Team.Enemy"/> otherwise, exactly
+        /// as before this ticket.</summary>
         private Team _team = Team.Enemy;
 
         public Team Team => _team;
@@ -751,91 +751,132 @@ namespace MaxWorlds.Enemies
             return nearest;
         }
 
-        // --- MV-716: Override (Max -> robot) --------------------------------------------------------
+        // --- MV-716: Override (Max -> robot) — MV-1035 removed the 20s expiry/burnout blast and the
+        // fixed MaxConvertedRobots=3 cap: a converted robot (whichever ability converted it) now stays
+        // an ally until it is killed, and the live cap is whatever ConversionCap is set to. -----------
 
-        /// <summary>HP fraction below which this robot exposes an override port (spec: "below 25%").</summary>
+        /// <summary>HP fraction below which this robot exposes an override port (spec: "below 25%") —
+        /// still the gate for the parameterless <see cref="TryConvert()"/> overload (MV-716's Override
+        /// ability, not yet wired to a live trigger). The TRAP ability (MV-1035) converts via
+        /// <see cref="TryConvert(bool)"/> with this bypassed — a caught robot converts regardless of HP.</summary>
         public const float OverrideHealthThreshold = 0.25f;
 
-        /// <summary>How long a converted robot fights for Max before it burns out (spec table).</summary>
-        public const float ConvertedDurationSeconds = 20f;
+        /// <summary>MV-1035: how many robots may be converted to Max's side at once, right now —
+        /// replaces the old fixed <c>MaxConvertedRobots</c> constant. The TRAP ability sets this to the
+        /// current HOLD level (<c>p_tcap</c>) before each conversion; nothing else in production calls
+        /// <see cref="TryConvert(bool)"/>. Defaults to 1 so a caller that never touches this still allows
+        /// a single conversion rather than none.</summary>
+        public static int ConversionCap { get; set; } = 1;
 
-        /// <summary>The burnout detonation's radius (spec: "a 3 m AoE detonation that damages robots
-        /// only").</summary>
-        public const float BurnoutRadius = 3f;
-
-        private const float BurnoutDamage = 20f;
-
-        /// <summary>Max may have at most this many converted robots at once (spec table); a further
-        /// conversion is refused, and the existing ones are unaffected (AC5).</summary>
-        public const int MaxConvertedRobots = 3;
-
-        private static readonly List<RobotEnemy> _converted = new List<RobotEnemy>(MaxConvertedRobots);
+        private static readonly List<RobotEnemy> _converted = new List<RobotEnemy>(4);
 
         /// <summary>Every robot currently converted to Max's side, world-wide.</summary>
         public static IReadOnlyList<RobotEnemy> Converted => _converted;
 
-        private static readonly Collider[] s_burnoutHits = new Collider[16];
-
         /// <summary>True while this robot is alive, not already converted, and below
-        /// <see cref="OverrideHealthThreshold"/> HP — the "port exposed" condition that gates
-        /// <see cref="TryConvert"/>. What ELSE has to be true for a conversion to actually trigger (a
-        /// proximity check, a channel, whatever a given ability requires) is that ability's own
-        /// responsibility, not this robot's.</summary>
+        /// <see cref="OverrideHealthThreshold"/> HP — the "port exposed" condition that gates the
+        /// parameterless <see cref="TryConvert()"/>. What ELSE has to be true for a conversion to
+        /// actually trigger (a proximity check, a channel, whatever a given ability requires) is that
+        /// ability's own responsibility, not this robot's.</summary>
         public bool IsPortExposed => IsAlive && !IsConverted && HealthNormalized < OverrideHealthThreshold;
 
-        /// <summary>True while this robot is converted to Max's side.</summary>
+        /// <summary>True while this robot is converted to Max's side. Permanent (MV-1035) until this
+        /// robot dies — no more timed expiry.</summary>
         public bool IsConverted { get; private set; }
 
-        private float _convertedElapsed;
+        /// <summary>Attempts to convert this robot for MV-716's Override ability — health-gated via
+        /// <see cref="IsPortExposed"/>. See <see cref="TryConvert(bool)"/> for the TRAP ability's own
+        /// entry point, which bypasses the health gate.</summary>
+        public bool TryConvert() => TryConvert(requirePortExposed: true);
 
-        /// <summary>Attempts to convert this robot (spec: joins Max, cyan trim, fights other robots,
-        /// ignores Max, for <see cref="ConvertedDurationSeconds"/>). Refused if not port-exposed
-        /// (<see cref="IsPortExposed"/> — the caller is responsible for whatever ELSE its own trigger
-        /// condition requires) or if Max already has <see cref="MaxConvertedRobots"/> converted (AC5) —
-        /// the existing ones are left untouched, never evicted for a newer one.</summary>
-        public bool TryConvert()
+        /// <summary>Attempts to convert this robot. <paramref name="requirePortExposed"/> true (the
+        /// parameterless overload) keeps MV-716's original health-gated Override precondition; false is
+        /// the TRAP ability's own entry point (MV-1035) — any living, not-yet-converted enemy-team robot
+        /// it holds converts regardless of HP, since capture (not low health) is TRAP's own trigger
+        /// condition. Either way, refused if Max already has <see cref="ConversionCap"/> converted — the
+        /// existing ones are left untouched, never evicted for a newer one.</summary>
+        public bool TryConvert(bool requirePortExposed)
         {
-            if (!IsPortExposed) return false;
-            if (_converted.Count >= MaxConvertedRobots) return false;
+            if (requirePortExposed) { if (!IsPortExposed) return false; }
+            else if (!IsAlive || IsConverted) return false;
+            if (_converted.Count >= ConversionCap) return false;
 
             IsConverted = true;
-            _convertedElapsed = 0f;
             _team = Team.Player;
             _converted.Add(this);
             return true;
         }
 
-        /// <summary>Counts a converted robot toward its burnout. Driven from <see cref="Update"/> in Play
-        /// mode and directly by tests in EditMode.</summary>
-        public void TickConversion(float deltaTime)
+        // --- MV-1035: TRAP ability (Ghostbusters-style catch -> hold -> convert) ---------------------
+
+        /// <summary>The ally body colour a TRAP conversion lerps toward (spec: #5BE35A).</summary>
+        private static readonly Color TrapAllyColor = new Color(0.357f, 0.890f, 0.353f);
+
+        /// <summary>How long the orange-&gt;green body lerp takes once a trap starts converting what it
+        /// holds (spec: ~4.5s).</summary>
+        public const float TrapConversionSeconds = 4.5f;
+
+        private bool _trapHeld;
+        private bool _trapConverting;
+        private float _trapConvertElapsed;
+        private Color _trapConvertFromColor;
+        private CharacterSkin _skin;
+
+        /// <summary>True while a <see cref="MaxWorlds.Weapons.RobotTrap"/> is holding (or converting)
+        /// this robot — frozen, untargetable and undamageable from the moment it is caught. See
+        /// <see cref="IsDamageable"/> and <see cref="IsEngageable"/>.</summary>
+        public bool IsTrapHeld => _trapHeld;
+
+        public bool IsTrapConverting => _trapConverting;
+
+        /// <summary>Eligible to be caught by a TRAP right now (MV-1035): alive, on the enemy team, not
+        /// already converted or held, and not a Splicer mid-channel (spec: "Splicers mid-channel are
+        /// never caught"). A boss is never a <see cref="RobotEnemy"/> at all (see
+        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>), so "bosses are never caught" needs no check
+        /// here — a trap can only ever iterate this type.</summary>
+        public bool IsTrapCatchable => IsAlive && Team == Team.Enemy && !IsConverted && !_trapHeld && !IsChannelingSplice;
+
+        /// <summary>Caught: frozen, untargetable, undamageable from this instant (MV-1035). Releases any
+        /// held lunge-attack token immediately, the same "never leak a token" idiom <see cref="Die"/>/
+        /// <see cref="Despawn"/> already use, since a caught robot may never reach either of those to
+        /// hand it back on its own.</summary>
+        public void BeginTrapHold()
         {
-            if (!IsConverted) return;
-            _convertedElapsed += deltaTime;
-            if (_convertedElapsed >= ConvertedDurationSeconds) Burnout();
+            if (!IsAlive || _trapHeld) return;
+            if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; }
+            _trapHeld = true;
+            _bar?.SetTrapMarker(true, false);
         }
 
-        /// <summary>The end of a converted robot's borrowed time (spec: "burns out — a 3 m AoE
-        /// detonation that damages robots only"). Queries <see cref="RobotEnemy"/> components
-        /// specifically, not <see cref="IDamageable"/> in general, so Max and any Sentinel in range are
-        /// excluded by TYPE regardless of team state (AC6) rather than relying on <see cref="DamageRules"/>
-        /// alone. The attacking team is <see cref="Team.Player"/> — this robot's own team right up until
-        /// this call — so <see cref="TakeDamage"/>'s existing friendly-fire gate on each receiver still
-        /// rejects any OTHER currently-converted robot nearby, exactly as it would reject Max hitting his
-        /// own Sentinel.</summary>
-        private void Burnout()
+        /// <summary>Starts the orange-&gt;green conversion lerp (MV-1035) — still frozen/untargetable.
+        /// Caches this body's current colour as the lerp's start so the fade always begins from whatever
+        /// it actually looked like, not an assumed default.</summary>
+        public void BeginTrapConversion()
         {
-            Vector3 point = transform.position;
-            int count = Physics.OverlapSphereNonAlloc(point, BurnoutRadius, s_burnoutHits, ~0, QueryTriggerInteraction.Ignore);
-            for (int i = 0; i < count; i++)
-            {
-                if (s_burnoutHits[i] == null) continue;
-                if (!s_burnoutHits[i].TryGetComponent<RobotEnemy>(out var robot) || robot == this || !robot.IsAlive) continue;
-                robot.TakeDamage(new DamageInfo(BurnoutDamage, point, Vector3.up, Team.Player, source: DamageSource.Ability));
-            }
+            if (!_trapHeld || _trapConverting) return;
+            _trapConverting = true;
+            _trapConvertElapsed = 0f;
+            if (_skin == null) _skin = GetComponent<CharacterSkin>();
+            _trapConvertFromColor = _skin != null ? _skin.BodyColor : Color.white;
+        }
 
-            _converted.Remove(this);
-            IsConverted = false;
-            Die(Vector3.up);
+        /// <summary>Advances the TRAP conversion colour lerp — call every frame while converting.
+        /// Completes the conversion (via <see cref="TryConvert(bool)"/>, health-gate bypassed) and
+        /// returns true the instant the lerp reaches its end.</summary>
+        public bool TickTrapConversion(float dt)
+        {
+            if (!_trapConverting) return false;
+
+            _trapConvertElapsed += dt;
+            float t = TrapConversionSeconds > 0f ? Mathf.Clamp01(_trapConvertElapsed / TrapConversionSeconds) : 1f;
+            _skin?.SetAllyOverrideColor(Color.Lerp(_trapConvertFromColor, TrapAllyColor, t));
+            if (t < 1f) return false;
+
+            _trapConverting = false;
+            _trapHeld = false;
+            bool converted = TryConvert(requirePortExposed: false);
+            _bar?.SetTrapMarker(converted, converted);
+            return converted;
         }
 
         private float _stateTimer;
@@ -1353,7 +1394,12 @@ namespace MaxWorlds.Enemies
             IsSplicer = false;
             if (IsConverted) _converted.Remove(this);
             IsConverted = false;
-            _convertedElapsed = 0f;
+            // MV-1035: a pooled robot must not carry the last life's TRAP hold/conversion state or ally
+            // body-colour override forward.
+            _trapHeld = false;
+            _trapConverting = false;
+            if (_skin == null) _skin = GetComponent<CharacterSkin>();
+            _skin?.SetAllyOverrideColor(null);
             _team = Team.Enemy;
             // MV-980: a pooled robot must not carry the last life's disabled CharacterController
             // forward — one that died mid-Dormant (BeginDormant disables it; only Activate re-enables)
@@ -1558,6 +1604,11 @@ namespace MaxWorlds.Enemies
             // bounded only the wake CHECK; everything else in TickBody still ran every frame for it).
             if (Current == State.Dormant) return;
 
+            // MV-1035: frozen while a TRAP holds (or is converting) this robot — RobotTrap drives its
+            // transform and body colour directly. Nothing below (state machine, sight, splice channel,
+            // contact damage, knockback decay) may run against a body that cannot move or be targeted.
+            if (_trapHeld) return;
+
             // MV-940: diagnostic-only breakdown nested inside the outer Bucket.Robot charge Update()
             // already wraps this whole call in (see RobotSubPhase's own doc comment). MV-980:
             // RobotSubPhase.Dormant never gets charged any more — Tick() above already returned for a
@@ -1580,15 +1631,6 @@ namespace MaxWorlds.Enemies
         {
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
-
-            // MV-1015: a converted robot's borrowed time counts down regardless of state, same
-            // reasoning as the two timers above — its burnout AoE must fire and free the conversion
-            // slot on schedule even mid-Telegraph/Lunge, not only while it happens to be in Chase.
-            // TickConversion is itself a no-op unless IsConverted, so this costs nothing for every
-            // ordinary robot. Burnout can kill this robot outright (Die()), so nothing below must run
-            // against a body that just went State.Dead this same frame.
-            TickConversion(dt);
-            if (Current == State.Dead) return;
 
             // MV-706: ticks regardless of state, same reasoning as the ram cooldown above — a robot
             // mid-Chase or mid-Lunge still has to shed its "just doubled" tag on schedule.
