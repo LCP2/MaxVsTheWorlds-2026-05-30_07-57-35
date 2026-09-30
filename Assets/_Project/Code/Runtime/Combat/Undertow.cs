@@ -3,34 +3,32 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Combat
 {
     /// <summary>
-    /// World 3's primary (MV-714) — UNDERTOW: one button, two behaviours, same shell as
+    /// World 3's primary (MV-714, re-shaped by MV-1034) — UNDERTOW: same shell as
     /// <see cref="WaterBlaster"/>/<see cref="PulseLaser"/> (an <see cref="EnergyPool"/> tank built from
     /// <see cref="BlasterTuning"/>, an optional <see cref="PlayerController"/> aim source driving
     /// <see cref="IsFiring"/>/facing).
     ///
-    /// Holding fire streams the <b>pressure lance</b> — a narrow, long-ranged tick that pierces up to
-    /// <see cref="MaxPierceCount"/> robots in a line — at the same per-tick cadence and (base) damage as
-    /// the RCDA, so its DPS tracks the RCDA's within the ticket's 10% band by construction rather than by
-    /// a coincidentally-matched authored number. Once a continuous hold reaches <see cref="ChargeSeconds"/>
-    /// the lance stops ticking and charges instead (telegraphed on the weapon itself); releasing while
-    /// charged fires the <b>cavitation shot</b> (<see cref="CavitationBubble"/>) instead of a final tick.
-    /// An early release (never charged) fires one ordinary lance tick — "never a wasted shot", per spec.
+    /// Holding fire streams the <b>pressure lance</b> continuously for as long as the trigger is held —
+    /// a narrow, long-ranged tick that pierces up to <see cref="MaxPierceCount"/> robots in a line — at
+    /// the same per-tick cadence and (base) damage as the RCDA, so its DPS tracks the RCDA's within the
+    /// ticket's 10% band by construction rather than by a coincidentally-matched authored number.
+    ///
+    /// MV-1034 removed the charge-and-release cavitation shot entirely (Lee: "the blue ball does not
+    /// work as a design — the Shoulder Rack rockets already kill robots before it can convert them").
+    /// There is no charge phase any more: releasing fire simply stops the stream, the same "trigger
+    /// held = stream on" shape <see cref="WaterBlaster"/> already uses. Robot conversion
+    /// (<see cref="MaxWorlds.Enemies.RobotEnemy.TryConvert"/>) is unchanged and now belongs to a
+    /// separate trap ability (MV-1035).
     /// </summary>
     [MaxWorlds.Core.PerfSection("combat")]
     public sealed class Undertow : MonoBehaviour
     {
-        // -------------------------------------------------------------------------------- lance
-
-        /// <summary>Authored base per-tick damage — deliberately the SAME number as
-        /// <see cref="WaterBlaster.DefaultDamagePerTick"/> (and the same <see cref="DefaultFireInterval"/>
-        /// as <see cref="WaterBlaster"/>'s own fire interval), so the lance's DPS matches the RCDA's
-        /// exactly at the shared base, then continues to track it through every future retune of either
-        /// constant, without this ticket's own "within 10%" band ever needing separate upkeep.</summary>
         public const float DefaultDamagePerTick = WaterBlaster.DefaultDamagePerTick;
 
         public const float DefaultFireInterval = 0.1f;
@@ -47,52 +45,12 @@ namespace MaxWorlds.Combat
         /// in-range, in-sight targets, not a distance/falloff cutoff.</summary>
         public const int MaxPierceCount = 2;
 
-        // -------------------------------------------------------------------------------- cavitation
-
-        /// <summary>Seconds of unbroken hold before the lance stops ticking and charges (spec: "hold the
-        /// fire button 0.9s").</summary>
-        public const float DefaultChargeSeconds = 0.9f;
-
-        /// <summary>Spec: "Cooldown 4s."</summary>
-        public const float DefaultCavitationCooldownSeconds = 4f;
-
-        /// <summary>Spec: "robots within 4m are pulled".</summary>
-        public const float DefaultPullRadius = 4f;
-
-        /// <summary>Spec: "pulled 2.5m toward the impact point" — a flat displacement, not clamped to
-        /// the robot's own remaining distance to the point (see <see cref="RobotEnemy.ApplyPull"/>'s own
-        /// doc for why: the ticket's AC wants a robot seeded well inside the pull distance to still move
-        /// the full 2.5m, ending up pulled through and past the impact point).</summary>
-        public const float DefaultPullDistance = 2.5f;
-
-        /// <summary>Spec: "staggered for 0.6s" — reuses <see cref="RobotEnemy.Stun"/>, the same freeze
-        /// mechanic the LPPE's Shock already uses (MV-708); a second stagger/stun mechanic would be a
-        /// distinction with no behavioural difference.</summary>
-        public const float DefaultStaggerSeconds = 0.6f;
-
-        /// <summary>Spec: "cavitation direct damage 25-40% of one second of lance DPS" — 30%, the
-        /// midpoint of that band, expressed as a fraction of <see cref="DamagePerSecond"/> so it keeps
-        /// tracking the lance's own upgrades rather than needing a second authored number retuned in
-        /// lockstep.</summary>
-        public const float CavitationDamageFraction = 0.3f;
-
-        /// <summary>A slow spinning bubble (spec) — much slower than <see cref="PlayerRocket"/>'s 14 m/s.</summary>
-        public const float DefaultCavitationSpeed = 6f;
-
         [Header("Lance")]
         [SerializeField] private float range = DefaultRange;
         [SerializeField] private float coneHalfAngle = DefaultConeHalfAngle;
         [SerializeField] private float damagePerTick = DefaultDamagePerTick;
         [SerializeField] private float fireInterval = DefaultFireInterval;
         [SerializeField] private LayerMask hitMask = ~0;
-
-        [Header("Cavitation")]
-        [SerializeField] private float chargeSeconds = DefaultChargeSeconds;
-        [SerializeField] private float cavitationCooldownSeconds = DefaultCavitationCooldownSeconds;
-        [SerializeField] private float pullRadius = DefaultPullRadius;
-        [SerializeField] private float pullDistance = DefaultPullDistance;
-        [SerializeField] private float staggerSeconds = DefaultStaggerSeconds;
-        [SerializeField] private float cavitationSpeed = DefaultCavitationSpeed;
 
         [Header("Aim source")]
         [Tooltip("Optional. If set, fires while the player aims and orients to their facing. " +
@@ -134,25 +92,21 @@ namespace MaxWorlds.Combat
         /// the RCDA's is (same "flat authored number" shape <see cref="PulseLaser.EnergyPerPulse"/> uses).</summary>
         public float EnergyPerTick => DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond) * fireInterval;
 
-        public float ChargeSeconds => chargeSeconds;
-        public float CavitationCooldownSeconds => cavitationCooldownSeconds;
+        /// <summary>Where the visible stream currently ends, world space — the farthest robot it
+        /// actually damaged this tick (it pierces up to two), the first wall/cover in its path, or its
+        /// own <see cref="Range"/>, whichever is shortest (MV-1034 spec). Set every time
+        /// <see cref="FireLanceTick"/> runs; holds its last value between ticks.</summary>
+        public Vector3 StreamEndPoint { get; private set; }
 
-        /// <summary>Whether a cavitation shot could fire right now (spec: "a second cavitation shot is
-        /// refused within 4s of the first").</summary>
-        public bool CavitationReady => _cooldownRemaining <= 0f;
-
-        /// <summary>The cavitation shot the most recent charge-and-release spawned, or null before the
-        /// first one — the same "public accessor for a test" idiom as <see cref="PulseLaser.LastSpawnedPulseForTests"/>.</summary>
-        public CavitationBubble LastSpawnedCavitationForTests { get; private set; }
+        /// <summary>Whether the stream's VFX is actually showing right now — what an EditMode test
+        /// reads instead of inspecting the VFX component's own renderers directly.</summary>
+        public bool IsStreamVisible => _vfx != null && _vfx.IsStreaming;
 
         private float _tickTimer;
-        private float _holdTimer;
-        private float _cooldownRemaining;
-        private bool _charged;
-        private bool _wasFiring;
         private bool _lastEmitting;
         private bool _depleted;
         private EnergyPool _tank;
+        private UndertowVfx _vfx;
 
         private const int InitialHitBufferSize = 16;
         private Collider[] _hits = new Collider[InitialHitBufferSize];
@@ -163,16 +117,31 @@ namespace MaxWorlds.Combat
         {
             _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
 
+            // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule), same idiom
+            // WaterVfx/LppeVfx use for their own weapons.
+            _vfx = GetComponent<UndertowVfx>();
+            if (_vfx == null) _vfx = gameObject.AddComponent<UndertowVfx>();
+            _vfx.Init();
+
+            // A safe resting endpoint before the first tick ever lands, so the very first emitting
+            // frame doesn't draw a stream collapsed onto the origin.
+            StreamEndPoint = transform.position + transform.forward * range;
+
             // MV-1012: self-attached from PlayerController.Awake (code-driven scenes, no scene wiring),
             // same "resolve-or-fall-back" shape PulseLaser.Awake uses for its own aimSource.
             if (aimSource == null) aimSource = GetComponent<PlayerController>();
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The real per-frame update, pulled out to its own explicit-<paramref name="dt"/>
+        /// method (the same shape <see cref="MaxWorlds.Enemies.RobotEnemy.TickConversion"/> already
+        /// uses) so an EditMode test can drive exactly 0.1s ticks through the SAME logic
+        /// <see cref="Update"/> calls, instead of reading Unity's own near-zero-in-EditMode
+        /// <see cref="Time.deltaTime"/> (MV-1034's stream test).</summary>
+        private void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             _tank.Tick(dt);
-            if (_cooldownRemaining > 0f) _cooldownRemaining = Mathf.Max(0f, _cooldownRemaining - dt);
 
             if (aimSource != null)
             {
@@ -184,23 +153,7 @@ namespace MaxWorlds.Combat
             if (DevMode.IsAutoFiring) IsFiring = true;
             if (DevMode.IsInfiniteEnergy) _tank.Refill();
 
-            if (IsFiring)
-            {
-                _holdTimer += dt;
-                if (!_charged && _holdTimer >= chargeSeconds) _charged = true;
-            }
-            else
-            {
-                if (_wasFiring) Release(_holdTimer);
-                _holdTimer = 0f;
-                _charged = false;
-            }
-            _wasFiring = IsFiring;
-
-            // Charging pauses the stream (spec: "the lance barrel fills with a bright core") — the
-            // charge itself is the tell, not an interruption on top of an still-streaming lance.
             float cost = EnergyPerTick;
-            bool wantsToStream = IsFiring && !_charged;
             if (_depleted && _tank.Normalized >= BlasterTuning.RechargeFraction) _depleted = false;
             else if (!_depleted && !_tank.CanSpend(cost)) _depleted = true;
 
@@ -208,32 +161,22 @@ namespace MaxWorlds.Combat
             // PulseLaser's own ActivePrimary gate for the same self-attach-then-no-op shape), so it must
             // gate itself rather than relying on being added/removed.
             bool emitting = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Undertow
-                && ShouldEmit(wantsToStream, !_depleted && _tank.CanSpend(cost));
+                && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(cost));
             _lastEmitting = emitting;
+
+            if (_vfx != null) _vfx.SetStreaming(emitting);
             if (!emitting) { _tickTimer = 0f; return; }
 
             _tickTimer -= dt;
-            if (_tickTimer > 0f) return;
-            _tickTimer = fireInterval;
-
-            if (!_tank.TrySpend(cost)) return;
-            FireLanceTick();
-        }
-
-        /// <summary>Fires on release (button up). <paramref name="heldSeconds"/> is the length of the
-        /// hold that just ended — charged (&gt;= <see cref="chargeSeconds"/>) and off cooldown fires the
-        /// cavitation shot; anything else (an early release, or a charged release still on cooldown)
-        /// fires one ordinary lance tick instead, so a charge that can't be spent is never a wasted shot
-        /// (spec).</summary>
-        private bool Release(float heldSeconds)
-        {
-            if (heldSeconds >= chargeSeconds && CavitationReady)
+            if (_tickTimer <= 0f)
             {
-                FireCavitation();
-                return true;
+                _tickTimer = fireInterval;
+                if (_tank.TrySpend(cost)) FireLanceTick();
             }
-            FireLanceTick();
-            return false;
+
+            // Animate the crackle strands every frame the stream is up, not just on the tick cadence —
+            // FireLanceTick above (if it ran this frame) already refreshed StreamEndPoint first.
+            if (_vfx != null) _vfx.UpdateStream(transform.position, StreamEndPoint, dt);
         }
 
         /// <summary>Same growing-buffer idiom <see cref="WaterBlaster.OverlapSphereGrowing"/> uses
@@ -255,7 +198,8 @@ namespace MaxWorlds.Combat
         /// Gathers everything in range, keeps only what's inside the narrow lance cone (the codebase's
         /// established line-hit idiom — no raycast, see <see cref="SprayHit"/>) and in sight, sorts by
         /// distance along the aim axis, then damages only the closest <see cref="MaxPierceCount"/> — a
-        /// third robot standing further back in the same line is never hit (AC1).
+        /// third robot standing further back in the same line is never hit (AC1). Also resolves
+        /// <see cref="StreamEndPoint"/> and drives the muzzle/splash flares (MV-1034).
         /// </summary>
         private void FireLanceTick()
         {
@@ -307,17 +251,16 @@ namespace MaxWorlds.Combat
                 s_buffer[i].TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
             }
-        }
 
-        private void FireCavitation()
-        {
-            _cooldownRemaining = cavitationCooldownSeconds;
-            Vector3 origin = transform.position;
-            Vector3 dir = transform.forward;
-            float damage = DamagePerSecond * CavitationDamageFraction;
+            // MV-1034: the visible stream reaches whichever is closest — the farthest robot it actually
+            // damaged this tick, the first wall/cover in its path, or the weapon's own range.
+            float endDistance = reach;
+            if (pierced > 0) endDistance = Mathf.Min(endDistance, s_dist[pierced - 1]);
+            if (Physics.Raycast(origin, dir, out RaycastHit coverHit, reach, CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+                endDistance = Mathf.Min(endDistance, coverHit.distance);
 
-            LastSpawnedCavitationForTests = CavitationBubble.Fire(
-                origin, dir, cavitationSpeed, Range, damage, pullRadius, pullDistance, staggerSeconds);
+            StreamEndPoint = origin + dir * endDistance;
+            if (_vfx != null) _vfx.OnTick(origin, StreamEndPoint, dir);
         }
 
 #if UNITY_EDITOR

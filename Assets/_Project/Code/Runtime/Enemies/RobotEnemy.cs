@@ -756,10 +756,6 @@ namespace MaxWorlds.Enemies
         /// <summary>HP fraction below which this robot exposes an override port (spec: "below 25%").</summary>
         public const float OverrideHealthThreshold = 0.25f;
 
-        /// <summary>How close a cavitation implosion must land to a port-exposed robot to convert it
-        /// (spec table).</summary>
-        public const float OverrideRadius = 2f;
-
         /// <summary>How long a converted robot fights for Max before it burns out (spec table).</summary>
         public const float ConvertedDurationSeconds = 20f;
 
@@ -781,9 +777,10 @@ namespace MaxWorlds.Enemies
         private static readonly Collider[] s_burnoutHits = new Collider[16];
 
         /// <summary>True while this robot is alive, not already converted, and below
-        /// <see cref="OverrideHealthThreshold"/> HP — the "port exposed" condition a cavitation
-        /// implosion's distance check (see <see cref="MaxWorlds.Weapons.CavitationImplosion"/>) gates
-        /// <see cref="TryConvert"/> behind.</summary>
+        /// <see cref="OverrideHealthThreshold"/> HP — the "port exposed" condition that gates
+        /// <see cref="TryConvert"/>. What ELSE has to be true for a conversion to actually trigger (a
+        /// proximity check, a channel, whatever a given ability requires) is that ability's own
+        /// responsibility, not this robot's.</summary>
         public bool IsPortExposed => IsAlive && !IsConverted && HealthNormalized < OverrideHealthThreshold;
 
         /// <summary>True while this robot is converted to Max's side.</summary>
@@ -793,10 +790,9 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Attempts to convert this robot (spec: joins Max, cyan trim, fights other robots,
         /// ignores Max, for <see cref="ConvertedDurationSeconds"/>). Refused if not port-exposed
-        /// (<see cref="IsPortExposed"/> — the caller is responsible for the distance-to-implosion half of
-        /// the trigger condition, see <see cref="MaxWorlds.Weapons.CavitationImplosion"/>) or if Max
-        /// already has <see cref="MaxConvertedRobots"/> converted (AC5) — the existing ones are left
-        /// untouched, never evicted for a newer one.</summary>
+        /// (<see cref="IsPortExposed"/> — the caller is responsible for whatever ELSE its own trigger
+        /// condition requires) or if Max already has <see cref="MaxConvertedRobots"/> converted (AC5) —
+        /// the existing ones are left untouched, never evicted for a newer one.</summary>
         public bool TryConvert()
         {
             if (!IsPortExposed) return false;
