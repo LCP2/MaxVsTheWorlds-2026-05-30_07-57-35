@@ -104,7 +104,16 @@ namespace MaxWorlds.UI
 
         private void Start()
         {
-            if (SaveSystem.ActiveSlot >= 0)
+            bool captureBypass = PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
+                MaxWorlds.Dev.PerfCaptureDirector.Armed() || MaxWorlds.Dev.CaptureDirector.Armed();
+
+            // MV-1032: a CaptureDirector preset's own BeforeSceneLoad often seeds ActiveSlot = 0 itself
+            // (so time is never paused in the first place — see CaptureDirector's own presets), which
+            // used to hit the "a slot is already live" branch below and trust whatever slot 0 already
+            // held on disk verbatim — a genuinely live/paused run from a prior session, not a controlled
+            // one. A capture must always fall through to the clean bypass instead, same as the other
+            // three directors already do.
+            if (SaveSystem.ActiveSlot >= 0 && !captureBypass)
             {
                 // MV-985: HomeScreen.OnResume left a cross-world resume pending just before triggering
                 // this very reload (the checkpoint's world differed from what was already built) — this
@@ -125,14 +134,15 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
-                MaxWorlds.Dev.PerfCaptureDirector.Armed())
+            if (captureBypass)
             {
-                // Filming (press-kit), a fixed-state UI capture (ui-screens), or an unattended
-                // frame-time sample (MV-494) all have nothing to click the modal with — hand off to
-                // slot 0 straight away, without pausing (Open() below sets Time.timeScale = 0, which
-                // would freeze the very simulation a perf capture exists to measure) or showing
-                // anything, the same lever PressKitDirector already used (YT-97; MV-441).
+                // Filming (press-kit), a fixed-state UI capture (ui-screens), an unattended frame-time
+                // sample (MV-494), or a CaptureDirector preset (MV-1032) all have nothing to click the
+                // modal with — hand off to slot 0 straight away, without pausing (Open() below sets
+                // Time.timeScale = 0, which would freeze the very simulation a perf capture exists to
+                // measure) or showing anything, the same lever PressKitDirector already used (YT-97;
+                // MV-441). StartSlot's own WipeForFreshRun clears any stale checkpoint first, so a
+                // capture never resumes a live run left over from a previous session.
                 StartSlot(0, playIntro: false);
                 return;
             }
