@@ -36,7 +36,16 @@ namespace MaxWorlds.VFX
         private static void Install()
         {
             if (FindFirstObjectByType<BackyardExitGate>() != null) return;
-            if (FindFirstObjectByType<BackyardPath>() == null) return;      // not the Backyard
+            var path = FindFirstObjectByType<BackyardPath>();
+            if (path == null) return;                                     // not the Backyard
+            if (path.ResolvedWorldIndex != 0) return;                      // MV-1045: World 1 only --
+                                                                            // every world shares this
+                                                                            // BackyardPath/BigBermudaBoss
+                                                                            // pair, but the real exit is
+                                                                            // each world's own finale
+                                                                            // door (MV-956/964); this
+                                                                            // YT-153 decoration is only
+                                                                            // World 1's own garden gate.
             if (FindFirstObjectByType<BigBermudaBoss>() == null) return;    // no boss, no exit beat
             new GameObject("BackyardExitGate").AddComponent<BackyardExitGate>();
         }
@@ -178,7 +187,7 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
             go.name = name;
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
             go.transform.SetParent(transform, worldPositionStays: false);
             go.transform.localPosition = pos;
             go.transform.localRotation = rot;
@@ -211,7 +220,8 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);                 // reveal only — the real wall keeps its collider
+            // reveal only — the real wall keeps its collider
+            if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
             go.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
             return go;
