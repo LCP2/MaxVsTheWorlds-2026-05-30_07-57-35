@@ -127,7 +127,10 @@ namespace MaxWorlds.Core
             Bootstrap.ActiveSessionRecorder?.RecordEvent(DateTime.UtcNow, "cct-refused", context);
         }
 
-        private static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
+        /// <summary>MV-1043: public so the NaN firewall (<see cref="CharacterControllerMotion"/>,
+        /// <see cref="NanMoveLog"/>, and the movers that call them) can share this exact finite-check
+        /// rather than each keeping its own copy.</summary>
+        public static bool IsFinite(Vector3 v) => IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
 
         private static bool IsFinite(Quaternion q) =>
             IsFinite(q.x) && IsFinite(q.y) && IsFinite(q.z) && IsFinite(q.w);
