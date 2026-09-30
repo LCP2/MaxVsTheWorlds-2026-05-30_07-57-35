@@ -99,6 +99,12 @@ namespace MaxWorlds.Factories
         private ShedMobility _mobilityState = ShedMobility.Grounded;
         private float _groundY;
 
+        /// <summary>MV-1043: this shed's own last-known-finite position, refreshed at the end of every
+        /// <see cref="TickMobility"/> tick that leaves it finite. The backstop <see cref="TickMobility"/>
+        /// restores to if the shed's own transform is ever found non-finite at the start of a tick — the
+        /// same "keep a last-finite position and restore it" contract the ticket asks for.</summary>
+        private Vector3 _lastFinitePosition;
+
         /// <summary>MV-1022: THIS shed's own resolved centre-to-centre pursuit distance — see
         /// <see cref="ResolvePursuitStandoff"/>. Defaults to the old flat 2 m so a hutch this is never
         /// called on (Grounded is a permanent no-op without <see cref="ConfigureMobility"/>) never reads
@@ -212,6 +218,7 @@ namespace MaxWorlds.Factories
             if (!_mobile) return;
             _cc = GetComponent<CharacterController>();
             _groundY = transform.position.y;
+            _lastFinitePosition = transform.position;
             _pursuitStandoff = ResolvePursuitStandoff();
             // MV-618: seeded full so the very first contact ever made isn't an instant free hit —
             // same convention RobotEnemy's own _contactCooldownTimer uses.
@@ -370,7 +377,11 @@ namespace MaxWorlds.Factories
             // MV-548: a mobile shed's wreck drops to the ground at wherever it currently is — X/Z stay
             // exactly where it died mid-pursuit; only the hover Y is undone. TickMobility never runs
             // again once IsAlive is false, so nothing re-lifts it after this.
-            if (_mobile) transform.position = new Vector3(transform.position.x, _groundY, transform.position.z);
+            if (_mobile)
+            {
+                Vector3 grounded = new Vector3(transform.position.x, _groundY, transform.position.z);
+                NanMoveLog.GuardedWrite(transform, grounded, name, "MowerHutch.ApplyDestructionEffects", 0f);
+            }
 
             // The source is gone: hide the body, collider, and bar — but keep the GameObject
             // ALIVE, because the robots it already spawned are parented here and must keep
@@ -452,6 +463,27 @@ namespace MaxWorlds.Factories
         {
             if (!_mobile || !IsAlive) return;
 
+            // MV-1043: the shed's own transform may have gone non-finite off a prior tick's movement
+            // (a CCT depenetration against a coincident capsule, or any other unguarded write) — restore
+            // it from the last known-finite position before doing anything else this tick.
+            if (!CharacterControllerSafety.IsFinite(transform.position))
+            {
+                NanMoveLog.Record(name, "MowerHutch.TickMobility", Vector3.zero, transform.position, dt,
+                    $"state={_mobilityState}");
+                if (_cc != null) CharacterControllerSafety.SafeReposition(_cc, _lastFinitePosition, "MowerHutch.TickMobility");
+                else transform.position = _lastFinitePosition;
+            }
+
+            // A non-finite targetPosition is refused outright rather than trusted to arithmetic that
+            // happens to be safe against it (Vector3.normalized/Mathf.Min both degrade gracefully, but
+            // that's incidental — see this ticket's own test doc comment).
+            if (!CharacterControllerSafety.IsFinite(targetPosition))
+            {
+                NanMoveLog.Record(name, "MowerHutch.TickMobility", Vector3.zero, transform.position, dt,
+                    $"state={_mobilityState} nonFiniteTarget={targetPosition}");
+                return;
+            }
+
             switch (_mobilityState)
             {
                 case ShedMobility.Grounded:
@@ -478,6 +510,9 @@ namespace MaxWorlds.Factories
             // MV-1022: last, so it catches whatever the state's own movement AND the area leash just did
             // this tick — the safety net of last resort, not a state the shed is ever meant to reach.
             ClampToGroundY(dt);
+
+            if (CharacterControllerSafety.IsFinite(transform.position))
+                _lastFinitePosition = transform.position;
         }
 
         /// <summary>MV-683's leash: holds this hutch's X/Z inside the area it was authored inside
@@ -513,8 +548,12 @@ namespace MaxWorlds.Factories
             if (p.y >= _groundY) return;
 
             Vector3 recovered = new Vector3(p.x, _groundY, p.z);
+            // MV-1043: p.x/p.z can themselves already be non-finite (the exact case this clamp's own
+            // p.y >= _groundY guard can't catch, since a NaN p.y compares false against everything) —
+            // guarded so this never becomes a second write path that turns a partial NaN into a full one.
+            if (!NanMoveLog.GuardedWrite(transform, recovered, name, "MowerHutch.ClampToGroundY", dt))
+                return;
             FallEventLog.Record("shed", EnemyNavigation.Map, p, recovered, dt);
-            transform.position = recovered;
         }
 
         /// <summary>Grounded's own exit condition (MV-548 state table): the area has to be ACTIVE —

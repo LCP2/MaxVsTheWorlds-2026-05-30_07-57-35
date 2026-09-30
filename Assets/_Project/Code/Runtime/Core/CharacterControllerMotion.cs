@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace MaxWorlds.Core
@@ -166,16 +167,40 @@ namespace MaxWorlds.Core
         /// <summary>Moves <paramref name="cc"/> by <paramref name="displacement"/>, splitting it into
         /// up to <see cref="MaxSubSteps"/> steps when it's larger than <see cref="MaxSafeStep"/>. Each
         /// step is its own swept collision test, so a stall-inflated single-frame displacement can't
-        /// skip past a thin collider the way one oversized <c>Move()</c> call can.</summary>
-        public static void SafeMove(CharacterController cc, Vector3 displacement)
+        /// skip past a thin collider the way one oversized <c>Move()</c> call can.
+        ///
+        /// MV-1043: the NaN firewall. A non-finite <paramref name="displacement"/> is refused outright —
+        /// never handed to <c>cc.Move</c> — and after every individual sub-step this re-checks the
+        /// controller's own transform; if a step somehow left it non-finite (PhysX depenetration against
+        /// a degenerate/coincident collider, not just a bad input), the remaining sub-steps are abandoned
+        /// and the transform is restored to its last finite position via
+        /// <see cref="CharacterControllerSafety.SafeReposition"/>. Either path writes one rate-limited
+        /// <see cref="NanMoveLog"/> row. <paramref name="site"/> is the caller's own method name,
+        /// captured automatically via <see cref="CallerMemberNameAttribute"/> so none of this static
+        /// utility's ~20 call sites need to pass one explicitly.</summary>
+        public static void SafeMove(CharacterController cc, Vector3 displacement,
+            [CallerMemberName] string site = null)
         {
             CallCount++;
+
+            if (!CharacterControllerSafety.IsFinite(displacement))
+            {
+                NanMoveLog.Record(cc.name, site, displacement, cc.transform.position, Time.deltaTime);
+                return;
+            }
+
             float dist = displacement.magnitude;
             if (dist <= MaxSafeStep)
             {
                 MoveSweepCount++;
                 RecordRecentStep(1, dist, false);
+                Vector3 before = cc.transform.position;
                 cc.Move(displacement);
+                if (!CharacterControllerSafety.IsFinite(cc.transform.position))
+                {
+                    NanMoveLog.Record(cc.name, site, displacement, before, Time.deltaTime);
+                    CharacterControllerSafety.SafeReposition(cc, before, site);
+                }
                 return;
             }
 
@@ -196,7 +221,14 @@ namespace MaxWorlds.Core
             for (int i = 0; i < steps; i++)
             {
                 MoveSweepCount++;
+                Vector3 before = cc.transform.position;
                 cc.Move(step);
+                if (!CharacterControllerSafety.IsFinite(cc.transform.position))
+                {
+                    NanMoveLog.Record(cc.name, site, step, before, Time.deltaTime);
+                    CharacterControllerSafety.SafeReposition(cc, before, site);
+                    break;
+                }
             }
         }
     }

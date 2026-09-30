@@ -326,7 +326,7 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-697's leash: holds this robot's X/Z to the nearest point inside the union of its
         /// deck rects — the one thing ordinary wall collision does not stop it walking off (a deck has
         /// no railing on the edge a ramp climbs into). A no-op with no footprint set.</summary>
-        private void ClampToDeckFootprint()
+        private void ClampToDeckFootprint(float dt)
         {
             if (_deckRects == null || _deckRects.Count == 0) return;
 
@@ -344,7 +344,10 @@ namespace MaxWorlds.Enemies
                 if (distSq < bestDistSq) { bestDistSq = distSq; nearest = candidate; }
             }
 
-            transform.position = new Vector3(nearest.x, p.y, nearest.y);
+            // MV-1043: p.y (untouched by this clamp) can already be non-finite off an unguarded write
+            // elsewhere — guarded so the deck leash never becomes a second path that ships a NaN.
+            NanMoveLog.GuardedWrite(transform, new Vector3(nearest.x, p.y, nearest.y), name,
+                "RobotEnemy.ClampToDeckFootprint", dt);
         }
 
         // --- Replicator lure (MV-706) — World 2's factory pulls an unaware robot off Max toward its
@@ -554,7 +557,11 @@ namespace MaxWorlds.Enemies
             {
                 // Stalled for a full window — step directly this frame, bypassing whatever collider is
                 // pinning the CharacterController, then start a fresh window from the new position.
-                transform.position += dir * step;
+                // MV-1043: guarded the same as every other direct transform write this ticket found —
+                // dir is a normalized (to/dist) vector, so a non-finite ReplicatorSeekTarget is the only
+                // way this could turn non-finite.
+                NanMoveLog.GuardedWrite(transform, transform.position + dir * step, name,
+                    "RobotEnemy.TickReplicatorSeeking", dt);
                 _seekStallTimer = 0f;
                 _seekLastProgressDist = dist - step;
             }
@@ -1710,7 +1717,7 @@ namespace MaxWorlds.Enemies
 
             // MV-697: applied after every state's own movement, regardless of state.
             FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
-            ClampToDeckFootprint();
+            ClampToDeckFootprint(dt);
             FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
             // MV-611: keeps this robot's own entry in the shared neighbour grid current every
