@@ -158,6 +158,14 @@ namespace MaxWorlds.Arena
         /// once something else has taken over deciding whether it draws, the gate must leave it alone.</summary>
         private HashSet<Renderer> _dressedHidden;
 
+        /// <summary>MV-1038 item 3: each live pickup's own last-registered zone id, tracked separately
+        /// from <see cref="_rendererZones"/> (which is keyed by renderer, not by pickup) so <see
+        /// cref="ReregisterPickupIfZoneChanged"/> can answer "has this pickup actually crossed a zone
+        /// boundary" with one dictionary lookup and a string compare — no <c>GetComponentsInChildren</c>
+        /// walk, no allocation — on every frame a live Magneto pull calls it, the overwhelming majority
+        /// of which stay inside the one zone the pull started in.</summary>
+        private readonly Dictionary<Pickup, string> _pickupZone = new Dictionary<Pickup, string>();
+
         /// <summary>MV-932: World 1's dressing (<see cref="MaxWorlds.Arena.BackyardDressing"/>,
         /// <see cref="MaxWorlds.Arena.BackyardBackdrop"/>, <see cref="MaxWorlds.Arena.BackyardHomeShed"/>,
         /// <see cref="MaxWorlds.Arena.BackyardEntryDoor"/>) builds on its own scene-root GameObject, not
@@ -273,6 +281,113 @@ namespace MaxWorlds.Arena
                 }
                 r.enabled = visible;
             }
+        }
+
+        /// <summary>MV-1038: strips every one of <paramref name="renderers"/> out of this gate's own
+        /// bookkeeping — from <see cref="_rendererZones"/> AND <see cref="_dressedHidden"/>. Call this
+        /// from any path that returns a POOLED pickup to its pool (<c>PickupDirector.Collect</c>,
+        /// <c>RetireCell</c>), before the pool hands it back out to a fresh <see cref="RegisterPickup"/>
+        /// call at some other position. Without this, a renderer this gate disabled for the pickup's OLD
+        /// zone — or one <see cref="RegisterAtPosition"/> used to fold into <see cref="_dressedHidden"/>
+        /// simply because it happened to read disabled at that exact moment — kept that stale state
+        /// forever once the pickup was re-placed somewhere else: the pooled-pickup regression this
+        /// ticket fixes. A no-op for a renderer this gate never tagged.</summary>
+        public void Unregister(Renderer[] renderers)
+        {
+            if (renderers == null) return;
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                _rendererZones?.Remove(r);
+                _dressedHidden?.Remove(r);
+            }
+        }
+
+        /// <summary>Pickup.BuildVisual/BuildWeaponCoreVisual's own name for the greybox stand-in
+        /// primitive — mirrors <c>PickupArtDirector.HideGreybox</c>'s own <c>pickup.Find("Visual")</c>.</summary>
+        private const string PickupGreyboxName = "Visual";
+
+        /// <summary>PickupArtDirector's own <c>ArtPrefix</c> — the designed-art child it builds (once)
+        /// and renames to <c>"PartArt:" + key</c>. Its PRESENCE (not any renderer's current enabled
+        /// state — see <see cref="ApplyPickupZoneTag"/>'s own doc for why that signal is unsafe) is what
+        /// tells <see cref="ApplyPickupZoneTag"/> this pickup's greybox is HideGreybox's to own, not the
+        /// gate's.</summary>
+        private const string PickupDesignedArtPrefix = "PartArt:";
+
+        /// <summary>MV-1038: registers a pickup's renderers by what they ARE — a walk-over collectible
+        /// that gets POOLED and re-placed, not static geometry dropped once and forgotten the way <see
+        /// cref="RegisterAtPosition"/> assumes (that method still exists, unchanged, for its other,
+        /// genuinely-static callers). Tags each renderer to <paramref name="worldPos"/>'s own resolved
+        /// zone ONLY — replacing whatever zone a previous life left behind, never appending, unlike
+        /// <see cref="RegisterAtPosition"/>'s own "appends and never removes" behaviour — and sets it to
+        /// the gate's current verdict for that zone. See <see cref="ApplyPickupZoneTag"/> for the one
+        /// carve-out (the art-hidden greybox). Called by <c>PickupDirector.SpawnDrop</c> for every drop,
+        /// fresh or pooled — the pool doesn't know the difference and doesn't need to.</summary>
+        public void RegisterPickup(Pickup p, Vector3 worldPos)
+        {
+            if (_map == null || _rendererZones == null || p == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+
+            _pickupZone[p] = zone.id;
+            ApplyPickupZoneTag(p, zone);
+        }
+
+        /// <summary>MV-1038 item 3: re-registers <paramref name="p"/> only if <paramref name="worldPos"/>
+        /// resolves to a different zone than its last registration — the Magneto pull in
+        /// <c>PickupDirector.Update</c> steps a live pickup toward Max frame by frame rather than placing
+        /// it once via <c>Pickup.Place</c>, so nothing else re-tags it as it moves. Cheap on the
+        /// overwhelmingly common case (a pull that never leaves the zone it started in): one <see
+        /// cref="MapData.ZoneAt(float,float,float)"/> resolve plus a dictionary lookup and string
+        /// compare against <see cref="_pickupZone"/>, no <c>GetComponentsInChildren</c> walk and no
+        /// allocation unless the zone actually changed.</summary>
+        public void ReregisterPickupIfZoneChanged(Pickup p, Vector3 worldPos)
+        {
+            if (_map == null || _rendererZones == null || p == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+            if (_pickupZone.TryGetValue(p, out string current) && current == zone.id) return;
+
+            _pickupZone[p] = zone.id;
+            ApplyPickupZoneTag(p, zone);
+        }
+
+        /// <summary>The shared per-renderer tagging pass <see cref="RegisterPickup"/> and <see
+        /// cref="ReregisterPickupIfZoneChanged"/> both apply once they've resolved the zone to tag to.
+        ///
+        /// Never files a pickup renderer into <see cref="_dressedHidden"/>, and never re-touches the ONE
+        /// legitimate permanently-hidden pickup renderer: the greybox <see cref="PickupGreyboxName"/>
+        /// stand-in, whose visibility <c>PickupArtDirector.HideGreybox</c> owns once designed art exists.
+        /// That carve-out is keyed on a STRUCTURAL fact — a <see cref="PickupDesignedArtPrefix"/> child
+        /// actually exists — rather than "this renderer currently reads disabled and was never tracked
+        /// before", which <see cref="Unregister"/> makes an unsafe signal: a pool-returned pickup's
+        /// renderers are ALWAYS untracked (that's what Unregister just did to them), so a stale-disabled
+        /// ART renderer — the exact bug this ticket fixes — would misread as "the greybox" and stay
+        /// hidden forever under the old signal. A kind with no designed art (a failed <c>WeaponPartArt.Build</c>,
+        /// or a <see cref="PickupKind.WeaponCore"/>, whose own <c>Visual</c> IS its only art, not a
+        /// stand-in — <c>OnPickupRegistered</c> never builds it a <see cref="PickupDesignedArtPrefix"/>
+        /// child at all) is untouched by the carve-out: its <c>Visual</c> gates like any other renderer.</summary>
+        private void ApplyPickupZoneTag(Pickup p, MapZone zone)
+        {
+            bool visible = _activeZoneIds != null && _activeZoneIds.Contains(zone.id);
+            bool hasDesignedArt = HasDesignedArtChild(p.transform);
+
+            foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (hasDesignedArt && r.gameObject.name == PickupGreyboxName) continue;
+
+                _rendererZones[r] = new List<string>(1) { zone.id };
+                r.enabled = visible;
+            }
+        }
+
+        private static bool HasDesignedArtChild(Transform pickup)
+        {
+            for (int i = 0; i < pickup.childCount; i++)
+                if (pickup.GetChild(i).name.StartsWith(PickupDesignedArtPrefix, System.StringComparison.Ordinal))
+                    return true;
+            return false;
         }
 
         /// <summary>MV-978: <see cref="RegisterGatedActor"/> for an actor that spawns at runtime with no
