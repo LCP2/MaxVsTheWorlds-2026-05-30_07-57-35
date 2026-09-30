@@ -19,9 +19,9 @@ namespace MaxWorlds.Tests.EditMode
     /// found") before a single assertion runs.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1), one narrative per AC bullet, same idiom
-    /// as <c>MV836FloodOffTests</c>/<c>MV837DeckSludgeTests</c>: loads the real, shipped World 2 config
-    /// through <see cref="WorldLibrary"/>/<see cref="WorldMapLoader"/> (no hand-authored fixture) and
-    /// drives the real <see cref="MapSludgeDamageRunner.TickSludgeDamage"/> path.
+    /// as <c>MV837DeckSludgeTests</c>: loads the real, shipped World 2 config through
+    /// <see cref="WorldLibrary"/>/<see cref="WorldMapLoader"/> (no hand-authored fixture) and drives the
+    /// real <see cref="MapSludgeDamageRunner.TickSludgeDamage"/> path.
     /// </summary>
     public sealed class MV838SludgeDamageTests
     {
@@ -64,10 +64,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(cfg, "World 2's own shipped config must load for this test to mean anything");
                 Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-                // StormdrainFlood.IsFlooded/MapGeometry.SpeedMultiplierAt both resolve their zone off
-                // EnemyNavigation.Map, which finds the map through a live BackyardPath, not through the
-                // local `map` this test already has — same stub MV836FloodOffTests/MV837DeckSludgeTests
-                // install for the same reason.
+                // MapGeometry.SpeedMultiplierAt resolves its zone off EnemyNavigation.Map, which finds
+                // the map through a live BackyardPath, not through the local `map` this test already
+                // has — same stub MV837DeckSludgeTests installs for the same reason.
                 pathGo = new GameObject("MV838-backyard-path");
                 var path = pathGo.AddComponent<BackyardPath>();
                 BackyardPathMapField.SetValue(path, map);
@@ -92,10 +91,6 @@ namespace MaxWorlds.Tests.EditMode
 
                 const float simulatedSeconds = 2f;
                 const float step = 0.1f;
-
-                // === AC5: the flood switch is off by design (MV-836) — sludge damage must not depend
-                // === on it at all. ===
-                Assert.IsFalse(StormdrainFlood.FloodEnabled, "setup failure: MV-836 must still have the flood switched off");
 
                 // === AC1: Max at floor level (y 0) inside a3_sludge1, Force Field down, 2.0s -> loses
                 // === 15 HP (7.5/s, MV-924 retune), within the AC's own ±1.5 tolerance. ===

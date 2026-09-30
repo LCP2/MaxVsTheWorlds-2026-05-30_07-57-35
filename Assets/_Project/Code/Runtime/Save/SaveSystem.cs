@@ -215,7 +215,6 @@ namespace MaxWorlds.Save
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
             data.CheckpointElapsedSeconds = RunProgressState.Elapsed;
             data.CheckpointKills = RunProgressState.Kills;
-            data.CheckpointFloodLevel01 = StormdrainFlood.Level01;
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
             data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
@@ -246,12 +245,10 @@ namespace MaxWorlds.Save
         /// Returns false and changes nothing if the slot holds no checkpoint. Re-entering the checkpoint's
         /// area is the caller's job — this ticket does not wire a scene/HomeScreen caller (MV-524 part 3).
         ///
-        /// MV-776: also rewinds <see cref="StormdrainFlood"/> to the checkpoint's own level (never the
-        /// live one — a resume restores what the gate looked like, not wherever the flood drifted to by
-        /// the time the run ended) and re-applies the checkpoint's destroyed-Replicator set onto whichever
+        /// MV-776: also re-applies the checkpoint's destroyed-Replicator set onto whichever
         /// currently-registered instances the level's own build has already brought alive by the time
-        /// this runs (<see cref="FactoryCensus.ApplyCheckpointDestroyedIds"/>) — both pure-data systems
-        /// with no scene dependency of their own, same as every other field this method already
+        /// this runs (<see cref="FactoryCensus.ApplyCheckpointDestroyedIds"/>) — a pure-data system
+        /// with no scene dependency of its own, same as every other field this method already
         /// restores.
         ///
         /// MV-922: same treatment for World 1's own factory, the Mower Hutch shed — before this, a
@@ -276,7 +273,6 @@ namespace MaxWorlds.Save
             PickupWallet.SetPowerCellSecondary(data.CheckpointPowerCellsSecondary);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
             RunProgressState.Restore(data.CheckpointElapsedSeconds, data.CheckpointKills);
-            StormdrainFlood.RestoreLevel01(data.CheckpointFloodLevel01);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
             BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
@@ -377,7 +373,6 @@ namespace MaxWorlds.Save
             data.CheckpointDeathsTaken = 0;
             data.CheckpointElapsedSeconds = 0f;
             data.CheckpointKills = 0;
-            data.CheckpointFloodLevel01 = 0f;
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();

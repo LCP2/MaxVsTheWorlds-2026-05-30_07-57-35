@@ -178,9 +178,8 @@ namespace MaxWorlds.Factories
         public static string AreaIdOf(Replicator replicator) =>
             replicator != null && ReplicatorArea.TryGetValue(replicator, out string areaId) ? areaId : null;
 
-        /// <summary>How many Replicators are standing right now (MV-774) — what
-        /// <see cref="MaxWorlds.Arena.StormdrainFlood"/>'s own "every live Replicator adds to the rate"
-        /// rule reads, so the "REPLICATORS n/25" counter finally means something beyond a label.</summary>
+        /// <summary>How many Replicators are standing right now (MV-774) — what backs the
+        /// "REPLICATORS n/25" counter.</summary>
         public static int ReplicatorsAlive => ReplicatorsStanding.Count;
 
         /// <summary>True once every Replicator this run has is down. False in a run with none — same
