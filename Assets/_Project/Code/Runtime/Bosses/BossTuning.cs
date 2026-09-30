@@ -75,6 +75,13 @@ namespace MaxWorlds.Bosses
         /// boss's own knob rather than sharing the robots' one.</summary>
         public const float ContactCooldown = 1.0f;
 
+        /// <summary>MV-1037: extra surface-to-surface margin added on top of the boss's and the
+        /// target's own WORLD-space collider radii when resolving contact reach (see
+        /// <see cref="BigBermudaBoss.TickContactDamage"/>) — the same "a hair of grace so touching
+        /// doesn't require literal interpenetration" idea <c>MowerHutch</c>'s own pursuit standoff and
+        /// <c>RobotEnemy.TickContactTouch</c> already give their own contact checks.</summary>
+        public const float ContactSkin = 0.3f;
+
         // ---------------------------------------------------------------- the fight escalates on its own clock
         //
         // MV-588: the charge is gone entirely — "kill it before its army outgrows you" replaces it. The
