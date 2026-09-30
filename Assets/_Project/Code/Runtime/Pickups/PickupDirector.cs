@@ -457,12 +457,14 @@ namespace MaxWorlds.Pickups
                 _cellAge[p] = 0f;
             }
 
-            // MV-972: a pickup never moves once dropped, so a one-time zone tag (no chase override
-            // needed) is enough — same registration a robot-death/shed-destroyed/World-1-finale drop
-            // all funnel through here for. A no-op for a map-authored EntityKind.Pickup, spawned while
-            // MapRuntime.Build is still running: the gate doesn't exist yet at that call time, so
-            // MapRuntime.BuildProps tags those itself, straight off this method's own return value.
-            MapStaticBatchRoot.Active?.RegisterAtPosition(p.GetComponentsInChildren<Renderer>(true), pos);
+            // MV-972/MV-1038: registers (or RE-registers, for a pooled reuse) this drop's own zone tag
+            // — same registration a robot-death/shed-destroyed/World-1-finale drop all funnel through
+            // here for. RegisterPickup (not RegisterAtPosition — see its own doc for why a pooled
+            // pickup needs a REPLACE, not an APPEND) is a no-op for a map-authored EntityKind.Pickup,
+            // spawned while MapRuntime.Build is still running: the gate doesn't exist yet at that call
+            // time, so MapRuntime.BuildProps tags those itself, straight off this method's own return
+            // value.
+            MapStaticBatchRoot.Active?.RegisterPickup(p, pos);
 
             return p;
         }
@@ -498,6 +500,10 @@ namespace MaxWorlds.Pickups
         {
             UntrackCell(p);
             _reserveFullTold.Remove(p);
+            // MV-1038: strip this pickup's renderers out of the area gate's bookkeeping BEFORE it goes
+            // back in the pool — see MapStaticBatchRoot.Unregister's own doc for the stale-zone bug this
+            // prevents on the pool's next SpawnDrop.
+            MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
             p.gameObject.SetActive(false);
             _live.RemoveAt(index);
             _cellPool.Push(p);
@@ -573,6 +579,11 @@ namespace MaxWorlds.Pickups
                     float step = MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullSpeed * dt;
                     if (step * step >= d2) p.transform.position = new Vector3(m.x, pos.y, m.z);
                     else p.transform.position = pos + toMax.normalized * step;
+
+                    // MV-1038 item 3: a Magneto-pulled pickup can cross a zone boundary mid-pull without
+                    // ever going through SpawnDrop's own RegisterPickup call — cheap no-op on the common
+                    // case (still the same zone), see ReregisterPickupIfZoneChanged's own doc.
+                    MapStaticBatchRoot.Active?.ReregisterPickupIfZoneChanged(p, p.transform.position);
                 }
             }
         }
@@ -665,6 +676,8 @@ namespace MaxWorlds.Pickups
             }
 
             _reserveFullTold.Remove(p);
+            // MV-1038: same pool-return unregistration as RetireCell — see that call's own comment.
+            MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
             p.gameObject.SetActive(false);
             _live.RemoveAt(index);
             Stack<Pickup> pool = p.Kind switch
