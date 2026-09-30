@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -12,6 +14,13 @@ namespace MaxWorlds.Arena
     /// cause. <see cref="MaxWorlds.Dev.Mv503DiagnosticOverlay"/> renders the buffer as a "FALLS" section;
     /// <see cref="Record"/> also <see cref="Debug.LogWarning"/>s each line so it shows up in a captured
     /// device log too.
+    ///
+    /// MV-1039: Lee's World 1 a22 fall/bounce (no shed nearby, weakening MV-1022's shed hypothesis) went
+    /// entirely unrecorded on disk — this ring buffer and its log line are read only if someone is
+    /// watching at the time. <see cref="Record"/> now also writes ONE row per fall to the session events
+    /// CSV (<see cref="Bootstrap.ActiveSessionRecorder"/>, same no-op-without-a-recorder contract as
+    /// <c>WaterBlaster</c>'s MVHIT row), carrying two ground-truth <see cref="Physics.Raycast"/> floor
+    /// probes so the next live fall names its own cause without anyone reproducing it first.
     /// </summary>
     public readonly struct FallEventRecord
     {
@@ -54,10 +63,24 @@ namespace MaxWorlds.Arena
         // append, never a per-frame allocation (a fall itself is already the rare case this only runs on).
         private static readonly List<FallEventRecord> _events = new List<FallEventRecord>(Capacity);
 
+        /// <summary>MV-1039: recent fall timestamps per entity kind — the CSV row's own "bounce-loop
+        /// signature" (a running count of how many FALL rows THIS entity has written in the last
+        /// <see cref="RecentWindowSeconds"/>). <see cref="Time.realtimeSinceStartup"/>, not
+        /// <see cref="Time.time"/> — the same clock <see cref="MaxWorlds.Dev.Mv503DiagnosticOverlay"/>'s
+        /// own cache already uses, and one that actually advances in EditMode (a batch-mode test process
+        /// never enters Play mode).</summary>
+        private static readonly Dictionary<string, List<float>> _recentFallTimesByEntity = new Dictionary<string, List<float>>();
+
+        private const float RecentWindowSeconds = 10f;
+
         public static IReadOnlyList<FallEventRecord> Events => _events;
 
         /// <summary>Test hygiene — EditMode tests run in one shared process/session.</summary>
-        public static void Reset() => _events.Clear();
+        public static void Reset()
+        {
+            _events.Clear();
+            _recentFallTimesByEntity.Clear();
+        }
 
         /// <summary>Called the instant a <see cref="FallRecoveryState"/>'s own <c>Tick</c> returns a
         /// recovery position — never per frame otherwise (AC3's allocation guard).</summary>
@@ -82,6 +105,68 @@ namespace MaxWorlds.Arena
             _events.Add(record);
 
             Debug.LogWarning(FormatLine(record));
+
+            // MV-1039: same no-op-without-a-recorder contract as WaterBlaster's MVHIT row -- skip
+            // building the context string (two raycasts, a scene lookup) entirely when nothing is
+            // listening, rather than throwing the result away.
+            PerfSessionRecorder recorder = Bootstrap.ActiveSessionRecorder;
+            if (recorder != null)
+                recorder.RecordEvent(DateTime.UtcNow, "FALL", BuildEventContext(record, areaId, gateId));
+        }
+
+        private const float ProbeUpOffsetPrimary = 1f;
+        private const float ProbeUpOffsetSecondary = 3f;
+        private const float ProbeDownDistance = 4f;
+
+        /// <summary>MV-1039: the ticket's own two ground-truth checks -- "is there actually a floor
+        /// collider under the recover-to point" and "under the point Max first left the playable area".
+        /// All layers, triggers ignored (a trigger volume is never what holds Max up), so this answers
+        /// "is there real, solid ground here", not "does anything overlap this point at all".</summary>
+        private static string ProbeFloor(Vector3 basePosition, float upOffset)
+        {
+            Vector3 origin = basePosition + Vector3.up * upOffset;
+            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, ProbeDownDistance, ~0,
+                    QueryTriggerInteraction.Ignore))
+                return "none";
+
+            Collider c = hit.collider;
+            return $"{c.name}(enabled={c.enabled},trigger={c.isTrigger},active={c.gameObject.activeInHierarchy}," +
+                   $"y={hit.point.y:F2},layer={LayerMask.LayerToName(c.gameObject.layer)})";
+        }
+
+        /// <summary>MV-1039: the running "how many times has THIS entity fallen in the last 10s" count
+        /// -- the bounce-loop signature Lee's a22 report described ("fell through the floor and bounced
+        /// up and down again"). Mutates <see cref="_recentFallTimesByEntity"/>, so this must be called
+        /// exactly once per recorded fall.</summary>
+        private static int RecordAndCountRecentFalls(string entityKind)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (!_recentFallTimesByEntity.TryGetValue(entityKind, out List<float> times))
+            {
+                times = new List<float>();
+                _recentFallTimesByEntity[entityKind] = times;
+            }
+
+            times.Add(now);
+            times.RemoveAll(t => now - t > RecentWindowSeconds);
+            return times.Count;
+        }
+
+        private static string BuildEventContext(in FallEventRecord r, string areaId, string gateId)
+        {
+            var director = UnityEngine.Object.FindFirstObjectByType<AreaAccumulationDirector>();
+            string areaTracker = director != null
+                ? $"currentArea={director.CurrentArea} physicalArea={director.PhysicalArea}"
+                : "currentArea=none physicalArea=none";
+            bool gateActive = MapStaticBatchRoot.Active != null && MapStaticBatchRoot.Active.IsZoneActive(areaId);
+
+            return $"entity={r.EntityKind} area={areaId} gate={gateId} " +
+                   $"firstOut={r.FirstOutOfPlayPosition:F2} lastGrounded={r.LastGroundedPosition:F2} " +
+                   $"dt={r.DeltaTime:F3} subSteps={r.MaxSubStepCount}@{r.MaxSubStepSize:F2}m oversized={r.OversizedMoveDetected} " +
+                   $"floorProbe1={ProbeFloor(r.LastGroundedPosition, ProbeUpOffsetPrimary)} " +
+                   $"floorProbe2={ProbeFloor(r.FirstOutOfPlayPosition, ProbeUpOffsetSecondary)} " +
+                   $"{areaTracker} gateActive={gateActive} " +
+                   $"recentFalls10s={RecordAndCountRecentFalls(r.EntityKind)}";
         }
 
         /// <summary>Nearest <see cref="EntityKind.Gate"/>/<see cref="EntityKind.AreaGate"/> entity to
