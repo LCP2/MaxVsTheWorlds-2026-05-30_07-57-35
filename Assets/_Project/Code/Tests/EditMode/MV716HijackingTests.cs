@@ -11,13 +11,18 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-716 — Hijacking, both ways: a Splicer (a role on the existing Gunner kind) channels one of
-    /// Max's Sentinels over to the enemy team for a timed window (AC1-3), and a cavitation implosion
-    /// converts a critically-damaged, port-exposed robot to Max's side for a timed window, capped at
-    /// three at once, ending in a robots-only burnout AoE (AC4-7). One consolidated test method covers
-    /// both halves (MV-465 Rule 1: at most one new test per ticket) — every assertion reads RESOLVED
-    /// state (a Sentinel's/robot's actual <see cref="Team"/>, <see cref="Sentinel.IsHijacked"/>,
-    /// <see cref="RobotEnemy.IsConverted"/>, <see cref="RobotEnemy.HealthCurrent"/>), never an authored
-    /// constant.
+    /// Max's Sentinels over to the enemy team for a timed window (AC1-3), and a critically-damaged,
+    /// port-exposed robot converts to Max's side for a timed window, capped at three at once, ending in
+    /// a robots-only burnout AoE (AC5-7). One consolidated test method covers both halves (MV-465 Rule 1:
+    /// at most one new test per ticket) — every assertion reads RESOLVED state (a Sentinel's/robot's
+    /// actual <see cref="Team"/>, <see cref="Sentinel.IsHijacked"/>, <see cref="RobotEnemy.IsConverted"/>,
+    /// <see cref="RobotEnemy.HealthCurrent"/>), never an authored constant.
+    ///
+    /// MV-1034 removed the distance-gated <c>CavitationImplosion.Apply</c> entry point this test's own
+    /// AC4 used to drive conversion through (Lee: the charge/cavitation shot "does not work as a
+    /// design"); <see cref="RobotEnemy.TryConvert"/> itself is unchanged and reused by the new trap
+    /// ability (MV-1035), so this now calls it directly — the distance-to-impact half of the old trigger
+    /// no longer exists to test.
     ///
     /// Fails on 5d7e4e0 (MV-715, the commit before this ticket): none of
     /// <see cref="RobotEnemy.TryBeginSpliceChannel"/>, <see cref="RobotEnemy.TickSpliceChannel"/>,
@@ -62,7 +67,7 @@ namespace MaxWorlds.Tests.EditMode
         public void SplicerChannelFlipsAndReturnsASentinel_AndOverrideConvertsAndBurnsOutARobot_MV716()
         {
             GameObject maxGo = null, sentinelGo = null, splicerGo = null, secondSplicerGo = null, bystanderGo = null;
-            RobotEnemy nearRobot = null, farRobot = null, healthyRobot = null, secondConverted = null,
+            RobotEnemy nearRobot = null, healthyRobot = null, secondConverted = null,
                 thirdConverted = null, fourthCandidate = null;
             try
             {
@@ -124,27 +129,20 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(Team.Player, sentinel.Team, "killing the Splicer mid-channel must leave the Sentinel on Max's team");
                 Object.DestroyImmediate(killableSplicer.gameObject);
 
-                // === AC4: a cavitation implosion 1.9m from a robot at 20% HP converts it; at 2.1m it
-                // does not; at 30% HP within range it does not.
+                // === MV-1034: conversion is driven directly through RobotEnemy.TryConvert's own health
+                // gate now (the old distance-to-implosion half of the trigger no longer exists — see
+                // class doc). healthyRobot survives, unconverted, to be counted in AC7's census below —
+                // placed opposite nearRobot (4m away) so AC6's burnout below (3m AoE, centred on
+                // nearRobot) can't kill it before that census runs.
                 Vector3 impact = new Vector3(0f, 0f, 100f); // far from everything above
                 nearRobot = NewGunner("Near20pct", impact + new Vector3(1.9f, 0f, 0f));
-                // Opposite side of the impact point, not +2.1 alongside nearRobot: still exactly 2.1m
-                // from the impact (AC4 only cares about distance-to-impact), but 4m from nearRobot —
-                // outside nearRobot's eventual 3m burnout AoE (AC6), so farRobot survives to be counted
-                // in AC7's census below.
-                farRobot = NewGunner("Far20pct", impact + new Vector3(-2.1f, 0f, 0f));
-                healthyRobot = NewGunner("Healthy30pct", impact + new Vector3(1.5f, 0f, 0f));
+                healthyRobot = NewGunner("Healthy30pct", impact + new Vector3(-2.1f, 0f, 0f));
                 nearRobot.SetHealthFraction(0.20f);
-                farRobot.SetHealthFraction(0.20f);
                 healthyRobot.SetHealthFraction(0.30f);
-                Physics.SyncTransforms();
 
-                CavitationImplosion.Apply(impact, damage: 1f, pullRadius: 4f, pullDistance: 0f, staggerSeconds: 0f);
-
-                Assert.IsTrue(nearRobot.IsConverted, "a robot 1.9m from the implosion at 20% HP must convert");
+                Assert.IsTrue(nearRobot.TryConvert(), "a robot below the 25% override threshold must convert");
                 Assert.AreEqual(Team.Player, nearRobot.Team);
-                Assert.IsFalse(farRobot.IsConverted, "a robot 2.1m from the implosion must not convert, even at 20% HP");
-                Assert.IsFalse(healthyRobot.IsConverted, "a robot at 30% HP must not convert, even within range");
+                Assert.IsFalse(healthyRobot.TryConvert(), "a robot at 30% HP must not convert");
 
                 // === AC5: a fourth conversion while three are converted is refused; the existing three
                 // are unaffected.
@@ -191,9 +189,9 @@ namespace MaxWorlds.Tests.EditMode
 
                 // === AC7: converted robots are excluded from the live-robot cap and included in the
                 // area's clear condition.
-                var mixedCensus = new[] { secondConverted, thirdConverted, farRobot };
+                var mixedCensus = new[] { secondConverted, thirdConverted, healthyRobot };
                 Assert.AreEqual(1, RobotPopulation.LiveCapCount(mixedCensus),
-                    "the live-robot cap must count only the non-converted, engageable robot (farRobot)");
+                    "the live-robot cap must count only the non-converted, engageable robot (healthyRobot)");
                 Assert.IsFalse(RobotPopulation.IsAreaClear(mixedCensus),
                     "an area with a still-converted (not yet burned-out) robot must not read as clear");
 
@@ -211,7 +209,6 @@ namespace MaxWorlds.Tests.EditMode
                 if (secondSplicerGo != null) Object.DestroyImmediate(secondSplicerGo);
                 if (bystanderGo != null) Object.DestroyImmediate(bystanderGo);
                 if (nearRobot != null) Object.DestroyImmediate(nearRobot.gameObject);
-                if (farRobot != null) Object.DestroyImmediate(farRobot.gameObject);
                 if (healthyRobot != null) Object.DestroyImmediate(healthyRobot.gameObject);
                 if (secondConverted != null) Object.DestroyImmediate(secondConverted.gameObject);
                 if (thirdConverted != null) Object.DestroyImmediate(thirdConverted.gameObject);
