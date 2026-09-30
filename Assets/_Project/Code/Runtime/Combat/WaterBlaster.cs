@@ -408,40 +408,23 @@ namespace MaxWorlds.Combat
                 if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && d.Team != Team.Player
                     && !s_buffer.Contains(d))
                 {
-                    // Gates are wide structures (MV-302): a hit test against their CENTRE point only
-                    // lets you damage them dead-on, leaving both ends of a wide gate untouchable. Test
-                    // (and later damage) the point on the gate's own collider closest to the aim axis
-                    // instead, so fire landing anywhere across its full width registers. Every other
-                    // damageable keeps testing its own transform position — normal robot targeting,
-                    // where the collider IS the body, is unchanged.
-                    Vector3 testPoint = d is AreaGate
-                        ? ContactPoint(origin, dir, _hits[i], _hits[i].transform.position)
-                        : _hits[i].transform.position;
+                    // Gates are wide structures (MV-302) whose damageable leaf sits off the Cover layer
+                    // (MV-386) — GateHitResolver (MV-1044) tests and sight-checks a gate at the point on
+                    // its own collider closest to the aim axis, against its ThresholdObject, so fire
+                    // landing anywhere across its full width registers and a closed gate's own Cover
+                    // threshold doesn't read every shot as blocked. Every other damageable keeps testing
+                    // its own transform position — normal robot targeting is unchanged. Undertow's own
+                    // lance shares this exact resolution (MV-1044) rather than copying it, which is what
+                    // MV-1044 fixed: it never had this at all.
+                    GateHitResolver.Resolve(d, origin, dir, _hits[i], out Vector3 testPoint, out Transform sightTarget);
 
-                    // MV-386 regression: an AreaGate's leaf collider (where IDamageable actually
-                    // lives) is deliberately left OFF the Cover layer — only its ThresholdObject is on
-                    // Cover (see MapRuntime.BuildAreaGate), so an opened gate's swinging leaf can't
-                    // re-block the sight-line it just gave up. But that means a Cover-masked cast
-                    // toward the LEAF's own testPoint still hits the threshold collider sitting across
-                    // the same closed doorway first — and since the threshold is a different Transform
-                    // from the leaf we asked permission for, LineOfSight.Clear read that as "blocked",
-                    // so a closed gate could stop a shot (correctly solid) while never registering the
-                    // damage that shot carried. Ask permission for the threshold itself when the target
-                    // is a gate — that's the Transform actually sitting on the Cover layer.
-                    Transform sightTarget = d is AreaGate gateHit && gateHit.ThresholdObject != null
-                        ? gateHit.ThresholdObject.transform
-                        : _hits[i].transform;
-
-                    if (SprayHit.InCone(origin, dir, testPoint, reach, cone)
-                        // Water does not go through the shed (YT-83). This is not decoration — it is
-                        // what keeps cover a DECISION instead of an exploit. If the tree broke the
-                        // robots' sight of Max but not Max's spray of them, hiding would be strictly
-                        // dominant: stand behind cover, kill everything in perfect safety, never come
-                        // out. Cover has to cost you your shot too, or it isn't cover, it's a turret nest.
-                        && LineOfSight.Clear(origin, testPoint, sightTarget)
-                        // MV-944: floor and deck fight separately — the spray never washes a target
-                        // standing on the other combat level, whatever the cone/LOS above allow.
-                        && CombatLevel.SameLevel(EnemyNavigation.Map, origin, testPoint))
+                    // Water does not go through the shed (YT-83) — LineOfSight is part of what
+                    // GateHitResolver.Passes checks below. This is not decoration — it is what keeps
+                    // cover a DECISION instead of an exploit. If the tree broke the robots' sight of Max
+                    // but not Max's spray of them, hiding would be strictly dominant: stand behind cover,
+                    // kill everything in perfect safety, never come out. Cover has to cost you your shot
+                    // too, or it isn't cover, it's a turret nest.
+                    if (GateHitResolver.Passes(origin, dir, testPoint, sightTarget, reach, cone))
                     {
                         s_buffer.Add(d);
                         s_contacts.Add(_hits[i]);
@@ -497,7 +480,7 @@ namespace MaxWorlds.Combat
                 // centre (which is what the damage event reports). Nothing below feeds damage.
                 if (_vfx != null)
                 {
-                    _vfx.Splash(ContactPoint(origin, dir, s_contacts[i], point), dir, tickDamage);
+                    _vfx.Splash(GateHitResolver.ContactPoint(origin, dir, s_contacts[i], point), dir, tickDamage);
                 }
             }
 
@@ -662,18 +645,6 @@ namespace MaxWorlds.Combat
                         soak: true, source: DamageSource.PrimaryWeapon));
                 }
             }
-        }
-
-        /// <summary>Where the stream visually lands on a body: the point on its collider
-        /// closest to the stream's axis. Falls back to <paramref name="fallback"/> if the
-        /// collider can't answer (non-convex mesh colliders reject ClosestPoint).</summary>
-        private static Vector3 ContactPoint(Vector3 origin, Vector3 dir, Collider col, Vector3 fallback)
-        {
-            if (col == null) return fallback;
-            Vector3 onAxis = WaterVfxTuning.NearestPointOnRay(origin, dir, float.MaxValue, col.bounds.center);
-            var mesh = col as MeshCollider;
-            if (mesh != null && !mesh.convex) return col.ClosestPointOnBounds(onAxis);
-            return col.ClosestPoint(onAxis);
         }
 
         private void OnGUI()
