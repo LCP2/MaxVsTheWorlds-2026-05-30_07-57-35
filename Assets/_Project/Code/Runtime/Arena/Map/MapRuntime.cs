@@ -146,6 +146,12 @@ namespace MaxWorlds.Arena
         /// once something else has taken over deciding whether it draws, the gate must leave it alone.</summary>
         private HashSet<Renderer> _dressedHidden;
 
+        /// <summary>MV-1038: the zone id each live pickup was last registered under, read back by
+        /// <see cref="ReregisterPickupIfZoneChanged"/> so a pull in flight (Magneto) can tell "nothing to
+        /// do" from "crossed a boundary" with one dictionary lookup instead of re-resolving and
+        /// re-tagging every renderer every frame it's in the air.</summary>
+        private readonly Dictionary<Pickup, string> _pickupZones = new Dictionary<Pickup, string>(32);
+
         /// <summary>MV-932: World 1's dressing (<see cref="MaxWorlds.Arena.BackyardDressing"/>,
         /// <see cref="MaxWorlds.Arena.BackyardBackdrop"/>, <see cref="MaxWorlds.Arena.BackyardHomeShed"/>,
         /// <see cref="MaxWorlds.Arena.BackyardEntryDoor"/>) builds on its own scene-root GameObject, not
@@ -254,6 +260,91 @@ namespace MaxWorlds.Arena
                 }
                 r.enabled = visible;
             }
+        }
+
+        /// <summary>MV-1038: removes every renderer in <paramref name="renderers"/> from this gate's own
+        /// bookkeeping — <see cref="_rendererZones"/> and <see cref="_dressedHidden"/> alike. Call this
+        /// from any path that returns a pooled pickup to its pool, BEFORE the next life re-registers it:
+        /// without it, a renderer's stale zone tag or <see cref="_dressedHidden"/> membership from a
+        /// PREVIOUS life could otherwise survive into the next one. <see cref="RegisterPickup"/> already
+        /// replaces (never appends) a live pickup's own zone tag and never files one into
+        /// <see cref="_dressedHidden"/> in the first place, so this exists purely to leave nothing behind
+        /// for a pickup sitting inert in a pool, where nothing else would ever clear it.</summary>
+        public void Unregister(Renderer[] renderers)
+        {
+            if (renderers == null) return;
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                _rendererZones?.Remove(r);
+                _dressedHidden?.Remove(r);
+            }
+        }
+
+        /// <summary>MV-1038: registers (or re-registers) a pickup's whole renderer set by what it
+        /// currently IS — this drop's own resolved zone and the gate's live verdict for that zone — never
+        /// by whatever enabled/disabled state each renderer happens to already be carrying in. That
+        /// enabled-state read is exactly what made <see cref="RegisterAtPosition"/> unsafe for a POOLED
+        /// renderer set (a fresh map-authored/robot-death prop, registered exactly once, never hits
+        /// either bug): it APPENDS the new zone onto whatever zone list the renderer already carried
+        /// rather than replacing it, and it folds any renderer that happens to be disabled at
+        /// registration into <see cref="_dressedHidden"/> forever — correct for a renderer some OTHER
+        /// system permanently retired (a dressed-away cover box), wrong for a pickup's own art, which is
+        /// routinely disabled by nothing more than "its zone wasn't active the last time this gate ran"
+        /// and must be free to light back up the moment it's redropped somewhere lit.
+        ///
+        /// The one exception is the greybox <c>Visual</c> child: <c>PickupArtDirector.HideGreybox</c>
+        /// disables it, synchronously, inside the very <c>Pickup.Place</c> call that always precedes this
+        /// one whenever designed art exists — so if it is ALREADY disabled the moment this method sees
+        /// it, that is <c>PickupArtDirector</c>'s own call, not a stale gate verdict. Filing it into
+        /// <see cref="_dressedHidden"/> is exactly the trick this method exists to stop trusting for a
+        /// pickup's ART, so the greybox instead gets left OUT of <see cref="_rendererZones"/> entirely
+        /// while it's in this state — untagged, <see cref="ApplyAreaGate"/> never iterates it again for
+        /// any reason, on this or any later call, which is what "never let the gate re-enable it" needs
+        /// (a one-time skip in the loop below would only hold until the NEXT unrelated
+        /// <see cref="ApplyAreaGate"/> zone change, which is exactly the MV-988 regression this must not
+        /// reopen).</summary>
+        public void RegisterPickup(Pickup p, Vector3 worldPos)
+        {
+            if (_map == null || _rendererZones == null || p == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+
+            _pickupZones[p] = zone.id;
+            bool visible = _activeZoneIds != null && _activeZoneIds.Contains(zone.id);
+
+            foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+
+                bool greyboxAlreadyHiddenByArt = !r.enabled && r.transform.parent == p.transform && r.transform.name == "Visual";
+                if (greyboxAlreadyHiddenByArt)
+                {
+                    _rendererZones.Remove(r);
+                    _dressedHidden?.Remove(r);
+                    continue;
+                }
+
+                _rendererZones[r] = new List<string>(1) { zone.id };
+                _dressedHidden?.Remove(r);
+                r.enabled = visible;
+            }
+        }
+
+        /// <summary>MV-1038: the "pickups that move" case — Magneto's pull-to-Max in
+        /// <see cref="PickupDirector.Update"/> — re-registers only once the pickup's resolved zone has
+        /// actually changed since <see cref="RegisterPickup"/> last stamped it, via a single
+        /// <see cref="_pickupZones"/> lookup, so a pull that never crosses a zone boundary (the common
+        /// case: most pulls happen well inside Max's own zone) costs one comparison per frame instead of
+        /// repeating <see cref="RegisterPickup"/>'s own renderer walk and list allocation for every frame
+        /// it's in flight.</summary>
+        public void ReregisterPickupIfZoneChanged(Pickup p, Vector3 worldPos)
+        {
+            if (_map == null || p == null) return;
+            MapZone zone = _map.ZoneAt(worldPos.x, worldPos.y, worldPos.z) ?? MapRuntime.NearestFloorZone(_map, worldPos.x, worldPos.z);
+            if (zone == null) return;
+            if (_pickupZones.TryGetValue(p, out string lastZoneId) && lastZoneId == zone.id) return;
+            RegisterPickup(p, worldPos);
         }
 
         /// <summary>MV-978: <see cref="RegisterGatedActor"/> for an actor that spawns at runtime with no
