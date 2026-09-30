@@ -97,7 +97,19 @@ namespace MaxWorlds.Arena
         /// back-pointer (rather than a scene-wide <c>FindFirstObjectByType</c> call from every robot
         /// spawn/respawn) is enough — the same reasoning <see cref="AreaAccumulationDirector"/>'s own
         /// singleton-ish usage already relies on elsewhere in this codebase.</summary>
-        public static MapStaticBatchRoot Active { get; private set; }
+        private static MapStaticBatchRoot _active;
+
+        /// <summary>MV-1042: every one of the 11 production readers reaches this through `?.`, whose
+        /// own null check is a raw reference check, never Unity's overloaded `==` — so a destroyed
+        /// instance (fake-null) used to sail straight through it and into a corpse. Collapsing that
+        /// case to a REAL null here, using the overloaded `==` (the same fake-null idiom MV-981
+        /// already established at <see cref="ApplyAreaGate"/>), makes every `?.` call site safe
+        /// without touching any of them.</summary>
+        public static MapStaticBatchRoot Active
+        {
+            get => _active != null ? _active : null;
+            private set => _active = value;
+        }
 
         /// <summary>MV-972: every <see cref="IZoneGatedActor"/> registered with this gate (currently:
         /// every live <c>RobotEnemy</c>, via <c>SetAreaIndex</c>) and the zone id it was last stamped
