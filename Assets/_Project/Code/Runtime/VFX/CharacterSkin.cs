@@ -285,8 +285,27 @@ namespace MaxWorlds.VFX
         private string _appliedSkin;
         private string _appliedColourRole;
 
+        /// <summary>MV-1035: the TRAP ability's own ally-conversion tint, overriding <see cref="_body"/>
+        /// (but not the hit flash, which still layers on top — see <see cref="LateUpdate"/>) for as long
+        /// as it's set. Cleared (null) the instant a pooled robot is reset for reuse.</summary>
+        private Color? _allyOverrideColor;
+
         public CharacterRole Role => role;
-        public Color BodyColor => _body;
+
+        /// <summary>The body colour this skin is actually rendering right now — <see cref="_allyOverrideColor"/>
+        /// when TRAP has set one, <see cref="_body"/> otherwise. A resolved value, not an authored
+        /// constant: reads correctly whether or not <see cref="LateUpdate"/> has run yet this frame.</summary>
+        public Color BodyColor => _allyOverrideColor ?? _body;
+
+        /// <summary>MV-1035: sets (or, with null, clears) the TRAP ability's own persistent body-colour
+        /// override — written into the property block immediately so a caller driving this outside
+        /// Unity's own frame loop (an EditMode test) sees the change without waiting for
+        /// <see cref="LateUpdate"/>.</summary>
+        public void SetAllyOverrideColor(Color? color)
+        {
+            _allyOverrideColor = color;
+            if (_renderer != null && !IsMachine) Write(BodyColor, Color.black);
+        }
 
         /// <summary>Configure in code (no inspector wiring) and dress immediately.</summary>
         public CharacterSkin Bind(CharacterRole r, Element element = Element.Neutral)
@@ -534,7 +553,8 @@ namespace MaxWorlds.VFX
             // Wind-up: the body heats toward the warn colour as the strike lands, backing up the
             // ground ring. Reading the enemy's own state — nothing is written back to it.
             float windup = _enemy != null ? _enemy.TelegraphProgress : 0f;
-            Color body = windup > 0f ? Color.Lerp(_body, WarnColor, windup) : _body;
+            Color baseColor = _allyOverrideColor ?? _body;
+            Color body = windup > 0f ? Color.Lerp(baseColor, WarnColor, windup) : baseColor;
 
             if (_flash > 0f)
             {

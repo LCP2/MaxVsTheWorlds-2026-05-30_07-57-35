@@ -18,6 +18,12 @@ namespace MaxWorlds.Tests.EditMode
     /// and passing the robot's own (already-mutable) <c>_team</c> as attacker at every contact-damage
     /// call site instead of a hardcoded <c>Team.Enemy</c>.
     ///
+    /// MV-1035 then removed <c>TickConversion</c>/the 20s expiry/the burnout blast entirely — a
+    /// converted robot (whichever ability converted it) now stays an ally until it is killed. Part (c)
+    /// below, which used to prove the burnout fired at the 20s mark, now proves the opposite: ticking
+    /// well past where the old timeout used to fire leaves the robot alive, still converted, and still
+    /// occupying its conversion slot.
+    ///
     /// Drives the REAL per-frame path — <see cref="RobotEnemy.Tick"/>, now public for exactly this
     /// reason — not a hand-picked private Tick* method, so this proves the actual production decision
     /// chain (<c>TickBody</c> -&gt; <c>TickChase</c> -&gt; <c>RetargetIfNeeded</c> -&gt;
@@ -44,6 +50,7 @@ namespace MaxWorlds.Tests.EditMode
             RobotEnemy.ResetRegistry();
             DevTuning.Reset(); // a stray dev-tuned contact cooldown from another test must not leak in
             EnemyNavigation.Reset();
+            RobotEnemy.ConversionCap = 1; // MV-1035: static, mutable — never leak one test's cap into another
         }
 
         /// <summary>Same construction idiom as <c>MV832SentinelTargetingTests.NewRobot</c>: AddComponent
@@ -108,14 +115,17 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(maxHealthBefore, playerHealth.Current, 1e-3f,
                     "(b) a converted robot's hit must never reduce Max's HP");
 
-                // (c) tick the remaining time out to comfortably past the 20s conversion timeout, then
-                // confirm burnout.
-                int framesToBurnout = Mathf.CeilToInt((RobotEnemy.ConvertedDurationSeconds + 1f) / dt) - framesPastContactCooldown;
-                for (int i = 0; i < framesToBurnout; i++) attacker.Tick(dt);
+                // (c) MV-1035: tick well past where the old 20s burnout used to fire — the robot must
+                // still be alive, still converted, and still occupying its conversion slot, proving the
+                // timed expiry is really gone (it now stays an ally until something kills it).
+                const float pastOldTimeoutSeconds = 21f;
+                int framesPastOldTimeout = Mathf.CeilToInt(pastOldTimeoutSeconds / dt) - framesPastContactCooldown;
+                for (int i = 0; i < framesPastOldTimeout; i++) attacker.Tick(dt);
 
-                Assert.IsFalse(attacker.IsAlive, "(c) a converted robot must be dead 20s after conversion");
-                Assert.AreEqual(0, RobotEnemy.Converted.Count,
-                    "(c) the conversion cap slot must free once the converted robot burns out");
+                Assert.IsTrue(attacker.IsAlive, "(c) a converted robot must not die on its own past the old 20s mark");
+                Assert.IsTrue(attacker.IsConverted, "(c) a converted robot must stay converted past the old 20s mark");
+                Assert.AreEqual(1, RobotEnemy.Converted.Count,
+                    "(c) a still-converted robot must keep occupying its conversion slot");
             }
             finally
             {

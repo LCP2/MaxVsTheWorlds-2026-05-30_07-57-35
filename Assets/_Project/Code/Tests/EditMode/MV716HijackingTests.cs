@@ -4,7 +4,6 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Player;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -20,15 +19,22 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// MV-1034 removed the distance-gated <c>CavitationImplosion.Apply</c> entry point this test's own
     /// AC4 used to drive conversion through (Lee: the charge/cavitation shot "does not work as a
-    /// design"); <see cref="RobotEnemy.TryConvert"/> itself is unchanged and reused by the new trap
+    /// design"); <see cref="RobotEnemy.TryConvert()"/> itself is unchanged and reused by the new trap
     /// ability (MV-1035), so this now calls it directly — the distance-to-impact half of the old trigger
     /// no longer exists to test.
+    ///
+    /// MV-1035 also removed the 20s expiry/burnout blast this test's own AC6 used to drive through
+    /// <c>TickConversion</c> (deleted — a converted robot now stays converted until it is killed) and
+    /// replaced the fixed <c>MaxConvertedRobots</c>=3 cap with the settable <see cref="RobotEnemy.ConversionCap"/>,
+    /// which this test now sets explicitly rather than relying on a hardcoded default. AC6's old burnout
+    /// assertions are gone with the mechanic; AC7's census is asserted directly against the still-converted
+    /// robots from AC5 instead.
     ///
     /// Fails on 5d7e4e0 (MV-715, the commit before this ticket): none of
     /// <see cref="RobotEnemy.TryBeginSpliceChannel"/>, <see cref="RobotEnemy.TickSpliceChannel"/>,
     /// <see cref="Sentinel.BeginHijack"/>, <see cref="Sentinel.TickHijack"/>,
-    /// <see cref="RobotEnemy.TryConvert"/>, <see cref="RobotEnemy.TickConversion"/> or
-    /// <see cref="RobotPopulation"/> exist on that commit, so this test does not compile there.
+    /// <see cref="RobotEnemy.TryConvert()"/> or <see cref="RobotPopulation"/> exist on that commit, so
+    /// this test does not compile there.
     /// </summary>
     public sealed class MV716HijackingTests
     {
@@ -41,6 +47,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Sentinel.ResetRegistry();
             RobotEnemy.ResetRegistry();
+            RobotEnemy.ConversionCap = 1; // MV-1035: static, mutable — never leak one test's cap into another
         }
 
         private static RobotEnemy NewGunner(string name, Vector3 position)
@@ -64,13 +71,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SplicerChannelFlipsAndReturnsASentinel_AndOverrideConvertsAndBurnsOutARobot_MV716()
+        public void SplicerChannelFlipsAndReturnsASentinel_AndOverrideConvertsARobot_MV716()
         {
-            GameObject maxGo = null, sentinelGo = null, splicerGo = null, secondSplicerGo = null, bystanderGo = null;
+            GameObject sentinelGo = null, splicerGo = null, secondSplicerGo = null;
             RobotEnemy nearRobot = null, healthyRobot = null, secondConverted = null,
                 thirdConverted = null, fourthCandidate = null;
             try
             {
+                RobotEnemy.ConversionCap = 3; // MV-1035: replaces the old fixed MaxConvertedRobots=3
                 // === AC1 (part 1) + AC3: a Splicer in range and in line of sight completes a 2.5s
                 // channel, flipping the Sentinel's team, then the Sentinel returns to Max's team exactly
                 // 12s later at whatever health it then has.
@@ -160,54 +168,27 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(3, RobotEnemy.Converted.Count, "the existing three converted robots must be unaffected by the refused fourth");
                 Assert.IsTrue(nearRobot.IsConverted, "the oldest converted robot must remain converted");
 
-                // === AC6: a converted robot's burnout deals damage to a robot 2m away and none to Max at
-                // the same distance.
-                maxGo = new GameObject("MV-716 test Max", typeof(CharacterController));
-                var playerHealth = maxGo.AddComponent<PlayerHealth>();
-                playerHealth.Initialize();
-                maxGo.transform.position = nearRobot.transform.position + new Vector3(2f, 0f, 0f);
-
-                RobotEnemy bystander = NewGunner("Bystander", nearRobot.transform.position + new Vector3(0f, 0f, 2f));
-                bystanderGo = bystander.gameObject;
-                float bystanderHealthBefore = bystander.HealthCurrent;
-                float maxHealthBefore = playerHealth.Current;
-                Physics.SyncTransforms();
-
-                nearRobot.TickConversion(19f);
-                Assert.IsTrue(nearRobot.IsConverted, "must still be converted before the 20s mark");
-                nearRobot.TickConversion(1f); // elapsed 20s exactly (19f + 1f, both exact in float — avoids boundary flake)
-
-                Assert.Less(bystander.HealthCurrent, bystanderHealthBefore, "burnout must damage a robot within its 3m AoE");
-                Assert.AreEqual(maxHealthBefore, playerHealth.Current, 1e-3f, "burnout must never damage Max");
-                Assert.IsFalse(nearRobot.IsConverted, "a burned-out robot is no longer converted");
-                bool nearRobotStillInConvertedRegistry = false;
-                foreach (RobotEnemy r in RobotEnemy.Converted)
-                {
-                    if (r == nearRobot) { nearRobotStillInConvertedRegistry = true; break; }
-                }
-                Assert.IsFalse(nearRobotStillInConvertedRegistry, "a burned-out robot must free its conversion slot");
-
                 // === AC7: converted robots are excluded from the live-robot cap and included in the
-                // area's clear condition.
-                var mixedCensus = new[] { secondConverted, thirdConverted, healthyRobot };
+                // area's clear condition. MV-1035 removed the 20s expiry/burnout this used to reach via
+                // TickConversion (deleted — a converted robot now stays converted until it is killed),
+                // so this asserts directly against the still-converted robots from AC5 above.
+                var mixedCensus = new[] { nearRobot, healthyRobot };
                 Assert.AreEqual(1, RobotPopulation.LiveCapCount(mixedCensus),
                     "the live-robot cap must count only the non-converted, engageable robot (healthyRobot)");
                 Assert.IsFalse(RobotPopulation.IsAreaClear(mixedCensus),
-                    "an area with a still-converted (not yet burned-out) robot must not read as clear");
+                    "an area with a still-converted robot must not read as clear");
 
-                var onlyConvertedCensus = new[] { secondConverted, thirdConverted };
+                var onlyConvertedCensus = new[] { nearRobot, secondConverted, thirdConverted };
                 Assert.AreEqual(0, RobotPopulation.LiveCapCount(onlyConvertedCensus),
                     "converted robots alone must contribute nothing to the live-robot cap");
                 Assert.IsFalse(RobotPopulation.IsAreaClear(onlyConvertedCensus),
-                    "converted-but-not-yet-burned-out robots must still block the area's clear condition");
+                    "converted robots must still block the area's clear condition — MV-1035: permanently, not just until a 20s timer");
             }
             finally
             {
-                if (maxGo != null) Object.DestroyImmediate(maxGo);
                 if (sentinelGo != null) Object.DestroyImmediate(sentinelGo);
                 if (splicerGo != null) Object.DestroyImmediate(splicerGo);
                 if (secondSplicerGo != null) Object.DestroyImmediate(secondSplicerGo);
-                if (bystanderGo != null) Object.DestroyImmediate(bystanderGo);
                 if (nearRobot != null) Object.DestroyImmediate(nearRobot.gameObject);
                 if (healthyRobot != null) Object.DestroyImmediate(healthyRobot.gameObject);
                 if (secondConverted != null) Object.DestroyImmediate(secondConverted.gameObject);

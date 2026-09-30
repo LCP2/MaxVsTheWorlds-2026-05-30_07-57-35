@@ -74,6 +74,9 @@ namespace MaxWorlds.UI
         /// primary's own blue, since the turret is meant to read as Max's own tech ("a hose pipe on a
         /// stick").</summary>
         private static readonly Color SentinelColor = new Color(0.45f, 0.65f, 0.85f);
+        /// <summary>The TRAP button's colour (MV-1035) — the same ally green (#5BE35A) the trap's own
+        /// ring/core and a converted robot's body all wear, so the button reads as the same thing.</summary>
+        private static readonly Color TrapColor = new Color(0.357f, 0.890f, 0.353f);
         // The Supercell-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell
         // and the pickup it points at read as ONE language. Sourced from the constant the aura uses, not
         // a matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
@@ -112,6 +115,13 @@ namespace MaxWorlds.UI
         /// less crowded everywhere without any one element clipping on a narrow phone.</summary>
         private const float ForceFieldX = 150f;
         private const float ForceFieldRise = 357f;
+
+        /// <summary>TRAP button (MV-1035): mirrored onto the opposite side from the Sentinel joystick
+        /// (X=360, Rise=820) — the same "well clear of every other control and the boss bar's y-band"
+        /// clearance reasoning <see cref="SentinelJoystickRise"/>'s own comment gives, just flipped to
+        /// the empty right-of-centre slot rather than doubling up on Sentinel's own column.</summary>
+        private const float TrapButtonX = -360f;
+        private const float TrapButtonRise = 820f;
 
         /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
         /// horizontally centred on the aim stick's own centre line (same -150 offset — see
@@ -153,6 +163,12 @@ namespace MaxWorlds.UI
         private bool _forceFieldWasReady;
         private bool _forceFieldWasActive;
         private float _forceFieldReadyFlash;
+
+        // The TRAP button (MV-1035): hidden until p_trp (a PRIMARY RIG node) is owned, same round
+        // action-button/radial-cooldown shape as Force Field above.
+        private RectTransform _trapButtonRoot;
+        private Image _trapGlow, _trapRadial;
+        private Text _trapLabel;
 
         // The Sentinel deploy joystick (MV-362, aimed-placement MV-399, one sentinel only MV-422):
         // hidden until AbilityKind.Sentinels is acquired, same tech-ring joystick shape Water
@@ -313,6 +329,7 @@ namespace MaxWorlds.UI
             BuildHydroButton();
             BuildForceFieldButton();
             BuildSentinelJoystick();
+            BuildTrapButton();
             BuildFocusToggle();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
@@ -419,6 +436,9 @@ namespace MaxWorlds.UI
             RefreshFocusToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
+            // MV-1035: p_trp is a PRIMARY RIG node, not an AbilityKind — WeaponSystemState.Changed still
+            // fires on this level-up (see this method's own doc comment), so the same hook applies.
+            if (_trapButtonRoot != null) _trapButtonRoot.gameObject.SetActive(RigState.IsOwned("p_trp"));
             // MV-694: SecondaryKind flipping (MV-689's morph) changes whether an empty bank reads EMPTY
             // on this chip, independent of the cell count itself changing.
             RefreshPowerCellSecondaryDisplay(MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary);
@@ -688,6 +708,7 @@ namespace MaxWorlds.UI
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
             UpdateSentinelJoystick();
+            UpdateTrapButton(dt);
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
@@ -1024,6 +1045,38 @@ namespace MaxWorlds.UI
                 glow = Color.Lerp(glow, Color.white, _forceFieldSnapFlash);
                 glow.a = ready ? Mathf.Clamp01(readyPulse + _forceFieldReadyFlash) : Mathf.Max(0f, _forceFieldSnapFlash * 0.8f);
                 _forceFieldGlow.color = glow;
+            }
+        }
+
+        /// <summary>Drives the TRAP button (MV-1035) — a no-op while hidden (not yet owned). While a
+        /// trap is down, the label shows its live "n/capacity" hold readout and the glow brightens while
+        /// it converts; otherwise the radial covers the button through the post-conversion cooldown,
+        /// same shape as <see cref="UpdateForceFieldButton"/>.</summary>
+        private void UpdateTrapButton(float dt)
+        {
+            if (_trapButtonRoot == null || !_trapButtonRoot.gameObject.activeSelf) return;
+            if (_abilities == null) return;
+
+            RobotTrap trap = _abilities.ActiveTrap;
+            if (trap != null)
+            {
+                _trapLabel.text = $"{trap.HeldCount}/{trap.Capacity}";
+                _trapRadial.fillAmount = 0f;
+                float pulse = trap.IsConverting ? 0.7f + 0.3f * Mathf.Abs(Mathf.Sin(Time.time * 8f)) : 0.6f;
+                _trapGlow.color = new Color(TrapColor.r, TrapColor.g, TrapColor.b, pulse);
+            }
+            else
+            {
+                _trapLabel.text = "TRAP";
+                _trapRadial.fillAmount = _abilities.TrapCooldownRemaining > 0f
+                    ? Mathf.Clamp01(_abilities.TrapCooldownRemaining / RobotTrap.ConversionCooldownSeconds)
+                    : 0f;
+
+                bool ready = _abilities.TrapReady;
+                float readyPulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+                Color glow = Color.Lerp(ReadyGlow, TrapColor, 0.5f);
+                glow.a = ready ? Mathf.Clamp01(readyPulse) : 0f;
+                _trapGlow.color = glow;
             }
         }
 
@@ -1378,6 +1431,64 @@ namespace MaxWorlds.UI
         /// is itself a no-op when not ready (unowned, on cooldown, already up, or too few cells), so
         /// there is nothing to gate here beyond the button existing at all.</summary>
         private void OnForceFieldButtonTapped() => _abilities?.TryActivateForceField();
+
+        /// <summary>
+        /// The TRAP button (MV-1035) — same round action-button shape as Force Field. Hidden until
+        /// <c>p_trp</c> is owned; unlike every other ability button this reads <see cref="RigState"/>
+        /// directly rather than <see cref="WeaponSystemState.IsAcquired"/>, since a PRIMARY RIG node has
+        /// no separate boolean-unlock layer (see <see cref="PlayerAbilities.TrapOwned"/>'s own doc).
+        /// </summary>
+        private void BuildTrapButton()
+        {
+            var root = NewRect("Trap Button", Root);
+            Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(TrapButtonX, TrapButtonRise);
+            root.sizeDelta = new Vector2(HydroButtonSize, HydroButtonSize);
+            _trapButtonRoot = root;
+
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _trapGlow = glow;
+
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), TrapColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnTrapButtonTapped);
+
+            _trapLabel = AddText(root, 32f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            Anchor(_trapLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _trapLabel.rectTransform.sizeDelta = new Vector2(96f, 52f);
+            _trapLabel.rectTransform.anchoredPosition = Vector2.zero;
+            _trapLabel.text = "TRAP";
+            _trapLabel.fontStyle = FontStyle.Bold;
+            _trapLabel.raycastTarget = false;
+            _trapLabel.resizeTextForBestFit = true;
+            _trapLabel.resizeTextMinSize = 10;
+            var trapLabelOutline = _trapLabel.gameObject.AddComponent<Outline>();
+            trapLabelOutline.effectColor = BoneWhite;
+            trapLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
+            _trapLabel.resizeTextMaxSize = 32;
+
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _trapRadial = radial;
+
+            root.gameObject.SetActive(RigState.IsOwned("p_trp"));
+        }
+
+        /// <summary>Tapping TRAP (MV-1035): drop it at Max's own feet. <see cref="PlayerAbilities.TryDropTrap"/>
+        /// is itself a no-op when not ready (unowned, on cooldown, or one already down), so there is
+        /// nothing to gate here beyond the button existing at all.</summary>
+        private void OnTrapButtonTapped() => _abilities?.TryDropTrap();
 
         // The Sentinel deploy joystick (MV-362, aimed placement MV-399, one sentinel only MV-422):
         // well clear of Hydro's own stack below (top edge 385, MV-606: Force Field moved off this

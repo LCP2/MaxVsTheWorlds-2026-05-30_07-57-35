@@ -57,6 +57,29 @@ namespace MaxWorlds.Weapons
         private float _forceFieldAbsorbCap;    // this activation's full cap, for the HUD/visual fraction
         private ForceFieldBubble _forceFieldBubble;
 
+        // --- TRAP (MV-1035, World 3's PRIMARY ability) ---
+        private RobotTrap _activeTrap;
+        private float _trapCooldown;    // > 0 while cooling down, only starts once a trap converts
+
+        /// <summary>Owned (RIG node <c>p_trp</c> at level &gt;= 1) — a PRIMARY-track node, so this reads
+        /// <see cref="RigState"/> directly rather than <see cref="WeaponSystemState.IsAcquired"/>: PRIMARY
+        /// tracks have no separate boolean-unlock layer the way <see cref="AbilityKind.Sentinels"/>/
+        /// <see cref="AbilityKind.ForceField"/> do (see <see cref="Weapons.RigState"/>'s own doc comment).</summary>
+        public bool TrapOwned => RigState.IsOwned("p_trp");
+
+        /// <summary>Seconds left before TRAP can be dropped again, 0 when ready. Only starts counting
+        /// down once a trap actually converts something (spec: "the 20s cooldown starts then") — a trap
+        /// that despawns having caught nothing never starts it.</summary>
+        public float TrapCooldownRemaining => Mathf.Max(0f, _trapCooldown);
+
+        /// <summary>Owned, off cooldown, AND no trap already down — the HUD button's own gate (spec:
+        /// "one trap at a time — the button does nothing while one is down").</summary>
+        public bool TrapReady => TrapOwned && _activeTrap == null && _trapCooldown <= 0f;
+
+        /// <summary>True while a trap is currently down — what the HUD reads to show the "n / capacity"
+        /// hold readout and the post-fill conversion glow.</summary>
+        public RobotTrap ActiveTrap => _activeTrap;
+
         // MV-1028: no longer readonly — grown on overflow by NonRobotOverlapGrowing, same idiom
         // WaterBlaster.OverlapSphereGrowing uses, so a room too cluttered for the original fixed size
         // can no longer silently drop a Replicator or boss out of the query.
@@ -157,6 +180,7 @@ namespace MaxWorlds.Weapons
             _waterBalloonCooldown = Mathf.Max(0f, _waterBalloonCooldown - dt);
             _teleportCooldown = Mathf.Max(0f, _teleportCooldown - dt);
             _forceFieldCooldown = Mathf.Max(0f, _forceFieldCooldown - dt);
+            _trapCooldown = Mathf.Max(0f, _trapCooldown - dt);
 
             if (_forceFieldBubble != null) _forceFieldBubble.SetFraction(ForceFieldAbsorbFraction);
         }
@@ -839,6 +863,35 @@ namespace MaxWorlds.Weapons
                 if (d > bestSq) { bestSq = d; furthest = s; }
             }
             furthest?.Recall();
+        }
+
+        // --- TRAP (MV-1035) ---
+
+        /// <summary>Drops a trap at Max's own feet (spec: "drops a trap where Max stands" — no aim, a
+        /// plain tap). Reads HOLD (<c>p_tcap</c>) and RADIUS (<c>p_trad</c>) fresh at drop time, same
+        /// "every RIG axis read fresh at deploy time" convention <see cref="TryDeploySentinel(Vector3)"/>
+        /// already uses. The trap's own catch capacity is capped at the number of ally slots actually
+        /// free right now (spec: "a trap never catches more robots than the free ally slots") — with no
+        /// other trap ever running concurrently (one at a time), that count can't change out from under
+        /// this trap except via its own conversions.</summary>
+        public bool TryDropTrap()
+        {
+            if (!TrapReady) return false;
+
+            int holdLevel = Mathf.Max(1, RigState.Level("p_tcap"));
+            int freeSlots = Mathf.Max(0, holdLevel - RobotEnemy.Converted.Count);
+            int capacity = Mathf.Min(holdLevel, freeSlots); // 0 if already at the ally cap — the trap will simply never catch
+            float radius = 3.0f + 0.75f * RigState.Level("p_trad");
+
+            RobotEnemy.ConversionCap = holdLevel;
+            _activeTrap = RobotTrap.Spawn(transform.position, capacity, radius, OnTrapDespawned);
+            return true;
+        }
+
+        private void OnTrapDespawned(bool converted)
+        {
+            _activeTrap = null;
+            if (converted) _trapCooldown = RobotTrap.ConversionCooldownSeconds;
         }
     }
 }

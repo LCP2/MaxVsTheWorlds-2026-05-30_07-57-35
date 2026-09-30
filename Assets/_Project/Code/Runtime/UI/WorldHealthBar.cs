@@ -71,6 +71,11 @@ namespace MaxWorlds.UI
         private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color ReplicatorMarkerColor = new Color(0.3f, 1f, 1f, 0.95f); // MV-706: matches the Replicator's own cyan LED
 
+        // MV-1035: the TRAP ability's own HELD/ALLY nameplate tag — orange while caught (matches the
+        // trap's own orange rim), the ally green (#5BE35A) once converted.
+        private static readonly Color TrapHeldMarkerColor = new Color(1f, 0.65f, 0.2f, 0.95f);
+        private static readonly Color TrapAllyMarkerColor = new Color(0.357f, 0.890f, 0.353f, 0.95f);
+
         /// <summary>MV-991: the shield-% readout above Max's own name label — big enough (double
         /// <see cref="LabelFontSize"/>) that his eyes catch it without hunting the corner HUD button
         /// for the same number.</summary>
@@ -163,6 +168,7 @@ namespace MaxWorlds.UI
         private Text _nameText;
         private Text _numberText;
         private Text _replicatorMarker;
+        private Text _trapMarker;
         private Text _shieldText;
         private Camera _camera;
         private CanvasGroup _canvasGroup;
@@ -345,6 +351,18 @@ namespace MaxWorlds.UI
             if (_replicatorMarker != null) _replicatorMarker.gameObject.SetActive(show);
         }
 
+        /// <summary>Show/hide the TRAP ability's HELD/ALLY tag above this unit's nameplate (MV-1035) —
+        /// same discrete-transition idiom as <see cref="SetReplicatorMarker"/>. <paramref name="isAlly"/>
+        /// switches both the text and colour; callers pass (true, false) on capture and (true, true) on
+        /// a successful conversion.</summary>
+        public void SetTrapMarker(bool show, bool isAlly)
+        {
+            if (_trapMarker == null) return;
+            _trapMarker.text = isAlly ? "ALLY" : "HELD";
+            _trapMarker.color = isAlly ? TrapAllyMarkerColor : TrapHeldMarkerColor;
+            _trapMarker.gameObject.SetActive(show);
+        }
+
         private void Build()
         {
             if (_pivot != null) return;
@@ -443,6 +461,18 @@ namespace MaxWorlds.UI
             // ticket names, so this stands in for it rather than adding a new non-ASCII allow-list entry.
             _replicatorMarker.text = "^^";
             _replicatorMarker.gameObject.SetActive(false);
+
+            // MV-1035: the TRAP ability's own HELD/ALLY tag — same slot/shape as the replicator marker
+            // above; a robot is never both replicator-seeking and trap-held/ally at once in practice
+            // (World 3, where TRAP ships, has no Replicator), so the shared vertical slot never fights.
+            _trapMarker = NewText(_canvas, LabelFontSize + 6, TrapHeldMarkerColor, TextAnchor.LowerCenter);
+            var tmr = _trapMarker.rectTransform;
+            tmr.anchorMin = tmr.anchorMax = new Vector2(0.5f, 1f);
+            tmr.pivot = new Vector2(0.5f, 0f);
+            tmr.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
+            tmr.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
+            _trapMarker.text = "HELD";
+            _trapMarker.gameObject.SetActive(false);
 
             // MV-991: the Force Field shield % — directly above the name label, only ever fed by
             // Max's own Attach() call (shieldFraction/shieldActive stay null everywhere else, so a
