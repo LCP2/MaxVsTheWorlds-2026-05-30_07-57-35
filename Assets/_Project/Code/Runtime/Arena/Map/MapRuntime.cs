@@ -166,6 +166,13 @@ namespace MaxWorlds.Arena
         /// call (see that method's own doc). Never consulted for a gameplay decision.</summary>
         public int RendererCensusRunCount { get; private set; }
 
+        /// <summary>MV-1039 diagnostic: "is this zone one of the ones the render gate currently has
+        /// active" — the same <see cref="_activeZoneIds"/> check <see cref="RegisterGatedActor"/> already
+        /// makes inline, exposed so a fall's own recorded context can name whether the zone Max fell out
+        /// of was actually lit at the time.</summary>
+        public bool IsZoneActive(string zoneId) =>
+            !string.IsNullOrEmpty(zoneId) && _activeZoneIds != null && _activeZoneIds.Contains(zoneId);
+
         /// <summary>Every GameObject <c>MapRuntime.Build</c> classified as never moving (MV-882's own
         /// list; MV-934's <see cref="CombineZoneGeometry"/> is what actually folds these into combined
         /// meshes now, but this stays the declared classification an EditMode test asserts against).</summary>

@@ -48,6 +48,7 @@ namespace MaxWorlds.Dev
         private string _cachedFallsLine;
         private string _cachedSessionRecorderLine;
         private float _perfBuiltAt = float.NegativeInfinity;
+        private float _fallsBuiltAt = float.NegativeInfinity;
 
         public IReadOnlyList<string> Lines => _lines;
         public bool Visible => _visible;
@@ -322,13 +323,19 @@ namespace MaxWorlds.Dev
                 // sections PerfTelemetry resolves, replacing the since-boot FrameCost averages this
                 // ticket's own investigation found diluted on device (see PerfTelemetry's class doc).
                 _cachedPerfTelemetryLine = PerfTelemetry.FormatOverlayLine();
-                // MV-955: same cadence, same cache -- the FALLS section, right after the frame-cost
-                // line every other debug readout already sits under.
-                _cachedFallsLine = FormatFallsLine();
-                // MV-970: same cadence, same cache -- the session recorder's own file name/row count,
-                // right after the FALLS section.
+                // MV-970: same cadence, same cache -- the session recorder's own file name/row count.
                 _cachedSessionRecorderLine = FormatSessionRecorderLine();
                 _perfBuiltAt = now;
+            }
+
+            // MV-955/MV-1039: the FALLS section on its own cache tick, independent of _perfMeter's
+            // presence (unlike the block above, it needs no live FpsMeter to be worth showing) -- a
+            // fall itself is rare, so rebuilding this only costs anything on the same glance-rate
+            // schedule the perf lines already pay.
+            if (now - _fallsBuiltAt >= PerfRefreshSeconds)
+            {
+                _cachedFallsLine = FormatFallsLine();
+                _fallsBuiltAt = now;
             }
 
             string diagBlock = _lines.Count == 0
@@ -339,8 +346,14 @@ namespace MaxWorlds.Dev
                 ? null
                 : _cachedPerfLine + "\n" + _cachedTimingLine + "\n" + _cachedFrameRateLine + "\n" +
                   _cachedPopulationLine + "\n" + _cachedFrameCostLine + "\n" + _cachedPerfTelemetryLine +
-                  "\n" + _cachedFallsLine + "\n" + _cachedSessionRecorderLine;
-            return perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
+                  "\n" + _cachedSessionRecorderLine;
+
+            // MV-1039: the FALLS section moves to the very top of the drawn text -- on a phone the
+            // overlay's box is capped at 55% of screen height (see OnGUI below), and every line ahead
+            // of it pushed it below that clip. It is never clipped from here regardless of how many
+            // perf/diagnostic lines precede it.
+            string rest = perfBlock == null ? diagBlock : perfBlock + "\n" + diagBlock;
+            return _cachedFallsLine + "\n" + rest;
         }
 
         private void OnGUI()

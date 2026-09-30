@@ -48,6 +48,14 @@ namespace MaxWorlds.Core
         /// installs Bootstrap.</summary>
         public static PerfSessionRecorder ActiveSessionRecorder { get; private set; }
 
+        /// <summary>MV-1039: lets an EditMode test wire a real, temp-directory
+        /// <see cref="PerfSessionRecorder"/> onto <see cref="ActiveSessionRecorder"/> without a live
+        /// Bootstrap — every other call site (<see cref="FallEventLog.Record"/> now included) is a
+        /// no-op without one, so a test can't otherwise prove a CSV row was actually written. Same
+        /// "ForTest" naming convention as <see cref="PerfTelemetry.UseClockForTest"/>.</summary>
+        public static void SetActiveSessionRecorderForTest(PerfSessionRecorder recorder) =>
+            ActiveSessionRecorder = recorder;
+
         /// <summary>MV-970 item 4: flush cadence — every 5s, plus on pause/quit (see
         /// <see cref="OnApplicationPause"/>/<see cref="OnApplicationQuit"/>) — never per frame, so a
         /// session's disk writes stay batched.</summary>
