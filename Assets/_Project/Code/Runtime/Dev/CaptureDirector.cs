@@ -128,6 +128,13 @@ namespace MaxWorlds.Dev
             return null;
         }
 
+        /// <summary>Is any preset currently armed? Public so the Home screen (MV-1032) can take the
+        /// same skip-the-modal bypass PressKitDirector/UiScreensDirector/PerfCaptureDirector already
+        /// use, routing a capture run through <c>HomeScreen.StartSlot</c>'s clean wipe instead of
+        /// trusting whatever a stale <see cref="SaveSystem.ActiveSlot"/> already points at — a capture
+        /// must never resume a live/saved run.</summary>
+        public static bool Armed() => ArmedPreset() != null;
+
         private static bool IsArmed(CapturePreset preset)
         {
             foreach (var a in Environment.GetCommandLineArgs())
@@ -135,7 +142,39 @@ namespace MaxWorlds.Dev
             try { return File.Exists(preset.ArmFile); } catch { return false; }
         }
 
-        private void Start() => StartCoroutine(Run());
+        /// <summary>Set the moment <see cref="Finish"/> or <see cref="Fail"/> writes the done-marker —
+        /// <see cref="Watchdog"/>'s cue that it no longer needs to force one (MV-1032).</summary>
+        private bool _done;
+
+        private void Start()
+        {
+            StartCoroutine(Run());
+            StartCoroutine(Watchdog());
+        }
+
+        /// <summary>Independent of anything <see cref="Run"/> awaits on: an unattended capture can hang
+        /// for reasons no preset-authored wait sees coming (MV-1032) — Max dying mid-shot freezes
+        /// <see cref="Time.timeScale"/>, which used to freeze every preset wait built on scaled
+        /// <see cref="Time.time"/> right along with it. This timer runs on <see cref="Time.unscaledTime"/>
+        /// so it keeps counting through a frozen game, and forces the same <see cref="Fail"/> path any
+        /// other capture failure takes once <see cref="CapturePreset.TimeoutSeconds"/> is up — so a
+        /// headless run always exits via its own done-marker instead of hanging for the editor-side
+        /// watchdog (<c>CaptureEntryPoint.PollHeadless</c>) to notice.</summary>
+        private IEnumerator Watchdog()
+        {
+            var preset = _preset;
+            float deadline = Time.unscaledTime + (float)preset.TimeoutSeconds;
+            while (!_done && Time.unscaledTime < deadline) yield return null;
+            if (_done) yield break;
+
+            var liveDirs = new List<string>();
+            foreach (var dir in preset.OutputDirs)
+            {
+                try { Directory.CreateDirectory(dir); liveDirs.Add(dir); }
+                catch { /* best effort — Fail() below falls back to "." if this stays empty */ }
+            }
+            Fail(preset, liveDirs, $"watchdog: exceeded TimeoutSeconds ({preset.TimeoutSeconds}s) with no result");
+        }
 
         private IEnumerator Run()
         {
@@ -174,8 +213,11 @@ namespace MaxWorlds.Dev
             Finish(preset, liveDirs);
         }
 
-        /// <summary>Pumps a nested setup/prepare IEnumerator, catching a <see cref="CaptureAbortException"/>
-        /// into <see cref="_failReason"/> instead of letting it fault the whole coroutine — a plain
+        /// <summary>Pumps a nested setup/prepare IEnumerator, catching any exception (MV-1032: not just
+        /// a deliberate <see cref="CaptureAbortException"/> — an unplanned one, e.g. a reflection call
+        /// failing or a null scene reference, used to end the coroutine with no done-marker at all,
+        /// which is exactly what left CI hanging until the watchdog took over) into
+        /// <see cref="_failReason"/> instead of letting it fault the whole coroutine — a plain
         /// try/catch can't wrap a yield, so the MoveNext() driving happens inside the try and the yield
         /// happens outside it.</summary>
         private IEnumerator Drive(IEnumerator inner)
@@ -184,7 +226,11 @@ namespace MaxWorlds.Dev
             {
                 bool more;
                 try { more = inner.MoveNext(); }
-                catch (CaptureAbortException ex) { _failReason = ex.Message; yield break; }
+                catch (Exception ex)
+                {
+                    _failReason = ex is CaptureAbortException ? ex.Message : ex.ToString();
+                    yield break;
+                }
                 if (!more) yield break;
                 yield return inner.Current;
             }
@@ -253,6 +299,8 @@ namespace MaxWorlds.Dev
 
         private void Finish(CapturePreset preset, List<string> liveDirs)
         {
+            if (_done) return;
+            _done = true;
             var manifest = new System.Text.StringBuilder();
             foreach (var shot in preset.Shots) manifest.Append(shot.Name).Append(".png\n");
             string report = "ok\n" + manifest + (preset.ExtraReport?.Invoke() ?? "");
@@ -262,6 +310,8 @@ namespace MaxWorlds.Dev
 
         private void Fail(CapturePreset preset, List<string> liveDirs, string why)
         {
+            if (_done) return;
+            _done = true;
             LogWarn(preset, preset.Key + " capture aborted: " + why);
             try
             {
@@ -937,10 +987,12 @@ namespace MaxWorlds.Dev
         /// path (not a scripted VFX call) and frames the arrival point once the beat's staggered
         /// arrival burst has fired — long enough for the new electric crackle layer (MV-674) to be
         /// live alongside the existing cyan-violet surge/shockwave, short enough that the crackle's
-        /// own ~0.1-0.2s life hasn't faded yet. Waits on <see cref="Time.time"/> rather than a fixed
-        /// frame count: an idle headless scene can render far more or fewer frames per real second
-        /// than 60, and <see cref="MaxWorlds.VFX.CombatVfx"/>'s own beat coroutine stagger
-        /// (<c>TeleportFlashStagger</c>, 0.08s) is itself Time.time-driven, not frame-count-driven.</summary>
+        /// own ~0.1-0.2s life hasn't faded yet. Waits on <see cref="Time.unscaledTime"/> rather than a
+        /// fixed frame count (MV-1032: not scaled <c>Time.time</c> — an unattended Max dying mid-capture
+        /// freezes <see cref="Time.timeScale"/>, which would freeze a scaled-time wait right along with
+        /// it): an idle headless scene can render far more or fewer frames per real second than 60, and
+        /// <see cref="MaxWorlds.VFX.CombatVfx"/>'s own beat coroutine stagger (<c>TeleportFlashStagger</c>,
+        /// 0.08s) is itself real-time-driven, not frame-count-driven.</summary>
         private static CapturePreset BuildMv674TeleportCrackle()
         {
             const float pitch = 60f;
@@ -977,7 +1029,7 @@ namespace MaxWorlds.Dev
                 }
 
                 // Same clear-of-hedges direction MV-555/MV-617's captures already settled on.
-                float teleportedAt = Time.time;
+                float teleportedAt = Time.unscaledTime;
                 if (!abilities.TryTeleport(Vector3.left))
                     throw new CaptureAbortException("TryTeleport returned false — ability not acquired or on cooldown");
 
@@ -986,7 +1038,7 @@ namespace MaxWorlds.Dev
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
                 cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
 
-                while (Time.time - teleportedAt < settleSeconds) yield return null;
+                while (Time.unscaledTime - teleportedAt < settleSeconds) yield return null;
             }
 
             return new CapturePreset
@@ -2066,13 +2118,13 @@ namespace MaxWorlds.Dev
                 targetGo = BuildClusterRobot(EnemyKind.Rusher, targetPos);
                 Physics.SyncTransforms();
 
-                float waitStart = Time.time;
-                while (PlayerRocket.Active.Count < 1 && Time.time - waitStart < maxWaitSeconds) yield return null;
+                float waitStart = Time.unscaledTime;
+                while (PlayerRocket.Active.Count < 1 && Time.unscaledTime - waitStart < maxWaitSeconds) yield return null;
                 if (PlayerRocket.Active.Count < 1)
                     throw new CaptureAbortException("the Shoulder Rack never fired a salvo within the capture window");
 
-                float firstLaunchAt = Time.time;
-                while (Time.time - firstLaunchAt < settleSeconds) yield return null;
+                float firstLaunchAt = Time.unscaledTime;
+                while (Time.unscaledTime - firstLaunchAt < settleSeconds) yield return null;
 
                 // Framed on the midpoint between rack and target — same "frame the pair, not just one
                 // end" recipe BuildMv616SentinelBeam uses for its own beam-between-two-actors shot.
@@ -2164,8 +2216,8 @@ namespace MaxWorlds.Dev
                 targetGo = BuildClusterRobot(EnemyKind.Rusher, targetPos);
                 Physics.SyncTransforms();
 
-                float waitStart = Time.time;
-                while (PlayerRocket.Active.Count < 3 && Time.time - waitStart < maxWaitSeconds) yield return null;
+                float waitStart = Time.unscaledTime;
+                while (PlayerRocket.Active.Count < 3 && Time.unscaledTime - waitStart < maxWaitSeconds) yield return null;
                 if (PlayerRocket.Active.Count < 3)
                     throw new CaptureAbortException(
                         $"only {PlayerRocket.Active.Count} of 3 salvo rockets were airborne within the capture window");
@@ -3575,12 +3627,12 @@ namespace MaxWorlds.Dev
                 var anchor = bossGo.AddComponent<AnchorheadBoss>();
                 rig = AnchorheadRig.CreateFor(boss, anchor);
 
-                float wokeAt = Time.time;
+                float wokeAt = Time.unscaledTime;
                 typeof(BigBermudaBoss).GetMethod("Wake", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(boss, null);
                 // Past the boss's own 1.6s intro AND the rig's 0.9s wake-stutter -- a steady, settled
                 // amber rather than whatever the Perlin-noise flicker lands on mid-stutter.
-                while (Time.time - wokeAt < 1.8f) yield return null;
+                while (Time.unscaledTime - wokeAt < 1.8f) yield return null;
 
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
                 Vector3 camFocus = focus + Vector3.up * 1.8f;
