@@ -416,40 +416,66 @@ namespace MaxWorlds.Bosses
         /// Goes through the ordinary <see cref="IDamageable.TakeDamage"/> path like any other hit, so
         /// it drains the Force Field first exactly like every other contact source (MV-586) for free —
         /// nothing here needs to know the bubble exists. This is a passive damaging PRESENCE, not an
-        /// attack move: it never displaces or interrupts anything else the boss is doing.</summary>
+        /// attack move: it never displaces or interrupts anything else the boss is doing.
+        ///
+        /// MV-1037: reach is resolved in WORLD units, not compared against <see cref="_cc"/>'s raw
+        /// local radius. <see cref="FitColliderToRenderedBody"/>/<see cref="FitColliderTo"/> size the
+        /// collider from LOCAL mesh bounds, but <see cref="MapRuntime.BuildBoss"/> spawns the body
+        /// scaled to its authored size (3.6-4.5 m in Worlds 1-3) — comparing the unscaled local radius
+        /// against a world-space distance made contact unreachable for every boss in every world (Lee,
+        /// 2026-09-30: Big Bermuda sat on top of Max and a Sentinel and did no damage).</summary>
         private void TickContactDamage(float dt)
         {
             _contactCooldownTimer -= dt;
             if (_contactCooldownTimer > 0f) return;
 
-            float reach = _cc.radius + EnemyArchetype.PlayerRadius;
-            bool hitSomething = DamageIfTouching(_target, reach);
+            float bossRadius = WorldRadius(_cc, transform);
+            bool hitSomething = DamageIfTouching(_target, bossRadius);
 
             IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
             for (int i = 0; i < sentinels.Count; i++)
             {
                 Sentinel s = sentinels[i];
-                if (DamageIfTouching(s != null ? s.transform : null, reach)) hitSomething = true;
+                if (DamageIfTouching(s != null ? s.transform : null, bossRadius)) hitSomething = true;
             }
 
             if (hitSomething) _contactCooldownTimer = BossTuning.ContactCooldown;
         }
 
         /// <summary>Deals <see cref="BossTuning.ContactDamagePerTick"/> to <paramref name="t"/> if it's
-        /// within <paramref name="reach"/> of the boss's own position and carries a live
-        /// <see cref="IDamageable"/>. Returns whether it actually landed, so
+        /// within <paramref name="bossRadius"/> (the boss's own WORLD-space contact radius) plus
+        /// <paramref name="t"/>'s own WORLD-space radius plus <see cref="BossTuning.ContactSkin"/>, and
+        /// carries a live <see cref="IDamageable"/>. Returns whether it actually landed, so
         /// <see cref="TickContactDamage"/> only resets the shared cooldown when something was touching
         /// — a boss standing alone must not silently burn its cadence against nothing.</summary>
-        private bool DamageIfTouching(Transform t, float reach)
+        private bool DamageIfTouching(Transform t, float bossRadius)
         {
             if (t == null) return false;
             Vector3 to = t.position - transform.position; to.y = 0f;
+            float reach = bossRadius + TargetRadius(t) + BossTuning.ContactSkin;
             if (to.magnitude > reach) return false;
 
             if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return false;
             Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : Vector3.forward;
             damageable.TakeDamage(new DamageInfo(BossTuning.ContactDamagePerTick, transform.position, dir, Team.Enemy));
             return true;
+        }
+
+        /// <summary>MV-1037: <paramref name="t"/>'s own CharacterController world radius (Max's or a
+        /// Sentinel's — both carry one on the same GameObject their transform belongs to), falling back
+        /// to <see cref="EnemyArchetype.PlayerRadius"/> for anything that doesn't (a bare test fixture,
+        /// or any future target this never anticipated).</summary>
+        private static float TargetRadius(Transform t) =>
+            t.TryGetComponent<CharacterController>(out var cc) ? WorldRadius(cc, t) : EnemyArchetype.PlayerRadius;
+
+        /// <summary>A <see cref="CharacterController"/>'s radius, converted from its own LOCAL space
+        /// into world units via <paramref name="t"/>'s lossy scale — same "radius × max(|scale.x|,
+        /// |scale.z|)" conversion <c>MV1022MobileShedStandoffTests.WorldCapsuleRadius</c> already uses
+        /// for this exact shape of problem (a mobile shed's own scaled-cube collider).</summary>
+        private static float WorldRadius(CharacterController cc, Transform t)
+        {
+            Vector3 scale = t.lossyScale;
+            return cc.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
         }
 
         private void OnControllerColliderHit(ControllerColliderHit hit) => HandleWallContact(hit.collider, hit.normal);
