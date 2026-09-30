@@ -35,6 +35,11 @@ namespace MaxWorlds.UI
 
         private static readonly Stopwatch Timer = new Stopwatch();
 
+        /// <summary>MV-1040: cached the same "look up once, re-find only if lost" way
+        /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> already caches its own Max
+        /// reference — a per-frame tag search for a Transform that never moves scenes is wasted work.</summary>
+        private Transform _maxTransform;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -50,7 +55,15 @@ namespace MaxWorlds.UI
             // MV-747: collapse same-kind overlapping bars into one combined plate FIRST, so the
             // cluster-lift pass below only ever staggers what's left (different kinds, Max, gates) —
             // a same-kind pile no longer needs staggering once it is already down to one plate.
-            Vector3 refPos = Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+            //
+            // MV-1040: ranked against MAX now, not the camera — the plate cap must keep the robots
+            // nearest the player he's actually fighting, not whatever happens to be nearest the lens.
+            if (_maxTransform == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p != null) _maxTransform = p.transform;
+            }
+            Vector3 refPos = _maxTransform != null ? _maxTransform.position : Vector3.zero;
             WorldHealthBar.ResolveGroups(WorldHealthBar.DefaultGroupRadius, WorldHealthBar.DefaultPlateCap, refPos);
             WorldHealthBar.ResolveClutter(ClusterRadius, StackStep);
             Timer.Stop();

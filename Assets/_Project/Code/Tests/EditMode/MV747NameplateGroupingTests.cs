@@ -41,8 +41,18 @@ namespace MaxWorlds.Tests.EditMode
         [TearDown]
         public void TearDown()
         {
+            // MV-1040: Register()'s reflection-invoked OnEnable never went through Unity's real enable
+            // state machine, so DestroyImmediate below won't fire a matching OnDisable to pull these bars
+            // back out of WorldHealthBar's own static _active registry on its own — unregister explicitly,
+            // or a later test that also calls ResolveGroups/ResolveClutter inherits destroyed,
+            // MissingReference-throwing entries.
             foreach (var go in _spawned)
-                if (go != null) Object.DestroyImmediate(go);
+            {
+                if (go == null) continue;
+                var bar = go.GetComponent<WorldHealthBar>();
+                if (bar != null) OnDisableMethod.Invoke(bar, null);
+                Object.DestroyImmediate(go);
+            }
             _spawned.Clear();
         }
 
@@ -53,6 +63,8 @@ namespace MaxWorlds.Tests.EditMode
         /// reflection instead of relying on Unity to call them.</summary>
         private static readonly MethodInfo OnEnableMethod =
             typeof(WorldHealthBar).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo OnDisableMethod =
+            typeof(WorldHealthBar).GetMethod("OnDisable", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private WorldHealthBar Register(WorldHealthBar bar)
         {
@@ -60,12 +72,19 @@ namespace MaxWorlds.Tests.EditMode
             return bar;
         }
 
-        private WorldHealthBar NewCrab(Vector3 position)
+        /// <summary>MV-1040: <paramref name="hp"/> is set BEFORE <c>Attach</c>'s own Build()-&gt;Refresh()
+        /// establishes this bar's health baseline, so a crab seeded below full HP never reads as
+        /// "just took damage" — hit bars are now exempt from grouping (see
+        /// <see cref="WorldHealthBar.ResolveGroups"/>), so this test's crabs, which exist to prove the
+        /// FADE-OUT-TAIL grouping behaviour still works, must never accidentally land in the live-fire
+        /// window. Setting Hp afterward (the old idiom) would trigger it on the very next Refresh.</summary>
+        private WorldHealthBar NewCrab(Vector3 position, float hp = 100f)
         {
             var go = new GameObject("Crab");
             go.transform.position = position;
             _spawned.Add(go);
             var unit = go.AddComponent<FakeUnit>();
+            unit.Hp = hp;
             return Register(WorldHealthBar.Attach(go, unit, heightAboveCentre: 1.15f, worldWidth: 1.1f,
                                                   alwaysShow: true, groupable: true));
         }
@@ -128,9 +147,8 @@ namespace MaxWorlds.Tests.EditMode
             float expectedSum = 0f;
             for (int i = 0; i < 6; i++)
             {
-                crabs[i] = NewCrab(positions[i]);
                 float hp = 50f + i;   // distinct per crab, so "the sum" is actually provable
-                ((FakeUnit)crabs[i].GetComponent<FakeUnit>()).Hp = hp;
+                crabs[i] = NewCrab(positions[i], hp);
                 expectedSum += hp;
             }
 

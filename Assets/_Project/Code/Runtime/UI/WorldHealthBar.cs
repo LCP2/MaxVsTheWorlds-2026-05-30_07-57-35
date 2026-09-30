@@ -559,7 +559,19 @@ namespace MaxWorlds.UI
             if (_pivot == null || _source == null) return;
             // MV-980: a sleeping garrison robot is motionless and untouched — nothing here to resync or
             // refresh until it wakes (RobotEnemy.Activate/TakeDamage are the only ways out of Dormant).
-            if (_source is RobotEnemy robot && robot.IsDormant) return;
+            if (_source is RobotEnemy robot && robot.IsDormant)
+            {
+                // MV-1040: _wantsShow/the canvas are never refreshed while asleep, so a robot that went
+                // (back) to Dormant still wanting to show stayed a live grouping/cap candidate at a
+                // stale position indefinitely — force both off the moment it's noticed here instead.
+                // Guarded so a robot already settled into Dormant costs nothing extra every frame.
+                if (_wantsShow)
+                {
+                    _wantsShow = false;
+                    if (_canvas.gameObject.activeSelf) _canvas.gameObject.SetActive(false);
+                }
+                return;
+            }
             SyncToBody();
             Refresh();
         }
@@ -674,9 +686,15 @@ namespace MaxWorlds.UI
 
         /// <summary>Most nameplates drawn at once, post-grouping (MV-747 change item 3) — a HUD with
         /// more than a handful of readable plates stops being readable at all. Beyond this, only the
-        /// candidates nearest the reference position (the camera, in production) stay drawn; the rest
-        /// hide exactly like a non-leader group member already does.</summary>
-        public const int DefaultPlateCap = 10;
+        /// candidates nearest the reference position (Max, in production — MV-1040) stay drawn; the
+        /// rest hide exactly like a non-leader group member already does.
+        ///
+        /// MV-1040: raised 10 -> 14 alongside the reference-position switch (camera -> Max) and hit
+        /// bars becoming ungroupable (see <see cref="ResolveGroups"/>) — a robot Max is actually
+        /// damaging must never be the one this cap culls, and 14 individually-showing hit bars is
+        /// comfortably inside a 6-inch-screen's readability budget the way a stack of merged plates
+        /// past 10 was not.</summary>
+        public const int DefaultPlateCap = 14;
 
         private sealed class GroupInfo
         {
@@ -688,9 +706,17 @@ namespace MaxWorlds.UI
         }
 
         private static readonly List<WorldHealthBar> _groupScratch = new List<WorldHealthBar>();
+        private static readonly List<WorldHealthBar> _hitScratch = new List<WorldHealthBar>();
         private static readonly List<int> _unionParent = new List<int>();
         private static readonly List<GroupInfo> _groupInfos = new List<GroupInfo>();
         private static readonly List<GroupInfo> _capScratch = new List<GroupInfo>();
+
+        /// <summary>MV-1040: true while this bar's trigger (damage within the hold window, or being
+        /// Max's current target) is still live — <see cref="_secondsSinceTrigger"/> already carries
+        /// both, since <see cref="Refresh"/> resets it to zero on either. A hit bar always shows its
+        /// own plate; only once it falls into the fade-out tail does <see cref="ResolveGroups"/>
+        /// consider it for merging.</summary>
+        private bool IsHitLive => _secondsSinceTrigger <= TriggerHoldSeconds;
 
         private static int Find(List<int> parent, int i)
         {
@@ -721,9 +747,15 @@ namespace MaxWorlds.UI
         /// Only bars passed <c>groupable: true</c> at <see cref="Attach"/> (robots) take part — Max's
         /// own bar and an area-gate's pill are never folded into a crowd.
         ///
-        /// Beyond <paramref name="plateCap"/> resolved plates, only the ones nearest
-        /// <paramref name="referencePosition"/> stay drawn; the same "hide the pivot" mechanism a
-        /// non-leader group member already uses.
+        /// MV-1040: a candidate whose trigger is still live (<see cref="IsHitLive"/> — damaged within
+        /// the hold window, or Max's current target) is excluded from the merge below and always
+        /// resolves as its own singleton plate: a robot Max is actively hitting must show its own bar,
+        /// even mid-cluster, which outranks the MV-747 declutter. Only bars already in their fade-out
+        /// tail are still eligible to collapse into a shared "NAME x N" plate.
+        ///
+        /// Beyond <paramref name="plateCap"/> resolved plates (hit-bar singletons and fade-out group
+        /// leaders together), only the ones nearest <paramref name="referencePosition"/> stay drawn;
+        /// the same "hide the pivot" mechanism a non-leader group member already uses.
         /// </summary>
         internal static void ResolveGroups(float groupRadius, int plateCap, Vector3 referencePosition)
         {
@@ -731,9 +763,18 @@ namespace MaxWorlds.UI
             // — a non-leader bar's pivot is left inactive from THIS SAME resolve, further down, so its
             // activeSelf is already the final answer by the time the NEXT frame's Refresh runs, not a
             // signal of whether it wants to be a candidate again.
+            //
+            // MV-1040: split here, not filtered later — a hit bar never enters the union-find below at
+            // all, so it can never win/lose group leadership or get folded under a stale one.
             _groupScratch.Clear();
+            _hitScratch.Clear();
             for (int i = 0; i < _active.Count; i++)
-                if (_active[i]._groupable && _active[i]._wantsShow) _groupScratch.Add(_active[i]);
+            {
+                var bar = _active[i];
+                if (!bar._groupable || !bar._wantsShow) continue;
+                if (bar.IsHitLive) _hitScratch.Add(bar);
+                else _groupScratch.Add(bar);
+            }
 
             int n = _groupScratch.Count;
             _unionParent.Clear();
@@ -773,9 +814,23 @@ namespace MaxWorlds.UI
                     info.Leader = bar;
             }
 
+            // MV-1040: every hit bar is wrapped as its own count-1 GroupInfo so it shares the cap/sort
+            // machinery below with the fade-out group leaders — one combined population, ranked and
+            // capped together, rather than a second bespoke cap pass.
             _capScratch.Clear();
             for (int i = 0; i < n; i++)
                 if (_groupInfos[i] != null) _capScratch.Add(_groupInfos[i]);
+            for (int i = 0; i < _hitScratch.Count; i++)
+            {
+                var bar = _hitScratch[i];
+                _capScratch.Add(new GroupInfo
+                {
+                    Leader = bar,
+                    Count = 1,
+                    HealthCurrentSum = bar._source.HealthCurrent,
+                    NormalizedSum = bar._source.HealthNormalized,
+                });
+            }
 
             _capScratch.Sort((a, b) =>
                 (a.Leader.transform.position - referencePosition).sqrMagnitude
@@ -784,26 +839,36 @@ namespace MaxWorlds.UI
             for (int i = 0; i < _capScratch.Count; i++)
                 _capScratch[i].CapVisible = i < plateCap;
 
-            for (int i = 0; i < n; i++)
+            // Apply every resolved plate (hit-bar singleton or fade-out group leader) in one pass.
+            for (int i = 0; i < _capScratch.Count; i++)
             {
-                var bar = _groupScratch[i];
-                var info = _groupInfos[Find(_unionParent, i)];
-                bool isLeader = ReferenceEquals(bar, info.Leader);
+                var info = _capScratch[i];
+                var leader = info.Leader;
 
-                if (!isLeader || !info.CapVisible)
+                if (!info.CapVisible)
                 {
-                    // Diffed (MV-963): most non-leaders were ALREADY hidden by last resolve and stay
-                    // hidden — only a bar whose group/cap standing just changed this frame is an actual
-                    // state transition (and Canvas rebuild) rather than a same-value no-op call.
-                    if (bar._canvas.gameObject.activeSelf) bar._canvas.gameObject.SetActive(false);
+                    // Diffed (MV-963): most were ALREADY hidden by last resolve and stay hidden — only
+                    // a plate whose cap standing just changed this frame is an actual state transition
+                    // (and Canvas rebuild) rather than a same-value no-op call.
+                    if (leader._canvas.gameObject.activeSelf) leader._canvas.gameObject.SetActive(false);
                     continue;
                 }
 
                 // MV-963: the activation Refresh() deliberately deferred for every groupable candidate —
                 // this is the one place a groupable bar's pivot is ever turned ON, decided once the
                 // leader/cap question is actually settled.
-                if (!bar._canvas.gameObject.activeSelf) bar._canvas.gameObject.SetActive(true);
-                bar.ApplyGroupDisplay(info.Count, info.HealthCurrentSum, info.NormalizedSum / info.Count);
+                if (!leader._canvas.gameObject.activeSelf) leader._canvas.gameObject.SetActive(true);
+                leader.ApplyGroupDisplay(info.Count, info.HealthCurrentSum, info.NormalizedSum / info.Count);
+            }
+
+            // Every non-leader member of a fade-out group always hides, independent of the cap above —
+            // a hit bar never reaches here at all (it was never added to _groupScratch/the union-find).
+            for (int i = 0; i < n; i++)
+            {
+                var bar = _groupScratch[i];
+                var info = _groupInfos[Find(_unionParent, i)];
+                if (!ReferenceEquals(bar, info.Leader) && bar._canvas.gameObject.activeSelf)
+                    bar._canvas.gameObject.SetActive(false);
             }
         }
 
