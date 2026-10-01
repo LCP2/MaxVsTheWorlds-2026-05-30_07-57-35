@@ -2570,6 +2570,12 @@ namespace MaxWorlds.Arena
         private const float FittingInset = 0.85f;   // fraction of the half-extent, so a corner turret doesn't overhang
         private const float FittingSize = 0.5f;     // a small turret, not a shed-sized object
 
+        // MV-1058: the collider has to cover ShedTurretRig's own Ø 0.86 m dome (built in real metres,
+        // independent of FittingSize) so a turret this prominent is as easy to hit as it now looks. The
+        // host's own localScale is FittingSize, so the BoxCollider's LOCAL size has to be the world
+        // coverage divided back out by that scale, or Unity would shrink it to FittingSize again.
+        private const float FittingColliderCoverage = 0.95f; // world metres, >= the dome's 0.86 m diameter
+
         private static void BuildShedFittings(GameObject body, MapEntity e, MowerHutch hutch)
         {
             ShedFittingKind kind = ShedFittingKindEnums.Parse(e.fittingKind);
@@ -2585,22 +2591,13 @@ namespace MaxWorlds.Arena
             {
                 Vector2 sign = FittingCornerSigns[i];
 
-                // MV-913: Missile gets MissileLauncherRig's generated-mesh body (built inside
+                // MV-1058: every kind now gets ShedTurretRig's generated-mesh body (built inside
                 // ShedFitting.Bind) riding on a bare collider host — CreatePrimitive would leave a
-                // stray Unity cube mesh/renderer behind the rig, which is exactly the primitive the
-                // ticket's AC2 test asserts is gone. Spiker/Laser are untouched: their own tickets
-                // convert them later, and until then they still need CreatePrimitive's box mesh AND
-                // its collider in one call.
-                GameObject go;
-                if (kind == ShedFittingKind.Missile)
-                {
-                    go = new GameObject();
-                    go.AddComponent<BoxCollider>();
-                }
-                else
-                {
-                    go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                }
+                // stray Unity cube mesh/renderer behind the rig, exactly the primitive the ticket's
+                // AC test asserts is gone, for all three kinds now (not just Missile, MV-913's old scope).
+                var go = new GameObject();
+                var collider = go.AddComponent<BoxCollider>();
+                collider.size = Vector3.one * (FittingColliderCoverage / FittingSize);
 
                 go.name = $"{e.id}_fitting{i + 1}";
                 go.transform.position = new Vector3(center.x + sign.x * halfW, roofY, center.z + sign.y * halfD);
