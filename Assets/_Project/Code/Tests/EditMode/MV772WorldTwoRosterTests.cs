@@ -49,12 +49,19 @@ namespace MaxWorlds.Tests.EditMode
     /// (236/572), below the old 45% floor. The floor is widened to 40% — still comfortably clear of the
     /// ~37% reverted-conversion signal this assertion actually guards, per the same reasoning MV-865/875
     /// used each time a legitimate re-author moved this number.
+    ///
+    /// MV-1050 (a21 finale: 3x area, ~50 robots, hiding cover) replaces a21's whole 7-entry garrison
+    /// (3 sludger/4 rusher) with 50 fresh entries across 6 clusters (8 rusher, 8 bruiser, 9 bolter,
+    /// 2 turret, 8 sludger, 15 charger) — a genuine content change, not drift, so both numbers below are
+    /// recomputed against the real post-ticket config same as every prior re-author above. Total rises
+    /// 572 -&gt; 615 (+43); the World 2 kinds share moves 41.3% (236/572) -&gt; 42.0% (258/615), still inside
+    /// the existing [40%, 64%] band with no floor/ceiling change needed.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
-        // Recomputed against the V10 shipped config (MV-900) — still a guard against an UNRELATED drift,
-        // not an authored constant: derived from the real config, not hand-picked.
-        private const uint ExpectedCoordinateHash = 3219086536u;
+        // Recomputed against the real config after MV-1050's a21 re-author — still a guard against an
+        // UNRELATED drift, not an authored constant: derived from the real config, not hand-picked.
+        private const uint ExpectedCoordinateHash = 101841298u;
 
         [Test]
         public void WorldTwoRoster_MatchesTheMV772Conversion()
@@ -78,7 +85,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(572, total, "World 2's total garrison placement count (MV-900 V10 config)");
+            Assert.AreEqual(615, total, "World 2's total garrison placement count (post-MV-1050 a21 re-author)");
 
             int Count(string kind) => counts.TryGetValue(kind, out int n) ? n : 0;
             int worldTwoKinds = Count("sludger") + Count("charger") + Count("turret") + Count("lurker");

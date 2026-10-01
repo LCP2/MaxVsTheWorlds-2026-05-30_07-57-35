@@ -8,9 +8,12 @@ namespace MaxWorlds.Bosses
     {
         // ---------------------------------------------------------------- the fight's length
 
-        /// <summary>HP: 6 × Big Bermuda's (the ticket's own multiplier) — a longer fight to match the
-        /// bigger arena and the two-flood-stage structure.</summary>
-        public const float Health = BossTuning.Health * 6f;
+        /// <summary>HP: 12 × Big Bermuda's — 6x (MV-696's own multiplier, a longer fight to match the
+        /// bigger arena and the two-flood-stage structure) doubled again (MV-1050: a21 grew 3x by area
+        /// with ~50 garrisoned robots, so the finale boss needed to outlast that crowd too). Sludgequeen
+        /// is World 2's only boss, so this constant doubling IS "double it only in World 2" — there is
+        /// no second world that reads this class.</summary>
+        public const float Health = BossTuning.Health * 12f;
 
         /// <summary>Below this fraction the flood goes from half the well to the whole floor.</summary>
         public const float PhaseTwoThreshold = 0.5f;
