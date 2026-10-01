@@ -376,7 +376,25 @@ namespace MaxWorlds.Factories
         {
             HudSignals.EmitFactoryRegistered();
             _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea += OnAreaEntered;
+            if (_areaDirector != null)
+            {
+                _areaDirector.PlayerCrossedIntoArea += OnAreaEntered;
+                PrimeFromCurrentPhysicalArea(_areaDirector);
+            }
+        }
+
+        /// <summary>MV-1047: <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> is a pure
+        /// crossing/delta signal — it never fires for the area Max already occupies when this box's own
+        /// <see cref="Start"/> runs (map build), nor does <see cref="AreaAccumulationDirector.SetCurrentArea"/>
+        /// (death-Continue / cold-boot RESUME) re-fire it when the landing area is the one already
+        /// tracked as <see cref="AreaAccumulationDirector.PhysicalArea"/> — its own early-return at
+        /// <c>areaIndex == _physicalArea</c> skips the invoke. Without this, every box in the area Max
+        /// starts or resumes into stayed permanently unlured: <see cref="_playerInArea"/> latched false
+        /// forever, since nothing short of a later boundary CROSSING ever sets it. Public so an EditMode
+        /// test can drive it directly, same convention as every other post-build call in this file.</summary>
+        public void PrimeFromCurrentPhysicalArea(AreaAccumulationDirector director)
+        {
+            if (director != null) OnAreaEntered(director.PhysicalArea);
         }
 
         private void OnDestroy()
