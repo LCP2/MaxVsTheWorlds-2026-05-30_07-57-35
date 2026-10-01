@@ -141,6 +141,14 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefFloorCircuitCyan = HexColor(0x27E6FF);
         public static readonly Color ReefFloorCircuitViolet = HexColor(0xC25BFF);
 
+        // MV-1055: the hydroponic bed's kelp spikes and the hull-top accent lamp — the ticket's own
+        // exact hex values, named separately from the MV-713/MV-1053 cyan/violet tones above (which
+        // are close but not identical) for the same reason those were split out: a value tweak to one
+        // must never silently relight the other.
+        public static readonly Color ReefKelpGreen = HexColor(0x46FF9A);
+        public static readonly Color ReefKelpMagenta = HexColor(0xFF4FD8);
+        public static readonly Color ReefLampViolet = HexColor(0xC45CFF);
+
         /// <summary>World size, in metres, of one deck plate (MV-1053 ticket: "2 m square plates").
         /// Shared with <see cref="MaxWorlds.Rendering.ReefKit.DressHull"/>, which uses it to turn the
         /// floor's own resolved world size into the material's mesh-UV tiling — one authored number
@@ -156,6 +164,12 @@ namespace MaxWorlds.Rendering
         public static Material M_MetalDark => ReefMaterial("M_MetalDark", ReefMetalDark);
         public static Material M_CrateBody => ReefMaterial("M_CrateBody", ReefCrateBody);
         public static Material M_CrateCap => ReefMaterial("M_CrateCap", ReefCrateCap);
+
+        // MV-1055: bioluminescent kelp and the hull-top accent lamp all read as LIT, same reasoning as
+        // M_Circuit_Cyan's own emissive branch above.
+        public static Material M_KelpGreen => ReefMaterial("M_KelpGreen", ReefKelpGreen, emissive: true);
+        public static Material M_KelpMagenta => ReefMaterial("M_KelpMagenta", ReefKelpMagenta, emissive: true);
+        public static Material M_LampViolet => ReefMaterial("M_LampViolet", ReefLampViolet, emissive: true);
 
         /// <summary>The observation-window glass — a two-stop vertical gradient (near/far) rather than a
         /// flat colour, built the same way <see cref="MaterialLibrary"/> bakes its own two-tone surfaces

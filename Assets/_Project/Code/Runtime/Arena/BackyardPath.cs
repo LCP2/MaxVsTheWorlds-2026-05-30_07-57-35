@@ -215,7 +215,7 @@ namespace MaxWorlds.Arena
             // that wants a cosmetic override of its own, applied here rather than at MapRuntime build
             // time so it can never race the sweep above or run before a hutch/gate's own Awake has set
             // up the renderer it recolours.
-            if (worldIndex >= 2) ApplyReefKit(host, cover);
+            if (worldIndex >= 2) ApplyReefKit(host, _map, _cfg, cover);
             // MV-755: World 2 never got a kit (MV-690's documented scope cut) and then lost the
             // garden props it was borrowing (MV-750) — this is what replaces both.
             else if (worldIndex == 1)
@@ -241,9 +241,13 @@ namespace MaxWorlds.Arena
         /// for <see cref="WorldJoinDressing"/>'s own corridor windows), and dresses every authored
         /// "machinery" cover piece into a coolant turret (MV-744: <see cref="ReefDressing"/> is the
         /// routing this world's own kit was missing — <c>ReefKit.BuildCoolantTurret</c> existed since
-        /// MV-713 but nothing ever called it). Called once per load, only when the active world is
-        /// Reef (index 2+) — every other world leaves this untouched.</summary>
-        private static void ApplyReefKit(Transform host, IReadOnlyList<CoverPiece> cover)
+        /// MV-713 but nothing ever called it), and auto-places hydroponic beds and hull-top lamps on
+        /// the open floor (MV-1055: <see cref="ReefHydroponics.PlaceBeds"/> picks WHERE, clear of
+        /// every cover piece, gate mouth, garrison point, factory and Replicator; the lamps are part
+        /// of <see cref="ReefKit.DressHull"/> itself, mounted straight off the same wall list the
+        /// circuit spine and observation glass already walk). Called once per load, only when the
+        /// active world is Reef (index 2+) — every other world leaves this untouched.</summary>
+        private static void ApplyReefKit(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
             foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
                 hutch.ApplyReefSkin();
@@ -253,6 +257,7 @@ namespace MaxWorlds.Arena
             ReefKit.DressHull(host);
             ReefKit.BuildOceanVoid(host);
             ReefDressing.DressCover(host, cover);
+            ReefHydroponics.PlaceBeds(host, map, cfg, cover);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the
