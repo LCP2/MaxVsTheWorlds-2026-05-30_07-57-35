@@ -230,5 +230,51 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(_replicatorGo.GetComponent<Renderer>().enabled,
                 "the old primitive-cube renderer must be switched off once the generated body is built");
         }
+
+        /// <summary>
+        /// MV-1047 — <c>PlayerCrossedIntoArea</c> is a pure crossing/delta signal: it never fires for
+        /// the area Max already occupies when a box's own <c>Start</c> runs (map build), nor does
+        /// <c>SetCurrentArea</c> (death-Continue / cold-boot RESUME) re-fire it when the landing area is
+        /// the one already tracked as <c>PhysicalArea</c>. Fails to compile on the pre-fix commit
+        /// (ff6973b) — <c>Replicator.PrimeFromCurrentPhysicalArea</c> does not exist there, because
+        /// <c>Start</c> never self-primed and nothing else did either, leaving every box in Max's
+        /// starting/resumed area permanently unlured. Tier 2 (resolved values): asserts the resolved
+        /// <c>PlayerInArea</c> flag and the robot's resolved lure state, never an authored constant.
+        /// </summary>
+        [Test]
+        public void Replicator_PrimesPlayerInArea_WhenMaxAlreadyOccupiesTheBoxsStartingArea()
+        {
+            LogAssert.ignoreFailingMessages = true; // same BuildBody collider-strip [Error] as above
+
+            _replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _replicatorGo.name = "Replicator";
+            _replicatorGo.transform.position = RigOrigin;
+            var replicator = _replicatorGo.AddComponent<Replicator>();
+            replicator.Build();
+            replicator.Configure(1); // capacity 1
+            replicator.SetAreaIndex(1); // matches AreaAccumulationDirector's default PhysicalArea
+            Set(_replicatorGo.GetComponent<EnemySpawner>(), "startingRobots", 4);
+
+            RobotEnemy rusher = NewRusher(RigOrigin + new Vector3(5f, 0f, 0f)); // 5 m from the box
+            rusher.SetAreaIndex(1);
+
+            var directorGo = new GameObject("AreaAccumulationDirector");
+            var director = directorGo.AddComponent<AreaAccumulationDirector>();
+            try
+            {
+                replicator.PrimeFromCurrentPhysicalArea(director);
+
+                Assert.IsTrue(replicator.PlayerInArea,
+                    "Max already standing in the box's own area when Start runs must seed PlayerInArea " +
+                    "true immediately, not leave it waiting for a boundary CROSSING that never comes");
+                Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, rusher.Current,
+                    "priming must TickLure immediately, pulling an eligible robot toward the box rather " +
+                    "than leaving it idle beside an unblocked ramp");
+            }
+            finally
+            {
+                Object.DestroyImmediate(directorGo);
+            }
+        }
     }
 }
