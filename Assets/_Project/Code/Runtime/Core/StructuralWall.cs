@@ -21,5 +21,15 @@ namespace MaxWorlds.Core
     [DisallowMultipleComponent]
     public sealed class StructuralWall : MonoBehaviour
     {
+        /// <summary>True if at least one of this wall's two faces borders no room (MV-1054) — the
+        /// map's own outer hull, not a partition between two interior areas. Same idiom as the marker
+        /// itself: the one place that knows for certain (<c>MapRuntime.Build</c>, from the
+        /// <c>WallSegment</c> it just solved) says so once, here, rather than a later pass guessing
+        /// from a wall's position against the map's bounding box — which a non-convex, spiral-shaped
+        /// map (World 3's own "double-spiral route", MVW_World3_Level_Design_V6) can defeat: an inner
+        /// loop's own outward-facing wall never comes near the overall bounding rectangle's edge.</summary>
+        public bool IsOuterEdge { get; private set; }
+
+        public void Configure(bool isOuterEdge) => IsOuterEdge = isOuterEdge;
     }
 }

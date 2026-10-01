@@ -128,6 +128,11 @@ namespace MaxWorlds.Rendering
         /// <summary>The glass gradient's FAR (bottom) tone — darker, deeper water.</summary>
         public static readonly Color ReefGlassOceanFar = HexColor(0x052B49);
 
+        // MV-1054: the ocean void backdrop's own radial gradient — centre brighter/closer, edge
+        // darker/farther, per the ticket's own art direction.
+        public static readonly Color ReefOceanVoidCenter = HexColor(0x0B4C72);
+        public static readonly Color ReefOceanVoidEdge = HexColor(0x031426);
+
         // MV-1053: World 3's deck floor — plated hull, seams, rivets, a grate, and an emissive mask
         // of circuit traces. Named separately from M_Circuit_Cyan/M_Circuit_Purple (MV-713) because
         // those are shared by OTHER renderers (the wall-base circuit spine, the coolant turret) that
@@ -158,6 +163,12 @@ namespace MaxWorlds.Rendering
         /// keeps this material readable through the same <c>_BaseMap</c>/<c>_BaseColor</c> pair every
         /// other surface in the game already uses.</summary>
         public static Material M_GlassOcean => ReefGlassMaterial();
+
+        /// <summary>The ocean void backdrop (MV-1054) — a baked radial gradient plus light shafts,
+        /// fish specks and faint silhouettes (<see cref="StylizedTextures.OceanVoidAlbedo"/>), the same
+        /// "small baked texture, not a second shader" idiom <see cref="M_GlassOcean"/> already uses.
+        /// </summary>
+        public static Material M_OceanVoid => ReefOceanVoidMaterial();
 
         /// <summary><paramref name="detailScale"/> &gt; 0 asks for the triplanar
         /// <see cref="MaterialLibrary.StylizedSurfaceShader"/> (it is the one shader in the chain that
@@ -321,6 +332,45 @@ namespace MaxWorlds.Rendering
 
             s_reefCache[key] = m;
             return m;
+        }
+
+        /// <summary>Unlit, since this plane sits ~6 m below the floor with nothing ever casting light
+        /// on it — same "bake the look into the texture, don't ask the shader to compute it" reasoning
+        /// <see cref="ReefGlassMaterial"/> already uses for the window gradient.</summary>
+        private static Material ReefOceanVoidMaterial()
+        {
+            const string key = "M_OceanVoid";
+            if (s_reefCache.TryGetValue(key, out var cached) && cached != null)
+            {
+                if (cached.GetTexture("_BaseMap") == null) RefreshReefOceanVoidTexture(cached);
+                return cached;
+            }
+
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader)
+            {
+                name = key,
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true,
+            };
+
+            Color mean = Color.Lerp(ReefOceanVoidCenter, ReefOceanVoidEdge, 0.5f);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", mean);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", mean);
+
+            RefreshReefOceanVoidTexture(m);
+
+            s_reefCache[key] = m;
+            return m;
+        }
+
+        private static void RefreshReefOceanVoidTexture(Material m)
+        {
+            Texture2D albedo = StylizedTextures.OceanVoidAlbedo();
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", albedo);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", albedo);
         }
     }
 }

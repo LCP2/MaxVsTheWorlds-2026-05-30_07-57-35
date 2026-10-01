@@ -842,15 +842,30 @@ namespace MaxWorlds.Arena
         private void TagReefDressing(Transform areaRoot)
         {
             Transform circuitSpine = areaRoot.Find("Circuit Spine");
-            if (circuitSpine != null)
+            // MV-1054: "Observation Glass" is the frame/top-strip/mullion overlay ReefKit builds on
+            // top of each outer-edge wall — new geometry sitting exactly at that wall's own position,
+            // same situation Circuit Spine already solved, so it needs the same two-sided wall-zone
+            // probe or it stays permanently enabled while the wall it overlays is gated off.
+            Transform observationGlass = areaRoot.Find("Observation Glass");
+            if (circuitSpine != null || observationGlass != null)
             {
                 List<WallSegment> wallSegments = MapGeometry.Walls(_map);
-                foreach (Renderer r in circuitSpine.GetComponentsInChildren<Renderer>(true))
-                {
-                    List<string> ids = NearestWallZoneIds(r.transform.position, wallSegments);
-                    if (ids != null) AddRendererZones(r, ids);
-                    else TagRendererSimple(r);
-                }
+
+                if (circuitSpine != null)
+                    foreach (Renderer r in circuitSpine.GetComponentsInChildren<Renderer>(true))
+                    {
+                        List<string> ids = NearestWallZoneIds(r.transform.position, wallSegments);
+                        if (ids != null) AddRendererZones(r, ids);
+                        else TagRendererSimple(r);
+                    }
+
+                if (observationGlass != null)
+                    foreach (Renderer r in observationGlass.GetComponentsInChildren<Renderer>(true))
+                    {
+                        List<string> ids = NearestWallZoneIds(r.transform.position, wallSegments);
+                        if (ids != null) AddRendererZones(r, ids);
+                        else TagRendererSimple(r);
+                    }
             }
 
             Transform reefProps = areaRoot.Find("Reef Props");
@@ -1406,7 +1421,10 @@ namespace MaxWorlds.Arena
                 // knowing exactly what it is, so it says so rather than making KindOf guess from shape.
                 GameObject wallGo = Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
                 ApplyBevelledBoxMesh(wallGo, w.Size);
-                wallGo.AddComponent<StructuralWall>();
+                // MV-1054: a face with no room on it looks out of the map entirely (WallFace.FacesRoom
+                // mirrors this same RoomLower/RoomUpper pair) — exactly the walls ReefKit's observation
+                // glass pass needs to find.
+                wallGo.AddComponent<StructuralWall>().Configure(!w.RoomLower || !w.RoomUpper);
                 TagWallZones(map, wallGo, w, rendererZones);
                 AddStatic(map, wallGo, staticGeometry, rendererZones, autoTag: false);
             }

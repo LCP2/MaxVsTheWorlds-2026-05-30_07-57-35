@@ -65,15 +65,24 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(circuit.sharedMaterial.IsKeywordEnabled("_EMISSION"),
                     "the circuit material must have emission enabled — a cyan spine that isn't lit is just paint");
 
-                // AC3: every built wall wears M_ShipWall, and the count matches the map's own solved walls.
-                List<Renderer> walls = AllWalls(root3.transform);
+                // AC3: every built wall wears M_ShipWall, EXCEPT an outer-edge one (MV-1054:
+                // ReefKit.DressHull now also runs BuildObservationGlass, which re-skins exactly those
+                // walls to the observation-glass pane material instead) — and the count still matches
+                // the map's own solved walls either way.
+                List<StructuralWall> wallComponents = AllWallComponents(root3.transform);
                 int expectedWalls = MapGeometry.Walls(map3).Count;
                 Assert.Greater(expectedWalls, 0, "precondition: World 3's own map must solve to some walls");
-                Assert.AreEqual(expectedWalls, walls.Count,
+                Assert.AreEqual(expectedWalls, wallComponents.Count,
                     "the number of built wall renderers must match the map's own solved wall count");
-                foreach (Renderer w in walls)
-                    Assert.AreSame(WorldMaterials.M_ShipWall, w.sharedMaterial,
-                        $"wall '{w.name}' must wear WorldMaterials.M_ShipWall by identity");
+                foreach (StructuralWall w in wallComponents)
+                {
+                    Renderer r = w.GetComponent<Renderer>();
+                    Material expected = w.IsOuterEdge ? WorldMaterials.M_GlassOcean : WorldMaterials.M_ShipWall;
+                    string expectedName = w.IsOuterEdge ? "M_GlassOcean (MV-1054 observation glass)" : "M_ShipWall";
+                    Assert.AreSame(expected, r.sharedMaterial, $"wall '{w.name}' must wear {expectedName} by identity");
+                }
+                Assert.IsTrue(wallComponents.Exists(w => w.IsOuterEdge),
+                    "precondition: World 3's own map must solve at least one outer-edge wall, or MV-1054's own pass never ran");
 
                 // AC4 (World 3 half): no skybox once BackyardLighting has run against the Reef palette.
                 lighting3 = new GameObject("Lighting").AddComponent<BackyardLighting>();
@@ -146,6 +155,14 @@ namespace MaxWorlds.Tests.EditMode
                 var r = w.GetComponent<Renderer>();
                 if (r != null) walls.Add(r);
             }
+            return walls;
+        }
+
+        private static List<StructuralWall> AllWallComponents(Transform root)
+        {
+            var walls = new List<StructuralWall>();
+            foreach (StructuralWall w in root.GetComponentsInChildren<StructuralWall>(true))
+                if (w.GetComponent<Renderer>() != null) walls.Add(w);
             return walls;
         }
     }

@@ -231,15 +231,18 @@ namespace MaxWorlds.Arena
 
         /// <summary>World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
         /// (<see cref="MowerHutch"/>) and power hatch (<see cref="AreaGate"/>) already built in the
-        /// scene, re-skins the floor/walls with the ticket's own named materials and lays the circuit
-        /// spine along their base (MV-745: <see cref="ReefKit.DressHull"/> — the generic per-world
-        /// sweep above only ever wore World 3 in a recoloured version of every other biome's ground/
-        /// wall shader, never the dedicated Reef materials MV-713 shipped), builds the ocean backdrop
-        /// behind its observation windows (MV-713), and dresses every authored "machinery" cover piece
-        /// into a coolant turret (MV-744: <see cref="ReefDressing"/> is the routing this world's own
-        /// kit was missing — <c>ReefKit.BuildCoolantTurret</c> existed since MV-713 but nothing ever
-        /// called it). Called once per load, only when the active world is Reef (index 2+) — every
-        /// other world leaves this untouched.</summary>
+        /// scene, re-skins the floor/walls with the ticket's own named materials, lays the circuit
+        /// spine along their base and turns every outer-edge wall into observation glass (MV-745/
+        /// MV-1054: <see cref="ReefKit.DressHull"/> — the generic per-world sweep above only ever wore
+        /// World 3 in a recoloured version of every other biome's ground/wall shader, never the
+        /// dedicated Reef materials MV-713 shipped), builds the ocean void beyond the map's own edge
+        /// (MV-1054 — replaces the flat void a camera used to see past the map, distinct from the
+        /// four small per-window parallax layers <see cref="ReefKit.BuildOceanBackdrop"/> still builds
+        /// for <see cref="WorldJoinDressing"/>'s own corridor windows), and dresses every authored
+        /// "machinery" cover piece into a coolant turret (MV-744: <see cref="ReefDressing"/> is the
+        /// routing this world's own kit was missing — <c>ReefKit.BuildCoolantTurret</c> existed since
+        /// MV-713 but nothing ever called it). Called once per load, only when the active world is
+        /// Reef (index 2+) — every other world leaves this untouched.</summary>
         private static void ApplyReefKit(Transform host, IReadOnlyList<CoverPiece> cover)
         {
             foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
@@ -248,7 +251,7 @@ namespace MaxWorlds.Arena
                 gate.ApplyReefSkin();
 
             ReefKit.DressHull(host);
-            ReefKit.BuildOceanBackdrop(host);
+            ReefKit.BuildOceanVoid(host);
             ReefDressing.DressCover(host, cover);
         }
 

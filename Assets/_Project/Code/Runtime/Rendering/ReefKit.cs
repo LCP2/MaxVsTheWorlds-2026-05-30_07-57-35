@@ -103,6 +103,7 @@ namespace MaxWorlds.Rendering
             }
 
             BuildCircuitSpine(host, walls);
+            BuildObservationGlass(host, walls);
         }
 
         /// <summary>Sets the shared deck material's mesh-UV tiling from the floor's OWN resolved
@@ -156,6 +157,145 @@ namespace MaxWorlds.Rendering
             }
 
             root.AddComponent<ReefCircuitFlow>().Configure(WorldMaterials.M_Circuit_Cyan, CircuitScrollSpeed);
+        }
+
+        // MV-1054, change item 2: every structural wall on the map's outer edge becomes observation
+        // glass — a low dark frame, a translucent cyan-blue pane, a cyan top strip, and dark mullions
+        // every 4 m along its length.
+        private const float GlassFrameHeight = 0.12f;
+        private const float GlassTopStripHeight = 0.12f;
+        private const float GlassMullionWidth = 0.08f;
+        private const float GlassMullionPitch = 4f;
+        private const float GlassProud = 0.02f;   // same anti-z-fight idiom as CircuitStripProud
+
+        /// <summary>Re-skins every outer-edge wall in <paramref name="walls"/> (<see cref="StructuralWall.IsOuterEdge"/>,
+        /// set by <c>MapRuntime.Build</c> from the wall solver's own room-adjacency data — the only
+        /// thing that can tell a hull wall from an interior partition on a non-convex, spiral-shaped
+        /// map) into observation glass. The wall's own renderer becomes the pane
+        /// (<see cref="WorldMaterials.M_GlassOcean"/>); frame, strip and mullions are new, collider-
+        /// free overlay geometry parented under one "Observation Glass" root (own sibling of "Circuit
+        /// Spine" and "Reef Props" — <c>MapRuntime.TagReefDressing</c> looks it up by that exact name
+        /// to keep it zone-gated the same way). Wall colliders are untouched (ticket, "Change" 2):
+        /// same "collider stays, art swaps" contract every other Reef dressing case keeps.</summary>
+        private static void BuildObservationGlass(Transform host, List<StructuralWall> walls)
+        {
+            if (walls.Count == 0) return;
+
+            GameObject root = null;
+
+            foreach (StructuralWall wall in walls)
+            {
+                if (!wall.IsOuterEdge) continue;
+
+                Transform wt = wall.transform;
+                Renderer wr = wall.GetComponent<Renderer>();
+                if (wr == null) continue;
+
+                wr.sharedMaterial = WorldMaterials.M_GlassOcean;
+
+                if (root == null)
+                {
+                    root = new GameObject("Observation Glass");
+                    root.transform.SetParent(host, false);
+                }
+
+                Vector3 scale = wt.lossyScale;
+                bool alongX = scale.x >= scale.z;
+                float length = alongX ? scale.x : scale.z;
+                float height = scale.y;
+
+                GlassBar(root.transform, $"{wt.name} Glass Frame", wt.position, scale,
+                    GlassFrameHeight, -height * 0.5f + GlassFrameHeight * 0.5f, WorldMaterials.M_MetalDark);
+                GlassBar(root.transform, $"{wt.name} Glass Strip", wt.position, scale,
+                    GlassTopStripHeight, height * 0.5f - GlassTopStripHeight * 0.5f, WorldMaterials.M_Circuit_Cyan);
+
+                int mullions = Mathf.Max(0, Mathf.FloorToInt(length / GlassMullionPitch));
+                for (int i = 1; i <= mullions; i++)
+                {
+                    float offset = -length * 0.5f + i * GlassMullionPitch;
+                    if (offset >= length * 0.5f - 0.01f) continue;
+
+                    Vector3 pos = alongX
+                        ? new Vector3(wt.position.x + offset, wt.position.y, wt.position.z)
+                        : new Vector3(wt.position.x, wt.position.y, wt.position.z + offset);
+
+                    GameObject mullion = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    mullion.name = $"{wt.name} Mullion {i}";
+                    mullion.transform.SetParent(root.transform, false);
+                    mullion.transform.position = pos;
+                    mullion.transform.localScale = alongX
+                        ? new Vector3(GlassMullionWidth, height + GlassProud, scale.z + GlassProud)
+                        : new Vector3(scale.x + GlassProud, height + GlassProud, GlassMullionWidth);
+                    StripColliders(mullion);
+                    var mRend = mullion.GetComponent<Renderer>();
+                    if (mRend != null) mRend.sharedMaterial = WorldMaterials.M_MetalDark;
+                }
+            }
+        }
+
+        /// <summary>One frame/strip bar, hugging a wall's own footprint — same "parent's cumulative
+        /// scale does the metric conversion" idiom <see cref="BuildCircuitSpine"/>'s own strip uses.
+        /// </summary>
+        private static void GlassBar(Transform parent, string name, Vector3 wallPosition, Vector3 wallScale,
+            float barHeight, float yOffset, Material material)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(wallPosition.x, wallPosition.y + yOffset, wallPosition.z);
+            go.transform.localScale = new Vector3(wallScale.x + GlassProud, barHeight, wallScale.z + GlassProud);
+            StripColliders(go);
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = material;
+        }
+
+        // MV-1054, change item 1: the ocean pressing in beyond the map's own edge.
+        private const float OceanVoidDepthBelowFloor = 6f;   // ticket: "~6 m below floor level"
+        private const float OceanVoidMarginMetres = 45f;     // ticket AC: >= 40 m past the map's XZ bounds on every side; kept with headroom above that minimum
+        private const float OceanVoidThickness = 0.2f;
+
+        /// <summary>The ocean beyond World 3's own hull (MV-1054, change item 1): one large, unlit,
+        /// collider-free slab far below the floor, its footprint the map's own XZ bounds (read off the
+        /// floor's OWN resolved renderer, the single map-spanning "Map Floor" <see cref="MaxWorlds.Arena.MapRuntime.Build"/>
+        /// always builds and tags <see cref="StructuralFloor"/>) inflated by <see cref="OceanVoidMarginMetres"/>
+        /// on every side — not threaded in as <c>MapData</c>, the same "ask the built geometry, not the
+        /// author data" idiom <see cref="ApplyDeckTiling"/> already uses for the deck's own tiling.
+        /// Replaces the flat black void a camera used to see past the map's edge — distinct from
+        /// <see cref="BuildOceanBackdrop"/>'s four small per-window parallax layers, which stay exactly
+        /// as they are (MV713ReefKitTests pins that shape).</summary>
+        public static GameObject BuildOceanVoid(Transform host)
+        {
+            if (host == null) return null;
+
+            Renderer floor = FindFloorRenderer(host);
+            if (floor == null) return null;
+
+            Bounds b = floor.bounds;
+            float sizeX = b.size.x + OceanVoidMarginMetres * 2f;
+            float sizeZ = b.size.z + OceanVoidMarginMetres * 2f;
+            float topY = b.max.y - OceanVoidDepthBelowFloor;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "Ocean Void";
+            go.transform.SetParent(host, false);
+            go.transform.position = new Vector3(b.center.x, topY - OceanVoidThickness * 0.5f, b.center.z);
+            go.transform.localScale = new Vector3(sizeX, OceanVoidThickness, sizeZ);
+            StripColliders(go);
+
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = WorldMaterials.M_OceanVoid;
+
+            return go;
+        }
+
+        private static Renderer FindFloorRenderer(Transform host)
+        {
+            foreach (MeshRenderer r in host.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (!WorldMaterials.IsWorldSurface(r)) continue;
+                if (WorldMaterials.KindOf(r) == SurfaceKind.Ground) return r;
+            }
+            return null;
         }
 
         // Bounding box in metres for a coolant turret prop — tall enough to read as the tree it replaces

@@ -310,6 +310,77 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
+        /// <summary>World 3's ocean void backdrop (MV-1054, change item 1): a baked radial gradient —
+        /// <see cref="WorldMaterials.ReefOceanVoidCenter"/> at the centre fading to
+        /// <see cref="WorldMaterials.ReefOceanVoidEdge"/> at the edge — with soft diagonal light
+        /// shafts, a scatter of pale fish specks, and two faint dark silhouettes (a manta, a wreck
+        /// spar) standing in for distant shapes. Baked once: the plane never moves or relights, so
+        /// there is nothing here a shader needs to recompute per frame (ticket's own "textures/shaders
+        /// over meshes" instruction).</summary>
+        public static Texture2D OceanVoidAlbedo(int size = 512)
+        {
+            const string key = "oceanVoidAlbedo";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var t = NewTexture(key, size, linear: false);
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size;
+                float v = (y + 0.5f) / size;
+
+                float d = Mathf.Clamp01(Vector2.Distance(new Vector2(u, v), new Vector2(0.5f, 0.5f)) / 0.7071068f);
+                Color c = Color.Lerp(WorldMaterials.ReefOceanVoidCenter, WorldMaterials.ReefOceanVoidEdge,
+                    Curve(0.15f, 0.9f, d));
+
+                // Soft diagonal light shafts: a low-frequency band along one diagonal, faded out
+                // toward the edge so a shaft never washes the gradient's own dark rim out to flat
+                // colour.
+                float diag = (u + v) * 0.5f;
+                float shaft = Mathf.Max(0f, Mathf.Sin(diag * Mathf.PI * 6f)) * (1f - d);
+                c = Color.Lerp(c, Color.white, shaft * 0.10f);
+
+                // Fish specks: sparse bright pinpricks from a high-frequency hash, independent of the
+                // gradient/shaft layers.
+                float speck = Fbm(u, v, baseFreq: 60, octaves: 1);
+                if (speck > 0.93f) c = Color.Lerp(c, Color.white, (speck - 0.93f) / 0.07f * 0.6f);
+
+                c += OceanVoidSilhouette(u, v);
+
+                px[y * size + x] = new Color32(
+                    (byte)Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255f),
+                    (byte)Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255f),
+                    (byte)Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255f),
+                    255);
+            }
+
+            t.SetPixels32(px);
+            t.Apply(updateMipmaps: true);
+            s_cache[key] = t;
+            return t;
+        }
+
+        /// <summary>Darkens two fixed spots into faint silhouettes — a wide, flat ellipse standing in
+        /// for a distant manta, and a thin vertical sliver for a wreck spar — subtracted from the
+        /// gradient rather than painted as a flat shape, so each only ever darkens, never flattens, the
+        /// gradient underneath.</summary>
+        private static Color OceanVoidSilhouette(float u, float v)
+        {
+            Color delta = Color.black;
+
+            float mu = (u - 0.28f) / 0.16f, mv = (v - 0.62f) / 0.05f;
+            float manta = mu * mu + mv * mv;
+            if (manta < 1f) delta -= new Color(0.10f, 0.10f, 0.10f) * (1f - manta);
+
+            float su = (u - 0.74f) / 0.015f, sv = (v - 0.30f) / 0.22f;
+            float spar = su * su + sv * sv;
+            if (spar < 1f) delta -= new Color(0.07f, 0.07f, 0.07f) * (1f - spar);
+
+            return delta;
+        }
+
         private static void DrawTraceAlongV(Color32[] px, int size, float u, Color32 c)
         {
             int x = Mathf.Clamp(Mathf.RoundToInt(u * size), 0, size - 1);
