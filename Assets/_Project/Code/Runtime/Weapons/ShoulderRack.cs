@@ -173,11 +173,18 @@ namespace MaxWorlds.Weapons
         /// awake robots standing right next to Max. Candidates now come from
         /// <see cref="RobotEnemy.Active"/>, filtered exactly as before (alive, not dormant,
         /// <see cref="CombatLevel.SameLevel"/>, within <see cref="RangeMeters"/>) — no physics query,
-        /// no allocation per call.</summary>
+        /// no allocation per call.
+        ///
+        /// MV-1048: a candidate also needs a clear <see cref="HomingSteering.BlockedByGeometry"/> segment
+        /// from the rack's own muzzle to the robot's centre — the same geometry test
+        /// <see cref="PlayerRocket"/> dies on in flight, so selection and flight can't disagree. Without
+        /// this, a robot locked behind a closed gate or wall burned every rocket in the salvo on the
+        /// obstruction instead of ever reaching it.</summary>
         private RobotEnemy NearestAwakeRobotInRange()
         {
             float rangeSq = RangeMeters * RangeMeters;
             MapData map = EnemyNavigation.Map;
+            Vector3 origin = MuzzleOrigin();
             RobotEnemy best = null;
             float bestSq = float.MaxValue;
 
@@ -191,6 +198,7 @@ namespace MaxWorlds.Weapons
 
                 float d = (robot.transform.position - transform.position).sqrMagnitude;
                 if (d > rangeSq) continue;
+                if (HomingSteering.BlockedByGeometry(origin, robot.transform.position, out _)) continue;
                 if (d < bestSq) { bestSq = d; best = robot; }
             }
             return best;
