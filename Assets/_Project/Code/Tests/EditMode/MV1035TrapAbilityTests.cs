@@ -85,11 +85,23 @@ namespace MaxWorlds.Tests.EditMode
             RigBoard.UseWorld(2); // World 3 — the only board carrying p_trp/p_tcap/p_trad
             RigState.Reset();
 
-            GameObject maxGo = null, hudGo = null, max2Go = null;
+            GameObject maxGo = null, hudGo = null, max2Go = null, floorGo = null;
             RobotEnemy robotA = null, enemyTarget = null, nearRobot = null, farRobot = null,
                 fillRobot1 = null, fillRobot2 = null;
             try
             {
+                // MV-1061: a real physical floor under the ally's walk, same idiom as
+                // MV952RobotFallRecoveryTests — without it, robotA's post-conversion CharacterController
+                // (ungrounded in the full-suite's shared EditMode scene, whose ground residue depends on
+                // whichever fixture ran immediately before this one) falls instead of walking over to
+                // contact-damage enemyTarget, and the "must damage an enemy robot" assertion below goes
+                // flaky depending on run order. Covers robotA (2,0,0) through enemyTarget (3,0,0) with
+                // margin for the 1.5s walk.
+                floorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                floorGo.transform.position = new Vector3(2.5f, -0.05f, 0f);
+                floorGo.transform.localScale = new Vector3(10f, 0.1f, 10f);
+                Physics.SyncTransforms();
+
                 maxGo = new GameObject("MV-1035 test Max", typeof(CharacterController)) { tag = "Player" };
                 var playerHealth = maxGo.AddComponent<PlayerHealth>();
                 playerHealth.Initialize();
@@ -229,6 +241,7 @@ namespace MaxWorlds.Tests.EditMode
                 if (maxGo != null) Object.DestroyImmediate(maxGo);
                 if (max2Go != null) Object.DestroyImmediate(max2Go);
                 if (hudGo != null) Object.DestroyImmediate(hudGo);
+                if (floorGo != null) Object.DestroyImmediate(floorGo);
                 if (robotA != null) Object.DestroyImmediate(robotA.gameObject);
                 if (enemyTarget != null) Object.DestroyImmediate(enemyTarget.gameObject);
                 if (nearRobot != null) Object.DestroyImmediate(nearRobot.gameObject);
