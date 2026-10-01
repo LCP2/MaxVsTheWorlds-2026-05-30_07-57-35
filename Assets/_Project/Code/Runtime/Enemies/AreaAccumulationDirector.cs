@@ -464,17 +464,47 @@ namespace MaxWorlds.Enemies
 
             var stale = new List<RobotEnemy>();
             foreach (KeyValuePair<RobotEnemy, int> kv in _areaByRobot)
-                if (kv.Value < checkpointAreaIndex) stale.Add(kv.Key);
+                if (kv.Value < checkpointAreaIndex && !IsInPlaceDeckArea(kv.Value)) stale.Add(kv.Key);
 
             foreach (RobotEnemy robot in stale)
                 if (robot != null) robot.Despawn();
 
             for (int area = 1; area < checkpointAreaIndex; area++)
             {
+                // MV-1049: an in-place-deck area (a10/a11/a12 — ONE zone covers floor and deck alike,
+                // MapData.IsOnDeck's own doc) is never actually "behind" Max just because its own INDEX
+                // sits below the checkpoint's. World 2's own walkway (gates g32-g37) revisits a10/a11/
+                // a12's deck AFTER a14/a15 — numerically lower indices, visited LATER. Wiping/pinning
+                // them here (as every other, genuinely-monotonic area correctly is) despawned an
+                // already-standing deck garrison the player hadn't reached yet and permanently starved
+                // it (_filledAreas), end to end "no robots on the decks" for a cold-boot RESUME captured
+                // anywhere at or past a14.
+                if (IsInPlaceDeckArea(area)) continue;
+
                 _queue.RemoveQueued(area);
                 _pendingGarrisonByArea.Remove(area);
                 _filledAreas.Add(area);
             }
+        }
+
+        /// <summary>True when <paramref name="areaIndex"/>'s own authored garrison mixes floor (level 0)
+        /// and deck (level&gt;0) entries (MV-1049) — World 2's a10/a11/a12 shape, where a single area
+        /// index is visited twice, at two different elevations, far apart in actual play order even
+        /// though close together in index order. <see cref="ClearAreasBeforeCheckpoint"/>'s own
+        /// index-ordered "already behind Max" assumption never holds for this shape.</summary>
+        private bool IsInPlaceDeckArea(int areaIndex)
+        {
+            WorldArea area = _worldCfg?.AreaByIndex(areaIndex);
+            if (area?.garrison == null) return false;
+
+            bool sawFloor = false, sawDeck = false;
+            foreach (WorldGarrisonEntry g in area.garrison)
+            {
+                if (g == null) continue;
+                if (g.level > 0) sawDeck = true; else sawFloor = true;
+                if (sawFloor && sawDeck) return true;
+            }
+            return false;
         }
 
         /// <summary>Establishes both <see cref="CurrentArea"/> and the physical-position tracker AT
