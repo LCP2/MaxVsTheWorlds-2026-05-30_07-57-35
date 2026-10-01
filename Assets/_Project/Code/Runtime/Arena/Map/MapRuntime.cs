@@ -857,6 +857,37 @@ namespace MaxWorlds.Arena
             if (reefProps != null)
                 foreach (Renderer r in reefProps.GetComponentsInChildren<Renderer>(true))
                     TagRendererSimple(r);
+
+            TagCrateCornerCaps();
+        }
+
+        /// <summary>MV-1052: a crate's own four "CrateCap" corner accents (<see cref="ReefKit.ApplyCrateSkin"/>,
+        /// MV-1019) are built under its body by <see cref="ReefDressing.DressCover"/>, called from
+        /// <c>BackyardPath.Awake</c> AFTER <see cref="MapRuntime.Build"/>'s own <c>TagStatic</c> walk has
+        /// already tagged that body — so the caps never joined <see cref="_rendererZones"/> and sat
+        /// permanently enabled, orphaned from the gate that correctly hides their own parent crate body
+        /// the instant its zone goes inactive. With the body gone dark and the caps left lit, all that
+        /// was left drawing was four thin orange slivers where a full crate should be — Lee's own "one
+        /// slab ... part-drawn" (MV-1052). Found by walking every static cover body already in
+        /// <see cref="_statics"/> for a "Corner Caps" child, rather than re-deriving a crate's own
+        /// identity here — every cap is tagged with the SAME zone ids its own parent body already
+        /// carries, so it tracks the gate exactly as that body does without needing its own probe.</summary>
+        private void TagCrateCornerCaps()
+        {
+            if (_statics == null) return;
+
+            foreach (GameObject go in _statics)
+            {
+                if (go == null) continue;
+                Transform caps = go.transform.Find("Corner Caps");
+                if (caps == null) continue;
+
+                Renderer body = go.GetComponent<Renderer>();
+                if (body == null || !_rendererZones.TryGetValue(body, out List<string> zones)) continue;
+
+                foreach (Renderer cap in caps.GetComponentsInChildren<Renderer>(true))
+                    AddRendererZones(cap, zones);
+            }
         }
 
         /// <summary>MV-932, change item 3: World 1's dressing builds on its own scene-root GameObject —
