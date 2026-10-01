@@ -128,13 +128,21 @@ namespace MaxWorlds.Rendering
         /// <summary>The glass gradient's FAR (bottom) tone — darker, deeper water.</summary>
         public static readonly Color ReefGlassOceanFar = HexColor(0x052B49);
 
-        /// <summary>Panel-seam tiling for the floor's triplanar grain (MV-745, ticket change item 1):
-        /// the palette's own <see cref="BiomePalette.GroundDetailScale"/>, so the seam grid matches
-        /// whatever density the Reef ground shader already uses elsewhere rather than inventing a
-        /// second number for the same idea.</summary>
-        private static float ShipFloorDetailScale => BiomePalette.Reef.GroundDetailScale;
+        // MV-1053: World 3's deck floor — plated hull, seams, rivets, a grate, and an emissive mask
+        // of circuit traces. Named separately from M_Circuit_Cyan/M_Circuit_Purple (MV-713) because
+        // those are shared by OTHER renderers (the wall-base circuit spine, the coolant turret) that
+        // this ticket never touches; giving the deck's own mask its own constants keeps a value tweak
+        // here from silently relighting something else.
+        public static readonly Color ReefFloorCircuitCyan = HexColor(0x27E6FF);
+        public static readonly Color ReefFloorCircuitViolet = HexColor(0xC25BFF);
 
-        public static Material M_ShipFloor => ReefMaterial("M_ShipFloor", ReefShipFloor, detailScale: ShipFloorDetailScale);
+        /// <summary>World size, in metres, of one deck plate (MV-1053 ticket: "2 m square plates").
+        /// Shared with <see cref="MaxWorlds.Rendering.ReefKit.DressHull"/>, which uses it to turn the
+        /// floor's own resolved world size into the material's mesh-UV tiling — one authored number
+        /// instead of two that have to be kept in step by hand.</summary>
+        public const float ReefDeckPlateSizeMetres = 2f;
+
+        public static Material M_ShipFloor => ReefDeckFloorMaterial();
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
         public static Material M_Circuit_Cyan => ReefMaterial("M_Circuit_Cyan", ReefCircuitCyan, emissive: true);
         public static Material M_Circuit_Purple => ReefMaterial("M_Circuit_Purple", ReefCircuitPurple, emissive: true);
@@ -187,6 +195,89 @@ namespace MaxWorlds.Rendering
 
             s_reefCache[key] = m;
             return m;
+        }
+
+        /// <summary>
+        /// World 3's deck floor (MV-1053): a baked, tiled deck texture (plates, seams, corner
+        /// rivets, a grate — see <see cref="StylizedTextures.ReefDeckAlbedo"/>) plus an emissive mask
+        /// of cyan/violet circuit traces (<see cref="StylizedTextures.ReefDeckEmission"/>), replacing
+        /// the flat tint <see cref="ReefMaterial"/> gave this before.
+        ///
+        /// <see cref="ReefShipFloor"/>'s own value is kept EXACTLY as MV-1019 tuned it — that number
+        /// is also what anchors <c>MV1019ReefFloorContrastTests</c>'s "crate must read >= 1.6x the
+        /// floor" margin, and <see cref="StylizedTextures.ReefDeckAlbedo"/> is baked as a MULTIPLIER
+        /// around a mean of 1 (plate interior ~1, seam ~0.46 — see its own comment), never as a
+        /// colour in its own right, so this never has to touch that number to add the new detail.
+        ///
+        /// Deliberately NOT built through <see cref="ReefMaterial"/>: this is the one Reef surface
+        /// that shader-switches off the triplanar <see cref="MaterialLibrary.StylizedSurfaceShader"/>
+        /// onto the plain chain. The ticket's own AC computes the deck's world-space plate period
+        /// from the material's mesh-UV tiling against the floor's resolved world size
+        /// (<see cref="ReefKit.DressHull"/> sets <c>mainTextureScale</c> for exactly that reason), and
+        /// the triplanar shader never reads that tiling — it samples its base map from world
+        /// position instead (see StylizedSurface.shader's own header) — so it is the wrong shader
+        /// for an AC phrased that way.
+        ///
+        /// This material's OWN identity is cached forever, same as every other entry in
+        /// <see cref="s_reefCache"/> — but its two baked TEXTURES are not: they live in
+        /// <see cref="StylizedTextures"/>'s own cache, which <see cref="StylizedTextures.Clear"/>
+        /// sweeps on every biome change, same as every other generated texture in this project. So
+        /// the cache-hit path below re-checks that the material's base map SURVIVED the last sweep,
+        /// and re-points both slots at freshly-baked textures if it did not, rather than either (a)
+        /// exempting these two from the sweep — which would make them the only generated textures in
+        /// the project that outlive a palette change, for no reason tied to their own content, since
+        /// unlike a <see cref="Tinted"/> albedo they carry no biome colour of their own to begin with
+        /// — or (b) leaving the material holding a destroyed Texture2D, which is the MV-1053 dangling-
+        /// reference bug this class's own <see cref="MaterialLibrary.Clear"/> doc comment already
+        /// names for the Tinted case.
+        /// </summary>
+        private static Material ReefDeckFloorMaterial()
+        {
+            const string key = "M_ShipFloor";
+            if (s_reefCache.TryGetValue(key, out var cached) && cached != null)
+            {
+                if (cached.GetTexture("_BaseMap") == null) RefreshReefDeckTextures(cached);
+                return cached;
+            }
+
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader)
+            {
+                name = key,
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true,
+            };
+
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ReefShipFloor);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", ReefShipFloor);
+
+            RefreshReefDeckTextures(m);
+
+            // Circuitry reads as LIT, not just coloured — same idiom ReefMaterial's own emissive
+            // branch uses. _EmissionColor is left white: the mask already carries the real cyan/
+            // violet hues, so tinting it here would just multiply them a second time.
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.white);
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+
+            s_reefCache[key] = m;
+            return m;
+        }
+
+        /// <summary>(Re-)points the deck material's base/emission map slots at
+        /// <see cref="StylizedTextures.ReefDeckAlbedo"/>/<see cref="StylizedTextures.ReefDeckEmission"/>
+        /// — both self-rebuild on next access if <see cref="StylizedTextures.Clear"/> destroyed the
+        /// previous instance, so this always hands the material a live texture.</summary>
+        private static void RefreshReefDeckTextures(Material m)
+        {
+            Texture2D albedo = StylizedTextures.ReefDeckAlbedo();
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", albedo);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", albedo);
+
+            Texture2D emission = StylizedTextures.ReefDeckEmission();
+            if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", emission);
         }
 
         private static Material ReefGlassMaterial()

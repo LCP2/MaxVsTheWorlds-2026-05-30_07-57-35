@@ -49,13 +49,15 @@ namespace MaxWorlds.Tests.EditMode
                 wm.Apply(BiomePalette.ForWorld(2));
                 ReefKit.DressHull(root3.transform);
 
-                // AC1: the floor's shared material is WorldMaterials.M_ShipFloor, seam detail scale > 0.
+                // AC1: the floor's shared material is WorldMaterials.M_ShipFloor, wearing a real
+                // baked deck texture (MV-1053 switched this off the triplanar shader's _DetailScale
+                // knob onto a baked, mesh-UV-tiled texture — see M_ShipFloor's own comment).
                 Renderer floor = FindNamed(root3.transform, "Map Floor");
                 Assert.IsNotNull(floor, "expected World 3's built map to include its floor slab");
                 Assert.AreSame(WorldMaterials.M_ShipFloor, floor.sharedMaterial,
                     "the World 3 floor must wear WorldMaterials.M_ShipFloor by identity, not a generic swept material");
-                Assert.Greater(floor.sharedMaterial.GetFloat("_DetailScale"), 0f,
-                    "the floor's seam detail scale must be non-zero, or the deck reads as a flat tint again");
+                Assert.AreSame(StylizedTextures.ReefDeckAlbedo(), floor.sharedMaterial.GetTexture("_BaseMap"),
+                    "the floor's base map must be the baked deck texture, or the deck reads as a flat tint again");
 
                 // AC2: at least one renderer uses M_Circuit_Cyan and has emission enabled.
                 Renderer circuit = FindByMaterial(root3.transform, WorldMaterials.M_Circuit_Cyan);

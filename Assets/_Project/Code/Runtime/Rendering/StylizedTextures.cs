@@ -174,6 +174,173 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
+        // ------------------------------------------------------------------ MV-1053: the deck floor
+        //
+        // Two separate maps, not one, and deliberately not built on the shared Height()/Blend() path
+        // above: the albedo is a pure MULTIPLIER (mean ~1 across the plate, dipping at the seam) so
+        // WorldMaterials.M_ShipFloor's own _BaseColor keeps carrying the tone MV-1019 tuned — see that
+        // material's own comment for why. The emission mask is the opposite: a real colour in its own
+        // right, baked "linear: false" like every other albedo here.
+        //
+        // Both represent exactly ONE 2 m plate. ReefKit.DressHull is what makes that read as "2 m
+        // plates" on the actual floor: it sets the material's own mainTextureScale from the floor's
+        // resolved world size, so this image only ever has to BE one plate, never worry how many of
+        // them the floor needs.
+
+        private const float ReefDeckSeamFraction = 0.03f;    // ~6 cm seam / 2 m plate, ticket's own number
+        private const float ReefDeckSeamMultiplier = 0.46f;  // how much darker the seam reads than the plate
+
+        private const float ReefDeckRivetInset = 0.09f;      // how far a rivet sits from the plate's corner
+        private const float ReefDeckRivetRadius = 0.045f;
+        private const float ReefDeckRivetRingMultiplier = 0.7f;
+
+        // A grate inset, centred and clear of both the seam band and the corner rivets — "occasional"
+        // within the repeating tile rather than across separate plates, since one image here IS one
+        // plate (see the section note above): there is nowhere else for "occasional" to live.
+        private const float ReefDeckGrateMin = 0.37f, ReefDeckGrateMax = 0.63f;
+        private const int ReefDeckGrateBars = 5;
+        private const float ReefDeckGrateBarMultiplier = 0.50f;
+
+        /// <summary>The deck's one 2 m plate, as a greyscale MULTIPLIER against <c>M_ShipFloor</c>'s
+        /// own _BaseColor: ~1 across the face with a little tileable per-plate value noise (the
+        /// ticket's "±5% per-plate value variation"), a dark border at the plate's own seam, a small
+        /// full-value rivet disc ringed darker at each corner, and one grate inset.</summary>
+        public static Texture2D ReefDeckAlbedo(int size = 256)
+        {
+            const string key = "reefDeckAlbedo";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var t = NewTexture(key, size, linear: true);
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size;
+                float v = (y + 0.5f) / size;
+
+                float variation = (Fbm(u, v, baseFreq: 5, octaves: 2) - 0.5f) * 0.10f;
+                float m = 1f + variation;
+
+                float edge = Mathf.Max(Mathf.Abs(u - 0.5f) / 0.5f, Mathf.Abs(v - 0.5f) / 0.5f);
+                float seam = Curve(1f - ReefDeckSeamFraction, 1f, edge);
+                m = Mathf.Lerp(m, ReefDeckSeamMultiplier, seam);
+
+                float rivet = ReefDeckRivetMultiplier(u, v);
+                if (rivet >= 0f) m = rivet;
+
+                float grate = ReefDeckGrateMultiplier(u, v);
+                if (grate >= 0f) m = Mathf.Min(m, grate);
+
+                byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
+                px[y * size + x] = new Color32(g, g, g, 255);
+            }
+
+            t.SetPixels32(px);
+            t.Apply(updateMipmaps: true);
+            s_cache[key] = t;
+            return t;
+        }
+
+        /// <summary>-1 where no rivet reaches; otherwise the multiplier to use. Never above 1: a
+        /// texture multiply can only darken relative to _BaseColor, never brighten past it, so the
+        /// rivet's own disc reads at the plate's full (untouched) value rather than as a highlight.
+        /// </summary>
+        private static float ReefDeckRivetMultiplier(float u, float v)
+        {
+            float best = -1f;
+            foreach (float cx in new[] { ReefDeckRivetInset, 1f - ReefDeckRivetInset })
+            foreach (float cy in new[] { ReefDeckRivetInset, 1f - ReefDeckRivetInset })
+            {
+                float d = Mathf.Sqrt((u - cx) * (u - cx) + (v - cy) * (v - cy));
+                if (d <= ReefDeckRivetRadius) return 1f;
+                if (d <= ReefDeckRivetRadius * 1.6f)
+                {
+                    float ring = 1f - Curve(ReefDeckRivetRadius, ReefDeckRivetRadius * 1.6f, d);
+                    float m = Mathf.Lerp(1f, ReefDeckRivetRingMultiplier, ring);
+                    if (best < 0f || m < best) best = m;
+                }
+            }
+            return best;
+        }
+
+        private static float ReefDeckGrateMultiplier(float u, float v)
+        {
+            if (u < ReefDeckGrateMin || u > ReefDeckGrateMax || v < ReefDeckGrateMin || v > ReefDeckGrateMax)
+                return -1f;
+
+            float lu = (u - ReefDeckGrateMin) / (ReefDeckGrateMax - ReefDeckGrateMin);
+            float lv = (v - ReefDeckGrateMin) / (ReefDeckGrateMax - ReefDeckGrateMin);
+            float barU = Mathf.Abs(Frac(lu * ReefDeckGrateBars) - 0.5f) * 2f;
+            float barV = Mathf.Abs(Frac(lv * ReefDeckGrateBars) - 0.5f) * 2f;
+            float bar = Mathf.Max(Curve(0.7f, 1f, barU), Curve(0.7f, 1f, barV));
+            return Mathf.Lerp(0.85f, ReefDeckGrateBarMultiplier, bar);
+        }
+
+        /// <summary>The deck's emissive mask: sparse cyan circuit traces along two of the plate's
+        /// four seams (never all four — the ticket's own "running along SOME seams"), small brighter
+        /// nodes along them, and one violet node. Baked as a real colour, not a multiplier —
+        /// <see cref="WorldMaterials.M_ShipFloor"/> leaves _EmissionColor white so this paints the
+        /// floor's glow directly.</summary>
+        public static Texture2D ReefDeckEmission(int size = 256)
+        {
+            const string key = "reefDeckEmission";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var t = NewTexture(key, size, linear: false);
+            var px = new Color32[size * size];
+            var black = new Color32(0, 0, 0, 255);
+            var cyan = (Color32)WorldMaterials.ReefFloorCircuitCyan;
+            var violet = (Color32)WorldMaterials.ReefFloorCircuitViolet;
+
+            for (int i = 0; i < px.Length; i++) px[i] = black;
+
+            float traceHalfWidth = ReefDeckSeamFraction * 0.5f;
+            DrawTraceAlongV(px, size, u: traceHalfWidth, cyan);
+            DrawTraceAlongU(px, size, v: 1f - traceHalfWidth, cyan);
+
+            PutNode(px, size, traceHalfWidth, 0.30f, cyan, radius: 0.02f);
+            PutNode(px, size, traceHalfWidth, 0.70f, cyan, radius: 0.02f);
+            PutNode(px, size, 0.40f, 1f - traceHalfWidth, cyan, radius: 0.02f);
+            PutNode(px, size, 0.75f, 1f - traceHalfWidth, violet, radius: 0.022f);   // the odd violet node
+
+            t.SetPixels32(px);
+            t.Apply(updateMipmaps: true);
+            s_cache[key] = t;
+            return t;
+        }
+
+        private static void DrawTraceAlongV(Color32[] px, int size, float u, Color32 c)
+        {
+            int x = Mathf.Clamp(Mathf.RoundToInt(u * size), 0, size - 1);
+            int half = Mathf.Max(1, Mathf.RoundToInt(size * 0.006f));
+            for (int y = 0; y < size; y++)
+            for (int dx = -half; dx <= half; dx++)
+                px[y * size + Wrap(x + dx, size)] = c;
+        }
+
+        private static void DrawTraceAlongU(Color32[] px, int size, float v, Color32 c)
+        {
+            int y = Mathf.Clamp(Mathf.RoundToInt(v * size), 0, size - 1);
+            int half = Mathf.Max(1, Mathf.RoundToInt(size * 0.006f));
+            for (int x = 0; x < size; x++)
+            for (int dy = -half; dy <= half; dy++)
+                px[Wrap(y + dy, size) * size + x] = c;
+        }
+
+        private static void PutNode(Color32[] px, int size, float u, float v, Color32 c, float radius)
+        {
+            int cx = Mathf.RoundToInt(u * size);
+            int cy = Mathf.RoundToInt(v * size);
+            int r = Mathf.Max(1, Mathf.RoundToInt(radius * size));
+            for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                if (dx * dx + dy * dy > r * r) continue;
+                px[Wrap(cy + dy, size) * size + Wrap(cx + dx, size)] = c;
+            }
+        }
+
         // ------------------------------------------------------------------ YT-77: the materials
         //
         // Everything below follows the shape YT-69 proved on the lawn: build ONE height field, then
@@ -478,7 +645,16 @@ namespace MaxWorlds.Rendering
         /// own exemption for the <see cref="MaterialLibrary.Tinted"/> materials that reference them —
         /// destroying the texture out from under a material this project deliberately kept alive would
         /// just trade one orphaned reference (magenta) for another (a Tinted surface gone flat white,
-        /// since <c>_BaseColor</c> alone carries no tone for these — the albedo texture is the tone).</summary>
+        /// since <c>_BaseColor</c> alone carries no tone for these — the albedo texture is the tone).
+        ///
+        /// <c>"reefDeck"</c> (MV-1053) is deliberately NOT exempt the same way, even though
+        /// <see cref="WorldMaterials.M_ShipFloor"/> is ALSO a permanently-cached material that
+        /// references one of these: unlike a Tinted albedo, a deck multiplier/emission mask carries
+        /// no biome colour of its own, so there is no equivalent reason for it to outlive every other
+        /// generated texture in the project. <see cref="WorldMaterials"/>'s own cache instead
+        /// self-heals — it notices a destroyed base map on next access and re-points the (still-live)
+        /// material at a freshly rebuilt one — so this Clear() can sweep these two exactly like every
+        /// other entry here without leaving anything dangling.</summary>
         public static void Clear()
         {
             var keys = new List<string>(s_cache.Keys);

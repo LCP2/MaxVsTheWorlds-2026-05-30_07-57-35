@@ -92,6 +92,7 @@ namespace MaxWorlds.Rendering
                 if (kind == SurfaceKind.Ground)
                 {
                     r.sharedMaterial = WorldMaterials.M_ShipFloor;
+                    ApplyDeckTiling(r);
                 }
                 else if (kind == SurfaceKind.Wall)
                 {
@@ -102,6 +103,28 @@ namespace MaxWorlds.Rendering
             }
 
             BuildCircuitSpine(host, walls);
+        }
+
+        /// <summary>Sets the shared deck material's mesh-UV tiling from the floor's OWN resolved
+        /// world size (MV-1053) — not a hardcoded guess, so a differently-sized World 3 floor still
+        /// reads as 2 m plates rather than stretched or shrunk ones. The floor is a single Box
+        /// primitive scaled to its footprint, and a Unity cube's default face UVs already span 0..1
+        /// across that exact footprint, so this tiling count is the real one, not an approximation.
+        /// </summary>
+        private static void ApplyDeckTiling(Renderer floorRenderer)
+        {
+            Vector3 size = floorRenderer.bounds.size;
+            float plate = WorldMaterials.ReefDeckPlateSizeMetres;
+            Vector2 tiling = new Vector2(
+                Mathf.Max(1f, size.x / plate),
+                Mathf.Max(1f, size.z / plate));
+
+            // SetTextureScale("_BaseMap", ...), not the mainTextureScale shortcut: that shortcut
+            // targets whichever property carries the shader's [MainTexture] tag (or _MainTex if none
+            // does), and URP/Lit's own Properties block never tags _BaseMap with it — mainTextureScale
+            // silently no-ops on this shader. Naming the property directly is what actually reaches
+            // the _BaseMap_ST the shader samples through.
+            floorRenderer.sharedMaterial.SetTextureScale("_BaseMap", tiling);
         }
 
         /// <summary>One strip per built wall, hugging its base, plus the single driver that scrolls
