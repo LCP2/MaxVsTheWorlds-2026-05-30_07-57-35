@@ -47,6 +47,14 @@ namespace MaxWorlds.Save
         /// world button and a respawn all boot with this null, exactly as before this ticket.</summary>
         public static PendingResumePlan? PendingResume { get; set; }
 
+        /// <summary>MV-1057: marks that the reload <see cref="PendingResume"/> is carrying should finish
+        /// as the Home screen's DEV "FINAL AREA" jump (<see cref="MaxWorlds.UI.HomeScreen.ApplyDevFinaleJump"/>)
+        /// rather than an ordinary RESUME (<see cref="MaxWorlds.UI.HomeScreen.ApplyResume"/>) once the
+        /// reload's own <c>Start()</c> finds <see cref="PendingResume"/> set — same idiom as
+        /// <see cref="PendingResume"/> itself, just the one extra bit a cross-world dev jump needs on top
+        /// of it. False (the RESUME path) whenever no dev jump is in flight.</summary>
+        public static bool PendingDevFinaleJump { get; set; }
+
         /// <summary>See <see cref="PendingResume"/>.</summary>
         public readonly struct PendingResumePlan
         {
@@ -390,6 +398,7 @@ namespace MaxWorlds.Save
             ActiveSlot = -1;
             s_directoryOverride = null;
             PendingResume = null;
+            PendingDevFinaleJump = false;
         }
     }
 }

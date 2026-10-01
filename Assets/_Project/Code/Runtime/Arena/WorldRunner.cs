@@ -342,6 +342,51 @@ namespace MaxWorlds.Arena
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
         }
 
+        /// <summary>MV-1057: the Home screen's DEV "FINAL AREA" entry point — jumps straight to this
+        /// world's finale (its own final, boss-role area: <see cref="WorldConfig.AreaByIndex"/> of
+        /// <see cref="WorldDials.areaCount"/>) with every prerequisite on the route already satisfied:
+        /// every shed and Replicator strictly before it destroyed (<see cref="DestroyFactoriesBefore"/>,
+        /// crediting the REPLICATORS/FACTORIES banner exactly as a real playthrough would) and every
+        /// condition-gated gate re-resolved open (<see cref="RefreshConditionGates"/>) before landing.
+        /// The landing itself is <see cref="ResumeCheckpoint"/> verbatim, so Max arrives exactly as a
+        /// RESUME into that area would — standing at its gate, in the area before it — with none of
+        /// this written back to the slot's own save. A no-op (returns false) before <see cref="Configure"/>
+        /// has wired this runner up, or if the config's own final area isn't boss-role (shouldn't happen
+        /// for an authored world).</summary>
+        public bool JumpToFinaleArea()
+        {
+            if (_areaDirector == null || _cfg?.dials == null) return false;
+
+            int finaleIndex = _cfg.dials.areaCount;
+            WorldArea finale = _cfg.AreaByIndex(finaleIndex);
+            if (finale == null || !finale.IsBossRole) return false;
+
+            DestroyFactoriesBefore(finaleIndex);
+            RefreshConditionGates();
+
+            ResumeCheckpoint(finaleIndex);
+            return true;
+        }
+
+        /// <summary>Every shed and Replicator strictly before <paramref name="targetAreaIndex"/>,
+        /// destroyed — the same reach <see cref="MaxWorlds.Dev.DevModeController.TryJumpToArea"/>'s own
+        /// replicator-only helper has (MV-940), extended to sheds since <see cref="JumpToFinaleArea"/>'s
+        /// own prerequisite list (MV-1057) names both.</summary>
+        private void DestroyFactoriesBefore(int targetAreaIndex)
+        {
+            foreach (Replicator r in _replicators)
+                if (r != null && r.IsAlive && r.AreaIndex < targetAreaIndex)
+                    r.ApplyCheckpointDestroyed();
+
+            foreach (var (areaId, _, hutch) in _sheds)
+            {
+                if (hutch == null || !hutch.IsAlive) continue;
+                WorldArea area = _cfg?.Area(areaId);
+                if (area != null && area.index < targetAreaIndex)
+                    hutch.ApplyCheckpointDestroyed();
+            }
+        }
+
         /// <summary>MV-665: reports every newly-dead shed into <see cref="_supply"/> — sheds no longer
         /// gate any door by role, but <see cref="SupplyLineNetwork"/> still needs to know a shed died for
         /// everything else it drives (supply lines, <see cref="TrackDestroyedShedStream"/>). MV-703 adds

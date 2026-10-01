@@ -122,8 +122,11 @@ namespace MaxWorlds.UI
                 if (SaveSystem.PendingResume.HasValue && SaveSystem.PendingResume.Value.Slot == SaveSystem.ActiveSlot)
                 {
                     int pendingSlot = SaveSystem.PendingResume.Value.Slot;
+                    bool pendingFinaleJump = SaveSystem.PendingDevFinaleJump;
                     SaveSystem.PendingResume = null;
-                    ApplyResume(pendingSlot);
+                    SaveSystem.PendingDevFinaleJump = false;
+                    if (pendingFinaleJump) ApplyDevFinaleJump(pendingSlot);
+                    else ApplyResume(pendingSlot);
                     return;
                 }
 
@@ -524,6 +527,54 @@ namespace MaxWorlds.UI
             WeaponSystemState.RebuildAcquiredFromRigState();
         }
 
+        /// <summary>DEV: FINAL AREA tapped (MV-1057) — Lee's own dev shortcut to reach a world's finale
+        /// area (whichever area carries the "boss" role at the end of <see cref="MaxWorlds.Arena.WorldConfig.dials"/>'s
+        /// <c>areaCount</c>) without replaying the whole world, so a world-to-world transition can be
+        /// tested without a full playthrough. Starts the slot's own saved world — its checkpoint's world
+        /// if a run is in progress, else <see cref="SaveSlotData.WorldIndex"/> (world 1 for a never-played
+        /// slot), via the exact same <see cref="SaveSystem.ResolveResumePlan"/> RESUME itself uses — and
+        /// keeps the slot's own RIG/loadout exactly as RESUME would (<see cref="ApplyResumeState"/>);
+        /// nothing here maxes or otherwise inflates it, and nothing here is written back to the save.
+        /// Same cross-world reload shape as <see cref="OnResume"/> (MV-985): reloads only when the target
+        /// world differs from what's already built, via <see cref="SaveSystem.PendingResume"/>, with
+        /// <see cref="SaveSystem.PendingDevFinaleJump"/> marking that the reload's own <see cref="Start"/>
+        /// should finish as this jump rather than an ordinary RESUME.</summary>
+        private void OnDevFinalAreaTapped(int slot)
+        {
+            var path = FindFirstObjectByType<MaxWorlds.Arena.BackyardPath>();
+            int builtWorldIndex = path != null ? path.ResolvedWorldIndex : 0;
+            int worldIndex = SaveSystem.ResolveResumePlan(slot, builtWorldIndex).WorldIndex;
+
+            if (worldIndex == builtWorldIndex)
+            {
+                ApplyDevFinaleJump(slot);
+                return;
+            }
+
+            SaveSystem.ActiveSlot = slot;
+            SaveSystem.PendingResume = new SaveSystem.PendingResumePlan(slot, worldIndex);
+            SaveSystem.PendingDevFinaleJump = true;
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
+        }
+
+        /// <summary>The actual jump (MV-1057), shared by <see cref="OnDevFinalAreaTapped"/>'s immediate
+        /// (same-world) path and <see cref="Start"/>'s post-reload (cross-world) path — restores the
+        /// slot's own RIG/loadout the same way <see cref="ApplyResume"/> does, then hands off to
+        /// <see cref="MaxWorlds.Arena.WorldRunner.JumpToFinaleArea"/> for the prerequisite-clearing and
+        /// landing itself. Closes the modal exactly as <see cref="ApplyResume"/> does — harmless when
+        /// called from <see cref="Start"/>, where this instance was never opened in the first place.</summary>
+        private void ApplyDevFinaleJump(int slot)
+        {
+            int worldIndex = SaveSystem.ResolveResumePlan(slot, builtWorldIndex: 0).WorldIndex;
+            ApplyResumeState(slot, worldIndex);
+            Close();
+
+            var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
+            runner?.JumpToFinaleArea();
+        }
+
         /// <summary>RESET tapped on an occupied slot (MV-282) — asks for confirmation before wiping
         /// anything; a bare tap must never erase progress by itself.</summary>
         private void OnResetTapped(int slot)
@@ -727,18 +778,24 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>WORLD 2/3 dev entry points (MV-726; MV-736; relocated off the cards by MV-960) —
-        /// NOT part of the design, built to be deleted later: every button this builds lives in this
-        /// one method, called from the single guarded line in <see cref="Build"/>, so removing them is
-        /// exactly delete-this-method + delete-the-const + delete-the-one-call.</summary>
+        /// <summary>WORLD 2/3 dev entry points (MV-726; MV-736; relocated off the cards by MV-960), plus
+        /// DEV: FINAL AREA (MV-1057) — NOT part of the design, built to be deleted later: every button
+        /// this builds lives in this one method, called from the single guarded line in
+        /// <see cref="Build"/>, so removing them is exactly delete-this-method + delete-the-const +
+        /// delete-the-one-call. MV-1057 shrank WORLD 2/3's own width from 285 to a three-across split of
+        /// the same card footprint (580 wide) to make room for the third button — DEV: FINAL AREA is
+        /// visible on every slot (same "always there, only tappable when it means something" idiom as
+        /// RESET on an occupied/empty card) but only interactable on an occupied one, since there is
+        /// nothing to jump to on an empty slot.</summary>
         private void BuildDevWorldShortcuts(RectTransform stage)
         {
             var yellow = new Color(242f / 255f, 196f / 255f, 58f / 255f);
             var fill = Color.Lerp(PanelColor, yellow, 0.08f);
             float[] cardX = { 40f, 650f, 1260f };
-            const float y = 846f, h = 66f, w = 285f, gap = 10f;
+            const float y = 846f, h = 66f, cardW = 580f, gap = 10f;
+            const float w = (cardW - 2f * gap) / 3f;
 
-            void BuildButton(string label, float x, UnityEngine.Events.UnityAction onClick)
+            void BuildButton(string label, float x, bool interactable, UnityEngine.Events.UnityAction onClick)
             {
                 var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
                 go.transform.SetParent(stage, false);
@@ -755,20 +812,24 @@ namespace MaxWorlds.UI
                 Stretch(outline.rectTransform);
                 outline.raycastTarget = false;
 
-                var text = AddText(rt, 24f, yellow, TextAnchor.MiddleCenter, FontStyle.Bold);
+                Color textColor = interactable ? yellow : new Color(yellow.r, yellow.g, yellow.b, 0.35f);
+                var text = AddText(rt, 22f, textColor, TextAnchor.MiddleCenter, FontStyle.Bold);
                 Stretch(text.rectTransform);
                 text.text = label;
 
                 var btn = go.GetComponent<Button>();
                 btn.targetGraphic = img;
+                btn.interactable = interactable;
                 btn.onClick.AddListener(onClick);
             }
 
             for (int slot = 0; slot < SaveSystem.SlotCount && slot < cardX.Length; slot++)
             {
                 int capturedSlot = slot;
-                BuildButton("DEV - WORLD 2", cardX[slot], () => OnWorldDevStart(capturedSlot, 1, maxRig: false));
-                BuildButton("DEV - WORLD 3", cardX[slot] + w + gap, () => OnWorldDevStart(capturedSlot, 2, maxRig: true));
+                bool occupied = SaveSystem.Load(slot).HasData;
+                BuildButton("DEV - WORLD 2", cardX[slot], true, () => OnWorldDevStart(capturedSlot, 1, maxRig: false));
+                BuildButton("DEV - WORLD 3", cardX[slot] + w + gap, true, () => OnWorldDevStart(capturedSlot, 2, maxRig: true));
+                BuildButton("DEV: FINAL AREA", cardX[slot] + 2f * (w + gap), occupied, () => OnDevFinalAreaTapped(capturedSlot));
             }
         }
 
