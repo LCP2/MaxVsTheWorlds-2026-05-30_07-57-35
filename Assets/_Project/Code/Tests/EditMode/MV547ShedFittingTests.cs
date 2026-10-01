@@ -172,21 +172,25 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>MV-913: Missile no longer wears its own MeshRenderer — <see cref="ShedFitting.Bind"/>
-        /// builds it a <see cref="MaxWorlds.VFX.MissileLauncherRig"/> of CHILD parts instead (the whole
-        /// point of AC2's "no primitive" assertion), so the fixture matches <c>MapRuntime.BuildShedFittings</c>'s
-        /// real construction (a bare GameObject, not <c>CreatePrimitive</c>) and the read walks into
-        /// children via <see cref="Component.GetComponentInChildren{T}()"/> rather than assuming the
-        /// fitting's own root carries the renderer. Spiker/Laser are untouched: their own primitive cube
-        /// still carries its MeshRenderer directly on the root, which GetComponentInChildren finds first.</summary>
+        /// <summary>MV-1058: no fitting kind wears its own MeshRenderer any more — <see cref="ShedFitting.Bind"/>
+        /// builds every kind a <see cref="MaxWorlds.VFX.ShedTurretRig"/> of CHILD parts instead (the whole
+        /// point of AC2's "no primitive" assertion in <c>MV1058ShedTurretTests</c>), so the fixture matches
+        /// <c>MapRuntime.BuildShedFittings</c>'s real construction (a bare GameObject, not <c>CreatePrimitive</c>).
+        /// Reads the DOME renderer by name specifically, not just the first renderer found — the base ring
+        /// and (for Spiker/Laser) the barrel housing are deliberately dark, non-emissive metal, so a
+        /// name-blind "first renderer" read would pick up the wrong part and the hue check below would be
+        /// comparing a near-black base to red, not red to red.</summary>
         private static Color FittingEmissionOfFreshFitting(ShedFittingKind kind)
         {
-            var go = kind == ShedFittingKind.Missile ? new GameObject() : GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var go = new GameObject();
             try
             {
                 var fitting = go.AddComponent<ShedFitting>();
                 fitting.Bind(null, kind);
-                return go.GetComponentInChildren<MeshRenderer>().sharedMaterial.GetColor("_EmissionColor");
+                foreach (var r in go.GetComponentsInChildren<MeshRenderer>())
+                    if (r.name == "TurretDome") return r.sharedMaterial.GetColor("_EmissionColor");
+                Assert.Fail("the fitting built no TurretDome renderer to read emission from");
+                return default;
             }
             finally
             {

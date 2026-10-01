@@ -61,66 +61,49 @@ namespace MaxWorlds.Factories
         private const float MissileDamage = 22f;
         private const float MissileSplashRadius = 2f;
 
-        // ---------------------------------------------------------------- MV-911: world-independent colour
+        // ---------------------------------------------------------------- MV-1058: turret visual
         //
-        // Bug (Lee, live build, World 1): a general lighting darkening left the Spiker fitting "heavily
-        // blackened" and its spikes unreadable. The fitting cube (built by MapRuntime.BuildShedFittings)
-        // is IDamageable and mounted under the shed's own MowerHutch, so CharacterSkinDirector classifies
-        // it CharacterRole.Structure and paints it with a plain MaterialLibrary.Tinted metal material —
-        // no emission, so it is entirely dependent on scene lighting for how bright it reads. That is the
-        // exact defect MV-857 (Max) and MV-861 (the Launcher missile) already fixed: give the surface its
-        // own emission, computed from the active BackyardLook, so it stops depending on the scene light.
+        // Lee (live build, 2026-10-01): shed corner turrets mostly read as "plain cubes sitting on the
+        // corners" — only Missile (MV-913) had gotten a generated-mesh rig; Spiker and Laser were still
+        // a bare GameObject.CreatePrimitive(PrimitiveType.Cube) at 0.5 m, tinted the shed's own
+        // Structure colour (with MV-911's compensation emission), so they blended into the roof. Every
+        // kind now gets the same ShedTurretRig body (Runtime/VFX/ShedTurretRig.cs) — a dark metal base
+        // ring, a fixed red (#D4161C) emissive dome that yaws to face the current target, and a
+        // kind-specific barrel — built on MapRuntime.BuildShedFittings's bare GameObject host exactly
+        // the way MV-913's Missile rig already was (no Unity primitive mesh anywhere, any kind).
         //
-        // This also has to keep CharacterSkinDirector's own sweep off the fitting (SelfDrivenTint, the
-        // same "whoever drives a block owns it" marker MowerHutch's VulnerableCore already uses), or that
-        // director claims the renderer a frame later and overwrites this material with its own undressed
+        // SelfDrivenTint keeps CharacterSkinDirector's own sweep off the fitting (the same "whoever
+        // drives a block owns it" marker MowerHutch's VulnerableCore already uses), or that director
+        // would claim the renderer a frame later and overwrite these materials with its own undressed
         // metal-tint version.
 
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
-        /// <summary>The fitting's own colour — the same pale galvanised steel every other part of the
-        /// shed wears (<see cref="CharacterRole.Structure"/>), read live rather than duplicated so a
-        /// future retune of the shed's own colour flows through here automatically.</summary>
-        private static readonly Color FittingColor = CharacterSkin.BaseColorFor(CharacterRole.Structure);
+        /// <summary>The dome's fixed colour (ticket #D4161C) — deliberately NOT the shed's own
+        /// Structure tint, so every fitting of every kind on every world's shed reads the same
+        /// unmistakable red rather than blending into whatever the shed roof happens to be painted.
+        /// Missile's launch pods wear this same tone too (ticket: "twin red launch pods").</summary>
+        private static readonly Color DomeColor = new Color32(0xD4, 0x16, 0x1C, 0xFF);
 
-        /// <summary>Exposes <see cref="FittingColor"/> for <c>MV547ShedFittingTests</c> (MV-911), same
-        /// shape as <see cref="MaxWorlds.Enemies.HomingMissile.ShaftColorForTests"/>.</summary>
-        public static Color FittingColorForTests => FittingColor;
+        /// <summary>Dark metal — the base ring and the Spiker/Laser barrel housings.</summary>
+        private static readonly Color DarkMetalColor = new Color(0.09f, 0.095f, 0.105f);
 
-        /// <summary>Gives the fitting's own renderer a private material carrying MV-857's own
-        /// world-compensation emission, and marks it so CharacterSkinDirector never re-dresses it back to
-        /// a plain, lighting-only surface. A private clone (never the shared <see cref="MaterialLibrary"/>
-        /// cache entry) — MowerHutch tints the exact same <see cref="FittingColor"/> tone, and writing
-        /// emission onto the cached instance directly would leak this fitting's glow onto the shed body
-        /// too (the same trap <see cref="MaxWorlds.Enemies.HomingMissile"/>'s own EmissiveInstance avoids).</summary>
-        private static void BuildVisual(GameObject go)
-        {
-            go.AddComponent<SelfDrivenTint>();
+        /// <summary>The bright, always-on glow accent (muzzle collar / emitter lens / missile pod
+        /// tips) — additive and unlit, so it reads the same in every world rather than depending on
+        /// <see cref="MaxRig.WorldCompensationEmission"/> the way the dome and barrels do.</summary>
+        private static readonly Color GlowAccentColor = new Color(1f, 0.18f, 0.12f);
 
-            var renderer = go.GetComponent<MeshRenderer>();
-            Material template = MaterialLibrary.Tinted(SurfaceKind.Metal, FittingColor);
-            if (renderer == null || template == null) return;
+        /// <summary>Exposes <see cref="DomeColor"/> for <c>MV547ShedFittingTests</c>' MV-911
+        /// world-independent-emission regression guard, same shape as
+        /// <see cref="MaxWorlds.Enemies.HomingMissile.ShaftColorForTests"/>.</summary>
+        public static Color FittingColorForTests => DomeColor;
 
-            var mat = new Material(template) { name = "ShedFitting", hideFlags = HideFlags.HideAndDontSave };
-            if (mat.HasProperty(EmissionId))
-            {
-                BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
-                mat.SetColor(EmissionId, MaxRig.WorldCompensationEmission(FittingColor, activeLook));
-            }
-            renderer.sharedMaterial = mat;
-        }
-
-        // ---------------------------------------------------------------- MV-913: reusable missile rig
-        //
-        // Missile only (ticket scope) — Spiker/Laser stay on BuildVisual's plain tinted cube above until
-        // their own tickets convert them. Builds MissileLauncherRig (Runtime/VFX/MissileLauncherRig.cs),
-        // a generated-mesh rig with no reference to sheds/MowerHutch/ShedFitting of its own, and hands it
-        // a palette carrying the SAME MV-857/861/911 world-compensation emission BuildVisual gives every
-        // other fitting — so the missile launcher reads no darker in World 2 fog than a Spiker sitting
-        // right next to it. One material per part (never MaterialLibrary's own cached instance), same
-        // "clone before you tint" rule BuildVisual already follows.
-
-        private static Material MissilePartMaterial(string name, Color tone, BackyardLook activeLook)
+        /// <summary>A private material clone (never MaterialLibrary's own cached instance) carrying
+        /// MV-857/861/911's world-compensation emission, so this turret reads no darker in World 2 fog
+        /// than it does in World 1. Writing emission onto the cached instance directly would leak onto
+        /// every other prop wearing the same tone (the same trap
+        /// <see cref="MaxWorlds.Enemies.HomingMissile"/>'s own EmissiveInstance avoids).</summary>
+        private static Material TurretMaterial(string name, Color tone, BackyardLook activeLook)
         {
             Material template = MaterialLibrary.Tinted(SurfaceKind.Metal, tone);
             if (template == null) return null;
@@ -129,30 +112,26 @@ namespace MaxWorlds.Factories
             return mat;
         }
 
-        private static MissileLauncherRig BuildMissileVisual(GameObject go)
+        private static ShedTurretRig BuildTurretVisual(GameObject go, ShedFittingKind kind)
         {
             go.AddComponent<SelfDrivenTint>();
 
             // MapRuntime.BuildShedFittings has already set go.transform.localScale to FittingSize
             // (0.5) by the time Bind() runs — the same "1x1x1 unit cube, shrunk by the parent's own
-            // scale" trick the old CreatePrimitive cube relied on. MissileLauncherRig authors its parts
-            // in real metres, so building it straight under go.transform would scale it down AGAIN
+            // scale" trick the old CreatePrimitive cube relied on. ShedTurretRig authors its parts in
+            // real metres, so building it straight under go.transform would scale it down AGAIN
             // (YT-71/YT-74's exact trap — see ParentScale's own doc comment). MakeMetreSpace cancels it.
-            Transform metreSpace = ParentScale.MakeMetreSpace(new GameObject("MissileLauncherVisual").transform, go.transform);
+            Transform metreSpace = ParentScale.MakeMetreSpace(new GameObject("ShedTurretVisual").transform, go.transform);
 
             BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
-            var palette = new MissileLauncherPalette(
-                MissilePartMaterial("ShedFittingMissileBase", FittingColor, activeLook),
-                MissilePartMaterial("ShedFittingMissileArm", FittingColor, activeLook),
-                MissilePartMaterial("ShedFittingMissileTip", FittingColor * 0.6f, activeLook));
+            var palette = new ShedTurretPalette(
+                baseMaterial: TurretMaterial("ShedTurretBase", DarkMetalColor, activeLook),
+                dome: TurretMaterial("ShedTurretDome", DomeColor, activeLook),
+                barrel: TurretMaterial("ShedTurretBarrel", kind == ShedFittingKind.Missile ? DomeColor : DarkMetalColor, activeLook),
+                glow: VfxMaterials.AdditiveTinted(GlowAccentColor));
 
-            return MissileLauncherRig.Build(metreSpace, FittingSizeForRig, palette);
+            return ShedTurretRig.Build(metreSpace, kind, palette);
         }
-
-        /// <summary>The fitting's own authored roof-corner size in real metres — <c>MapRuntime.FittingSize</c>,
-        /// kept as a private copy rather than a cross-file constant reference, so this file never needs to
-        /// know that name.</summary>
-        private const float FittingSizeForRig = 0.5f;
 
         private enum Phase { Idle, Telegraph, Beam }
 
@@ -165,10 +144,9 @@ namespace MaxWorlds.Factories
         private float _phaseTimer;
         private float _cooldownTimer;
 
-        /// <summary>MV-913: non-null only for <see cref="ShedFittingKind.Missile"/> — the reusable rig
-        /// this fitting drives (facing + fire recoil) but never builds the logic for; see
-        /// <see cref="BuildMissileVisual"/>.</summary>
-        private MissileLauncherRig _missileRig;
+        /// <summary>MV-1058: the turret body this fitting drives (facing yaw + fire recoil) but never
+        /// builds the logic for; see <see cref="BuildTurretVisual"/>.</summary>
+        private ShedTurretRig _turretRig;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -185,8 +163,7 @@ namespace MaxWorlds.Factories
             _hutch = hutch;
             _kind = kind;
             _health = new DestructibleHealth(StatsFor(kind).Hp);
-            if (kind == ShedFittingKind.Missile) _missileRig = BuildMissileVisual(gameObject);
-            else BuildVisual(gameObject);
+            _turretRig = BuildTurretVisual(gameObject, kind);
         }
 
         /// <summary>Point this fitting at what it should shoot — a test's synthetic Max, or (via
@@ -257,13 +234,13 @@ namespace MaxWorlds.Factories
             if (_hutch != null && !_hutch.IsAlive) { KillWithShed(); return; }
             if (!IsAlive || _kind == ShedFittingKind.None) return;
 
-            // MV-913: the rig ticks (facing + recoil decay) every step this fitting is alive, regardless
+            // MV-1058: the rig ticks (facing + recoil decay) every step this fitting is alive, regardless
             // of which combat phase below returns early — a turret that only turned to face while firing
             // would sit frozen aimed at whatever it last shot, which is not "tracks its current target".
-            if (_missileRig != null)
+            if (_turretRig != null)
             {
-                if (_target != null) _missileRig.Face(_target.position - transform.position);
-                _missileRig.Tick(dt);
+                if (_target != null) _turretRig.Face(_target.position - transform.position);
+                _turretRig.Tick(dt);
             }
 
             switch (_phase)
@@ -341,9 +318,9 @@ namespace MaxWorlds.Factories
                     break;
                 case ShedFittingKind.Missile:
                     HomingMissile.Fire(transform.position, _target, MissileSpeed, MissileDamage, MissileSplashRadius);
-                    _missileRig?.Fire(); // MV-913: the visible recoil — no diff to the missile's own flight numbers above
                     break;
             }
+            _turretRig?.Fire(); // MV-1058: the visible recoil kick — no diff to any kind's own flight numbers above
         }
     }
 }
