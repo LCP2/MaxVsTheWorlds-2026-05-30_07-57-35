@@ -346,10 +346,12 @@ namespace MaxWorlds.Arena
         /// world's finale (its own final, boss-role area: <see cref="WorldConfig.AreaByIndex"/> of
         /// <see cref="WorldDials.areaCount"/>) with every prerequisite on the route already satisfied:
         /// every shed and Replicator strictly before it destroyed (<see cref="DestroyFactoriesBefore"/>,
-        /// crediting the REPLICATORS/FACTORIES banner exactly as a real playthrough would) and every
-        /// condition-gated gate re-resolved open (<see cref="RefreshConditionGates"/>) before landing.
-        /// The landing itself is <see cref="ResumeCheckpoint"/> verbatim, so Max arrives exactly as a
-        /// RESUME into that area would — standing at its gate, in the area before it — with none of
+        /// silently — no loot/VFX replay for a kill the player never made — then
+        /// <see cref="FactoryCensus.RaiseCheckpointRestored"/> to catch the REPLICATORS/FACTORIES banner
+        /// up to it, the same recompute a checkpoint RESUME already triggers for the same reason) and
+        /// every condition-gated gate re-resolved open (<see cref="RefreshConditionGates"/>) before
+        /// landing. The landing itself is <see cref="ResumeCheckpoint"/> verbatim, so Max arrives exactly
+        /// as a RESUME into that area would — standing at its gate, in the area before it — with none of
         /// this written back to the slot's own save. A no-op (returns false) before <see cref="Configure"/>
         /// has wired this runner up, or if the config's own final area isn't boss-role (shouldn't happen
         /// for an authored world).</summary>
@@ -362,6 +364,7 @@ namespace MaxWorlds.Arena
             if (finale == null || !finale.IsBossRole) return false;
 
             DestroyFactoriesBefore(finaleIndex);
+            FactoryCensus.RaiseCheckpointRestored();
             RefreshConditionGates();
 
             ResumeCheckpoint(finaleIndex);
