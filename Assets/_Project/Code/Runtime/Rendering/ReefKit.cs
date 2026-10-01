@@ -18,6 +18,14 @@ namespace MaxWorlds.Rendering
         public OceanLayerKind Kind;
     }
 
+    /// <summary>Marks one hydroponic bed (MV-1055) so an EditMode test — or any future gameplay
+    /// query — can find every one <c>MaxWorlds.Arena.ReefHydroponics</c> placed without walking the
+    /// whole scene by name. Carries no data of its own: a bed's shape and position are baked into
+    /// its built geometry, same as every other Reef dressing piece.</summary>
+    public sealed class HydroponicBed : MonoBehaviour
+    {
+    }
+
     /// <summary>
     /// World 3's Reef ship kit (MV-713) — the pieces the ticket's material/prefab pass adds that don't
     /// already fall out of the existing per-world plumbing.
@@ -104,6 +112,7 @@ namespace MaxWorlds.Rendering
 
             BuildCircuitSpine(host, walls);
             BuildObservationGlass(host, walls);
+            BuildWallLamps(host, walls);
         }
 
         /// <summary>Sets the shared deck material's mesh-UV tiling from the floor's OWN resolved
@@ -247,6 +256,63 @@ namespace MaxWorlds.Rendering
             StripColliders(go);
             var rend = go.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = material;
+        }
+
+        // MV-1055, change item 2: small violet accent lamps mounted along the top of every hull
+        // wall, roughly every 6 m — the ticket's own pitch, distinct from the 4 m glass-mullion
+        // pitch above (a different rhythm reads as two different kit pieces, not one mis-spaced).
+        private const float WallLampPitch = 6f;
+        private const float WallLampDiameter = 0.18f;
+        private const float WallLampProud = 0.05f;   // perches on the wall's own top face, not embedded
+
+        /// <summary>One small violet bead per <see cref="WallLampPitch"/> along EVERY built wall
+        /// (not just the outer-edge glass walls <see cref="BuildObservationGlass"/> re-skins) —
+        /// "hull walls" in the ticket's own words, and every <see cref="StructuralWall"/> IS hull
+        /// plate in World 3. Evenly spread along each wall's own length (same "(i + 0.5) / count"
+        /// centring idiom <see cref="BuildObservationGlass"/>'s own mullion loop uses), never flush
+        /// with an end cap, so a short wall still reads as dressed rather than empty.</summary>
+        private static void BuildWallLamps(Transform host, List<StructuralWall> walls)
+        {
+            if (walls.Count == 0) return;
+
+            GameObject root = null;
+
+            foreach (StructuralWall wall in walls)
+            {
+                Transform wt = wall.transform;
+                Vector3 scale = wt.lossyScale;
+
+                bool alongX = scale.x >= scale.z;
+                float length = alongX ? scale.x : scale.z;
+                float height = scale.y;
+
+                int lamps = Mathf.Max(1, Mathf.FloorToInt(length / WallLampPitch));
+                for (int i = 0; i < lamps; i++)
+                {
+                    float t = (i + 0.5f) / lamps - 0.5f;
+                    float offset = t * length;
+
+                    Vector3 pos = alongX
+                        ? new Vector3(wt.position.x + offset, wt.position.y + height * 0.5f + WallLampProud, wt.position.z)
+                        : new Vector3(wt.position.x, wt.position.y + height * 0.5f + WallLampProud, wt.position.z + offset);
+
+                    if (root == null)
+                    {
+                        root = new GameObject("Wall Lamps");
+                        root.transform.SetParent(host, false);
+                    }
+
+                    GameObject lamp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    lamp.name = $"{wt.name} Lamp {i}";
+                    lamp.transform.SetParent(root.transform, false);
+                    lamp.transform.position = pos;
+                    lamp.transform.localScale = Vector3.one * WallLampDiameter;
+                    StripColliders(lamp);
+
+                    var rend = lamp.GetComponent<Renderer>();
+                    if (rend != null) rend.sharedMaterial = WorldMaterials.M_LampViolet;
+                }
+            }
         }
 
         // MV-1054, change item 1: the ocean pressing in beyond the map's own edge.
@@ -459,6 +525,126 @@ namespace MaxWorlds.Rendering
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
             if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
             rend.sharedMaterial = mat;
+        }
+
+        // MV-1055, change item 1: low hexagonal hydroponic beds. WHERE each bed stands is decided by
+        // MaxWorlds.Arena.ReefHydroponics (it needs cover/gate/garrison data this Rendering-assembly
+        // class has no reference to); this builds the geometry for one bed at a position already
+        // chosen to clear everything the ticket names.
+        private const float BedRadius = 1.5f;          // ticket: "~3 m across" is the diameter
+        private const float BedRimHeight = 0.16f;
+        private const float BedRimThickness = 0.12f;
+        private const float BedSoilInset = 0.25f;      // keeps the soil pad inside the rim's own ring
+        private const float BedSoilHeight = 0.12f;
+        private const float KelpSpikeHeight = 0.10f;
+        private const float KelpSpikeThickness = 0.05f;
+        private const int BedRimSides = 6;
+
+        /// <summary>Tallest point any of a bed's own pieces reaches (the kelp spikes, planted on top
+        /// of the soil pad) — kept below the ticket's own 0.3 m ceiling with headroom, so it can never
+        /// read as cover (ticket, "Change" §1).</summary>
+        private const float BedMaxHeight = BedSoilHeight + KelpSpikeHeight;
+
+        /// <summary>One hydroponic bed — a glowing cyan hex rim, a dark soil pad recessed inside it,
+        /// and a few bioluminescent kelp spikes — at <paramref name="worldCenterXz"/> (Y ignored; a
+        /// bed always rests on the floor, never authored half-buried or floating). Collider-free
+        /// throughout, <see cref="BedMaxHeight"/> tall at its tallest point.</summary>
+        public static GameObject BuildHydroponicBed(Transform parent, Vector3 worldCenterXz)
+        {
+            var root = new GameObject("HydroponicBed");
+            root.transform.SetParent(parent, false);
+            root.transform.position = new Vector3(worldCenterXz.x, 0f, worldCenterXz.z);
+            root.AddComponent<HydroponicBed>();
+
+            BuildBedSoil(root.transform);
+            BuildBedRim(root.transform);
+            BuildKelpSpikes(root.transform);
+
+            return root;
+        }
+
+        private static void BuildBedSoil(Transform parent)
+        {
+            float radius = BedRadius - BedSoilInset;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = "Soil";
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(0f, BedSoilHeight * 0.5f, 0f);
+            // A default Unity cylinder is 2 units tall, 1 unit across at scale 1 — halving the
+            // requested height into the Y scale and doubling the radius into X/Z is what turns those
+            // unit dimensions into the actual metres asked for.
+            go.transform.localScale = new Vector3(radius * 2f, BedSoilHeight * 0.5f, radius * 2f);
+            StripColliders(go);
+
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = WorldMaterials.M_MetalDark;
+        }
+
+        /// <summary>Six bar segments joining the vertices of a regular hexagon — a regular hexagon's
+        /// own side length equals its circumradius, so each bar's length is just <see cref="BedRadius"/>,
+        /// no extra trig beyond the vertex positions themselves. Same "CreatePrimitive(Cube), scale
+        /// and rotate to fit" idiom every other edge-hugging piece in this file already uses (the glass
+        /// mullions, the crate corner caps) — never a hand-authored mesh.</summary>
+        private static void BuildBedRim(Transform parent)
+        {
+            var verts = new Vector3[BedRimSides];
+            for (int i = 0; i < BedRimSides; i++)
+            {
+                float angle = Mathf.Deg2Rad * (60f * i);
+                verts[i] = new Vector3(Mathf.Cos(angle) * BedRadius, 0f, Mathf.Sin(angle) * BedRadius);
+            }
+
+            for (int i = 0; i < BedRimSides; i++)
+            {
+                Vector3 a = verts[i];
+                Vector3 b = verts[(i + 1) % BedRimSides];
+                Vector3 mid = (a + b) * 0.5f;
+                Vector3 dir = b - a;
+
+                var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bar.name = $"Rim {i}";
+                bar.transform.SetParent(parent, false);
+                bar.transform.localPosition = new Vector3(mid.x, BedRimHeight * 0.5f, mid.z);
+                bar.transform.localRotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
+                bar.transform.localScale = new Vector3(BedRimThickness, BedRimHeight, dir.magnitude);
+                StripColliders(bar);
+
+                var rend = bar.GetComponent<Renderer>();
+                if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            }
+        }
+
+        // Fixed local offsets, not a per-instance random scatter (same "deterministic, never Random"
+        // idiom MaxWorlds.Enemies.CorrosionPuddle.BuildFanMesh's own seeded-hash comment keeps) — a
+        // bed built on CI must look identical to the same bed built in the editor.
+        private static readonly Vector3[] KelpSpikeOffsets =
+        {
+            new Vector3(0.4f, 0f, 0.25f),
+            new Vector3(-0.3f, 0f, 0.45f),
+            new Vector3(0.1f, 0f, -0.5f),
+        };
+
+        /// <summary>A few kelp spikes planted in the soil pad — mostly <see cref="WorldMaterials.ReefKelpGreen"/>
+        /// (#46FF9A), with "some magenta" (ticket, "Change" §1) at <see cref="WorldMaterials.ReefKelpMagenta"/>
+        /// (#FF4FD8): one in three, the odd one out rather than a 50/50 split.</summary>
+        private static void BuildKelpSpikes(Transform parent)
+        {
+            for (int i = 0; i < KelpSpikeOffsets.Length; i++)
+            {
+                var spike = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                spike.name = $"Kelp {i}";
+                spike.transform.SetParent(parent, false);
+                spike.transform.localPosition = new Vector3(
+                    KelpSpikeOffsets[i].x, BedSoilHeight + KelpSpikeHeight * 0.5f, KelpSpikeOffsets[i].z);
+                spike.transform.localRotation = Quaternion.Euler(0f, i * 35f, 10f);
+                spike.transform.localScale = new Vector3(KelpSpikeThickness, KelpSpikeHeight, KelpSpikeThickness);
+                StripColliders(spike);
+
+                var rend = spike.GetComponent<Renderer>();
+                if (rend != null)
+                    rend.sharedMaterial = (i == 1) ? WorldMaterials.M_KelpMagenta : WorldMaterials.M_KelpGreen;
+            }
         }
 
         /// <summary>Ocean backdrop and dressing props are scenery — never a thing Max, a robot or the
