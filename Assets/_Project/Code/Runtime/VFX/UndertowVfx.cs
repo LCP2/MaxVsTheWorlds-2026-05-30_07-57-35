@@ -5,22 +5,24 @@ namespace MaxWorlds.VFX
     /// <summary>
     /// UNDERTOW's own firing VFX (MV-1034, replacing the charge/cavitation shot's telegraph; MV-1046
     /// made the beam itself snake and corkscrew rather than just its crackle strands; MV-1064 made it
-    /// latch onto a robot and wrap it): a writhing beam from the muzzle rather than a straight laser
-    /// line — a white-hot core inside a cyan sheath, both walking one shared, animated centreline
-    /// pinned at the muzzle and the exact hit point, wrapped by a handful of orange/red/amber crackle
-    /// strands whose phase animates every frame — plus a muzzle flare and a splash flare where the
-    /// beam lands, and — while latched (<see cref="SetLatch"/>) — three coloured coils spiralling the
-    /// latched robot and a steady spray of sparks off its body.
+    /// latch onto a robot and wrap it; MV-1070 made the tip itself seek and gave it a deliberate,
+    /// non-ball finish): a writhing beam from the muzzle rather than a straight laser line — a
+    /// white-hot core inside a cyan sheath, both walking one shared, animated centreline pinned at the
+    /// muzzle and the tip, wrapped by a handful of orange/red/amber crackle strands whose phase
+    /// animates every frame — a muzzle flare, three short forked crackle prongs at the tip itself
+    /// (<see cref="UpdateProngs"/>, MV-1070 spec #9 — no ball, dot or orb), and — while latched
+    /// (<see cref="SetLatch"/>) — three coloured coils spiralling the latched robot and a steady spray
+    /// of sparks off its body.
     ///
     /// Owned entirely by the art stream, same split as <see cref="WaterVfx"/>/<see cref="LppeVfx"/>:
     /// <see cref="MaxWorlds.Combat.Undertow"/> drives it with cosmetic-only calls
     /// (<see cref="Init"/>, <see cref="SetStreaming"/>, <see cref="UpdateStream"/>, <see cref="OnTick"/>,
     /// <see cref="SetLatch"/>) and turning it off changes nothing but the picture.
     ///
-    /// Built from <see cref="LineRenderer"/>s updated in place every frame (the core/sheath/strand/coil
-    /// positions are overwritten, never reallocated) plus four shared <see cref="VfxBurst"/>s for the
-    /// muzzle flare, splash flare, latch sparks and latch impact flare — no per-frame allocation, so
-    /// the MV527 allocation guard holds.
+    /// Built from <see cref="LineRenderer"/>s updated in place every frame (the core/sheath/strand/coil/
+    /// prong positions are overwritten, never reallocated) plus three shared <see cref="VfxBurst"/>s for
+    /// the muzzle flare, latch sparks and latch impact flare — no per-frame allocation, so the MV527
+    /// allocation guard holds.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("vfx")]
@@ -79,12 +81,45 @@ namespace MaxWorlds.VFX
         private const float SparkLifeMin = 0.25f;
         private const float SparkLifeMax = 0.4f;
 
-        /// <summary>Spec: "a pulsing impact flare 0.8 m across at the contact point".</summary>
-        private const float ImpactFlareSize = 0.8f;
+        /// <summary>Spec: "a pulsing impact flare ... at the contact point". MV-1070 AC3: "no glow or
+        /// flare at the tip may be wider than the sheath itself (0.70m)" — clamped down from MV-1064's
+        /// original 0.8m, which would now fail that hard cap.</summary>
+        private const float ImpactFlareSize = 0.65f;
         private const float ImpactPulseHz = 5f;
 
         /// <summary>Spec: "muzzle flare 0.5 m" (was 0.35m).</summary>
         private const float MuzzleFlareSize = 0.5f;
+
+        // --- MV-1070 tip prongs (spec #9): "A deliberate end, NOT a ball." Three short LineRenderers
+        // forking forward from the tip — one white-hot flanked by one orange and one red — replace the
+        // old splash-flare particle burst at the hit point, which read as a soft glowing blob (the "ball"
+        // Lee called out) rather than a beam simply stopping.
+        private const int ProngCount = 3;
+        private static readonly float[] ProngLength = { 0.35f, 0.25f, 0.25f };   // white, orange, red
+        private const float ProngThickness = 0.08f;
+
+        /// <summary>Spec: "fork forward" — each flanking prong splays this many degrees off the beam's
+        /// own tangent at the tip; the centre (white-hot) prong runs straight along it.</summary>
+        private const float ProngSpreadDegrees = 18f;
+
+        /// <summary>Spec: "flickering and re-angling a few times a second".</summary>
+        private const float ProngReangleHz = 5f;
+
+        /// <summary>Spec: "On latch the prongs flare to 1.4x length for 0.15 s."</summary>
+        private const float ProngLatchFlareMultiplier = 1.4f;
+        private const float ProngLatchFlareSeconds = 0.15f;
+
+        private static readonly Color[] ProngColors =
+        {
+            new Color(1.9f, 1.95f, 2f, 1f), // white-hot, same over-bright trick as MuzzleColor
+            new Color(1f, 0.478f, 0.102f, 0.85f),   // #FF7A1A (orange) -- EmberColors[0]
+            new Color(1f, 0.165f, 0.071f, 0.85f),   // #FF2A12 (red) -- EmberColors[1]
+        };
+
+        /// <summary>Which way each prong splays off the tip tangent: the white-hot prong (0) runs
+        /// straight; the flanking orange/red prongs (1/2) splay symmetrically. A fixed lookup rather
+        /// than a fresh array literal every <see cref="UpdateProngs"/> call.</summary>
+        private static readonly float[] ProngAngleSign = { 0f, 1f, -1f };
 
         // MV-1046 centreline snake/corkscrew — every constant below is the ticket's own authored
         // number, not a tuned guess.
@@ -127,7 +162,6 @@ namespace MaxWorlds.VFX
             new Color(1f, 0.690f, 0.125f, 0.85f),   // #FFB020 (amber)
         };
         private static readonly Color MuzzleColor = new Color(1.9f, 1.95f, 2f, 1f);
-        private static readonly Color SplashColor = new Color(1.7f, 1.75f, 1.8f, 1f);
         private static readonly Color SparkColorA = new Color(1f, 0.55f, 0.12f, 1f);
         private static readonly Color SparkColorB = new Color(1f, 0.2f, 0.08f, 1f);
         private static readonly Color ImpactFlareColor = new Color(1f, 0.45f, 0.12f, 1f);
@@ -136,8 +170,8 @@ namespace MaxWorlds.VFX
         private LineRenderer _sheath;
         private LineRenderer[] _strands;
         private LineRenderer[] _coils;
+        private LineRenderer[] _prongs;
         private VfxBurst _muzzleFlare;
-        private VfxBurst _splashFlare;
         private VfxBurst _latchSparks;
         private VfxBurst _latchFlare;
         private bool _initialized;
@@ -159,6 +193,16 @@ namespace MaxWorlds.VFX
         /// beam's end-of-line curl in <see cref="UpdateStream"/>, so the two never visibly desync.</summary>
         private float _latchVisibility;
         private float _sparkAccumulator;
+
+        // --- MV-1070 tip prongs.
+        private float _prongReangleTimer;
+        private float _prongAngleOffset;
+
+        /// <summary>Counts down from <see cref="ProngLatchFlareSeconds"/> the instant the latch visibility
+        /// starts rising from 0 (a fresh latch, not an already-held one) — drives the prongs' one-shot
+        /// length flare (spec #9).</summary>
+        private float _prongFlareTimer;
+        private bool _wasLatchedLastFrame;
 
         /// <summary>Whether the stream's renderers are currently enabled — what
         /// <see cref="MaxWorlds.Combat.Undertow.IsStreamVisible"/> reads.</summary>
@@ -186,8 +230,13 @@ namespace MaxWorlds.VFX
             for (int i = 0; i < CoilCount; i++)
                 _coils[i] = BuildLine($"UndertowCoil{i}", CoilThickness, glow, positionCount: CoilSegments + 1);
 
+            // MV-1070: 3 short 2-point prongs forking forward from the tip (spec #9) -- built even
+            // though they're only positioned/enabled once the stream is up (UpdateProngs).
+            _prongs = new LineRenderer[ProngCount];
+            for (int i = 0; i < ProngCount; i++)
+                _prongs[i] = BuildLine($"UndertowProng{i}", ProngThickness, glow, positionCount: 2);
+
             _muzzleFlare = new VfxBurst("UndertowMuzzleFlare", glow, 24, 0f, perFrameCap: 4);
-            _splashFlare = new VfxBurst("UndertowSplashFlare", glow, 24, 0f, perFrameCap: 4);
             _latchSparks = new VfxBurst("UndertowLatchSparks", glow, 64, 0f, perFrameCap: 6);
             _latchFlare = new VfxBurst("UndertowLatchFlare", glow, 16, 0f, perFrameCap: 2);
         }
@@ -220,6 +269,7 @@ namespace MaxWorlds.VFX
             _sheath.enabled = on;
             _core.enabled = on;
             for (int i = 0; i < _strands.Length; i++) _strands[i].enabled = on;
+            for (int i = 0; i < _prongs.Length; i++) _prongs[i].enabled = on;
         }
 
         /// <summary>Re-lay the core/sheath/strand geometry between <paramref name="muzzle"/> and
@@ -324,6 +374,45 @@ namespace MaxWorlds.VFX
                 strand.startColor = c;
                 strand.endColor = c;
             }
+
+            UpdateProngs(dt, right);
+        }
+
+        /// <summary>MV-1070 spec #9: three short prongs forking forward from the tip along its own
+        /// tangent (the last centreline segment, not the straight muzzle->tip axis, so they follow the
+        /// snake/corkscrew rather than cutting across it) — re-angled a few times a second and briefly
+        /// flared on a fresh latch. Never a ball: each prong is a thin 2-point line, and the longest
+        /// (0.35m) stays well inside the sheath's own 0.70m width.</summary>
+        private void UpdateProngs(float dt, Vector3 right)
+        {
+            _prongReangleTimer += dt;
+            float reangleInterval = 1f / ProngReangleHz;
+            if (_prongReangleTimer >= reangleInterval)
+            {
+                _prongReangleTimer %= reangleInterval;
+                _prongAngleOffset = Random.Range(-1f, 1f) * ProngSpreadDegrees * 0.35f;
+            }
+
+            if (_prongFlareTimer > 0f) _prongFlareTimer = Mathf.Max(0f, _prongFlareTimer - dt);
+            float flareMul = 1f + (ProngLatchFlareMultiplier - 1f) * (_prongFlareTimer / ProngLatchFlareSeconds);
+
+            Vector3 tip = _centerline[Segments];
+            Vector3 tangent = tip - _centerline[Segments - 1];
+            if (tangent.sqrMagnitude < 1e-8f) tangent = tip - _centerline[0];
+            tangent = tangent.sqrMagnitude > 1e-8f ? tangent.normalized : Vector3.forward;
+
+            // Prong 0 (white-hot) runs straight along the tangent; 1 (orange)/2 (red) splay symmetrically
+            // off it, in the same right/up plane the strands already wrap in, re-angled together so the
+            // whole fork "flickers" as one cluster rather than each prong jittering independently.
+            for (int i = 0; i < _prongs.Length; i++)
+            {
+                float rad = ProngAngleSign[i] * (ProngSpreadDegrees + _prongAngleOffset) * Mathf.Deg2Rad;
+                Vector3 dir = tangent * Mathf.Cos(rad) + right * Mathf.Sin(rad);
+                _prongs[i].SetPosition(0, tip);
+                _prongs[i].SetPosition(1, tip + dir * (ProngLength[i] * flareMul));
+                _prongs[i].startColor = ProngColors[i];
+                _prongs[i].endColor = ProngColors[i];
+            }
         }
 
         /// <summary>The latched target's own collider radius plus the spec's pad, or a reasonable
@@ -340,6 +429,11 @@ namespace MaxWorlds.VFX
         public void SetLatch(bool on, Transform targetTransform, CharacterController targetCc, float dt)
         {
             if (!_initialized) return;
+
+            // MV-1070 spec #9: "On latch the prongs flare to 1.4x length for 0.15s" -- a fresh latch
+            // only (the rising edge), not every frame the latch is simply held.
+            if (on && !_wasLatchedLastFrame) _prongFlareTimer = ProngLatchFlareSeconds;
+            _wasLatchedLastFrame = on;
 
             if (on)
             {
@@ -401,7 +495,9 @@ namespace MaxWorlds.VFX
                     colorA: SparkColorA, colorB: SparkColorB);
             }
 
-            // Spec: "a pulsing impact flare 0.8m across at the contact point".
+            // Spec: "a pulsing impact flare ... at the contact point" -- clamped to ImpactFlareSize,
+            // itself capped at the sheath's own 0.70m by MV-1070 AC3 ("no renderer at the tip wider
+            // than the sheath -- no ball").
             float pulse = ImpactFlareSize * (0.85f + 0.15f * Mathf.Sin(Time.time * ImpactPulseHz * 2f * Mathf.PI));
             _latchFlare.Emit(centre, 1, Vector3.up, 180f,
                 speedMin: 0f, speedMax: 0f,
@@ -410,8 +506,10 @@ namespace MaxWorlds.VFX
                 colorA: ImpactFlareColor, colorB: ImpactFlareColor);
         }
 
-        /// <summary>The per-tick punctuation (spec): a bright muzzle flare at Max, and a splash flare
-        /// with 3 short white sparks where the beam lands. Called once per fire tick, not per frame.</summary>
+        /// <summary>The per-tick punctuation (spec): a bright muzzle flare at Max. MV-1070 removed the
+        /// old splash-flare burst at the hit point — that soft particle glow was exactly the "ball"
+        /// Lee called out; the tip's own look is now carried continuously by <see cref="UpdateProngs"/>
+        /// instead of a once-per-tick burst. Called once per fire tick, not per frame.</summary>
         public void OnTick(Vector3 muzzle, Vector3 endPoint, Vector3 forward)
         {
             if (!_initialized) return;
@@ -423,20 +521,12 @@ namespace MaxWorlds.VFX
                 sizeMin: MuzzleFlareSize, sizeMax: MuzzleFlareSize,
                 lifeMin: 0.1f, lifeMax: 0.1f,
                 colorA: MuzzleColor, colorB: MuzzleColor);
-
-            _splashFlare.Emit(endPoint, 3,
-                axis: Vector3.up, spreadDegrees: 60f,
-                speedMin: 1.5f, speedMax: 3f,
-                sizeMin: 0.08f, sizeMax: 0.14f,
-                lifeMin: 0.12f, lifeMax: 0.18f,
-                colorA: SplashColor, colorB: SplashColor);
         }
 
         private void LateUpdate()
         {
             if (!_initialized) return;
             _muzzleFlare.EndFrame();
-            _splashFlare.EndFrame();
             _latchSparks.EndFrame();
             _latchFlare.EndFrame();
         }
@@ -449,8 +539,9 @@ namespace MaxWorlds.VFX
                 for (int i = 0; i < _strands.Length; i++) DestroyLine(_strands[i]);
             if (_coils != null)
                 for (int i = 0; i < _coils.Length; i++) DestroyLine(_coils[i]);
+            if (_prongs != null)
+                for (int i = 0; i < _prongs.Length; i++) DestroyLine(_prongs[i]);
             Dispose(_muzzleFlare);
-            Dispose(_splashFlare);
             Dispose(_latchSparks);
             Dispose(_latchFlare);
         }

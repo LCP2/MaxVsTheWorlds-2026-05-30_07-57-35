@@ -26,6 +26,11 @@ namespace MaxWorlds.Tests.EditMode
     /// damage on every 0.1s tick; releasing spawns a <c>CavitationBubble</c> rather than nothing; and
     /// there is no stream VFX at all — <c>Undertow.IsStreamVisible</c>/<c>StreamEndPoint</c> do not exist,
     /// so this test does not compile there.
+    ///
+    /// Updated for MV-1070: the stream now only damages a robot once the tip's own seeking spring has
+    /// physically closed on it (<see cref="Undertow.IsLatched"/>), which takes a handful of ticks even
+    /// dead-ahead (spec'd up to ~0.45s) rather than landing on tick 0 — AC1's "every tick across a 2s
+    /// hold" window now starts counting from the first latched tick, not from the very first tick fired.
     /// </summary>
     public sealed class MV1034UndertowStreamTests
     {
@@ -98,20 +103,31 @@ namespace MaxWorlds.Tests.EditMode
 
             WeaponSystemState.ApplyWeaponCoreMorph(2); // World 3 -> UNDERTOW is the active primary
             DevMode.Enabled = true;
+            DevMode.InfiniteEnergy = true; // isolate the 2s hold from tank depletion
             DevMode.AutoFire = true; // "request fire" without the real Input System (PlayMode is banned)
 
             // --- AC1: a robot 6m ahead takes damage on every 0.1s tick across a full 2s hold -- no
             // charge phase ever stops it, unlike the pre-fix behaviour past ChargeSeconds (0.9s).
+            // MV-1070: acquiring the latch is no longer instantaneous even dead-ahead (the tip's seeking
+            // spring takes a handful of ticks to physically close within Undertow.LatchDistance, spec'd
+            // up to ~0.45s), so tick until latched first, THEN assert the per-tick damage cadence the
+            // remaining ticks of the 2s hold.
             RobotEnemy target = NewRobot("Target", _playerGo.transform.position + _playerGo.transform.forward * 6f);
             Physics.SyncTransforms();
 
-            for (int i = 0; i < 20; i++)
+            const int maxAcquireTicks = 10; // 1s budget -- generous over the ~0.45s settle spec
+            int acquireTick = 0;
+            for (; acquireTick < maxAcquireTicks && !undertow.IsLatched; acquireTick++)
+                InvokeTick(undertow, 0.1f);
+            Assert.IsTrue(undertow.IsLatched, $"the tip never latched onto the dead-ahead target within {maxAcquireTicks * 0.1f:0.0}s");
+
+            for (int i = acquireTick; i < 20; i++)
             {
                 float before = target.HealthCurrent;
                 InvokeTick(undertow, 0.1f);
                 Assert.Less(target.HealthCurrent, before,
                     $"tick {i} (t={((i + 1) * 0.1f):0.0}s): the lance must damage the target every 0.1s tick " +
-                    "across the full 2s hold -- no charge phase may ever pause it (MV-1034)");
+                    "once latched, across the full 2s hold -- no charge phase may ever pause it (MV-1034)");
             }
 
             Assert.IsTrue(undertow.IsStreamVisible, "the stream renderers must be enabled while firing");
@@ -151,7 +167,10 @@ namespace MaxWorlds.Tests.EditMode
             Physics.SyncTransforms(); // autoSyncTransforms is off project-wide
 
             DevMode.AutoFire = true;
-            InvokeTick(undertow, 0.1f);
+            // MV-1070: the tip is a seeking point now, not an instant raycast hit -- with no candidate
+            // (behindCover is sight-blocked) it eases toward the rest point over a handful of ticks
+            // rather than snapping there in one, so tick until it settles before reading its position.
+            for (int i = 0; i < 10; i++) InvokeTick(undertow, 0.1f);
 
             float coverFaceZ = coverGo.transform.position.z - coverCollider.size.z * 0.5f;
             Assert.AreEqual(coverFaceZ, undertow.StreamEndPoint.z, 0.05f,
