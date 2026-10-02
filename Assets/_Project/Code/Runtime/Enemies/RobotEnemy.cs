@@ -457,6 +457,8 @@ namespace MaxWorlds.Enemies
                 _stateTimer = 0f;
                 _seekStallTimer = 0f; // MV-812: fresh stall window for a fresh seek
                 _seekLastProgressDist = -1f;
+                _seekElapsedSeconds = 0f; // MV-1066: fresh guaranteed-arrival window for a fresh seek
+                _zoneRouteBudget.Reset(); // MV-1066: a stale Chase-session cached step is never this seek's
                 _bar?.SetReplicatorMarker(true);
             }
             ReplicatorSeekTarget = hatchPosition;
@@ -501,12 +503,33 @@ namespace MaxWorlds.Enemies
         private float _seekStallTimer;
         private float _seekLastProgressDist = -1f; // MV-812: -1 is "no checkpoint yet this seek"
 
-        /// <summary>Walks straight toward <see cref="ReplicatorSeekTarget"/> (MV-706) — the same
-        /// direct point-to-point <see cref="CharacterControllerMotion.SafeMove"/> idiom
-        /// <see cref="MaxWorlds.Factories.MowerHutch"/>'s own mobile pursuit already uses, reused rather
-        /// than forked: no sight, no navigation waypoints, no cover-routing — a lured robot beelines for
-        /// the box it's been pulled toward. Arrival itself is the Replicator's own call (it watches the
-        /// distance and consumes the robot); this only ever closes the gap.
+        /// <summary>MV-1066: seconds since THIS seek last entered <see cref="State.ReplicatorSeeking"/>
+        /// fresh (reset only there, in <see cref="SeekReplicator"/> — never on a mere retarget as the
+        /// queue shifts forward). Once this crosses <see cref="GuaranteedArrivalSeconds"/>, Lee's "no
+        /// robot stays assigned and stationary" rule takes over regardless of how far the authored
+        /// garrison placement that lured it actually was.</summary>
+        private float _seekElapsedSeconds;
+
+        /// <summary>MV-1066: Lee's own number for "a robot that has not reached its slot within
+        /// this long is drawn straight to the hatch". Real seek distances (garrison robots lured from
+        /// across a whole World 2 area, not just the next room) can run into the hundreds of metres —
+        /// this ticket's own repro proved 60 s of ordinary beelining never closes that gap for most of
+        /// a box's queue — so this is a hard guarantee, not a stall-recovery nudge.</summary>
+        private const float GuaranteedArrivalSeconds = 6f;
+
+        /// <summary>MV-1066: the speed a robot moves at once <see cref="GuaranteedArrivalSeconds"/> has
+        /// elapsed — a deliberate "pulled in hard" tell, visibly faster than any kind's own ordinary
+        /// move speed, not a disguised teleport. Fast enough that even this ticket's own worst-case
+        /// repro distance (high hundreds of metres) closes in a handful of seconds.</summary>
+        private const float GuaranteedArrivalGlideSpeed = 40f;
+
+        /// <summary>Walks toward <see cref="ReplicatorSeekTarget"/> (MV-706), routing around this room's
+        /// own authored cover the same <see cref="EnemyNavigation.Waypoint"/>/<see cref="ZoneRouteGrid"/>
+        /// way <c>TickChase</c> does (MV-1066 Step 2.2) — no sight gate, just the room-local steering,
+        /// since a lured robot already knows exactly where it's going. Arrival itself is the
+        /// Replicator's own call (it watches the distance and consumes the robot); this only ever closes
+        /// the gap. MV-1066: past <see cref="GuaranteedArrivalSeconds"/> this drops routing altogether
+        /// and glides straight at the real target instead — see that branch's own comment.
         ///
         /// MV-812 change 3: if distance to target hasn't closed by <see cref="ReplicatorSeekProgressThreshold"/>
         /// over the last <see cref="ReplicatorSeekStallSeconds"/>, this frame's step is applied directly to
@@ -521,7 +544,38 @@ namespace MaxWorlds.Enemies
             // him, or taking damage, and never times out — it stops only via CancelReplicatorSeeking
             // (it dies, its box dies/empties, or Max leaves the area), called externally by the box.
 
-            Vector3 to = ReplicatorSeekTarget - transform.position;
+            Vector3 rawTo = ReplicatorSeekTarget - transform.position;
+            rawTo.y = 0f;
+            float rawDist = rawTo.magnitude;
+            if (rawDist <= 0.001f) return;
+
+            _seekElapsedSeconds += dt; // MV-1066
+
+            // MV-1066: guaranteed arrival — once this seek has run GuaranteedArrivalSeconds without
+            // reaching its target, stop routing and stop tracking stalls; glide straight at the real
+            // target, collisions ignored, same direct-write escape as the stall nudge below, just
+            // permanent instead of a one-off. This is the fix this ticket's own repro proved necessary:
+            // a garrison robot lured from far across the area can never beeline the gap in time, let
+            // alone route around cover to it.
+            if (_seekElapsedSeconds >= GuaranteedArrivalSeconds)
+            {
+                Vector3 glideDir = rawTo / rawDist;
+                RotateToward(glideDir, dt);
+                float glideStep = Mathf.Min(GuaranteedArrivalGlideSpeed * dt, rawDist);
+                NanMoveLog.GuardedWrite(transform, transform.position + glideDir * glideStep, name,
+                    "RobotEnemy.TickReplicatorSeeking.GuaranteedArrival", dt);
+                return;
+            }
+
+            // MV-1066 Step 2.2: route around this room's own authored cover to the slot — the same
+            // EnemyNavigation.Waypoint + ZoneRouteGrid steering TickChase already uses (see that
+            // method's own call below), reused rather than forked, so a lured robot stops beelining
+            // through walls and other boxes on its way to the hatch.
+            MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, ReplicatorSeekTarget,
+                rawZone?.id, UsesGridRoute(Kind), _zoneRouteBudget, dt);
+
+            Vector3 to = waypoint - transform.position;
             to.y = 0f;
             float dist = to.magnitude;
             if (dist <= 0.001f) return;
@@ -1700,19 +1754,35 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
 
-            FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
-            ApplyGravity(dt);
-            FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
+            // MV-1066: once the guaranteed-arrival glide has taken over (TickReplicatorSeeking, past
+            // GuaranteedArrivalSeconds), gravity and the fall-recovery safety net (MV-946/MV-952) must
+            // not fight it — the ticket's own spec calls this a "visible glide, collisions ignored", and
+            // a robot gliding in hard off an authored garrison position is, by construction, nowhere
+            // near solid ground along the way. Without this, gravity (ticked regardless of state) pulls
+            // it below BelowFloorMargin mid-glide and fall-recovery teleports it back to whatever
+            // position ResetState happened to seed _fallRecovery with when this instance was first
+            // built (MV-966 CreateInstance's own CreatePrimitive-time origin, not its real spawn point)
+            // — this ticket's own 60 s repro proved exactly that fight: a lured robot's distance to its
+            // slot never closes because every recovery undoes the glide's own progress.
+            bool inGuaranteedArrivalGlide = Current == State.ReplicatorSeeking
+                && _seekElapsedSeconds >= GuaranteedArrivalSeconds;
 
-            // MV-952: below the floor or outside the world bounds for more than the grace window ->
-            // back to solid ground, the same recovery MV-946 already gives Max and every Sentinel. No
-            // damage, no death, and never counted as a kill -- this is recovery, not a hazard.
-            Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
-            if (recoverTo.HasValue)
+            if (!inGuaranteedArrivalGlide)
             {
-                // MV-955: evidence for a live fall that could never be reproduced in EditMode.
-                FallEventLog.Record("robot", EnemyNavigation.Map, _fallRecovery.FirstOutOfPlayPosition, recoverTo.Value, dt);
-                RecoverFromFall(recoverTo.Value);
+                FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
+                ApplyGravity(dt);
+                FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
+
+                // MV-952: below the floor or outside the world bounds for more than the grace window ->
+                // back to solid ground, the same recovery MV-946 already gives Max and every Sentinel. No
+                // damage, no death, and never counted as a kill -- this is recovery, not a hazard.
+                Vector3? recoverTo = _fallRecovery.Tick(transform.position, EnemyNavigation.Map, _cc.isGrounded, dt);
+                if (recoverTo.HasValue)
+                {
+                    // MV-955: evidence for a live fall that could never be reproduced in EditMode.
+                    FallEventLog.Record("robot", EnemyNavigation.Map, _fallRecovery.FirstOutOfPlayPosition, recoverTo.Value, dt);
+                    RecoverFromFall(recoverTo.Value);
+                }
             }
 
             // MV-697: applied after every state's own movement, regardless of state.
@@ -2830,6 +2900,7 @@ namespace MaxWorlds.Enemies
                     _stateTimer = 0f;
                     _seekStallTimer = 0f;
                     _seekLastProgressDist = -1f;
+                    _seekElapsedSeconds = 0f;
                     _bar?.SetReplicatorMarker(true);
                     ReplicatorSeekTarget = target;
                     return;
