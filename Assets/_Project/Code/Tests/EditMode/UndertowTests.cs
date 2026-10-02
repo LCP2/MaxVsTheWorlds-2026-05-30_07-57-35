@@ -22,6 +22,13 @@ namespace MaxWorlds.Tests.EditMode
     /// Fails on 43c8d6e (MV-704, the commit before MV-714): none of <see cref="Undertow"/> or
     /// <see cref="WeaponCatalog.PrimaryKind.Undertow"/> exist on that commit, so this test does not
     /// compile there — the same class of pre-fix evidence <c>PulseLaserTests</c>' own doc comment uses.
+    ///
+    /// Updated for MV-1070, which removed the single-shot <c>FireLanceTick</c> this test used to invoke
+    /// directly: a robot can now only take damage once the tip's own seeking spring has physically
+    /// latched onto it (<see cref="Undertow.IsLatched"/>), so AC1 now ticks the REAL <c>Tick</c> path
+    /// until latched before asserting the pierce. MV-1070 also added a distance tie-break to candidate
+    /// selection specifically for this geometry (three robots dead-ahead in a line all read the same
+    /// angle off aim) — the nearest must be the one sought/latched/pierced-from first.
     /// </summary>
     public sealed class UndertowTests
     {
@@ -33,8 +40,8 @@ namespace MaxWorlds.Tests.EditMode
             typeof(RobotEnemy).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo UndertowAwake =
             typeof(Undertow).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly MethodInfo UndertowFireLanceTick =
-            typeof(Undertow).GetMethod("FireLanceTick", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo UndertowTick =
+            typeof(Undertow).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo WaterBlasterAwake =
             typeof(WaterBlaster).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
 
@@ -64,6 +71,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.ActivePrimary = WeaponCatalog.PrimaryKind.Undertow;
             UpgradeState.Reset();
             DevTuning.Reset();
+            DevMode.Reset();
 
             _weaponGo = new GameObject("Undertow");
             _weaponGo.transform.position = Vector3.zero;
@@ -76,6 +84,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Reset();
             UpgradeState.Reset();
             DevTuning.Reset();
+            DevMode.Reset();
             RobotEnemy.ResetRegistry();
             if (_weaponGo != null) Object.DestroyImmediate(_weaponGo);
         }
@@ -83,23 +92,37 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LancePiercesTwoRobotsAndDpsTracksTheRcda_MV714()
         {
+            DevMode.Enabled = true;
+            DevMode.InfiniteEnergy = true;
+
             Undertow undertow = _weaponGo.AddComponent<Undertow>();
             UndertowAwake.Invoke(undertow, null); // Awake doesn't run for AddComponent outside Play mode
+            undertow.SetFiring(true); // no aimSource on this standalone probe -- SetFiring drives it directly
 
-            // --- AC1: a lance tick fired along a line of three robots damages exactly the first two.
+            // --- AC1: a line of three robots dead-ahead; the tip latches onto the nearest (MV-1070's own
+            // distance tie-break for equal-angle candidates), then pierces to the second-closest.
             RobotEnemy near = NewEnemy("Near", Vector3.forward * 2f);
             RobotEnemy mid = NewEnemy("Mid", Vector3.forward * 4f);
             RobotEnemy far = NewEnemy("Far", Vector3.forward * 6f);
             Physics.SyncTransforms();
 
-            UndertowFireLanceTick.Invoke(undertow, null);
+            const int maxAcquireTicks = 10; // 1s budget -- generous over the ~0.45s settle spec
+            int t = 0;
+            for (; t < maxAcquireTicks && !undertow.IsLatched; t++)
+                UndertowTick.Invoke(undertow, new object[] { 0.1f });
+            Assert.IsTrue(undertow.IsLatched, $"the tip never latched onto the nearest dead-ahead robot within {maxAcquireTicks * 0.1f:0.0}s");
+            Assert.AreSame(near.gameObject, undertow.LatchedTransform.gameObject,
+                "of three equally-dead-ahead robots the tip must latch onto the CLOSEST one");
+
+            float nearBefore = near.HealthCurrent, midBefore = mid.HealthCurrent, farBefore = far.HealthCurrent;
+            UndertowTick.Invoke(undertow, new object[] { 0.1f });
 
             float tickDamage = undertow.EffectiveDamagePerTick;
-            Assert.AreEqual(100f - tickDamage, near.HealthCurrent, 0.01f,
-                "the closest robot in the line must take one lance tick of damage");
-            Assert.AreEqual(100f - tickDamage, mid.HealthCurrent, 0.01f,
+            Assert.AreEqual(nearBefore - tickDamage, near.HealthCurrent, 0.01f,
+                "the closest (latched) robot in the line must take one lance tick of damage");
+            Assert.AreEqual(midBefore - tickDamage, mid.HealthCurrent, 0.01f,
                 "the second-closest robot in the line must ALSO take one lance tick of damage (pierces two)");
-            Assert.AreEqual(100f, far.HealthCurrent, 0.01f,
+            Assert.AreEqual(farBefore, far.HealthCurrent, 0.01f,
                 "the third robot in the line must take NO damage — the lance pierces at most two");
 
             // --- AC5: UNDERTOW's lance DPS at track level 0 (fresh state) is within 10% of the RCDA's.
