@@ -517,11 +517,16 @@ namespace MaxWorlds.Enemies
         /// a box's queue — so this is a hard guarantee, not a stall-recovery nudge.</summary>
         private const float GuaranteedArrivalSeconds = 6f;
 
-        /// <summary>MV-1066: the speed a robot moves at once <see cref="GuaranteedArrivalSeconds"/> has
-        /// elapsed — a deliberate "pulled in hard" tell, visibly faster than any kind's own ordinary
-        /// move speed, not a disguised teleport. Fast enough that even this ticket's own worst-case
-        /// repro distance (high hundreds of metres) closes in a handful of seconds.</summary>
-        private const float GuaranteedArrivalGlideSpeed = 40f;
+        /// <summary>MV-1067: true only across the guaranteed-arrival PULL itself — the window the box's
+        /// own green beam/tint tell must cover, per Lee's "I don't want robots just suddenly
+        /// disappearing" (2026-10-02). Excludes <see cref="IsBeingDrawnIn"/> deliberately: once the
+        /// robot has actually arrived and the normal Intake beat (hatch open/walk/shrink/close) has
+        /// taken over, the pull itself is over even though <see cref="Current"/> and
+        /// <see cref="_seekElapsedSeconds"/> alone can't tell the two states apart — see
+        /// <see cref="MaxWorlds.Factories.Replicator"/>'s own pull-beam tracker and this class's own
+        /// body-tint tell in <see cref="MaxWorlds.VFX.RobotRig"/>, both driven off this.</summary>
+        public bool IsInGuaranteedArrivalGlide =>
+            Current == State.ReplicatorSeeking && !IsBeingDrawnIn && _seekElapsedSeconds >= GuaranteedArrivalSeconds;
 
         /// <summary>Walks toward <see cref="ReplicatorSeekTarget"/> (MV-706), routing around this room's
         /// own authored cover the same <see cref="EnemyNavigation.Waypoint"/>/<see cref="ZoneRouteGrid"/>
@@ -552,16 +557,20 @@ namespace MaxWorlds.Enemies
             _seekElapsedSeconds += dt; // MV-1066
 
             // MV-1066: guaranteed arrival — once this seek has run GuaranteedArrivalSeconds without
-            // reaching its target, stop routing and stop tracking stalls; glide straight at the real
+            // reaching its target, stop routing and stop tracking stalls; head straight at the real
             // target, collisions ignored, same direct-write escape as the stall nudge below, just
-            // permanent instead of a one-off. This is the fix this ticket's own repro proved necessary:
-            // a garrison robot lured from far across the area can never beeline the gap in time, let
-            // alone route around cover to it.
+            // permanent instead of a one-off. MV-1067 (Lee, 2026-10-02: "I don't want robots just
+            // suddenly disappearing"): this used to glide at a fixed 40 m/s — visibly faster than any
+            // kind's own move speed, which read as a snap/teleport, the exact thing Lee rejected. It
+            // now moves at this robot's own EffectiveMoveSpeed, same as every other walk in this file —
+            // never a teleport — while Replicator's own green beam/tint tell (gated on
+            // IsInGuaranteedArrivalGlide) makes the pull itself visible instead of relying on speed to
+            // read as "something is happening".
             if (_seekElapsedSeconds >= GuaranteedArrivalSeconds)
             {
                 Vector3 glideDir = rawTo / rawDist;
                 RotateToward(glideDir, dt);
-                float glideStep = Mathf.Min(GuaranteedArrivalGlideSpeed * dt, rawDist);
+                float glideStep = Mathf.Min(EffectiveMoveSpeed * dt, rawDist);
                 NanMoveLog.GuardedWrite(transform, transform.position + glideDir * glideStep, name,
                     "RobotEnemy.TickReplicatorSeeking.GuaranteedArrival", dt);
                 return;
