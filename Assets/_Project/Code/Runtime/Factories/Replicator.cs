@@ -191,6 +191,11 @@ namespace MaxWorlds.Factories
         /// pool is gone; this is the only replication tell mounted on the box itself.</summary>
         private Renderer _replicationBeacon;
         private MaterialPropertyBlock _replicationBeaconMpb;
+        /// <summary>MV-1067: "a green beam ... from the hatch to the robot for the whole pull" — aimed
+        /// and toggled every <see cref="TickConsumption"/> tick by <see cref="UpdatePullBeam"/>, never
+        /// LateUpdate, same "an EditMode test can read the resolved state back off a synthetic dt"
+        /// convention as every other tell in this file.</summary>
+        private LineRenderer _pullBeam;
         /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
@@ -485,6 +490,10 @@ namespace MaxWorlds.Factories
             // exactly the "robot fully inside" to "second twin emitted + linger" window.
             _replicationBeacon = parts.ReplicationBeacon;
             _replicationBeaconMpb = new MaterialPropertyBlock();
+
+            // MV-1067: the guaranteed-arrival pull's own beam, built inactive — UpdatePullBeam aims and
+            // switches it on for exactly the window a queued robot is mid-pull.
+            _pullBeam = parts.PullBeam;
 
             // The status LED — green idle / red busy while it can still double a robot (MV-808), red
             // (spent) once capacity hits 0, off once destroyed (OnDestroyed hides it).
@@ -940,7 +949,44 @@ namespace MaxWorlds.Factories
 
             _beaconStrobeTime += dt;
             UpdateReplicationLight();
+            UpdatePullBeam();
         }
+
+        /// <summary>MV-1067: "a green beam ... from the hatch to the robot for the whole pull" — scans
+        /// the queue in slot order (nearest first) for the first robot currently mid-pull
+        /// (<see cref="RobotEnemy.IsInGuaranteedArrivalGlide"/>) and aims the beam at it; off the
+        /// instant nothing in the queue is being pulled (never left pointing at a stale position). Does
+        /// not need to consider <see cref="_intakeRobot"/> — once a robot reaches Intake,
+        /// IsInGuaranteedArrivalGlide reads false for it, which is exactly the point: the pull is over
+        /// and the normal Intake beat has taken over instead.</summary>
+        private void UpdatePullBeam()
+        {
+            if (_pullBeam == null) return;
+
+            RobotEnemy pulled = null;
+            for (int i = 0; i < _queue.Count; i++)
+            {
+                if (_queue[i] != null && _queue[i].IsInGuaranteedArrivalGlide) { pulled = _queue[i]; break; }
+            }
+
+            if (pulled != null)
+            {
+                _pullBeam.SetPosition(0, HatchPosition);
+                _pullBeam.SetPosition(1, pulled.transform.position);
+                _pullBeam.startColor = ReplicationLightColor;
+                _pullBeam.endColor = ReplicationLightColor;
+                _pullBeam.gameObject.SetActive(true);
+            }
+            else
+            {
+                _pullBeam.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>MV-1067: true while the pull beam is live — read back by an EditMode test the same
+        /// way every other resolved-value probe in this file is (see <see cref="QueueCount"/>'s own doc
+        /// comment).</summary>
+        public bool PullBeamActive => _pullBeam != null && _pullBeam.gameObject.activeSelf;
 
         /// <summary>MV-834: paints/toggles <see cref="_replicationBeacon"/> off <see cref="_replicationLightOn"/>
         /// — fully inactive when off ("the difference must be unmistakable", MV-823's own words, still

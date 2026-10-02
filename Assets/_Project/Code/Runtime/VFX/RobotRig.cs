@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
@@ -216,6 +217,12 @@ namespace MaxWorlds.VFX
         /// unchanged idiom as <see cref="_lastAppliedEyeColor"/>, for the one <see cref="_bodyMat"/>
         /// write every robot's <see cref="LateUpdate"/> otherwise made unconditionally.</summary>
         private Color? _lastAppliedBodyHeat;
+
+        /// <summary>MV-1067: true once this robot's chassis has been painted the guaranteed-arrival
+        /// pull's own green — see <see cref="LateUpdate"/>'s own pull-tint block. Lets that block write
+        /// the property block only on the rising/falling edge, same skip-when-unchanged idiom as
+        /// <see cref="_lastAppliedBodyHeat"/>.</summary>
+        private bool _pullTintActive;
 
         /// <summary>MV-746: the World 3 Puffer Mine's inflatable-body transform (see
         /// <see cref="RobotBodies.Body.Inflatable"/>), or null for every other kind — see
@@ -736,30 +743,58 @@ namespace MaxWorlds.VFX
             _tellColor = Color.Lerp(_tellColor, target, 1f - Mathf.Exp(-eyeResponse * dt));
             ApplyEyes(_tellColor);
 
-            // The chassis heats WITH the eye, but only in emission and only a little: the body has to
-            // stay its own turquoise/violet or it stops reading as its kind. Same trick the boss uses.
-            // MV-584: the teleport-arrival pop fades from 1 to 0 across the same grow-in as
-            // _teleportExpand climbs from 0 to 1, so it reads as a flash that is brightest the instant
-            // the body starts assembling and is gone by the time it's full size.
-            float teleportPop = 1f - _teleportExpand;
-            Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
-                       + TeleportFlashColor * (teleportPop * 0.8f);
-            // MV-963: skip the write once heat has settled (the steady state for the vast majority of
-            // robots, most frames — no wind-up, no flash, no teleport pop).
-            // MV-969: writes to a MaterialPropertyBlock on THIS robot's own combined renderer, at the
-            // submesh _bodyMat lives in — not to _bodyMat itself any more, which MV-969 turned into a
-            // material SHARED by every robot of this kind (see BuildMaterials/SharedCharacterMaterial).
-            // Mutating it directly here would heat every robot of that kind at once, the instant any one
-            // of them wound up.
-            if (_combinedRenderer != null && _bodyMaterialIndex >= 0 && _bodyMat != null &&
-                _bodyMat.HasProperty(EmissionId) &&
-                (!_lastAppliedBodyHeat.HasValue || _lastAppliedBodyHeat.Value != heat))
+            // MV-1067: "the robot tinted the same green" while a guaranteed-arrival pull is dragging it
+            // to the hatch (Lee, 2026-10-02: "I don't want robots just suddenly disappearing") — a flat
+            // base+emission override, not blended with the windup/flash/teleport heat below, so the
+            // pull reads unambiguously regardless of whatever tell this robot's own state happens to be
+            // mid-running. Checked first so the heat block below never fights it for the same submesh.
+            bool pulled = _enemy.IsInGuaranteedArrivalGlide;
+            if (pulled != _pullTintActive && _combinedRenderer != null && _bodyMaterialIndex >= 0 && _bodyMat != null)
             {
-                _lastAppliedBodyHeat = heat;
+                _pullTintActive = pulled;
                 _bodyMpb ??= new MaterialPropertyBlock();
                 _combinedRenderer.GetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
-                _bodyMpb.SetColor(EmissionId, heat);
+                if (pulled)
+                {
+                    Color pull = Replicator.ReplicationLightColor;
+                    _bodyMpb.SetColor(BaseColorId, pull);
+                    _bodyMpb.SetColor(EmissionId, pull * 2f);
+                }
+                else
+                {
+                    _bodyMpb.Clear(); // drop the override entirely — the heat block below re-asserts emission fresh
+                }
                 _combinedRenderer.SetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                _lastAppliedBodyHeat = null; // force the heat block to re-assert even if heat is unchanged
+            }
+
+            if (!pulled)
+            {
+                // The chassis heats WITH the eye, but only in emission and only a little: the body has
+                // to stay its own turquoise/violet or it stops reading as its kind. Same trick the boss
+                // uses. MV-584: the teleport-arrival pop fades from 1 to 0 across the same grow-in as
+                // _teleportExpand climbs from 0 to 1, so it reads as a flash that is brightest the
+                // instant the body starts assembling and is gone by the time it's full size.
+                float teleportPop = 1f - _teleportExpand;
+                Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
+                           + TeleportFlashColor * (teleportPop * 0.8f);
+                // MV-963: skip the write once heat has settled (the steady state for the vast majority
+                // of robots, most frames — no wind-up, no flash, no teleport pop).
+                // MV-969: writes to a MaterialPropertyBlock on THIS robot's own combined renderer, at
+                // the submesh _bodyMat lives in — not to _bodyMat itself any more, which MV-969 turned
+                // into a material SHARED by every robot of this kind (see
+                // BuildMaterials/SharedCharacterMaterial). Mutating it directly here would heat every
+                // robot of that kind at once, the instant any one of them wound up.
+                if (_combinedRenderer != null && _bodyMaterialIndex >= 0 && _bodyMat != null &&
+                    _bodyMat.HasProperty(EmissionId) &&
+                    (!_lastAppliedBodyHeat.HasValue || _lastAppliedBodyHeat.Value != heat))
+                {
+                    _lastAppliedBodyHeat = heat;
+                    _bodyMpb ??= new MaterialPropertyBlock();
+                    _combinedRenderer.GetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                    _bodyMpb.SetColor(EmissionId, heat);
+                    _combinedRenderer.SetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                }
             }
         }
 

@@ -52,14 +52,19 @@ namespace MaxWorlds.VFX
             /// (<c>ReplicationPool</c>) is deleted outright — Lee: "a stupid, basic big yellow circle
             /// around it that is illogical". No floor pool of any colour replaces it.</summary>
             public readonly MeshRenderer ReplicationBeacon;
+            /// <summary>MV-1067: the guaranteed-arrival pull's own visible tell — "a green beam ...
+            /// from the hatch to the robot for the whole pull" (Lee, 2026-10-02: "I don't want robots
+            /// just suddenly disappearing"). Built disabled, two positions, world space; <see cref="Replicator"/>'s
+            /// own TickConsumption aims and toggles it every tick a pull is live.</summary>
+            public readonly LineRenderer PullBeam;
 
             public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
                                    Transform fan, Transform outputLip, MeshRenderer statusRing,
-                                   MeshRenderer replicationBeacon)
+                                   MeshRenderer replicationBeacon, LineRenderer pullBeam)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
                 OutputLip = outputLip; StatusRing = statusRing;
-                ReplicationBeacon = replicationBeacon;
+                ReplicationBeacon = replicationBeacon; PullBeam = pullBeam;
             }
         }
 
@@ -205,8 +210,23 @@ namespace MaxWorlds.VFX
             replicationBeacon.gameObject.name = "ReplicationBeacon";
             replicationBeacon.gameObject.SetActive(false);
 
+            // MV-1067: the pull beam — built disabled and colourless; Replicator paints it the same
+            // ReplicationLightColor the beacon/status-ring/hatch-glow already take, the instant a
+            // guaranteed-arrival pull goes live, same "built inert, painted by the owner" convention
+            // every other tell in this file already follows.
+            var pullBeamGo = new GameObject("PullBeam");
+            pullBeamGo.transform.SetParent(root, worldPositionStays: false);
+            LineRenderer pullBeam = pullBeamGo.AddComponent<LineRenderer>();
+            pullBeam.positionCount = 2;
+            pullBeam.useWorldSpace = true;
+            pullBeam.widthMultiplier = 0.12f;
+            pullBeam.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            pullBeam.receiveShadows = false;
+            pullBeam.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            pullBeamGo.SetActive(false);
+
             return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
-                outputLipGo.transform, statusRing, replicationBeacon);
+                outputLipGo.transform, statusRing, replicationBeacon, pullBeam);
         }
 
         /// <summary>MV-808: one sloped deck plus a handful of cross-slats between <paramref name="footLocal"/>
