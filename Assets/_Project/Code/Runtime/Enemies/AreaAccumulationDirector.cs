@@ -187,18 +187,45 @@ namespace MaxWorlds.Enemies
         /// subscribes to instead of <see cref="AreaGate.Opened"/> (MV-396).</summary>
         public event System.Action<int> PlayerCrossedIntoArea;
 
-        /// <summary>MV-1002: the area Max was physically standing in immediately before the LAST time
-        /// he crossed into <paramref name="areaIndex"/> — a real crossing-history lookup, not raw index
-        /// arithmetic, so a death respawn can fall back to wherever Max actually came from even when a
-        /// world's area INDEX order isn't its play order (see <see cref="_physicalAreaHistory"/>).
-        /// Returns 0 ("unknown") if <paramref name="areaIndex"/> was never physically crossed into —
-        /// the caller's own fallback case (e.g. death in the very first area entered after a cold
-        /// boot, before any crossing is tracked).</summary>
+        /// <summary>MV-1065: the respawn predecessor of <paramref name="areaIndex"/> is a ROUTE-GRAPH
+        /// answer, not a crossing-history one — <see cref="WorldConfig.InboundGateSourceIds"/>'s set of
+        /// authored "from" areas for every gate leading into it (deck gates included). MV-1002's old
+        /// approach (blindly taking whatever sat immediately before the LAST physical-history entry of
+        /// <paramref name="areaIndex"/>) over-corrected: stepping ahead into the next area and
+        /// retreating back re-logs a crossing into <paramref name="areaIndex"/> with THAT next area as
+        /// its immediate predecessor, even though no authored gate runs that direction — which is
+        /// exactly how a death respawn used to land one area past where Max actually died.
+        ///
+        /// Fix: scan <see cref="_physicalAreaHistory"/> backward (most recent first) and accept only a
+        /// hit whose immediate predecessor is one of the authored inbound "from" areas — a mere
+        /// backtrack through an already-open doorway never qualifies, since there is no authored gate
+        /// running that direction, so the scan skips past it to the real crossing underneath. A world
+        /// that routes through the SAME area twice via two genuinely different authored gates (World 2's
+        /// a10/a11/a12 gantry-deck loop, World 3's branches) resolves to whichever one Max is CURRENTLY
+        /// on — the most recent validated crossing, found first by this backward scan.
+        ///
+        /// Falls back to the first authored inbound gate (in <see cref="WorldConfig.gates"/>'s own
+        /// order) when no history entry validates at all — e.g. a cold-boot RESUME straight into a
+        /// mid-world checkpoint Max never actually walked to this session. Returns 0 ("unknown"/entry
+        /// stub) when <paramref name="areaIndex"/> authors no inbound gate (area 1) or no world config
+        /// is loaded.</summary>
         public int PredecessorOf(int areaIndex)
         {
+            WorldArea target = _worldCfg?.AreaByIndex(areaIndex);
+            if (target == null) return 0;
+
+            List<string> candidateFromIds = new List<string>(_worldCfg.InboundGateSourceIds(target.id));
+            if (candidateFromIds.Count == 0) return 0;
+
             for (int i = _physicalAreaHistory.Count - 1; i >= 1; i--)
-                if (_physicalAreaHistory[i] == areaIndex) return _physicalAreaHistory[i - 1];
-            return 0;
+            {
+                if (_physicalAreaHistory[i] != areaIndex) continue;
+                int predecessorIndex = _physicalAreaHistory[i - 1];
+                string predecessorId = _worldCfg.AreaByIndex(predecessorIndex)?.id;
+                if (predecessorId != null && candidateFromIds.Contains(predecessorId)) return predecessorIndex;
+            }
+
+            return _worldCfg.Area(candidateFromIds[0])?.index ?? 0;
         }
 
         /// <summary>Robots this director currently considers live on the field.</summary>
