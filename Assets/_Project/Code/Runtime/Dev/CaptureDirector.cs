@@ -424,6 +424,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1024SentinelColorCheck());
             Add(BuildMv1019ReefFloorCheck());
             Add(BuildMv1063ReefFixCheck());
+            Add(BuildMv1064UndertowLatchCheck());
             return d;
         }
 
@@ -1861,6 +1862,148 @@ namespace MaxWorlds.Dev
             float sumSq = 0f;
             foreach (float v in values) sumSq += (v - mean) * (v - mean);
             return Mathf.Sqrt(sumSq / values.Count);
+        }
+
+        // ---- Mv1064UndertowLatchCheck (MV-1064 AC3) --------------------------------------------
+
+        /// <summary>MV-1064 AC3: one standalone-PLAYER capture (this preset, launched via its own
+        /// <c>-mv1064shot</c> flag — never <c>-nographics</c>, so this is the actual player-build
+        /// shader/material path the ticket's own point #11 calls out) of UNDERTOW latched onto a
+        /// robot, wrapped in the new coils/sparks. A fresh <see cref="Undertow"/> on a synthetic
+        /// GameObject (no <see cref="PlayerController"/> attached, so <c>aimSource</c> stays null and
+        /// <see cref="Undertow.SetFiring"/> drives it directly) aimed point-blank at a stationary
+        /// <see cref="RobotEnemy"/> built the same <c>BuildClusterRobot</c> way
+        /// <see cref="BuildHealthBarCluster"/>/<see cref="BuildMv758LppeSalvo"/> already do — same
+        /// "fresh probe, not the real Player-tagged Max" idiom <see cref="BuildMv758LppeSalvo"/>'s own
+        /// doc comment explains (deterministic, no dependency on a real scene's spawn roster). Driven
+        /// by REAL <c>Update()</c> frames (this runs inside an actual Play session, so
+        /// <c>Time.deltaTime</c> ticks for real) until <see cref="Undertow.IsLatched"/>, then a further
+        /// settle so the coils/sparks (which ease in over <c>CoilAppearSeconds</c>) are fully built up
+        /// for the shot.</summary>
+        private static CapturePreset BuildMv1064UndertowLatchCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float pitch = 55f;
+            const float distance = 3.5f;
+            const float robotAheadDistance = 4f;
+            const int maxAcquireFrames = 120;
+            const int settleFramesAfterLatch = 30;
+            const float probeRadiusMetres = 1.2f;   // AC3's own "within 1.2m of the robot"
+
+            GameObject undertowGo = null;
+            GameObject robotGo = null;
+            Undertow undertow = null;
+            int orangeRedPixels = -1;
+            int probeRadiusPx = -1;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                WeaponSystemState.ApplyWorldLoadout(2);   // World 3 -> UNDERTOW is the active primary
+                DevMode.Enabled = true;
+                DevMode.InfiniteEnergy = true;
+
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                Vector3 focus = playerGo != null ? playerGo.transform.position : (CaptureDirector.OpenZoneCenter() ?? Vector3.zero);
+                Vector3 aimDir = playerGo != null ? playerGo.transform.forward : Vector3.forward;
+                aimDir.y = 0f;
+                if (aimDir.sqrMagnitude < 0.01f) aimDir = Vector3.forward; else aimDir.Normalize();
+
+                undertowGo = new GameObject("MV1064CaptureUndertow");
+                undertowGo.transform.SetPositionAndRotation(focus, Quaternion.LookRotation(aimDir, Vector3.up));
+                undertow = undertowGo.AddComponent<Undertow>();
+
+                robotGo = BuildClusterRobot(EnemyKind.Rusher, focus + aimDir * robotAheadDistance);
+                Physics.SyncTransforms();
+
+                undertow.SetFiring(true);
+
+                int frame = 0;
+                while (!undertow.IsLatched && frame < maxAcquireFrames)
+                {
+                    yield return null;
+                    frame++;
+                }
+                if (!undertow.IsLatched)
+                    throw new CaptureAbortException($"Undertow never latched onto the probe robot within {maxAcquireFrames} frames");
+
+                for (int i = 0; i < settleFramesAfterLatch; i++) yield return null;   // let the coils/sparks ease fully in and build up
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = robotGo.transform.position + Vector3.up * 0.6f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                var cam = Camera.main;
+                if (cam == null || robotGo == null) { orangeRedPixels = 0; return; }
+
+                Vector3 centre = robotGo.transform.position + Vector3.up * 0.6f;
+                Vector3 edge = centre + cam.transform.right * probeRadiusMetres;
+                Vector3 cvp = cam.WorldToViewportPoint(centre);
+                Vector3 evp = cam.WorldToViewportPoint(edge);
+                int cx = Mathf.RoundToInt(cvp.x * tex.width);
+                int cy = Mathf.RoundToInt(cvp.y * tex.height);
+                int ex = Mathf.RoundToInt(evp.x * tex.width);
+                int ey = Mathf.RoundToInt(evp.y * tex.height);
+                float radiusPx = Mathf.Max(4f, Mathf.Sqrt((ex - cx) * (ex - cx) + (float)(ey - cy) * (ey - cy)));
+                probeRadiusPx = Mathf.RoundToInt(radiusPx);
+
+                // AC3: "hue 0-40deg, value >= 0.6" -- orange/red family, within probeRadiusMetres
+                // (approximated as a screen-space circle at this fixed framing, the same box-around-a-
+                // world-point idiom SampleMeanValue/SampleLuminanceStdDev use elsewhere in this file).
+                int count = 0;
+                int boxHalf = Mathf.CeilToInt(radiusPx);
+                for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= tex.height) continue;
+                    for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= tex.width) continue;
+                        if (dx * dx + dy * dy > radiusPx * radiusPx) continue;
+                        Color.RGBToHSV(tex.GetPixel(x, y), out float h, out float s, out float v);
+                        float deg = h * 360f;
+                        if (deg <= 40f && v >= 0.6f) count++;
+                    }
+                }
+                orangeRedPixels = count;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1064undertowlatch",
+                LogTag = "[MV1064Capture]",
+                Flag = "-mv1064shot",
+                ArmFile = "Temp/mv1064.arm",
+                HeadlessMarker = "Temp/mv1064.headless",
+                DoneFileName = "_mv1064_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same HomeScreen-modal-freezes-time dodge BuildMv758LppeSalvo/BuildMv616SentinelBeam
+                    // use — without it, HomeScreen.Start() has no slot to resume and blocks on the
+                    // pick-a-slot modal forever in an unattended capture.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1064-undertow-latch", Setup, measure: Measure) },
+                Cleanup = () =>
+                {
+                    if (undertowGo != null) Destroy(undertowGo);
+                    if (robotGo != null) Destroy(robotGo);
+                },
+                ExtraReport = () =>
+                    $"orange/red pixels within {probeRadiusMetres}m ({probeRadiusPx}px) of the latched robot: " +
+                    $"{orangeRedPixels} (AC3 >= 300)\n",
+            };
         }
 
         // ---- MV750DressingCheck (MV-750 AC3) --------------------------------------------------
