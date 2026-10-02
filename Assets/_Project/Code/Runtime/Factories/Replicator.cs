@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -79,6 +80,13 @@ namespace MaxWorlds.Factories
         /// get taken. While Max is standing in this box's area, it has capacity, and a slot is empty,
         /// assignment is re-tried on this cadence.</summary>
         public const float LureRetryIntervalSeconds = 0.5f;
+
+        /// <summary>MV-1066 Step 2.4: how often this box writes a <c>REPL</c> row to the session events
+        /// CSV (<see cref="PerfSessionRecorder.RecordEvent"/>) while Max is standing in its area — so a
+        /// live device session can prove this box's own in/cap/queue/eligible/taken state over time
+        /// without a dev build attached, the same reasoning <see cref="MaxWorlds.Arena.FallEventLog"/>
+        /// already applies to falls.</summary>
+        public const float ReplTelemetryIntervalSeconds = 5f;
 
         /// <summary>MV-823 change 1: seconds the hatch takes to swing fully open, authored as its own
         /// <see cref="AnimSequence"/> step (OutQuad) rather than the pre-Intake MoveTowards creep
@@ -263,6 +271,15 @@ namespace MaxWorlds.Factories
         /// <summary>MV-828 D2: counts down to the next periodic lure retry — 0 so the very first tick
         /// after a slot opens (or Max enters) tries immediately rather than waiting a full interval.</summary>
         private float _lureRetryTimer;
+
+        /// <summary>MV-1066 Step 2.4: counts down to the next REPL telemetry row — 0 so the very first
+        /// tick Max is in this box's area writes one immediately, same "first tick fires, not a full
+        /// interval late" convention as <see cref="_lureRetryTimer"/>.</summary>
+        private float _replTelemetryTimer;
+
+        /// <summary>MV-1066 Step 2.4: how many robots this box has drawn fully through its hatch over
+        /// its lifetime — the REPL row's own "taken" field.</summary>
+        private int _takenInTotal;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -671,6 +688,18 @@ namespace MaxWorlds.Factories
             return nearest;
         }
 
+        /// <summary>MV-1066 Step 2.4: the REPL telemetry row's own "elig" field — how many of
+        /// <see cref="RobotEnemy.Active"/> currently pass <see cref="IsEligibleFor"/> for this box's
+        /// own area. Same walk <see cref="NearestEligible"/> does, just counting instead of ranking.</summary>
+        private int CountEligible()
+        {
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            int count = 0;
+            for (int i = 0; i < active.Count; i++)
+                if (IsEligibleFor(active[i], AreaIndex)) count++;
+            return count;
+        }
+
         /// <summary>MV-820 R1/R3: the area-entry signal (<see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/>,
         /// wired in <see cref="Start"/>; public so an EditMode test can drive it directly). Fills this
         /// box's queue the instant Max physically crosses into its own area; releases every current
@@ -704,6 +733,25 @@ namespace MaxWorlds.Factories
         public void TickConsumption(float dt)
         {
             if (!IsAlive) return;
+
+            // MV-1066 Step 2.1: resolve "is Max physically in this box's area" fresh off the area
+            // director's own live-position tracker every tick — never solely off the
+            // PlayerCrossedIntoArea crossing event, which a resume/checkpoint edge case can land Max
+            // past without ever firing (the same class of bug MV-1047 already fixed once for Start,
+            // but for any OTHER way _playerInArea could go stale). Gated on an actual change so this
+            // costs one int compare per tick, not a NearestEligible rescan — OnAreaEntered's own
+            // TickLure/ReleaseAllAssignees transition already handles the real work and must stay off
+            // the hot path when nothing has changed.
+            if (_areaDirector != null)
+            {
+                bool reallyInArea = _areaDirector.PhysicalArea == AreaIndex;
+                if (reallyInArea != _playerInArea)
+                {
+                    _playerInArea = reallyInArea;
+                    if (_playerInArea) TickLure();
+                    else ReleaseAllAssignees();
+                }
+            }
 
             // MV-813: free-running, independent of every other beat here — the status ring pulses off
             // this alone, whether or not anything is actually happening.
@@ -758,6 +806,7 @@ namespace MaxWorlds.Factories
                     RetargetQueue();
                     _intakeRobot = head;
                     _intakeStartPos = head.transform.position;
+                    _takenInTotal++; // MV-1066 Step 2.4: the REPL row's own "taken" field
 
                     // MV-823: the walk-in is authored fresh per robot — distance / the robot's own
                     // MoveSpeed (floored at MinIntakeWalkSpeed), so a Brute's walk genuinely takes longer
@@ -867,6 +916,26 @@ namespace MaxWorlds.Factories
             else
             {
                 _lureRetryTimer = 0f;
+            }
+
+            // MV-1066 Step 2.4: a REPL row to the session events CSV every ReplTelemetryIntervalSeconds
+            // while Max is in this box's own area — area, box id, in, cap, queue count, eligible count,
+            // taken-in total. Reset the instant he leaves, same "always fires promptly next time" reason
+            // as the lure retry timer just above, not merely left to drift.
+            if (_playerInArea)
+            {
+                _replTelemetryTimer -= dt;
+                if (_replTelemetryTimer <= 0f)
+                {
+                    Bootstrap.ActiveSessionRecorder?.RecordEvent(DateTime.UtcNow, "REPL",
+                        $"area={AreaIndex} box={Id} in=1 cap={capacity} q={_queue.Count}/{EffectiveQueueCap}" +
+                        $" elig={CountEligible()} taken={_takenInTotal}");
+                    _replTelemetryTimer = ReplTelemetryIntervalSeconds;
+                }
+            }
+            else
+            {
+                _replTelemetryTimer = 0f;
             }
 
             _beaconStrobeTime += dt;
