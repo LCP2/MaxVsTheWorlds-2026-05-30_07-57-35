@@ -116,12 +116,18 @@ namespace MaxWorlds.UI
         private const float ForceFieldX = 150f;
         private const float ForceFieldRise = 357f;
 
-        /// <summary>TRAP button (MV-1035): mirrored onto the opposite side from the Sentinel joystick
-        /// (X=360, Rise=820) — the same "well clear of every other control and the boss bar's y-band"
-        /// clearance reasoning <see cref="SentinelJoystickRise"/>'s own comment gives, just flipped to
-        /// the empty right-of-centre slot rather than doubling up on Sentinel's own column.</summary>
-        private const float TrapButtonX = -360f;
-        private const float TrapButtonRise = 820f;
+        /// <summary>TRAP button (MV-1035, repositioned MV-1068): the old (X=-360, Rise=820) was computed
+        /// against the canvas's bottom-left corner, but the doc comment's "mirrors the Sentinel
+        /// joystick" reasoning actually describes the Sentinel's bottom-CENTRE anchor
+        /// (<see cref="AbilityControlArt.BuildJoystick"/>) — from the bottom-left corner X=-360 sits
+        /// 360 units left of the screen edge, entirely off-screen. Fixed by placing it beside
+        /// <see cref="ForceFieldX"/>/<see cref="ForceFieldRise"/> in the same bottom-left-anchored left
+        /// play-area column, same size, 180 units right of FIELD's own centre (half FIELD's
+        /// <see cref="HydroButtonSize"/> + a 70px gap + half this button's own size) — option 1 from the
+        /// ticket; it clears every other active HUD control at every <see cref="RigBoardLayout.CaptureAspects"/>
+        /// entry, so option 2 (stacking above FIELD) was not needed.</summary>
+        private const float TrapButtonX = 330f;
+        private const float TrapButtonRise = 357f;
 
         /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
         /// horizontally centred on the aim stick's own centre line (same -150 offset — see
