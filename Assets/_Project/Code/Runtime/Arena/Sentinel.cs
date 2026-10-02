@@ -175,6 +175,56 @@ namespace MaxWorlds.Arena
         /// stays hazard red (ticket: "the bolt colour: stays hazard red") — only the eye moves.</summary>
         private static readonly Color EyeColorWorld2 = new Color(1.0f, 0.86f, 0.62f);
 
+        /// <summary>MV-1069: World 3's own body/accent/bolt (Lee, 2026-10-03: "give World 3's
+        /// Sentinels a colour of their own — green — and make their lasers green as well... same
+        /// styling and width of laser, same impressiveness" as World 2). Hex #1FA84A/#6DFF8A/#4DFF6A.</summary>
+        private static readonly Color BodyColorWorld3 = new Color(0.1216f, 0.6588f, 0.2902f);
+        private static readonly Color BodyAccentWorld3 = new Color(0.4275f, 1.0f, 0.5412f);
+        private static readonly Color BoltColorWorld3 = new Color(0.3020f, 1.0f, 0.4157f);
+
+        /// <summary>MV-1069: World 3's eye, pale gold like World 2's for the same reason — a green eye
+        /// vanishes on World 3's own green body. Hex #FFDB9E.</summary>
+        private static readonly Color EyeColorWorld3 = new Color(1.0f, 0.8588f, 0.6196f);
+
+        /// <summary>MV-1069: one row per world's look, replacing the World-2-only equality checks that
+        /// used to be scattered across <see cref="BuildBody"/> and <see cref="SentinelBolt"/>. Index by
+        /// <see cref="_worldIndex"/> (0 = World 1, 1 = World 2, 2 = World 3); <see cref="ResolveStyle"/>
+        /// falls back to the World 1 row for the -1 "no BackyardPath" fixture case, matching every
+        /// world's pre-MV-1069 default look.</summary>
+        private readonly struct SentinelStyle
+        {
+            public readonly Color Body;
+            public readonly Color Accent;
+            public readonly Color Eye;
+            public readonly float EmissionFactor;
+            public readonly Color BoltColor;
+            public readonly float BoltThicknessScale;
+
+            public SentinelStyle(Color body, Color accent, Color eye, float emissionFactor,
+                Color boltColor, float boltThicknessScale)
+            {
+                Body = body;
+                Accent = accent;
+                Eye = eye;
+                EmissionFactor = emissionFactor;
+                BoltColor = boltColor;
+                BoltThicknessScale = boltThicknessScale;
+            }
+        }
+
+        private static readonly SentinelStyle[] Styles =
+        {
+            new SentinelStyle(BodyColor, BodyAccent, EyeColor, emissionFactor: 0f,
+                boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1f),
+            new SentinelStyle(BodyColorWorld2, BodyAccentWorld2, EyeColorWorld2, emissionFactor: 0.35f,
+                boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1.6f),
+            new SentinelStyle(BodyColorWorld3, BodyAccentWorld3, EyeColorWorld3, emissionFactor: 0.35f,
+                boltColor: BoltColorWorld3, boltThicknessScale: 1.6f),
+        };
+
+        private static SentinelStyle ResolveStyle(int worldIndex) =>
+            worldIndex >= 0 && worldIndex < Styles.Length ? Styles[worldIndex] : Styles[0];
+
         /// <summary>Resolved once in <see cref="BuildBody"/> from <see cref="_worldIndex"/> — what
         /// <see cref="ApplyEyeColor"/> actually paints. Never re-resolved per frame (MV-1004: "resolve
         /// the world once at Sentinel build").</summary>
@@ -470,18 +520,18 @@ namespace MaxWorlds.Arena
         {
             _model = ParentScale.MakeMetreSpace(new GameObject("Model").transform, transform);
 
-            // MV-1004: World 2 only (resolved once above, in Init, before this runs) — Worlds 1/3 keep
-            // Max's own blue/hazard-red eye unchanged.
-            bool isWorld2 = _worldIndex == 1;
-            _eyeColor = isWorld2 ? EyeColorWorld2 : EyeColor;
+            // MV-1069: resolved once above, in Init, before this runs.
+            SentinelStyle style = ResolveStyle(_worldIndex);
+            _eyeColor = style.Eye;
 
-            var warm = NewMaterial("Sentinel_Warm", isWorld2 ? BodyColorWorld2 : BodyColor);
-            // MV-1024: World 2's Warm material only — holds the brightened body red under Stormdrain's
-            // dim lighting instead of reading as the same dark maroon Lee flagged on device. Same
-            // material-instance NewMaterial already made; no new shader, same _EmissionColor slot
-            // RobotRig's own Stormdrain hazard band already writes to on this shader.
-            if (isWorld2 && warm.HasProperty(EmissionId)) warm.SetColor(EmissionId, BodyColorWorld2 * 0.35f);
-            var accent = NewMaterial("Sentinel_Accent", isWorld2 ? BodyAccentWorld2 : BodyAccent);
+            var warm = NewMaterial("Sentinel_Warm", style.Body);
+            // MV-1024/MV-1069: a world row with a non-zero emission factor holds its body colour under
+            // Stormdrain's dim lighting instead of reading as a flat dark tone. Same material-instance
+            // NewMaterial already made; no new shader, same _EmissionColor slot RobotRig's own
+            // Stormdrain hazard band already writes to on this shader.
+            if (style.EmissionFactor > 0f && warm.HasProperty(EmissionId))
+                warm.SetColor(EmissionId, style.Body * style.EmissionFactor);
+            var accent = NewMaterial("Sentinel_Accent", style.Accent);
             var dark = NewMaterial("Sentinel_Dark", CharacterSkin.RobotDark);
             var gold = NewMaterial("Sentinel_Gold", CharacterSkin.RobotGold);
             _ownedMaterials = new[] { warm, accent, dark, gold };
@@ -926,7 +976,11 @@ namespace MaxWorlds.Arena
             Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
 
             if (_worldIndex == 0) FireWaterBeam(muzzle, end);
-            else SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed, _worldIndex);
+            else
+            {
+                SentinelStyle style = ResolveStyle(_worldIndex);
+                SentinelBolt.Fire(muzzle, end, PulseLaser.DefaultPulseSpeed, style.BoltColor, style.BoltThicknessScale);
+            }
         }
 
         /// <summary>MV-914: World 1's restored water beam. Reuses <see cref="WaterVfx"/> rather than a

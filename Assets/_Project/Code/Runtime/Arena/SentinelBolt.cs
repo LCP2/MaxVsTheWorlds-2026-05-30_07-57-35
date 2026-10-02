@@ -31,12 +31,6 @@ namespace MaxWorlds.Arena
         /// rather than re-typed, so this bolt can never drift bigger than Max's own when his is retuned.</summary>
         private const float SizeScale = 0.7f;
 
-        /// <summary>MV-1004: World 2 only (Lee, device, 2026-09-28: "make the Sentinels' laser in
-        /// World 2 a bit thicker") — widens the bolt's CROSS-SECTION (and its trail's
-        /// <c>widthMultiplier</c>) by this factor on top of <see cref="SizeScale"/>; length and the
-        /// ground glow are unaffected. See <see cref="BuildVisual"/>.</summary>
-        private const float ThicknessScaleWorld2 = 1.6f;
-
         private Vector3 _from;
         private Vector3 _to;
         private float _flightSeconds;
@@ -44,32 +38,38 @@ namespace MaxWorlds.Arena
         private bool _spent;
         private GroundRing _groundGlow;
         private float _groundGlowRadius;
+        private Color _boltColor;
 
         /// <summary>Fires one bolt from <paramref name="muzzle"/> straight to
         /// <paramref name="impactPoint"/> — the hitscan's own already-resolved hit point — at
         /// <paramref name="speed"/> m/s. No target is tracked: this never re-aims mid-flight.
-        /// <paramref name="worldIndex"/> is the firing <see cref="Sentinel"/>'s own already-resolved
-        /// world (MV-1004) — defaulted to -1 (never World 2) so every pre-existing caller/test that
-        /// doesn't pass one keeps today's uniform <see cref="SizeScale"/> thickness.</summary>
-        public static SentinelBolt Fire(Vector3 muzzle, Vector3 impactPoint, float speed, int worldIndex = -1)
+        /// <paramref name="boltColor"/>/<paramref name="thicknessScale"/> are the firing
+        /// <see cref="Sentinel"/>'s own already-resolved per-world style (MV-1069) — defaulted to
+        /// <see cref="BoltColor"/>/1x so every pre-existing caller/test that doesn't pass one keeps
+        /// today's uniform red, <see cref="SizeScale"/>-only bolt.</summary>
+        public static SentinelBolt Fire(Vector3 muzzle, Vector3 impactPoint, float speed,
+            Color? boltColor = null, float thicknessScale = 1f)
         {
+            Color color = boltColor ?? BoltColor;
+
             var go = new GameObject("SentinelBolt");
             go.transform.position = muzzle;
             Vector3 dir = impactPoint - muzzle;
             go.transform.rotation = dir.sqrMagnitude > 1e-6f
                 ? Quaternion.LookRotation(dir.normalized, Vector3.up)
                 : Quaternion.identity;
-            BuildVisual(go.transform, worldIndex);
+            BuildVisual(go.transform, color, thicknessScale);
 
             var bolt = go.AddComponent<SentinelBolt>();
-            bolt.Init(muzzle, impactPoint, speed);
+            bolt.Init(muzzle, impactPoint, speed, color);
             return bolt;
         }
 
-        private void Init(Vector3 from, Vector3 to, float speed)
+        private void Init(Vector3 from, Vector3 to, float speed, Color boltColor)
         {
             _from = from;
             _to = to;
+            _boltColor = boltColor;
             float distance = Vector3.Distance(from, to);
             _flightSeconds = Mathf.Max(0.02f, distance / Mathf.Max(0.1f, speed));
 
@@ -98,7 +98,7 @@ namespace MaxWorlds.Arena
         {
             if (_groundGlow == null) return;
             Vector3 pos = transform.position;
-            Color glowColor = BoltColor;
+            Color glowColor = _boltColor;
             glowColor.a = 0.5f;
             _groundGlow.Show(new Vector3(pos.x, 0f, pos.z), _groundGlowRadius, glowColor);
         }
@@ -147,19 +147,19 @@ namespace MaxWorlds.Arena
         /// <summary>Same build idiom as <see cref="MaxWorlds.Weapons.SeekerPulse.BuildVisual"/>: the
         /// same cached lathed bolt mesh (MV-810 -- was its own <c>GameObject.CreatePrimitive</c> capsule,
         /// rebuilt and its collider destroyed on every single shot), an additive unlit material, a short
-        /// trail — just smaller and red instead of cyan-white. MV-1004: <paramref name="worldIndex"/> ==
-        /// 1 (World 2) widens the mesh's cross-section and the trail width by
-        /// <see cref="ThicknessScaleWorld2"/> on top of <see cref="SizeScale"/> — length (mesh-local Y,
-        /// the lathe's own revolve axis, which the 90° X rotation below aligns to the parent's travel
-        /// direction) and the ground glow (set in <see cref="Init"/>, off <see cref="SizeScale"/> alone)
-        /// are untouched, matching the ticket's "cross-section x1.6 while length is unchanged".</summary>
-        private static void BuildVisual(Transform parent, int worldIndex)
+        /// trail — just smaller and tinted <paramref name="boltColor"/> instead of cyan-white. MV-1069:
+        /// <paramref name="thicknessScale"/> widens the mesh's cross-section and the trail width on top
+        /// of <see cref="SizeScale"/> — length (mesh-local Y, the lathe's own revolve axis, which the
+        /// 90° X rotation below aligns to the parent's travel direction) and the ground glow (set in
+        /// <see cref="Init"/>, off <see cref="SizeScale"/> alone) are untouched, matching the ticket's
+        /// "cross-section x1.6 while length is unchanged".</summary>
+        private static void BuildVisual(Transform parent, Color boltColor, float thicknessScale)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Material boltMat = VfxMaterials.AdditiveTinted(BoltColor);
+            Material boltMat = VfxMaterials.AdditiveTinted(boltColor);
             CombatVfxTuning.LppeBoltTuning t = CombatVfxTuning.LppeBolt();
-            float crossScale = SizeScale * (worldIndex == 1 ? ThicknessScaleWorld2 : 1f);
+            float crossScale = SizeScale * thicknessScale;
 
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
             trail.time = t.TrailLifetime;
