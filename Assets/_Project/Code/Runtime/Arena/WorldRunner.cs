@@ -314,13 +314,20 @@ namespace MaxWorlds.Arena
         /// area would. Deliberately skips <see cref="DeathRunState.RecordDeath"/> and the
         /// <see cref="_pendingRespawn"/>/overlay machinery entirely — this is a cold boot landing mid-run,
         /// not a death. A no-op before <see cref="Configure"/> has wired this runner up, or for the entry
-        /// stub (<paramref name="areaIndex"/> &lt;= 0 — nothing to restore/respawn into).</summary>
+        /// stub (<paramref name="areaIndex"/> &lt;= 0 — nothing to restore/respawn into).
+        ///
+        /// MV-1065: resolves its predecessor through the exact same <see cref="ResolveRespawnPredecessor"/>
+        /// route-graph lookup <see cref="OnPlayerDied"/> uses, deck-aware, rather than calling the 2-arg
+        /// <see cref="RespawnPlanner.Resolve(int, bool)"/> overload — whose own <c>areaIndex - 1</c>
+        /// fallback is only correct when a world's area INDEX order matches its PLAY order, which World
+        /// 2's descending gantry-deck leg (a15 -&gt; a12 -&gt; a11 -&gt; a10) does not.</summary>
         public void ResumeCheckpoint(int areaIndex)
         {
             if (_areaDirector == null || _cfg?.dials == null || areaIndex <= 0) return;
 
             bool gateIsConditionGated = IsConditionGatedArea(areaIndex);
-            RespawnPlan plan = RespawnPlanner.Resolve(areaIndex, gateIsConditionGated);
+            int predecessor = ResolveRespawnPredecessor(areaIndex);
+            RespawnPlan plan = RespawnPlanner.Resolve(areaIndex, gateIsConditionGated, predecessor);
 
             // MV-951: Configure() (BackyardPath.Awake, before this Home-screen RESUME even ran) always
             // fills area 1 — and pre-places area 2's garrison — regardless of which area this checkpoint

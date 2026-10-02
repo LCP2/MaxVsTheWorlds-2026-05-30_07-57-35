@@ -922,6 +922,23 @@ namespace MaxWorlds.Arena
             return null;
         }
 
+        /// <summary>Every authored gate's <c>from.area</c> id whose <c>to.area</c> is
+        /// <paramref name="toAreaId"/>, in <see cref="gates"/>' own authored order (MV-1065) — the
+        /// real inbound edges of the world's PLAY-order route graph, as opposed to <see cref="AreaByIndex"/>'s
+        /// raw INDEX order (which a gantry-deck loop like World 2's a10/a11/a12 visits twice, through
+        /// two different gates, so a plain index predecessor is sometimes simply wrong). Deck gates
+        /// (<c>opensWith</c> carrying the <c>[DECK]</c> suffix) are ordinary <see cref="WorldGate"/>
+        /// entries and are included with no special casing.</summary>
+        public IEnumerable<string> InboundGateSourceIds(string toAreaId)
+        {
+            if (gates == null || string.IsNullOrEmpty(toAreaId)) yield break;
+            foreach (WorldGate g in gates)
+            {
+                if (g?.to == null || g.to.area != toAreaId) continue;
+                if (!string.IsNullOrEmpty(g.from?.area)) yield return g.from.area;
+            }
+        }
+
         /// <summary>This world's solved enemy composition for combat area <paramref name="areaIndex"/>
         /// (MV-268's budget solver, driven by THIS world's own <see cref="dials"/>) — the single source
         /// both <see cref="MaxWorlds.Enemies.Garrison"/> and <see cref="MaxWorlds.Enemies.PowerScoring"/>
