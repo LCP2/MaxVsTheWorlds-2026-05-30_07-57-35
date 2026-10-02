@@ -101,10 +101,12 @@ namespace MaxWorlds.Rendering
                 {
                     r.sharedMaterial = WorldMaterials.M_ShipFloor;
                     ApplyDeckTiling(r);
+                    MarkDressed(r.gameObject);
                 }
                 else if (kind == SurfaceKind.Wall)
                 {
                     r.sharedMaterial = WorldMaterials.M_ShipWall;
+                    MarkDressed(r.gameObject);
                     StructuralWall wall = r.GetComponent<StructuralWall>();
                     if (wall != null) walls.Add(wall);
                 }
@@ -113,6 +115,22 @@ namespace MaxWorlds.Rendering
             BuildCircuitSpine(host, walls);
             BuildObservationGlass(host, walls);
             BuildWallLamps(host, walls);
+        }
+
+        /// <summary>Stops <see cref="MaxWorlds.VFX.RuntimeSurfaceDirector"/>'s own later, generic
+        /// <c>Start()</c> sweep — guaranteed by Unity to run after every object's <c>Awake</c>, this
+        /// one included — from finding a freshly Reef-dressed renderer "undressed" and repainting it
+        /// back onto the shape-classified generic material (MV-1063: that is why World 3's deck,
+        /// circuit traces, hydroponic glow, hull lamps and ocean glass all rendered flat in a built
+        /// player — this method's own <see cref="DressHull"/> and every other Reef piece below assign
+        /// the right material during <c>BackyardPath.Awake</c>, and the sweep undoes it one phase
+        /// later). <see cref="KeepsOwnMaterial"/> is the existing, general escape hatch for exactly
+        /// this — both that sweep and <see cref="WorldMaterials.Apply"/>'s own generic one already
+        /// check for it via <c>GetComponentInParent</c> — so tagging a piece's root protects every
+        /// renderer under it with one call, no new marker type needed.</summary>
+        private static void MarkDressed(GameObject go)
+        {
+            if (go != null && go.GetComponent<KeepsOwnMaterial>() == null) go.AddComponent<KeepsOwnMaterial>();
         }
 
         /// <summary>Sets the shared deck material's mesh-UV tiling from the floor's OWN resolved
@@ -147,6 +165,7 @@ namespace MaxWorlds.Rendering
 
             var root = new GameObject("Circuit Spine");
             root.transform.SetParent(host, false);
+            MarkDressed(root);
 
             foreach (StructuralWall wall in walls)
             {
@@ -206,6 +225,7 @@ namespace MaxWorlds.Rendering
                 {
                     root = new GameObject("Observation Glass");
                     root.transform.SetParent(host, false);
+                    MarkDressed(root);
                 }
 
                 Vector3 scale = wt.lossyScale;
@@ -300,6 +320,7 @@ namespace MaxWorlds.Rendering
                     {
                         root = new GameObject("Wall Lamps");
                         root.transform.SetParent(host, false);
+                        MarkDressed(root);
                     }
 
                     GameObject lamp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -350,17 +371,23 @@ namespace MaxWorlds.Rendering
 
             var rend = go.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = WorldMaterials.M_OceanVoid;
+            MarkDressed(go);
 
             return go;
         }
 
+        /// <summary>Finds the map's own floor slab by the authoritative <see cref="StructuralFloor"/>
+        /// tag <c>MapRuntime.Build</c> always sets on it — NOT <see cref="WorldMaterials.IsWorldSurface"/>
+        /// (MV-1063 regression: that check excludes anything carrying <see cref="KeepsOwnMaterial"/>,
+        /// and <see cref="DressHull"/>'s own fix for this ticket now tags the floor with exactly that,
+        /// so the old <c>IsWorldSurface</c> + shape-classified <c>KindOf</c> combination here stopped
+        /// finding a freshly Reef-dressed floor at all — <see cref="BuildOceanVoid"/> started returning
+        /// null for every real World 3 load). Whether a renderer keeps its own material has nothing to
+        /// do with whether it IS the map floor.</summary>
         private static Renderer FindFloorRenderer(Transform host)
         {
             foreach (MeshRenderer r in host.GetComponentsInChildren<MeshRenderer>(true))
-            {
-                if (!WorldMaterials.IsWorldSurface(r)) continue;
-                if (WorldMaterials.KindOf(r) == SurfaceKind.Ground) return r;
-            }
+                if (r.GetComponentInParent<StructuralFloor>() != null) return r;
             return null;
         }
 
@@ -385,6 +412,7 @@ namespace MaxWorlds.Rendering
 
             var rend = go.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            MarkDressed(go);
 
             var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             band.name = "HazardBand";
@@ -423,6 +451,7 @@ namespace MaxWorlds.Rendering
 
             var rend = crateBody.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = WorldMaterials.M_CrateBody;
+            MarkDressed(crateBody);
 
             if (!addCornerCaps) return;
 
@@ -473,6 +502,7 @@ namespace MaxWorlds.Rendering
 
             var rend = go.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = WorldMaterials.M_GlassOcean;
+            MarkDressed(go);
 
             return go;
         }
@@ -491,6 +521,7 @@ namespace MaxWorlds.Rendering
         {
             var root = new GameObject("Ocean Backdrop");
             root.transform.SetParent(parent, false);
+            MarkDressed(root);
 
             BuildLayer(root.transform, OceanLayerKind.FishSchool, WorldMaterials.ReefCircuitCyan, 0f * LayerDepthStep, instanced: true);
             BuildLayer(root.transform, OceanLayerKind.Jellyfish, WorldMaterials.ReefBioGlow, 1f * LayerDepthStep, instanced: false);
@@ -555,6 +586,7 @@ namespace MaxWorlds.Rendering
             root.transform.SetParent(parent, false);
             root.transform.position = new Vector3(worldCenterXz.x, 0f, worldCenterXz.z);
             root.AddComponent<HydroponicBed>();
+            MarkDressed(root);
 
             BuildBedSoil(root.transform);
             BuildBedRim(root.transform);

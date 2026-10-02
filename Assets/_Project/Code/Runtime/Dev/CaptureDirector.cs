@@ -17,6 +17,7 @@ using MaxWorlds.Factories;
 using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.Rendering;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -306,6 +307,7 @@ namespace MaxWorlds.Dev
             string report = "ok\n" + manifest + (preset.ExtraReport?.Invoke() ?? "");
             File.WriteAllText(Path.Combine(liveDirs[0], preset.DoneFileName), report);
             Log(preset, preset.Key + " capture complete. " + report);
+            QuitIfStandalonePlayer(0);
         }
 
         private void Fail(CapturePreset preset, List<string> liveDirs, string why)
@@ -319,6 +321,23 @@ namespace MaxWorlds.Dev
                 File.WriteAllText(Path.Combine(dir, preset.DoneFileName), "fail: " + why + "\n");
             }
             catch { /* best effort */ }
+            QuitIfStandalonePlayer(1);
+        }
+
+        /// <summary>MV-1063: every preset above was written for <see cref="CaptureEntryPoint"/>'s
+        /// Editor-Play-Mode harness, which stops play mode and exits the EDITOR process itself once the
+        /// done-marker lands — nothing here ever quit a running PLAYER. A ticket whose AC specifically
+        /// needs player-build evidence (not Editor evidence — shader-variant stripping and other
+        /// build-only effects don't reproduce in the Editor) launches the already-built standalone .exe
+        /// with this preset's own command-line flag instead of going through the Editor at all; without
+        /// this, that process would sit at its done-marker forever under <c>-batchmode</c>, since nothing
+        /// else ever calls <see cref="Application.Quit"/> for it. A no-op in the Editor (Play Mode exits
+        /// via <c>EditorApplication.isPlaying = false</c> in <see cref="CaptureEntryPoint"/> instead,
+        /// same as it always has — this never fires there).</summary>
+        private static void QuitIfStandalonePlayer(int exitCode)
+        {
+            if (Application.isEditor) return;
+            Application.Quit(exitCode);
         }
 
         private static void Log(CapturePreset preset, string m) => Debug.Log($"{preset.LogTag} {m}");
@@ -404,6 +423,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1018Anchorhead());
             Add(BuildMv1024SentinelColorCheck());
             Add(BuildMv1019ReefFloorCheck());
+            Add(BuildMv1063ReefFixCheck());
             return d;
         }
 
@@ -1650,6 +1670,197 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1019-reef-floor", NoSetup) },
             };
+        }
+
+        // ---- MV1063ReefFixCheck (MV-1063 AC1/AC2) ---------------------------------------------
+
+        /// <summary>MV-1063's own player-build evidence. A real World 3 area's hydroponic-bed and
+        /// wall-lamp placement is level-authored (<c>MaxWorlds.Arena.ReefHydroponics</c>'s own
+        /// cover/gate/garrison-aware search, not a fixed spot this capture could frame reliably) — same
+        /// reason <see cref="BuildMv616SentinelBeam"/>/<see cref="BuildMv693Replicator"/>/
+        /// <see cref="BuildMv1024SentinelColorCheck"/> all build a synthetic probe instead of trusting
+        /// where the real map happens to put things. This probe calls the exact production dressing
+        /// code (<see cref="ReefKit.DressHull"/>, <see cref="ReefKit.BuildHydroponicBed"/>) a real World
+        /// 3 area calls, then reflectively fires the installed <see cref="RuntimeSurfaceDirector"/>'s
+        /// own <c>Sweep()</c> — simulating the one-time pass that runs after every object's Awake in a
+        /// real scene, which is NOT guaranteed to land before this coroutine's own next frame if left to
+        /// Unity's own scheduling. Launched directly against the standalone .exe
+        /// (<c>-mv1063shot</c>, no Editor involved at all) so the pixels this measures are player-build
+        /// ones, not Editor ones — the ticket's own AC1.</summary>
+        private static CapturePreset BuildMv1063ReefFixCheck()
+        {
+            const float pitch = 60f;
+            const float distance = 16f;
+            const int floorPatchBoxHalf = 50;
+            const int bedLampBoxHalf = 30;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject host = null;
+            Vector3 bedWorldPos = Vector3.zero;
+            Vector3 lampWorldPos = Vector3.zero;
+            Vector3 floorPatchWorldPos = new Vector3(4f, 0.1f, 2f);   // open floor, clear of the bed (0,-2) and the wall (z=6)
+
+            float cyanVioletPercent = -1f;
+            float floorLuminanceStdDev = -1f;
+            float bedMeanValue = -1f;
+            float lampMeanValue = -1f;
+
+            IEnumerator Setup(Camera cam)
+            {
+                host = new GameObject("MV1063 Reef Fix Probe");
+
+                GameObject floorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                floorGo.name = "Probe Floor";
+                floorGo.transform.SetParent(host.transform, false);
+                floorGo.transform.localScale = new Vector3(14f, 0.2f, 14f);
+                floorGo.AddComponent<StructuralFloor>();
+
+                GameObject wallGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wallGo.name = "Probe Wall";
+                wallGo.transform.SetParent(host.transform, false);
+                wallGo.transform.position = new Vector3(0f, 1.5f, 6f);
+                wallGo.transform.localScale = new Vector3(14f, 3f, 0.3f);
+                wallGo.AddComponent<StructuralWall>();
+
+                // The exact call BackyardPath.Awake makes for a real World 3 scene: sets
+                // M_ShipFloor/M_ShipWall, lays the circuit spine along the wall base, builds the
+                // observation-glass/wall-lamp groups, and (MV-1063's fix) tags every piece it builds
+                // with KeepsOwnMaterial.
+                ReefKit.DressHull(host.transform);
+
+                bedWorldPos = new Vector3(0f, 0f, -2f);
+                ReefKit.BuildHydroponicBed(host.transform, bedWorldPos);
+
+                yield return null;
+                yield return null;
+
+                var director = FindFirstObjectByType<RuntimeSurfaceDirector>();
+                if (director == null)
+                    throw new CaptureAbortException("no RuntimeSurfaceDirector installed — its AfterSceneLoad hook did not fire");
+                typeof(RuntimeSurfaceDirector).GetMethod("Sweep", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(director, null);
+
+                Transform lampsRoot = host.transform.Find("Wall Lamps");
+                if (lampsRoot == null || lampsRoot.childCount == 0)
+                    throw new CaptureAbortException("DressHull built no wall lamps for the probe wall");
+                lampWorldPos = lampsRoot.GetChild(0).position;
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 focus = new Vector3(0f, 1f, 1f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                var cam = Camera.main;
+                if (cam == null) return;
+
+                // AC2a: cyan (hue 170-200deg) or violet (hue 265-295deg) at value>=0.7, across every
+                // pixel the probe put on screen — at this framing that's floor, wall, circuit spine,
+                // bed and lamp, i.e. "the floor pixels" the AC means by a World 3 surface that reads
+                // as Reef rather than flat.
+                int cyanOrViolet = 0, totalPixels = tex.width * tex.height;
+                for (int y = 0; y < tex.height; y++)
+                {
+                    for (int x = 0; x < tex.width; x++)
+                    {
+                        Color.RGBToHSV(tex.GetPixel(x, y), out float h, out float s, out float v);
+                        float deg = h * 360f;
+                        bool cyan = deg >= 170f && deg <= 200f;
+                        bool violet = deg >= 265f && deg <= 295f;
+                        if ((cyan || violet) && v >= 0.7f) cyanOrViolet++;
+                    }
+                }
+                cyanVioletPercent = totalPixels > 0 ? cyanOrViolet * 100f / totalPixels : 0f;
+
+                // AC2b: plate-seam contrast — luminance std-dev over an open floor patch, clear of the
+                // bed/wall/lamp, compared against the SAME patch captured on the pre-fix commit (see
+                // the ticket comment for that paired baseline run).
+                floorLuminanceStdDev = SampleLuminanceStdDev(tex, cam, floorPatchWorldPos, floorPatchBoxHalf);
+
+                // AC2c: hydroponic bed / wall lamp mean value >= 0.6.
+                bedMeanValue = SampleMeanValue(tex, cam, bedWorldPos + Vector3.up * 0.15f, bedLampBoxHalf);
+                lampMeanValue = SampleMeanValue(tex, cam, lampWorldPos, bedLampBoxHalf);
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1063reeffix",
+                LogTag = "[MV1063Capture]",
+                Width = 1600,
+                Height = 1000,
+                Flag = "-mv1063shot",
+                ArmFile = "Temp/mv1063.arm",
+                HeadlessMarker = "Temp/mv1063.headless",
+                DoneFileName = "_mv1063_done.txt",
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1063-reef-fix", Setup, measure: Measure) },
+                Cleanup = () => { if (host != null) Destroy(host); },
+                ExtraReport = () =>
+                    $"cyan/violet floor pixels: {cyanVioletPercent:F2}% (AC2a >= 1.50%)\n" +
+                    $"floor patch luminance std-dev: {floorLuminanceStdDev:F4} (AC2b: compare against the pre-fix baseline run, needs >= 3x)\n" +
+                    $"hydroponic bed mean value: {bedMeanValue:F3} (AC2c >= 0.600)\n" +
+                    $"wall lamp mean value: {lampMeanValue:F3} (AC2c >= 0.600)\n",
+            };
+        }
+
+        /// <summary>Mean HSV value (brightness) over a square pixel box centred on <paramref name="worldPos"/>'s
+        /// own viewport projection — shared by every bed/lamp/body sample in this file
+        /// (<see cref="BuildMv1024SentinelColorCheck"/>'s own inline version predates this extraction).</summary>
+        private static float SampleMeanValue(Texture2D tex, Camera cam, Vector3 worldPos, int boxHalf)
+        {
+            Vector3 vp = cam.WorldToViewportPoint(worldPos);
+            int cx = Mathf.RoundToInt(vp.x * tex.width);
+            int cy = Mathf.RoundToInt(vp.y * tex.height);
+            double sum = 0;
+            int count = 0;
+            for (int dy = -boxHalf; dy <= boxHalf; dy++)
+            {
+                int y = cy + dy;
+                if (y < 0 || y >= tex.height) continue;
+                for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                {
+                    int x = cx + dx;
+                    if (x < 0 || x >= tex.width) continue;
+                    Color.RGBToHSV(tex.GetPixel(x, y), out _, out _, out float v);
+                    sum += v;
+                    count++;
+                }
+            }
+            return count > 0 ? (float)(sum / count) : -1f;
+        }
+
+        /// <summary>Population std-dev of HSV value over the same kind of box <see cref="SampleMeanValue"/>
+        /// samples — the plate-seam-contrast metric AC2b asks for (a flat, undetailed surface reads as a
+        /// near-zero std-dev; visible seams/tiling push it up).</summary>
+        private static float SampleLuminanceStdDev(Texture2D tex, Camera cam, Vector3 worldPos, int boxHalf)
+        {
+            Vector3 vp = cam.WorldToViewportPoint(worldPos);
+            int cx = Mathf.RoundToInt(vp.x * tex.width);
+            int cy = Mathf.RoundToInt(vp.y * tex.height);
+            var values = new List<float>();
+            for (int dy = -boxHalf; dy <= boxHalf; dy++)
+            {
+                int y = cy + dy;
+                if (y < 0 || y >= tex.height) continue;
+                for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                {
+                    int x = cx + dx;
+                    if (x < 0 || x >= tex.width) continue;
+                    Color.RGBToHSV(tex.GetPixel(x, y), out _, out _, out float v);
+                    values.Add(v);
+                }
+            }
+            if (values.Count == 0) return -1f;
+            float mean = 0f;
+            foreach (float v in values) mean += v;
+            mean /= values.Count;
+            float sumSq = 0f;
+            foreach (float v in values) sumSq += (v - mean) * (v - mean);
+            return Mathf.Sqrt(sumSq / values.Count);
         }
 
         // ---- MV750DressingCheck (MV-750 AC3) --------------------------------------------------

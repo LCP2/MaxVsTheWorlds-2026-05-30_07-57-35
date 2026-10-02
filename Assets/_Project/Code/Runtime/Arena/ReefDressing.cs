@@ -62,6 +62,8 @@ namespace MaxWorlds.Arena
                     {
                         var longRenderer = piece.Body.GetComponent<Renderer>();
                         if (longRenderer != null) longRenderer.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+                        if (piece.Body.GetComponent<KeepsOwnMaterial>() == null)
+                            piece.Body.AddComponent<KeepsOwnMaterial>();
                         continue;
                     }
 
