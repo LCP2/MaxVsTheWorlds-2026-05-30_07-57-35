@@ -830,11 +830,17 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>MV-698: the world whose board a pending Weapon Core morph should switch to — the
-        /// active profile's current <c>WorldIndex</c> (already advanced past the world whose finale
-        /// dropped the core by <c>SaveSystem.RecordResult</c> by the time THE RIG can next be opened).
-        /// Falls back to World 1 with no active profile (a capture/press-kit run, or a test) — never
-        /// reached for real, since nothing sets <see cref="PendingMorphingModule.WeaponCorePending"/>
-        /// without an active slot to have advanced.</summary>
+        /// active profile's current <c>WorldIndex</c>. MV-1074 corrects this doc's own prior false
+        /// assumption: between collecting a finale's Weapon Core and actually crossing the finale gate,
+        /// <c>WorldIndex</c> has NOT yet advanced — <c>SaveSystem.RecordResult</c> only advances it once
+        /// the run seals, which needs Max to walk out through the gate. So opening THE RIG in the finale
+        /// world itself still reads the OLD (current) world here; that is exactly why
+        /// <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/> compares this value against
+        /// <see cref="RigBoard.ActiveWorldIndex"/> rather than trusting it to already mean "the next
+        /// world" — only once the run seals and the NEXT world's own <see cref="MaxWorlds.Arena.BackyardPath.Awake"/>
+        /// calls back in with the advanced index does the morph actually apply. Falls back to World 1
+        /// with no active profile (a capture/press-kit run, or a test) — never reached for real, since
+        /// nothing sets <see cref="PendingMorphingModule.WeaponCorePending"/> without an active slot.</summary>
         private static int CurrentWorldIndex() =>
             SaveSystem.ActiveSlot >= 0 ? SaveSystem.Load(SaveSystem.ActiveSlot).WorldIndex : 0;
 
