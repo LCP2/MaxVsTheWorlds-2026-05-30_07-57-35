@@ -1,6 +1,7 @@
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
 {
@@ -99,8 +100,57 @@ namespace MaxWorlds.Arena
 
         private static readonly Color PortalViolet = new Color(0.55f, 0.25f, 0.85f);
 
-        private static Material PortalSpillMaterial() =>
-            EmissiveMaterial(ref _portalSpillMaterial, "PortalSpill", PortalViolet, 0.9f);
+        /// <summary>MV-1076: a dedicated cached material on the same URP/Lit shader
+        /// <see cref="StatusLampMaterial"/> already uses, rather than reaching for
+        /// <see cref="MaxWorlds.VFX.VfxMaterials"/>'s particle-shader cache — MV-965's own AC1c (every
+        /// 4 m window in segment C holds a renderer with <c>_EMISSION</c> enabled) reads that keyword on
+        /// THIS shader, so keeping the portal spill on it is what keeps this one renderer compatible
+        /// with that check instead of carving out a second, unrelated definition of "emissive".
+        /// <see cref="VfxMaterials.Glow"/>'s own radial-falloff texture gives it a soft, round edge — no
+        /// opaque geometry, no hard rectangular edge — and the transparent/additive blend plus
+        /// <see cref="SpillMaxAlpha"/> keep it reading as light spilling from the portal, not a solid
+        /// slab.</summary>
+        private const float SpillMaxAlpha = 0.35f;
+
+        private static Material PortalSpillMaterial()
+        {
+            if (_portalSpillMaterial != null) return _portalSpillMaterial;
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader)
+            {
+                name = "WorldJoin_PortalSpill",
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true,
+                renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent,
+            };
+
+            Texture2D glow = VfxMaterials.Glow();
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", glow);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", glow);
+
+            Color tinted = new Color(PortalViolet.r, PortalViolet.g, PortalViolet.b, SpillMaxAlpha);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tinted);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", tinted);
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", PortalViolet * 0.9f);
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);     // 0 opaque, 1 transparent
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 2f);        // additive -- a light, not a decal
+            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
+            if (m.HasProperty("_SrcBlend"))
+                m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (m.HasProperty("_DstBlend"))
+                m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.SetOverrideTag("RenderType", "Transparent");
+
+            _portalSpillMaterial = m;
+            return m;
+        }
 
         /// <summary>Drops the cached materials this class owns — mirrors <see cref="StormdrainKit.Clear"/>
         /// so an EditMode run that builds the corridor repeatedly across tests never leaks one Material
@@ -374,11 +424,31 @@ namespace MaxWorlds.Arena
             }
         }
 
+        /// <summary>MV-1076: Lee, v0.11.5 on his phone — this read as a flat, solid bright-purple square
+        /// covering the whole floor width, not light spilling from the portal. Replaced the opaque box
+        /// with a flat quad carrying <see cref="PortalSpillMaterial"/>'s soft radial glow, centred on
+        /// <paramref name="dEnd"/> (the far gate, where it reads strongest) and sized so it fades to
+        /// nothing <paramref name="dEnd"/> - <paramref name="dStart"/> m back — no opaque geometry, no
+        /// hard rectangular edge.</summary>
         private static void DressPortalSpill(Transform parent, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
         {
-            GameObject spill = Bar(parent, "Portal Spill", doorMouth, wall, dStart, dEnd, 0f, 3f, 0.02f, 0.01f, PortalViolet);
+            float alongDiameter = (dEnd - dStart) * 2f;
+            const float acrossDiameter = 3f;   // the corridor's own interior width -- same footprint the old slab had
+
+            bool travelAlongZ = OutwardDir(wall).x == 0f;
+
+            GameObject spill = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            spill.name = "Portal Spill";
+            spill.transform.SetParent(parent, false);
+            spill.transform.localPosition = At(doorMouth, wall, dEnd, 0f, 0.02f);
+            spill.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            spill.transform.localScale = travelAlongZ
+                ? new Vector3(acrossDiameter, alongDiameter, 1f)
+                : new Vector3(alongDiameter, acrossDiameter, 1f);
+            StormdrainKit.Strip(spill);
+
             var rend = spill.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = PortalSpillMaterial();
+            rend.sharedMaterial = PortalSpillMaterial();
         }
 
         // ================================================================== World 2 -> World 3 (MV-967)
