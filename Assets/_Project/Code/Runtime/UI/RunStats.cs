@@ -42,8 +42,8 @@ namespace MaxWorlds.UI
 
         /// <summary>Whether this Victory's finale dropped and collected a Weapon Core (MV-698) — set by
         /// <c>RunTracker</c> at seal time, same "captured beforehand, not derived here" shape as
-        /// <see cref="AdvancesWorld"/>. Drives whether the Result screen shows its "NEW PRIMARY: LPPE"
-        /// line.</summary>
+        /// <see cref="AdvancesWorld"/>. Drives whether the Result screen shows its "NEW WEAPON
+        /// UNLOCKED" line (MV-1075).</summary>
         public bool WeaponCoreGranted { get; private set; }
 
         public void SetWeaponCoreGranted(bool value) => WeaponCoreGranted = value;

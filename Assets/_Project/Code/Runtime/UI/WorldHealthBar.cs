@@ -331,6 +331,17 @@ namespace MaxWorlds.UI
             if (hidden && _canvas != null) _canvas.gameObject.SetActive(false);
         }
 
+        /// <summary>MV-1075: force every attached bar (Max's, Sentinels', robots') off at once — the
+        /// Result card's opaque panel sits on a screen-space overlay canvas, so without this a
+        /// world-space bar underneath it still draws straight through. No matching "show all": the
+        /// Result screen is terminal for the slice (MV-574's own ModalFrameRateGate.Enter comment —
+        /// it never closes), so there is nothing to restore visibility for.</summary>
+        public static void SetAllForceHidden(bool hidden)
+        {
+            for (int i = 0; i < _active.Count; i++)
+                _active[i].SetForceHidden(hidden);
+        }
+
         /// <summary>Hide the bar strip but keep the name label (MV-571). A condition-locked gate has
         /// no HP worth drawing, but it still has something to say — the label carries it. Only forces
         /// the strip off immediately, same asymmetry as <see cref="SetForceHidden"/>: un-hiding is

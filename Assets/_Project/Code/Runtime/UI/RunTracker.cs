@@ -217,7 +217,7 @@ namespace MaxWorlds.UI
 
             // MV-698: this run's finale granted a Weapon Core (already collected by now — TrySeal
             // wouldn't have let a still-awaited one reach here) — the Result screen's cue to show the
-            // "NEW PRIMARY: LPPE" line.
+            // "NEW WEAPON UNLOCKED" line (MV-1075).
             _stats.SetWeaponCoreGranted(_weaponCoreAwaited);
 
             // MV-427: deaths taken is the new personal-best discriminator — the peak-Domination %
