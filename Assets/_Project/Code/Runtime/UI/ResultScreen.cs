@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
 {
@@ -113,15 +114,17 @@ namespace MaxWorlds.UI
                 new Color(0.3f, 0.34f, 0.4f), canAdvance, canAdvance ? (UnityEngine.Events.UnityAction)RunFlow.StartNextWorld : null);
             Bottom(nextBtn, 0f, 40f, ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
 
-            // MV-698/MV-1074: World 1's finale — collecting the Weapon Core morphs PRIMARY at the
-            // START of the next world (not on next opening THE RIG, which is what this line used to
-            // say), so the player never has to go open THE RIG for it. This line is the only place
-            // that ever tells the player the Core landed.
+            // MV-698/MV-1074: World 1's finale — collecting the Weapon Core morphs PRIMARY on the spot,
+            // during the finale's own WEAPON TAKEN beat (MV-1079), not on next opening THE RIG, which is
+            // what this line used to say. MV-1079: by the time this card shows, that beat has already
+            // applied the morph, so WeaponSystemState.ActivePrimary already reads the new primary — this
+            // line names it by the same WeaponCatalog long name the beat's own banner used, replacing the
+            // vaguer "READY IN THE NEXT WORLD" wording.
             if (stats.WeaponCoreGranted)
             {
                 var corePrompt = AddText(panel.rectTransform, 22f, CoreCyan, TextAnchor.MiddleCenter, FontStyle.Bold);
                 Bottom(corePrompt.rectTransform, 0f, 40f + ResultLayout.ButtonHeight + 14f, ResultLayout.ButtonWidth, 28f);
-                corePrompt.text = "NEW WEAPON UNLOCKED - READY IN THE NEXT WORLD";
+                corePrompt.text = "NEW WEAPON: " + WeaponCatalog.DisplayName(WeaponSystemState.ActivePrimary);
             }
         }
 

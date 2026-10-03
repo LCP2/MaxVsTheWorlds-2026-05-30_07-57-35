@@ -11,6 +11,7 @@ using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
@@ -58,6 +59,16 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(stray.gameObject);
             foreach (var stray in Object.FindObjectsByType<BackyardLighting>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(stray.gameObject);
+
+            // MV-1079: Beat A/Beat B's own scratch VFX/UI are never torn down by OnDisable here -- same
+            // "OnDisable isn't reliably invoked for AddComponent outside Play mode" note the
+            // WorldJoinSequence/BackyardLighting sweeps above already carry.
+            foreach (var ring in Object.FindObjectsByType<GroundRing>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(ring.gameObject);
+            foreach (var bolt in Object.FindObjectsByType<SentinelBolt>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(bolt.gameObject);
+            foreach (var banner in Object.FindObjectsByType<FinaleBanner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(banner.gameObject);
 
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
@@ -249,6 +260,12 @@ namespace MaxWorlds.Tests.EditMode
                     Pickup core = Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None)
                         .Single(p => p.Kind == PickupKind.WeaponCore);
                     InvokeCollect(pickupDirector, core);
+
+                    // MV-1079: collecting the Core now starts Beat A (2.5s; this director's own per-area
+                    // robot count is 0, so clean-up finds zero left and moves straight to Beat B, 1.0s of
+                    // which is what actually calls WorldFinaleGate.Open()).
+                    gate.TickWeaponBeat(2.5f);
+                    gate.TickExitBeat(1.0f);
 
                     Assert.IsTrue(gate.IsOpen, $"world {row.WorldIndex}'s gate must open once the Core is collected");
                     Assert.IsTrue(built.ExitGate.IsOpen,

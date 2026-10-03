@@ -629,6 +629,12 @@ namespace MaxWorlds.VFX
         /// <summary>The mirror of <see cref="ShoulderL"/>, for the right sleeve.</summary>
         public Vector3 ShoulderR { get; private set; }
 
+        /// <summary>MV-1079: the gadget's own world position right now — where the finale's weapon-taken
+        /// flash and the exit beat's travelling bolt both originate, so neither effect is invented at
+        /// Max's capsule centre. Falls back to this rig's own transform before <see cref="Build"/> has
+        /// run (there is nothing better to offer yet).</summary>
+        public Vector3 GunWorldPosition => _gun != null ? _gun.position : transform.position;
+
         // ---------------------------------------------------------------- build
 
         private void Awake()

@@ -2,10 +2,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.Feel;
 using MaxWorlds.Intro;
+using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
@@ -104,6 +107,49 @@ namespace MaxWorlds.VFX
         /// requirement.</summary>
         private const float CleanupFailsafeSeconds = 25f;
 
+        // ---------------------------------------------------------------- MV-1079: Beat A, WEAPON TAKEN
+
+        private const float WeaponBeatDuration = 2.5f;
+        private const float WeaponBeatMorphTime = 0.5f;
+        private const float WeaponBeatFlashEnd = 0.7f;
+        private const float WeaponBeatFlashDiameter = 1.5f;
+        private const float WeaponBeatRingStart = 0.5f;
+        private const float WeaponBeatRingEnd = 1.3f;
+        private const float WeaponBeatRingMaxRadius = 3f; // 6 m across
+        private const float WeaponBeatBannerStart = 0.6f;
+        private const float WeaponBeatBannerFadeInEnd = 0.8f;   // start + 0.2 s
+        private const float WeaponBeatBannerFadeOutStart = 2.2f; // end - 0.3 s
+
+        private bool _weaponBeatActive;
+        private float _weaponBeatTime;
+        private bool _weaponBeatMorphApplied;
+        private int _weaponBeatPlayedWorld;
+        private GroundRing _weaponBeatFlashRing;
+        private GroundRing _weaponBeatRing;
+
+        // ---------------------------------------------------------------- MV-1079: Beat B, EXIT OPEN
+
+        private const float ExitBeatDuration = 3.0f;
+        private const float ExitBeatDoorOpenTime = 1.0f;
+        private const float ExitBeatHoldUntil = 2.2f;
+        private const float ExitBeatBurstFadeSeconds = 0.3f;
+        private const float ExitBeatBurstRadius = 1.5f; // 3 m across
+        private const float ExitBeatNearDoorSkipDistance = 8f;
+        private const float ExitBeatBoltSpeedFloor = 1f;
+
+        private bool _exitBeatActive;
+        private float _exitBeatTime;
+        private bool _exitBeatSkipTravel;
+        private bool _exitBeatDoorOpened;
+        private Vector3 _exitBeatDoorPosition;
+        private CameraTargetRig _exitBeatCameraRig;
+        private SentinelBolt _exitBeatBolt;
+        private GroundRing _exitBeatBurstRing;
+
+        private FinaleBanner _banner;
+        private readonly List<RobotEnemy> _frozenRobots = new List<RobotEnemy>(16);
+        private PlayerController _frozenPlayer;
+
         private void Awake()
         {
             var path = FindFirstObjectByType<BackyardPath>();
@@ -132,6 +178,13 @@ namespace MaxWorlds.VFX
         {
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
+
+            // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
+            // scratch VFX/UI or leave gameplay stuck suspended.
+            if (_weaponBeatActive || _exitBeatActive) RestoreGameplayForBeat();
+            HideWeaponBeatVisuals();
+            HideExitBeatVisuals();
+            if (_banner != null) { _banner.DestroySelf(); _banner = null; }
         }
 
         /// <summary>MV-956: <see cref="HudSignals.BossDefeated"/> fires for the last living boss of ANY
@@ -145,18 +198,21 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-1078: the orb is what starts the WEAPON TAKEN/CLEAN-UP beat — never before the
         /// final boss has actually died (a Weapon Core only ever drops off that death, but this guard
-        /// keeps the two concerns independent), and never twice for the same finale.</summary>
+        /// keeps the two concerns independent), and never twice for the same finale. MV-1079: the beat
+        /// that actually starts here is now Beat A (<see cref="BeginWeaponBeat"/>), the player-visible
+        /// "orb becomes the weapon" moment — CLEAN-UP itself only begins once that beat finishes.</summary>
         private void OnWeaponCoreCollected()
         {
-            if (!_finalBossDefeated || _cleanupActive || IsOpen) return;
-            BeginCleanup();
+            if (!_finalBossDefeated || _cleanupActive || _weaponBeatActive || IsOpen) return;
+            BeginWeaponBeat();
         }
 
-        /// <summary>MV-1078, WEAPON TAKEN: (a) the next world's weapon applies NOW, not at the next
-        /// world's own run start — skipped entirely with nothing consumed when there is no next world to
-        /// apply it for. (b) the final area's own sheds/Replicators stop producing and anything still
-        /// queued for it is discarded. (c) every living robot already in the final area wakes and hunts,
-        /// whatever its dormancy state. Then CLEAN-UP begins: <see cref="TickCleanup"/> drives the rest.</summary>
+        /// <summary>MV-1078, WEAPON TAKEN -&gt; CLEAN-UP: (a) the final area's own sheds/Replicators stop
+        /// producing and anything still queued for it is discarded. (b) every living robot already in the
+        /// final area wakes and hunts, whatever its dormancy state. Then CLEAN-UP begins:
+        /// <see cref="TickCleanup"/> drives the rest. MV-1079: the weapon morph itself no longer applies
+        /// here — <see cref="TickWeaponBeat"/> applies it mid-beat, at its own authored instant, and this
+        /// method only ever runs once that beat (or its no-next-weapon skip) has already finished.</summary>
         private void BeginCleanup()
         {
             _cleanupActive = true;
@@ -164,13 +220,6 @@ namespace MaxWorlds.VFX
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
             WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
             _finalAreaIndex = cfg?.dials != null ? cfg.dials.areaCount : 0;
-
-            int playedWorld = areaDirector != null ? areaDirector.ActiveWorldIndex : 0;
-            if (playedWorld + 1 < WorldLibrary.Count)
-            {
-                PendingMorphingModule.TakeWeaponCore();
-                WeaponSystemState.ApplyWeaponCoreMorph(playedWorld + 1);
-            }
 
             if (_finalAreaIndex > 0)
             {
@@ -182,6 +231,158 @@ namespace MaxWorlds.VFX
             _lastRobotsLeft = -1;
             _lastRobotDeathRealtime = Time.unscaledTime;
             TickCleanup();
+        }
+
+        /// <summary>MV-1079, Beat A entry point: the player-visible "orb becomes the weapon" beat (2.5 s)
+        /// — gameplay suspends, the Core flies into the gadget, the morph applies at its own authored
+        /// instant mid-beat (<see cref="TickWeaponBeat"/>), and CLEAN-UP (<see cref="BeginCleanup"/>)
+        /// only starts once it finishes. Skipped entirely — straight to CLEAN-UP, nothing to animate or
+        /// apply — when this world has no next weapon (the last world).</summary>
+        private void BeginWeaponBeat()
+        {
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            int playedWorld = areaDirector != null ? areaDirector.ActiveWorldIndex : 0;
+
+            if (playedWorld + 1 >= WorldLibrary.Count)
+            {
+                BeginCleanup();
+                return;
+            }
+
+            _weaponBeatActive = true;
+            _weaponBeatTime = 0f;
+            _weaponBeatMorphApplied = false;
+            _weaponBeatPlayedWorld = playedWorld;
+            SuspendGameplayForBeat();
+        }
+
+        /// <summary>Advance Beat A by <paramref name="dt"/> seconds. Public — same "an EditMode test can
+        /// drive this deterministically" contract <see cref="WorldJoinSequence.Tick"/> and
+        /// <see cref="SentinelBolt.Tick"/> already give their own scripted beats.</summary>
+        public void TickWeaponBeat(float dt)
+        {
+            if (!_weaponBeatActive) return;
+            _weaponBeatTime += dt;
+
+            if (!_weaponBeatMorphApplied && _weaponBeatTime >= WeaponBeatMorphTime)
+            {
+                _weaponBeatMorphApplied = true;
+                // MV-1079: the weapon change lands at THIS instant, not before — BeginCleanup used to
+                // apply it the moment the Core was collected; now the beat itself is what applies it,
+                // inside the flash below.
+                PendingMorphingModule.TakeWeaponCore();
+                WeaponSystemState.ApplyWeaponCoreMorph(_weaponBeatPlayedWorld + 1);
+            }
+
+            UpdateWeaponBeatFlash();
+            UpdateWeaponBeatRing();
+            UpdateWeaponBeatBanner();
+
+            if (_weaponBeatTime >= WeaponBeatDuration)
+            {
+                _weaponBeatActive = false;
+                HideWeaponBeatVisuals();
+                RestoreGameplayForBeat();
+                BeginCleanup();
+            }
+        }
+
+        /// <summary>MV-1079, Beat A step 2: a white-cyan additive flash about 1.5 m across at the gadget,
+        /// 0.50-0.70 s — the morph itself already applied by the time this window opens.</summary>
+        private void UpdateWeaponBeatFlash()
+        {
+            if (_weaponBeatTime < WeaponBeatMorphTime || _weaponBeatTime > WeaponBeatFlashEnd)
+            {
+                _weaponBeatFlashRing?.Hide();
+                return;
+            }
+
+            if (_weaponBeatFlashRing == null) _weaponBeatFlashRing = GroundRing.Create("MV-1079 Weapon Flash", additive: true);
+            float t = Mathf.InverseLerp(WeaponBeatMorphTime, WeaponBeatFlashEnd, _weaponBeatTime);
+            Vector3 pos = GadgetPosition();
+            float radius = Mathf.Sin(t * Mathf.PI) * (WeaponBeatFlashDiameter * 0.5f);
+            Color c = new Color(0.85f, 0.98f, 1f, 1f - t);
+            _weaponBeatFlashRing.Show(pos, Mathf.Max(0.05f, radius), c);
+        }
+
+        /// <summary>MV-1079, Beat A step 3: a ground ring expands from Max to 6 m across and fades,
+        /// 0.50-1.30 s. Visual only — no gameplay effect.</summary>
+        private void UpdateWeaponBeatRing()
+        {
+            if (_weaponBeatTime < WeaponBeatRingStart || _weaponBeatTime > WeaponBeatRingEnd)
+            {
+                _weaponBeatRing?.Hide();
+                return;
+            }
+
+            Transform max = MaxTransform();
+            if (max == null) return;
+
+            if (_weaponBeatRing == null) _weaponBeatRing = GroundRing.Create("MV-1079 Weapon Ring", additive: true);
+            float t = Mathf.InverseLerp(WeaponBeatRingStart, WeaponBeatRingEnd, _weaponBeatTime);
+            float radius = Mathf.Lerp(0.1f, WeaponBeatRingMaxRadius, t);
+            Color c = new Color(0.4f, 0.95f, 1f, 1f - t);
+            _weaponBeatRing.Show(max.position, radius, c);
+        }
+
+        /// <summary>MV-1079, Beat A step 4: the centre banner — "NEW WEAPON" small, the new primary's
+        /// long name large, cyan — 0.60-2.50 s, fading in over 0.2 s and out over the last 0.3 s.</summary>
+        private void UpdateWeaponBeatBanner()
+        {
+            if (_weaponBeatTime < WeaponBeatBannerStart || _weaponBeatTime > WeaponBeatDuration)
+            {
+                _banner?.Hide();
+                return;
+            }
+
+            float alpha;
+            if (_weaponBeatTime < WeaponBeatBannerFadeInEnd)
+                alpha = Mathf.InverseLerp(WeaponBeatBannerStart, WeaponBeatBannerFadeInEnd, _weaponBeatTime);
+            else if (_weaponBeatTime > WeaponBeatBannerFadeOutStart)
+                alpha = 1f - Mathf.InverseLerp(WeaponBeatBannerFadeOutStart, WeaponBeatDuration, _weaponBeatTime);
+            else
+                alpha = 1f;
+
+            if (_banner == null) _banner = FinaleBanner.Create();
+            string longName = WeaponCatalog.DisplayName(WeaponSystemState.ActivePrimary);
+            _banner.Show("NEW WEAPON", longName, alpha);
+        }
+
+        private void HideWeaponBeatVisuals()
+        {
+            _weaponBeatFlashRing?.Hide();
+            _weaponBeatRing?.Hide();
+        }
+
+        /// <summary>Where Beat A's flash plays — Max's own gadget, when his rig exists, falling back to
+        /// Max's capsule position for a fixture/test with no <see cref="MaxRig"/> built.</summary>
+        private static Vector3 GadgetPosition()
+        {
+            if (MaxRig.Instance != null) return MaxRig.Instance.GunWorldPosition;
+            GameObject g = GameObject.FindGameObjectWithTag("Player");
+            return g != null ? g.transform.position : Vector3.zero;
+        }
+
+        /// <summary>MV-1079: freezes the field for a finale beat — every active robot and Max's own
+        /// control, so neither can act or be acted on while a scripted beat plays. The HUD is
+        /// deliberately left alone (both beats keep it up). Same disable/snapshot idiom
+        /// <see cref="WorldJoinSequence.SuspendGameplay"/> already uses.</summary>
+        private void SuspendGameplayForBeat()
+        {
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player != null) { player.enabled = false; _frozenPlayer = player; }
+
+            _frozenRobots.Clear();
+            _frozenRobots.AddRange(RobotEnemy.Active);
+            foreach (RobotEnemy r in _frozenRobots)
+                if (r != null) r.enabled = false;
+        }
+
+        private void RestoreGameplayForBeat()
+        {
+            if (_frozenPlayer != null) { _frozenPlayer.enabled = true; _frozenPlayer = null; }
+            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.enabled = true;
+            _frozenRobots.Clear();
         }
 
         /// <summary>MV-1078 (b): this gate's own final area's sheds (<see cref="MowerHutch"/>) and
@@ -254,7 +455,7 @@ namespace MaxWorlds.VFX
             if (left <= 0)
             {
                 _cleanupActive = false;
-                Open();
+                BeginExitBeat(ResolveDoorPosition());
             }
         }
 
@@ -308,6 +509,139 @@ namespace MaxWorlds.VFX
                 _exitGate.ForceOpen();
         }
 
+        /// <summary>MV-1079: the door's own resolved world position, for Beat B's camera travel and
+        /// bolt target — <see cref="_exitGate"/> when Awake resolved real geometry (every production
+        /// run), falling back to Max's own position (a geometry-independent fixture/test with nothing
+        /// built at all, where the beat then measures as "already at the door" and skips its travel).</summary>
+        private Vector3 ResolveDoorPosition()
+        {
+            if (_exitGate != null) return _exitGate.transform.position;
+            Transform max = MaxTransform();
+            return max != null ? max.position : Vector3.zero;
+        }
+
+        /// <summary>MV-1079, Beat B entry point: the player-visible "exit blows open" beat (3.0 s) —
+        /// gameplay suspends, a bolt travels from the gadget to the door, the camera travels with it
+        /// (<see cref="CameraTargetRig.ApplyFocusOverride"/>), the door itself opens mid-beat
+        /// (<see cref="TickExitBeat"/> moves the existing <see cref="Open"/> call to that instant), and
+        /// gameplay resumes once it ends. Public — same "an EditMode test can drive this deterministically,
+        /// no scene required" contract as <see cref="WorldJoinSequence.Initialize"/>: a real run always
+        /// arrives here through <see cref="TickCleanup"/>, which resolves <paramref name="doorPosition"/>
+        /// itself (<see cref="ResolveDoorPosition"/>); a test can call this directly with an explicit
+        /// position instead.</summary>
+        public void BeginExitBeat(Vector3 doorPosition)
+        {
+            if (_exitBeatActive || IsOpen) return;
+
+            _exitBeatActive = true;
+            _exitBeatTime = 0f;
+            _exitBeatDoorOpened = false;
+            _exitBeatDoorPosition = doorPosition;
+
+            Transform max = MaxTransform();
+            Vector3 maxPos = max != null ? max.position : Vector3.zero;
+            float dist = Vector2.Distance(new Vector2(maxPos.x, maxPos.z), new Vector2(doorPosition.x, doorPosition.z));
+            _exitBeatSkipTravel = dist < ExitBeatNearDoorSkipDistance;
+
+            _exitBeatCameraRig = FindFirstObjectByType<CameraTargetRig>();
+
+            SuspendGameplayForBeat();
+
+            // MV-1079 step 1: the bolt and its ground glow fly for exactly the travel window
+            // (0.00-1.00 s) regardless of the 8 m skip — "the bolt and burst still play" even when the
+            // camera itself doesn't travel.
+            Vector3 origin = GadgetPosition();
+            float speed = Mathf.Max(ExitBeatBoltSpeedFloor, Vector3.Distance(origin, doorPosition) / ExitBeatDoorOpenTime);
+            _exitBeatBolt = SentinelBolt.Fire(origin, doorPosition, speed, ExitBeatColor());
+        }
+
+        /// <summary>Advance Beat B by <paramref name="dt"/> seconds. Public — same test-driving contract
+        /// as <see cref="TickWeaponBeat"/>.</summary>
+        public void TickExitBeat(float dt)
+        {
+            if (!_exitBeatActive) return;
+            _exitBeatTime += dt;
+
+            _exitBeatBolt?.Tick(dt);
+
+            if (!_exitBeatSkipTravel && _exitBeatCameraRig != null)
+            {
+                float travel;
+                if (_exitBeatTime <= ExitBeatDoorOpenTime)
+                    travel = AnimSequence.OutQuad(Mathf.Clamp01(_exitBeatTime / ExitBeatDoorOpenTime));
+                else if (_exitBeatTime <= ExitBeatHoldUntil)
+                    travel = 1f;
+                else
+                    travel = 1f - Mathf.Clamp01((_exitBeatTime - ExitBeatHoldUntil) / (ExitBeatDuration - ExitBeatHoldUntil));
+
+                _exitBeatCameraRig.ApplyFocusOverride(_exitBeatDoorPosition, travel);
+            }
+
+            if (!_exitBeatDoorOpened && _exitBeatTime >= ExitBeatDoorOpenTime)
+            {
+                _exitBeatDoorOpened = true;
+                Open(); // MV-1079: moved here from the instant the final robot died — see class doc.
+                PlayExitBeatBurst();
+            }
+
+            UpdateExitBeatBurst();
+            UpdateExitBeatBanner();
+
+            if (_exitBeatTime >= ExitBeatDuration)
+            {
+                _exitBeatActive = false;
+                if (_exitBeatCameraRig != null) _exitBeatCameraRig.EndFocusOverride();
+                HideExitBeatVisuals();
+                RestoreGameplayForBeat();
+            }
+        }
+
+        /// <summary>MV-1079, Beat B step 2: an additive burst about 3 m across at the door, the instant
+        /// it opens.</summary>
+        private void PlayExitBeatBurst()
+        {
+            if (_exitBeatBurstRing == null) _exitBeatBurstRing = GroundRing.Create("MV-1079 Exit Burst", additive: true);
+            _exitBeatBurstRing.Show(_exitBeatDoorPosition, ExitBeatBurstRadius, ExitBeatColor());
+        }
+
+        private void UpdateExitBeatBurst()
+        {
+            if (_exitBeatBurstRing == null || !_exitBeatBurstRing.Visible) return;
+            float sinceOpen = _exitBeatTime - ExitBeatDoorOpenTime;
+            float t = Mathf.Clamp01(sinceOpen / ExitBeatBurstFadeSeconds);
+            if (t >= 1f) { _exitBeatBurstRing.Hide(); return; }
+            Color c = ExitBeatColor();
+            c.a = 1f - t;
+            _exitBeatBurstRing.Show(_exitBeatDoorPosition, ExitBeatBurstRadius, c);
+        }
+
+        /// <summary>MV-1079, Beat B step 3: the centre banner reads "EXIT OPEN" from the instant the door
+        /// opens (1.00 s) to 2.40 s.</summary>
+        private void UpdateExitBeatBanner()
+        {
+            const float BannerStart = ExitBeatDoorOpenTime;
+            const float BannerEnd = 2.4f;
+            if (_exitBeatTime < BannerStart || _exitBeatTime > BannerEnd)
+            {
+                _banner?.Hide();
+                return;
+            }
+
+            if (_banner == null) _banner = FinaleBanner.Create();
+            _banner.Show("EXIT OPEN", string.Empty, 1f);
+        }
+
+        private void HideExitBeatVisuals()
+        {
+            _exitBeatBurstRing?.Hide();
+            _banner?.Hide();
+        }
+
+        /// <summary>The new primary's own glow colour — the bolt and the door-open burst both play in it
+        /// (ticket: "in the new weapon's glow colour"). Falls back to the LPPE/RCDA lens family
+        /// (<see cref="MaxRig.LensGlass"/>) for a primary with no distinct glow of its own.</summary>
+        private static Color ExitBeatColor() => MaxRig.LensGlass;
+
         /// <summary>MV-1013: the last world's own crossing check — every OTHER world hands this job to
         /// <see cref="WorldJoinSequence"/>'s own <c>AwaitingCrossing</c> phase (armed via <see cref="_entry"/>
         /// in <see cref="Open"/>), so this only ever runs when <see cref="_entry"/> is null and there is
@@ -316,7 +650,9 @@ namespace MaxWorlds.VFX
         /// corridor walk ends, so <c>RunTracker</c> cannot tell the two cases apart.</summary>
         private void Update()
         {
+            if (_weaponBeatActive) TickWeaponBeat(Time.unscaledDeltaTime);
             if (_cleanupActive && !IsOpen) TickCleanup();
+            if (_exitBeatActive) TickExitBeat(Time.unscaledDeltaTime);
 
             if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;
 

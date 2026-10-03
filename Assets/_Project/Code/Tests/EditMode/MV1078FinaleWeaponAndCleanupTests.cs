@@ -62,6 +62,17 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var rs in Object.FindObjectsByType<ResultScreen>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(rs.gameObject);
 
+            // MV-1079: Beat A/Beat B's own scratch VFX/UI (GroundRing flash/ring/burst, the travelling
+            // SentinelBolt, the centre FinaleBanner) are never torn down by OnDisable here -- same
+            // "OnDisable isn't reliably invoked for AddComponent outside Play mode" note as OnEnable
+            // above -- so sweep them by hand, same idiom as the ResultScreen cleanup just above.
+            foreach (var ring in Object.FindObjectsByType<GroundRing>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(ring.gameObject);
+            foreach (var bolt in Object.FindObjectsByType<SentinelBolt>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(bolt.gameObject);
+            foreach (var banner in Object.FindObjectsByType<FinaleBanner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(banner.gameObject);
+
             CameraTestUtil.RestoreAmbientMainCameras(_suppressedAmbientCameras);
             RobotEnemy.ResetRegistry();
             DevTuning.Reset();
@@ -156,14 +167,22 @@ namespace MaxWorlds.Tests.EditMode
             Pickup core = LivePickups().Single(p => p.Kind == PickupKind.WeaponCore);
             InvokeCollect(pickupDirector, core);
 
+            // MV-1079: collecting the Core now starts Beat A (WEAPON TAKEN) instead of applying the
+            // morph and the clean-up wake synchronously -- the morph itself lands at the beat's own
+            // authored 0.5s instant.
+            gate.TickWeaponBeat(0.5f);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
-                "MV-1078: collecting the Core must apply the next world's weapon immediately");
+                "MV-1079: the beat applies the next world's weapon at its own 0.5s instant");
             Assert.AreEqual(0, areaDirector.ActiveWorldIndex,
                 "MV-1078: the weapon morph applies while the PLAYED world is still World 1 -- the morph " +
                 "itself is not what advances it");
             Assert.IsFalse(gate.IsOpen,
                 "MV-1078: the Core is collected but a30's 3 remaining robots are still alive -- the exit " +
                 "must stay shut");
+
+            // MV-1079: the rest of Beat A (2.5s total) -- clean-up (waking a30's own remaining robots)
+            // only begins once it finishes.
+            gate.TickWeaponBeat(2.0f);
 
             Kill(remaining[0]);
             InvokeUpdate(gate);
@@ -174,9 +193,16 @@ namespace MaxWorlds.Tests.EditMode
                 "must stay shut");
 
             Kill(remaining[2]);
+            // MV-1079: the last living robot dying starts Beat B (EXIT OPEN, 3.0s) instead of opening the
+            // door synchronously -- InvokeUpdate drives Update() with whatever stray Time.unscaledDeltaTime
+            // the editor happens to carry between calls (often large), which is enough on its own to run
+            // the whole beat to completion here; the explicit tick below is what makes that deterministic
+            // regardless of what the editor's own clock did.
             InvokeUpdate(gate);
+            gate.TickExitBeat(1.0f);
             Assert.IsTrue(gate.IsOpen,
-                "MV-1078: the third and last living robot in a30 just died -- the exit must open now");
+                "MV-1079: with the Core collected and a30's own robots now dead, Beat B must have reached " +
+                "its door-open instant and the door must be open");
 
             Object.DestroyImmediate(payoff.gameObject);
             Object.DestroyImmediate(gate.gameObject);

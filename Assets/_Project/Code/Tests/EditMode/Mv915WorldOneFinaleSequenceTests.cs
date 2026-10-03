@@ -73,6 +73,16 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var rs in Object.FindObjectsByType<ResultScreen>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(rs.gameObject);
 
+            // MV-1079: Beat A/Beat B's own scratch VFX/UI are never torn down by OnDisable here -- same
+            // "OnDisable isn't reliably invoked for AddComponent outside Play mode" note as the
+            // ResultScreen cleanup above.
+            foreach (var ring in Object.FindObjectsByType<GroundRing>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(ring.gameObject);
+            foreach (var bolt in Object.FindObjectsByType<SentinelBolt>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(bolt.gameObject);
+            foreach (var banner in Object.FindObjectsByType<FinaleBanner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(banner.gameObject);
+
             BossCensus.Reset();
             Pickup.ResetRegistry();
             PendingMorphingModule.Reset();
@@ -243,13 +253,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.Device),
                 "the World 1 finale drop must never be a Device");
 
-            // MV-1078: collecting the Core now applies the next world's weapon immediately (no more
-            // waiting for THE RIG's own open ceremony at the next world's run start) and, with no a30
-            // garrison modeled here, also opens the exit straight away.
+            // MV-1078: collecting the Core now applies the next world's weapon (no more waiting for THE
+            // RIG's own open ceremony at the next world's run start) and, with no a30 garrison modeled
+            // here, clean-up finds zero robots left and moves straight to the exit beat. MV-1079: both
+            // of those now happen inside scripted beats rather than synchronously -- the morph lands at
+            // Beat A's own 0.5s instant (driven here to its 2.5s end, which starts clean-up), and
+            // WorldFinaleGate.Open() lands at Beat B's own 1.0s instant.
             InvokeCollect(pickupDirector, core[0]);
+            gate.TickWeaponBeat(2.5f);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
                 "AC3: collecting the Core must resolve the active primary weapon to the laser (LPPE) " +
                 "immediately, not wait for the next world's run start");
+            gate.TickExitBeat(1.0f);
             Assert.IsTrue(gate.IsOpen,
                 "MV-1078: with no a30 robots modeled in this fixture, collecting the Core must open the " +
                 "exit right away");
