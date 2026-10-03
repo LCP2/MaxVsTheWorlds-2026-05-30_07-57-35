@@ -165,6 +165,12 @@ namespace MaxWorlds.Player
             if (_damageFeedback == null) _damageFeedback = gameObject.AddComponent<DamageFeedbackVfx>();
             _damageFeedback.Initialize();
             _damageFeedback.Init(() => Normalized);
+
+            // MV-1071: Max's visible body is MaxRig, a separate scene-root object this PlayerHealth
+            // object knows nothing about and which may not exist yet (the rig installs AfterSceneLoad,
+            // possibly after this very Initialize) — resolved lazily off MaxRig.Instance, never a
+            // per-hit Find*.
+            _damageFeedback.SetExternalBodySource(() => MaxRig.Instance != null ? MaxRig.Instance.BodyRenderers : null);
         }
 
         /// <summary>MV-760: the equipped primary's tank, 0..1, for the floating gauge — the LPPE's

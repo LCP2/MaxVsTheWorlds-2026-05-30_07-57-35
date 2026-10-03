@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
@@ -83,6 +84,19 @@ namespace MaxWorlds.VFX
 
             new GameObject("MaxRig").AddComponent<MaxRig>();
         }
+
+        /// <summary>MV-1071: the live rig, published here so <see cref="DamageFeedbackVfx"/> can reach
+        /// Max's actual visible body without a per-hit <c>Find*</c> call — <see cref="Install"/> only
+        /// ever builds one of these, and this is set the moment that one finishes <see cref="Awake"/>.
+        /// Null whenever no rig exists (before install, or after <see cref="OnDestroy"/>).</summary>
+        public static MaxRig Instance { get; private set; }
+
+        /// <summary>MV-1071: every renderer that is Max's BODY, for the hit-flash to tint — everything
+        /// under this rig except the gadget glow / lens renderers <see cref="_lensMpb"/> already drives
+        /// continuously (<see cref="_gadgetGlow"/>, <see cref="_lppeGlow"/>, <see cref="_rackTubeGlow"/>),
+        /// which the ticket calls out to leave alone. Built once in <see cref="Build"/>; never reassigned
+        /// afterward, so a caller may cache the reference instead of re-reading this property per hit.</summary>
+        public Renderer[] BodyRenderers { get; private set; }
 
         // ---------------------------------------------------------------- the palette
         //
@@ -622,6 +636,8 @@ namespace MaxWorlds.VFX
             _max = FindFirstObjectByType<PlayerController>();
             if (_max == null) return;
 
+            Instance = this; // MV-1071: published before Build() so a hit landing mid-Awake can still reach us
+
             _maxCc = _max.GetComponent<CharacterController>();
             _blaster = _max.GetComponent<WaterBlaster>();
             _shoulderRack = _max.GetComponent<ShoulderRack>();
@@ -880,6 +896,18 @@ namespace MaxWorlds.VFX
                 _lensMpb.SetColor(BaseColorId, LppeLens);
                 r.SetPropertyBlock(_lensMpb);
             }
+
+            // MV-1071: everything under the rig IS the body except the three groups above — those are
+            // driven continuously through _lensMpb and the ticket calls them out to leave alone.
+            var glowExclude = new HashSet<Renderer>();
+            foreach (var r in _gadgetGlow) if (r != null) glowExclude.Add(r);
+            foreach (var r in _lppeGlow) if (r != null) glowExclude.Add(r);
+            foreach (var r in _rackTubeGlow) if (r != null) glowExclude.Add(r);
+
+            Renderer[] everything = GetComponentsInChildren<Renderer>(true);
+            var bodyRenderers = new List<Renderer>(everything.Length);
+            foreach (var r in everything) if (!glowExclude.Contains(r)) bodyRenderers.Add(r);
+            BodyRenderers = bodyRenderers.ToArray();
         }
 
         /// <summary>MV-702: shows the gadget submesh matching <see cref="WeaponSystemState.ActivePrimary"/>
@@ -1347,6 +1375,8 @@ namespace MaxWorlds.VFX
 
         private void OnDestroy()
         {
+            if (Instance == this) Instance = null; // MV-1071
+
             WeaponSystemState.Changed -= ApplyPrimaryVisual;
             HudSignals.LppePulseFired -= OnLppePulseFired;
             HudSignals.RocketMuzzle -= OnRocketMuzzle;
