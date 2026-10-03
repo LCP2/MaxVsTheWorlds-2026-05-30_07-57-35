@@ -2570,11 +2570,14 @@ namespace MaxWorlds.Arena
         private const float FittingInset = 0.85f;   // fraction of the half-extent, so a corner turret doesn't overhang
         private const float FittingSize = 0.5f;     // a small turret, not a shed-sized object
 
-        // MV-1058: the collider has to cover ShedTurretRig's own Ø 0.86 m dome (built in real metres,
-        // independent of FittingSize) so a turret this prominent is as easy to hit as it now looks. The
-        // host's own localScale is FittingSize, so the BoxCollider's LOCAL size has to be the world
-        // coverage divided back out by that scale, or Unity would shrink it to FittingSize again.
-        private const float FittingColliderCoverage = 0.95f; // world metres, >= the dome's 0.86 m diameter
+        // MV-1058: the collider has to cover ShedTurretRig's own dome (built in real metres, independent
+        // of FittingSize) so a turret this prominent is as easy to hit as it now looks. The host's own
+        // localScale is FittingSize, so the BoxCollider's LOCAL size has to be the world coverage divided
+        // back out by that scale, or Unity would shrink it to FittingSize again.
+        // MV-1072: the rig shrank its dome from Ø 0.86 m to Ø 0.45 m — shrunk to match, with the same
+        // "a little margin over the dome" slack MV-1058 left (0.95 / 0.86 ~= 1.10x there; 0.6 / 0.45 ~= 1.33x
+        // here, since the smaller dome needs proportionally more margin to stay as easy to hit).
+        private const float FittingColliderCoverage = 0.6f; // world metres, >= the dome's 0.45 m diameter
 
         private static void BuildShedFittings(GameObject body, MapEntity e, MowerHutch hutch)
         {
