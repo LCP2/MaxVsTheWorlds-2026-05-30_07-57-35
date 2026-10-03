@@ -377,10 +377,18 @@ namespace MaxWorlds.Weapons
 
         /// <summary>THE RIG's "next open plays the morph" ceremony trigger (MV-689) — applies a banked
         /// Weapon Core (<see cref="PendingMorphingModule.SetWeaponCore"/>) the moment THE RIG opens.
-        /// Idempotent: a no-op, returning false, if nothing is pending.</summary>
+        /// Idempotent: a no-op, returning false, if nothing is pending. MV-1074: also a no-op, leaving
+        /// the Core banked, while <paramref name="worldIndex"/> is not strictly past
+        /// <see cref="RigBoard.ActiveWorldIndex"/> — the Core is the NEXT world's weapon, never the one
+        /// that dropped it, and <paramref name="worldIndex"/> (a profile's current <c>WorldIndex</c>,
+        /// via <see cref="MaxWorlds.UI.WeaponsScreen.Open"/>'s own caller) still reads the finale world
+        /// itself until the run actually seals and the next world's own <see cref="MaxWorlds.Arena.BackyardPath.Awake"/>
+        /// calls back in with the advanced index — at which point <c>RigBoard.ActiveWorldIndex</c> is
+        /// still the OLD world's board, so the comparison flips true and the morph finally applies.</summary>
         public static bool OpenWeaponCoreMorphIfPending(int worldIndex)
         {
             if (!PendingMorphingModule.WeaponCorePending) return false;
+            if (worldIndex <= RigBoard.ActiveWorldIndex) return false;
             PendingMorphingModule.TakeWeaponCore();
             ApplyWeaponCoreMorph(worldIndex);
             return true;

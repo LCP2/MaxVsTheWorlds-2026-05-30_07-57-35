@@ -517,12 +517,15 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-519: the ring's amber "parts to fit" state now tracks banked ability credits
         /// alone — a Supercell is never banked anymore (<see cref="MaxWorlds.Pickups.PickupWallet.AddSupercell"/>
-        /// grants instantly, nothing left to flag an alert over). MV-698: a banked Weapon Core is the
-        /// same "the game is waiting on a decision" cyan state a captured Morphing Module already
-        /// carries — collecting one must pulse this button exactly the way a module does.</summary>
+        /// grants instantly, nothing left to flag an alert over). MV-1074: a banked Weapon Core no longer
+        /// pulses this button — MV-698's reasoning ("the game is waiting on a decision") doesn't hold for
+        /// it: opening THE RIG while the Core is pending does nothing (<see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/>
+        /// now refuses it until the next world), so inviting a tap into THE RIG is actively wrong; the
+        /// centre warning label (<see cref="UpdateWarnings"/>) tells the player what to do instead. A
+        /// banked Morphing Module draft still pulses it exactly as before.</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
             AbilityCreditBank.Banked > 0,
-            PendingMorphingModule.HasPending || PendingMorphingModule.WeaponCorePending);
+            PendingMorphingModule.HasPending);
 
         /// <summary>Pure predicate (MV-358, dropped its Supercell half MV-519 — a Supercell is never
         /// banked anymore) — pinned by an EditMode test without building a canvas: a spend is waiting
@@ -1196,6 +1199,14 @@ namespace MaxWorlds.UI
             else if (_health != null && _health.IsAlive && _health.Normalized > 0f && _health.Normalized < 0.25f)
             {
                 msg = "HEALTH LOW"; col = HpColor;
+            }
+            // MV-1074: a collected Weapon Core no longer does anything in THE RIG until the run seals
+            // and the next world starts (WeaponSystemState.OpenWeaponCoreMorphIfPending) — this is what
+            // tells the player what to do instead, lowest priority so it never steps on BOSS INCOMING or
+            // HEALTH LOW.
+            else if (PendingMorphingModule.WeaponCorePending)
+            {
+                msg = "NEW WEAPON SECURED - HEAD FOR THE EXIT"; col = ModuleColor;
             }
 
             if (msg == null) { _warning.gameObject.SetActive(false); return; }
