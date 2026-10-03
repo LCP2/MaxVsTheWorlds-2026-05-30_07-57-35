@@ -37,11 +37,14 @@ namespace MaxWorlds.Factories
             public Stats(float range, float cadence, float hp) { Range = range; Cadence = cadence; Hp = hp; }
         }
 
+        // MV-1073: Lee, on his phone — shed corner turrets are "extremely weak" and their "fire rate is
+        // too slow". Cadence halved (doubles output) and HP tripled (makes them last) per kind; range
+        // and per-shot damage are deliberately unchanged.
         public static Stats StatsFor(ShedFittingKind kind) => kind switch
         {
-            ShedFittingKind.Spiker => new Stats(range: 8f, cadence: 2.5f, hp: 40f),
-            ShedFittingKind.Laser => new Stats(range: 12f, cadence: 6f, hp: 60f),
-            ShedFittingKind.Missile => new Stats(range: 14f, cadence: 8f, hp: 80f),
+            ShedFittingKind.Spiker => new Stats(range: 8f, cadence: 1.2f, hp: 120f),
+            ShedFittingKind.Laser => new Stats(range: 12f, cadence: 3f, hp: 180f),
+            ShedFittingKind.Missile => new Stats(range: 14f, cadence: 4f, hp: 240f),
             _ => new Stats(0f, 0f, 0f),
         };
 

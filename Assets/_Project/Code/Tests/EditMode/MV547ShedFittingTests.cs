@@ -67,9 +67,9 @@ namespace MaxWorlds.Tests.EditMode
             },
         };
 
-        [TestCase("spiker", ShedFittingKind.Spiker, 8f, 2.5f, 40f)]
-        [TestCase("laser", ShedFittingKind.Laser, 12f, 6f, 60f)]
-        [TestCase("missile", ShedFittingKind.Missile, 14f, 8f, 80f)]
+        [TestCase("spiker", ShedFittingKind.Spiker, 8f, 1.2f, 120f)]
+        [TestCase("laser", ShedFittingKind.Laser, 12f, 3f, 180f)]
+        [TestCase("missile", ShedFittingKind.Missile, 14f, 4f, 240f)]
         public void ShedFittings_SpawnAuthoredCountAndType_ResolveTheTable_AndDieIndependentlyOrWithTheShed(
             string fittingKind, ShedFittingKind expectedKind, float expectedRange, float expectedCadence, float expectedHp)
         {
