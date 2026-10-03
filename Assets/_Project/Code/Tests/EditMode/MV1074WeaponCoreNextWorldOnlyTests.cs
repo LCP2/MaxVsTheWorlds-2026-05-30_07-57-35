@@ -22,6 +22,14 @@ namespace MaxWorlds.Tests.EditMode
     /// against <paramref name="worldIndex"/> not yet having advanced past <see cref="RigBoard.ActiveWorldIndex"/>,
     /// so the first assertion below (<c>p_dmg</c> still at 3 after the simulated Open() call) fails there --
     /// base reads 1 (the RCDA's run-start level, re-granted by the premature morph).
+    ///
+    /// MV-1078 note (no change needed here): a world's finale now applies the morph immediately on
+    /// collection, via <c>WorldFinaleGate</c>'s own clean-up beat -- not via this guard. That path
+    /// consumes the Core synchronously, so in ordinary play <see cref="PendingMorphingModule.WeaponCorePending"/>
+    /// is never observably true long enough for THE RIG to open against it. This test drives the guard
+    /// directly instead (no <c>WorldFinaleGate</c> involved at all), which still matters as a backstop --
+    /// e.g. a checkpoint restoring a stale pending flag with no live <c>WorldFinaleGate</c> to consume it
+    /// yet. The ticket explicitly keeps this guard; nothing it asserts changed.
     /// </summary>
     public sealed class MV1074WeaponCoreNextWorldOnlyTests
     {

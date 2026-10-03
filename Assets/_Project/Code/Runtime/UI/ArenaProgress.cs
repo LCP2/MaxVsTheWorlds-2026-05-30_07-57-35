@@ -28,6 +28,10 @@ namespace MaxWorlds.UI
         /// wording), set once the map finishes building (<see cref="SetReplicatorWorld"/>).</summary>
         public bool IsReplicatorWorld { get; private set; }
 
+        /// <summary>MV-1078: replaces the ordinary "FACTORIES x/y"/"REPLICATORS x/y" text while a
+        /// world's finale clean-up is live — null (the default) defers to the ordinary count.</summary>
+        public string OverrideText { get; private set; }
+
         /// <summary>Fired on a count change. Arg = true when it should pop prominently
         /// (a sub-zone was cleared), false for a quiet factory tick.</summary>
         public event Action<bool> Changed;
@@ -93,6 +97,15 @@ namespace MaxWorlds.UI
         public void SetReplicatorWorld(bool isReplicatorWorld)
         {
             IsReplicatorWorld = isReplicatorWorld;
+            Changed?.Invoke(false);
+        }
+
+        /// <summary>MV-1078: set (non-null) or clear (null) <see cref="OverrideText"/> — a quiet tick,
+        /// same as every other wording-only change above.</summary>
+        public void SetOverrideText(string text)
+        {
+            if (OverrideText == text) return;
+            OverrideText = text;
             Changed?.Invoke(false);
         }
     }

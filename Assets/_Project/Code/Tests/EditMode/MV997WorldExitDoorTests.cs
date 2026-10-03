@@ -8,9 +8,11 @@ using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Intro;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -44,6 +46,9 @@ namespace MaxWorlds.Tests.EditMode
 
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
+            Pickup.ResetRegistry();
+            PendingMorphingModule.Reset();
+            WeaponSystemState.Reset();
         }
 
         [TearDown]
@@ -56,6 +61,9 @@ namespace MaxWorlds.Tests.EditMode
 
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
+            Pickup.ResetRegistry();
+            PendingMorphingModule.Reset();
+            WeaponSystemState.Reset();
         }
 
         private static void InvokeAwake(Object component) =>
@@ -72,6 +80,16 @@ namespace MaxWorlds.Tests.EditMode
 
         private static void SetPrivateField(object target, string field, object value) =>
             target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(target, value);
+
+        private static void InvokeCollect(PickupDirector director, Pickup pickup)
+        {
+            var liveField = typeof(PickupDirector).GetField("_live", BindingFlags.NonPublic | BindingFlags.Instance);
+            var live = (System.Collections.IList)liveField.GetValue(director);
+            int index = live.IndexOf(pickup);
+            Assert.GreaterOrEqual(index, 0, "the collected pickup must still be live on the director");
+            typeof(PickupDirector).GetMethod("Collect", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(director, new object[] { index, pickup });
+        }
 
         private static Vector3 AlongDoorProbe(Vector2 doorMouth, Wall wall, float wallHeight, float delta) =>
             (wall == Wall.N || wall == Wall.S)
@@ -105,7 +123,7 @@ namespace MaxWorlds.Tests.EditMode
 
             foreach (Row row in rows)
             {
-                GameObject root = null, pathGo = null, gateGo = null, sequenceGo = null, playerGo = null;
+                GameObject root = null, pathGo = null, gateGo = null, payoffGo = null, sequenceGo = null, playerGo = null;
                 try
                 {
                     WorldConfig cfg = WorldLibrary.Load(row.WorldKey);
@@ -207,6 +225,13 @@ namespace MaxWorlds.Tests.EditMode
                     InvokeAwake(gate);
                     InvokeOnEnable(gate);
 
+                    // MV-1078: the Core is what actually matters now, not the boss dying -- needs a
+                    // real BossVictoryPayoff to drop it (this test previously had none, since it never
+                    // needed one before).
+                    payoffGo = new GameObject("BossVictoryPayoff Test");
+                    var payoff = payoffGo.AddComponent<BossVictoryPayoff>();
+                    InvokeOnEnable(payoff);
+
                     foreach (BigBermudaBoss b in finalBosses)
                         BossCensus.Register(b, "TEST BOSS", phases: 1, current: 100f, max: 100f, areaIndex: cfg.dials.areaCount);
 
@@ -214,7 +239,18 @@ namespace MaxWorlds.Tests.EditMode
 
                     foreach (BigBermudaBoss b in finalBosses) InvokeOnDeath(b);
 
-                    Assert.IsTrue(gate.IsOpen, $"world {row.WorldIndex}'s gate must open on its own final boss death");
+                    // MV-1078: the boss dying no longer opens the exit by itself -- the Core must be
+                    // collected first (this director never calls Configure/EnterArea, so its own
+                    // per-area robot count is 0, and the exit opens as soon as the Core is taken).
+                    Assert.IsFalse(gate.IsOpen,
+                        $"world {row.WorldIndex}: boss death alone must no longer open the exit");
+
+                    var pickupDirector = PickupDirector.EnsureInstalled();
+                    Pickup core = Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None)
+                        .Single(p => p.Kind == PickupKind.WeaponCore);
+                    InvokeCollect(pickupDirector, core);
+
+                    Assert.IsTrue(gate.IsOpen, $"world {row.WorldIndex}'s gate must open once the Core is collected");
                     Assert.IsTrue(built.ExitGate.IsOpen,
                         $"world {row.WorldIndex}: the SAME real map gate MapRuntime built must be the one that opened");
 
@@ -228,6 +264,7 @@ namespace MaxWorlds.Tests.EditMode
                 {
                     if (sequenceGo != null) Object.DestroyImmediate(sequenceGo);
                     if (gateGo != null) Object.DestroyImmediate(gateGo);
+                    if (payoffGo != null) Object.DestroyImmediate(payoffGo);
                     if (playerGo != null) Object.DestroyImmediate(playerGo);
                     if (pathGo != null) Object.DestroyImmediate(pathGo);
                     if (root != null) Object.DestroyImmediate(root);

@@ -419,6 +419,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed -= OnAbilitiesChanged;
             AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
             PendingMorphingModule.Changed -= OnPendingModuleChanged;
+            HudSignals.ArenaLabelOverride -= OnArenaLabelOverride;
         }
 
         /// <summary>The Hydro burst button appears the moment the harness + condenser are both
@@ -1200,14 +1201,6 @@ namespace MaxWorlds.UI
             {
                 msg = "HEALTH LOW"; col = HpColor;
             }
-            // MV-1074: a collected Weapon Core no longer does anything in THE RIG until the run seals
-            // and the next world starts (WeaponSystemState.OpenWeaponCoreMorphIfPending) — this is what
-            // tells the player what to do instead, lowest priority so it never steps on BOSS INCOMING or
-            // HEALTH LOW.
-            else if (PendingMorphingModule.WeaponCorePending)
-            {
-                msg = "NEW WEAPON SECURED - HEAD FOR THE EXIT"; col = ModuleColor;
-            }
 
             if (msg == null) { _warning.gameObject.SetActive(false); return; }
             _warning.gameObject.SetActive(true);
@@ -1968,6 +1961,7 @@ namespace MaxWorlds.UI
             _arenaLabel.fontStyle = FontStyle.Bold;
             RefreshArenaText(prominent: false);
             _model.Arena.Changed += OnArenaChanged;
+            HudSignals.ArenaLabelOverride += OnArenaLabelOverride;
         }
 
         private void OnArenaChanged(bool prominent)
@@ -1977,8 +1971,21 @@ namespace MaxWorlds.UI
             else _arenaProminence = Mathf.Max(_arenaProminence, 0.7f);
         }
 
+        /// <summary>MV-1078: <c>WorldFinaleGate</c>'s own "ROBOTS LEFT n" (or null to clear) during a
+        /// world's finale clean-up — routed through <see cref="HudSignals"/> rather than a direct
+        /// reference, the same decoupling every other HUD-driving domain event in this class uses.</summary>
+        private void OnArenaLabelOverride(string text)
+        {
+            _model.Arena.SetOverrideText(text);
+        }
+
         private void RefreshArenaText(bool prominent)
         {
+            // MV-1078: a stale HudController left over from an earlier EditMode test (one that built a
+            // real HUD and was torn down without OnDisable ever unsubscribing it -- a pre-existing test
+            // isolation gap this ticket's new HudSignals.ArenaLabelOverride event was the first thing to
+            // actually trip) can still be live here with its own _arenaLabel already destroyed.
+            if (_arenaLabel == null) return;
             _arenaLabel.text = ArenaLabelText(_model.Arena);
         }
 
@@ -1994,9 +2001,11 @@ namespace MaxWorlds.UI
         /// </summary>
         /// <summary>MV-706: a world whose sources are Replicators with no sheds reads "REPLICATORS
         /// n/N" — same counter, different word, so a World 2 player never sees a label naming a
-        /// building type this world doesn't have.</summary>
+        /// building type this world doesn't have. MV-1078: <see cref="ArenaProgress.OverrideText"/>
+        /// (set by <c>WorldFinaleGate</c> during a finale's clean-up beat) takes over this line
+        /// entirely while it's set.</summary>
         public static string ArenaLabelText(ArenaProgress a) =>
-            $"{(a.IsReplicatorWorld ? "REPLICATORS" : "FACTORIES")} {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+            a.OverrideText ?? $"{(a.IsReplicatorWorld ? "REPLICATORS" : "FACTORIES")} {a.FactoriesDestroyed}/{a.FactoriesTotal}";
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
         /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is

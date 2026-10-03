@@ -149,7 +149,13 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 bossDeathPos = bossGo.transform.position;
             InvokeOnDeath(boss);
 
-            Assert.IsTrue(gate.IsOpen, "MV-959: the wall must open the instant a21's boss dies");
+            // MV-1078: the boss dying no longer opens the exit by itself -- a21's own ambient robots
+            // (built by the real map above, same as its boss) are what the gate now waits on, on top of
+            // the Core being collected.
+            Assert.Greater(areaDirector.ActiveCountForArea(21), 0,
+                "MV-1078: a21's own ambient robots must still be alive right after its boss dies");
+            Assert.IsFalse(gate.IsOpen,
+                "MV-1078: boss death alone must no longer open the exit");
 
             Pickup core = LivePickups().Single(p => p.Kind == PickupKind.WeaponCore);
             float dist = Vector2.Distance(
@@ -160,11 +166,14 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.Greater(areaDirector.ActiveCount, 0,
                 "MV-959: World 2's other robots (area 1 ambient, area 2 dormant garrison) must still be " +
-                "alive at this point -- proof neither the orb, the gate, nor Victory below depend on a21 " +
-                "or World 2 being cleared");
+                "alive at this point -- proof the orb-drop and Victory below don't depend on World 2 at " +
+                "large being cleared (MV-1078: a21 ITSELF now gates the exit, via WorldFinaleGate's own " +
+                "clean-up beat, but RunTracker's seal below is driven directly and never reads " +
+                "WorldFinaleGate.IsOpen)");
 
-            // --- Victory seals despite those robots still alive: Max collects the core and crosses the
-            // now-open finale gate, then the next-world path must advance the save into World 3. ---
+            // --- Victory seals despite those robots still alive: RunTracker's own seal conditions are
+            // driven directly here, independent of whether WorldFinaleGate itself has actually opened --
+            // see MV-1078's own dedicated test for that. ---
             var pickupDirector = PickupDirector.EnsureInstalled();
             InvokeCollect(pickupDirector, core);
             HudSignals.EmitBossPayoffFinished();
