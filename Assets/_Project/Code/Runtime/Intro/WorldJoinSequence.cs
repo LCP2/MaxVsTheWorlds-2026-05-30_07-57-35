@@ -276,6 +276,7 @@ namespace MaxWorlds.Intro
             SuspendGameplay();
 
             CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth, out Material wallMaterial);
+            ClearOverheadDressingNearDoor(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth);
             _doorGate = BuildDoor(_doorMouth, _wall, wallHeight, wallThickness, wallMaterial, transform, "World Arrival Door");
             ApplyDestinationSkin(_doorGate, toWorld);
             _doorGate.ForceOpen();
@@ -406,6 +407,53 @@ namespace MaxWorlds.Intro
                 clone.name = wallGo.name + " (MV-964 far side of door)";
                 ResizeWallAxis(clone, alongX, doorMax, bMax);
             }
+        }
+
+        /// <summary>MV-1077: the destination stub's own wall was dressed (e.g.
+        /// <c>StormdrainDressing.Dress</c>'s wall-hugging overhead main/collars/junction boxes, built
+        /// inset into the room at head height along the wall's full original length) before this gap
+        /// ever existed — <see cref="CutWallGap"/> only resizes the STRUCTURAL wall's own collider/mesh,
+        /// never the decorative overhead kit crossing the same span. Disables (never destroys -- these
+        /// carry no collider, see <c>StormdrainKit.Strip</c>) every enabled renderer sitting anywhere
+        /// under the one host every overhead piece is built under (<c>StormdrainDressing.Dress</c>'s own
+        /// <c>new GameObject("Overhead")</c> — a leaf part's own name, e.g. a junction box's "Pool" light
+        /// decal, never carries "Overhead" itself, only its root does) whose bounds fall inside a
+        /// generous box around the new door: reach 4 m into the room, the door's own width plus margin
+        /// across it, floor to a metre above the wall.</summary>
+        private const float OverheadClearanceReach = 4f;
+        private const float OverheadClearanceAcrossMargin = 0.5f;
+        private const float OverheadClearanceHeightMargin = 1f;
+        private const string OverheadHostName = "Overhead";
+
+        private static void ClearOverheadDressingNearDoor(Vector2 doorMouth, Wall wall, float wallHeight, float doorWidth)
+        {
+            Vector3 outDir = OutwardDir(wall);
+            Vector3 acrossDir = AcrossDir(wall);
+            Vector3 inDir = -outDir;
+
+            float acrossSize = doorWidth + OverheadClearanceAcrossMargin * 2f;
+            float height = wallHeight + OverheadClearanceHeightMargin;
+
+            Vector3 center = new Vector3(doorMouth.x, height * 0.5f, doorMouth.y) + inDir * (OverheadClearanceReach * 0.5f);
+            Vector3 size = new Vector3(
+                Mathf.Abs(outDir.x) * OverheadClearanceReach + Mathf.Abs(acrossDir.x) * acrossSize,
+                height,
+                Mathf.Abs(outDir.z) * OverheadClearanceReach + Mathf.Abs(acrossDir.z) * acrossSize);
+            var clearance = new Bounds(center, size);
+
+            foreach (Renderer r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (r == null || !r.enabled) continue;
+                if (!UnderOverheadHost(r.transform)) continue;
+                if (clearance.Intersects(r.bounds)) r.enabled = false;
+            }
+        }
+
+        private static bool UnderOverheadHost(Transform t)
+        {
+            for (Transform p = t; p != null; p = p.parent)
+                if (p.name == OverheadHostName) return true;
+            return false;
         }
 
         private static void ResizeWallAxis(GameObject wallGo, bool alongX, float min, float max)
