@@ -100,11 +100,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(sentinelVfx, "Sentinel.Init must attach a DamageFeedbackVfx (MV-1005)");
 
             sentinel.TakeDamage(new DamageInfo(10f, sentinel.transform.position, Vector3.forward, Team.Enemy));
-            Assert.AreEqual(0.65f, ResolvedFlashStrength(_sentinelGo), 0.02f,
-                "a landed Sentinel hit must resolve the property-block tint strength to 0.65");
-            Tick(sentinelVfx, 0.2f);
+            Assert.AreEqual(0.9f, ResolvedFlashStrength(_sentinelGo), 0.02f,
+                "a landed Sentinel hit must resolve the property-block tint strength to 0.9 (MV-1071)");
+            Tick(sentinelVfx, 0.3f);
             Assert.LessOrEqual(ResolvedFlashStrength(_sentinelGo), 0.01f,
-                "the Sentinel's hit flash must have decayed to ~0 after 0.2s of ticks (0.15s decay)");
+                "the Sentinel's hit flash must have decayed to ~0 after 0.3s of ticks (0.25s decay, MV-1071)");
 
             // --- hit flash: Max ---
             PlayerHealth playerHealth = NewPlayer("MV1005 Player", out _playerGo);
@@ -112,11 +112,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(playerVfx, "PlayerHealth.Initialize must attach a DamageFeedbackVfx (MV-1005)");
 
             playerHealth.TakeDamage(new DamageInfo(10f, playerHealth.transform.position, Vector3.forward, Team.Enemy));
-            Assert.AreEqual(0.65f, ResolvedFlashStrength(_playerGo), 0.02f,
-                "a landed hit on Max must resolve the property-block tint strength to 0.65");
-            Tick(playerVfx, 0.2f);
+            Assert.AreEqual(0.9f, ResolvedFlashStrength(_playerGo), 0.02f,
+                "a landed hit on Max must resolve the property-block tint strength to 0.9 (MV-1071)");
+            Tick(playerVfx, 0.3f);
             Assert.LessOrEqual(ResolvedFlashStrength(_playerGo), 0.01f,
-                "Max's hit flash must have decayed to ~0 after 0.2s of ticks (0.15s decay)");
+                "Max's hit flash must have decayed to ~0 after 0.3s of ticks (0.25s decay, MV-1071)");
 
             // --- low-HP smoke gate: Sentinel, 30% (active) vs 40% (inactive) ---
             Sentinel lowSentinel = NewSentinel("MV1005 Sentinel Low", maxHp: 100f, out _lowSentinelGo);

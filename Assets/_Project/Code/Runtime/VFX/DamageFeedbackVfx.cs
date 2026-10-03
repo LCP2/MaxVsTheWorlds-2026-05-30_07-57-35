@@ -30,12 +30,15 @@ namespace MaxWorlds.VFX
         /// EditMode test can read it straight off the renderer with no reflection into private state.</summary>
         private static readonly Color HitTintColor = new Color(1.0f, 0.22f, 0.15f);
 
-        /// <summary>How strongly the tint reads the instant a hit lands (MV-1005 spec).</summary>
-        private const float HitFlashStrength = 0.65f;
+        /// <summary>How strongly the tint reads the instant a hit lands. MV-1071: 0.65 -> 0.9 (Lee,
+        /// v0.11.5: "I can see a tiny splat of red. Needs to be a bit bigger.") — see the class doc's
+        /// ADDITIVE note on why this is safe to raise even on Max's own MV-857-compensated materials.</summary>
+        private const float HitFlashStrength = 0.9f;
 
-        /// <summary>Seconds the flash takes to decay to 0 — 9 frames at 60 fps; 8 is the visibility
-        /// floor (MV-1005 spec).</summary>
-        private const float HitFlashDecaySeconds = 0.15f;
+        /// <summary>Seconds the flash takes to decay to 0. MV-1071: 0.15 -> 0.25 (15 frames at 60 fps),
+        /// alongside the strength raise above — the original MV-1005 floor was tuned for the smaller
+        /// flash.</summary>
+        private const float HitFlashDecaySeconds = 0.25f;
 
         /// <summary>Below this HP fraction the smoke wisp runs; at or above it, it stops.</summary>
         private const float LowHealthFraction = 0.35f;
@@ -45,12 +48,15 @@ namespace MaxWorlds.VFX
         private const float SmokePuffSize = 0.3f;
         private static readonly Color SmokeColor = new Color(0.12f, 0.11f, 0.10f, 0.6f);
 
-        private const int SparkCount = 6;
-        private const float SparkSize = 0.06f;
-        private const float FlashDiscSize = 0.25f;
+        // MV-1071 (Lee, v0.11.5: "I can see a tiny splat of red... needs to be a bit bigger"): the
+        // whole burst scaled up — SparkCount's own perFrameCap in EnsureBursts raises to match, or the
+        // extra four sparks would simply be dropped on the floor.
+        private const int SparkCount = 10;
+        private const float SparkSize = 0.14f;
+        private const float FlashDiscSize = 0.6f;
         private const float SparkMinSpeed = 3f;
         private const float SparkMaxSpeed = 5f;
-        private const float SparkLifetimeSeconds = 0.25f;
+        private const float SparkLifetimeSeconds = 0.30f;
 
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
@@ -61,8 +67,19 @@ namespace MaxWorlds.VFX
         private static VfxBurst s_smoke;
 
         private Renderer[] _bodyRenderers;
+        private Color[] _bodyBaseEmission;
         private MaterialPropertyBlock _mpb;
         private Func<float> _healthNormalized;
+
+        /// <summary>MV-1071: resolves an owner's EXTRA set of body renderers lazily — Max's case, where
+        /// the visible body (<see cref="MaxWorlds.VFX.MaxRig"/>) is a separate scene-root object the
+        /// owner this component is attached to (<see cref="MaxWorlds.Player.PlayerHealth"/>) knows
+        /// nothing about and which may not even exist yet when <see cref="Initialize"/> runs (the rig
+        /// installs <c>AfterSceneLoad</c>). Wired once via <see cref="SetExternalBodySource"/>; never
+        /// invoked per-hit once resolved — see <see cref="TryResolveExternalRenderers"/>.</summary>
+        private Func<Renderer[]> _externalRendererSource;
+        private Renderer[] _externalRenderers;
+        private Color[] _externalBaseEmission;
 
         /// <summary>0..1, decaying to 0 — the multiplier baked into the emission colour this instance
         /// just wrote to every body renderer's property block.</summary>
@@ -83,9 +100,52 @@ namespace MaxWorlds.VFX
         public void Initialize()
         {
             _bodyRenderers = GetComponentsInChildren<Renderer>(true);
+            _bodyBaseEmission = CaptureBaseEmission(_bodyRenderers);
             _mpb ??= new MaterialPropertyBlock();
             EnsureBursts();
             enabled = false; // idle until a hit lands or Init() finds HP already low
+        }
+
+        /// <summary>MV-1071: wires an additional renderer set this instance should flash alongside its
+        /// own — Max's own invisible greybox renderers are not his visible body (see <see
+        /// cref="_externalRendererSource"/>'s doc). Resolved lazily off the SOURCE here, not called with
+        /// the renderers directly, because the rig this points at may not exist yet. Safe to call more
+        /// than once (a re-<see cref="MaxWorlds.Player.PlayerHealth.Initialize"/> on Revive); idempotent
+        /// like the rest of this class.</summary>
+        public void SetExternalBodySource(Func<Renderer[]> source) => _externalRendererSource = source;
+
+        /// <summary>Reads each renderer's own, already-resolved emission once — straight off its shared
+        /// material, never a property block (none of these renderers carry one yet at this point) — so
+        /// <see cref="ApplyFlash"/> has something exact to add the hit tint on top of and return to.
+        /// Renderers with no emission property (or none at all) base out at black, matching the
+        /// pre-MV-1071 behaviour exactly.</summary>
+        private static Color[] CaptureBaseEmission(Renderer[] renderers)
+        {
+            var result = new Color[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer r = renderers[i];
+                result[i] = r != null && r.sharedMaterial != null && r.sharedMaterial.HasProperty(EmissionId)
+                    ? r.sharedMaterial.GetColor(EmissionId)
+                    : Color.black;
+            }
+
+            return result;
+        }
+
+        /// <summary>The one-time hop from "a source Func" to "a cached renderer array" — called from
+        /// <see cref="ApplyFlash"/> so a hit landing before the rig exists just finds nothing this time
+        /// and tries again on the next hit, with zero added cost once it succeeds (MV-1071's own "no
+        /// per-hit Find* call once resolved" constraint).</summary>
+        private void TryResolveExternalRenderers()
+        {
+            if (_externalRenderers != null || _externalRendererSource == null) return;
+
+            Renderer[] renderers = _externalRendererSource();
+            if (renderers == null || renderers.Length == 0) return;
+
+            _externalRenderers = renderers;
+            _externalBaseEmission = CaptureBaseEmission(renderers);
         }
 
         /// <summary>Wires the HP source this instance reads for the low-HP smoke gate — a Sentinel's
@@ -104,7 +164,7 @@ namespace MaxWorlds.VFX
             Texture2D glow = VfxMaterials.Glow();
             Material additive = VfxMaterials.Additive(glow);
             Material soft = VfxMaterials.AlphaBlend(glow);
-            s_sparks = new VfxBurst("DamageFeedbackSparks", additive, 120, 0f, perFrameCap: 6);
+            s_sparks = new VfxBurst("DamageFeedbackSparks", additive, 120, 0f, perFrameCap: 10); // MV-1071: matches SparkCount, or some of the 10 never emit
             s_flashDisc = new VfxBurst("DamageFeedbackFlashDisc", additive, 30, 0f, perFrameCap: 6);
             s_smoke = new VfxBurst("DamageFeedbackSmoke", soft, 80, -0.15f, perFrameCap: 2);
         }
@@ -181,16 +241,31 @@ namespace MaxWorlds.VFX
             if (_flashStrength <= 0f && !SmokeActive) enabled = false; // idle again (MV-1005 cost rule)
         }
 
+        /// <summary>MV-1071: ADDS the hit tint on top of each renderer's own base emission rather than
+        /// overwriting it, and always writes <c>base + tint</c> rather than special-casing a decayed-to-
+        /// zero flash — at <see cref="_flashStrength"/> == 0 that is just <c>base + black == base</c>,
+        /// the renderer's exact pre-hit value. The old code wrote the tint alone, which was fine while
+        /// every flashed renderer's own baseline was black (true for Sentinels and for Max's invisible
+        /// greybox) but would have permanently wiped Max's <see cref="MaxRig.WorldCompensationEmission"/>
+        /// (MV-857) the moment his real body started flashing too.</summary>
         private void ApplyFlash()
         {
-            if (_bodyRenderers == null) return;
-            Color emission = HitTintColor * _flashStrength;
-            for (int i = 0; i < _bodyRenderers.Length; i++)
+            TryResolveExternalRenderers();
+            Color flashAdd = HitTintColor * _flashStrength;
+            ApplyFlashTo(_bodyRenderers, _bodyBaseEmission, flashAdd);
+            ApplyFlashTo(_externalRenderers, _externalBaseEmission, flashAdd);
+        }
+
+        private void ApplyFlashTo(Renderer[] renderers, Color[] baseEmission, Color flashAdd)
+        {
+            if (renderers == null) return;
+            for (int i = 0; i < renderers.Length; i++)
             {
-                Renderer r = _bodyRenderers[i];
+                Renderer r = renderers[i];
                 if (r == null) continue;
+                Color baseColor = baseEmission != null && i < baseEmission.Length ? baseEmission[i] : Color.black;
                 r.GetPropertyBlock(_mpb);
-                _mpb.SetColor(EmissionId, emission);
+                _mpb.SetColor(EmissionId, baseColor + flashAdd);
                 r.SetPropertyBlock(_mpb);
             }
         }
