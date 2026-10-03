@@ -65,6 +65,16 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var rs in Object.FindObjectsByType<ResultScreen>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(rs.gameObject);
 
+            // MV-1079: Beat B's own scratch VFX/UI (GroundRing burst, the travelling SentinelBolt, the
+            // centre FinaleBanner) are never torn down by OnDisable here -- same "OnDisable isn't
+            // reliably invoked for AddComponent outside Play mode" note as the ResultScreen cleanup above.
+            foreach (var ring in Object.FindObjectsByType<GroundRing>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(ring.gameObject);
+            foreach (var bolt in Object.FindObjectsByType<SentinelBolt>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(bolt.gameObject);
+            foreach (var banner in Object.FindObjectsByType<FinaleBanner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(banner.gameObject);
+
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
             Pickup.ResetRegistry();
@@ -228,6 +238,10 @@ namespace MaxWorlds.Tests.EditMode
                     r.TakeDamage(new DamageInfo(999999f, r.transform.position, Vector3.forward, Team.Player));
                     InvokeUpdate(gate);
                 }
+
+                // MV-1079: the last robot dying starts Beat B (EXIT OPEN, 3.0s) -- WorldFinaleGate.Open()
+                // itself now lands 1.0s into that beat, not synchronously off the kill.
+                gate.TickExitBeat(1.0f);
 
                 Assert.IsTrue(gate.IsOpen,
                     "MV-1078: with the Core collected and a30's other robots now dead, the door must open");
