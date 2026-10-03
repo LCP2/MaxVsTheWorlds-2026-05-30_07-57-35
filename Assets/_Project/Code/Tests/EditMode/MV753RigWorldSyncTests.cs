@@ -2,6 +2,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -60,6 +61,12 @@ namespace MaxWorlds.Tests.EditMode
             // drop a Rack Module -- the exact player-facing gap ("no ability to pick up") this fixes.
             var directorGo = new GameObject("PickupDirector Test");
             var director = directorGo.AddComponent<PickupDirector>();
+            // MV-1078: the Rack Module gate now reads the PLAYED world (AreaAccumulationDirector.ActiveWorldIndex),
+            // not RigBoard.ActiveWorldIndex alone -- this run start is genuinely World 2's own, so stand
+            // up a probe director saying so (the real BackyardPath.Awake this run start belongs to does
+            // the same, via its own AreaAccumulationDirector.ConfigureWorld call).
+            var areaDirector = directorGo.AddComponent<AreaAccumulationDirector>();
+            areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, worldIndex: 1);
             try
             {
                 InvokeOnFactoryDestroyed(director, Vector3.zero);

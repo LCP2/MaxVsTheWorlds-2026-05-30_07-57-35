@@ -16,12 +16,15 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-1013 (the one new test, per CC_AUTONOMY's testing policy): World 3 (the last world) gets the
-    /// same finale as every other world — its own final boss (Anchorhead, a30) dying drops a Weapon Core
-    /// and opens the real exit door in the same frame, with no requirement that any OTHER robot in a30
-    /// (or the world) also be dead. Loads World 3 through the real world-load path (the same
-    /// <c>WorldLibrary.Load</c> -&gt; <c>WorldMapLoader.TryLoad</c> -&gt; <c>WorldTransitions.ApplyExitDoorway</c>
-    /// -&gt; <c>MapRuntime.Build</c> pipeline <c>BackyardPath.Awake</c> runs, <see cref="MV997WorldExitDoorTests"/>'s
-    /// own idiom), not a synthetic single-area config.
+    /// same finale as every other world — its own final boss (Anchorhead, a30) dying drops a Weapon Core,
+    /// with no requirement that any OTHER robot in a30 (or the world) also be dead. Loads World 3 through
+    /// the real world-load path (the same <c>WorldLibrary.Load</c> -&gt; <c>WorldMapLoader.TryLoad</c> -&gt;
+    /// <c>WorldTransitions.ApplyExitDoorway</c> -&gt; <c>MapRuntime.Build</c> pipeline <c>BackyardPath.Awake</c>
+    /// runs, <see cref="MV997WorldExitDoorTests"/>'s own idiom), not a synthetic single-area config.
+    ///
+    /// MV-1078 updated this test's own exit-door assertions: the real door opens once the Core is
+    /// collected AND a30's other robots are dead too, not on the boss's death alone — see that ticket for
+    /// the full ruling. The Weapon-Core-on-death-alone assertions are untouched.
     ///
     /// Fails on base commit 3cfa5fb two different ways: <c>BossVictoryPayoff.MaybeDropWeaponCore</c> and
     /// <c>WorldFinaleGate.Install</c> both bail out via their own <c>HasNextWorld()</c> guard, which
@@ -108,7 +111,13 @@ namespace MaxWorlds.Tests.EditMode
             var go = new GameObject(name);
             go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
-            e.ResetState();
+            // MV-1078: OnEnable (not just Awake) isn't reliably invoked for a plain AddComponent outside
+            // Play mode either -- without this, the robot never joins RobotEnemy.Active, so
+            // AreaAccumulationDirector.ActiveCountForArea silently reads 0 for it and the finale gate
+            // opens as if it were already dead. InvokeOnEnable also runs ResetState() itself, so the
+            // standalone call this replaced is gone -- SetAreaIndex must run AFTER it or OnEnable's own
+            // ResetState() would clobber it back to unset.
+            InvokeOnEnable(e);
             e.SetAreaIndex(areaIndex);
             return e;
         }
@@ -199,15 +208,32 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.LessOrEqual(coreDist, 1f,
                     "the Weapon Core must land within 1 m (XZ) of Anchorhead's own death position");
 
-                Assert.IsTrue(gate.IsOpen, "MV-1013: the finale door must open on World 3's own last boss dying");
+                // MV-1078: the boss dying -- even World 3's own last one -- no longer opens the finale
+                // door by itself; it opens once the Core is collected AND a30's other robots are dead.
+                Assert.IsFalse(gate.IsOpen,
+                    "MV-1078: boss death alone must no longer open the finale door");
+                foreach (RobotEnemy r in otherRobots)
+                    Assert.IsTrue(r.IsAlive, "a30's other robots must still be alive while the gate is shut");
+
+                // --- Max collects the core. The weapon morph applies immediately; a30's other robots
+                // are still alive, so the door stays shut. ---
+                InvokeCollect(pickupDirector, cores[0]);
+                Assert.IsFalse(gate.IsOpen,
+                    "MV-1078: collecting the Core alone must not open the door -- a30's other robots are " +
+                    "still alive");
+
+                // --- a30's other robots die. Only now does the door open. ---
+                foreach (RobotEnemy r in otherRobots)
+                {
+                    r.TakeDamage(new DamageInfo(999999f, r.transform.position, Vector3.forward, Team.Player));
+                    InvokeUpdate(gate);
+                }
+
+                Assert.IsTrue(gate.IsOpen,
+                    "MV-1078: with the Core collected and a30's other robots now dead, the door must open");
                 Assert.IsTrue(built.ExitGate.IsOpen,
                     "the SAME real map gate MapRuntime built must be the one that opened -- no corridor to build");
 
-                foreach (RobotEnemy r in otherRobots)
-                    Assert.IsTrue(r.IsAlive, "a30's other robots must still be alive right after the finale opens");
-
-                // --- Max collects the core and walks through the open door. ---
-                InvokeCollect(pickupDirector, cores[0]);
                 HudSignals.EmitBossPayoffFinished();
 
                 Assert.IsNull(Object.FindFirstObjectByType<ResultScreen>(),
@@ -232,7 +258,9 @@ namespace MaxWorlds.Tests.EditMode
                     "exactly as every other world's finale does");
 
                 foreach (RobotEnemy r in otherRobots)
-                    Assert.IsTrue(r.IsAlive, "a30's other robots must still be alive after Victory seals");
+                    Assert.IsFalse(r.IsAlive,
+                        "MV-1078: a30's other robots were killed off to let the finale door open -- they " +
+                        "must still be dead by the time Victory seals");
             }
             finally
             {

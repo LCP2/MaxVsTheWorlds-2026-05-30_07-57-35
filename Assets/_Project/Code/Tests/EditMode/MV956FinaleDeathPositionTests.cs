@@ -191,7 +191,14 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 boss1DeathPos = boss1Go.transform.position;
             InvokeOnDeath(boss1);   // a30_boss1 is the one that actually empties a30 this time
 
-            Assert.IsTrue(gate1.IsOpen, "MV-956: the wall must open the instant a30's last boss dies");
+            // MV-1078: the boss dying (even the last one) no longer opens the exit -- a30's other 30
+            // garrison robots, built above and still alive, are what the gate now waits on.
+            Assert.IsTrue(areaDirector.ActiveCountForArea(30) > 0,
+                "MV-956/MV-1078: a30's other garrison robots must still be alive right after the last " +
+                "boss dies -- proof the orb-drop doesn't depend on the area being cleared");
+            Assert.IsFalse(gate1.IsOpen,
+                "MV-1078: boss death alone -- even a30's last -- must no longer open the exit; it waits " +
+                "on the Core being collected AND a30's own robots being dead");
 
             Pickup core1 = LivePickups().Single(p => p.Kind == PickupKind.WeaponCore);
             float dist1 = Vector2.Distance(
@@ -227,8 +234,11 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 boss2DeathPos = boss2b.transform.position;
             InvokeOnDeath(boss2b);   // a30_boss2 is the one that empties a30 this time
 
-            Assert.IsTrue(gate2.IsOpen,
-                "MV-956 (reversed order): the wall must open the instant a30's last boss dies");
+            // MV-1078: the boss dying (even the last one) no longer opens the exit by itself -- see the
+            // gate1 half above. Victory still seals below despite a30's robots staying alive throughout
+            // (RunTracker's own seal conditions, driven directly here, never touch WorldFinaleGate.IsOpen).
+            Assert.IsFalse(gate2.IsOpen,
+                "MV-1078 (reversed order): boss death alone must no longer open the exit");
 
             Pickup core2 = LivePickups().Single(p => p.Kind == PickupKind.WeaponCore);
             float dist2 = Vector2.Distance(
@@ -239,11 +249,13 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.Greater(areaDirector.ActiveCount, 0,
                 "MV-956: a30's other garrison robots (and area 1's ambient ones) must still be alive at " +
-                "this point -- proof neither the orb, the gate, nor Victory below depend on the area/world " +
-                "being cleared");
+                "this point -- proof the orb-drop and Victory below don't depend on the area/world being " +
+                "cleared (MV-1078: the GATE now does, via WorldFinaleGate's own clean-up beat, but " +
+                "RunTracker's seal below is driven directly and never reads WorldFinaleGate.IsOpen)");
 
-            // --- Victory seals despite those robots still alive: Max collects the core and crosses the
-            // now-open finale gate. ---
+            // --- Victory seals despite those robots still alive: RunTracker's own seal conditions are
+            // driven directly here (same as every other test in this file), independent of whether
+            // WorldFinaleGate itself has actually opened -- see MV-1078's own dedicated test for that. ---
             InvokeCollect(pickupDirector, core2);
             HudSignals.EmitBossPayoffFinished();
             Assert.AreEqual(0, SaveSystem.Load(0).WorldIndex,

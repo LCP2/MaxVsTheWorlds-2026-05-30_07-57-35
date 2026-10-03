@@ -1,6 +1,8 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
+using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
 
@@ -66,14 +68,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(Resources.Load<TextAsset>(RigBoardLibrary.World2ResourcePath).text,
                 Does.Not.Contain("PART STORAGE"), "e_cel's label must read PART CAPACITY, not STORAGE");
 
+            // MV-1078: GrantsSupercellForArea now reads the PLAYED world (AreaAccumulationDirector.ActiveWorldIndex),
+            // not RigBoard.ActiveWorldIndex -- a finale's Weapon Core morph switches RigBoard onto the
+            // next world the instant it's collected, well before the played world itself advances, so
+            // the old RigBoard-only read would misfire mid-clean-up. Drive the played-world index
+            // directly via a probe AreaAccumulationDirector instead of RigBoard.UseWorld alone.
             RigBoard.UseWorld(1);
-            Assert.That(GrantsSupercellForArea(1), Is.True, "World 2 area 1 must still grant a Supercell");
-            Assert.That(GrantsSupercellForArea(2), Is.False, "World 2 area 2 must NOT grant a Supercell");
-            Assert.That(GrantsSupercellForArea(3), Is.True, "World 2 area 3 must grant a Supercell");
+            Assert.That(GrantsSupercellForArea(1, playedWorld: 1), Is.True, "World 2 area 1 must still grant a Supercell");
+            Assert.That(GrantsSupercellForArea(2, playedWorld: 1), Is.False, "World 2 area 2 must NOT grant a Supercell");
+            Assert.That(GrantsSupercellForArea(3, playedWorld: 1), Is.True, "World 2 area 3 must grant a Supercell");
 
             RigBoard.ResetForTests();
-            Assert.That(GrantsSupercellForArea(1), Is.True, "World 1 area 1 must grant a Supercell");
-            Assert.That(GrantsSupercellForArea(2), Is.True, "World 1 area 2 must also grant a Supercell");
+            Assert.That(GrantsSupercellForArea(1, playedWorld: 0), Is.True, "World 1 area 1 must grant a Supercell");
+            Assert.That(GrantsSupercellForArea(2, playedWorld: 0), Is.True, "World 1 area 2 must also grant a Supercell");
         }
 
         private static int TotalPrimarySecondaryCost(int worldIndex)
@@ -101,9 +108,22 @@ namespace MaxWorlds.Tests.EditMode
             return total;
         }
 
-        private static bool GrantsSupercellForArea(int areaIndex) =>
-            (bool)typeof(PickupDirector)
-                .GetMethod("GrantsSupercellForArea", BindingFlags.NonPublic | BindingFlags.Static)
-                .Invoke(null, new object[] { areaIndex });
+        private static bool GrantsSupercellForArea(int areaIndex, int playedWorld)
+        {
+            var go = new GameObject("MV767 GrantsSupercellForArea Probe");
+            try
+            {
+                var areaDirector = go.AddComponent<AreaAccumulationDirector>();
+                areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, playedWorld);
+                var director = go.AddComponent<PickupDirector>();
+                return (bool)typeof(PickupDirector)
+                    .GetMethod("GrantsSupercellForArea", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(director, new object[] { areaIndex });
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
     }
 }

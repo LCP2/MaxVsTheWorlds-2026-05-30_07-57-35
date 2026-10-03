@@ -229,12 +229,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0f, LastHealth(trace), 0.001f,
                 "AC3: the combined boss health bar must resolve to 0 once both bosses are down");
 
-            // MV-956: the fence now opens on THIS death (a30's last boss falling), never on RunComplete --
-            // asserted here, before anything reports the area/world as empty, since nothing in this test
-            // ever will (no RunComplete is fired at all below, and Victory still seals -- MV-956's whole
-            // point is that no robot-clearing is required anywhere in the finale).
-            Assert.IsTrue(gate.IsOpen,
-                "MV-956: WorldFinaleGate must open the instant a30's last boss dies, not wait for RunComplete");
+            // MV-1078: a30's last boss falling drops the Core (unchanged) but no longer opens the exit
+            // by itself -- it opens once the Core is collected AND a30's own robots are gone. This
+            // lightweight fixture never models any a30 garrison, so "gone" is vacuously true the moment
+            // the Core is collected below; MV956FinaleDeathPositionTests/the new MV-1078 test cover the
+            // "robots still alive" case against a real map.
+            Assert.IsFalse(gate.IsOpen,
+                "MV-1078: boss death alone -- even a30's last -- must no longer open the exit");
 
             List<Pickup> core = LivePickups().Where(p => p.Kind == PickupKind.WeaponCore).ToList();
             Assert.AreEqual(1, core.Count,
@@ -242,16 +243,16 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.Device),
                 "the World 1 finale drop must never be a Device");
 
+            // MV-1078: collecting the Core now applies the next world's weapon immediately (no more
+            // waiting for THE RIG's own open ceremony at the next world's run start) and, with no a30
+            // garrison modeled here, also opens the exit straight away.
             InvokeCollect(pickupDirector, core[0]);
-            // MV-1023: the world index passed here is the DESTINATION world (WeaponsScreen.CurrentWorldIndex's
-            // own doc: "already advanced past the world whose finale dropped the core by SaveSystem.RecordResult
-            // by the time THE RIG can next be opened") — World 2, not World 1's own index. MV-1023's
-            // ApplyWorldLoadout made this mapping exact (0/1/2 -> RCDA/LPPE/UNDERTOW); the old inline mapping
-            // treated any value below 2 as LPPE, which let this literal read 0 with no observable difference.
-            WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 1);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
-                "AC3: once the collected core's morph applies (THE RIG's own open ceremony), the active " +
-                "primary weapon must resolve to the laser (LPPE)");
+                "AC3: collecting the Core must resolve the active primary weapon to the laser (LPPE) " +
+                "immediately, not wait for the next world's run start");
+            Assert.IsTrue(gate.IsOpen,
+                "MV-1078: with no a30 robots modeled in this fixture, collecting the Core must open the " +
+                "exit right away");
 
             // AC4: the boss payoff beat (a12's own walk-out, unrelated to a30) finishing is RunTracker's
             // other seal condition. In the real game its Update() loop would already have fired

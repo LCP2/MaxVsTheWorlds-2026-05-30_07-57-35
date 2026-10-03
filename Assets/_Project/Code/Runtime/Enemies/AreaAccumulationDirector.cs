@@ -234,6 +234,31 @@ namespace MaxWorlds.Enemies
         /// <summary>Robots still queued for the current (or a past) area, not yet released.</summary>
         public int QueuedCount => _queue?.QueuedCount ?? 0;
 
+        /// <summary>Robots currently alive in ONE specific area (MV-1078) — unlike <see cref="ActiveCount"/>,
+        /// which is field-wide and never reaches zero while an earlier area still has survivors. Scans
+        /// <see cref="Object.FindObjectsByType{T}(FindObjectsInactive, FindObjectsSortMode)"/> rather
+        /// than <see cref="RobotEnemy.Active"/> — same reasoning as <see cref="ParkByReach"/>'s own doc
+        /// comment: <see cref="RobotEnemy.Active"/> is populated from <c>OnEnable</c>, which outside Play
+        /// mode is never reliably invoked for a robot placed via <c>AddComponent</c>/pooling, so it stays
+        /// empty for every EditMode test (confirmed by MV-1078's own finale-clean-up tests, which read 0
+        /// for a real, alive garrison). What <see cref="MaxWorlds.VFX.WorldFinaleGate"/>'s own finale
+        /// clean-up counts down.</summary>
+        public int ActiveCountForArea(int areaIndex)
+        {
+            int count = 0;
+            foreach (RobotEnemy r in Object.FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (r != null && r.IsAlive && r.AreaIndex == areaIndex) count++;
+            return count;
+        }
+
+        /// <summary>Drops everything still queued (not yet released) for <paramref name="areaIndex"/>
+        /// without touching anything already active (MV-1078) — what a world's finale clean-up calls on
+        /// its own final area the instant the Weapon Core is collected, so a shed/Replicator's own
+        /// already-queued backlog can't keep topping the area up after production there is supposed to
+        /// have stopped. Thin passthrough to <see cref="AreaSpawnQueue.RemoveQueued"/>, the same call
+        /// <see cref="RestoreArea"/> already makes internally.</summary>
+        public void DiscardQueuedForArea(int areaIndex) => _queue?.RemoveQueued(areaIndex);
+
         /// <summary>The large-robot count <see cref="FillArea"/> solved for 1-based
         /// <paramref name="areaIndex"/> (MV-375) — 0 if that area hasn't been filled yet (or was the
         /// empty entry room). <see cref="MaxWorlds.Pickups.PickupDirector"/> divides its authored

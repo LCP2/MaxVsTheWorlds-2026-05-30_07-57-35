@@ -95,6 +95,13 @@ namespace MaxWorlds.UI
         /// appear the instant the final area empties.</summary>
         public static event Action FinaleGateCrossed;
 
+        /// <summary>MV-1078: override the bottom objective line (ordinarily "FACTORIES x/y" or
+        /// "REPLICATORS x/y", <see cref="MaxWorlds.UI.HudController.ArenaLabelText"/>) during a world's
+        /// finale clean-up — fired with "ROBOTS LEFT n" by <c>WorldFinaleGate</c> while the Core is taken
+        /// but the final area isn't empty yet, and with null once it is, to go back to the ordinary
+        /// count. (text, null clears the override)</summary>
+        public static event Action<string> ArenaLabelOverride;
+
         /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
         /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
@@ -287,6 +294,9 @@ namespace MaxWorlds.UI
 
         public static void EmitFinaleGateCrossed()
             => FinaleGateCrossed?.Invoke();
+
+        public static void EmitArenaLabelOverride(string text)
+            => ArenaLabelOverride?.Invoke(text);
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);
