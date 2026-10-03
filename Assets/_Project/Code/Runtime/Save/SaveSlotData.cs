@@ -71,6 +71,16 @@ namespace MaxWorlds.Save
         /// save that never recorded it (<c>SaveSystem.ResolveResumePlan</c>).</summary>
         public int CheckpointWorldIndex = -1;
 
+        /// <summary>The world (<see cref="MaxWorlds.Weapons.RigBoard.ActiveWorldIndex"/>) THE RIG's own
+        /// board was reading from at the moment this checkpoint was captured (MV-1080) — can differ from
+        /// <see cref="CheckpointWorldIndex"/> (the world actually PLAYED) during a finale's CLEAN-UP
+        /// window: <c>WorldFinaleGate.BeginCleanup</c> morphs the board onto the NEXT world's the instant
+        /// the Weapon Core is collected, well before the played world itself advances past its own final
+        /// area. -1 means unknown — either a save from before this field existed, or no checkpoint — and
+        /// reads as <see cref="CheckpointWorldIndex"/> (<c>HomeScreen.ApplyResumeState</c>'s own
+        /// fallback), same as a pre-MV-985 save falls back to <see cref="WorldIndex"/>.</summary>
+        public int CheckpointRigBoardWorldIndex = -1;
+
         /// <summary>THE RIG's node ids at the checkpoint, parallel to <see cref="CheckpointRigNodeLevels"/>
         /// — <c>JsonUtility</c> can't serialize a <c>Dictionary</c>, hence the parallel-array split of
         /// <see cref="MaxWorlds.Weapons.RigState.SnapshotLevels"/>.</summary>

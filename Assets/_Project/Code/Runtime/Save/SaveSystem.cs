@@ -218,6 +218,10 @@ namespace MaxWorlds.Save
             // caller's own AreaAccumulationDirector.ActiveWorldIndex, not this slot's WorldIndex (which
             // names the world that plays NEXT and can be a different one already).
             data.CheckpointWorldIndex = worldIndex;
+            // MV-1080: THE RIG's own board can already be on the NEXT world (a finale's CLEAN-UP window
+            // morphs it the instant the Core is collected, before the played world above advances) — a
+            // RESUME must re-apply THIS board's loadout, not the played world's.
+            data.CheckpointRigBoardWorldIndex = RigBoard.ActiveWorldIndex;
             data.CheckpointPowerCells = PickupWallet.PowerCells;
             data.CheckpointPowerCellsSecondary = PickupWallet.PowerCellsSecondary;
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
@@ -373,6 +377,7 @@ namespace MaxWorlds.Save
             data.HasRunInProgress = false;
             data.CheckpointAreaIndex = 0;
             data.CheckpointWorldIndex = -1;
+            data.CheckpointRigBoardWorldIndex = -1;
             data.CheckpointRigNodeIds = Array.Empty<string>();
             data.CheckpointRigNodeLevels = Array.Empty<int>();
             data.CheckpointUnlockedCategories = Array.Empty<string>();

@@ -501,7 +501,15 @@ namespace MaxWorlds.UI
         /// nothing could read. A still-pending Weapon Core (<see cref="SaveSlotData.WeaponCorePending"/>,
         /// restored below) is untouched here — <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/>
         /// still runs it on the next RIG open/run start exactly as in live play, and its result wins,
-        /// since it runs strictly after this.</summary>
+        /// since it runs strictly after this.
+        ///
+        /// MV-1080: the loadout applied is the checkpoint's own RIG BOARD world
+        /// (<see cref="SaveSlotData.CheckpointRigBoardWorldIndex"/>), not <paramref name="worldIndex"/>
+        /// (the PLAYED world) directly — a finale's CLEAN-UP window can leave those two different, since
+        /// the Core morphs the board onto the next world the instant it's collected, before the played
+        /// world itself advances. <paramref name="worldIndex"/> is still what the map loads for (resolved
+        /// separately by <see cref="SaveSystem.ResolveResumePlan"/>) and is the fallback for a save that
+        /// predates this field.</summary>
         public static void ApplyResumeState(int slot, int worldIndex)
         {
             SaveSystem.ActiveSlot = slot;
@@ -518,7 +526,9 @@ namespace MaxWorlds.UI
             MaxWorlds.Weapons.PendingMorphingModule.Reset();
             MaxWorlds.Arena.DeathRunState.Reset();
 
-            WeaponSystemState.ApplyWorldLoadout(worldIndex);
+            SaveSlotData data = SaveSystem.Load(slot);
+            int rigBoardWorldIndex = data.CheckpointRigBoardWorldIndex >= 0 ? data.CheckpointRigBoardWorldIndex : worldIndex;
+            WeaponSystemState.ApplyWorldLoadout(rigBoardWorldIndex);
             SaveSystem.RestoreCheckpoint(slot);
             // RestoreCheckpoint sets RigState directly, which never touches WeaponSystemState's own
             // acquisition-order list — without this every restored ability reads as unacquired on the
