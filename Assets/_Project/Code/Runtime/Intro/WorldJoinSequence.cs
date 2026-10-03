@@ -223,17 +223,27 @@ namespace MaxWorlds.Intro
             BiomePalette to = BiomePalette.ForWorld(toWorld);
             string keyPrefix = $"join{_fromWorldIndex}";
 
+            Material floorA = IntroBuild.Lit($"{keyPrefix}_A_floor", from.ColorFor(SurfaceKind.Ground));
+            Material floorB = IntroBuild.Lit($"{keyPrefix}_B_floor", Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f));
+            Material floorC = IntroBuild.Lit($"{keyPrefix}_C_floor", to.ColorFor(SurfaceKind.Ground));
+
             _segmentARoot = BuildSegment(root, "A", wallHeight, wallThickness, 0f, _entry.SegmentAEnd,
-                IntroBuild.Lit($"{keyPrefix}_A_floor", from.ColorFor(SurfaceKind.Ground)),
-                IntroBuild.Lit($"{keyPrefix}_A_wall", from.ColorFor(SurfaceKind.Wall)));
+                floorA, IntroBuild.Lit($"{keyPrefix}_A_wall", from.ColorFor(SurfaceKind.Wall)));
 
             _segmentBRoot = BuildSegment(root, "B", wallHeight, wallThickness, _entry.SegmentAEnd, _entry.SegmentBEnd,
-                IntroBuild.Lit($"{keyPrefix}_B_floor", Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f)),
-                IntroBuild.Lit($"{keyPrefix}_B_wall", Color.Lerp(from.ColorFor(SurfaceKind.Wall), to.ColorFor(SurfaceKind.Wall), 0.5f)));
+                floorB, IntroBuild.Lit($"{keyPrefix}_B_wall", Color.Lerp(from.ColorFor(SurfaceKind.Wall), to.ColorFor(SurfaceKind.Wall), 0.5f)));
 
             _segmentCRoot = BuildSegment(root, "C", wallHeight, wallThickness, _entry.SegmentBEnd, _entry.CorridorLength,
-                IntroBuild.Lit($"{keyPrefix}_C_floor", to.ColorFor(SurfaceKind.Ground)),
-                IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
+                floorC, IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
+
+            // MV-1076: ground to stand beside the corridor and past its far end -- without this, the
+            // camera's own clear colour shows the instant Max is far enough along that the walls no
+            // longer fill his view (void here; a flat destination-world colour on the arrival side,
+            // below).
+            BuildGroundApron(root, wallThickness,
+                (0f, _entry.SegmentAEnd, floorA),
+                (_entry.SegmentAEnd, _entry.SegmentBEnd, floorB),
+                (_entry.SegmentBEnd, _entry.CorridorLength, floorC));
 
             // MV-965: garden/kerb+grate/culvert set-dressing on top of the three flat-coloured shells
             // above — a separate pass, same reason StormdrainDressing/BackyardDressing are separate from
@@ -297,9 +307,13 @@ namespace MaxWorlds.Intro
         private void BuildArrivalShell(float wallHeight, float wallThickness, int toWorld)
         {
             BiomePalette palette = BiomePalette.ForWorld(toWorld);
+            Material floorMat = IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground));
             _arrivalRoot = BuildSegment(transform, "Arrival", wallHeight, wallThickness, 0f, _entry.ArrivalShellLength,
-                IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground)),
-                IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
+                floorMat, IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
+
+            // MV-1076: same reasoning as the exit corridor's own apron -- the shell's far end (the end
+            // away from the destination stub, where Max first appears) has nothing beyond it either.
+            BuildGroundApron(_arrivalRoot, wallThickness, (0f, _entry.ArrivalShellLength, floorMat));
 
             // MV-965: same dressing pass as the exit side's segment C, continued into the arrival shell.
             if (toWorld == 1)
@@ -544,6 +558,57 @@ namespace MaxWorlds.Intro
             var r = go.GetComponent<MeshRenderer>();
             if (mat != null) r.sharedMaterial = mat;
             return go;
+        }
+
+        /// <summary>MV-1076: at least this wide either side of the corridor/shell's own playable width,
+        /// and this far past the last span's own far end (ticket's own numbers).</summary>
+        private const float ApronSideWidth = 12f;
+        private const float ApronFarExtension = 6f;
+        private const float ApronHeight = 0.1f;
+        private const float ApronCenterY = -0.05f;   // matches BuildSegment's own floor box -- tops stay coplanar
+
+        /// <summary>Flat ground beside each <paramref name="spans"/> entry's own along-range (its own
+        /// floor colour, so the apron reads as a continuation of the segment it runs beside, not one
+        /// flat colour the whole way), plus a cap <see cref="ApronFarExtension"/> m past the last span's
+        /// own far end. Without this, the camera's own clear colour shows the moment the corridor or
+        /// arrival shell runs out of either world's ground (MV-1076: void beside the World 1 -> World 2
+        /// corridor, a flat blue beside its arrival shell). KeepsOwnMaterial + no collider: decoration
+        /// only, never reachable by Max or a robot, and never re-tinted by the world's own dressing
+        /// sweep.</summary>
+        private void BuildGroundApron(Transform root, float wallThickness,
+            params (float AlongMin, float AlongMax, Material FloorMat)[] spans)
+        {
+            if (spans.Length == 0) return;
+
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float sideCenter = halfWidth + wallThickness + ApronSideWidth * 0.5f;
+
+            foreach (var span in spans)
+            {
+                MarkApron(BuildBox(root, "Ground Apron E", span.AlongMin, span.AlongMax, sideCenter,
+                    ApronSideWidth, ApronHeight, ApronCenterY, span.FloorMat));
+                MarkApron(BuildBox(root, "Ground Apron W", span.AlongMin, span.AlongMax, -sideCenter,
+                    ApronSideWidth, ApronHeight, ApronCenterY, span.FloorMat));
+            }
+
+            var last = spans[spans.Length - 1];
+            float capWidth = (halfWidth + wallThickness + ApronSideWidth) * 2f;
+            MarkApron(BuildBox(root, "Ground Apron Far Cap", last.AlongMax, last.AlongMax + ApronFarExtension,
+                0f, capWidth, ApronHeight, ApronCenterY, last.FloorMat));
+        }
+
+        /// <summary>Decoration only: strips the primitive cube's default collider (ticket AC: "no
+        /// collider that Max or robots can reach") and marks it <see cref="KeepsOwnMaterial"/> so neither
+        /// world's own runtime dressing sweep repaints it.</summary>
+        private static void MarkApron(GameObject go)
+        {
+            var collider = go.GetComponent<Collider>();
+            if (collider != null)
+            {
+                if (Application.isPlaying) Destroy(collider);
+                else DestroyImmediate(collider);
+            }
+            go.AddComponent<KeepsOwnMaterial>();
         }
 
         private void BuildFade()
