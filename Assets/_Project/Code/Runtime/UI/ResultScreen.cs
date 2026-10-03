@@ -26,6 +26,17 @@ namespace MaxWorlds.UI
         private static readonly Color Bone = new Color(0.96f, 0.94f, 0.86f);
         private static readonly Color CoreCyan = new Color(0.31f, 0.86f, 0.98f);
 
+        // MV-1075: the title used to be a fixed 78pt with horizontalOverflow = Overflow, so
+        // "WORLD 1 — BACKYARD SAVED" just rendered 1221px wide against a 720px card. ResolveTitle
+        // below shrinks it (best-fit, floor 44pt) and, if it still doesn't fit at the floor, wraps it
+        // onto two lines at the world name's own " — " (every authored WorldConfig.world reads
+        // "World N — Name", per MV-921's own comment on this file).
+        private const float TitleMaxFontSize = 78f;
+        private const float TitleMinFontSize = 44f;
+        private const float TitleTopOffset = 60f;
+        private const float TitleSingleLineBoxHeight = 90f;
+        private const float TitleLineGap = 8f;
+
         /// <summary>Build and show the screen for a finished (Victory) run. Pauses the game.</summary>
         public void Show(RunStats stats)
         {
@@ -55,24 +66,39 @@ namespace MaxWorlds.UI
             panel.type = Image.Type.Sliced;
             Center(panel.rectTransform, ResultLayout.PanelWidth, ResultLayout.PanelHeight);
 
+            // MV-1075: nothing from the live world may show through the panel behind the title — the
+            // panel is a translucent image on a screen-space overlay canvas, so a world-space
+            // WorldHealthBar (Max's, Sentinels', robots') still draws straight through it otherwise.
+            WorldHealthBar.SetAllForceHidden(true);
+
             // MV-427: the only outcome that ever reaches this screen now is Victory — death respawns
             // Max instead of ending the run, so there is no DEFEAT banner/near-miss/REPLAY branch left.
             // MV-841: the banner itself now says which world was saved (Lee: "needs to say 'World
             // [name] Saved'") rather than a bare "VICTORY" plus a separate "{map} cleared" subtitle.
-            var title = AddText(panel.rectTransform, 78f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
-            Top(title.rectTransform, 0f, -60f, 680f, 90f);
+            var title = AddText(panel.rectTransform, TitleMaxFontSize, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             // MV-687: reads the loaded world's own name, not a "Backyard"-literal — a Victory in
             // World 2 (or beyond) must not still read as if it happened in the Backyard. MV-921: every
             // authored WorldConfig.world already reads "World N — Name" (e.g. "World 1 — Backyard"), so
             // a hardcoded "WORLD " prefix here doubled up into "WORLD WORLD 1 — BACKYARD SAVED".
             var backyardPath = FindFirstObjectByType<BackyardPath>();
             string worldName = backyardPath != null && backyardPath.Map != null ? backyardPath.Map.name : "World";
-            title.text = $"{worldName.ToUpperInvariant()} SAVED";
+            string fullTitle = $"{worldName.ToUpperInvariant()} SAVED";
+
+            float titleBoxWidth = ResultLayout.ContentWidth;
+            float titleBoxHeight = ResolveTitle(title, fullTitle, titleBoxWidth);
+            Top(title.rectTransform, 0f, -TitleTopOffset, titleBoxWidth, titleBoxHeight);
+
+            // The title only grows DOWN into the card when it needs a second line — give it back the
+            // room it took, as extra panel height, rather than letting the wrapped line run into the
+            // stat rows below it.
+            float extraTitleHeight = Mathf.Max(0f, titleBoxHeight - TitleSingleLineBoxHeight);
+            if (extraTitleHeight > 0f)
+                panel.rectTransform.sizeDelta += new Vector2(0f, extraTitleHeight);
 
             // Stat rows — the whole world's tally from its first entry to this victory, across any
             // deaths along the way (MV-841: RunProgressState/DeathRunState both checkpoint and
             // restore across a resume, so these never silently reset to zero mid-world).
-            float y = -170f;
+            float y = -170f - extraTitleHeight;
             AddStatRow(panel.rectTransform, "TIME", RunStats.FormatTime(stats.Elapsed), ref y);
             AddStatRow(panel.rectTransform, "DEATHS", DeathRunState.DeathsTaken.ToString(), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
@@ -87,15 +113,74 @@ namespace MaxWorlds.UI
                 new Color(0.3f, 0.34f, 0.4f), canAdvance, canAdvance ? (UnityEngine.Events.UnityAction)RunFlow.StartNextWorld : null);
             Bottom(nextBtn, 0f, 40f, ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
 
-            // MV-698: World 1's finale — collecting the Weapon Core morphs PRIMARY the moment THE RIG
-            // is next opened (WeaponSystemState.OpenWeaponCoreMorphIfPending). This line is the only
-            // place that ever tells the player so, sitting just above the CTA it's pointing them at.
+            // MV-698/MV-1074: World 1's finale — collecting the Weapon Core morphs PRIMARY at the
+            // START of the next world (not on next opening THE RIG, which is what this line used to
+            // say), so the player never has to go open THE RIG for it. This line is the only place
+            // that ever tells the player the Core landed.
             if (stats.WeaponCoreGranted)
             {
                 var corePrompt = AddText(panel.rectTransform, 22f, CoreCyan, TextAnchor.MiddleCenter, FontStyle.Bold);
                 Bottom(corePrompt.rectTransform, 0f, 40f + ResultLayout.ButtonHeight + 14f, ResultLayout.ButtonWidth, 28f);
-                corePrompt.text = "NEW PRIMARY: LPPE - open THE RIG";
+                corePrompt.text = "NEW WEAPON UNLOCKED - READY IN THE NEXT WORLD";
             }
+        }
+
+        /// <summary>
+        /// MV-1075: picks the title's final text and font size, and returns the box height it needs.
+        /// Best-fit shrink first (78pt down to the 44pt floor, measured against <paramref
+        /// name="maxWidth"/> via <see cref="Text.preferredWidth"/> — <c>resizeTextForBestFit</c>'s own
+        /// search, <c>TextGenerator.fontSizeUsedForBestFit</c>, is a documented no-op under
+        /// <c>-batchmode -nographics</c> (MV-585/MV-593), so this mirrors that search by hand instead).
+        /// If even the floor still overflows as one line, wraps onto two lines at the world name's own
+        /// " — " (every authored <c>WorldConfig.world</c> reads "World N — Name") and re-runs the same
+        /// search against whichever of the two lines is wider.
+        /// </summary>
+        private static float ResolveTitle(Text title, string fullText, float maxWidth)
+        {
+            for (int size = (int)TitleMaxFontSize; size >= TitleMinFontSize; size--)
+            {
+                title.fontSize = size;
+                title.text = fullText;
+                if (title.preferredWidth <= maxWidth)
+                    return Mathf.Max(TitleSingleLineBoxHeight, title.preferredHeight);
+            }
+
+            // MV600AsciiOnlyPlayerFacingTextTests scans Runtime/UI/*.cs string literals for a literal
+            // non-ASCII byte; this delimiter is never drawn (it only splits the world name apart), so
+            // it is built from the codepoint below rather than a literal character in a string
+            // literal, to keep that scan honest about which strings are actually player-facing.
+            string dash = ((char)0x2014).ToString();
+            string[] parts = fullText.Split(new[] { " " + dash + " " }, 2, System.StringSplitOptions.None);
+            if (parts.Length != 2)
+            {
+                // No dash to wrap at (never true for an authored world name) — ship the floor size as
+                // a single line rather than crash.
+                title.fontSize = (int)TitleMinFontSize;
+                title.text = fullText;
+                return Mathf.Max(TitleSingleLineBoxHeight, title.preferredHeight);
+            }
+
+            string line1 = parts[0];
+            string line2 = parts[1];
+            for (int size = (int)TitleMaxFontSize; size >= TitleMinFontSize; size--)
+            {
+                title.fontSize = size;
+                title.text = line1;
+                float width1 = title.preferredWidth;
+                title.text = line2;
+                float width2 = title.preferredWidth;
+                if (Mathf.Max(width1, width2) <= maxWidth)
+                {
+                    title.text = line1 + "\n" + line2;
+                    return title.preferredHeight + TitleLineGap;
+                }
+            }
+
+            // The floor still overflows both lines (an unusually long authored name) — ship the floor
+            // size anyway; a slightly tight two-line card beats a one-line card hanging off the panel.
+            title.fontSize = (int)TitleMinFontSize;
+            title.text = line1 + "\n" + line2;
+            return title.preferredHeight + TitleLineGap;
         }
 
         private void AddStatRow(RectTransform panel, string label, string value, ref float y)
