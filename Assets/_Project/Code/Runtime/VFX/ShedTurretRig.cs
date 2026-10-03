@@ -42,6 +42,14 @@ namespace MaxWorlds.VFX
     /// </summary>
     public sealed class ShedTurretRig
     {
+        // MV-1072: Lee, phone, World 1 — "these turrets have been created massively larger than before.
+        // They look ridiculous." MV-1058 sized the dome at 0.86 m (38% of the 2.25 m shed side); this
+        // shrinks the WHOLE rig uniformly so the dome reads at 0.45 m (20% of the shed's side) instead,
+        // applied as one scale on a dedicated child of the rig's root rather than rewriting every
+        // constant below, so every part (and the recoil travel, which is itself a fraction of a part's
+        // own local-space reach) stays in the same proportion MV-1058 authored.
+        private const float ShrinkFactor = 0.45f / 0.86f;
+
         // ---------------------------------------------------------------- ticket MV-1058's own numbers
         private const float BaseDiameter = 1.0f;
         private const float BaseHeight = 0.32f;
@@ -83,14 +91,21 @@ namespace MaxWorlds.VFX
         /// — callable with no shed (or any other host) present; see <c>MV1058ShedTurretTests</c>.</summary>
         public static ShedTurretRig Build(Transform root, ShedFittingKind kind, in ShedTurretPalette palette)
         {
+            // MV-1072: a dedicated scaled child, not root.localScale directly — root is the caller's own
+            // metre-space transform (see ShedFitting.BuildTurretVisual), and this rig must shrink only
+            // what it builds under it, not reach back and rescale whatever space the caller handed in.
+            var rig = new GameObject("TurretRig").transform;
+            rig.SetParent(root, worldPositionStays: false);
+            rig.localScale = Vector3.one * ShrinkFactor;
+
             float baseRadius = BaseDiameter * 0.5f;
-            Part(root, CharacterMeshes.Prism(8, baseRadius, baseRadius * 0.88f, BaseHeight, 0.16f), palette.Base,
+            Part(rig, CharacterMeshes.Prism(8, baseRadius, baseRadius * 0.88f, BaseHeight, 0.16f), palette.Base,
                 new Vector3(0f, BaseHeight * 0.5f, 0f), Quaternion.identity, Vector3.one, "TurretBase");
 
             // The yaw pivot: dome and barrel both live under here, so Face() is one Quaternion write.
-            // Base stays under root, fixed, per the ticket's own "base stays fixed" line.
+            // Base stays under rig, fixed, per the ticket's own "base stays fixed" line.
             var turret = new GameObject("Turret").transform;
-            turret.SetParent(root, worldPositionStays: false);
+            turret.SetParent(rig, worldPositionStays: false);
             turret.localPosition = new Vector3(0f, BaseHeight, 0f);
 
             Part(turret, CharacterMeshes.Sphere(16), palette.Dome,
