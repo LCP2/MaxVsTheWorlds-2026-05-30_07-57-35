@@ -928,13 +928,18 @@ namespace MaxWorlds.Arena
         /// raw INDEX order (which a gantry-deck loop like World 2's a10/a11/a12 visits twice, through
         /// two different gates, so a plain index predecessor is sometimes simply wrong). Deck gates
         /// (<c>opensWith</c> carrying the <c>[DECK]</c> suffix) are ordinary <see cref="WorldGate"/>
-        /// entries and are included with no special casing.</summary>
-        public IEnumerable<string> InboundGateSourceIds(string toAreaId)
+        /// entries and are included with no special casing, UNLESS <paramref name="level"/> is given
+        /// (MV-1091): then only a gate whose own <see cref="WorldMapLoader.GateLevel"/> matches it
+        /// counts — the fix for an in-place-deck area (one area id visited at two elevations, World 2's
+        /// a10/a11/a12) where a floor-only retreat and a genuine deck arrival both land on the same area
+        /// id and must not be allowed to validate each other's gate.</summary>
+        public IEnumerable<string> InboundGateSourceIds(string toAreaId, int? level = null)
         {
             if (gates == null || string.IsNullOrEmpty(toAreaId)) yield break;
             foreach (WorldGate g in gates)
             {
                 if (g?.to == null || g.to.area != toAreaId) continue;
+                if (level.HasValue && WorldMapLoader.GateLevel(g) != level.Value) continue;
                 if (!string.IsNullOrEmpty(g.from?.area)) yield return g.from.area;
             }
         }
