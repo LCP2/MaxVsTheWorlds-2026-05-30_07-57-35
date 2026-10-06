@@ -658,13 +658,14 @@ namespace MaxWorlds.Intro
             _hud = FindFirstObjectByType<HudController>();
             if (_hud != null) _hud.gameObject.SetActive(false);
 
-            // Snapshot first -- disabling a RobotEnemy fires its own OnDisable, which removes it from
-            // the very list RobotEnemy.Active is backed by, so iterating that list live while disabling
-            // its members would mutate it mid-enumeration.
+            // MV-1081: freeze, don't disable -- disabling fired OnEnable's own ResetState on restore,
+            // which stomped every robot's state/health/Submerged body-visibility/IsConverted back to a
+            // fresh full-health Chase the moment Max arrived (a Dormant garrison waking, an invisible,
+            // unkillable Submerged Lurker chasing him). SetCutsceneFrozen never touches OnEnable at all.
             _frozenRobots.Clear();
             _frozenRobots.AddRange(RobotEnemy.Active);
             foreach (RobotEnemy r in _frozenRobots)
-                if (r != null) r.enabled = false;
+                if (r != null) r.SetCutsceneFrozen(true);
         }
 
         private void RestoreGameplay()
@@ -673,7 +674,7 @@ namespace MaxWorlds.Intro
             _restored = true;
             if (_player != null) _player.enabled = true;
             if (_hud != null) _hud.gameObject.SetActive(true);
-            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.enabled = true;
+            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.SetCutsceneFrozen(false);
             _frozenRobots.Clear();
         }
 

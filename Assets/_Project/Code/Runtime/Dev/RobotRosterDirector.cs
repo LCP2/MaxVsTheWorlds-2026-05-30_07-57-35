@@ -158,7 +158,7 @@ namespace MaxWorlds.Dev
 
             var e = go.AddComponent<RobotEnemy>();
             e.Apply(a);
-            e.enabled = false;   // hold the pose — no player in this shot for it to chase
+            e.SetCutsceneFrozen(true);   // MV-1081: hold the pose — no player in this shot for it to chase
 
             go.AddComponent<RobotRig>();   // builds the body synchronously, in its own Awake
 
