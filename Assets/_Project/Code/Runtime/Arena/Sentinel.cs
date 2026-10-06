@@ -247,9 +247,11 @@ namespace MaxWorlds.Arena
 
         /// <summary>MV-624: Unity's 0.3 default step offset would let the sentinel climb small props
         /// (pots/crates) instead of being stopped by them — which fails this ticket's AC2 while
-        /// appearing to pass a "does it collide at all" check. Half the default, well under the
-        /// smallest prop this needs to be blocked by.</summary>
-        private const float ControllerStepOffset = 0.1f;
+        /// appearing to pass a "does it collide at all" check. MV-1087 raised this from the original
+        /// 0.1 to the ticket's own "at least 0.25 m" floor so a sentinel can step up onto a World 2
+        /// channel kerb/crossing (0.20 m / 0.025 m tall) — still well under the smallest pot/crate prop
+        /// (0.5 m, MV624SentinelCollisionTests' own AC2) this needs to keep being blocked by.</summary>
+        private const float ControllerStepOffset = 0.25f;
 
         /// <summary>MV-624: bounds a sidestep whose target sits inside a solid — with collision now
         /// live, <see cref="_sidestepTarget"/>'s arrival test can never fire if the target is
