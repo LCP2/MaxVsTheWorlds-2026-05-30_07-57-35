@@ -92,6 +92,13 @@ namespace MaxWorlds.Bosses
         // (a stray scene-authored instance) simply never wakes rather than waking on any stray position.
         private Rect _wakeArea;
 
+        /// <summary>MV-1122: this boss's own 1-based area (<see cref="ResolveAreaIndex"/>), resolved
+        /// once in <see cref="Wake"/> and stamped onto every add it flings (<see cref="LaunchVolley"/>)
+        /// — a brood add never carried an <see cref="RobotEnemy.AreaIndex"/> of its own before this,
+        /// so <see cref="MaxWorlds.VFX.WorldFinaleGate"/>'s clean-up count/wake/safety-net never saw it
+        /// (Lee, device, "FACTORIES 17/17" never falling — the hypothesis this ticket proves).</summary>
+        private int _areaIndex;
+
         private float _verticalVel;
         private float _introTimer;
         private float _bladeTimer;
@@ -263,6 +270,7 @@ namespace MaxWorlds.Bosses
         private void Wake()
         {
             int areaIndex = ResolveAreaIndex();
+            _areaIndex = areaIndex; // MV-1122: stamped onto every add this boss flings — see field doc
 
             // MV-995: a cold-boot RESUME rebuilds every authored boss fresh and Dormant, with no memory
             // of a prior run's fight -- so a boss whose area was already beaten before the checkpoint was
@@ -598,6 +606,7 @@ namespace MaxWorlds.Bosses
 
                 RobotEnemy add = TakeAdd(archetype);
                 add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
+                add.SetAreaIndex(_areaIndex); // MV-1122: see _areaIndex's own doc comment
                 add.transform.position = from;
 
                 // MV-1021: this add's CharacterController has sat enabled (just inactive) since
@@ -890,6 +899,9 @@ namespace MaxWorlds.Bosses
             // get "what they need" (where to blow up) without ever touching this instance themselves.
             // Reversing this order would hand them a deactivated GameObject with nothing left to read.
             BossCensus.ReportDefeated(this);
+            // MV-1122: land every add still mid-throw NOW, before Update stops ticking this boss (the
+            // Phase.Dead switch arm below never calls AdvanceAdds again) — see LandInFlightAdds' own doc.
+            LandInFlightAdds();
             // MV-698: the "RARE SHARD" toast here was a placeholder — no pickup ever backed it, and the
             // shard concept isn't in the design. The real finale reward (BossVictoryPayoff's Weapon
             // Core, World 1's last boss area only) carries its own toast on collection.
@@ -897,6 +909,32 @@ namespace MaxWorlds.Bosses
             // YT-55/MV-721) — raised above, inside ReportDefeated, for every boss's own death, not just
             // the area's last one.
             gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1122: every add still in flight the instant this boss dies is placed at its own
+        /// landing point and enabled on this same tick. Before this, only <see cref="AdvanceAdds"/> —
+        /// called from this boss's OWN <see cref="Update"/> — ever moved an in-flight add, and
+        /// <see cref="Update"/>'s phase switch stops calling it the moment <see cref="_phase"/> flips to
+        /// <see cref="Phase.Dead"/> above; an add still mid-arc at that exact instant stayed suspended
+        /// in the air forever with <see cref="RobotEnemy.enabled"/> false (brain off) — Lee, 2026-10-07,
+        /// "robots end up suspended in mid-air because they're thrown out of the Bermudas in a way that
+        /// they can't land". Worse for THIS ticket specifically: a disabled robot is never removed by
+        /// clean-up's own unreachable check reading it as alive-but-unreachable forever without this,
+        /// since a robot that can never land can never satisfy anything else either — this is the one
+        /// layer that actually fixes the cause rather than cleaning up after it.</summary>
+        private void LandInFlightAdds()
+        {
+            foreach (AddInFlight a in _inFlight)
+            {
+                if (a.Robot == null) continue;
+                a.Robot.transform.position = a.To;
+                Vector3 outward = a.To - a.From; outward.y = 0f;
+                if (outward.sqrMagnitude > 0.0001f)
+                    a.Robot.transform.rotation = Quaternion.LookRotation(outward.normalized, Vector3.up);
+                a.Robot.enabled = true; // OnEnable already ran; this only flips the brain back on
+                LetThePlayerThrough(a.Robot.gameObject);
+            }
+            _inFlight.Clear();
         }
 
         private void AcquireTarget()
