@@ -1406,6 +1406,21 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        private bool _cutsceneFrozen;
+
+        /// <summary>MV-1081: holds this robot motionless and untouchable for a scripted cutscene
+        /// (<see cref="MaxWorlds.Intro.WorldJoinSequence"/>'s arrival/exit walk,
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate"/>'s weapon/exit beat) WITHOUT disabling the
+        /// component — the thing every cutscene used to do instead, which fired <see cref="OnEnable"/>'s
+        /// own <see cref="ResetState"/> on restore and stomped every robot's state/health/Submerged
+        /// body-visibility/IsConverted back to a fresh full-health Chase the moment gameplay resumed
+        /// (root cause: a Dormant garrison waking and an invisible, unkillable Submerged Lurker chasing
+        /// Max through the World 2 arrival walk). Frozen, <see cref="Tick"/> and <see cref="TakeDamage"/>
+        /// both no-op, so nothing it was carrying — state, health, body visibility, collision solidity,
+        /// garrison slot, IsConverted, attack token, area index — ever touches <see cref="ResetState"/>;
+        /// on unfreeze it is exactly as it was the instant freeze lifted.</summary>
+        public void SetCutsceneFrozen(bool frozen) => _cutsceneFrozen = frozen;
+
         /// <summary>Reset to a fresh, alive Chase state. Called from Awake/OnEnable and
         /// directly by tests (which don't get Unity lifecycle callbacks).</summary>
         public void ResetState()
@@ -1664,6 +1679,10 @@ namespace MaxWorlds.Enemies
         public void Tick(float dt)
         {
             if (Current == State.Dead) return;
+
+            // MV-1081: a cutscene holds this robot frozen — no tick at all, state and timers exactly
+            // as they were, regardless of what state it's frozen in (Dormant, Submerged, Chase...).
+            if (_cutsceneFrozen) return;
 
             // MV-980: a Dormant robot costs NOTHING per frame until it wakes — no gravity/SafeMove, no
             // LineOfSight, no fall-recovery tick, no separation-grid write, nothing TickBody below does.
@@ -3097,6 +3116,7 @@ namespace MaxWorlds.Enemies
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            if (_cutsceneFrozen) return;   // MV-1081: untouchable while a cutscene holds this robot
             if (!IsDamageable) return;   // MV-688: a submerged/rattling/re-submerging Lurker is invulnerable
             // Friendly-fire rejection: an enemy never damages another enemy, whatever
             // path delivered the hit. Logged so any same-team source is visible.

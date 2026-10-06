@@ -365,8 +365,11 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-1079: freezes the field for a finale beat — every active robot and Max's own
         /// control, so neither can act or be acted on while a scripted beat plays. The HUD is
-        /// deliberately left alone (both beats keep it up). Same disable/snapshot idiom
-        /// <see cref="WorldJoinSequence.SuspendGameplay"/> already uses.</summary>
+        /// deliberately left alone (both beats keep it up). MV-1081: freezes via
+        /// <see cref="RobotEnemy.SetCutsceneFrozen"/> rather than disabling — disabling fired OnEnable's
+        /// own ResetState on restore, reverting every robot to a fresh full-health Chase after each beat
+        /// and un-converting anything captured. Same snapshot idiom <see cref="WorldJoinSequence.SuspendGameplay"/>
+        /// already uses.</summary>
         private void SuspendGameplayForBeat()
         {
             var player = FindFirstObjectByType<PlayerController>();
@@ -375,13 +378,13 @@ namespace MaxWorlds.VFX
             _frozenRobots.Clear();
             _frozenRobots.AddRange(RobotEnemy.Active);
             foreach (RobotEnemy r in _frozenRobots)
-                if (r != null) r.enabled = false;
+                if (r != null) r.SetCutsceneFrozen(true);
         }
 
         private void RestoreGameplayForBeat()
         {
             if (_frozenPlayer != null) { _frozenPlayer.enabled = true; _frozenPlayer = null; }
-            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.enabled = true;
+            foreach (RobotEnemy r in _frozenRobots) if (r != null) r.SetCutsceneFrozen(false);
             _frozenRobots.Clear();
         }
 

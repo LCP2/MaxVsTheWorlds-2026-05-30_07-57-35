@@ -228,7 +228,7 @@ namespace MaxWorlds.Dev
             for (int i = 0; i < n; i++)
             {
                 var e = robots[i];
-                e.enabled = false;                          // hold position — don't let them walk off/into Max
+                e.SetCutsceneFrozen(true);                   // MV-1081: hold position — don't let them walk off/into Max
                 float lane = (i - (n - 1) * 0.5f);
                 Vector3 pos = max.position + fwd * (3.2f + 0.35f * Mathf.Abs(lane)) + right * lane * 1.25f;
                 pos.y = e.transform.position.y;

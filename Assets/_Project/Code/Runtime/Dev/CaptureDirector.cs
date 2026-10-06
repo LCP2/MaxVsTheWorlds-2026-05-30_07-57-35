@@ -456,7 +456,7 @@ namespace MaxWorlds.Dev
 
             var e = go.AddComponent<RobotEnemy>();
             e.Apply(a);
-            e.enabled = false;   // hold the pose — nothing in this shot for it to chase
+            e.SetCutsceneFrozen(true);   // MV-1081: hold the pose — nothing in this shot for it to chase
 
             go.AddComponent<MaxWorlds.VFX.RobotRig>();
             return go;
@@ -2786,9 +2786,9 @@ namespace MaxWorlds.Dev
                 for (int i = 0; i < 3; i++) yield return null;   // let the generated body (hatch/fan/LED) settle
 
                 rusherGo = BuildClusterRobot(EnemyKind.Rusher, replicator.HatchPosition + new Vector3(5f, 0f, 0f));
-                // BuildClusterRobot disables its RobotEnemy ("hold the pose") — re-enabling re-fires
-                // OnEnable, which is what actually populates RobotEnemy.Active for TickLure to find it.
-                rusherGo.GetComponent<RobotEnemy>().enabled = true;
+                // MV-1081: BuildClusterRobot freezes its RobotEnemy to "hold the pose" — unfreeze it for
+                // the real lure/intake simulation below.
+                rusherGo.GetComponent<RobotEnemy>().SetCutsceneFrozen(false);
 
                 // The real lure/intake path, not a scripted pose: TickLure hands it the hatch as its
                 // seek target, then TickConsumption draws it in and starts the Cycle beat.
