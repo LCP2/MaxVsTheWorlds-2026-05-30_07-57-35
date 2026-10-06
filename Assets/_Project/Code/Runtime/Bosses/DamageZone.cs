@@ -21,19 +21,22 @@ namespace MaxWorlds.Bosses
         private float _armDelay;
         private float _life;
         private float _age;
-        private float _sinceTick;
+        private int _ticksApplied;
+        private int _maxTicks;
         private GroundRing _ring;
 
         private static readonly Collider[] s_hits = new Collider[16];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
 
         // Read-only windows into existing state, for the readability VFX (YT-53) to draw a
-        // danger indicator that fills as the zone arms. No behaviour change.
+        // danger indicator that fills as the zone arms, then (MV-1082) flashes solid once it does.
         public float Radius => _radius;
         public bool IsArming => _age < _armDelay;
+        public bool IsActive => !IsArming && _age < _armDelay + _life;
         public float ArmProgress => _armDelay <= 0f ? 1f : Mathf.Clamp01(_age / _armDelay);
 
-        /// <summary>Spawn a damage zone at a world position.</summary>
+        /// <summary>Spawn a damage zone at a world position. MV-1082: <paramref name="life"/> is time
+        /// spent ACTIVE after arming — total lifetime is <c>armDelay + life</c>.</summary>
         public static DamageZone Spawn(Vector3 pos, float radius, float damage, float life,
             float armDelay, Color color, float tickInterval = 0.4f)
         {
@@ -45,6 +48,9 @@ namespace MaxWorlds.Bosses
             zone._life = Mathf.Max(0.1f, life);
             zone._armDelay = Mathf.Max(0f, armDelay);
             zone._tickInterval = Mathf.Max(0.05f, tickInterval);
+            // +epsilon guards the exact-multiple case (e.g. life 0.8 / tickInterval 0.4 == 2.0) against
+            // floor() landing one tick short on float error — matches BossTuning.TicksIn.
+            zone._maxTicks = 1 + Mathf.FloorToInt(zone._life / zone._tickInterval + 1e-4f);
             zone.BuildVisual(color);
             return zone;
         }
@@ -90,17 +96,32 @@ namespace MaxWorlds.Bosses
         /// sphere, which is nowhere near the ground it should be drawing on.</summary>
         private static Vector3 Grounded(Vector3 p) => new Vector3(p.x, 0f, p.z);
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>Advances the zone by <paramref name="dt"/> seconds (MV-1082). The first damage
+        /// tick lands the instant the zone arms, then every <c>tickInterval</c>, for exactly
+        /// <see cref="BossTuning.TicksIn"/> ticks; the zone is destroyed once its full lifetime
+        /// (<c>armDelay + life</c>) has elapsed — previously it destroyed itself at <c>life</c> alone,
+        /// which for the blade rain (life 0.8s &lt; arm 0.85s) killed every zone before it could ever
+        /// bite. An absolute-age while loop (not a per-frame accumulator) so a single large <paramref
+        /// name="dt"/> — exactly what an EditMode test drives this with — still applies every tick a
+        /// real frame-by-frame Update() would have. Exposed so a test can drive it directly:
+        /// <c>Update()</c> never runs outside Play mode.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             _age += dt;
-            if (_age >= _life) { Destroy(gameObject); return; }
             if (_age < _armDelay) return; // telegraph window — no damage yet
 
-            _sinceTick += dt;
-            if (_sinceTick < _tickInterval) return;
-            _sinceTick = 0f;
-            ApplyDamage();
+            while (_ticksApplied < _maxTicks && _age >= _armDelay + _ticksApplied * _tickInterval)
+            {
+                ApplyDamage();
+                _ticksApplied++;
+            }
+
+            if (_age >= _armDelay + _life)
+            {
+                if (Application.isPlaying) Destroy(gameObject); else DestroyImmediate(gameObject);
+            }
         }
 
         private void ApplyDamage()

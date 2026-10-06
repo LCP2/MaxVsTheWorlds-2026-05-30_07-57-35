@@ -99,15 +99,22 @@ namespace MaxWorlds.VFX
         {
             foreach (var zone in FindObjectsByType<DamageZone>(FindObjectsSortMode.None))
             {
-                if (!zone.IsArming) continue;
-
                 // The boss's AoE keeps its own radius — the indicator has to match the real danger
                 // area exactly, or it teaches the player the wrong thing.
-                float p = zone.ArmProgress;
-                Color c = Color.Lerp(warnColor, armedColor, p);
-                c.a = Mathf.Lerp(0.3f, 0.9f, p);
-
-                Next().Show(Ground(zone.transform.position), zone.Radius, c);
+                if (zone.IsArming)
+                {
+                    float p = zone.ArmProgress;
+                    Color c = Color.Lerp(warnColor, armedColor, p);
+                    c.a = Mathf.Lerp(0.3f, 0.9f, p);
+                    Next().Show(Ground(zone.transform.position), zone.Radius, c);
+                }
+                else if (zone.IsActive)
+                {
+                    // MV-1082: the moment it arms, flash to a solid bright fill for its active life —
+                    // "this is about to hurt" (above) becomes "this hurts now", instead of the ring
+                    // simply vanishing the instant arming ends.
+                    Next().Show(Ground(zone.transform.position), zone.Radius, armedColor);
+                }
             }
         }
 
