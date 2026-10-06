@@ -51,6 +51,20 @@ namespace MaxWorlds.Bosses
         private BigBermudaBrain _brain;
         private CharacterController _cc;
         private Transform _target;
+
+        /// <summary>MV-1083: Max, specifically — set once in <see cref="AcquireTarget"/> and never
+        /// reassigned. <see cref="_target"/> is the boss's CURRENT chase/face/attack target, which
+        /// <see cref="RetargetIfNeeded"/> may swing onto a nearby Sentinel; contact damage against Max
+        /// always goes through this field instead, so the Sentinel loop in
+        /// <see cref="TickContactDamage"/> can never double-hit whichever Sentinel happens to be
+        /// <see cref="_target"/> at the time.</summary>
+        private Transform _playerTarget;
+
+        /// <summary>MV-1083: the Sentinel <see cref="_target"/> is currently engaged with, or null while
+        /// chasing Max — same bookkeeping shape as <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own
+        /// <c>_engagedSentinel</c> (MV-362).</summary>
+        private Sentinel _engagedSentinel;
+
         private Renderer _renderer;
         private MaterialPropertyBlock _mpb;
 
@@ -312,6 +326,7 @@ namespace MaxWorlds.Bosses
         private void TickFight(float dt)
         {
             if (_target == null) { AcquireTarget(); return; }
+            RetargetIfNeeded();
             _brain.Tick(dt, _health.Normalized);
             BossCensus.ReportSpawnLevel(this, _brain.SpawnLevel, _brain.SpawnLevelProgress01);
 
@@ -359,16 +374,22 @@ namespace MaxWorlds.Bosses
         /// standing inside concave geometry has an actual way out instead of only a direction and a
         /// slide. The stop check below still measures the REAL distance to the target, not the route,
         /// so the boss still parks at its authored standoff from Max and not from some intermediate
-        /// waypoint. MV-720: reaching Standoff no longer returns immediately (a dead stop MV-588 left
-        /// behind) — see <see cref="DriftAtStandoff"/>.</summary>
+        /// waypoint. MV-720: reaching standoff no longer returns immediately (a dead stop MV-588 left
+        /// behind) — see <see cref="DriftAtStandoff"/>. MV-1083: the stop distance is no longer the
+        /// fixed <see cref="BossTuning.Standoff"/> — it is <see cref="ContactReachTo"/>'s own live
+        /// number (the exact reach <see cref="TickContactDamage"/> checks) minus
+        /// <see cref="BossTuning.StandoffMargin"/>, so a boss can never again park outside the range it
+        /// needs to actually land a hit (Lee, device, 2026-10-06: "just goes around Max in a
+        /// circle").</summary>
         public void TickApproach(float dt, Vector3 targetPosition, float speedScale = 1f)
         {
             Vector3 to = targetPosition - transform.position;
             to.y = 0f;
 
             float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
+            float stopDistance = ContactReachTo(_target) - BossTuning.StandoffMargin;
 
-            if (to.magnitude <= BossTuning.Standoff)
+            if (to.magnitude <= stopDistance)
             {
                 DriftAtStandoff(dt, to, move * speedScale);
                 return;
@@ -430,7 +451,10 @@ namespace MaxWorlds.Bosses
             if (_contactCooldownTimer > 0f) return;
 
             float bossRadius = WorldRadius(_cc, transform);
-            bool hitSomething = DamageIfTouching(_target, bossRadius);
+            // MV-1083: always Max directly, never _target -- _target may currently BE a Sentinel
+            // (RetargetIfNeeded), and that Sentinel is already covered by the loop below. Hitting it
+            // through both _target and the loop in the same tick would double its damage.
+            bool hitSomething = DamageIfTouching(_playerTarget, bossRadius);
 
             IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
             for (int i = 0; i < sentinels.Count; i++)
@@ -476,6 +500,18 @@ namespace MaxWorlds.Bosses
         {
             Vector3 scale = t.lossyScale;
             return cc.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        }
+
+        /// <summary>MV-1083: the exact world-space contact reach <see cref="TickContactDamage"/> would
+        /// check for <paramref name="target"/> right now — the SAME number <see cref="TickApproach"/>
+        /// stops just inside of. Falls back to <see cref="EnemyArchetype.PlayerRadius"/> when
+        /// <paramref name="target"/> is null (a bare synthetic Vector3 target with no real Transform —
+        /// <c>MV590BossWallSteeringTests</c>/<c>MV667BossConcaveRoutingTests</c> drive <see cref="TickApproach"/>
+        /// directly this way, with no Player tagged in their scene for <see cref="AcquireTarget"/> to find).</summary>
+        private float ContactReachTo(Transform target)
+        {
+            float targetRadius = target != null ? TargetRadius(target) : EnemyArchetype.PlayerRadius;
+            return WorldRadius(_cc, transform) + targetRadius + BossTuning.ContactSkin;
         }
 
         private void OnControllerColliderHit(ControllerColliderHit hit) => HandleWallContact(hit.collider, hit.normal);
@@ -764,7 +800,54 @@ namespace MaxWorlds.Bosses
         private void AcquireTarget()
         {
             var p = GameObject.FindGameObjectWithTag("Player");
-            if (p != null) _target = p.transform;
+            if (p == null) return;
+            _target = p.transform;
+            _playerTarget = p.transform;
+        }
+
+        /// <summary>MV-1083: re-decide whether to chase Max or the nearest Sentinel — the same
+        /// proximity-only rule (never an absolute preference) <see cref="MaxWorlds.Enemies.RobotEnemy"/>
+        /// already applies for ordinary robots (MV-362's own <c>RetargetIfNeeded</c>): strictly closer
+        /// than Max AND within <see cref="SentinelTargeting.AggroRadius"/> AND on the same combat level,
+        /// or a distant/off-level Sentinel never steals the boss away from Max. Checked once per Fight
+        /// tick, before <see cref="Approach"/>/<see cref="FaceTarget"/> read <see cref="_target"/>.
+        /// <see cref="TickContactDamage"/> is untouched by this — it always hits
+        /// <see cref="_playerTarget"/> directly plus every Sentinel in <see cref="Sentinel.Active"/>, so
+        /// this only changes who the boss WALKS at and FACES, never who it can hurt.</summary>
+        private void RetargetIfNeeded()
+        {
+            if (_playerTarget == null) return;
+
+            // The Sentinel we were engaging died since the last tick -- fall back to Max before
+            // re-evaluating, so a dead Sentinel's Transform is never read below.
+            if (_engagedSentinel != null && !_engagedSentinel.IsAlive)
+            {
+                _engagedSentinel = null;
+                _target = _playerTarget;
+            }
+
+            MapData map = EnemyNavigation.Map;
+            float distToPlayer = Vector3.Distance(transform.position, _playerTarget.position);
+            Sentinel nearest = SentinelTargeting.Nearest(transform.position);
+            bool nearestSameLevel = nearest != null
+                && CombatLevel.SameLevel(map, transform.position, nearest.transform.position);
+            float distToSentinel = nearestSameLevel
+                ? Vector3.Distance(transform.position, nearest.transform.position)
+                : float.MaxValue;
+
+            bool engageSentinel = nearestSameLevel &&
+                SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToSentinel, SentinelTargeting.AggroRadius);
+
+            if (engageSentinel && nearest != _engagedSentinel)
+            {
+                _engagedSentinel = nearest;
+                _target = nearest.transform;
+            }
+            else if (!engageSentinel && _engagedSentinel != null)
+            {
+                _engagedSentinel = null;
+                _target = _playerTarget;
+            }
         }
 
         private Vector3 PlanarToTarget()

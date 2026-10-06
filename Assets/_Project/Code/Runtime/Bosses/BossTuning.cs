@@ -49,7 +49,12 @@ namespace MaxWorlds.Bosses
         public const float MoveSpeed = 0.9f;
 
         /// <summary>MV-588: the ram/charge is gone — the boss just walks at Max and stops this far
-        /// out. Replaces the old <c>DesiredRange</c> circling.</summary>
+        /// out. Replaces the old <c>DesiredRange</c> circling. MV-1083: no longer what
+        /// <see cref="BigBermudaBoss.TickApproach"/> actually stops at — see <see cref="StandoffMargin"/>
+        /// below for the live, reach-derived replacement. Kept only as the generous upper-bound sanity
+        /// check <c>MV590BossWallSteeringTests</c>/<c>MV667BossConcaveRoutingTests</c> already assert
+        /// against ("closed to roughly standoff range"), since the real stop distance is now always
+        /// comfortably inside it.</summary>
         public const float Standoff = 3f;
 
         public const float EnrageMoveScale = 1.2f;   // was 1.4
@@ -81,6 +86,15 @@ namespace MaxWorlds.Bosses
         /// doesn't require literal interpenetration" idea <c>MowerHutch</c>'s own pursuit standoff and
         /// <c>RobotEnemy.TickContactTouch</c> already give their own contact checks.</summary>
         public const float ContactSkin = 0.3f;
+
+        /// <summary>MV-1083: how far inside the live contact reach <see cref="BigBermudaBoss.TickApproach"/>
+        /// now stops — the approach's own stop distance is resolved per-tick as "contact reach minus
+        /// this", never the old fixed <see cref="Standoff"/>, so "stopped" and "within reach" can never
+        /// drift apart again. That drift is exactly what <see cref="Standoff"/> (3 m) did for a boss
+        /// whose real world radius was under ~2.2 m: it parked outside its own contact reach and could
+        /// never touch anything it circled (Lee, device, 2026-10-06: "just goes around Max in a
+        /// circle").</summary>
+        public const float StandoffMargin = 0.1f;
 
         // ---------------------------------------------------------------- the fight escalates on its own clock
         //
