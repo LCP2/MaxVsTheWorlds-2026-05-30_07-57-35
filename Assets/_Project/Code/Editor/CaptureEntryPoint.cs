@@ -145,6 +145,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1018Anchorhead() => RunFromMenu(CapturePresets.All["mv1018anchorhead"]);
         public static void CaptureMv1018Anchorhead() => Run(CapturePresets.All["mv1018anchorhead"]);
 
+        [MenuItem("MaxWorlds/Capture/Undertow Beam (MV-1121)")]
+        public static void MenuMv1121UndertowBeam() => RunFromMenu(CapturePresets.All["mv1121undertowbeam"]);
+        public static void CaptureMv1121UndertowBeam() => Run(CapturePresets.All["mv1121undertowbeam"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

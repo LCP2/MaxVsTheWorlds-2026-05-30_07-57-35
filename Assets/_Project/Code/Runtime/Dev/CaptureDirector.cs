@@ -425,6 +425,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1019ReefFloorCheck());
             Add(BuildMv1063ReefFixCheck());
             Add(BuildMv1064UndertowLatchCheck());
+            Add(BuildMv1121UndertowBeamCheck());
             return d;
         }
 
@@ -2003,6 +2004,166 @@ namespace MaxWorlds.Dev
                 ExtraReport = () =>
                     $"orange/red pixels within {probeRadiusMetres}m ({probeRadiusPx}px) of the latched robot: " +
                     $"{orangeRedPixels} (AC3 >= 300)\n",
+            };
+        }
+
+        // ---- Mv1121UndertowBeamCheck (MV-1121 AC2) --------------------------------------------
+
+        /// <summary>MV-1121 AC2: up to four captures of the refreshed UNDERTOW beam in World 3
+        /// (<c>WorldIndex</c> seeded to 2, same idiom as <see cref="BuildMv1019ReefFloorCheck"/>) — free
+        /// and searching, bending toward a candidate robot, locked on an ordinary robot, and locked on
+        /// World 3's largest robot kind (<see cref="EnemyKind.Brute"/>, the biggest <c>BodyScale</c>/
+        /// <c>ColliderRadius</c> among <see cref="EnemyArchetype"/>'s roster). Same synthetic-probe
+        /// technique as <see cref="BuildMv1064UndertowLatchCheck"/> (a fresh <see cref="Undertow"/> with
+        /// no <see cref="PlayerController"/> aim source, driven by real <c>Update()</c> frames in a real
+        /// Play session) so the four states are deterministic rather than dependent on where World 3's
+        /// own live roster happens to be standing.</summary>
+        private static CapturePreset BuildMv1121UndertowBeamCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float pitch = 55f;
+            const float distance = 6f;
+            const int maxWaitFrames = 180;
+
+            GameObject undertowGo = null;
+            Undertow undertow = null;
+            GameObject ordinaryGo = null;
+            GameObject bigGo = null;
+            Vector3 origin = Vector3.zero;
+            Vector3 aimDir = Vector3.forward;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                // PauseSpawns (BeforeSceneLoad) only stops NEW spawns -- World 3's own area-accumulation
+                // pass can already have placed a robot or two before this coroutine ever runs, and the
+                // probe's own candidate search would happily latch onto one of those instead of the
+                // synthetic robots this preset places on purpose. Clear the board first.
+                foreach (var stray in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+                    if (stray != null) Destroy(stray.gameObject);
+
+                WeaponSystemState.ApplyWorldLoadout(2);   // World 3 -> UNDERTOW is the active primary
+                DevMode.Enabled = true;
+                DevMode.InfiniteEnergy = true;
+
+                // The largest OPEN zone on the loaded map, not the real player's own spawn point --
+                // World 3's real level geometry (walls, cover, hydroponic beds) sits close enough to
+                // Max's own spawn that a robot placed a few metres off-angle from it can clip LineOfSight/
+                // CombatLevel checks the real seek logic depends on. An open zone keeps this probe's own
+                // candidate search geometry clean regardless of which area the map happens to open into.
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                origin = CaptureDirector.OpenZoneCenter() ?? (playerGo != null ? playerGo.transform.position : Vector3.zero);
+                aimDir = playerGo != null ? playerGo.transform.forward : Vector3.forward;
+                aimDir.y = 0f;
+                aimDir = aimDir.sqrMagnitude > 0.01f ? aimDir.normalized : Vector3.forward;
+
+                undertowGo = new GameObject("MV1121CaptureUndertow");
+                undertowGo.transform.SetPositionAndRotation(origin, Quaternion.LookRotation(aimDir, Vector3.up));
+                undertow = undertowGo.AddComponent<Undertow>();
+                undertow.SetFiring(true);
+            }
+
+            void FrameOn(Camera cam, Vector3 focus)
+            {
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+            }
+
+            IEnumerator FreeShot(Camera cam)
+            {
+                for (int i = 0; i < 60; i++) yield return null;   // let the free-aim sway settle into its own rhythm
+                FrameOn(cam, origin + aimDir * (undertow.Range * 0.5f));
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            IEnumerator BendingShot(Camera cam)
+            {
+                Vector3 dir = Quaternion.AngleAxis(30f, Vector3.up) * aimDir;
+                Vector3 pos = origin + dir * 6f;
+                ordinaryGo = BuildClusterRobot(EnemyKind.Rusher, pos);
+                Physics.SyncTransforms();
+
+                for (int i = 0; i < 10 && !undertow.IsLatched; i++) yield return null;   // bending, not yet latched
+                if (undertow.IsLatched)
+                    throw new CaptureAbortException("the tip latched before the bending shot could be framed -- tighten the frame budget");
+
+                FrameOn(cam, ordinaryGo.transform.position);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            IEnumerator LockedOrdinaryShot(Camera cam)
+            {
+                int frame = 0;
+                while (!undertow.IsLatched && frame < maxWaitFrames) { yield return null; frame++; }
+                if (!undertow.IsLatched)
+                    throw new CaptureAbortException("the tip never latched onto the ordinary robot");
+                for (int i = 0; i < 20; i++) yield return null;   // let the ring/coils ease fully in
+
+                FrameOn(cam, ordinaryGo.transform.position + Vector3.up * 0.6f);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            IEnumerator LockedBigShot(Camera cam)
+            {
+                if (ordinaryGo != null) { Destroy(ordinaryGo); ordinaryGo = null; }
+                for (int i = 0; i < 10; i++) yield return null;   // let the dropped latch vanish
+
+                foreach (var stray in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+                    if (stray != null) Destroy(stray.gameObject);
+
+                Vector3 pos = origin + aimDir * 6f;
+                bigGo = BuildClusterRobot(EnemyKind.Brute, pos);
+                Physics.SyncTransforms();
+
+                int frame = 0;
+                while (!undertow.IsLatched && frame < maxWaitFrames) { yield return null; frame++; }
+                if (!undertow.IsLatched)
+                    throw new CaptureAbortException("the tip never latched onto the big robot");
+                for (int i = 0; i < 20; i++) yield return null;   // let the ring/coils ease fully in, sized to the bigger body
+
+                FrameOn(cam, bigGo.transform.position + Vector3.up * 0.9f);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1121undertowbeam",
+                LogTag = "[MV1121Capture]",
+                Flag = "-mv1121shot",
+                ArmFile = "Temp/mv1121.arm",
+                HeadlessMarker = "Temp/mv1121.headless",
+                DoneFileName = "_mv1121_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1019ReefFloorCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 2;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                    // Set from frame 0 (before the scene even loads) so World 3's own live roster never
+                    // gets a chance to spawn and contest the synthetic probe's candidate search.
+                    DevMode.Enabled = true;
+                    DevMode.PauseSpawns = true;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1121-free", FreeShot),
+                    new CaptureShot("MV-1121-bending", BendingShot),
+                    new CaptureShot("MV-1121-locked-ordinary", LockedOrdinaryShot),
+                    new CaptureShot("MV-1121-locked-big", LockedBigShot),
+                },
+                Cleanup = () =>
+                {
+                    if (undertowGo != null) Destroy(undertowGo);
+                    if (ordinaryGo != null) Destroy(ordinaryGo);
+                    if (bigGo != null) Destroy(bigGo);
+                },
             };
         }
 
