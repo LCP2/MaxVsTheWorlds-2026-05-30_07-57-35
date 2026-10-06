@@ -627,28 +627,49 @@ namespace MaxWorlds.Enemies
             private readonly int[] _emitted = new int[AllKinds.Length];
             private bool _warnedEmpty;
 
+            /// <summary>True if this area authors at least one emit-able kind (MV-1093) — what
+            /// <see cref="EnemySpawner.WantsToEmit"/> checks before letting a shed's door even consider
+            /// opening, so an area with nothing authored (a content bug, not a case to invent robots for)
+            /// never shows a door that cycles open and shut on nothing (World 3's reported defect: the
+            /// door moved, nothing ever came out, because nothing here was ever actually checked).</summary>
+            public readonly bool HasAnyAuthored;
+
             public AreaCadence(WorldComposition composition)
             {
-                if (composition == null) return;
-                _authored[(int)EnemyKind.Rusher] = composition.rusher;
-                _authored[(int)EnemyKind.Bruiser] = composition.bruiser;
-                _authored[(int)EnemyKind.Heavy] = composition.heavy;
-                _authored[(int)EnemyKind.Brute] = composition.brute;
-                _authored[(int)EnemyKind.Gunner] = composition.gunner;
-                _authored[(int)EnemyKind.Launcher] = composition.launcher;
-                _authored[(int)EnemyKind.Blinker] = composition.blinker;
-                _authored[(int)EnemyKind.Bolter] = composition.bolter;
-                // MV-705: an ambient sapper, same footing as Bolter — bound here so a shed's release
-                // cadence actually emits it, unlike Lurker below which only ever exists at a grate.
-                _authored[(int)EnemyKind.Sludger] = composition.sludger;
-                // MV-707: a floor-only rammer, same "ambient shed cadence" footing as Bolter/Sludger —
-                // it never needs a grate coincidence the way Lurker does.
-                _authored[(int)EnemyKind.Charger] = composition.charger;
-                // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
-                // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence must
-                // never invent one with no grate under it, so this area's authored lurker count stays
-                // out of AreaCadence's ratio math and is only ever drawn by name via garrison placement.
+                if (composition != null)
+                {
+                    _authored[(int)EnemyKind.Rusher] = composition.rusher;
+                    _authored[(int)EnemyKind.Bruiser] = composition.bruiser;
+                    _authored[(int)EnemyKind.Heavy] = composition.heavy;
+                    _authored[(int)EnemyKind.Brute] = composition.brute;
+                    _authored[(int)EnemyKind.Gunner] = composition.gunner;
+                    _authored[(int)EnemyKind.Launcher] = composition.launcher;
+                    _authored[(int)EnemyKind.Blinker] = composition.blinker;
+                    _authored[(int)EnemyKind.Bolter] = composition.bolter;
+                    // MV-705: an ambient sapper, same footing as Bolter — bound here so a shed's release
+                    // cadence actually emits it, unlike Lurker below which only ever exists at a grate.
+                    _authored[(int)EnemyKind.Sludger] = composition.sludger;
+                    // MV-707: a floor-only rammer, same "ambient shed cadence" footing as Bolter/Sludger —
+                    // it never needs a grate coincidence the way Lurker does.
+                    _authored[(int)EnemyKind.Charger] = composition.charger;
+                    // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
+                    // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence
+                    // must never invent one with no grate under it, so this area's authored lurker count
+                    // stays out of AreaCadence's ratio math and is only ever drawn by name via garrison
+                    // placement.
+                }
+
+                for (int i = 0; i < _authored.Length; i++)
+                {
+                    if (_authored[i] <= 0) continue;
+                    HasAnyAuthored = true;
+                    break;
+                }
             }
+
+            /// <summary>Whether this area's authored cadence includes <paramref name="kind"/> at all
+            /// (MV-1093) — test-only introspection, same footing as <see cref="EnemySpawner.LiveCountOf"/>.</summary>
+            public bool Authors(EnemyKind kind) => _authored[(int)kind] > 0;
 
             /// <summary>The next kind this shed should release — the allowed kind with the lowest
             /// emitted/authored ratio, ties broken by declaration order. False (after logging a

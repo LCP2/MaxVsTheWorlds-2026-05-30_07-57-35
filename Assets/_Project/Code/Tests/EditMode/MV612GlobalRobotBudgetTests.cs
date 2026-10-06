@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 
@@ -120,12 +121,11 @@ namespace MaxWorlds.Tests.EditMode
                 FieldInfo timerField = typeof(EnemySpawner).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance);
                 timerField.SetValue(spawner, 999f); // past CurrentInterval - isolates GlobalHasRoom as the only variable
 
-                // A fresh factory's EffectiveMaxLiveEnemies ramps from startingRobots (authored 0,
-                // YT-200: a run starts with no robots on the field) up as DifficultyDirector.Normalized
-                // climbs - both 0 by default here, which would gate WantsToEmit on ITS OWN local cap
-                // instead of the field-wide budget this test targets. Dial startingRobots up so the
-                // local cap has headroom and GlobalHasRoom is the only variable left under test.
-                DevTuning.StartingRobots = 4f;
+                // MV-1093: WantsToEmit now also requires the shed's own area cadence to author SOMETHING
+                // (an unconfigured spawner's cadence is empty by design) - unrelated to the field-wide
+                // budget this test targets, so give it one authored kind to isolate GlobalHasRoom as the
+                // only variable, same as the timer/StartingRobots setup above already does.
+                spawner.ConfigureAreaComposition(new WorldComposition { rusher = 1 });
 
                 Assert.IsTrue(spawner.WantsToEmit,
                     "a shed with an empty field and its own cadence ready must want to emit - the field-wide budget must not be blocking it");

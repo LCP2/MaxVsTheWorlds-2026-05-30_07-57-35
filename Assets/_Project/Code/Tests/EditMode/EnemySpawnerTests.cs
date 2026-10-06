@@ -30,25 +30,12 @@ namespace MaxWorlds.Tests.EditMode
             RobotEnemy.ResetRegistry();
         }
 
-        private static void Set(object o, string field, object value) =>
-            o.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)
-             .SetValue(o, value);
-
-        [Test]
-        public void ProductionPerMinute_ConvertsToTheEquivalentSecondsInterval()
-        {
-            _go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _go.name = "Mower Hutch";
-            _go.transform.position = new Vector3(0f, 1f, 15f);
-            _go.AddComponent<MowerHutch>().Build();   // RequireComponent brings EnemySpawner
-            var spawner = _go.GetComponent<EnemySpawner>();
-            Set(spawner, "rampSeconds", 0f);   // collapse the ramp so the steady-state value applies now
-
-            DevTuning.RobotProductionPerMinute = 30f;   // 30/min == one every 2 seconds
-
-            Assert.AreEqual(2.0f, spawner.CurrentInterval, 0.01f,
-                "30 robots/minute must convert to a 2-second interval (60 / 30)");
-        }
+        // MV-1093 culled ProductionPerMinute_ConvertsToTheEquivalentSecondsInterval here: a live shed's
+        // CurrentInterval no longer ramps off spawnIntervalStart/rampSeconds/spawnIntervalMin at all —
+        // MV-1093 replaced that whole model with a flat Invasion-Level lerp (4.0s at level 0 -> 2.0s at
+        // max), so DevTuning.RobotProductionPerMinute (which only ever fed the old steady-state end of
+        // the ramp) no longer has any live effect on a shed's cadence. The replacement coverage for the
+        // new formula is MV1093LiveShedProductionTests.
 
         /// <summary>
         /// MV-643 (AC1+AC2): a shed may only ever emit a kind its own area's authored composition
