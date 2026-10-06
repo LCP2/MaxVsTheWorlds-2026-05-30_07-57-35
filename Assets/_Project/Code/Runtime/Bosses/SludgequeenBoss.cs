@@ -12,8 +12,9 @@ namespace MaxWorlds.Bosses
 {
     /// <summary>
     /// Sludgequeen — the Wet Well boss (MV-696): a colossal sewage-pumping rig standing in a 44x44 arena
-    /// whose floor she floods. Modelled on <see cref="BigBermudaBoss"/> — slow walker, standoff, zero
-    /// contact damage, every attack a volley — but her signature is the FLOOR, not an add swarm: at
+    /// whose floor she floods. Modelled on <see cref="BigBermudaBoss"/> — slow walker, standoff, every
+    /// attack a volley, and (MV-1083) the same passive contact damage on top — but her signature is the
+    /// FLOOR, not an add swarm: at
     /// 100-50% HP the south half of the well is ankle-deep in ooze (slow + damage); below 50%, after a
     /// 3 s tell, the whole floor floods and only the map-authored deck islands (and the centre block)
     /// stay dry. <see cref="FloodRect"/>/<see cref="IsDry"/> are resolved values — an EditMode test
@@ -44,6 +45,25 @@ namespace MaxWorlds.Bosses
         private CharacterController _cc;
         private Transform _target;
         private IDamageable _targetDamageable;
+
+        /// <summary>MV-1083: Max, specifically — set once in <see cref="AcquireTarget"/> and never
+        /// reassigned. Same split as <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>'s own
+        /// <c>_playerTarget</c>/<c>_target</c>: <see cref="_target"/> is the CURRENT chase/face/attack
+        /// target, which <see cref="RetargetIfNeeded"/> may swing onto a nearby Sentinel; contact
+        /// damage against Max always goes through this field instead, so the Sentinel loop in
+        /// <see cref="TickContactDamage"/> can never double-hit whichever Sentinel happens to be
+        /// <see cref="_target"/> at the time.</summary>
+        private Transform _playerTarget;
+
+        /// <summary>MV-1083: the Sentinel <see cref="_target"/> is currently engaged with, or null
+        /// while chasing Max — same bookkeeping as <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>'s own
+        /// <c>_engagedSentinel</c>.</summary>
+        private Sentinel _engagedSentinel;
+
+        /// <summary>MV-1083: seconds left before another contact-damage tick can land — same
+        /// "no free first hit" convention as <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>'s own
+        /// <c>_contactCooldownTimer</c> (MV-720).</summary>
+        private float _contactCooldownTimer;
 
         // Same wall/route handling as BigBermudaBoss (MV-590/MV-667) — a boss this size still has to
         // navigate the arena's cover, not beeline through it.
@@ -162,6 +182,7 @@ namespace MaxWorlds.Bosses
             _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
             _health = new DestructibleHealth(SludgequeenTuning.Health);
             _health.Destroyed += OnDeath;
+            _contactCooldownTimer = SludgequeenTuning.ContactCooldown; // MV-1083: no free first hit
             AcquireTarget();
         }
 
@@ -250,12 +271,12 @@ namespace MaxWorlds.Bosses
         private void TickFight(float dt)
         {
             if (_target == null) { AcquireTarget(); return; }
+            RetargetIfNeeded();
             Approach(dt);
             FaceTarget();
+            TickContactDamage(dt);
             TickGlobVolley(dt);
             TickBrood(dt);
-
-            if (_targetDamageable == null) _targetDamageable = _target.GetComponent<IDamageable>();
             TickFloodDamage(dt, _target.position, _targetDamageable);
         }
 
@@ -266,12 +287,24 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>The actual approach-and-steer step, dt/target-parameterized so a test can drive it
-        /// directly — same shape and same reasoning as <see cref="BigBermudaBoss.TickApproach"/>.</summary>
+        /// directly — same shape and same reasoning as <see cref="BigBermudaBoss.TickApproach"/>.
+        /// MV-1083: the stop distance is no longer the fixed <see cref="SludgequeenTuning.Standoff"/>
+        /// — it is <see cref="ContactReachTo"/>'s own live number (the exact reach
+        /// <see cref="TickContactDamage"/> checks) minus <see cref="SludgequeenTuning.StandoffMargin"/>,
+        /// same reasoning as <see cref="BigBermudaBoss.TickApproach"/>. Reaching it no longer means a
+        /// dead stop either — see <see cref="DriftAtStandoff"/>, same MV-720 "a parked boss reads as a
+        /// statue" rule.</summary>
         public void TickApproach(float dt, Vector3 targetPosition)
         {
             Vector3 to = targetPosition - transform.position;
             to.y = 0f;
-            if (to.magnitude <= SludgequeenTuning.Standoff) return;
+            float stopDistance = ContactReachTo(_target) - SludgequeenTuning.StandoffMargin;
+
+            if (to.magnitude <= stopDistance)
+            {
+                DriftAtStandoff(dt, to, SludgequeenTuning.MoveSpeed);
+                return;
+            }
 
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, targetPosition,
                 useZoneRoute: true, budget: _routeBudget, dt: dt);
@@ -283,6 +316,18 @@ namespace MaxWorlds.Bosses
             CharacterControllerMotion.SafeMove(_cc, desired * SludgequeenTuning.MoveSpeed * dt);
         }
 
+        /// <summary>MV-1083: same circling drift as <see cref="BigBermudaBoss.DriftAtStandoff"/>, so
+        /// Sludgequeen never stops dead at standoff either.</summary>
+        private void DriftAtStandoff(float dt, Vector3 to, float speed)
+        {
+            if (to.sqrMagnitude < 0.0001f) return; // exactly on top of the target -- no ring to walk
+            Vector3 inward = to.normalized;
+            Vector3 tangent = new Vector3(-inward.z, 0f, inward.x) * _preferSign;
+
+            Vector3 desired = _wallLatch.Tick(tangent, transform.position, dt, _preferSign);
+            CharacterControllerMotion.SafeMove(_cc, desired * speed * dt);
+        }
+
         private void OnControllerColliderHit(ControllerColliderHit hit) => HandleWallContact(hit.collider, hit.normal);
 
         /// <summary>Same wall-vs-character split as <see cref="BigBermudaBoss.HandleWallContact"/> — a
@@ -292,6 +337,113 @@ namespace MaxWorlds.Bosses
             if (Mathf.Abs(normal.y) >= 0.5f) return;
             if (collider.TryGetComponent<CharacterController>(out _)) return;
             _wallLatch.NoteHit(normal);
+        }
+
+        /// <summary>MV-1083: Sludgequeen hurts on contact too — "Bosses must do damage to Max and
+        /// Sentinels in every world" (Lee, 2026-09-30) is not a BigBermudaBoss-only rule. Same shape as
+        /// <see cref="BigBermudaBoss.TickContactDamage"/>: rate-limited, distance-based against the
+        /// boss's own WORLD-space collider radius, independent of <see cref="TickFloodDamage"/> (a
+        /// separate, position-based floor hazard).</summary>
+        private void TickContactDamage(float dt)
+        {
+            _contactCooldownTimer -= dt;
+            if (_contactCooldownTimer > 0f) return;
+
+            float bossRadius = WorldRadius(_cc, transform);
+            // Always Max directly, never _target -- _target may currently BE a Sentinel
+            // (RetargetIfNeeded), and that Sentinel is already covered by the loop below.
+            bool hitSomething = DamageIfTouching(_playerTarget, bossRadius);
+
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel s = sentinels[i];
+                if (DamageIfTouching(s != null ? s.transform : null, bossRadius)) hitSomething = true;
+            }
+
+            if (hitSomething) _contactCooldownTimer = SludgequeenTuning.ContactCooldown;
+        }
+
+        private bool DamageIfTouching(Transform t, float bossRadius)
+        {
+            if (t == null) return false;
+            Vector3 to = t.position - transform.position; to.y = 0f;
+            float reach = bossRadius + TargetRadius(t) + SludgequeenTuning.ContactSkin;
+            if (to.magnitude > reach) return false;
+
+            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return false;
+            Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : Vector3.forward;
+            damageable.TakeDamage(new DamageInfo(SludgequeenTuning.ContactDamagePerTick, transform.position, dir, Team.Enemy));
+            return true;
+        }
+
+        private static float TargetRadius(Transform t) =>
+            t.TryGetComponent<CharacterController>(out var cc) ? WorldRadius(cc, t) : EnemyArchetype.PlayerRadius;
+
+        private static float WorldRadius(CharacterController cc, Transform t)
+        {
+            Vector3 scale = t.lossyScale;
+            return cc.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        }
+
+        /// <summary>MV-1083: the exact world-space contact reach <see cref="TickContactDamage"/> would
+        /// check for <paramref name="target"/> right now — the SAME number <see cref="TickApproach"/>
+        /// stops just inside of. Falls back to <see cref="EnemyArchetype.PlayerRadius"/> when
+        /// <paramref name="target"/> is null.</summary>
+        private float ContactReachTo(Transform target)
+        {
+            float targetRadius = target != null ? TargetRadius(target) : EnemyArchetype.PlayerRadius;
+            return WorldRadius(_cc, transform) + targetRadius + SludgequeenTuning.ContactSkin;
+        }
+
+        /// <summary>MV-1083: re-decide whether to chase Max or the nearest Sentinel — same
+        /// proximity-only rule as <see cref="BigBermudaBoss.RetargetIfNeeded"/> (itself mirroring
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s MV-362 rule). <see cref="TickContactDamage"/> is
+        /// untouched by this — it always hits <see cref="_playerTarget"/> directly plus every Sentinel
+        /// in <see cref="Sentinel.Active"/>, so this only changes who the boss WALKS at, FACES and
+        /// floods under, never who it can hurt.</summary>
+        private void RetargetIfNeeded()
+        {
+            if (_playerTarget == null) return;
+
+            if (_engagedSentinel != null && !_engagedSentinel.IsAlive)
+            {
+                _engagedSentinel = null;
+                SetTarget(_playerTarget);
+            }
+
+            MapData map = EnemyNavigation.Map;
+            float distToPlayer = Vector3.Distance(transform.position, _playerTarget.position);
+            Sentinel nearest = SentinelTargeting.Nearest(transform.position);
+            bool nearestSameLevel = nearest != null
+                && CombatLevel.SameLevel(map, transform.position, nearest.transform.position);
+            float distToSentinel = nearestSameLevel
+                ? Vector3.Distance(transform.position, nearest.transform.position)
+                : float.MaxValue;
+
+            bool engageSentinel = nearestSameLevel &&
+                SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToSentinel, SentinelTargeting.AggroRadius);
+
+            if (engageSentinel && nearest != _engagedSentinel)
+            {
+                _engagedSentinel = nearest;
+                SetTarget(nearest.transform);
+            }
+            else if (!engageSentinel && _engagedSentinel != null)
+            {
+                _engagedSentinel = null;
+                SetTarget(_playerTarget);
+            }
+        }
+
+        /// <summary>Points <see cref="_target"/>/<see cref="_targetDamageable"/> at a new goal together
+        /// — <see cref="TickFloodDamage"/> reads both off the same tick, so letting them drift apart
+        /// (a stale <see cref="_targetDamageable"/> left over from before a retarget) would apply the
+        /// flood's damage to the WRONG body at the new target's position.</summary>
+        private void SetTarget(Transform t)
+        {
+            _target = t;
+            _targetDamageable = t != null ? t.GetComponent<IDamageable>() : null;
         }
 
         // ---------------------------------------------------------------- glob volley (MV-696 §2)
@@ -455,7 +607,9 @@ namespace MaxWorlds.Bosses
         private void AcquireTarget()
         {
             var p = GameObject.FindGameObjectWithTag("Player");
-            if (p != null) _target = p.transform;
+            if (p == null) return;
+            _playerTarget = p.transform;
+            SetTarget(p.transform);
         }
 
         private Vector3 PlanarToTarget()

@@ -27,6 +27,17 @@ namespace MaxWorlds.Bosses
         public const float MoveSpeed = BossTuning.MoveSpeed;
         public const float Standoff = BossTuning.Standoff;
 
+        // ---------------------------------------------------------------- contact damage (MV-1083)
+        //
+        // "Bosses must do damage to Max and Sentinels in every world" (Lee, 2026-09-30) applies to
+        // every boss class, not just BigBermudaBoss -- Sludgequeen gets the same passive
+        // damaging-presence mechanic (BossTuning's own MV-720/1037 block), not a second one.
+
+        public const float ContactDamagePerTick = BossTuning.ContactDamagePerTick;
+        public const float ContactCooldown = BossTuning.ContactCooldown;
+        public const float ContactSkin = BossTuning.ContactSkin;
+        public const float StandoffMargin = BossTuning.StandoffMargin;
+
         // ---------------------------------------------------------------- the flood floor
 
         /// <summary>Same slow amount every other sludge hazard in the roster uses
