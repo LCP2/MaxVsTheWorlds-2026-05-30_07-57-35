@@ -271,6 +271,13 @@ namespace MaxWorlds.Tests.EditMode
             GameObject go = c.gameObject;
             if (go.name == "Map Floor") return true;
             if (go.GetComponent<StructuralWall>() != null) return true;
+            // MV-1087: a channel kerb/crossing is real walkable floor, same convention as "Map Floor"
+            // itself (both StructuralFloor-marked) — its own art IS its collider's visible box (kerb) or
+            // intentionally bare (crossing deck, backing gapped slats), neither of which this coverage
+            // rule's "art blankets the whole zone for free" trap (see ActiveRenderers' own doc) applies
+            // to, since a "Sludge"-hosted renderer is already excluded from the art list it compares
+            // against.
+            if (go.GetComponent<MaxWorlds.Core.StructuralFloor>() != null) return true;
 
             var robot = go.GetComponent<RobotEnemy>();
             if (robot != null)

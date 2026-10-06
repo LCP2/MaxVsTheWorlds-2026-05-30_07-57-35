@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Arena
 {
@@ -326,6 +327,17 @@ namespace MaxWorlds.Arena
             float multiplier = 1f;
             if (map?.entities == null) return multiplier;
             if (y >= map.deckHeight - 0.5f) return multiplier;
+
+            // MV-1087: a channel kerb or crossing deck (StormdrainKit.BuildChannelTrough/
+            // BuildChannelCrossings, both StructuralFloor-marked real colliders now) is real floor a
+            // mover can stand ON TOP of, even though a crossing's own XZ footprint still falls inside
+            // the sludge rect below it (it spans the channel's full width). A crossing deck's own
+            // resolved top sits exactly half its own slat height above the tile's floor datum — the
+            // same number StormdrainKit builds it at — so anywhere at or above that genuinely cleared
+            // the ooze; anywhere below it still reads as standing in sludge at floor height, same as
+            // before this ticket. A kerb's own top sits well clear of this (its own XZ footprint is
+            // outside the sludge rect to begin with), so this gate only ever matters for a crossing.
+            if (y >= StormdrainKit.ChannelCrossingSlatHeight * 0.5f) return multiplier;
 
             foreach (MapEntity e in map.SludgeEntities())
             {

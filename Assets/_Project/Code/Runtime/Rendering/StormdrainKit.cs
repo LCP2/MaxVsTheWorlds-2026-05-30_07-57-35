@@ -25,7 +25,10 @@ namespace MaxWorlds.Rendering
     ///
     /// Nothing built here carries a collider — same contract every
     /// <see cref="MaxWorlds.Arena.BackyardDressing"/> and <see cref="ReefDressing"/> prop keeps: the
-    /// map's own wall boxes and each cover block's own box remain the only things that stop anyone.
+    /// map's own wall boxes and each cover block's own box remain the only things that stop anyone —
+    /// with one exception: MV-1087's channel kerbs and crossing decks (<see cref="MakeWalkable"/>) are
+    /// real, <see cref="StructuralFloor"/>-marked floor, because they read as walkways in the key art
+    /// and must not let Max's legs sink through them.
     /// </summary>
     public static class StormdrainKit
     {
@@ -324,6 +327,13 @@ namespace MaxWorlds.Rendering
         private const float ChannelCrossingOverhang = 0.6f;
         private const float ChannelCrossingSlatPitch = 0.34f;
         private const float ChannelCrossingPostHeight = 0.75f;
+
+        /// <summary>MV-1087: a crossing's own slats sit centred on their parent's local Y = 0 (the
+        /// tile's pre-ticket floor datum — see <see cref="BuildChannelTrough"/>'s own doc), so a deck's
+        /// resolved top sits exactly half of this above that datum. Public so
+        /// <see cref="MaxWorlds.Arena.Map.MapGeometry"/> can gate its own sludge-exemption Y threshold
+        /// on the SAME number rather than a duplicated guess.</summary>
+        public const float ChannelCrossingSlatHeight = 0.05f;
 
         /// <summary>MV-906: above this channel run length, its crossing spacing (MV-801 change 5) widens
         /// by <see cref="LongChannelSpacingScale"/> — comfortably above every ordinary World 2 channel
@@ -1606,10 +1616,11 @@ namespace MaxWorlds.Rendering
                 Box(root, "Trough Lip B", new Vector3(-width * 0.5f, lipY, 0f),
                     new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
 
-                Box(root, "Channel Kerb A", new Vector3(width * 0.5f + ChannelKerbWidth * 0.5f, kerbY, 0f),
-                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
-                Box(root, "Channel Kerb B", new Vector3(-width * 0.5f - ChannelKerbWidth * 0.5f, kerbY, 0f),
-                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
+                Vector3 kerbSizeZ = new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth);
+                MakeWalkable(Box(root, "Channel Kerb A", new Vector3(width * 0.5f + ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    kerbSizeZ, KerbConcrete), kerbSizeZ);
+                MakeWalkable(Box(root, "Channel Kerb B", new Vector3(-width * 0.5f - ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    kerbSizeZ, KerbConcrete), kerbSizeZ);
             }
             else
             {
@@ -1637,10 +1648,11 @@ namespace MaxWorlds.Rendering
                 Box(root, "Trough Lip B", new Vector3(0f, lipY, -depth * 0.5f),
                     new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
 
-                Box(root, "Channel Kerb A", new Vector3(0f, kerbY, depth * 0.5f + ChannelKerbWidth * 0.5f),
-                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
-                Box(root, "Channel Kerb B", new Vector3(0f, kerbY, -depth * 0.5f - ChannelKerbWidth * 0.5f),
-                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
+                Vector3 kerbSizeX = new Vector3(width, ChannelKerbHeight, ChannelKerbWidth);
+                MakeWalkable(Box(root, "Channel Kerb A", new Vector3(0f, kerbY, depth * 0.5f + ChannelKerbWidth * 0.5f),
+                    kerbSizeX, KerbConcrete), kerbSizeX);
+                MakeWalkable(Box(root, "Channel Kerb B", new Vector3(0f, kerbY, -depth * 0.5f - ChannelKerbWidth * 0.5f),
+                    kerbSizeX, KerbConcrete), kerbSizeX);
             }
 
             BuildChannelCrossings(root, width, depth, alongZ, seed);
@@ -1653,8 +1665,9 @@ namespace MaxWorlds.Rendering
         /// <see cref="ChannelCrossingWidth"/> wide along the direction of travel, spans the channel's
         /// full width plus <see cref="ChannelCrossingOverhang"/> each side, slatted crosswise at
         /// <see cref="ChannelCrossingSlatPitch"/>, with a rust handrail post at each of its four
-        /// corners. Dressing only — no collider, same contract every other piece in this kit keeps, so
-        /// this never changes where anything can walk.</summary>
+        /// corners. MV-1087: the slats themselves stay dressing-only (gapped, not a single walkable
+        /// face), but the crossing's own root gets one invisible walkable deck (<see cref="MakeWalkable"/>)
+        /// spanning the slats' own envelope, so a mover's capsule never snags a gap between them.</summary>
         private static void BuildChannelCrossings(Transform root, float width, float depth, bool alongZ, int seed)
         {
             float run = alongZ ? depth : width;
@@ -1682,10 +1695,17 @@ namespace MaxWorlds.Rendering
                     float slatOffset = ((s + 0.5f) / slats - 0.5f) * ChannelCrossingWidth;
                     Vector3 slatLocal = alongZ ? new Vector3(0f, 0f, slatOffset) : new Vector3(slatOffset, 0f, 0f);
                     Vector3 slatSize = alongZ
-                        ? new Vector3(crossSpan, 0.05f, ChannelCrossingSlatPitch * 0.8f)
-                        : new Vector3(ChannelCrossingSlatPitch * 0.8f, 0.05f, crossSpan);
+                        ? new Vector3(crossSpan, ChannelCrossingSlatHeight, ChannelCrossingSlatPitch * 0.8f)
+                        : new Vector3(ChannelCrossingSlatPitch * 0.8f, ChannelCrossingSlatHeight, crossSpan);
                     Box(plank, $"Slat{s}", slatLocal, slatSize, RustDark, SurfaceKind.Metal);
                 }
+
+                // MV-1087: one continuous walkable deck spanning the slats' own envelope, at the same
+                // local Y they share — real floor a mover steps onto, not the gapped slats themselves.
+                Vector3 deckSize = alongZ
+                    ? new Vector3(crossSpan, ChannelCrossingSlatHeight, ChannelCrossingWidth)
+                    : new Vector3(ChannelCrossingWidth, ChannelCrossingSlatHeight, crossSpan);
+                MakeWalkable(plank.gameObject, deckSize);
 
                 for (int corner = 0; corner < 4; corner++)
                 {
@@ -1858,6 +1878,18 @@ namespace MaxWorlds.Rendering
                 if (Application.isPlaying) Object.Destroy(col);
                 else Object.DestroyImmediate(col);
             }
+        }
+
+        /// <summary>MV-1087: the one deliberate exception to <see cref="Strip"/> — a channel kerb or
+        /// crossing deck is real walkable floor, not scenery, so it keeps a collider sized to
+        /// <paramref name="size"/> (matching its own visible box) and gets marked
+        /// <see cref="StructuralFloor"/>, same convention <see cref="MaxWorlds.Arena.Map.MapRuntime"/>
+        /// already uses for the map's own floor slab.</summary>
+        public static void MakeWalkable(GameObject go, Vector3 size)
+        {
+            var collider = go.AddComponent<BoxCollider>();
+            collider.size = size;
+            go.AddComponent<StructuralFloor>();
         }
 
         private static void Paint(GameObject go, SurfaceKind kind, Color tone)

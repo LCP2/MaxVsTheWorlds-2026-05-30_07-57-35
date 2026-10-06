@@ -88,11 +88,16 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.Greater(flowMesh.vertexCount, 0, $"{tile.name}'s Flow mesh resolved with no vertices");
                 }
 
-                // ---- nothing built here carries a collider ----
+                // ---- nothing built here carries a collider, except MV-1087's walkable channel kerbs/
+                // crossings (StructuralFloor-marked, the map's own floor-slab convention) ----
                 Transform dressingHost = host.Find("Stormdrain Dressing");
                 Assert.IsNotNull(dressingHost, "the dressing host was never built");
-                Assert.IsEmpty(dressingHost.GetComponentsInChildren<UnityEngine.Collider>(true),
-                    "dressing is scenery — the map's own wall/cover boxes are the only colliders allowed");
+                var strayColliders = dressingHost.GetComponentsInChildren<UnityEngine.Collider>(true)
+                    .Where(c => c.GetComponent<MaxWorlds.Core.StructuralFloor>() == null)
+                    .ToList();
+                Assert.IsEmpty(strayColliders,
+                    "dressing is scenery — the map's own wall/cover boxes and MV-1087's StructuralFloor-marked " +
+                    "channel kerbs/crossings are the only colliders allowed");
 
                 // ---- a second Dress() call rebuilds; it does not double every piece ----
                 StormdrainDressing.DressReport report2 = StormdrainDressing.Dress(host, w2map, build.Cover);

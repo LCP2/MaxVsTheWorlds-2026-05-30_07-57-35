@@ -33,7 +33,10 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 MapBuild build = MapRuntime.Build(map, host);
-                int collidersBefore = host.GetComponentsInChildren<Collider>(true).Length;
+                // MV-1087: excludes StructuralFloor-marked colliders (the map's own floor-slab
+                // convention) -- the dressing pass now legitimately adds those for channel kerbs/
+                // crossings, so this invariant is scoped to everything ELSE Dress() must leave alone.
+                int collidersBefore = NonStructuralFloorColliderCount(host);
 
                 // ---- bullet 3 setup: find a 'pipe' cover piece and its collider BEFORE the dressing
                 // pass touches anything, so "unchanged" below compares two resolved snapshots, not an
@@ -54,8 +57,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(dressingHost, "the dressing host was never built");
 
                 // ---- bullet 2: dressing never adds, removes or resizes a collider anywhere under the
-                // map host — only the cover piece's own renderer is ever swapped out. ----
-                int collidersAfter = host.GetComponentsInChildren<Collider>(true).Length;
+                // map host (beyond MV-1087's own StructuralFloor channel pieces) — only the cover
+                // piece's own renderer is ever swapped out. ----
+                int collidersAfter = NonStructuralFloorColliderCount(host);
                 Assert.AreEqual(collidersBefore, collidersAfter,
                     "StormdrainDressing.Dress must never add, remove or resize a collider");
 
@@ -112,6 +116,10 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(host.gameObject);
             }
         }
+
+        private static int NonStructuralFloorColliderCount(Transform host) =>
+            host.GetComponentsInChildren<Collider>(true)
+                .Count(c => c.GetComponent<MaxWorlds.Core.StructuralFloor>() == null);
 
         private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
         {

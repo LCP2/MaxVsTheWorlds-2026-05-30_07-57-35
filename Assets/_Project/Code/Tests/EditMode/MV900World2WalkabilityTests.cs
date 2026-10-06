@@ -353,11 +353,20 @@ namespace MaxWorlds.Tests.EditMode
             return null;
         }
 
+        private static readonly Collider[] s_overlapBuffer = new Collider[32];
+
         private static bool IsBlocked(float x, float z, float groundY)
         {
             var p0 = new Vector3(x, groundY + Radius, z);
             var p1 = new Vector3(x, groundY + Height - Radius, z);
-            return Physics.CheckCapsule(p0, p1, Radius, ~0, QueryTriggerInteraction.Ignore);
+            // MV-1087: a StructuralFloor-marked collider (a channel kerb/crossing, same convention as
+            // the map's own "Map Floor") is a mover's own real CharacterController.stepOffset's job to
+            // climb, not a wall this flat capsule-overlap check can see past -- it never counts as
+            // blocking here, the same way it never stopped Max/a robot in the real build.
+            int count = Physics.OverlapCapsuleNonAlloc(p0, p1, Radius, s_overlapBuffer, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+                if (s_overlapBuffer[i].GetComponent<StructuralFloor>() == null) return true;
+            return false;
         }
     }
 }
