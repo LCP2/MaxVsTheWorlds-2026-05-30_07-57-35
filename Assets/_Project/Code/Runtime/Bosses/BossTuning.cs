@@ -159,16 +159,22 @@ namespace MaxWorlds.Bosses
         /// emptying" beat before the shell closes.</summary>
         public const float VolleyOpenHold = 0.7f;
 
-        /// <summary>Robots flung per volley before enrage.</summary>
-        public const int RobotsPerVolley = 2;
+        /// <summary>Robots flung per volley before enrage. MV-1085: 2 -> 3 (Lee: "not enough robots"),
+        /// made safe to raise by the same ticket's landing fix — every add now lands inside the boss's
+        /// own area, so a bigger wave can never again jam the cap shut with stranded, undying adds.</summary>
+        public const int RobotsPerVolley = 3;
 
-        /// <summary>Robots flung per volley once enraged — a bigger wave on top of the faster cadence.</summary>
-        public const int RobotsPerVolleyEnraged = 3;
+        /// <summary>Robots flung per volley once enraged — a bigger wave on top of the faster cadence.
+        /// MV-1085: 3 -> 4, same reasoning as <see cref="RobotsPerVolley"/>.</summary>
+        public const int RobotsPerVolleyEnraged = 4;
 
         /// <summary>The ceiling on adds alive at once. The boss fight is the ONE time nothing else caps
         /// the robot count (every factory is dead by now), so this is the whole "kiteable, not a wall of
-        /// bodies" guarantee (YT-63/74/80) — a volley that would breach it throws fewer, or none.</summary>
-        public const int MaxConcurrentAdds = 6;
+        /// bodies" guarantee (YT-63/74/80) — a volley that would breach it throws fewer, or none.
+        /// MV-1085: 6 -> 10 (Lee: "not enough robots") — safe to raise alongside the per-volley counts
+        /// above once a stranded add can no longer hold a slot forever (see
+        /// <see cref="BigBermudaBoss.CountLandedAddsInArea"/>).</summary>
+        public const int MaxConcurrentAdds = 10;
 
         /// <summary>Whether it flings adds in phase one, or only once enraged. True = a second threat
         /// from the opening; false = the swarm is the phase-two escalation. Ships true so the signature

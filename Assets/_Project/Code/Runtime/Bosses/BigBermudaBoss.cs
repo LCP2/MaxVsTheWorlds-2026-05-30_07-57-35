@@ -115,7 +115,6 @@ namespace MaxWorlds.Bosses
         private Transform _addsRoot;                    // world-space, unit scale — NOT under the moving boss
         private readonly List<AddInFlight> _inFlight = new List<AddInFlight>(8);
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _addPools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
-        private int _liveAdds;                          // landed + chasing; capped by MaxConcurrentAdds
         private Collider[] _playerColliders;
 
         /// <summary>One robot mid-throw: it is visible but its own logic is switched off, so the boss
@@ -543,6 +542,16 @@ namespace MaxWorlds.Bosses
         /// The volley is vetoed (<c>canVent = false</c>) only while the arena already holds its cap of
         /// adds, which is the whole kiteability guarantee for a fight where no factory is left to bound
         /// the robot count.
+        ///
+        /// MV-1085: "on field" is counted fresh every time, never carried in a decrement-only field —
+        /// see <see cref="CountLandedAddsInArea"/>. A boss standing near a wall used to fling adds clean
+        /// over it (<see cref="LaunchVolley"/>'s old unclamped <see cref="BroodArc.Landing"/> call); they
+        /// fell forever outside the map (MV-955's repeating FALLS log), could never reach Max, could
+        /// never die, and a counter that only ever went down on death held their slot open for good —
+        /// six of those and the boss never produced another robot (Lee, device, 2026-10-06). Every add
+        /// now lands inside the boss's own area no matter what (<see cref="ResolveLanding"/>), so this
+        /// jam should not recur — but counting it fresh, excluding anything outside the area, means even
+        /// a stray one from an old save or an edge case can never again wedge the cap shut.
         /// </summary>
         private void TickVolley(float dt)
         {
@@ -550,7 +559,7 @@ namespace MaxWorlds.Bosses
             bool phaseAllows = enraged || BossTuning.VolleyFiresBeforeEnrage;
 
             int maxAdds = Mathf.Max(0, Mathf.RoundToInt(DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds)));
-            int onField = _liveAdds + _inFlight.Count;
+            int onField = CountLandedAddsInArea() + _inFlight.Count;
 
             bool canVent = phaseAllows && onField < maxAdds;
             _volley.Tick(dt, enraged, canVent);
@@ -584,9 +593,8 @@ namespace MaxWorlds.Bosses
 
                 Vector3 from = BroodArc.Muzzle(pos, facing, side,
                     BossTuning.HatchMuzzleSide, BossTuning.HatchMuzzleHeight);
-                Vector3 to = BroodArc.Landing(pos, facing, side,
-                    BossTuning.VolleyLandingSide, BossTuning.VolleyLandingForward,
-                    archetype.SpawnHeight, spread);
+                Vector3 to = ResolveLanding(from, pos, facing, side, spread,
+                    archetype.SpawnHeight, archetype.ColliderRadius);
 
                 RobotEnemy add = TakeAdd(archetype);
                 add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
@@ -615,6 +623,76 @@ namespace MaxWorlds.Bosses
             }
         }
 
+        /// <summary>How many flanks-then-closer attempts <see cref="ResolveLanding"/> tries before giving
+        /// up and landing the add against the boss's own body. 6 gives 3 "rings" (each flank once) at
+        /// progressively tighter distances — ample for any wall this boss can stand against; nothing in
+        /// this fight's geometry is so tight it would ever need more.</summary>
+        private const int LandingAttempts = 6;
+
+        /// <summary>How much <see cref="ResolveLanding"/> shrinks the throw's side/forward/spread
+        /// distances every second attempt (once both flanks have been tried at the current distance).</summary>
+        private const float LandingShrinkStep = 0.3f;
+
+        /// <summary>MV-1085: where add #<paramref name="preferredSide"/>/<paramref name="spread"/> of
+        /// this volley actually lands — never past the boss's own arena wall, however close the boss
+        /// stands to it. The raw <see cref="BroodArc.Landing"/> point is only ever a SUGGESTION (a fixed
+        /// distance to a flank plus spread, with no awareness of the arena at all); a boss standing
+        /// within that distance of a wall used to throw an add clean over it, where it fell forever
+        /// outside the map (MV-955's repeating FALLS log), could never reach Max, could never die, and
+        /// jammed the volley shut once enough of those had piled up. This tries the preferred flank
+        /// first, then the other, then both again progressively closer to the boss, accepting the first
+        /// candidate that both lands inside the boss's own authored area (<see cref="ClampLandingToArea"/>,
+        /// shrunk by the add's own <paramref name="bodyRadius"/> so its BODY never clips the wall either)
+        /// and has a clear line from the muzzle — the same <see cref="LineOfSight"/> cover check every
+        /// other ranged read in this game already uses, so an add is never thrown through a wall it
+        /// can't see over either. Falls back to a point hugging the boss's own body — always inside the
+        /// area it stands in, and nothing can stand between a body and its own skin — if every attempt
+        /// is blocked.</summary>
+        private Vector3 ResolveLanding(Vector3 muzzle, Vector3 bossPos, Quaternion facing, float preferredSide,
+            float spread, float groundHeight, float bodyRadius)
+        {
+            for (int attempt = 0; attempt < LandingAttempts; attempt++)
+            {
+                float side = (attempt % 2 == 0) ? preferredSide : -preferredSide;
+                float shrink = 1f - (attempt / 2) * LandingShrinkStep;
+
+                Vector3 candidate = BroodArc.Landing(bossPos, facing, side,
+                    BossTuning.VolleyLandingSide * shrink, BossTuning.VolleyLandingForward * shrink,
+                    groundHeight, spread * shrink);
+                Vector3 clamped = ClampLandingToArea(candidate, bodyRadius);
+
+                if (LineOfSight.Clear(muzzle, clamped)) return clamped;
+            }
+
+            Vector3 atBoss = bossPos + facing * Vector3.forward * bodyRadius;
+            atBoss.y = groundHeight;
+            return ClampLandingToArea(atBoss, bodyRadius);
+        }
+
+        /// <summary>Pulls <paramref name="point"/>'s XZ back inside the boss's own authored area
+        /// (<see cref="_wakeArea"/>) by <paramref name="bodyRadius"/> from every wall — the same
+        /// pull-back-from-the-edge shape <see cref="MapZone.Clamp"/> already gives a room — and snaps Y
+        /// onto the real walkable surface through <see cref="MapData.SnapToWalkableSurface"/>, the same
+        /// path <see cref="MaxWorlds.Enemies.EnemySpawner.ResolveMusterPoint"/> already resolves a
+        /// muster point through, so an add can never land floating off a deck edge either. Degrades to
+        /// the raw point with no map registered (<see cref="EnemyNavigation.Map"/> is null in a bare test
+        /// fixture) or no authored area (<see cref="_wakeArea"/> defaults to an empty Rect for a boss
+        /// nobody called <see cref="SetWakeArea"/> on) — nothing to clamp into either way.</summary>
+        private Vector3 ClampLandingToArea(Vector3 point, float bodyRadius)
+        {
+            MapData map = EnemyNavigation.Map;
+            Vector3 resolved = map != null ? map.SnapToWalkableSurface(transform.position, point, bodyRadius) : point;
+
+            if (_wakeArea.width <= 0f || _wakeArea.height <= 0f) return resolved;
+
+            float minX = _wakeArea.xMin + bodyRadius, maxX = _wakeArea.xMax - bodyRadius;
+            float minZ = _wakeArea.yMin + bodyRadius, maxZ = _wakeArea.yMax - bodyRadius;
+            if (minX > maxX) minX = maxX = _wakeArea.center.x;
+            if (minZ > maxZ) minZ = maxZ = _wakeArea.center.y;
+
+            return new Vector3(Mathf.Clamp(resolved.x, minX, maxX), resolved.y, Mathf.Clamp(resolved.z, minZ, maxZ));
+        }
+
         /// <summary>Fly every in-flight add one step along its parabola. On landing it re-enables the
         /// robot — <see cref="RobotEnemy"/>'s OnEnable resets it into Chase and it self-acquires Max — and
         /// lets the player walk through it, so from that instant it is an ordinary robot.</summary>
@@ -638,7 +716,6 @@ namespace MaxWorlds.Bosses
 
                     a.Robot.enabled = true;   // OnEnable -> ResetState -> Chase, full health, acquires Max
                     LetThePlayerThrough(a.Robot.gameObject);
-                    _liveAdds++;
                     _inFlight.RemoveAt(i);
                 }
                 else
@@ -703,10 +780,35 @@ namespace MaxWorlds.Bosses
 
         private void OnAddDied(RobotEnemy e)
         {
-            _liveAdds = Mathf.Max(0, _liveAdds - 1);
             if (!_addPools.TryGetValue(e.Kind, out Stack<RobotEnemy> pool))
                 _addPools[e.Kind] = pool = new Stack<RobotEnemy>(4);
             pool.Push(e);   // back to its own kind's pool, reused on the next volley — no GC churn
+        }
+
+        /// <summary>MV-1085: this boss's own adds that currently hold a cap slot — alive, active, and
+        /// standing inside its own authored area. Counted fresh off <see cref="_addsRoot"/> every time
+        /// <see cref="TickVolley"/> considers venting, never carried in a decrement-only field: a dead
+        /// one deactivates itself (<see cref="RobotEnemy"/>'s own death path), an in-flight one is
+        /// excluded by its own disabled <see cref="RobotEnemy.enabled"/> (it is counted separately, in
+        /// <see cref="_inFlight"/>), and — the actual jam this replaces — one that somehow ended up
+        /// outside the boss's own area (MV-955: flung over a wall, forever falling, never dying) is
+        /// excluded too, so it can never again hold a slot the boss can't ever free.</summary>
+        private int CountLandedAddsInArea()
+        {
+            if (_addsRoot == null) return 0;
+
+            int count = 0;
+            for (int i = 0; i < _addsRoot.childCount; i++)
+            {
+                Transform child = _addsRoot.GetChild(i);
+                if (child == null || !child.gameObject.activeInHierarchy) continue;
+                if (!child.TryGetComponent<RobotEnemy>(out RobotEnemy robot) || !robot.enabled || !robot.IsAlive) continue;
+
+                Vector3 p = child.position;
+                if (!_wakeArea.Contains(new Vector2(p.x, p.z))) continue;
+                count++;
+            }
+            return count;
         }
 
         /// <summary>The container the adds live in. Top-level and unit-scaled ON PURPOSE: the boss MOVES,
