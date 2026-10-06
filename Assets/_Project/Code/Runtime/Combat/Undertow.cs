@@ -94,8 +94,11 @@ namespace MaxWorlds.Combat
         /// <summary>MV-1070 spec #4: "tip speed capped at 18 m/s".</summary>
         public const float TipMaxSpeed = 18f;
 
-        /// <summary>MV-1070 spec #3: "about 0.35m across" figure-of-eight sway when nothing is sought.</summary>
-        public const float SwayWidth = 0.35f;
+        /// <summary>MV-1121 Change 3: "the tip sweeps side to side across the aim line, 1.25 m each way
+        /// at 0.8 Hz (today 0.35 m)" — up from MV-1070's 0.35m-across figure-of-eight (each-way amplitude
+        /// ~0.175m), so the free end reads as visibly searching. This is now the each-way amplitude
+        /// itself (<see cref="SwayOffset"/> no longer halves it), not a peak-to-peak "width".</summary>
+        public const float SwayWidth = 2.5f;
 
         /// <summary>MV-1070 spec #3: "~0.8 Hz".</summary>
         public const float SwayHz = 0.8f;
@@ -303,7 +306,7 @@ namespace MaxWorlds.Combat
                 // Animate the crackle strands/prongs every frame the stream is up, not just on the tick
                 // cadence — the fire tick above (if it ran this frame) already refreshed StreamEndPoint
                 // indirectly via the tip, but UpdateStream also needs to run every frame regardless.
-                _vfx.UpdateStream(transform.position, StreamEndPoint, dt);
+                _vfx.UpdateStream(transform.position, StreamEndPoint, dir, dt);
             }
         }
 
@@ -488,9 +491,9 @@ namespace MaxWorlds.Combat
             return origin + dir * dist;
         }
 
-        /// <summary>MV-1070 spec #3: "sways around it in a slow figure-of-eight, about 0.35m across,
-        /// ~0.8Hz, so it never sits still" — a lemniscate traced in the plane perpendicular to the aim
-        /// direction.</summary>
+        /// <summary>MV-1121 Change 3: "sweeps side to side across the aim line, 1.25 m each way at 0.8 Hz"
+        /// — a lemniscate traced in the plane perpendicular to the aim direction, same shape MV-1070
+        /// shipped, just a bigger, more visibly-searching sway.</summary>
         private static Vector3 SwayOffset(Branch b, Vector3 right, Vector3 up, float dt)
         {
             b.SwayTime += dt;

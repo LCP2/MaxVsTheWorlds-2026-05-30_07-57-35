@@ -11,9 +11,7 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-1070 — World 3's UNDERTOW beam's tip must genuinely SEEK a robot (magnetic pull, visible
     /// overshoot, snap-on within <see cref="Undertow.LatchDistance"/>) rather than only latching when
-    /// Max is already aimed dead-on inside the lance's own 3-degree fire cone (MV-1064's shape), and must
-    /// end at a deliberate full-width finish with forked crackle prongs rather than a soft particle
-    /// "ball" at the hit point.
+    /// Max is already aimed dead-on inside the lance's own 3-degree fire cone (MV-1064's shape).
     ///
     /// A standalone <see cref="Undertow"/> with no <see cref="MaxWorlds.Player.PlayerController"/> aim
     /// source (same "fresh probe, aimSource stays null, SetFiring drives it directly" idiom
@@ -24,10 +22,15 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Fails on b2589a1 (the commit before this ticket): a robot 25 degrees off aim sits outside
     /// <c>Undertow</c>'s old 3-degree acquire cone, so it is never latched and never damaged at all (the
-    /// first "reaches within 0.4m" assertion below times out); there is no <c>UndertowProng0/1/2</c> child
-    /// at all (AC3's renderer lookup fails to find it); and the pre-fix splash flare has no resolved
-    /// LineRenderer geometry to assert a "no renderer wider than the sheath" bound against in the first
-    /// place, since the old tip punctuation was a particle burst, not a line.
+    /// first "reaches within 0.4m" assertion below times out).
+    ///
+    /// MV-1121 removed this test's own former closing block: it asserted three forked "prong" child
+    /// LineRenderers at the tip (MV-1070's deliberate finish), which MV-1121 explicitly deleted outright
+    /// ("no jaw, prong, cross-bar, ball, orb, dot or sprite at the tip" — Lee, 2026-10-07) and replaced
+    /// with a plain cut end; that removal — and the finish itself — is covered by
+    /// <c>MV1121UndertowBeamRefinementTests</c> instead. MV-1121 also widened the free-aim sway (Change
+    /// 3), which is why this test's own stay-near-rest budget below reads 1.5m rather than its original
+    /// 0.6m.
     /// </summary>
     public sealed class MV1070UndertowSeekingTipTests
     {
@@ -110,9 +113,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(Vector3.Distance(swayA, swayB), 0.1f,
                 $"with no candidate the tip must sway >=0.1m over 0.3s, moved only {Vector3.Distance(swayA, swayB):0.000}m");
 
+            // MV-1121 widened the sway from "0.35m across" to "1.25m each way" (Undertow.SwayWidth 0.35 ->
+            // 2.5) so the free end reads as visibly searching -- the stay-near-rest budget widens with it.
             Vector3 restPoint = origin + aimDir * undertow.Range;
-            Assert.LessOrEqual(Vector3.Distance(swayA, restPoint), 0.6f, "the sway must stay within 0.6m of the aim point at Range");
-            Assert.LessOrEqual(Vector3.Distance(swayB, restPoint), 0.6f, "the sway must stay within 0.6m of the aim point at Range");
+            Assert.LessOrEqual(Vector3.Distance(swayA, restPoint), 1.5f, "the sway must stay within 1.5m of the aim point at Range");
+            Assert.LessOrEqual(Vector3.Distance(swayB, restPoint), 1.5f, "the sway must stay within 1.5m of the aim point at Range");
 
             // --- AC1 (seek half): Robot A, 6m out, 25 degrees off aim -- outside the lance's own 3-degree
             // fire cone but well inside the tip's 35-degree acquire cone. Robot B, 5m out, 50 degrees off
@@ -224,29 +229,13 @@ namespace MaxWorlds.Tests.EditMode
             // combat tip this same test just asserted on above.
             for (int i = 0; i < 20; i++) InvokeTick(undertow, dt); // 1s, many lag time-constants
 
-            // The core stays full width to the tip, and the finish is three prong LINE renderers
-            // starting at the tip -- never a ball/orb/dot.
+            // The core stays full width to the tip (MV-1121: a plain cut end, no prong/jaw/ball — see
+            // MV1121UndertowBeamRefinementTests for that removal's own coverage).
             Transform coreT = _undertowGo.transform.Find("UndertowCore");
             Assert.IsNotNull(coreT, "UndertowVfx.Init must build a child named UndertowCore");
             var core = coreT.GetComponent<LineRenderer>();
             Assert.GreaterOrEqual(core.widthMultiplier, 0.22f * 0.85f,
                 "the core must keep >=85% of its own width all the way to the tip (spec #8)");
-
-            Transform sheathT = _undertowGo.transform.Find("UndertowSheath");
-            Assert.IsNotNull(sheathT, "UndertowVfx.Init must build a child named UndertowSheath");
-            float sheathWidth = sheathT.GetComponent<LineRenderer>().widthMultiplier;
-
-            for (int p = 0; p < 3; p++)
-            {
-                Transform prongT = _undertowGo.transform.Find($"UndertowProng{p}");
-                Assert.IsNotNull(prongT, $"UndertowVfx.Init must build a tip-prong child UndertowProng{p} (spec #9)");
-                var prong = prongT.GetComponent<LineRenderer>();
-                Assert.IsTrue(prong.enabled, $"prong {p} must be enabled while the stream is firing");
-                Assert.LessOrEqual(Vector3.Distance(prong.GetPosition(0), undertow.StreamEndPoint), 0.05f,
-                    $"prong {p} must start within 0.05m of the tip");
-                Assert.LessOrEqual(prong.widthMultiplier, sheathWidth,
-                    $"prong {p} must not be wider than the sheath itself -- no ball (spec #9), was {prong.widthMultiplier:0.000}m");
-            }
         }
     }
 }

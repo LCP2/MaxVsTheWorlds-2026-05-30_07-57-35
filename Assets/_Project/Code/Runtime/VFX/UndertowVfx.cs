@@ -5,14 +5,16 @@ namespace MaxWorlds.VFX
     /// <summary>
     /// UNDERTOW's own firing VFX (MV-1034, replacing the charge/cavitation shot's telegraph; MV-1046
     /// made the beam itself snake and corkscrew rather than just its crackle strands; MV-1064 made it
-    /// latch onto a robot and wrap it; MV-1070 made the tip itself seek and gave it a deliberate,
-    /// non-ball finish): a writhing beam from the muzzle rather than a straight laser line — a
-    /// white-hot core inside a cyan sheath, both walking one shared, animated centreline pinned at the
-    /// muzzle and the tip, wrapped by a handful of orange/red/amber crackle strands whose phase
-    /// animates every frame — a muzzle flare, three short forked crackle prongs at the tip itself
-    /// (<see cref="UpdateProngs"/>, MV-1070 spec #9 — no ball, dot or orb), and — while latched
-    /// (<see cref="SetLatch"/>) — three coloured coils spiralling the latched robot and a steady spray
-    /// of sparks off its body.
+    /// latch onto a robot and wrap it; MV-1070 made the tip itself seek, then MV-1121 removed the
+    /// deliberate-finish prongs MV-1070 added — no jaw, nothing at all on the end): a writhing beam from
+    /// the muzzle rather than a straight laser line — a white-hot core inside a cyan sheath, both walking
+    /// one shared, animated centreline pinned at the muzzle and bent along a curve toward the tip
+    /// (<see cref="UpdateStream"/>, MV-1121 — the beam always leaves the gun on the aim line and bends to
+    /// wherever the tip is), wrapped by a handful of orange/red/amber crackle strands whose phase
+    /// animates every frame — a muzzle flare, and — while latched (<see cref="SetLatch"/>) — three
+    /// coloured coils and an orange/white lock ring sized from the latched robot's own visible renderer
+    /// bounds (MV-1121, never <see cref="CharacterController.radius"/>) spiralling/encircling it, and a
+    /// steady spray of sparks off its body.
     ///
     /// Owned entirely by the art stream, same split as <see cref="WaterVfx"/>/<see cref="LppeVfx"/>:
     /// <see cref="MaxWorlds.Combat.Undertow"/> drives it with cosmetic-only calls
@@ -20,8 +22,8 @@ namespace MaxWorlds.VFX
     /// <see cref="SetLatch"/>) and turning it off changes nothing but the picture.
     ///
     /// Built from <see cref="LineRenderer"/>s updated in place every frame (the core/sheath/strand/coil/
-    /// prong positions are overwritten, never reallocated) plus three shared <see cref="VfxBurst"/>s for
-    /// the muzzle flare, latch sparks and latch impact flare — no per-frame allocation, so the MV527
+    /// lock-ring positions are overwritten, never reallocated) plus three shared <see cref="VfxBurst"/>s
+    /// for the muzzle flare, latch sparks and latch impact flare — no per-frame allocation, so the MV527
     /// allocation guard holds.
     /// </summary>
     [DisallowMultipleComponent]
@@ -37,8 +39,15 @@ namespace MaxWorlds.VFX
         /// <summary>MV-1064 spec: "5 strands (was 3)".</summary>
         public const int StrandCount = 5;
 
-        /// <summary>MV-1064 spec: "amplitude 0.3 -&gt; 0.45 m".</summary>
-        public const float StrandAmplitude = 0.45f;
+        /// <summary>MV-1121: "The strands wrap at a constant 0.24 m from the centre-line (so the bundle
+        /// stays inside the 0.70 m sheath)" — down from MV-1064's 0.45m, which peaked only at mid-beam;
+        /// this is now the CONSTANT wrap distance once <see cref="StrandRampFraction"/> has ramped up.</summary>
+        public const float StrandAmplitude = 0.24f;
+
+        /// <summary>MV-1121: "ramping up from zero only over the first 6% of the beam at the gun" — the
+        /// strand wrap no longer tapers back down toward the tip (MV-1064's shape), so the bundle reads
+        /// full width right up to the plain cut end.</summary>
+        private const float StrandRampFraction = 0.06f;
 
         /// <summary>Spec: "Segments ≥ 24 points from muzzle to end point" — shared by the centreline
         /// (core/sheath) and the strand wrap sampling, so both walk the same t values.</summary>
@@ -49,14 +58,14 @@ namespace MaxWorlds.VFX
         private const float WaveCyclesPerBeam = 2.5f;
         private const float PhaseSpeed = 6f;
 
+        /// <summary>MV-1121: "a quadratic curve from the muzzle to the tip whose control point is on the
+        /// aim line, 55% of the muzzle-to-tip distance out from the muzzle" — the beam therefore always
+        /// leaves the gun along the aim direction and bends to wherever the tip actually is, rather than
+        /// swinging the whole chord (MV-1046's straight muzzle-&gt;tip line).</summary>
+        private const float CurveControlFraction = 0.55f;
+
         // --- MV-1064 latch wrap-around: 3 coils spiralling the latched robot feet-to-top.
         private const int CoilCount = 3;
-
-        /// <summary>Spec: "3 coils ... 0.10 m thick".</summary>
-        private const float CoilThickness = 0.10f;
-
-        /// <summary>Spec: "radius = the robot's own radius + 0.15 m".</summary>
-        private const float CoilRadiusPad = 0.15f;
 
         /// <summary>Spec: "~2.2 turns each".</summary>
         private const float CoilTurns = 2.2f;
@@ -64,6 +73,10 @@ namespace MaxWorlds.VFX
         /// <summary>Spec: "rotating at 2 revolutions per second".</summary>
         private const float CoilRevsPerSecond = 2f;
         private const int CoilSegments = 28;
+
+        /// <summary>MV-1121: "rising from 0.15 m to the top of the robot's renderer bounds" — measured up
+        /// from the renderer bounds' own floor, not from a CharacterController's feet.</summary>
+        private const float CoilBottomHeight = 0.15f;
 
         /// <summary>Spec: "Coils appear within 0.1 s of latching".</summary>
         private const float CoilAppearSeconds = 0.1f;
@@ -73,6 +86,34 @@ namespace MaxWorlds.VFX
 
         /// <summary>Spec: "The last 1 m of the beam curls into the coils rather than stopping dead."</summary>
         private const float CurlLength = 1f;
+
+        // --- MV-1121 lock sizing: "Lock radius R = half the widest horizontal extent of the robot's
+        // combined renderer bounds, plus 0.25 m. Never the controller radius."
+        private const float LockRadiusPad = 0.25f;
+
+        /// <summary>Legacy fallback pad for the CharacterController-radius shape MV-1064 originally
+        /// shipped — used ONLY when <see cref="ResolveLockGeometry"/> finds no renderer to measure (a
+        /// test double built without a <see cref="RobotRig"/>; every real in-game robot always carries
+        /// one). Keeps every existing EditMode test's coil/curl geometry numerically unchanged.</summary>
+        private const float LegacyRadiusPad = 0.15f;
+
+        /// <summary>MV-1121 spec: "Line thickness for the ring and coils = 0.14 m x (R / 0.75), clamped
+        /// to 0.14 to 0.30 m."</summary>
+        private const float LockThicknessBase = 0.14f;
+        private const float LockThicknessRefRadius = 0.75f;
+        private const float LockThicknessMin = 0.14f;
+        private const float LockThicknessMax = 0.30f;
+
+        /// <summary>MV-1121 spec: "The ring is drawn 1.25 times that [thickness]."</summary>
+        private const float LockRingThicknessMultiplier = 1.25f;
+
+        /// <summary>MV-1121 spec: "It appears at 1.6 R and closes to R over 0.12 s (the "snap shut")".</summary>
+        private const float LockRingOvershootMultiplier = 1.6f;
+        private const float LockRingSnapSeconds = 0.12f;
+
+        /// <summary>MV-1121 spec: "a closed circle ... (0.12 m above the floor)".</summary>
+        private const float LockRingHeightAboveFloor = 0.12f;
+        private const int LockRingSegments = 48;
 
         // --- MV-1064 latch sparks + impact flare.
         private const float SparksPerSecond = 12f;   // spec: "10-14 ... per second"
@@ -89,37 +130,6 @@ namespace MaxWorlds.VFX
 
         /// <summary>Spec: "muzzle flare 0.5 m" (was 0.35m).</summary>
         private const float MuzzleFlareSize = 0.5f;
-
-        // --- MV-1070 tip prongs (spec #9): "A deliberate end, NOT a ball." Three short LineRenderers
-        // forking forward from the tip — one white-hot flanked by one orange and one red — replace the
-        // old splash-flare particle burst at the hit point, which read as a soft glowing blob (the "ball"
-        // Lee called out) rather than a beam simply stopping.
-        private const int ProngCount = 3;
-        private static readonly float[] ProngLength = { 0.35f, 0.25f, 0.25f };   // white, orange, red
-        private const float ProngThickness = 0.08f;
-
-        /// <summary>Spec: "fork forward" — each flanking prong splays this many degrees off the beam's
-        /// own tangent at the tip; the centre (white-hot) prong runs straight along it.</summary>
-        private const float ProngSpreadDegrees = 18f;
-
-        /// <summary>Spec: "flickering and re-angling a few times a second".</summary>
-        private const float ProngReangleHz = 5f;
-
-        /// <summary>Spec: "On latch the prongs flare to 1.4x length for 0.15 s."</summary>
-        private const float ProngLatchFlareMultiplier = 1.4f;
-        private const float ProngLatchFlareSeconds = 0.15f;
-
-        private static readonly Color[] ProngColors =
-        {
-            new Color(1.9f, 1.95f, 2f, 1f), // white-hot, same over-bright trick as MuzzleColor
-            new Color(1f, 0.478f, 0.102f, 0.85f),   // #FF7A1A (orange) -- EmberColors[0]
-            new Color(1f, 0.165f, 0.071f, 0.85f),   // #FF2A12 (red) -- EmberColors[1]
-        };
-
-        /// <summary>Which way each prong splays off the tip tangent: the white-hot prong (0) runs
-        /// straight; the flanking orange/red prongs (1/2) splay symmetrically. A fixed lookup rather
-        /// than a fresh array literal every <see cref="UpdateProngs"/> call.</summary>
-        private static readonly float[] ProngAngleSign = { 0f, 1f, -1f };
 
         // MV-1046 centreline snake/corkscrew — every constant below is the ticket's own authored
         // number, not a tuned guess.
@@ -166,11 +176,17 @@ namespace MaxWorlds.VFX
         private static readonly Color SparkColorB = new Color(1f, 0.2f, 0.08f, 1f);
         private static readonly Color ImpactFlareColor = new Color(1f, 0.45f, 0.12f, 1f);
 
+        /// <summary>MV-1121 spec: "orange #FF7A1A with a white line inside it" — the lock ring's own
+        /// outer/inner pair, the same core/sheath (white-inside-colour) idiom the beam itself already uses.</summary>
+        private static readonly Color LockRingOuterColor = new Color(1f, 0.478f, 0.102f, 1f);
+        private static readonly Color LockRingInnerColor = new Color(1.6f, 1.65f, 1.7f, 1f);
+
         private LineRenderer _core;
         private LineRenderer _sheath;
         private LineRenderer[] _strands;
         private LineRenderer[] _coils;
-        private LineRenderer[] _prongs;
+        private LineRenderer _lockRingOuter;
+        private LineRenderer _lockRingInner;
         private VfxBurst _muzzleFlare;
         private VfxBurst _latchSparks;
         private VfxBurst _latchFlare;
@@ -189,20 +205,21 @@ namespace MaxWorlds.VFX
         private float _coilPhase;
 
         /// <summary>0..1, eased toward 1 while latched (<see cref="CoilAppearSeconds"/>) and back to 0
-        /// once it drops (<see cref="CoilVanishSeconds"/>) — drives both the coils' own alpha and the
-        /// beam's end-of-line curl in <see cref="UpdateStream"/>, so the two never visibly desync.</summary>
+        /// once it drops (<see cref="CoilVanishSeconds"/>) — drives both the coils'/ring's own alpha and
+        /// the beam's end-of-line curl in <see cref="UpdateStream"/>, so the three never visibly desync.</summary>
         private float _latchVisibility;
         private float _sparkAccumulator;
 
-        // --- MV-1070 tip prongs.
-        private float _prongReangleTimer;
-        private float _prongAngleOffset;
-
-        /// <summary>Counts down from <see cref="ProngLatchFlareSeconds"/> the instant the latch visibility
-        /// starts rising from 0 (a fresh latch, not an already-held one) — drives the prongs' one-shot
-        /// length flare (spec #9).</summary>
-        private float _prongFlareTimer;
+        /// <summary>MV-1121: the lock ring's own "snap shut" timer — seconds since the CURRENT latch
+        /// began (reset on a fresh latch's rising edge), driving the ring's ease from 1.6R down to R
+        /// over <see cref="LockRingSnapSeconds"/>.</summary>
+        private float _lockSnapElapsed;
         private bool _wasLatchedLastFrame;
+
+        /// <summary>The latched target's own resolved lock radius (<see cref="ResolveLockGeometry"/>) —
+        /// cached each <see cref="SetLatch"/> call and read back by <see cref="UpdateStream"/>'s end-of-
+        /// line curl the same frame (SetLatch always runs first; see <see cref="MaxWorlds.Combat.Undertow.Tick"/>).</summary>
+        private float _lockRadius;
 
         /// <summary>Whether the stream's renderers are currently enabled — what
         /// <see cref="MaxWorlds.Combat.Undertow.IsStreamVisible"/> reads.</summary>
@@ -216,29 +233,35 @@ namespace MaxWorlds.VFX
             if (_initialized) return;
             _initialized = true;
 
-            Material glow = VfxMaterials.Additive(VfxMaterials.Glow());
+            // MV-1121: every Undertow LINE uses a texture soft ACROSS its width and constant ALONG its
+            // length (VfxMaterials.LineGlow), not the radial Glow blob a LineRenderer stretches end to
+            // end — that stretch is exactly what read as "thick in the middle, wispy at the gun and the
+            // tip". Particle bursts (muzzle flare / latch sparks / impact flare) are untouched by this —
+            // they keep the radial Glow blob, which is correct for a one-shot point flash.
+            Material lineGlow = VfxMaterials.Additive(VfxMaterials.LineGlow());
+            Material burstGlow = VfxMaterials.Additive(VfxMaterials.Glow());
 
-            _sheath = BuildLine("UndertowSheath", SheathWidth, glow, positionCount: Segments + 1);
-            _core = BuildLine("UndertowCore", CoreWidth, glow, positionCount: Segments + 1);
+            _sheath = BuildLine("UndertowSheath", SheathWidth, lineGlow, positionCount: Segments + 1);
+            _core = BuildLine("UndertowCore", CoreWidth, lineGlow, positionCount: Segments + 1);
             _centerline = new Vector3[Segments + 1];
 
             _strands = new LineRenderer[StrandCount];
             for (int i = 0; i < StrandCount; i++)
-                _strands[i] = BuildLine($"UndertowStrand{i}", StrandWidth, glow, positionCount: Segments + 1);
+                _strands[i] = BuildLine($"UndertowStrand{i}", StrandWidth, lineGlow, positionCount: Segments + 1);
 
             _coils = new LineRenderer[CoilCount];
             for (int i = 0; i < CoilCount; i++)
-                _coils[i] = BuildLine($"UndertowCoil{i}", CoilThickness, glow, positionCount: CoilSegments + 1);
+                _coils[i] = BuildLine($"UndertowCoil{i}", LockThicknessMin, lineGlow, positionCount: CoilSegments + 1);
 
-            // MV-1070: 3 short 2-point prongs forking forward from the tip (spec #9) -- built even
-            // though they're only positioned/enabled once the stream is up (UpdateProngs).
-            _prongs = new LineRenderer[ProngCount];
-            for (int i = 0; i < ProngCount; i++)
-                _prongs[i] = BuildLine($"UndertowProng{i}", ProngThickness, glow, positionCount: 2);
+            // MV-1121: the lock ring — a closed circle round the latched robot, sized from its own
+            // renderer bounds. Built as an outer/inner pair (orange with a white line inside it), the
+            // same core/sheath idiom the beam itself already uses.
+            _lockRingOuter = BuildLine("UndertowLockRing", LockThicknessMin * LockRingThicknessMultiplier, lineGlow, positionCount: LockRingSegments + 1);
+            _lockRingInner = BuildLine("UndertowLockRingCore", LockThicknessMin * 0.4f, lineGlow, positionCount: LockRingSegments + 1);
 
-            _muzzleFlare = new VfxBurst("UndertowMuzzleFlare", glow, 24, 0f, perFrameCap: 4);
-            _latchSparks = new VfxBurst("UndertowLatchSparks", glow, 64, 0f, perFrameCap: 6);
-            _latchFlare = new VfxBurst("UndertowLatchFlare", glow, 16, 0f, perFrameCap: 2);
+            _muzzleFlare = new VfxBurst("UndertowMuzzleFlare", burstGlow, 24, 0f, perFrameCap: 4);
+            _latchSparks = new VfxBurst("UndertowLatchSparks", burstGlow, 64, 0f, perFrameCap: 6);
+            _latchFlare = new VfxBurst("UndertowLatchFlare", burstGlow, 16, 0f, perFrameCap: 2);
         }
 
         private LineRenderer BuildLine(string name, float width, Material material, int positionCount)
@@ -269,7 +292,6 @@ namespace MaxWorlds.VFX
             _sheath.enabled = on;
             _core.enabled = on;
             for (int i = 0; i < _strands.Length; i++) _strands[i].enabled = on;
-            for (int i = 0; i < _prongs.Length; i++) _prongs[i].enabled = on;
         }
 
         /// <summary>Re-lay the core/sheath/strand geometry between <paramref name="muzzle"/> and
@@ -277,7 +299,7 @@ namespace MaxWorlds.VFX
         /// <paramref name="dt"/>. Called every frame the stream is up — cheap, no allocation — so the
         /// beam tracks Max moving/aiming even between the fire-tick cadence that moves
         /// <paramref name="endPoint"/> itself.</summary>
-        public void UpdateStream(Vector3 muzzle, Vector3 endPoint, float dt)
+        public void UpdateStream(Vector3 muzzle, Vector3 endPoint, Vector3 aimDirection, float dt)
         {
             if (!_initialized || !IsStreaming) return;
             _phase += dt * PhaseSpeed;
@@ -285,16 +307,34 @@ namespace MaxWorlds.VFX
 
             Vector3 axis = endPoint - muzzle;
             float length = axis.magnitude;
-            Vector3 dir = length > 1e-4f ? axis / length : Vector3.forward;
-            Vector3 right = Vector3.Cross(Vector3.up, dir);
+
+            // MV-1121: the wrap/snake frame is anchored to the AIM direction, not the muzzle->tip chord —
+            // the beam always leaves the gun along the aim line (Change 3), so the plane it snakes/wraps
+            // in has to be the one that direction defines, not one that rotates with wherever the tip
+            // happens to be.
+            Vector3 aimDir = aimDirection.sqrMagnitude > 1e-6f
+                ? aimDirection.normalized
+                : (length > 1e-4f ? axis / length : Vector3.forward);
+            Vector3 right = Vector3.Cross(Vector3.up, aimDir);
             if (right.sqrMagnitude < 1e-6f) right = Vector3.right;
             right.Normalize();
-            Vector3 wrapUp = Vector3.Cross(dir, right);
+            Vector3 wrapUp = Vector3.Cross(aimDir, right);
 
-            // --- The whole beam snakes: one centreline, walked by both the core and the sheath.
+            // MV-1121 Change 3: a quadratic curve from the muzzle to the tip, control point on the aim
+            // line CurveControlFraction of the way out — replaces MV-1046's straight muzzle->tip chord
+            // as the base the snake wave rides on.
+            Vector3 control = muzzle + aimDir * (length * CurveControlFraction);
+
+            // --- The whole beam snakes along that curve: one centreline, walked by both the core and
+            // the sheath.
             for (int i = 0; i <= Segments; i++)
             {
                 float t = (float)i / Segments;
+                float oneMinusT = 1f - t;
+                Vector3 basePoint = oneMinusT * oneMinusT * muzzle
+                    + 2f * oneMinusT * t * control
+                    + t * t * endPoint;
+
                 // Both ends pinned (muzzle, exact hit point): taper is 0 at t=0 and t=1. Clamped to
                 // >=0 first — float rounding can make sin(t*pi) a tiny NEGATIVE epsilon right at t=1,
                 // and Mathf.Pow(negative, non-integer) is NaN, not a small negative number.
@@ -307,11 +347,11 @@ namespace MaxWorlds.VFX
                 // second, uncorrelated wobble.
                 float vertical = VerticalAmplitude * taper * Mathf.Cos(theta1);
 
-                Vector3 target = Vector3.Lerp(muzzle, endPoint, t) + right * lateral + Vector3.up * vertical;
+                Vector3 target = basePoint + right * lateral + Vector3.up * vertical;
 
                 // MV-1064 spec #9: "The last 1m of the beam curls into the coils rather than stopping
                 // dead." Only the tail of the centreline (within CurlLength of the end point) bulges
-                // outward toward the coil radius; eased by _latchVisibility so the curl appears/vanishes
+                // outward toward the lock radius; eased by _latchVisibility so the curl appears/vanishes
                 // in step with the coils themselves. The weight is a bump (0 at the curl's own start AND
                 // at t=1) rather than a ramp all the way to t=1, so the very last point stays pinned
                 // exactly on the end point — the invariant MV-1046's own test (and the hit-point math
@@ -325,7 +365,7 @@ namespace MaxWorlds.VFX
                     {
                         float curlT = Mathf.InverseLerp(curlStart, length, distFromMuzzle);
                         float curlWeight = Mathf.Sin(curlT * Mathf.PI); // 0 at curlStart and at t=1, peak mid-way
-                        float curlRadius = CoilRadius() * curlWeight * _latchVisibility;
+                        float curlRadius = _lockRadius * curlWeight * _latchVisibility;
                         float curlAngle = _coilPhase + curlT * CoilTurns * 2f * Mathf.PI;
                         Vector3 curlOffset = (right * Mathf.Cos(curlAngle) + wrapUp * Mathf.Sin(curlAngle)) * curlRadius;
                         target += curlOffset;
@@ -355,6 +395,9 @@ namespace MaxWorlds.VFX
             _sheath.endColor = SheathColor;
 
             // --- The crackle strands wrap the snaking centreline (offset from it, not the straight line).
+            // MV-1121: constant 0.24m wrap, ramped up from zero only over the first 6% of the beam —
+            // replaces MV-1064's sin(t*pi) taper, which peaked at mid-beam and fell back to zero at the
+            // tip (the beam must now end at a PLAIN CUT, full width).
             for (int s = 0; s < _strands.Length; s++)
             {
                 LineRenderer strand = _strands[s];
@@ -364,7 +407,7 @@ namespace MaxWorlds.VFX
                 for (int i = 0; i <= Segments; i++)
                 {
                     float t = (float)i / Segments;
-                    float strandTaper = Mathf.Sin(t * Mathf.PI);   // 0 at both ends, peak at the middle
+                    float strandTaper = t < StrandRampFraction ? (t / StrandRampFraction) : 1f;
                     float wave = Mathf.Sin(t * WaveCyclesPerBeam * Mathf.PI * 2f + _phase + s * 2.1f);
                     Vector3 point = _centerline[i] + wrapDir * (StrandAmplitude * strandTaper * wave);
                     strand.SetPosition(i, point);
@@ -374,66 +417,49 @@ namespace MaxWorlds.VFX
                 strand.startColor = c;
                 strand.endColor = c;
             }
-
-            UpdateProngs(dt, right);
         }
 
-        /// <summary>MV-1070 spec #9: three short prongs forking forward from the tip along its own
-        /// tangent (the last centreline segment, not the straight muzzle->tip axis, so they follow the
-        /// snake/corkscrew rather than cutting across it) — re-angled a few times a second and briefly
-        /// flared on a fresh latch. Never a ball: each prong is a thin 2-point line, and the longest
-        /// (0.35m) stays well inside the sheath's own 0.70m width.</summary>
-        private void UpdateProngs(float dt, Vector3 right)
+        /// <summary>The combined world-space renderer bounds of every renderer under
+        /// <paramref name="target"/>, plus a legacy CharacterController-radius fallback for a test double
+        /// built with no renderer at all — every real in-game robot carries a <see cref="RobotRig"/> and
+        /// always takes the renderer-bounds branch. MV-1121 spec: lock radius is half the widest
+        /// HORIZONTAL extent of that combined bounds, plus <see cref="LockRadiusPad"/> — "never the
+        /// controller radius".</summary>
+        private static void ResolveLockGeometry(Transform target, CharacterController cc,
+            out float radius, out Vector3 centre, out float floorY, out float topY)
         {
-            _prongReangleTimer += dt;
-            float reangleInterval = 1f / ProngReangleHz;
-            if (_prongReangleTimer >= reangleInterval)
+            Renderer[] renderers = target.GetComponentsInChildren<Renderer>(includeInactive: false);
+            if (renderers.Length > 0)
             {
-                _prongReangleTimer %= reangleInterval;
-                _prongAngleOffset = Random.Range(-1f, 1f) * ProngSpreadDegrees * 0.35f;
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+                radius = 0.5f * Mathf.Max(b.size.x, b.size.z) + LockRadiusPad;
+                centre = b.center;
+                floorY = b.min.y;
+                topY = b.max.y;
+                return;
             }
 
-            if (_prongFlareTimer > 0f) _prongFlareTimer = Mathf.Max(0f, _prongFlareTimer - dt);
-            float flareMul = 1f + (ProngLatchFlareMultiplier - 1f) * (_prongFlareTimer / ProngLatchFlareSeconds);
-
-            Vector3 tip = _centerline[Segments];
-            Vector3 tangent = tip - _centerline[Segments - 1];
-            if (tangent.sqrMagnitude < 1e-8f) tangent = tip - _centerline[0];
-            tangent = tangent.sqrMagnitude > 1e-8f ? tangent.normalized : Vector3.forward;
-
-            // Prong 0 (white-hot) runs straight along the tangent; 1 (orange)/2 (red) splay symmetrically
-            // off it, in the same right/up plane the strands already wrap in, re-angled together so the
-            // whole fork "flickers" as one cluster rather than each prong jittering independently.
-            for (int i = 0; i < _prongs.Length; i++)
-            {
-                float rad = ProngAngleSign[i] * (ProngSpreadDegrees + _prongAngleOffset) * Mathf.Deg2Rad;
-                Vector3 dir = tangent * Mathf.Cos(rad) + right * Mathf.Sin(rad);
-                _prongs[i].SetPosition(0, tip);
-                _prongs[i].SetPosition(1, tip + dir * (ProngLength[i] * flareMul));
-                _prongs[i].startColor = ProngColors[i];
-                _prongs[i].endColor = ProngColors[i];
-            }
+            radius = (cc != null ? cc.radius : 0.5f) + LegacyRadiusPad;
+            centre = cc != null ? cc.bounds.center : target.position;
+            float height = cc != null ? cc.height : 1.8f;
+            floorY = centre.y - height * 0.5f;
+            topY = centre.y + height * 0.5f;
         }
 
-        /// <summary>The latched target's own collider radius plus the spec's pad, or a reasonable
-        /// stand-in when there's no <see cref="CharacterController"/> to read (never 0 — a zero-radius
-        /// coil/curl would collapse onto the centreline and read as nothing).</summary>
-        private float CoilRadius() => (_coilCc != null ? _coilCc.radius : 0.5f) + CoilRadiusPad;
-
-        /// <summary>MV-1064: drives the wrap-around coils and the steady spark/impact-flare spray while
-        /// latched. Called every frame <see cref="MaxWorlds.Combat.Undertow.Tick"/> runs (not just on the
-        /// fire-tick cadence) so the coils track a moving target and the appear/vanish ease
+        /// <summary>MV-1064: drives the wrap-around coils/lock ring and the steady spark/impact-flare
+        /// spray while latched. Called every frame <see cref="MaxWorlds.Combat.Undertow.Tick"/> runs (not
+        /// just on the fire-tick cadence) so they track a moving target and the appear/vanish ease
         /// (<see cref="CoilAppearSeconds"/>/<see cref="CoilVanishSeconds"/>) is smooth. <paramref name="on"/>
         /// false with a null <paramref name="targetTransform"/>/<paramref name="targetCc"/> starts the
-        /// vanish while still showing the coils at their last known position/size.</summary>
+        /// vanish while still showing the coils/ring at their last known position/size.</summary>
         public void SetLatch(bool on, Transform targetTransform, CharacterController targetCc, float dt)
         {
             if (!_initialized) return;
 
-            // MV-1070 spec #9: "On latch the prongs flare to 1.4x length for 0.15s" -- a fresh latch
-            // only (the rising edge), not every frame the latch is simply held.
-            if (on && !_wasLatchedLastFrame) _prongFlareTimer = ProngLatchFlareSeconds;
+            bool freshLatch = on && !_wasLatchedLastFrame;
             _wasLatchedLastFrame = on;
+            if (on) _lockSnapElapsed = freshLatch ? 0f : _lockSnapElapsed + Mathf.Max(dt, 0f);
 
             if (on)
             {
@@ -446,30 +472,60 @@ namespace MaxWorlds.VFX
 
             bool show = _latchVisibility > 0f && _coilTarget != null;
             for (int i = 0; i < _coils.Length; i++) _coils[i].enabled = show;
+            _lockRingOuter.enabled = show;
+            _lockRingInner.enabled = show;
 
             if (!show)
             {
-                if (_latchVisibility <= 0f) { _coilTarget = null; _coilCc = null; }
+                if (_latchVisibility <= 0f) { _coilTarget = null; _coilCc = null; _lockRadius = 0f; }
                 return;
             }
 
-            Vector3 centre = _coilCc != null ? _coilCc.bounds.center : _coilTarget.position;
-            float radius = CoilRadius();
-            float height = _coilCc != null ? _coilCc.height : 1.8f;
-            Vector3 feet = centre - Vector3.up * (height * 0.5f);
+            ResolveLockGeometry(_coilTarget, _coilCc, out float radius, out Vector3 centre, out float floorY, out float topY);
+            _lockRadius = radius;
+
+            float thickness = Mathf.Clamp(LockThicknessBase * (radius / LockThicknessRefRadius), LockThicknessMin, LockThicknessMax);
+            float ringThickness = thickness * LockRingThicknessMultiplier;
+
+            float snapT = Mathf.Clamp01(_lockSnapElapsed / LockRingSnapSeconds);
+            float ringRadius = Mathf.Lerp(radius * LockRingOvershootMultiplier, radius, snapT);
+            float ringY = floorY + LockRingHeightAboveFloor;
+
+            _lockRingOuter.widthMultiplier = ringThickness;
+            _lockRingInner.widthMultiplier = Mathf.Min(thickness * 0.4f, ringThickness * 0.4f);
+
+            Color ringOuter = LockRingOuterColor; ringOuter.a *= _latchVisibility;
+            Color ringInner = LockRingInnerColor; ringInner.a *= _latchVisibility;
+            _lockRingOuter.startColor = _lockRingOuter.endColor = ringOuter;
+            _lockRingInner.startColor = _lockRingInner.endColor = ringInner;
+
+            for (int i = 0; i <= LockRingSegments; i++)
+            {
+                float angle = (float)i / LockRingSegments * 2f * Mathf.PI;
+                Vector3 p = new Vector3(
+                    centre.x + Mathf.Cos(angle) * ringRadius,
+                    ringY,
+                    centre.z + Mathf.Sin(angle) * ringRadius);
+                _lockRingOuter.SetPosition(i, p);
+                _lockRingInner.SetPosition(i, p);
+            }
 
             _coilPhase += dt * CoilRevsPerSecond * 2f * Mathf.PI;
+            float coilBottom = floorY + CoilBottomHeight;
+            float coilTop = Mathf.Max(coilBottom + 0.05f, topY);
 
             for (int c = 0; c < _coils.Length; c++)
             {
                 LineRenderer coil = _coils[c];
+                coil.widthMultiplier = thickness;
                 float coilPhaseOffset = (2f * Mathf.PI / _coils.Length) * c;
                 for (int i = 0; i <= CoilSegments; i++)
                 {
                     float t = (float)i / CoilSegments;
                     float angle = _coilPhase + coilPhaseOffset + t * CoilTurns * 2f * Mathf.PI;
                     Vector3 radial = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
-                    coil.SetPosition(i, feet + Vector3.up * (height * t) + radial);
+                    Vector3 basePos = new Vector3(centre.x, Mathf.Lerp(coilBottom, coilTop, t), centre.z);
+                    coil.SetPosition(i, basePos + radial);
                 }
 
                 Color col = EmberColors[c % EmberColors.Length];
@@ -506,10 +562,8 @@ namespace MaxWorlds.VFX
                 colorA: ImpactFlareColor, colorB: ImpactFlareColor);
         }
 
-        /// <summary>The per-tick punctuation (spec): a bright muzzle flare at Max. MV-1070 removed the
-        /// old splash-flare burst at the hit point — that soft particle glow was exactly the "ball"
-        /// Lee called out; the tip's own look is now carried continuously by <see cref="UpdateProngs"/>
-        /// instead of a once-per-tick burst. Called once per fire tick, not per frame.</summary>
+        /// <summary>The per-tick punctuation (spec): a bright muzzle flare at Max. Called once per fire
+        /// tick, not per frame.</summary>
         public void OnTick(Vector3 muzzle, Vector3 endPoint, Vector3 forward)
         {
             if (!_initialized) return;
@@ -539,8 +593,8 @@ namespace MaxWorlds.VFX
                 for (int i = 0; i < _strands.Length; i++) DestroyLine(_strands[i]);
             if (_coils != null)
                 for (int i = 0; i < _coils.Length; i++) DestroyLine(_coils[i]);
-            if (_prongs != null)
-                for (int i = 0; i < _prongs.Length; i++) DestroyLine(_prongs[i]);
+            DestroyLine(_lockRingOuter);
+            DestroyLine(_lockRingInner);
             Dispose(_muzzleFlare);
             Dispose(_latchSparks);
             Dispose(_latchFlare);

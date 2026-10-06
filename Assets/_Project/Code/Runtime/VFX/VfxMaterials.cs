@@ -211,6 +211,23 @@ namespace MaxWorlds.VFX
             });
         }
 
+        /// <summary>MV-1121: soft ACROSS a line, constant ALONG it — alpha depends only on distance
+        /// from the texture's own vertical centre (ny), never on horizontal position (nx). <see cref="Glow"/>
+        /// is a RADIAL blob: a <see cref="LineRenderer"/> stretches that one blob from its first point to
+        /// its last (Stretch texture mode), so brightness reads full at mid-beam and fades to nothing at
+        /// both pinned ends — UNDERTOW's own "thick in the middle, wispy at the gun and the tip" defect.
+        /// This keeps a line at the same brightness along its entire length while still falling off
+        /// softly across its width, the way a line light actually reads.</summary>
+        public static Texture2D LineGlow(int size = 64)
+        {
+            return Tex($"lineglow{size}", size, (nx, ny) =>
+            {
+                float d = Mathf.Clamp01(Mathf.Abs(ny) * 2f);     // 0 centre -> 1 edge, ACROSS only
+                float a = 1f - d;
+                return a * a;                                   // quadratic falloff, same shape as Glow's
+            });
+        }
+
         // --- internals ---
 
         private static Material Get(string key, Texture2D tex, bool additive)
