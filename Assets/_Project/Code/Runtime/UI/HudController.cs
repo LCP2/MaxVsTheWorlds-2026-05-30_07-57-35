@@ -2079,7 +2079,17 @@ namespace MaxWorlds.UI
         /// <summary>MV-1131 test seam: whether the objective strip is showing, and what it reads, same
         /// "public property, not reflection" shape as <see cref="ArenaLabelVisible"/>.</summary>
         public bool ObjectiveVisible => _objectiveRoot != null && _objectiveRoot.gameObject.activeSelf;
-        public string ObjectiveText => _objectiveLabel != null ? _objectiveLabel.text : null;
+
+        /// <summary>MV-1122: the strip's own resolved text with any rich-text colour tag stripped — the
+        /// RENDERED text (<c>_objectiveLabel.text</c> itself) still carries the tag, since
+        /// <see cref="Text.supportRichText"/> defaults true and that's what actually colours the
+        /// "ROBOTS LEFT n" portion yellow on screen (<see cref="WorldFinaleGate"/>'s own clean-up
+        /// text). A rendered colour is a Tier-3 fact (MV-465 testing policy) no EditMode test may
+        /// assert; this seam exists so a test CAN still assert the resolved CONTENT ("CLEAR THE AREA
+        /// ROBOTS LEFT 3") without tripping over markup that was never part of that content.</summary>
+        public string ObjectiveText => _objectiveLabel != null
+            ? System.Text.RegularExpressions.Regex.Replace(_objectiveLabel.text, "<.*?>", string.Empty)
+            : null;
 
         private void RefreshArenaText(bool prominent)
         {

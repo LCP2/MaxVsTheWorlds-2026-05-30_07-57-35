@@ -3173,7 +3173,7 @@ namespace MaxWorlds.Enemies
             else SetTell(Color.white); // brief hit flash; next state tick restores
         }
 
-        private void Die(Vector3 fromDir)
+        private void Die(Vector3 fromDir, bool grantsDrops = true)
         {
             // MV-428: death mid-Telegraph/Lunge must not leak the attack token — nothing else on
             // this path ever visits Recover to release it.
@@ -3192,11 +3192,28 @@ namespace MaxWorlds.Enemies
             HudSignals.EmitEnemyKilled(transform.position);
             // Announce the death to the drop system (YT-131); it decides whether loot falls out of
             // this kind. The enemy stays ignorant of pickups — the policy lives in PickupDirector.
-            MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
-            // MV-705: a Sludger's whole gimmick — killing it isn't the end.
-            if (Kind == EnemyKind.Sludger) SpawnSludgerSplit();
+            // MV-1122: grantsDrops is false for a clean-up safety-net kill (KillWithoutDrops) — the
+            // player never fought this robot, so it must not pay out either.
+            if (grantsDrops) MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
+            // MV-705: a Sludger's whole gimmick — killing it isn't the end. Gated on grantsDrops too
+            // (MV-1122): a forced clean-up kill splitting into MORE robots would fight the exact thing
+            // the thinning/hard-limit layers exist to guarantee (the area actually empties).
+            if (grantsDrops && Kind == EnemyKind.Sludger) SpawnSludgerSplit();
             Died?.Invoke(this);
             gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1122: kills this robot immediately through the ordinary death path (VFX, score)
+        /// but WITHOUT loot — what the final area's clean-up phase's safety nets (a robot outside the
+        /// area's own footprint, one the unreachable check gives up on, the no-progress thinner, the
+        /// hard time limit) call, so a robot the player never actually fought never pays out either,
+        /// while the kill still reads as a kill rather than a silent despawn. <see cref="Despawn"/> is
+        /// not this: it also suppresses the kill signal and death VFX entirely, which is right for
+        /// resetting an arena the player has left, not for a robot dying in front of them.</summary>
+        public void KillWithoutDrops()
+        {
+            if (!IsAlive) return;
+            Die(Vector3.forward, grantsDrops: false);
         }
 
         private const float SludgerSplitOffset = 0.6f;

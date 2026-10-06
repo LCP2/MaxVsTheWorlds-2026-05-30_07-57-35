@@ -34,9 +34,10 @@ namespace MaxWorlds.VFX
     /// Core on. MV-1078 reverses that: the orb (collecting the Core) is what matters now, not the boss
     /// dying — Lee, 2026-10-03, "I can't help thinking that the orb means nothing." The boss dying only
     /// latches <see cref="_finalBossDefeated"/>; the exit stays shut until every living robot in the
-    /// final area is dead too (see <see cref="OnWeaponCoreCollected"/>/<see cref="TickCleanup"/>) — the
-    /// 25s failsafe in <see cref="TickCleanup"/> is what stops one stuck robot stalling the ending
-    /// forever, the actual risk the 2026-09-26 ruling this reverses was guarding against.
+    /// final area is dead too (see <see cref="OnWeaponCoreCollected"/>/<see cref="TickCleanup(float)"/>)
+    /// — MV-1122's own four clean-up safety nets (see that ticket's own doc block, just above
+    /// <see cref="NoProgressSeconds"/>) are what stop one stuck robot stalling the ending forever, the
+    /// actual risk the 2026-09-26 ruling this reverses was guarding against.
     ///
     /// MV-964: no longer a barrier that sinks in place — opening now hands off to
     /// <see cref="WorldJoinSequence"/> to cut the REAL door <see cref="WorldTransitions"/> authors for
@@ -77,12 +78,17 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-1129: true once this finale has moved past its weapon moment — the Core collected
         /// and, if there is a next world, its morph already applied (<see cref="TickWeaponBeat"/>) —
-        /// into clean-up or later. Not simply <c>_cleanupActive || IsOpen</c>: <see cref="TickCleanup"/>
+        /// into clean-up or later. Not simply <c>_cleanupActive || IsOpen</c>: <see cref="TickCleanup(float)"/>
         /// can hand straight off to <see cref="BeginExitBeat"/> inside the very same call, with no frame
         /// where <c>_cleanupActive</c> is true and <see cref="IsOpen"/> isn't yet — <c>_exitBeatActive</c>
         /// covers exactly that gap. What <see cref="MaxWorlds.Save.SaveSlotData.CheckpointFinaleWeaponGranted"/>
         /// persists.</summary>
         public bool WeaponMomentResolved => _cleanupActive || _exitBeatActive || IsOpen;
+
+        /// <summary>MV-1122 test seam: whether Beat B (EXIT OPEN) has started — distinct from
+        /// <see cref="IsOpen"/>, which only flips true <see cref="ExitBeatDoorOpenTime"/> seconds into
+        /// that beat. What "the exit beat has begun" (the clean-up safety nets' own AC wording) means.</summary>
+        public bool ExitBeatActive => _exitBeatActive;
 
         private WorldConfig _cfg;
         private MapData _map;
@@ -118,13 +124,65 @@ namespace MaxWorlds.VFX
         private int _finalAreaIndex;
 
         private int _lastRobotsLeft;
-        private float _lastRobotDeathRealtime;
 
-        /// <summary>MV-1078: a stuck robot (nav-trapped, off a destroyed path) must never stall the
-        /// ending forever — the same risk the 2026-09-26 "neither the orb nor the exit may require
-        /// killing all robots" ruling was guarding against, now handled here instead of by dropping the
-        /// requirement.</summary>
-        private const float CleanupFailsafeSeconds = 25f;
+        // ---------------------------------------------------------------- MV-1122: clean-up safety nets
+        //
+        // Four independent layers so a robot the player can never deal with can never hold the exit
+        // shut (Lee, 2026-10-07): (1) BigBermudaBoss.LandInFlightAdds lands an airborne add the instant
+        // its boss dies, so nothing can stay suspended with its brain off forever. (2) TickUnreachableRemoval
+        // removes a counted robot once a second if it's disabled/inactive, stuck off the floor, outside
+        // the area's own footprint, or has had no route to Max for 2s. (3) TickNoProgressThinning — the
+        // old 25s all-at-once CleanupFailsafeSeconds is GONE; after NoProgressSeconds (10s) with no
+        // genuine kill, the remainder is thinned one every NoProgressThinInterval (0.3s). (4) the hard
+        // HardLimitSeconds (45s) ceiling clears everyone left and opens the exit regardless. All four
+        // are driven off _cleanupClock, an explicit elapsed-seconds accumulator advanced by TickCleanup's
+        // own dt argument — never Time.unscaledTime directly — so an EditMode test can drive 45+ seconds
+        // of clean-up deterministically in a tight loop, the same "a Tick(dt) the test can drive"
+        // contract TickWeaponBeat/TickExitBeat already give their own beats.
+
+        private const float NoProgressSeconds = 10f; // was CleanupFailsafeSeconds's 25s, single-shot
+        private const float NoProgressThinInterval = 0.3f;
+        private const float HardLimitSeconds = 45f;
+        private const float UnreachableCheckInterval = 1f;
+        private const float OffFloorTolerance = 0.5f;
+        private const float OffFloorGraceSeconds = 1f;
+        private const float NoRouteGraceSeconds = 2f;
+
+        private const float CleanupRingRadius = 0.9f;
+        private static readonly Color CleanupRingColor = new Color(1f, 0.231f, 0.188f, 0.9f); // #FF3B30 @ .9
+        private static readonly Color CleanupBorderColor = new Color(1f, 0.231f, 0.188f);      // #FF3B30
+        private const int MaxEdgeArrows = 6;
+
+        private float _cleanupClock;
+        private float _lastProgressClock;
+        private float _lastThinClock;
+        private float _lastUnreachableCheckClock;
+
+        /// <summary>Robots currently counted toward clean-up — alive, stamped with the final area, and
+        /// standing inside its own footprint. Rebuilt from scratch every <see cref="TickCleanup(float)"/>
+        /// (same "scan FindObjectsByType, never RobotEnemy.Active" reasoning as <see cref="AreaAccumulationDirector.ActiveCountForArea"/>'s
+        /// own doc comment — OnEnable never runs outside Play mode), so a removal this method makes is
+        /// only ever a same-tick bookkeeping shortcut; the next refresh would exclude it anyway.</summary>
+        private readonly List<RobotEnemy> _cleanupRobots = new List<RobotEnemy>(16);
+
+        private readonly Dictionary<RobotEnemy, GroundRing> _cleanupRings = new Dictionary<RobotEnemy, GroundRing>();
+        private readonly List<EdgeArrow> _cleanupArrows = new List<EdgeArrow>(MaxEdgeArrows);
+        private readonly Dictionary<RobotEnemy, float> _offFloorSinceClock = new Dictionary<RobotEnemy, float>();
+        private readonly Dictionary<RobotEnemy, float> _noRouteSinceClock = new Dictionary<RobotEnemy, float>();
+
+        /// <summary>Robots this tick's own forced removal (footprint violation, unreachable, thinning,
+        /// hard limit) has already killed — consumed once, at the top of the NEXT <see cref="TickCleanup(float)"/>,
+        /// to tell a genuine player kill (resets <see cref="_lastProgressClock"/>) apart from one of
+        /// clean-up's own safety-net kills (must NOT read as progress, or the no-progress thinner would
+        /// perpetually postpone itself on the very kills it just made).</summary>
+        private readonly HashSet<RobotEnemy> _forcedKillsPending = new HashSet<RobotEnemy>();
+
+        /// <summary>MV-1122 test/HUD seam: every ring currently marking a counted robot, keyed by the
+        /// robot it follows — resolved runtime state (position, scale), not a reflected field.</summary>
+        public IReadOnlyDictionary<RobotEnemy, GroundRing> CleanupRings => _cleanupRings;
+
+        /// <summary>MV-1122 test seam: how many off-screen edge arrows are showing right now.</summary>
+        public int ActiveEdgeArrowCount { get; private set; }
 
         // ---------------------------------------------------------------- MV-1079: Beat A, WEAPON TAKEN
 
@@ -259,6 +317,7 @@ namespace MaxWorlds.VFX
             HideWeaponBeatVisuals();
             HideExitBeatVisuals();
             HideCoreBeacon();
+            HideCleanupVisuals();
             if (_banner != null) { _banner.DestroySelf(); _banner = null; }
         }
 
@@ -409,8 +468,16 @@ namespace MaxWorlds.VFX
             }
 
             _lastRobotsLeft = -1;
-            _lastRobotDeathRealtime = Time.unscaledTime;
-            TickCleanup();
+            _cleanupClock = 0f;
+            _lastProgressClock = 0f;
+            _lastThinClock = -NoProgressThinInterval;
+            _lastUnreachableCheckClock = -UnreachableCheckInterval;
+            _cleanupRobots.Clear();
+            _cleanupRings.Clear();
+            _offFloorSinceClock.Clear();
+            _noRouteSinceClock.Clear();
+            _forcedKillsPending.Clear();
+            TickCleanup(0f);
         }
 
         /// <summary>MV-1079, Beat A entry point: the player-visible "orb becomes the weapon" beat (2.5 s)
@@ -714,52 +781,266 @@ namespace MaxWorlds.VFX
                 if (r != null && r.IsAlive && r.AreaIndex == areaIndex) r.Activate();
         }
 
-        /// <summary>MV-1078, CLEAN-UP: the bottom HUD line reads "ROBOTS LEFT n" (n = living robots in
-        /// the final area, counted directly off <see cref="RobotEnemy.Active"/>/<see cref="RobotEnemy.AreaIndex"/>
-        /// — the same per-robot source <see cref="WakeFinalAreaRobots"/> already scans, independent of
-        /// how a given robot got there (the ambient queue, a pre-placed garrison, or a hand-built test
-        /// fixture) — rather than field-wide <see cref="AreaAccumulationDirector.ActiveCount"/>, which
-        /// would never reach zero while an earlier area still has survivors, see the class doc comment's
-        /// Observation). A stuck robot force-dies after <see cref="CleanupFailsafeSeconds"/> with no
-        /// death in the area. Reaching zero opens the exit exactly as <see cref="Open"/> always has.</summary>
-        private void TickCleanup()
+        /// <summary>MV-1078/MV-1122, CLEAN-UP: the top HUD objective strip reads "CLEAR THE AREA
+        /// ROBOTS LEFT n" (n = alive robots stamped with the final area AND standing inside its own
+        /// footprint — see <see cref="RefreshCleanupRobots"/>). <paramref name="dt"/>-driven, not
+        /// <c>Time.unscaledTime</c> (MV-1122) — see the class's own clean-up-safety-nets doc block for
+        /// why. Public — same "an EditMode test can drive this deterministically" contract
+        /// <see cref="TickWeaponBeat"/>/<see cref="TickExitBeat"/> already give their own beats; a real
+        /// run always arrives here through <see cref="Update"/>, which passes <c>Time.unscaledDeltaTime</c>.</summary>
+        public void TickCleanup(float dt)
         {
-            int left = RobotsLeftInFinalArea();
+            if (!_cleanupActive) return;
+            _cleanupClock += dt;
 
-            if (left != _lastRobotsLeft)
+            List<RobotEnemy> previous = new List<RobotEnemy>(_cleanupRobots);
+            RefreshCleanupRobots();
+            int left = _cleanupRobots.Count;
+
+            bool realProgress = _lastRobotsLeft < 0;
+            if (!realProgress)
             {
-                _lastRobotsLeft = left;
-                _lastRobotDeathRealtime = Time.unscaledTime;
-                HudSignals.EmitArenaLabelOverride(left > 0 ? $"ROBOTS LEFT {left}" : null);
+                foreach (RobotEnemy prev in previous)
+                {
+                    if (prev == null || _cleanupRobots.Contains(prev) || _forcedKillsPending.Contains(prev)) continue;
+                    realProgress = true;
+                    break;
+                }
             }
-            else if (left > 0 && Time.unscaledTime - _lastRobotDeathRealtime >= CleanupFailsafeSeconds)
+            _forcedKillsPending.Clear();
+            if (realProgress) _lastProgressClock = _cleanupClock;
+
+            if (left != _lastRobotsLeft) { _lastRobotsLeft = left; EmitCleanupObjective(left); }
+
+            if (left > 0)
             {
-                ForceKillStragglers(_finalAreaIndex);
-                _lastRobotDeathRealtime = Time.unscaledTime;
-                return;
+                if (_cleanupClock >= HardLimitSeconds)
+                {
+                    KillAllCleanupRobots();
+                }
+                else
+                {
+                    TickUnreachableRemoval();
+                    TickNoProgressThinning();
+                }
+                left = _cleanupRobots.Count;
+                if (left != _lastRobotsLeft) { _lastRobotsLeft = left; EmitCleanupObjective(left); }
             }
+
+            UpdateCleanupVisuals();
 
             if (left <= 0)
             {
                 _cleanupActive = false;
+                HideCleanupVisuals();
                 BeginExitBeat(ResolveDoorPosition());
             }
         }
 
-        private int RobotsLeftInFinalArea() =>
-            FindFirstObjectByType<AreaAccumulationDirector>()?.ActiveCountForArea(_finalAreaIndex) ?? 0;
-
-        private static void ForceKillStragglers(int areaIndex)
+        /// <summary>Rebuilds <see cref="_cleanupRobots"/> from the live scene — alive, stamped with the
+        /// final area, and standing inside its own footprint. A robot stamped with the final area but
+        /// found OUTSIDE its footprint is destroyed on the spot, no drops (MV-1122 Change 2) — never
+        /// added to the list, so it never shows up as "counted" even for one frame. Scans
+        /// <see cref="Object.FindObjectsByType{T}(FindObjectsInactive, FindObjectsSortMode)"/> rather
+        /// than <see cref="RobotEnemy.Active"/>, same reasoning as <see cref="WakeFinalAreaRobots"/>'s
+        /// own doc comment.</summary>
+        private void RefreshCleanupRobots()
         {
-            // A snapshot, not a live view -- killing a robot deactivates its GameObject, and this must
-            // not mutate the very collection FindObjectsByType handed back while this loop walks it.
-            var stragglers = new List<RobotEnemy>(
-                FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None));
-            foreach (RobotEnemy r in stragglers)
+            _cleanupRobots.Clear();
+            foreach (RobotEnemy r in FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                if (r == null || !r.IsAlive || r.AreaIndex != areaIndex) continue;
-                r.TakeDamage(new DamageInfo(999999f, r.transform.position, Vector3.forward, Team.Player));
+                if (r == null || !r.IsAlive || r.AreaIndex != _finalAreaIndex) continue;
+
+                // MV-1122: IsInArea's own established "can't tell, so no" default (_map == null) is
+                // right for the no-op callers it already had; it would be wrong here, where "no" means
+                // "force-kill" — a geometry-independent fixture/test with no BackyardPath (every sibling
+                // finale test's own convention, see WorldFinaleGate's own class doc) would then nuke
+                // every robot it holds on the very first tick. Only a real, resolved "outside" counts.
+                if (_map != null && !IsInArea(r.transform.position, _finalAreaIndex))
+                {
+                    _forcedKillsPending.Add(r);
+                    r.KillWithoutDrops();
+                    continue;
+                }
+
+                _cleanupRobots.Add(r);
             }
+        }
+
+        /// <summary>MV-1122 Change 7, layer 2: once a second, removes a counted robot that cannot
+        /// actually be dealt with — disabled/inactive, outside the footprint (a straggler that wandered
+        /// out after being counted), stuck more than <see cref="OffFloorTolerance"/> off the floor for
+        /// <see cref="OffFloorGraceSeconds"/>, or with no route to Max for <see cref="NoRouteGraceSeconds"/>.
+        /// No drops — the player never actually fought it.</summary>
+        private void TickUnreachableRemoval()
+        {
+            if (_cleanupClock - _lastUnreachableCheckClock < UnreachableCheckInterval) return;
+            _lastUnreachableCheckClock = _cleanupClock;
+
+            Transform max = MaxTransform();
+            List<RobotEnemy> toRemove = null;
+
+            foreach (RobotEnemy r in _cleanupRobots)
+            {
+                if (r == null) continue;
+
+                bool disabledOrInactive = !r.enabled || !r.gameObject.activeInHierarchy;
+                bool outsideFootprint = _map != null && !IsInArea(r.transform.position, _finalAreaIndex);
+                if (disabledOrInactive || outsideFootprint)
+                {
+                    (toRemove ??= new List<RobotEnemy>()).Add(r);
+                    continue;
+                }
+
+                bool offFloorExpired = TrackTimer(_offFloorSinceClock, r, IsOffFloor(r), OffFloorGraceSeconds);
+                bool noRouteExpired = max != null && TrackTimer(_noRouteSinceClock, r, !HasRouteTo(r, max.position), NoRouteGraceSeconds);
+                if (offFloorExpired || noRouteExpired) (toRemove ??= new List<RobotEnemy>()).Add(r);
+            }
+
+            if (toRemove == null) return;
+            foreach (RobotEnemy r in toRemove) RemoveCleanupRobot(r);
+        }
+
+        /// <summary>Tracks how long <paramref name="conditionTrue"/> has held continuously for
+        /// <paramref name="r"/> against <see cref="_cleanupClock"/>; clears the timer the instant the
+        /// condition lifts. Returns whether <paramref name="grace"/> has now elapsed.</summary>
+        private bool TrackTimer(Dictionary<RobotEnemy, float> since, RobotEnemy r, bool conditionTrue, float grace)
+        {
+            if (!conditionTrue) { since.Remove(r); return false; }
+            if (!since.TryGetValue(r, out float first)) { since[r] = _cleanupClock; return false; }
+            return _cleanupClock - first >= grace;
+        }
+
+        /// <summary>Whether <paramref name="r"/>'s own pivot sits more than <see cref="OffFloorTolerance"/>
+        /// from where its kind should rest on the floor under it (<see cref="MapData.SurfaceHeightAt"/>
+        /// plus its own authored <see cref="EnemyArchetype.SpawnHeight"/> ground clearance — the same
+        /// offset every spawn path already adds when placing a robot). False with no map registered
+        /// (nothing to measure against).</summary>
+        private bool IsOffFloor(RobotEnemy r)
+        {
+            if (_map == null) return false;
+            float floorY = _map.SurfaceHeightAt(r.transform.position);
+            float expectedY = floorY + EnemyArchetype.Of(r.Kind).SpawnHeight;
+            return Mathf.Abs(r.transform.position.y - expectedY) > OffFloorTolerance;
+        }
+
+        /// <summary>Whether the room graph currently has any way at all from <paramref name="r"/>'s own
+        /// zone to <paramref name="targetPos"/>'s zone — a plain room-graph reachability check
+        /// (<see cref="MapRoutes.Rooms"/>), not a guarantee the live route is walkable this instant; this
+        /// is a safety net against a genuinely sealed-off robot, not a navigation system. True (never the
+        /// reason to remove anything) with no map, or either position resolving to no zone/the same zone.</summary>
+        private bool HasRouteTo(RobotEnemy r, Vector3 targetPos)
+        {
+            if (_map == null) return true;
+            MapZone from = _map.ZoneAt(r.transform.position.x, r.transform.position.z);
+            MapZone to = _map.ZoneAt(targetPos.x, targetPos.z);
+            if (from == null || to == null || from == to) return true;
+            return MapRoutes.Rooms(_map, from, to, EnemyNavigation.IsGateOpen).Count > 0;
+        }
+
+        /// <summary>MV-1122 Change 7, layer 3: after <see cref="NoProgressSeconds"/> with no GENUINE
+        /// kill (<see cref="_lastProgressClock"/> — a safety-net removal never counts as progress, see
+        /// <see cref="_forcedKillsPending"/>'s own doc comment), the remainder is thinned one every
+        /// <see cref="NoProgressThinInterval"/>. Replaces the old single-shot 25s CleanupFailsafeSeconds
+        /// entirely.</summary>
+        private void TickNoProgressThinning()
+        {
+            if (_cleanupRobots.Count == 0) return;
+            if (_cleanupClock - _lastProgressClock < NoProgressSeconds) return;
+            if (_cleanupClock - _lastThinClock < NoProgressThinInterval) return;
+            _lastThinClock = _cleanupClock;
+
+            RemoveCleanupRobot(_cleanupRobots[0]);
+        }
+
+        /// <summary>MV-1122 Change 7, layer 4: <see cref="HardLimitSeconds"/> after clean-up began, every
+        /// robot still counted is removed on this one tick and the exit beat follows immediately — the
+        /// exit can therefore never stay shut more than <see cref="HardLimitSeconds"/> past the weapon
+        /// beat ending, whatever layers 1-3 did or didn't manage to clear.</summary>
+        private void KillAllCleanupRobots()
+        {
+            // A snapshot: RemoveCleanupRobot mutates _cleanupRobots as it goes.
+            foreach (RobotEnemy r in new List<RobotEnemy>(_cleanupRobots)) RemoveCleanupRobot(r);
+        }
+
+        private void RemoveCleanupRobot(RobotEnemy r)
+        {
+            _cleanupRobots.Remove(r);
+            _offFloorSinceClock.Remove(r);
+            _noRouteSinceClock.Remove(r);
+            if (r == null || !r.IsAlive) return;
+            _forcedKillsPending.Add(r);
+            r.KillWithoutDrops();
+        }
+
+        /// <summary>MV-1122 Change 4: the top objective strip — "CLEAR THE AREA   ROBOTS LEFT n" with a
+        /// red (<see cref="CleanupBorderColor"/>) border, "ROBOTS LEFT n" itself in yellow via an inline
+        /// rich-text tag (<see cref="HudController.ObjectiveText"/>'s own doc comment explains why an
+        /// EditMode test never sees the tag). Cleared (no strip at all) the instant the count is back to
+        /// 0 — Change 3's "no strip, no wait" when clean-up opens on an already-empty area.</summary>
+        private void EmitCleanupObjective(int left)
+        {
+            if (left <= 0) { HudSignals.EmitObjective(null, default); return; }
+            HudSignals.EmitObjective($"CLEAR THE AREA   <color=#FFD23C>ROBOTS LEFT {left}</color>", CleanupBorderColor);
+        }
+
+        /// <summary>MV-1122 Change 5/6: a following red ground ring (<see cref="CleanupRingRadius"/>) on
+        /// every counted robot, and up to <see cref="MaxEdgeArrows"/> off-screen edge arrows for whichever
+        /// of them the camera can't currently see, nearest first.</summary>
+        private void UpdateCleanupVisuals()
+        {
+            var stillCounted = new HashSet<RobotEnemy>(_cleanupRobots);
+            List<RobotEnemy> staleRings = null;
+            foreach (KeyValuePair<RobotEnemy, GroundRing> kv in _cleanupRings)
+            {
+                if (stillCounted.Contains(kv.Key)) continue;
+                kv.Value?.Hide();
+                (staleRings ??= new List<RobotEnemy>()).Add(kv.Key);
+            }
+            if (staleRings != null) foreach (RobotEnemy r in staleRings) _cleanupRings.Remove(r);
+
+            foreach (RobotEnemy r in _cleanupRobots)
+            {
+                if (!_cleanupRings.TryGetValue(r, out GroundRing ring))
+                    _cleanupRings[r] = ring = GroundRing.Create($"MV-1122 Cleanup Ring {r.GetInstanceID()}");
+                ring.Show(r.transform.position, CleanupRingRadius, CleanupRingColor);
+            }
+
+            Camera cam = Camera.main;
+            Transform max = MaxTransform();
+            Vector3 origin = max != null ? max.position : Vector3.zero;
+
+            var offScreen = cam != null ? new List<RobotEnemy>(_cleanupRobots.Count) : null;
+            if (cam != null)
+            {
+                foreach (RobotEnemy r in _cleanupRobots)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(r.transform.position);
+                    bool onScreen = vp.z >= 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
+                    if (!onScreen) offScreen.Add(r);
+                }
+                offScreen.Sort((a, b) => Vector3.SqrMagnitude(a.transform.position - origin)
+                    .CompareTo(Vector3.SqrMagnitude(b.transform.position - origin)));
+            }
+
+            int shown = 0;
+            int available = offScreen?.Count ?? 0;
+            for (; shown < available && shown < MaxEdgeArrows; shown++)
+            {
+                if (shown >= _cleanupArrows.Count) _cleanupArrows.Add(EdgeArrow.Create($"MV-1122 Edge Arrow {shown}"));
+                _cleanupArrows[shown].Show(offScreen[shown].transform.position, cam);
+            }
+            for (int i = shown; i < _cleanupArrows.Count; i++) _cleanupArrows[i].Hide();
+
+            ActiveEdgeArrowCount = shown;
+        }
+
+        private void HideCleanupVisuals()
+        {
+            foreach (KeyValuePair<RobotEnemy, GroundRing> kv in _cleanupRings) kv.Value?.Hide();
+            _cleanupRings.Clear();
+            foreach (EdgeArrow a in _cleanupArrows) a.Hide();
+            ActiveEdgeArrowCount = 0;
         }
 
         /// <summary>The exact same "was the area that just cleared the world's own final boss area"
@@ -939,7 +1220,16 @@ namespace MaxWorlds.VFX
         {
             UpdateCoreBeacon();
             if (_weaponBeatActive) TickWeaponBeat(Time.unscaledDeltaTime);
-            if (_cleanupActive && !IsOpen) TickCleanup();
+            // MV-1122: clamped, unlike the beats above -- TickCleanup's own safety-net thresholds span
+            // real seconds of gameplay (10-45s), and an EditMode caller driving this gate through plain
+            // Update() (InvokeUpdate, every sibling finale test's own idiom) can hand it an arbitrarily
+            // large stray Time.unscaledDeltaTime between two synchronous statements (the editor's real
+            // clock, not a simulated frame) -- unclamped, that one stray value mass-kills every counted
+            // robot instantly instead of just fast-forwarding a short cosmetic beat the way the weapon/
+            // exit beats above tolerate. A real 60fps frame (~0.016s) is always far under this ceiling,
+            // so live gameplay is unaffected; a test wanting to drive real elapsed clean-up time still
+            // does so explicitly and unclamped through the public TickCleanup(dt) itself.
+            if (_cleanupActive && !IsOpen) TickCleanup(Mathf.Min(Time.unscaledDeltaTime, 0.1f));
             if (_exitBeatActive) TickExitBeat(Time.unscaledDeltaTime);
 
             if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;

@@ -270,6 +270,8 @@ namespace MaxWorlds.Tests.EditMode
                     WorldFinaleGate prevGate = NewGate();
 
                     var robot = new GameObject("MV1129 a30 robot");
+                    robot.transform.position = boss1.transform.position; // MV-1122: inside the final
+                    // area's own footprint -- clean-up now force-kills a stamped robot it finds outside it.
                     robot.AddComponent<CharacterController>();
                     var enemy = robot.AddComponent<RobotEnemy>();
                     InvokeOnEnable(enemy); // runs ResetState(); SetAreaIndex must come after
@@ -300,6 +302,7 @@ namespace MaxWorlds.Tests.EditMode
                     Sweep();
 
                     var freshRobot = new GameObject("MV1129 a30 robot (resumed)");
+                    freshRobot.transform.position = boss1.transform.position; // MV-1122: see the other robot's own comment above
                     freshRobot.AddComponent<CharacterController>();
                     var freshEnemy = freshRobot.AddComponent<RobotEnemy>();
                     InvokeOnEnable(freshEnemy);

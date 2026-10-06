@@ -351,6 +351,22 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public void Stop() => _running = false;
 
+        /// <summary>MV-1122: which 1-based area this spawner's own position resolves to right now —
+        /// stamped onto every robot it spawns (<see cref="SpawnKind"/>) so a shed-spawned robot is
+        /// counted, woken and removed by its own area's finale clean-up exactly as a garrison/ambient
+        /// one already is. Resolved fresh per spawn, not cached: a mobile shed's own position can have
+        /// moved between spawns. Unlike <see cref="MaxWorlds.Factories.Replicator.AreaIndex"/>, this
+        /// factory carries no authored area tag of its own (<see cref="MaxWorlds.VFX.WorldFinaleGate.StopFinalAreaProduction"/>'s
+        /// own doc comment), so this is resolved from the map the same "position -&gt; zone -&gt; area
+        /// index" way <see cref="MaxWorlds.Bosses.BigBermudaBoss.ResolveAreaIndex"/> does. 0 (unstamped)
+        /// with no map registered or no zone at this position.</summary>
+        private int ResolveAreaIndex()
+        {
+            MapData map = EnemyNavigation.Map;
+            MapZone zone = map?.ZoneAt(transform.position.x, transform.position.z);
+            return zone != null ? AreaAccumulationDirector.AreaIndexOf(zone.id) : 0;
+        }
+
         private bool _destroyed;
 
         /// <summary>Whether this factory has been destroyed and dropped into the post-destruction
@@ -594,6 +610,7 @@ namespace MaxWorlds.Enemies
             }
 
             e.gameObject.SetActive(true);
+            e.SetAreaIndex(ResolveAreaIndex()); // MV-1122: see ResolveAreaIndex's own doc comment
 
             // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
             // Told to emerge first, it would be told to chase a frame later and step out of the door
