@@ -231,6 +231,15 @@ namespace MaxWorlds.Save
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
             data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
 
+            // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
+            // null for every world before its own final boss falls, same as a fresh run. Read directly
+            // off the scene (unlike every other field above, which reads a static census) because
+            // WorldFinaleGate.Awake already runs well before this method ever does, and nothing else
+            // here keeps a running tally of its own.
+            var finaleGate = MaxWorlds.VFX.WorldFinaleGate.Active;
+            data.CheckpointFinaleWeaponGranted = finaleGate != null && finaleGate.WeaponMomentResolved;
+            data.CheckpointFinaleExitOpen = finaleGate != null && finaleGate.IsOpen;
+
             // MV-951: HomeScreen.OnResume wipes AbilityCreditBank/UpgradeState/PendingMorphingModule
             // as part of the same transient-state reset it always did for a fresh PLAY — harmless only
             // once something restores them afterward, which nothing did before this ticket.
@@ -389,6 +398,8 @@ namespace MaxWorlds.Save
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();
+            data.CheckpointFinaleWeaponGranted = false;
+            data.CheckpointFinaleExitOpen = false;
             data.CheckpointAbilityCredits = 0;
             data.CheckpointInstalledParts = Array.Empty<string>();
             data.CheckpointEscalationElapsed = 0f;

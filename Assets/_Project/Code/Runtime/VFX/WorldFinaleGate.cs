@@ -8,6 +8,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Feel;
 using MaxWorlds.Intro;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -64,9 +65,24 @@ namespace MaxWorlds.VFX
             new GameObject("WorldFinaleGate").AddComponent<WorldFinaleGate>();
         }
 
+        /// <summary>MV-1129: the most recently <see cref="Awake"/>-run gate — read by
+        /// <see cref="MaxWorlds.Save.SaveSystem.CaptureCheckpoint"/> the same static-only way it reads
+        /// every other checkpoint field (<c>BossCensus</c>, <c>FactoryCensus</c>, ...), since this class
+        /// keeps no running tally of its own otherwise. Cleared in <see cref="OnDestroy"/>.</summary>
+        public static WorldFinaleGate Active { get; private set; }
+
         /// <summary>The gate's own resolved state — open once this area's own final boss has actually
         /// died, not an authored flag (MV-915 AC4; MV-956 changed the trigger from RunComplete).</summary>
         public bool IsOpen { get; private set; }
+
+        /// <summary>MV-1129: true once this finale has moved past its weapon moment — the Core collected
+        /// and, if there is a next world, its morph already applied (<see cref="TickWeaponBeat"/>) —
+        /// into clean-up or later. Not simply <c>_cleanupActive || IsOpen</c>: <see cref="TickCleanup"/>
+        /// can hand straight off to <see cref="BeginExitBeat"/> inside the very same call, with no frame
+        /// where <c>_cleanupActive</c> is true and <see cref="IsOpen"/> isn't yet — <c>_exitBeatActive</c>
+        /// covers exactly that gap. What <see cref="MaxWorlds.Save.SaveSlotData.CheckpointFinaleWeaponGranted"/>
+        /// persists.</summary>
+        public bool WeaponMomentResolved => _cleanupActive || _exitBeatActive || IsOpen;
 
         private WorldConfig _cfg;
         private MapData _map;
@@ -88,6 +104,9 @@ namespace MaxWorlds.VFX
         /// <see cref="_cleanupActive"/>: a boss can die well before Max ever walks back to collect the
         /// Core it dropped.</summary>
         private bool _finalBossDefeated;
+
+        /// <summary>MV-1129: guards <see cref="ResumeFromCheckpoint"/> to exactly once per gate.</summary>
+        private bool _resumedFromCheckpoint;
 
         /// <summary>MV-1078: true from the moment the Core is collected until the final area's last
         /// living robot is dead and the exit actually opens.</summary>
@@ -152,6 +171,8 @@ namespace MaxWorlds.VFX
 
         private void Awake()
         {
+            Active = this;
+
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null || path.Cfg?.dials == null || path.Map == null) { enabled = false; return; }
 
@@ -166,6 +187,11 @@ namespace MaxWorlds.VFX
             // Open() forces THIS open rather than handing WorldJoinSequence a runtime CutWallGap.
             _exitGate = path.ExitGate;
             _doorway = _map.exitDoorway;
+        }
+
+        private void OnDestroy()
+        {
+            if (Active == this) Active = null;
         }
 
         private void OnEnable()
@@ -194,6 +220,57 @@ namespace MaxWorlds.VFX
         {
             if (!IsFinalBossAreaDefeat()) return;
             _finalBossDefeated = true;
+        }
+
+        /// <summary>MV-1129: seeds this freshly-rebuilt gate from an already-restored checkpoint — call
+        /// once, right after <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/> has already run
+        /// <c>BossCensus.ApplyCheckpointDefeatedAreas</c>, so <see cref="BossCensus.IsAreaDefeated"/>
+        /// below reads the just-restored set.
+        ///
+        /// A cold-boot RESUME rebuilds this gate fresh with no memory that its own final boss ever died:
+        /// <see cref="OnBossDefeated"/>'s own live trigger never fires for a restored defeat (see that
+        /// census method's own doc comment — "this is restoring history, not scoring a fresh kill"), so
+        /// without this call <see cref="_finalBossDefeated"/> stays false forever and the Weapon Core
+        /// this area already dropped — collected or not before the app closed — never resumes anything.
+        ///
+        /// A no-op unless this gate's own final area is recorded defeated: nothing to resume into
+        /// otherwise, and the ordinary live BossDefeated -&gt; Core -&gt; clean-up -&gt; exit chain runs
+        /// exactly as before this ticket. Idempotent — a second call does nothing once the first already
+        /// ran.</summary>
+        /// <param name="weaponGranted">The checkpoint's own <c>CheckpointFinaleWeaponGranted</c> — true
+        /// once the Core had already been collected (and, if there is a next world, its morph already
+        /// applied) by the time the checkpoint was captured.</param>
+        /// <param name="exitOpen">The checkpoint's own <c>CheckpointFinaleExitOpen</c>.</param>
+        public void ResumeFromCheckpoint(bool weaponGranted, bool exitOpen)
+        {
+            if (_resumedFromCheckpoint) return;
+            if (_cfg?.dials == null) return;
+
+            int finalAreaIndex = _cfg.dials.areaCount;
+            if (finalAreaIndex <= 0 || !BossCensus.IsAreaDefeated(finalAreaIndex)) return;
+
+            _resumedFromCheckpoint = true;
+            _finalBossDefeated = true;
+
+            if (exitOpen) { Open(); return; }
+            if (weaponGranted) { BeginCleanup(); return; }
+
+            PickupDirector.EnsureInstalled().SpawnWeaponCore(ResolveFinalBossPosition(finalAreaIndex));
+        }
+
+        /// <summary>Where <see cref="ResumeFromCheckpoint"/> drops a resume-spawned Weapon Core: the
+        /// final area's own boss, still standing Dormant in the rebuilt scene — <c>BossCensus.IsAreaDefeated</c>
+        /// is seeded before any boss's own <c>Wake()</c> ever runs, so it silently self-destructs without
+        /// ever registering (see <c>BigBermudaBoss.Wake</c>'s own doc comment) rather than vanishing the
+        /// instant the scene builds, leaving its GameObject and position right there to read. Falls back
+        /// to the door position for a geometry-independent fixture with no boss built at all, same
+        /// fallback <see cref="ResolveDoorPosition"/> itself uses.</summary>
+        private Vector3 ResolveFinalBossPosition(int areaIndex)
+        {
+            foreach (BigBermudaBoss boss in FindObjectsByType<BigBermudaBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (boss != null && IsInArea(boss.transform.position, areaIndex))
+                    return boss.transform.position + Vector3.up * 1.4f;
+            return ResolveDoorPosition();
         }
 
         /// <summary>MV-1078: the orb is what starts the WEAPON TAKEN/CLEAN-UP beat — never before the
