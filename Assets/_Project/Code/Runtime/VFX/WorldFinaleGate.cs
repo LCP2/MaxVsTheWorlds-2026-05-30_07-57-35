@@ -130,21 +130,67 @@ namespace MaxWorlds.VFX
 
         private const float WeaponBeatDuration = 2.5f;
         private const float WeaponBeatMorphTime = 0.5f;
-        private const float WeaponBeatFlashEnd = 0.7f;
-        private const float WeaponBeatFlashDiameter = 1.5f;
+
+        /// <summary>MV-1131: the flare is now a <see cref="CameraFacingFlare"/> (was a flat
+        /// <see cref="GroundRing"/> that never faced the camera — Lee's device observation, "my weapon
+        /// changed with no indication"), 2.5 m across for 0.25 s.</summary>
+        private const float WeaponBeatFlashEnd = WeaponBeatMorphTime + 0.25f;
+        private const float WeaponBeatFlashDiameter = 2.5f;
+
+        /// <summary>MV-1131: the Core's own 0.0-0.4 s flight arc into the gadget — the class doc's "the
+        /// doc comment says the Core flies into the gadget; there is no code that does it" gap.</summary>
+        private const float WeaponBeatCoreFlightDuration = 0.4f;
+        private const float WeaponBeatCoreFlightArcHeight = 1.5f;
+        private const float WeaponBeatCoreFlightStartDiameter = 1f;
+        private const float WeaponBeatCoreFlightEndScale = 0.3f;
+
+        /// <summary>MV-1131: the camera pushes in 20% toward Max, 0.0-0.5 s ease out, holds, eases back
+        /// 2.1-2.5 s — <see cref="FixedAngleCameraRig.Distance"/> is "the follow distance (or equivalent
+        /// zoom value)" the ticket's own AC names.</summary>
+        private const float WeaponBeatZoomPushEnd = 0.5f;
+        private const float WeaponBeatZoomHoldEnd = 2.1f;
+        private const float WeaponBeatZoomPushFraction = 0.2f;
+
+        /// <summary>MV-1131: eight additive shards radiate from the gun, 0.8-1.8 m long, 0.35 s.</summary>
+        private const float WeaponBeatShardDuration = 0.35f;
+        private const float WeaponBeatShardMinLength = 0.8f;
+        private const float WeaponBeatShardMaxLength = 1.8f;
+
         private const float WeaponBeatRingStart = 0.5f;
         private const float WeaponBeatRingEnd = 1.3f;
-        private const float WeaponBeatRingMaxRadius = 3f; // 6 m across
+        private const float WeaponBeatRingMaxRadius = 3.2f; // MV-1131: was 3f ("6 m across"), now 6.4 m
+        private const float WeaponBeatRingOuterMaxRadius = 4f; // MV-1131: the new fainter second ring
         private const float WeaponBeatBannerStart = 0.6f;
         private const float WeaponBeatBannerFadeInEnd = 0.8f;   // start + 0.2 s
         private const float WeaponBeatBannerFadeOutStart = 2.2f; // end - 0.3 s
+
+        private static readonly Color WeaponBeatGlowColor = new Color(0.85f, 0.98f, 1f);
 
         private bool _weaponBeatActive;
         private float _weaponBeatTime;
         private bool _weaponBeatMorphApplied;
         private int _weaponBeatPlayedWorld;
-        private GroundRing _weaponBeatFlashRing;
+        private Vector3 _weaponBeatCoreOrigin;
+        private CameraFacingFlare _weaponBeatFlashFlare;
+        private CameraFacingFlare _weaponBeatCoreFlare;
+        private ShardBurst _weaponBeatShards;
         private GroundRing _weaponBeatRing;
+        private GroundRing _weaponBeatOuterRing;
+        private FixedAngleCameraRig _weaponBeatCameraRig;
+        private float _weaponBeatCameraRestDistance = -1f;
+
+        // ---------------------------------------------------------------- MV-1131: the Core-on-ground beacon
+
+        private const float CoreBeaconPillarWidth = 0.5f;
+        private const float CoreBeaconPillarHeight = 6f;
+        private const float CoreBeaconRingRadius = 1.2f;
+        private static readonly Color CoreBeaconPillarColor = new Color(0.85f, 0.98f, 1f);
+        private static readonly Color CoreBeaconRingColor = new Color(0.4f, 0.95f, 1f);
+
+        private bool _coreBeaconActive;
+        private Vector3 _lastCorePosition;
+        private LightPillar _coreBeaconPillar;
+        private GroundRing _coreBeaconRing;
 
         // ---------------------------------------------------------------- MV-1079: Beat B, EXIT OPEN
 
@@ -198,18 +244,21 @@ namespace MaxWorlds.VFX
         {
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
+            HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
         }
 
         private void OnDisable()
         {
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
+            HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
             if (_weaponBeatActive || _exitBeatActive) RestoreGameplayForBeat();
             HideWeaponBeatVisuals();
             HideExitBeatVisuals();
+            HideCoreBeacon();
             if (_banner != null) { _banner.DestroySelf(); _banner = null; }
         }
 
@@ -281,7 +330,61 @@ namespace MaxWorlds.VFX
         private void OnWeaponCoreCollected()
         {
             if (!_finalBossDefeated || _cleanupActive || _weaponBeatActive || IsOpen) return;
+            HideCoreBeacon();
             BeginWeaponBeat();
+        }
+
+        /// <summary>MV-1131, Change B: while the Weapon Core waits on the ground — a camera-facing light
+        /// pillar above it, a pulsing ground ring under it, and the objective strip reading "TAKE THE
+        /// CORE" with a cyan border. Starts the instant <see cref="PickupDirector.SpawnWeaponCore"/> drops
+        /// it (every world's finale, including a resume-spawned Core), ends the instant it's collected
+        /// (<see cref="OnWeaponCoreCollected"/>/<see cref="HideCoreBeacon"/>).</summary>
+        private void OnWeaponCoreDropped()
+        {
+            _coreBeaconActive = true;
+            Pickup core = FindLiveWeaponCore();
+            if (core != null) _lastCorePosition = core.transform.position;
+            HudSignals.EmitObjective("TAKE THE CORE", CoreBeaconRingColor);
+        }
+
+        private static Pickup FindLiveWeaponCore()
+        {
+            foreach (Pickup p in FindObjectsByType<Pickup>(FindObjectsSortMode.None))
+                if (p != null && p.Kind == PickupKind.WeaponCore) return p;
+            return null;
+        }
+
+        /// <summary>Tracks the live Weapon Core's own position every frame the beacon is up — both to
+        /// place the pillar/ring where the Core actually is (it bobs, <see cref="Pickup"/>'s own float)
+        /// and so <see cref="_lastCorePosition"/> is the real drop-off point for Beat A's own flight arc
+        /// (<see cref="UpdateWeaponBeatCoreFlight"/>) even if nothing ticked <see cref="Update"/> between
+        /// the drop and the collect (a scripted test driving the signals directly, with no frames).</summary>
+        private void UpdateCoreBeacon()
+        {
+            if (!_coreBeaconActive) return;
+
+            Pickup core = FindLiveWeaponCore();
+            if (core == null) return; // collected already -- OnWeaponCoreCollected owns tearing this down
+
+            _lastCorePosition = core.transform.position;
+
+            if (_coreBeaconPillar == null) _coreBeaconPillar = LightPillar.Create("MV-1131 Core Pillar");
+            if (_coreBeaconRing == null) _coreBeaconRing = GroundRing.Create("MV-1131 Core Ring", additive: true);
+
+            _coreBeaconPillar.Show(_lastCorePosition, CoreBeaconPillarWidth, CoreBeaconPillarHeight, CoreBeaconPillarColor);
+
+            float pulse = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * 3f);
+            Color ringColor = CoreBeaconRingColor;
+            ringColor.a *= pulse;
+            _coreBeaconRing.Show(_lastCorePosition, CoreBeaconRingRadius, ringColor);
+        }
+
+        private void HideCoreBeacon()
+        {
+            _coreBeaconActive = false;
+            _coreBeaconPillar?.Hide();
+            _coreBeaconRing?.Hide();
+            HudSignals.EmitObjective(null, default);
         }
 
         /// <summary>MV-1078, WEAPON TAKEN -&gt; CLEAN-UP: (a) the final area's own sheds/Replicators stop
@@ -330,7 +433,13 @@ namespace MaxWorlds.VFX
             _weaponBeatTime = 0f;
             _weaponBeatMorphApplied = false;
             _weaponBeatPlayedWorld = playedWorld;
+            _weaponBeatCoreOrigin = _lastCorePosition;
             SuspendGameplayForBeat();
+
+            _weaponBeatCameraRig = FindFirstObjectByType<FixedAngleCameraRig>();
+            _weaponBeatCameraRestDistance = _weaponBeatCameraRig != null ? _weaponBeatCameraRig.Distance : -1f;
+
+            FindFirstObjectByType<HudController>()?.SetControlsHidden(true);
         }
 
         /// <summary>Advance Beat A by <paramref name="dt"/> seconds. Public — same "an EditMode test can
@@ -351,7 +460,10 @@ namespace MaxWorlds.VFX
                 WeaponSystemState.ApplyWeaponCoreMorph(_weaponBeatPlayedWorld + 1);
             }
 
+            UpdateWeaponBeatCoreFlight();
+            UpdateWeaponBeatZoom();
             UpdateWeaponBeatFlash();
+            UpdateWeaponBeatShards();
             UpdateWeaponBeatRing();
             UpdateWeaponBeatBanner();
 
@@ -360,35 +472,107 @@ namespace MaxWorlds.VFX
                 _weaponBeatActive = false;
                 HideWeaponBeatVisuals();
                 RestoreGameplayForBeat();
+
+                // MV-1131: restore exactly, rather than trust the ease-back curve's own last step to
+                // land on it -- the AC's "back within 1%" deserves exact, not "close enough by construction".
+                if (_weaponBeatCameraRig != null && _weaponBeatCameraRestDistance >= 0f)
+                    _weaponBeatCameraRig.SetDistance(_weaponBeatCameraRestDistance);
+                _weaponBeatCameraRig = null;
+                _weaponBeatCameraRestDistance = -1f;
+
+                FindFirstObjectByType<HudController>()?.SetControlsHidden(false);
                 BeginCleanup();
             }
         }
 
-        /// <summary>MV-1079, Beat A step 2: a white-cyan additive flash about 1.5 m across at the gadget,
-        /// 0.50-0.70 s — the morph itself already applied by the time this window opens.</summary>
+        /// <summary>MV-1131, Change C row 1: the Core flies from where it was to the gun on a 1.5 m arc,
+        /// shrinking to 30%, 0.0-0.4 s — reuses <see cref="BossVictoryPayoff.Arc"/>'s own pure hop curve
+        /// rather than a second copy of the same maths.</summary>
+        private void UpdateWeaponBeatCoreFlight()
+        {
+            if (_weaponBeatTime > WeaponBeatCoreFlightDuration)
+            {
+                _weaponBeatCoreFlare?.Hide();
+                return;
+            }
+
+            float t = Mathf.Clamp01(_weaponBeatTime / WeaponBeatCoreFlightDuration);
+            Vector3 pos = BossVictoryPayoff.Arc(_weaponBeatCoreOrigin, GadgetPosition(), t, WeaponBeatCoreFlightArcHeight);
+            float diameter = Mathf.Lerp(
+                WeaponBeatCoreFlightStartDiameter,
+                WeaponBeatCoreFlightStartDiameter * WeaponBeatCoreFlightEndScale,
+                t);
+
+            if (_weaponBeatCoreFlare == null) _weaponBeatCoreFlare = CameraFacingFlare.Create("MV-1131 Core Flight");
+            _weaponBeatCoreFlare.Show(pos, diameter, WeaponBeatGlowColor);
+        }
+
+        /// <summary>MV-1131, Change C row 2: the camera pushes in 20% toward Max, 0.0-0.5 s ease out,
+        /// holds, eases back 2.1-2.5 s — <see cref="FixedAngleCameraRig.SetDistance"/> is the same knob
+        /// <see cref="MaxWorlds.CameraRig.TeleportZoomController"/> already drives for its own zoom beat.</summary>
+        private void UpdateWeaponBeatZoom()
+        {
+            if (_weaponBeatCameraRig == null || _weaponBeatCameraRestDistance < 0f) return;
+
+            // MV-1131: "pushes in 20%" reads as a 20% bigger apparent zoom, i.e. distance / 1.2 (~0.833x)
+            // — not distance * 0.8 — matching the AC's own 0.83 (+-0.03) ratio with room either side of
+            // it, rather than sitting right on the tolerance's edge.
+            float pushedDistance = _weaponBeatCameraRestDistance / (1f + WeaponBeatZoomPushFraction);
+            float t;
+            if (_weaponBeatTime <= WeaponBeatZoomPushEnd)
+                t = AnimSequence.OutQuad(Mathf.Clamp01(_weaponBeatTime / WeaponBeatZoomPushEnd));
+            else if (_weaponBeatTime <= WeaponBeatZoomHoldEnd)
+                t = 1f;
+            else
+                t = 1f - Mathf.Clamp01((_weaponBeatTime - WeaponBeatZoomHoldEnd) / (WeaponBeatDuration - WeaponBeatZoomHoldEnd));
+
+            _weaponBeatCameraRig.SetDistance(Mathf.Lerp(_weaponBeatCameraRestDistance, pushedDistance, t));
+        }
+
+        /// <summary>MV-1131, Change C row 3 (the flare's own shards): eight additive shards radiate from
+        /// the gun, 0.8-1.8 m long, for 0.35 s from the same 0.5 s instant the flare and the morph both
+        /// land.</summary>
+        private void UpdateWeaponBeatShards()
+        {
+            float shardEnd = WeaponBeatMorphTime + WeaponBeatShardDuration;
+            if (_weaponBeatTime < WeaponBeatMorphTime || _weaponBeatTime > shardEnd)
+            {
+                _weaponBeatShards?.Hide();
+                return;
+            }
+
+            if (_weaponBeatShards == null) _weaponBeatShards = ShardBurst.Create("MV-1131 Weapon Shards");
+            float t = Mathf.InverseLerp(WeaponBeatMorphTime, shardEnd, _weaponBeatTime);
+            _weaponBeatShards.Show(GadgetPosition(), WeaponBeatShardMinLength, WeaponBeatShardMaxLength,
+                0.08f, WeaponBeatGlowColor, 1f - t);
+        }
+
+        /// <summary>MV-1131, Change C row 3: a camera-facing additive flare 2.5 m across at the gadget,
+        /// 0.50-0.75 s — the morph itself already applied by the time this window opens. Was a flat
+        /// <see cref="GroundRing"/> that never faced the camera (the class doc's own "not facing the
+        /// camera" observation) — now a <see cref="CameraFacingFlare"/>.</summary>
         private void UpdateWeaponBeatFlash()
         {
             if (_weaponBeatTime < WeaponBeatMorphTime || _weaponBeatTime > WeaponBeatFlashEnd)
             {
-                _weaponBeatFlashRing?.Hide();
+                _weaponBeatFlashFlare?.Hide();
                 return;
             }
 
-            if (_weaponBeatFlashRing == null) _weaponBeatFlashRing = GroundRing.Create("MV-1079 Weapon Flash", additive: true);
+            if (_weaponBeatFlashFlare == null) _weaponBeatFlashFlare = CameraFacingFlare.Create("MV-1131 Weapon Flash");
             float t = Mathf.InverseLerp(WeaponBeatMorphTime, WeaponBeatFlashEnd, _weaponBeatTime);
-            Vector3 pos = GadgetPosition();
-            float radius = Mathf.Sin(t * Mathf.PI) * (WeaponBeatFlashDiameter * 0.5f);
-            Color c = new Color(0.85f, 0.98f, 1f, 1f - t);
-            _weaponBeatFlashRing.Show(pos, Mathf.Max(0.05f, radius), c);
+            Color c = WeaponBeatGlowColor; c.a = 1f - t;
+            _weaponBeatFlashFlare.Show(GadgetPosition(), WeaponBeatFlashDiameter, c);
         }
 
-        /// <summary>MV-1079, Beat A step 3: a ground ring expands from Max to 6 m across and fades,
-        /// 0.50-1.30 s. Visual only — no gameplay effect.</summary>
+        /// <summary>MV-1131, Change C row 4: a cyan ground ring at Max's feet grows from 0.1 to 3.2 m
+        /// radius with a fainter second ring out to 4 m, 0.50-1.30 s. Visual only — no gameplay effect.</summary>
         private void UpdateWeaponBeatRing()
         {
             if (_weaponBeatTime < WeaponBeatRingStart || _weaponBeatTime > WeaponBeatRingEnd)
             {
                 _weaponBeatRing?.Hide();
+                _weaponBeatOuterRing?.Hide();
                 return;
             }
 
@@ -396,14 +580,22 @@ namespace MaxWorlds.VFX
             if (max == null) return;
 
             if (_weaponBeatRing == null) _weaponBeatRing = GroundRing.Create("MV-1079 Weapon Ring", additive: true);
+            if (_weaponBeatOuterRing == null) _weaponBeatOuterRing = GroundRing.Create("MV-1131 Weapon Ring Outer", additive: true);
+
             float t = Mathf.InverseLerp(WeaponBeatRingStart, WeaponBeatRingEnd, _weaponBeatTime);
             float radius = Mathf.Lerp(0.1f, WeaponBeatRingMaxRadius, t);
+            float outerRadius = Mathf.Lerp(0.1f, WeaponBeatRingOuterMaxRadius, t);
             Color c = new Color(0.4f, 0.95f, 1f, 1f - t);
+            Color outerC = new Color(0.4f, 0.95f, 1f, (1f - t) * 0.4f);
             _weaponBeatRing.Show(max.position, radius, c);
+            _weaponBeatOuterRing.Show(max.position, outerRadius, outerC);
         }
 
-        /// <summary>MV-1079, Beat A step 4: the centre banner — "NEW WEAPON" small, the new primary's
-        /// long name large, cyan — 0.60-2.50 s, fading in over 0.2 s and out over the last 0.3 s.</summary>
+        /// <summary>MV-1131, Change C row 6: the centre banner — "NEW WEAPON" small (cyan), the new
+        /// primary's own SHORT banner name large (white), one line of what it does (light grey) —
+        /// 0.60-2.50 s, fading in over 0.2 s and out over the last 0.3 s. <see cref="BannerCopyFor"/>'s
+        /// short name is deliberately NOT <see cref="WeaponCatalog.ShortName"/> ("LPPE") — the ticket's
+        /// own copy ("PULSE EMITTER") is what reads as a weapon name at this size, "LPPE" does not.</summary>
         private void UpdateWeaponBeatBanner()
         {
             if (_weaponBeatTime < WeaponBeatBannerStart || _weaponBeatTime > WeaponBeatDuration)
@@ -421,14 +613,29 @@ namespace MaxWorlds.VFX
                 alpha = 1f;
 
             if (_banner == null) _banner = FinaleBanner.Create();
-            string longName = WeaponCatalog.DisplayName(WeaponSystemState.ActivePrimary);
-            _banner.Show("NEW WEAPON", longName, alpha);
+            (string shortName, string effectLine) = BannerCopyFor(WeaponSystemState.ActivePrimary);
+            _banner.Show("NEW WEAPON", shortName, effectLine, alpha);
         }
+
+        /// <summary>The new-weapon banner's own short name + one-line effect description (ticket's
+        /// explicit copy table) — distinct from <see cref="WeaponCatalog.ShortName"/>/<c>EffectLine</c>,
+        /// which serve the weapons screen and abilities grid respectively, neither of which this banner
+        /// is.</summary>
+        private static (string shortName, string effectLine) BannerCopyFor(WeaponCatalog.PrimaryKind kind) =>
+            kind switch
+            {
+                WeaponCatalog.PrimaryKind.Lppe => ("PULSE EMITTER", "Fires pulses that home in on robots"),
+                WeaponCatalog.PrimaryKind.Undertow => ("UNDERTOW", "A beam that seeks robots and grips them"),
+                _ => (WeaponCatalog.ShortName(kind), string.Empty),
+            };
 
         private void HideWeaponBeatVisuals()
         {
-            _weaponBeatFlashRing?.Hide();
+            _weaponBeatFlashFlare?.Hide();
             _weaponBeatRing?.Hide();
+            _weaponBeatOuterRing?.Hide();
+            _weaponBeatCoreFlare?.Hide();
+            _weaponBeatShards?.Hide();
         }
 
         /// <summary>Where Beat A's flash plays — Max's own gadget, when his rig exists, falling back to
@@ -730,6 +937,7 @@ namespace MaxWorlds.VFX
         /// corridor walk ends, so <c>RunTracker</c> cannot tell the two cases apart.</summary>
         private void Update()
         {
+            UpdateCoreBeacon();
             if (_weaponBeatActive) TickWeaponBeat(Time.unscaledDeltaTime);
             if (_cleanupActive && !IsOpen) TickCleanup();
             if (_exitBeatActive) TickExitBeat(Time.unscaledDeltaTime);
