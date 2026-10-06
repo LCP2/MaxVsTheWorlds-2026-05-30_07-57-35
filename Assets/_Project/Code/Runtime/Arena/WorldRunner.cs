@@ -595,7 +595,12 @@ namespace MaxWorlds.Arena
             // role), not of where it sits in the sequence — a boss area's gate opens on a shed
             // condition, never combat, and re-closing it would be unreopenable (a softlock).
             bool deathGateIsConditionGated = IsConditionGatedArea(deathArea);
-            int predecessor = ResolveRespawnPredecessor(deathArea);
+            // MV-1091: which LEVEL Max actually died on — floor or deck — read straight off his real
+            // position, the only honest signal for an in-place-deck area (one area id visited at both
+            // elevations, World 2's a10/a11/a12): see ResolveRespawnPredecessor's onDeck param.
+            bool onDeck = _map != null && _player != null &&
+                          _map.IsOnDeck(_player.position.x, _player.position.y, _player.position.z);
+            int predecessor = ResolveRespawnPredecessor(deathArea, onDeck);
             RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated, predecessor);
 
             DeathRunState.RecordDeath();
@@ -690,8 +695,16 @@ namespace MaxWorlds.Arena
         /// area sits directly between the floor and its deck (World 2: a13's own predecessor, not a14
         /// "Replicator Nest", for a death on a15 "Trolley Yard (deck)"). Returns 0 ("unknown") when no
         /// crossing has been recorded yet, so <see cref="RespawnPlanner.Resolve"/>'s own
-        /// <c>deathAreaIndex - 1</c> fallback applies.</summary>
-        private int ResolveRespawnPredecessor(int deathAreaIndex)
+        /// <c>deathAreaIndex - 1</c> fallback applies.
+        ///
+        /// MV-1091: <paramref name="onDeck"/> is Max's real elevation at the moment this is asked —
+        /// null from <see cref="ResumeCheckpoint"/> (unchanged: a cold-boot RESUME has no live death
+        /// position to read one from, and MV-1065's own gantry-deck resume already resolves correctly
+        /// without it, by the two visits having crossed through genuinely different gates), a real
+        /// floor/deck reading from <see cref="OnPlayerDied"/>. Only changes the answer for an
+        /// in-place-deck area (<see cref="AreaAccumulationDirector.PredecessorOf(int,bool)"/>'s own doc
+        /// comment) — every other area ignores it.</summary>
+        private int ResolveRespawnPredecessor(int deathAreaIndex, bool? onDeck = null)
         {
             if (_areaDirector == null || _cfg == null) return 0;
 
@@ -703,7 +716,9 @@ namespace MaxWorlds.Arena
                 if (baseFloor != null) lookupArea = baseFloor.index;
             }
 
-            return _areaDirector.PredecessorOf(lookupArea);
+            return onDeck.HasValue
+                ? _areaDirector.PredecessorOf(lookupArea, onDeck.Value)
+                : _areaDirector.PredecessorOf(lookupArea);
         }
 
         private void RespawnPlayer(in RespawnPlan plan)

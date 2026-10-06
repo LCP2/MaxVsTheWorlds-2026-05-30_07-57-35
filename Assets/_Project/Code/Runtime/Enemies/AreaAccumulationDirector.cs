@@ -209,12 +209,31 @@ namespace MaxWorlds.Enemies
         /// mid-world checkpoint Max never actually walked to this session. Returns 0 ("unknown"/entry
         /// stub) when <paramref name="areaIndex"/> authors no inbound gate (area 1) or no world config
         /// is loaded.</summary>
-        public int PredecessorOf(int areaIndex)
+        public int PredecessorOf(int areaIndex) => PredecessorOf(areaIndex, onDeck: (bool?)null);
+
+        /// <summary>MV-1091: <paramref name="onDeck"/>-aware overload — where <paramref name="areaIndex"/>
+        /// is an IN-PLACE-DECK area (<see cref="IsInPlaceDeckArea"/>: one area id carrying both a floor
+        /// and a deck garrison, World 2's a10/a11/a12), only an inbound gate whose own level matches
+        /// <paramref name="onDeck"/> is accepted as a predecessor. Without this, the backward scan above
+        /// validated a candidate purely by "is this area SOME authored source of the death area", with
+        /// no check that the matching gate's elevation agreed with how Max actually got there — so a
+        /// floor-only retreat through an already-open doorway (a10 -&gt; a11 -&gt; back to a10, all on
+        /// the floor) wrongly validated against a10's DECK gate (a11 is also a10's deck-gate source,
+        /// g35, used much later on the descending gantry leg), and a death on the floor respawned a
+        /// whole area further on than it died (Lee, device, World 2 REPLICATORS 8/41). The 1-arg overload
+        /// is unchanged — every existing caller (<see cref="MaxWorlds.Arena.WorldRunner.ResumeCheckpoint"/>,
+        /// MV-1002/MV-1065's own tests) keeps matching ANY level, which is still correct where the two
+        /// visits are already told apart by crossing through genuinely different gates.</summary>
+        public int PredecessorOf(int areaIndex, bool onDeck) => PredecessorOf(areaIndex, (bool?)onDeck);
+
+        private int PredecessorOf(int areaIndex, bool? onDeck)
         {
             WorldArea target = _worldCfg?.AreaByIndex(areaIndex);
             if (target == null) return 0;
 
-            List<string> candidateFromIds = new List<string>(_worldCfg.InboundGateSourceIds(target.id));
+            int? levelFilter = onDeck.HasValue && IsInPlaceDeckArea(areaIndex) ? (onDeck.Value ? 1 : 0) : (int?)null;
+
+            List<string> candidateFromIds = new List<string>(_worldCfg.InboundGateSourceIds(target.id, levelFilter));
             if (candidateFromIds.Count == 0) return 0;
 
             for (int i = _physicalAreaHistory.Count - 1; i >= 1; i--)

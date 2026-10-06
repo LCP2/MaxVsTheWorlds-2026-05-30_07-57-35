@@ -44,6 +44,15 @@ namespace MaxWorlds.Arena
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
 
+        /// <summary>1 when <paramref name="gate"/>'s authored <c>opensWith</c> carries the
+        /// <see cref="DeckGateSuffix"/>, 0 otherwise (MV-1091) — the one place that reads a
+        /// <see cref="WorldGate"/>'s own elevation back out of its still-raw <c>opensWith</c> string, so
+        /// <see cref="TryLoad"/> (building the gate's entity) and <see cref="WorldConfig.InboundGateSourceIds"/>'s
+        /// level-filtered overload (resolving a death respawn's predecessor on an in-place-deck area, e.g.
+        /// World 2's a10/a11/a12) can never disagree about which gates are floor and which are deck.</summary>
+        public static int GateLevel(WorldGate gate) =>
+            !string.IsNullOrEmpty(gate?.opensWith) && gate.opensWith.EndsWith(DeckGateSuffix, StringComparison.Ordinal) ? 1 : 0;
+
         /// <summary>Parse a world-config JSON string and load it. The single entry point ticket 4
         /// (MV-270) is expected to call once <c>world1_config.json</c> is wired up as a real map.</summary>
         public static bool TryLoadJson(string json, out MapData map, out string reason)
@@ -151,8 +160,7 @@ namespace MaxWorlds.Arena
                 // to shift its base up by MapData.deckHeight. The suffix itself is stripped here; the
                 // remainder is exactly the same inert opensWith data every other gate already carries
                 // (see WorldGate's own doc comment — nothing yet resolves it into locked/unlocked).
-                int gateLevel = !string.IsNullOrEmpty(g.opensWith) &&
-                                g.opensWith.EndsWith(DeckGateSuffix, StringComparison.Ordinal) ? 1 : 0;
+                int gateLevel = GateLevel(g);
 
                 entities.Add(new MapEntity
                 {
