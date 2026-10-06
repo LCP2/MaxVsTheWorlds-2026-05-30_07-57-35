@@ -102,6 +102,12 @@ namespace MaxWorlds.UI
         /// count. (text, null clears the override)</summary>
         public static event Action<string> ArenaLabelOverride;
 
+        /// <summary>MV-1131: the top-centre objective strip — a dark pill with a coloured border, one
+        /// line of bold text, shown while the bottom arena label is hidden. <c>WorldFinaleGate</c> fires
+        /// this with "TAKE THE CORE" (cyan border) while the finale's Weapon Core waits on the ground;
+        /// null text clears it. (text, borderColor) — borderColor is meaningless when text is null.</summary>
+        public static event Action<string, Color> Objective;
+
         /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
         /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
@@ -297,6 +303,9 @@ namespace MaxWorlds.UI
 
         public static void EmitArenaLabelOverride(string text)
             => ArenaLabelOverride?.Invoke(text);
+
+        public static void EmitObjective(string text, Color borderColor)
+            => Objective?.Invoke(text, borderColor);
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);

@@ -143,6 +143,15 @@ namespace MaxWorlds.UI
         private Camera _worldCamera;
 
         private Canvas _canvas;
+
+        /// <summary>MV-1131: the live HUD's own scaled canvas (<see cref="CanvasScaler"/> in
+        /// scale-with-screen-size mode) — read by <see cref="MaxWorlds.UI.FinaleBanner"/> so the
+        /// finale's banners land on the real, scaled HUD rather than building their own bare overlay
+        /// canvas with no scaler (the bug this ticket's "the banner stays tiny on phone" observation
+        /// traced to). Null with no live HUD built (a geometry-independent test/fixture) — same
+        /// optional-reference fallback <see cref="MaxWorlds.VFX.MaxRig.Instance"/> already uses.</summary>
+        public static Canvas ActiveCanvas { get; private set; }
+
         private RectTransform _safeRoot;
         private FloatingTextLayer _floating;
 
@@ -225,6 +234,13 @@ namespace MaxWorlds.UI
         // Arena indicator
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
+
+        // The objective strip (MV-1131): top-centre, shown instead of the arena label while a finale
+        // beat has something specific for the player to do ("TAKE THE CORE").
+        private RectTransform _objectiveRoot;
+        private Image _objectiveBg;
+        private Image _objectiveBorder;
+        private Text _objectiveLabel;
 
         // The MAP button (MV-563), replacing the always-on minimap this ticket removes outright — see
         // BuildMapButton.
@@ -342,6 +358,7 @@ namespace MaxWorlds.UI
             BuildTeleportJoystick();
             BuildJoysticks();
             BuildArenaIndicator();
+            BuildObjectiveStrip();
             BuildInvasionDial();
             BuildBossBar();
             BuildSpawnLevelBar();
@@ -374,6 +391,7 @@ namespace MaxWorlds.UI
             HudSignals.BossSpawnLevelChanged += OnBossSpawnLevel;
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.SentinelRecalled += OnSentinelRecalled;
+            HudSignals.Objective += OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged += OnPowerCellsSecondary;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
@@ -412,6 +430,7 @@ namespace MaxWorlds.UI
             HudSignals.BossSpawnLevelChanged -= OnBossSpawnLevel;
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
+            HudSignals.Objective -= OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged -= OnPowerCellsSecondary;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
@@ -1231,6 +1250,13 @@ namespace MaxWorlds.UI
             _safeRoot = NewRect("Safe Area", (RectTransform)_canvas.transform);
             Stretch(_safeRoot);
             _safeRoot.gameObject.AddComponent<SafeArea>();
+
+            ActiveCanvas = _canvas;
+        }
+
+        private void OnDestroy()
+        {
+            if (ActiveCanvas == _canvas) ActiveCanvas = null;
         }
 
         /// <summary>Edge-anchored controls parent here — inset to the device safe area.</summary>
@@ -1978,6 +2004,82 @@ namespace MaxWorlds.UI
         {
             _model.Arena.SetOverrideText(text);
         }
+
+        /// <summary>MV-1131: a dark pill, top centre, with a 2px coloured border and one line of bold
+        /// text — sized as a fraction of the real, resolved canvas height (<see cref="FullRoot"/>'s own
+        /// rect, which <see cref="CanvasScaler.ScaleWithScreenSize"/> always keeps equal to
+        /// Screen.height / its own scale factor) rather than a fixed reference-pixel constant, so "4% of
+        /// screen height" reads true on any aspect, not just the 16:9 the reference resolution assumes.</summary>
+        private const float ObjectiveTextHeightFraction = 0.04f;
+        private const float ObjectiveTopFraction = 0.034f;
+
+        private void BuildObjectiveStrip()
+        {
+            _objectiveRoot = NewRect("Objective Strip", FullRoot);
+            Anchor(_objectiveRoot, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+
+            _objectiveBg = AddImage(_objectiveRoot, HudTextures.RoundedBox(48, 0.5f), PanelColor, "BG");
+            Stretch(_objectiveBg.rectTransform);
+            _objectiveBg.type = Image.Type.Sliced;
+            _objectiveBg.raycastTarget = false;
+
+            _objectiveBorder = AddImage(_objectiveRoot, HudTextures.RoundedBoxOutline(48, 0.5f, 2f), BoneWhite, "Border");
+            Stretch(_objectiveBorder.rectTransform);
+            _objectiveBorder.raycastTarget = false;
+
+            _objectiveLabel = AddText(_objectiveRoot, 24f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(_objectiveLabel.rectTransform, -16f);
+            _objectiveLabel.fontStyle = FontStyle.Bold;
+            _objectiveLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            _objectiveRoot.gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1131: <c>WorldFinaleGate</c>'s "TAKE THE CORE" (or null to clear) — while shown,
+        /// the bottom arena label is hidden (ticket: "while a strip is showing, the bottom arena label is
+        /// hidden") so the two never compete for the player's attention at once.</summary>
+        private void OnObjective(string text, Color borderColor)
+        {
+            if (_objectiveRoot == null) return;
+
+            bool showing = !string.IsNullOrEmpty(text);
+            _objectiveRoot.gameObject.SetActive(showing);
+            if (_arenaLabel != null) _arenaLabel.gameObject.SetActive(!showing);
+            if (!showing) return;
+
+            float canvasHeight = Mathf.Max(1f, FullRoot.rect.height);
+            float textHeight = canvasHeight * ObjectiveTextHeightFraction;
+            float topInset = canvasHeight * ObjectiveTopFraction;
+
+            _objectiveRoot.sizeDelta = new Vector2(600f, textHeight * 1.8f);
+            _objectiveRoot.anchoredPosition = new Vector2(0f, -(topInset + textHeight * 0.9f));
+
+            _objectiveLabel.text = text;
+            _objectiveLabel.fontSize = Mathf.RoundToInt(textHeight);
+            _objectiveLabel.resizeTextForBestFit = true;
+            _objectiveLabel.resizeTextMinSize = 10;
+            _objectiveLabel.resizeTextMaxSize = Mathf.RoundToInt(textHeight);
+
+            _objectiveBorder.color = borderColor;
+        }
+
+        /// <summary>MV-1131: hides (or restores) the move/aim on-screen sticks for the new-weapon
+        /// moment's 2.5s beat — gameplay is already frozen for it (<c>WorldFinaleGate.SuspendGameplayForBeat</c>),
+        /// but the sticks themselves stay interactable/visible unless told otherwise.</summary>
+        public void SetControlsHidden(bool hidden)
+        {
+            if (_moveJoystickRoot != null) _moveJoystickRoot.gameObject.SetActive(!hidden);
+            if (_aimJoystickRoot != null) _aimJoystickRoot.gameObject.SetActive(!hidden);
+        }
+
+        /// <summary>MV-1131 test seam: whether the bottom arena label's own GameObject is active right
+        /// now — resolved runtime state, not a field reflected into (this ticket's own testing rule).</summary>
+        public bool ArenaLabelVisible => _arenaLabel != null && _arenaLabel.gameObject.activeSelf;
+
+        /// <summary>MV-1131 test seam: whether the objective strip is showing, and what it reads, same
+        /// "public property, not reflection" shape as <see cref="ArenaLabelVisible"/>.</summary>
+        public bool ObjectiveVisible => _objectiveRoot != null && _objectiveRoot.gameObject.activeSelf;
+        public string ObjectiveText => _objectiveLabel != null ? _objectiveLabel.text : null;
 
         private void RefreshArenaText(bool prominent)
         {
