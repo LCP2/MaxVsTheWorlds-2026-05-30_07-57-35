@@ -175,6 +175,23 @@ namespace MaxWorlds.Enemies
         /// <summary>How many robots are switched on right now, field-wide (not per-factory).</summary>
         public static int ActiveCount => _active.Count;
 
+        /// <summary>How many robots are a real, present threat right now, field-wide (MV-1093) — every
+        /// <see cref="_active"/> entry whose <see cref="IsAwake"/> is true. Unlike <see cref="ActiveCount"/>,
+        /// this excludes a sleeping pre-placed garrison sitting Dormant-but-enabled within Max's reach
+        /// (<see cref="AreaAccumulationDirector.ParkByReach"/> only parks/disables what's OUTSIDE reach;
+        /// within it, a large authored garrison stayed enabled and counted against the field-wide budget
+        /// before this ticket) — what <see cref="EnemySpawner.GlobalHasRoom"/> now reads instead.</summary>
+        public static int AwakeCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < _active.Count; i++)
+                    if (_active[i] != null && _active[i].IsAwake) n++;
+                return n;
+            }
+        }
+
         /// <summary>Empties the registry. Called when a level starts building, alongside
         /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
         /// whose OnDisable hasn't run yet when the next level (or test) starts counting.</summary>
@@ -217,6 +234,17 @@ namespace MaxWorlds.Enemies
         /// already noticed something and is mid-engagement, and Change 1's own "awake robots chasing
         /// Max are never parked" leaves those alone regardless of area.</summary>
         public bool IsResting => Current == State.Dormant || Current == State.Submerged;
+
+        /// <summary>MV-1093: true for a robot that counts as a real, present threat for the field-wide
+        /// "room for one more" budget (<see cref="EnemySpawner.GlobalHasRoom"/>) — alive, not
+        /// <see cref="State.Dormant"/>, and not a Grate Lurker sitting in its asleep-underground beat
+        /// (<see cref="State.Submerged"/> with <see cref="_lurkerPhase"/> still
+        /// <see cref="LurkerCycle.Phase.Submerged"/>). A Lurker's Rattle/Emerged/Submerging beats share
+        /// the same <see cref="Current"/> value but are visible, active danger, not sleep, so they count.
+        /// Parked robots (<see cref="SetParked"/>) are already excluded — <see cref="OnDisable"/> drops
+        /// them out of <see cref="_active"/> entirely, the same registry this reads.</summary>
+        public bool IsAwake => IsAlive && Current != State.Dormant &&
+            !(Current == State.Submerged && _lurkerPhase == LurkerCycle.Phase.Submerged);
 
         /// <summary>True only when this robot is alive, awake, AND physically present to be hit
         /// (MV-733) — every future "can I engage this robot" caller belongs on this one property

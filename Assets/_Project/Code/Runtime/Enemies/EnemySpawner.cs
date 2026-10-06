@@ -34,15 +34,14 @@ namespace MaxWorlds.Enemies
         // the wall of bodies that kiteability tuning (YT-63/YT-80) exists to prevent.
         [SerializeField] private int maxLiveEnemies = 8;
 
-        /// <summary>Robots THIS factory allows alive at RUN START (YT-194) — see
-        /// <see cref="EffectiveMaxLiveEnemies"/>, which ramps this up to <see cref="maxLiveEnemies"/>
-        /// as the Invasion Level climbs. Default of a couple, not a swarm: the playtest that opened
-        /// this ticket found Max overrun in the opening seconds, before he has any answer to it.</summary>
-        [Tooltip("Robots THIS factory allows alive at RUN START — ramps up to Max live enemies as " +
-                 "the Invasion Level climbs (YT-194). Overridable via the Settings panel's " +
-                 "'Starting robots' knob.")]
-        // YT-200: Lee's on-device number is zero — the run starts with no robots on the field at all,
-        // arriving only via the Production/min ramp below.
+        /// <summary>MV-1093: no longer drives <see cref="EffectiveMaxLiveEnemies"/> for a live shed — a
+        /// live shed's per-shed cap is now a flat <see cref="maxLiveEnemies"/> at every Invasion Level,
+        /// never ramped from this. Kept only as the Settings panel's reference default
+        /// (<see cref="AuthoredStartingRobots"/>) for the (now otherwise unused) "Starting robots" knob,
+        /// so that control doesn't dangle with no authored value to show.</summary>
+        [Tooltip("Formerly ramped a live shed's own cap up from this value (YT-194); MV-1093 made the " +
+                 "per-shed cap a flat Max live enemies at every Invasion Level, so this no longer has " +
+                 "any live effect.")]
         [SerializeField] private int startingRobots = 0;
 
         /// <summary>
@@ -73,9 +72,14 @@ namespace MaxWorlds.Enemies
         /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory. MV-809:
         /// also treats every outstanding Replicator reservation as already spoken for, so an ordinary
         /// spawn (or a second Replicator's own emission) can never steal the one slot a cycle in flight
-        /// is guaranteed to get back.</summary>
+        /// is guaranteed to get back. MV-1093: reads <see cref="RobotEnemy.AwakeCount"/>, not the raw
+        /// <see cref="RobotEnemy.ActiveCount"/> — a sleeping, pre-placed garrison within Max's reach
+        /// stays enabled (only <c>AreaAccumulationDirector.ParkByReach</c> parks what's OUTSIDE reach)
+        /// and used to eat into this same field-wide budget, starving a shed in a room whose own
+        /// population was nowhere near full. A Dormant/Submerged-asleep robot is not a threat yet and
+        /// must never block a new one from arriving.</summary>
         private static bool GlobalHasRoom =>
-            RobotEnemy.ActiveCount + _replicatorReservedSlots < GlobalMaxLiveEnemies;
+            RobotEnemy.AwakeCount + _replicatorReservedSlots < GlobalMaxLiveEnemies;
 
         /// <summary>MV-809: called the instant a Replicator despawns a consumed robot — holds that
         /// robot's now-vacant slot until <see cref="ReleaseReplicatorReservation"/> spends it, so
@@ -92,35 +96,31 @@ namespace MaxWorlds.Enemies
         /// as <see cref="RobotEnemy.ResetRegistry"/>. Never called by shipped gameplay.</summary>
         public static void ResetReplicatorReservations() => _replicatorReservedSlots = 0;
 
-        /// <summary>The live-count ceiling THIS factory actually enforces right now (YT-194): ramps
-        /// from <see cref="startingRobots"/> up to the authored <see cref="maxLiveEnemies"/> as
-        /// <see cref="DifficultyDirector.Normalized"/> climbs from 0 to 1, so a fresh run shows a
-        /// couple of robots and the field fills in as the Invasion Level rises. Clamped to
-        /// <see cref="maxLiveEnemies"/> at both ends — never past the authored ceiling, and never
-        /// above it even mid-ramp if a test or a dialled override put <c>maxLiveEnemies</c> itself
-        /// below <see cref="startingRobots"/>.</summary>
-        private int EffectiveMaxLiveEnemies =>
-            _destroyed
-                ? postDestructionMaxLiveEnemies
-                : Mathf.Clamp(
-                    Mathf.RoundToInt(Mathf.Lerp(
-                        DevTuning.Or(DevTuning.StartingRobots, startingRobots),
-                        maxLiveEnemies,
-                        DifficultyDirector.Normalized)),
-                    0, maxLiveEnemies);
+        /// <summary>The live-count ceiling THIS factory actually enforces right now: a flat
+        /// <see cref="maxLiveEnemies"/> (8) at every Invasion Level for a live shed — MV-1093 removed
+        /// the old ramp from <see cref="startingRobots"/> (YT-194's "a fresh run starts with no robots"),
+        /// which left a shed producing nothing threatening for the opening stretch of every run (Lee's
+        /// "mower hutches are no threat" report). <see cref="startingRobots"/>/<see cref="DevTuning.StartingRobots"/>
+        /// are kept only as the authored/Settings-panel reference default (<see cref="AuthoredStartingRobots"/>)
+        /// — neither drives this any more.</summary>
+        private int EffectiveMaxLiveEnemies => _destroyed ? postDestructionMaxLiveEnemies : maxLiveEnemies;
 
         /// <summary>The authored starting-robot count, for the Settings panel's reference default
         /// (YT-194) — same pattern as <see cref="AuthoredSpawnIntervalMin"/>.</summary>
         public int AuthoredStartingRobots => startingRobots;
 
-        [Tooltip("Seconds between spawns at run start (breathable).")]
+        // MV-1093: spawnIntervalStart/rampSeconds no longer drive a live shed's cadence at all — see
+        // CurrentInterval's own LiveSpawnIntervalAtZeroInvasion/AtMaxInvasion, which replaced this ramp
+        // outright. Kept only so an already-authored prefab round-trips without data loss.
+        [Tooltip("No longer used (MV-1093 replaced the ramp with a flat Invasion-Level lerp).")]
         [SerializeField] private float spawnIntervalStart = 1.8f;
-        [Tooltip("Seconds between spawns at steady state (peak pressure).")]
+        [Tooltip("Still the Settings panel's reference default (AuthoredSpawnIntervalMin) — no longer " +
+                 "drives a live shed's own cadence (MV-1093).")]
         // YT-200: Lee's on-device number, dialled via the Settings panel's Production/min knob (was
         // 1.2s / 50 bots-per-min — this is 12s / 5 bots-per-min).
         // MV-658: baked from Lee's 2026-09-02 tuning pass (was 12s / 5 bots-per-min) — 0.5s / 120 bots-per-min.
         [SerializeField] private float spawnIntervalMin = 0.5f;
-        [Tooltip("Seconds over which the cadence ramps from start to min.")]
+        [Tooltip("No longer used (MV-1093 replaced the ramp with a flat Invasion-Level lerp).")]
         [SerializeField] private float rampSeconds = 45f;
 
         [Header("Post-destruction faucet (MV-456) — a destroyed shed's area stays a renewable cell " +
@@ -183,6 +183,10 @@ namespace MaxWorlds.Enemies
         /// emitted/authored ratios.</summary>
         public void ConfigureAreaComposition(MaxWorlds.Arena.WorldComposition composition) =>
             _areaCadence = new EnemyMix.AreaCadence(composition);
+
+        /// <summary>Test-only visibility into this shed's resolved area cadence (MV-1093) — same footing
+        /// as <see cref="LiveCountOf"/>.</summary>
+        public EnemyMix.AreaCadence Cadence => _areaCadence;
 
         /// <summary>This shed's loaded world (MV-701) — wired by <see cref="MaxWorlds.Arena.WorldRunner.Configure"/>
         /// alongside <see cref="ConfigureAreaComposition"/>, so <see cref="SpawnKind"/> can resolve a
@@ -309,9 +313,14 @@ namespace MaxWorlds.Enemies
 
         /// <summary>A robot is due — the cadence has come round and there is room on the field. The
         /// door watches this to know when to start hauling itself up, so that it is open by the time
-        /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
+        /// the robot is ready rather than the robot waiting on a door that had no reason to move.
+        /// MV-1093: also false while <see cref="_areaPaused"/> (Max is not standing in this shed's own
+        /// area — live or post-destruction trickle alike, no longer only the latter) or while
+        /// <see cref="_areaCadence"/> has nothing it may emit at all — without that second check a shed
+        /// whose area authors no composition and no emit-able garrison kind (World 3's every area, pre-
+        /// fix) wanted to emit forever and the door cycled open and shut on nothing.</summary>
         public bool WantsToEmit =>
-            _running && !(_destroyed && _areaPaused) &&
+            _running && !_areaPaused && _areaCadence.HasAnyAuthored &&
             _timer >= CurrentInterval && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom;
 
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
@@ -358,13 +367,13 @@ namespace MaxWorlds.Enemies
 
         private bool _areaPaused;
 
-        /// <summary>Pause/resume the post-destruction trickle (MV-456): a destroyed shed only streams
-        /// while the player is actually standing in its area. <see cref="MaxWorlds.Arena.WorldRunner"/>
-        /// drives this off the player's live position so a handful of destroyed sheds several rooms
-        /// back can never eat into the field-wide <see cref="GlobalMaxLiveEnemies"/> cap the room the
-        /// player is actually in depends on. Meaningless (and never called) for a factory that isn't
-        /// destroyed yet — the live cadence was never gated on area presence and this ticket doesn't
-        /// change that.</summary>
+        /// <summary>Pause/resume this shed's production (MV-456, generalised by MV-1093): it only
+        /// produces while the player is actually standing in its own area — live or, once destroyed,
+        /// trickling. <see cref="MaxWorlds.Arena.WorldRunner"/> drives this off the player's live
+        /// position for EVERY built shed, so a handful of OTHER sheds several rooms back (alive or
+        /// destroyed) can never eat into the field-wide <see cref="GlobalMaxLiveEnemies"/> cap the room
+        /// the player is actually in depends on — and so a live shed somewhere Max isn't standing reads
+        /// as dormant rather than as a threat he can't see or answer.</summary>
         public void SetAreaPaused(bool paused) => _areaPaused = paused;
 
         /// <summary>Live count of one kind — lets a test prove the mix actually reaches the field.</summary>
@@ -379,45 +388,49 @@ namespace MaxWorlds.Enemies
         /// (YT-170) — same pattern as <see cref="MaxWorlds.Factories.MowerHutch.AuthoredMax"/>.</summary>
         public float AuthoredSpawnIntervalMin => spawnIntervalMin;
 
-        /// <summary>Current seconds-between-spawns for the run time so far. Read live every call, so
-        /// a Settings-panel override takes effect on the very next check rather than needing a push
-        /// (YT-170) — a flat DevTuning rate replaces the whole start→min ramp outright, since a rate
-        /// the player dialled in is the rate they should get, not one more input the ramp blends away.
-        ///
-        /// The Invasion Level (YT-181) is layered OUTSIDE that override, not inside it: a manual
-        /// SpawnInterval pin is Lee dialling in an exact number, and escalation silently speeding
-        /// past it would break the one guarantee a pinned slider makes. Left alone, the computed
-        /// start→min ramp is further scaled down as the level climbs, so the same shed pumps out
-        /// robots faster late in a run without anyone having to touch a slider.</summary>
+        /// <summary>Current seconds-between-spawns. Read live every call, so a Settings-panel
+        /// <see cref="DevTuning.SpawnInterval"/> pin takes effect on the very next check and always
+        /// wins outright — Lee dialling in an exact number must never be silently sped past by
+        /// escalation. Without that pin, MV-1093's flat <see cref="LiveSpawnIntervalAtZeroInvasion"/>→
+        /// <see cref="LiveSpawnIntervalAtMaxInvasion"/> lerp applies for a live shed (one robot every
+        /// 4.0 s at the run's start, shortening to one every 2.0 s at full Invasion Level escalation —
+        /// replacing the old <see cref="spawnIntervalStart"/>→<see cref="spawnIntervalMin"/> ramp and
+        /// the <see cref="DifficultyDirector.SpawnIntervalMultiplier"/> product outright, per Lee's
+        /// "mower hutches produce robots way too infrequently" report), and
+        /// <see cref="postDestructionSpawnIntervalMin"/> (MV-456, untouched) once destroyed.</summary>
+        private const float LiveSpawnIntervalAtZeroInvasion = 4.0f;
+        private const float LiveSpawnIntervalAtMaxInvasion = 2.0f;
+
         public float CurrentInterval =>
             DevTuning.SpawnInterval.HasValue
                 ? DevTuning.SpawnInterval.Value
                 : _destroyed
                     ? postDestructionSpawnIntervalMin
-                    : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, EffectiveSpawnIntervalMin, rampSeconds)
-                        * DifficultyDirector.SpawnIntervalMultiplier;
-
-        /// <summary>The steady-state spawn interval in seconds — either the authored
-        /// <see cref="spawnIntervalMin"/> or, if the Settings panel's more intuitive "Robot
-        /// production / min" knob has been moved, that rate converted to seconds (YT-194: 60 /
-        /// robots-per-minute). Only replaces the STEADY-STATE end of the start→min ramp: the ramp
-        /// itself and the Invasion Level's <see cref="DifficultyDirector.SpawnIntervalMultiplier"/>
-        /// both still apply on top, unlike <see cref="DevTuning.SpawnInterval"/> above, which pins a
-        /// flat number and bypasses both.</summary>
-        private float EffectiveSpawnIntervalMin =>
-            DevTuning.RobotProductionPerMinute.HasValue && DevTuning.RobotProductionPerMinute.Value > 0f
-                ? 60f / DevTuning.RobotProductionPerMinute.Value
-                : spawnIntervalMin;
+                    : Mathf.Lerp(LiveSpawnIntervalAtZeroInvasion, LiveSpawnIntervalAtMaxInvasion,
+                        DifficultyDirector.Normalized);
 
         /// <summary>The authored steady-state production rate in robots/minute, for the Settings
         /// panel's reference default (YT-194) — same pattern as <see cref="AuthoredSpawnIntervalMin"/>.</summary>
         public float AuthoredProductionPerMinute => spawnIntervalMin > 0f ? 60f / spawnIntervalMin : 0f;
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame production step (MV-1093), pulled out of <see cref="Update"/> with an
+        /// explicit <paramref name="dt"/> — same "Tick(dt), not a bare Update()" shape as
+        /// <see cref="DifficultyDirector.Tick"/>/<see cref="MaxWorlds.Factories.Replicator.TickConsumption"/>
+        /// — so an EditMode test can drive many simulated seconds of production with no live Unity frame
+        /// loop (EditMode never runs one) instead of being limited to whatever <see cref="Time.deltaTime"/>
+        /// happens to read outside Play mode.</summary>
+        public void Tick(float dt)
         {
             if (!_running) return;
-            if (_destroyed && _areaPaused) return;   // MV-456: only trickle while the player is here
-            float dt = Time.deltaTime;
+            // MV-1093: only produce while Max stands in this shed's own area — live or post-destruction
+            // trickle alike (MV-456's rule, generalised rather than kept as a destroyed-only special case).
+            if (_areaPaused) return;
+            // MV-1093: nothing this area may emit — the door must stay shut, not cycle open and shut on
+            // nothing (World 3's every shed, pre-fix: no composition, no fallback, WantsToEmit never
+            // checked the cadence at all).
+            if (!_areaCadence.HasAnyAuthored) return;
             _elapsed += dt;
             _timer += dt;
             if (_timer < CurrentInterval || _live.Count >= EffectiveMaxLiveEnemies || !GlobalHasRoom) return;
@@ -455,9 +468,9 @@ namespace MaxWorlds.Enemies
         /// of <paramref name="count"/> when a cap bites), so a caller like <see cref="MaxWorlds.Factories.Replicator"/>
         /// (MV-808) can place them itself instead of trusting wherever <see cref="SpawnKind"/> put them.
         /// <paramref name="ignorePerFactoryCap"/> (MV-817): a Replicator's emitted twins are not this
-        /// factory's own production stream — <see cref="EffectiveMaxLiveEnemies"/> ramps from 0 early
-        /// in a run and has nothing to do with how many robots a box (whose own live count sits at 0 —
-        /// it never spawns on its own) is allowed to hand back. True skips that per-factory check
+        /// factory's own production stream — <see cref="EffectiveMaxLiveEnemies"/> is an ordinary
+        /// shed's own cap and has nothing to do with how many robots a box (whose own live count sits
+        /// at 0 — it never spawns on its own) is allowed to hand back. True skips that per-factory check
         /// entirely; <see cref="GlobalHasRoom"/> — and with it the MV-809 reservation — still applies
         /// unconditionally, so this can never spawn past the field-wide budget. <paramref name="ignoreGlobalRoom"/>
         /// (MV-820): a Replicator's guaranteed first twin is never dropped for lack of room — consuming

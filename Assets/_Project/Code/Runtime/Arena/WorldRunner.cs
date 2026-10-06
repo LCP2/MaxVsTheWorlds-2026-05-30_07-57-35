@@ -43,7 +43,7 @@ namespace MaxWorlds.Arena
 
         /// <summary>One entry per BUILT shed (MV-475, not per area — an area can carry several).
         /// <c>shedId</c> is the entity id <see cref="SupplyLineNetwork"/> tracks destruction against;
-        /// <c>areaId</c> is only needed alongside it for <see cref="TrackDestroyedShedStream"/>.</summary>
+        /// <c>areaId</c> is only needed alongside it for <see cref="DestroyFactoriesBefore"/>.</summary>
         private readonly List<(string areaId, string shedId, MowerHutch hutch)> _sheds =
             new List<(string, string, MowerHutch)>(3);
 
@@ -64,10 +64,14 @@ namespace MaxWorlds.Arena
         /// <see cref="IsConditionGatedArea"/>.</summary>
         private bool _loggedBossPrimaryCompat;
 
-        /// <summary>Destroyed sheds' spawners, keyed by their 1-based area index (MV-456) — fed by
-        /// <see cref="TrackDestroyedShedStream"/> as each shed dies. Never drained: a world is short
-        /// enough that this never grows past a handful of entries.</summary>
-        private readonly List<(int areaIndex, EnemySpawner spawner)> _destroyedShedSpawners =
+        /// <summary>Every built shed's <see cref="EnemySpawner"/>, paired with its own 1-based area
+        /// index (MV-1093) — built once in <see cref="Configure"/>, alive or later destroyed alike.
+        /// This runner is the only thing with a live view of which area Max is physically standing in,
+        /// so it alone can gate EVERY shed to "producing only while Max stands in its own area" — live
+        /// (Lee's "mower hutches are no threat" report: a shed several rooms away used to produce just
+        /// as readily as the one Max was actually fighting) and, once destroyed, the MV-456 trickle
+        /// (now just one case of this same gate rather than a separate destroyed-only code path).</summary>
+        private readonly List<(int areaIndex, EnemySpawner spawner)> _shedSpawners =
             new List<(int, EnemySpawner)>(9);
 
         private WorldConfig _cfg;
@@ -135,11 +139,14 @@ namespace MaxWorlds.Arena
                     // MV-643: this shed may only ever emit a kind ITS OWN area's authored composition
                     // contains — every world1 area with a shed authors one (WorldComposition), so this
                     // is what actually replaces the old area-blind global cadence for every real shed.
+                    // MV-1093: an area with NO authored composition (every World 3 area) now falls back
+                    // to one derived from its own garrison instead of emitting nothing forever.
                     EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
                     if (spawner != null)
                     {
-                        spawner.ConfigureAreaComposition(area.composition);
+                        spawner.ConfigureAreaComposition(ResolveShedComposition(area));
                         spawner.ConfigureWorldConfig(cfg);   // MV-701: so this shed's own spawns can resolve enemyOverrides
+                        _shedSpawners.Add((area.index, spawner));
                     }
                 }
 
@@ -275,6 +282,57 @@ namespace MaxWorlds.Arena
             return null;
         }
 
+        /// <summary>This shed's emission cadence source (MV-1093): <paramref name="area"/>'s own
+        /// authored <see cref="WorldComposition"/> when it has one, else one derived from the area's
+        /// authored <see cref="WorldArea.garrison"/> counts, same proportions — every World 3 area ships
+        /// with a garrison but no composition, which previously left <see cref="EnemyMix.AreaCadence"/>
+        /// empty forever (the "door cycles, nothing ever comes out" report). Logs an error naming the
+        /// area when NEITHER yields anything authored — that shed's door then stays shut
+        /// (<see cref="EnemySpawner.WantsToEmit"/>) rather than silently inventing a kind nobody drew.</summary>
+        private static WorldComposition ResolveShedComposition(WorldArea area)
+        {
+            if (area.composition != null && area.composition.IsAuthored) return area.composition;
+
+            WorldComposition derived = CompositionFromGarrison(area);
+            if (!derived.IsAuthored)
+            {
+                Debug.LogError($"[WorldRunner] MV-1093: area '{area.id}' has neither an authored " +
+                                "composition nor any emit-able garrison kind for its shed — its door " +
+                                "will stay shut.");
+            }
+            return derived;
+        }
+
+        /// <summary>Counts <paramref name="area"/>'s authored <see cref="WorldArea.garrison"/> entries by
+        /// kind, skipping Lurker/Turret (MV-1093: placed at an authored grate/wall mount, never emitted
+        /// through a shed's ambient release cadence — <see cref="EnemyMix.AreaCadence"/>'s own
+        /// constructor already carries this same exemption for Lurker).</summary>
+        private static WorldComposition CompositionFromGarrison(WorldArea area)
+        {
+            var composition = new WorldComposition();
+            if (area.garrison == null) return composition;
+
+            foreach (WorldGarrisonEntry g in area.garrison)
+            {
+                if (g == null || !EnemyKindNames.TryParse(g.kind, out EnemyKind kind)) continue;
+                switch (kind)
+                {
+                    case EnemyKind.Rusher: composition.rusher++; break;
+                    case EnemyKind.Bruiser: composition.bruiser++; break;
+                    case EnemyKind.Heavy: composition.heavy++; break;
+                    case EnemyKind.Brute: composition.brute++; break;
+                    case EnemyKind.Gunner: composition.gunner++; break;
+                    case EnemyKind.Launcher: composition.launcher++; break;
+                    case EnemyKind.Blinker: composition.blinker++; break;
+                    case EnemyKind.Bolter: composition.bolter++; break;
+                    case EnemyKind.Sludger: composition.sludger++; break;
+                    case EnemyKind.Charger: composition.charger++; break;
+                    // Lurker/Turret: placed, not emitted — skipped on purpose.
+                }
+            }
+            return composition;
+        }
+
         private void OnDestroy()
         {
             if (_playerHealth != null) _playerHealth.Died -= OnPlayerDied;
@@ -399,7 +457,7 @@ namespace MaxWorlds.Arena
 
         /// <summary>MV-665: reports every newly-dead shed into <see cref="_supply"/> — sheds no longer
         /// gate any door by role, but <see cref="SupplyLineNetwork"/> still needs to know a shed died for
-        /// everything else it drives (supply lines, <see cref="TrackDestroyedShedStream"/>). MV-703 adds
+        /// everything else it drives (supply lines). MV-703 adds
         /// the Replicator equivalent (no death event to subscribe to, so polled the same way) and then
         /// re-resolves every condition-gated gate's lock. Called every <see cref="Update"/> tick and
         /// public so anything else that needs a fresh resolution — a resume, a test — can force one
@@ -410,12 +468,11 @@ namespace MaxWorlds.Arena
 
             for (int i = _sheds.Count - 1; i >= 0; i--)
             {
-                (string areaId, string shedId, MowerHutch hutch) = _sheds[i];
+                (string _, string shedId, MowerHutch hutch) = _sheds[i];
                 if (hutch != null && hutch.IsAlive) continue;
 
                 _sheds.RemoveAt(i);
                 _supply.DestroyShed(shedId);
-                TrackDestroyedShedStream(areaId, hutch);
             }
 
             for (int i = _replicators.Count - 1; i >= 0; i--)
@@ -524,7 +581,7 @@ namespace MaxWorlds.Arena
         {
             RefreshConditionGates();
 
-            UpdatePostDestructionStreamGating();
+            UpdateShedAreaGating();
 
             // MV-591: the run ends when the FINAL area is empty — every robot dead, none still queued
             // to arrive, no boss alive. Not when a boss dies; a12 and a20 have bosses mid-run.
@@ -542,39 +599,24 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>Remember a destroyed shed's <see cref="EnemySpawner"/> against its 1-based area
-        /// index (MV-456), so <see cref="UpdatePostDestructionStreamGating"/> can pause/resume its
-        /// post-destruction trickle purely off which area the player is standing in. A no-op if the
-        /// area id doesn't resolve to a combat area index or the factory carries no spawner — neither
-        /// should happen (every shed's area carries one, and RequireComponent guarantees the other).</summary>
-        private void TrackDestroyedShedStream(string areaId, MowerHutch hutch)
+        /// <summary>MV-1093 (generalised from MV-456's destroyed-only version): a shed only produces
+        /// while the player is PHYSICALLY standing in its own area — live, so a shed Max isn't fighting
+        /// reads as dormant rather than a threat he can't see or answer, and once destroyed, so the
+        /// field-wide <see cref="EnemySpawner.GlobalMaxLiveEnemies"/> cap is never starved by several
+        /// OTHER destroyed sheds streaming unseen. Cheap to poll every frame — a world carries at most a
+        /// handful of sheds.</summary>
+        private void UpdateShedAreaGating()
         {
-            if (hutch == null || _cfg == null) return;
-            WorldArea area = _cfg.Area(areaId);
-            if (area == null || area.index <= 0) return;
-            EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
-            if (spawner == null) return;
-            _destroyedShedSpawners.Add((area.index, spawner));
-        }
-
-        /// <summary>The risk MV-456 flags by name: areas are never unloaded, so with several destroyed
-        /// sheds all streaming, the field-wide <see cref="EnemySpawner.GlobalMaxLiveEnemies"/> cap
-        /// could starve spawns in the room the player is actually in. Mitigation: only the destroyed
-        /// shed whose area the player is CURRENTLY, PHYSICALLY standing in keeps streaming; every
-        /// other destroyed shed pauses. Cheap to poll every frame — a world carries at most a handful
-        /// of sheds.</summary>
-        private void UpdatePostDestructionStreamGating()
-        {
-            if (_destroyedShedSpawners.Count == 0 || _map == null) return;
+            if (_shedSpawners.Count == 0 || _map == null) return;
             EnsurePlayer();
             if (_player == null) return;
 
             MapZone zone = _map.ZoneAt(_player.position.x, _player.position.z);
             int playerArea = zone == null ? 0 : AreaAccumulationDirector.AreaIndexOf(zone.id);
 
-            for (int i = 0; i < _destroyedShedSpawners.Count; i++)
+            for (int i = 0; i < _shedSpawners.Count; i++)
             {
-                (int areaIndex, EnemySpawner spawner) = _destroyedShedSpawners[i];
+                (int areaIndex, EnemySpawner spawner) = _shedSpawners[i];
                 if (spawner != null) spawner.SetAreaPaused(areaIndex != playerArea);
             }
         }
