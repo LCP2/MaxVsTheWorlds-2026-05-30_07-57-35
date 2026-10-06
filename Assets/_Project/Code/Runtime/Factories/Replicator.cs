@@ -669,14 +669,19 @@ namespace MaxWorlds.Factories
         /// <see cref="RobotEnemy.Active"/> instead of re-implementing (and risking drifting from) this
         /// box's own rule: alive, not a Lurker/Turret (they cannot walk to a box — kept, MV-688/MV-691),
         /// not tagged NoReplicate, not already assigned to this or any other box
-        /// (<see cref="RobotEnemy.IsAssignedToReplicator"/>), and physically in <paramref name="areaIndex"/>.
+        /// (<see cref="RobotEnemy.IsAssignedToReplicator"/>), physically in <paramref name="areaIndex"/>,
+        /// AND on the same combat level (<see cref="CombatLevel.SameLevel"/>) as <paramref name="replicatorPosition"/>
+        /// (MV-1086: a10/a11/a12 hold floor and deck robots under one area id — MV-944's "floor and deck
+        /// fight separately" rule has a replicator-shaped hole without this, and a floor box's own
+        /// guaranteed-arrival glide (MV-1066) will drag a deck robot right off its own level to close it).
         /// Distance is deliberately not part of this predicate — <see cref="NearestEligible"/> ranks by
         /// it separately; the probe only needs a count.</summary>
-        public static bool IsEligibleFor(RobotEnemy r, int areaIndex) =>
+        public static bool IsEligibleFor(RobotEnemy r, int areaIndex, Vector3 replicatorPosition) =>
             r != null && r.IsAlive
             && r.Kind != EnemyKind.Lurker && r.Kind != EnemyKind.Turret
             && !r.NoReplicate && !r.IsAssignedToReplicator
-            && r.AreaIndex == areaIndex;
+            && r.AreaIndex == areaIndex
+            && CombatLevel.SameLevel(EnemyNavigation.Map, replicatorPosition, r.transform.position);
 
         /// <summary>MV-820 Change 1: the nearest-by-straight-line-distance robot that passes
         /// <see cref="IsEligibleFor"/> for THIS box's own area (<see cref="AreaIndex"/>). Null if nobody
@@ -684,14 +689,15 @@ namespace MaxWorlds.Factories
         private RobotEnemy NearestEligible()
         {
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            Vector3 pos = transform.position;
             RobotEnemy nearest = null;
             float nearestDist = float.MaxValue;
             for (int i = 0; i < active.Count; i++)
             {
                 RobotEnemy r = active[i];
-                if (!IsEligibleFor(r, AreaIndex)) continue;
+                if (!IsEligibleFor(r, AreaIndex, pos)) continue;
 
-                float dist = Vector3.Distance(r.transform.position, transform.position);
+                float dist = Vector3.Distance(r.transform.position, pos);
                 if (dist < nearestDist) { nearestDist = dist; nearest = r; }
             }
             return nearest;
@@ -703,9 +709,10 @@ namespace MaxWorlds.Factories
         private int CountEligible()
         {
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            Vector3 pos = transform.position;
             int count = 0;
             for (int i = 0; i < active.Count; i++)
-                if (IsEligibleFor(active[i], AreaIndex)) count++;
+                if (IsEligibleFor(active[i], AreaIndex, pos)) count++;
             return count;
         }
 
@@ -773,12 +780,18 @@ namespace MaxWorlds.Factories
             // hand-off) hasn't reached ReplicatorSeeking yet but is still this box's, and the OLD
             // Current-only check dropped it here on the very next tick, refilling its slot out from
             // under it and leaving it to seek a slot it no longer owned once Recover finally ran.
+            // MV-1086: re-checked every tick, not just at assignment time — a robot already queued or
+            // gliding that is no longer on this box's own combat level (see IsEligibleFor) is released
+            // back to its own behaviour the same as one that died or got reassigned.
             bool queueClosedUp = false;
+            Vector3 boxPos = transform.position;
             for (int i = _queue.Count - 1; i >= 0; i--)
             {
                 RobotEnemy r = _queue[i];
-                if (r == null || !r.IsAlive || !r.IsAssignedToReplicator)
+                if (r == null || !r.IsAlive || !r.IsAssignedToReplicator
+                    || !CombatLevel.SameLevel(EnemyNavigation.Map, boxPos, r.transform.position))
                 {
+                    if (r != null && r.IsAlive && r.IsAssignedToReplicator) r.CancelReplicatorSeeking();
                     _queue.RemoveAt(i);
                     queueClosedUp = true;
                 }
