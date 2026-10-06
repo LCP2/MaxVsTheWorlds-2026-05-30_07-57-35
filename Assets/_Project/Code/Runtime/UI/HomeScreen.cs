@@ -483,11 +483,19 @@ namespace MaxWorlds.UI
             int worldIndex = SaveSystem.ResolveResumePlan(slot, builtWorldIndex: 0).WorldIndex;
             ApplyResumeState(slot, worldIndex);
 
-            int areaIndex = SaveSystem.Load(slot).CheckpointAreaIndex;
+            SaveSlotData data = SaveSystem.Load(slot);
             Close();
 
             var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
-            runner?.ResumeCheckpoint(areaIndex);
+            runner?.ResumeCheckpoint(data.CheckpointAreaIndex);
+
+            // MV-1129: this world's own finale gate (if its final boss area is already recorded
+            // defeated) never learns that from ApplyResumeState's own RestoreCheckpoint call above --
+            // BossCensus.ApplyCheckpointDefeatedAreas deliberately never re-fires BossDefeated, see that
+            // method's own doc comment -- so without this call a RESUME into a world whose final boss
+            // already died, mid-finale, strands the run.
+            var gate = FindFirstObjectByType<WorldFinaleGate>();
+            gate?.ResumeFromCheckpoint(data.CheckpointFinaleWeaponGranted, data.CheckpointFinaleExitOpen);
         }
 
         /// <summary>MV-1023: the resume restore's own public static seam, testable without a scene —

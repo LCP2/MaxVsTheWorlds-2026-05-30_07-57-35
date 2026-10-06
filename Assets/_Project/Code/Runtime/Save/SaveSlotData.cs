@@ -136,6 +136,21 @@ namespace MaxWorlds.Save
         /// field, or one with no defeated boss yet — a RESUME then behaves exactly as before this ticket.</summary>
         public int[] CheckpointDefeatedBossAreas = Array.Empty<int>();
 
+        /// <summary>True once this checkpoint's own world finale had already moved past its weapon
+        /// moment — the Core collected and, if there is a next world, its morph already applied — into
+        /// clean-up or later, at the moment this checkpoint was captured (MV-1129). The persisted twin of
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate.WeaponMomentResolved"/>, which lives only in the live
+        /// gate instance a cold-boot RESUME rebuilds fresh with no memory of it. False for a save
+        /// predating this field, or one whose finale never reached this point — a RESUME behaves exactly
+        /// as before this ticket (the Weapon Core, if its own area is recorded defeated, simply never
+        /// reappears).</summary>
+        public bool CheckpointFinaleWeaponGranted;
+
+        /// <summary>True once this checkpoint's own world finale's exit was already open at the moment
+        /// this checkpoint was captured (MV-1129) — the persisted twin of
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate.IsOpen"/>.</summary>
+        public bool CheckpointFinaleExitOpen;
+
         /// <summary><c>AbilityCreditBank.Banked</c> at the checkpoint (MV-951) — restored the same way
         /// <see cref="CheckpointDeathsTaken"/> is, so a cold-boot RESUME doesn't lose a banked-but-unspent
         /// ability credit to <c>HomeScreen.OnResume</c>'s own transient-state wipe.</summary>
