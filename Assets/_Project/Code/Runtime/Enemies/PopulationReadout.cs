@@ -71,7 +71,7 @@ namespace MaxWorlds.Enemies
                         awake++;
                     }
 
-                    if (target != null && Replicator.IsEligibleFor(r, target.AreaIndex)) elig++;
+                    if (target != null && Replicator.IsEligibleFor(r, target.AreaIndex, target.transform.position)) elig++;
                 }
             }
 

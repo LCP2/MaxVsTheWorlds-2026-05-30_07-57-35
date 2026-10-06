@@ -118,7 +118,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (Replicator box in boxes)
             {
                 int emitted = box.GetComponent<EnemySpawner>().Emitted;
-                int eligible = RobotEnemy.Active.Count(r => Replicator.IsEligibleFor(r, box.AreaIndex));
+                int eligible = RobotEnemy.Active.Count(r => Replicator.IsEligibleFor(r, box.AreaIndex, box.transform.position));
                 sb.AppendLine($"box={box.Id} in={(box.PlayerInArea ? 1 : 0)} cap={box.Capacity} " +
                               $"q={box.QueueCount}/{Replicator.MaxQueueSlots} elig={eligible} emitted={emitted}");
 
