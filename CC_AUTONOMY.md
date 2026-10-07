@@ -87,6 +87,13 @@ Captures: editor compile; EditMode tests, failing if `Logs\editmode-results.xml`
 
 If it fails on a transient/flake, retry once. If it fails structurally, stop and report.
 
+### When to run what (MV-1138)
+
+* Rule 1 fail-first proof: run `cc-test.bat <the new test's class name>` on base-plus-test-only and quote its failing output. Do not run the whole of `cc-verify.bat` for this.
+* When step 2 of `cc-verify.bat` fails: fix, confirm with `cc-test.bat` on the failed tests, then run `cc-verify.bat` again.
+* To find out whether a failing test was already failing before your change: run `cc-test.bat <that test>` on the base commit. Never run the full suite on base for this.
+* Unchanged: the whole of `cc-verify.bat` must exit 0 on the final tree before every merge. `cc-test.bat` never replaces it.
+
 **Never wait on, poll, or watch a backgrounded task - any backgrounded task, without exception.** If a command is moved to the background (a 10-minute cap, a hung process, anything), do NOT wait for a completion notification, do NOT loop on task-output checks, and do NOT sleep-and-retry. You run in one-shot `-p` mode: there are no background notifications, so you will loop forever burning paid runs while nothing progresses. Kill it, say plainly in a Jira comment what was running and that it was abandoned, and move on to the next ticket.
 
 This covers local verifies, CI runs, builds, deploys and test suites alike. It is the most expensive recurring failure on this project - it has happened four times in different disguises, each time patched only for the specific command that caused it. The rule is general on purpose.
@@ -102,9 +109,8 @@ waiting on the orphaned `Unity.Licensing.Client` child process the failed launch
 MV-971 and MV-1010 actually were — don't re-derive the diagnosis a fourth time.
 
 1. **Prefer `cc-verify.bat`.** It already quotes correctly (`-projectPath "%PROJECT%"`) and is the
-   reference implementation. A Rule 1 fail-first proof doesn't need a hand-rolled filtered run — running
-   `cc-verify.bat` on base-plus-test-only exits 1 at step `[2/6]` and writes `Logs\editmode-results.xml`
-   containing the failure, which is quotable evidence on its own.
+   reference implementation. A Rule 1 fail-first proof doesn't need a hand-rolled filtered run — see
+   "When to run what" above for the filtered `cc-test.bat` path instead.
 2. **If an ad-hoc Unity run is genuinely needed, launch it through cmd's `start "" /min /wait` with every
    path argument double-quoted.** Never use PowerShell `Start-Process -ArgumentList` array form for a
    Unity launch — PS 5.1 does not quote elements containing spaces, and this clone's path contains one.
