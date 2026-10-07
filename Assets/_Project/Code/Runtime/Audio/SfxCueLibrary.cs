@@ -262,5 +262,15 @@ namespace MaxWorlds.Audio
         /// <summary>Renders one cue to a playable clip — <see cref="SfxDirector"/> calls this once per
         /// cue at boot.</summary>
         public static UnityEngine.AudioClip RenderClip(Cue cue) => ProcSfx.RenderClip(cue.ToString(), Presets[cue]);
+
+        /// <summary>MV-1134: prefers a generated clip under <c>Resources/Audio/Sfx/&lt;cue&gt;</c> when
+        /// one has been committed, falling back to the synthesised <see cref="RenderClip"/> for every
+        /// cue that hasn't been generated yet — the synthesised sound is the permanent fallback, not a
+        /// placeholder being phased out.</summary>
+        public static UnityEngine.AudioClip ResolveClip(Cue cue)
+        {
+            var generated = UnityEngine.Resources.Load<UnityEngine.AudioClip>("Audio/Sfx/" + cue);
+            return generated != null ? generated : RenderClip(cue);
+        }
     }
 }

@@ -60,7 +60,7 @@ namespace MaxWorlds.Audio
 
         private void Awake()
         {
-            foreach (var cue in SfxCueLibrary.AllCues) _clips[cue] = SfxCueLibrary.RenderClip(cue);
+            foreach (var cue in SfxCueLibrary.AllCues) _clips[cue] = SfxCueLibrary.ResolveClip(cue);
 
             _pool = new AudioSource[PoolSize];
             for (int i = 0; i < PoolSize; i++)

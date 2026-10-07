@@ -1,0 +1,11 @@
+{
+    "sfx": [
+        {
+            "id": "UiClick",
+            "prompt": "Soft short user interface button click, clean plastic tick, dry, no reverb, no tail",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.6,
+            "loop": false
+        }
+    ]
+}
