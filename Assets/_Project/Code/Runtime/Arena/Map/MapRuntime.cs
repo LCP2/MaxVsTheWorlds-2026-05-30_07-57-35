@@ -2759,6 +2759,20 @@ namespace MaxWorlds.Arena
         /// — <see cref="MaxWorlds.VFX.WorldFinaleGate"/> forces it open on the world's own final boss
         /// death, exactly like an ordinary <c>opensWith</c> condition gate.
         ///
+        /// MV-1111: unlike an ordinary link gate, this doc comment's own "exactly like an opensWith
+        /// condition gate" promise was never actually kept — the gate below shipped with
+        /// <see cref="AreaGate.Locked"/> left false, so it took ordinary sustained-primary-fire damage
+        /// and broke open (<see cref="AreaGate.TakeDamage"/> -&gt; <see cref="AreaGate.Open"/>) like any
+        /// other gate, letting Max walk a world's finale before its boss had even been found (Lee's
+        /// device playtest, World 2, 2026-10-06). <c>Locked = true</c> is what an <c>opensWith</c>
+        /// condition gate actually carries (see <c>BuildAreaGate</c>'s own locked-boss-gate case): it
+        /// refuses ALL damage regardless of source (<c>TakeDamage</c>'s own guard) and hides the health
+        /// bar for the existing locked-door readout (<see cref="AreaGate.ReadoutName"/>) instead of a
+        /// "GATE" plate nobody can break. <see cref="AreaGate.ForceOpen"/> — the only path
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate.Open"/> and <see cref="MaxWorlds.Intro.WorldJoinSequence.BuildExit"/>
+        /// ever call on this gate — bypasses <c>Locked</c> entirely (it drives <c>_health</c> directly),
+        /// so the finale's own real open path is untouched.
+        ///
         /// Never dressed here: World 2's per-world sweep (<c>BackyardPath.ApplyWorldMaterials</c>)
         /// already re-skins EVERY <see cref="AreaGate"/> it finds in the scene with
         /// <see cref="AreaGate.ApplyStormdrainGateSkin"/>, and this gate already exists (built here, well
@@ -2785,6 +2799,10 @@ namespace MaxWorlds.Arena
             MarkDiscoverable(body);
             var gate = body.AddComponent<AreaGate>();
             gate.AwayFromPlayerDirection = ExitOutwardDir(doorway.Wall);
+
+            // MV-1111: a world's finale door opens ONLY through WorldFinaleGate.Open() -> ForceOpen(),
+            // never by being shot like an ordinary area gate -- see this method's own doc comment.
+            gate.Locked = true;
 
             // Shut, this gate blocks sight exactly like an ordinary one (YT-107) -- see BuildAreaGate's
             // own doc on why Cover goes on the THRESHOLD object, not the visible leaf.
