@@ -542,10 +542,13 @@ namespace MaxWorlds.UI
         /// it: opening THE RIG while the Core is pending does nothing (<see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/>
         /// now refuses it until the next world), so inviting a tap into THE RIG is actively wrong; the
         /// centre warning label (<see cref="UpdateWarnings"/>) tells the player what to do instead. A
-        /// banked Morphing Module draft still pulses it exactly as before.</summary>
+        /// banked Morphing Module draft still pulses it exactly as before. MV-1090: a banked Rack
+        /// Module pulses it too — unlike the Weapon Core, opening THE RIG with one pending DOES resolve
+        /// it immediately (<see cref="MaxWorlds.Weapons.PendingMorphingModule.RackModulePending"/>), so
+        /// the same "something is waiting on a decision" cyan tell applies.</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
             AbilityCreditBank.Banked > 0,
-            PendingMorphingModule.HasPending);
+            PendingMorphingModule.HasPending || PendingMorphingModule.RackModulePending);
 
         /// <summary>Pure predicate (MV-358, dropped its Supercell half MV-519 — a Supercell is never
         /// banked anymore) — pinned by an EditMode test without building a canvas: a spend is waiting

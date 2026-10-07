@@ -28,11 +28,24 @@ namespace MaxWorlds.Weapons
         /// <c>WeaponSystemState.OpenWeaponCoreMorphIfPending</c>).</summary>
         private static bool s_weaponCorePending;
 
+        /// <summary>MV-1090: a Rack Module is banked and waiting for THE RIG's next open to unlock
+        /// SECONDARY and grant <c>s_rkt</c> for free. Kept apart from <see cref="s_queue"/> for the same
+        /// reason <see cref="s_weaponCorePending"/> is — a Rack Module isn't a pick between candidates,
+        /// it always resolves the same single way (see <c>WeaponsScreen.Open</c>). Collecting the module
+        /// used to call <c>RigState.UnlockCategory</c>/<c>AcquireCap</c> straight from
+        /// <c>PickupDirector.Collect</c>, so the Shoulder Rack started auto-firing before the player had
+        /// ever opened THE RIG to see the reveal — this flag defers that grant to the same open-time
+        /// ceremony every other ability family already waits for.</summary>
+        private static bool s_rackModulePending;
+
         /// <summary>At least one draft is banked and waiting for the player to open WEAPONS.</summary>
         public static bool HasPending => s_queue.Count > 0;
 
         /// <summary>MV-689: a Weapon Core is banked and waiting for THE RIG's next open.</summary>
         public static bool WeaponCorePending => s_weaponCorePending;
+
+        /// <summary>MV-1090: a Rack Module is banked and waiting for THE RIG's next open.</summary>
+        public static bool RackModulePending => s_rackModulePending;
 
         /// <summary>How many separate draws are banked right now — test-only access, same idiom as
         /// <see cref="HasPending"/>.</summary>
@@ -92,12 +105,44 @@ namespace MaxWorlds.Weapons
             Changed?.Invoke();
         }
 
+        /// <summary>Bank a collected Rack Module (MV-1090, World 2's SECONDARY unlock) — the next THE
+        /// RIG open unlocks SECONDARY, grants <c>s_rkt</c> at level 1 for free, and plays the reveal.
+        /// Idempotent, same shape as <see cref="SetWeaponCore"/>.</summary>
+        public static void SetRackModule()
+        {
+            if (s_rackModulePending) return;
+            s_rackModulePending = true;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Consumes the banked Rack Module flag — <c>WeaponsScreen.Open</c>'s own entry point.
+        /// Returns false if nothing was pending.</summary>
+        public static bool TakeRackModule()
+        {
+            if (!s_rackModulePending) return false;
+            s_rackModulePending = false;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Restore the banked-Rack-Module flag from a captured checkpoint (MV-1090) — the
+        /// persisted twin, <see cref="MaxWorlds.Save.SaveSlotData.RackModulePending"/>, same reasoning as
+        /// <see cref="RestoreWeaponCorePending"/>: a cold-boot RESUME between collecting the module and
+        /// opening THE RIG must not silently lose the banked unlock.</summary>
+        public static void RestoreRackModulePending(bool pending)
+        {
+            if (s_rackModulePending == pending) return;
+            s_rackModulePending = pending;
+            Changed?.Invoke();
+        }
+
         /// <summary>Back to a fresh run's baseline: nothing pending. Test isolation and a new run.</summary>
         public static void Reset()
         {
-            if (s_queue.Count == 0 && !s_weaponCorePending) return;
+            if (s_queue.Count == 0 && !s_weaponCorePending && !s_rackModulePending) return;
             s_queue.Clear();
             s_weaponCorePending = false;
+            s_rackModulePending = false;
             Changed?.Invoke();
         }
     }

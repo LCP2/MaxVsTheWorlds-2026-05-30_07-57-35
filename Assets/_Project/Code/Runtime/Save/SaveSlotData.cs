@@ -47,6 +47,12 @@ namespace MaxWorlds.Save
         /// which lives only in memory and would otherwise lose the banked core across an app restart.</summary>
         public bool WeaponCorePending;
 
+        /// <summary>True once a Rack Module has been collected but THE RIG hasn't been opened yet to
+        /// unlock SECONDARY and grant <c>s_rkt</c> (MV-1090) — the persisted twin of
+        /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.RackModulePending"/>, same reasoning as
+        /// <see cref="WeaponCorePending"/>.</summary>
+        public bool RackModulePending;
+
         // --- Mid-run checkpoint (MV-557 schema; captured/restored for real as of MV-524 parts 2/3) ---
         // Written by SaveSystem.CaptureActiveCheckpoint (AreaAccumulationDirector.EnterArea and
         // WorldRunner's pause/focus handlers) and read by SaveSystem.RestoreCheckpoint (HomeScreen's
