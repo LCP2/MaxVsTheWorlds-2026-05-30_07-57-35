@@ -423,6 +423,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1018Anchorhead());
             Add(BuildMv1024SentinelColorCheck());
             Add(BuildMv1019ReefFloorCheck());
+            Add(BuildMv1094EdgeWallCheck());
             Add(BuildMv1063ReefFixCheck());
             Add(BuildMv1064UndertowLatchCheck());
             Add(BuildMv1121UndertowBeamCheck());
@@ -1671,6 +1672,85 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1019-reef-floor", NoSetup) },
+            };
+        }
+
+        // ---- MV1094EdgeWallCheck (MV-1094 AC2) ------------------------------------------------
+
+        /// <summary>MV-1094's own AC2 capture: World 3 area 10 (Drowned Mess Hall)'s real east edge,
+        /// loaded through the real per-world build (<see cref="BackyardPath.Awake"/>'s own path, same
+        /// as <see cref="BuildMv1019ReefFloorCheck"/> one world over) rather than a synthetic probe —
+        /// the ticket's own defect (MV-1054's observation-glass swap reading as a missing wall on a
+        /// phone) is specifically about how a REAL built area reads, not a standalone material check.
+        /// Area 10's own authored rect (world3_config.json: origin (172,106), size 28x36) puts its east
+        /// wall at x=200, z in [106,142] — Max is teleported there directly (same collider-disable/
+        /// teleport/re-enable shape <see cref="BuildIntroHandoffFrame"/> already uses) rather than
+        /// walked there, with a settle window long enough for the gate self-heal (MV-925/972, throttled
+        /// to at most 4x/second) to notice the crossing and enable area 10's own renderers before the
+        /// shot.</summary>
+        private static CapturePreset BuildMv1094EdgeWallCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            // Area 10 (Drowned Mess Hall): origin (172,106), size 28x36 -> east wall at x=200,
+            // z spanning [106,142]. Framed from just inside it, facing the wall.
+            static Vector3 AreaTenEastEdge(float y) => new Vector3(197f, y, 124f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials/ReefKit finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (rig == null) throw new CaptureAbortException("no FixedAngleCameraRig in the scene");
+
+                var max = GameObject.FindGameObjectWithTag("Player");
+                if (max == null) throw new CaptureAbortException("World 3 built no Player-tagged Max to shoot");
+
+                // Same collider-disable/teleport/re-enable shape BuildIntroHandoffFrame already uses — a
+                // live CharacterController would otherwise fight a direct position set.
+                var cc = max.GetComponent<CharacterController>();
+                bool was = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                Vector3 target = AreaTenEastEdge(max.transform.position.y);
+                max.transform.position = target;
+                if (cc != null) cc.enabled = was;
+                Physics.SyncTransforms();
+
+                // Let the gate self-heal (TickGateSelfHeal, throttled to at most 4x/second) notice the
+                // teleport and enable area 10's own renderers before the shot.
+                float until = Time.unscaledTime + 1.5f;
+                while (Time.unscaledTime < until) yield return null;
+
+                rig.RestingPose(target, out Vector3 camPos, out Quaternion camRot);
+                cam.transform.SetPositionAndRotation(camPos, camRot);
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1094edgewall",
+                LogTag = "[MV1094Capture]",
+                Flag = "-mv1094shot",
+                ArmFile = "Temp/mv1094.arm",
+                HeadlessMarker = "Temp/mv1094.headless",
+                DoneFileName = "_mv1094_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1019ReefFloorCheck -- World 3 is index 2.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 2;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1094-area10-east-wall", NoSetup) },
             };
         }
 
