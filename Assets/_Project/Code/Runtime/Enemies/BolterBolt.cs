@@ -122,9 +122,15 @@ namespace MaxWorlds.Enemies
             _maxDistance = Mathf.Max(0f, maxRange) + DespawnRangePadding;
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame flight step, split out of <see cref="Update"/> (MV-1105) so an
+        /// EditMode test can drive a fired bolt to a real impact — no private call, no reflection —
+        /// the same public "Tick(dt)" seam <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/> and
+        /// <see cref="MaxWorlds.Arena.Sentinel.TickSentinel"/> already carry for the identical
+        /// reason.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             Vector3 next = Step(transform.position, _direction, _speed, dt);
             _traveled += Vector3.Distance(transform.position, next);
             transform.position = next;
@@ -190,9 +196,21 @@ namespace MaxWorlds.Enemies
                     DamageFor(capturedRobot.MaxHealth), transform.position, _direction, Team.Enemy));
             }
 
-            Destroy(gameObject);
+            DestroySelf();
         }
 
-        private void DespawnHarmless() => Destroy(gameObject);
+        private void DespawnHarmless() => DestroySelf();
+
+        /// <summary>MV-1105: <see cref="Destroy(UnityEngine.Object)"/> is a same-frame no-op outside
+        /// Play mode (logged as illegal and otherwise ignored) — harmless for a live game, where this
+        /// bolt is always fired and detonated in Play mode, but it left every bolt an EditMode test
+        /// drove to impact alive and still travelling, re-detonating (and re-damaging its target) on
+        /// every subsequent <see cref="Tick"/> instead of actually going away. Same
+        /// <c>Application.isPlaying</c> split <see cref="Strip"/> already uses for this exact reason.</summary>
+        private void DestroySelf()
+        {
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
+        }
     }
 }
