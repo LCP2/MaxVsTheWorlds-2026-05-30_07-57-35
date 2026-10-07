@@ -79,6 +79,13 @@ namespace MaxWorlds.Save
         /// in — a resume restarts the player at this area's entry, not mid-area.</summary>
         public int CheckpointAreaIndex;
 
+        /// <summary>MV-1096: the id of the gate Max last entered through when this checkpoint was
+        /// captured — fixes both the area AND the level/visit, which <see cref="CheckpointAreaIndex"/>
+        /// alone cannot for a two-level area (World 2's a10/a11/a12, each visited through two different
+        /// gates, floor then deck). Null/empty for a save captured before this field existed — a resume
+        /// then falls back to <see cref="CheckpointAreaIndex"/> alone, exactly as it always has.</summary>
+        public string CheckpointGateId;
+
         /// <summary>The 0-based world (<c>AreaAccumulationDirector.ActiveWorldIndex</c>) the checkpoint
         /// above was captured IN (MV-985) — -1 means unknown, either a save from before this field
         /// existed or a slot with no checkpoint. Without this, a RESUME after <c>RunFlow.QuitToMenu</c>

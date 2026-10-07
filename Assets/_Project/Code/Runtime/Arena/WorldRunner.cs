@@ -102,6 +102,13 @@ namespace MaxWorlds.Arena
         /// a respawn lands behind.</summary>
         private readonly Dictionary<int, AreaGate> _gateIntoArea = new Dictionary<int, AreaGate>();
 
+        /// <summary>Every built gate (MV-1096), keyed by its own authored id rather than by area —
+        /// unlike <see cref="_gateIntoArea"/>, which can only ever remember ONE gate per area, this is
+        /// what resolves a checkpoint's own <see cref="MaxWorlds.Save.SaveSlotData.CheckpointGateId"/>
+        /// back to a specific gate instance for a two-level area visited through two different gates
+        /// (World 2's a10/a11/a12, floor and deck alike).</summary>
+        private readonly Dictionary<string, AreaGate> _gateById = new Dictionary<string, AreaGate>();
+
         /// <summary>Every built hatch (MV-829), paired with its own parsed <see cref="GateCondition"/>
         /// and its own area's 1-based index — keyed by the hatch itself rather than by "the area's
         /// incoming gate" (<see cref="_gateConditionIntoArea"/>'s shape) because an area can carry more
@@ -263,7 +270,11 @@ namespace MaxWorlds.Arena
                 // MV-575: this already covers boss areas too — WorldMapLoader translates a boss area's
                 // id to "area<N>" exactly like every other combat area, so the loop above keys its gate
                 // at its real index without needing a separate synthetic-index case here.
-                if (gate != null) _gateIntoArea[intoArea] = gate;
+                if (gate != null)
+                {
+                    _gateIntoArea[intoArea] = gate;
+                    _gateById[link.gate] = gate;
+                }
 
                 // MV-703: resolve the same gate's authored opensWith into a GateCondition, keyed the
                 // same way, so RefreshGateLocks (and IsConditionGatedArea) can evaluate it per area
@@ -361,7 +372,8 @@ namespace MaxWorlds.Arena
         private void CapturePauseCheckpoint()
         {
             if (_areaDirector == null) return;
-            SaveSystem.CaptureActiveCheckpoint(_areaDirector.CurrentArea, _areaDirector.ActiveWorldIndex);
+            SaveSystem.CaptureActiveCheckpoint(_areaDirector.CurrentArea, _areaDirector.ActiveWorldIndex,
+                _areaDirector.LastEnteredGateId);
         }
 
         /// <summary>RESUME tapped on the Home screen (MV-524 part 3): drop the player at
@@ -378,10 +390,25 @@ namespace MaxWorlds.Arena
         /// route-graph lookup <see cref="OnPlayerDied"/> uses, deck-aware, rather than calling the 2-arg
         /// <see cref="RespawnPlanner.Resolve(int, bool)"/> overload — whose own <c>areaIndex - 1</c>
         /// fallback is only correct when a world's area INDEX order matches its PLAY order, which World
-        /// 2's descending gantry-deck leg (a15 -&gt; a12 -&gt; a11 -&gt; a10) does not.</summary>
-        public void ResumeCheckpoint(int areaIndex)
+        /// 2's descending gantry-deck leg (a15 -&gt; a12 -&gt; a11 -&gt; a10) does not.
+        ///
+        /// MV-1096: <paramref name="gateId"/> is the id of the gate Max last entered through when this
+        /// checkpoint was captured (<see cref="MaxWorlds.Save.SaveSlotData.CheckpointGateId"/>) — when it
+        /// resolves to a real, built gate (<see cref="TryResolveEnteredGate"/>), it carries BOTH the area
+        /// and the level/visit, which <paramref name="areaIndex"/> alone cannot for a two-level area
+        /// (World 2's a10/a11/a12, each visited through two different gates). That path
+        /// (<see cref="ResumeAtEnteredGate"/>) replaces the predecessor-area fallback below entirely.
+        /// Null/empty (a save captured before this field existed) falls through to the unchanged
+        /// area-index-only path.</summary>
+        public void ResumeCheckpoint(int areaIndex, string gateId = null)
         {
             if (_areaDirector == null || _cfg?.dials == null || areaIndex <= 0) return;
+
+            if (TryResolveEnteredGate(gateId, out int gateAreaIndex, out int gateLevel, out AreaGate enteredGate))
+            {
+                ResumeAtEnteredGate(gateAreaIndex, gateLevel, enteredGate);
+                return;
+            }
 
             bool gateIsConditionGated = IsConditionGatedArea(areaIndex);
             int predecessor = ResolveRespawnPredecessor(areaIndex);
@@ -405,6 +432,56 @@ namespace MaxWorlds.Arena
             EnsurePlayer();
             RespawnPlayer(plan);
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
+        }
+
+        /// <summary>MV-1096: resolves <paramref name="gateId"/> to the area it leads into, that gate's
+        /// own level (0 floor / 1 deck, <see cref="WorldMapLoader.GateLevel"/>), and the live built
+        /// <see cref="AreaGate"/> instance — false for a null/empty id (no gate field on the save), an id
+        /// this world's own <see cref="WorldConfig.gates"/> doesn't recognise, or a gate this runner
+        /// never built (<see cref="_gateById"/>).</summary>
+        private bool TryResolveEnteredGate(string gateId, out int areaIndex, out int level, out AreaGate gate)
+        {
+            areaIndex = 0;
+            level = 0;
+            gate = null;
+            if (string.IsNullOrEmpty(gateId)) return false;
+
+            WorldGate schemaGate = GateSchemaById(gateId);
+            if (schemaGate?.to == null) return false;
+
+            WorldArea toArea = _cfg?.Area(schemaGate.to.area);
+            if (toArea == null) return false;
+
+            if (!_gateById.TryGetValue(gateId, out gate) || gate == null) return false;
+
+            areaIndex = toArea.index;
+            level = WorldMapLoader.GateLevel(schemaGate);
+            return true;
+        }
+
+        /// <summary>MV-1096: the gate-identified RESUME path — Max lands just INSIDE <paramref name="gate"/>,
+        /// on <paramref name="level"/>'s own elevation, in <paramref name="areaIndex"/>, rather than the
+        /// predecessor-area fallback <see cref="ResumeCheckpoint"/>'s area-index-only path uses. Population
+        /// restore is keyed the same way: an in-place-deck area (World 2's a10/a11/a12) restores ONLY
+        /// <paramref name="level"/>'s own authored garrison (<see cref="AreaAccumulationDirector.RestoreAreaAtLevel"/>)
+        /// — the other level is left exactly as a fresh cold boot leaves it, since it is either already
+        /// cleared (behind Max) or not yet reached (ahead of him). <paramref name="gate"/> is forced open
+        /// (<see cref="AreaGate.ForceOpen"/>) since Max is landing past it, not behind it.</summary>
+        private void ResumeAtEnteredGate(int areaIndex, int level, AreaGate gate)
+        {
+            _areaDirector.ClearAreasBeforeCheckpoint(areaIndex);
+            _areaDirector.RestoreAreaAtLevel(areaIndex, level);
+
+            if (_pickupDirector == null) _pickupDirector = FindFirstObjectByType<PickupDirector>();
+            _pickupDirector?.ResetBruiserCountdown(areaIndex);
+
+            gate.ForceOpen();
+
+            Sentinel.DestroyAllActive();
+
+            EnsurePlayer();
+            RespawnJustInsideGate(gate, areaIndex, level);
+            _areaDirector.SetCurrentArea(areaIndex);
         }
 
         /// <summary>MV-1057: the Home screen's DEV "FINAL AREA" entry point — jumps straight to this
@@ -767,11 +844,17 @@ namespace MaxWorlds.Arena
         {
             if (_player == null) return;
 
-            Vector3 point = RespawnPoint(plan);
+            TeleportPlayer(RespawnPoint(plan), "WorldRunner.RespawnPlayer");
+            _playerHealth?.Revive();
+        }
 
-            // Same collider-disable/teleport/re-enable shape MapRuntime.Adopt uses to place Max at
-            // level start — a CharacterController caches its own position and would otherwise undo
-            // the teleport. MV-1021: same guard MapRuntime.Adopt now carries — see its own comment.
+        /// <summary>MV-1096: the CC-safe teleport <see cref="RespawnPlayer"/> and
+        /// <see cref="RespawnJustInsideGate"/> both need — same collider-disable/teleport/re-enable
+        /// shape <see cref="MapRuntime.Adopt"/> uses to place Max at level start — a CharacterController
+        /// caches its own position and would otherwise undo the teleport. MV-1021: same guard
+        /// <see cref="MapRuntime.Adopt"/> now carries — see its own comment.</summary>
+        private void TeleportPlayer(Vector3 point, string callerName)
+        {
             var cc = _player.GetComponent<CharacterController>();
             bool was = cc != null && cc.enabled;
             if (cc != null) cc.enabled = false;
@@ -779,7 +862,7 @@ namespace MaxWorlds.Arena
             _player.position = point;
             if (cc != null && was)
             {
-                if (CharacterControllerSafety.CanCreate(_player, cc, out string respawnReason))
+                if (CharacterControllerSafety.CanCreate(_player, cc, out string reason))
                 {
                     cc.enabled = true;
                 }
@@ -787,15 +870,37 @@ namespace MaxWorlds.Arena
                 {
                     _player.position = before;
                     cc.enabled = true;
-                    CharacterControllerSafety.LogRefusal("WorldRunner.RespawnPlayer", _player.name,
-                        respawnReason, point, _player.lossyScale);
+                    CharacterControllerSafety.LogRefusal(callerName, _player.name,
+                        reason, point, _player.lossyScale);
                 }
             }
             else if (cc != null)
             {
                 cc.enabled = was;
             }
+        }
 
+        /// <summary>MV-1096: where Max lands for the gate-identified RESUME — just past
+        /// <paramref name="gate"/>'s own door mouth, along its <see cref="AreaGate.AwayFromPlayerDirection"/>
+        /// (which already points INTO <paramref name="areaIndex"/>, away from the room Max approached it
+        /// from), at <paramref name="level"/>'s own elevation: the live-resolved deck height
+        /// (<see cref="Garrison.ResolveLevelHeight"/>) for a deck gate, or the player's own current Y for
+        /// a floor one — never a step back behind the gate the way a death's <see cref="RespawnPoint"/>
+        /// lands, since this checkpoint was captured AFTER Max had already walked through it.</summary>
+        private void RespawnJustInsideGate(AreaGate gate, int areaIndex, int level)
+        {
+            if (_player == null || gate == null) return;
+
+            Vector3 dir = gate.AwayFromPlayerDirection;
+            if (dir == Vector3.zero) dir = Vector3.forward;
+            Vector3 point = gate.transform.position + dir.normalized * RespawnMarginFromGate;
+
+            WorldArea area = _cfg?.AreaByIndex(areaIndex);
+            point.y = level > 0 && area != null
+                ? Garrison.ResolveLevelHeight(area, _cfg, new Vector2(point.x, point.z))
+                : _player.position.y;
+
+            TeleportPlayer(point, "WorldRunner.RespawnJustInsideGate");
             _playerHealth?.Revive();
         }
 

@@ -492,7 +492,7 @@ namespace MaxWorlds.UI
             Close();
 
             var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
-            runner?.ResumeCheckpoint(data.CheckpointAreaIndex);
+            runner?.ResumeCheckpoint(data.CheckpointAreaIndex, data.CheckpointGateId);
 
             // MV-1129: this world's own finale gate (if its final boss area is already recorded
             // defeated) never learns that from ApplyResumeState's own RestoreCheckpoint call above --

@@ -280,7 +280,11 @@ namespace MaxWorlds.Arena
                 AreaGate gate = gateGo.GetComponent<AreaGate>();
                 if (gate == null) continue;   // e.g. boss_gate is the adopted SubZoneGate, not an AreaGate
 
-                gate.Opened += () => _areaDirector.EnterArea(nextArea);
+                // MV-1096: this closure already knows exactly which authored gate just broke — the one
+                // piece of identity EnterArea's own areaIndex-only signature can't carry for a two-level
+                // area (World 2's a10/a11/a12, visited through two different gates).
+                string enteredGateId = link.gate;
+                gate.Opened += () => _areaDirector.EnterArea(nextArea, enteredGateId);
             }
         }
 

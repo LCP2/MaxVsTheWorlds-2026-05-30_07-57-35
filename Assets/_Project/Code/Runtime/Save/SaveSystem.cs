@@ -191,7 +191,7 @@ namespace MaxWorlds.Save
         /// existing identity/personal-best fields.
         /// <see cref="AreaAccumulationDirector.EnterArea"/> and an <c>OnApplicationPause</c> handler are
         /// the trigger wiring, MV-524 parts 2/3.</summary>
-        public static void CaptureCheckpoint(int slot, int areaIndex, int worldIndex = -1)
+        public static void CaptureCheckpoint(int slot, int areaIndex, int worldIndex = -1, string gateId = null)
         {
             SaveSlotData data = Load(slot);
             if (!data.HasData) data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
@@ -227,7 +227,14 @@ namespace MaxWorlds.Save
             // restored from — WorldRunner.ResumeCheckpoint/Continue land CurrentArea one area BEHIND
             // the checkpoint (standing at the gate looking in), so a pause/focus capture taken before
             // that gate breaks again would otherwise regress the save by one area every single resume.
+            int previousAreaIndex = data.CheckpointAreaIndex;
             data.CheckpointAreaIndex = Math.Max(data.CheckpointAreaIndex, areaIndex);
+            // MV-1096: same rule, now per gate rather than per area — a capture must never overwrite
+            // the gate Max last entered through with one from an earlier point of the route. An area
+            // that hasn't regressed is the same guard the line above already computed; reusing it here
+            // means a later gate into the SAME area (World 2's a10 floor g27, then deck g35) still wins.
+            if (!string.IsNullOrEmpty(gateId) && areaIndex >= previousAreaIndex)
+                data.CheckpointGateId = gateId;
             // MV-985: which world areaIndex above actually belongs to — the world PLAYED, from the
             // caller's own AreaAccumulationDirector.ActiveWorldIndex, not this slot's WorldIndex (which
             // names the world that plays NEXT and can be a different one already).
@@ -352,10 +359,10 @@ namespace MaxWorlds.Save
         /// slot (<see cref="ActiveSlot"/> &lt; 0 — a capture/press-kit/perf-capture run, or a test) or
         /// for the empty entry stub (<paramref name="areaIndex"/> &lt;= 0 — nothing worth
         /// checkpointing yet).</summary>
-        public static void CaptureActiveCheckpoint(int areaIndex, int worldIndex = -1)
+        public static void CaptureActiveCheckpoint(int areaIndex, int worldIndex = -1, string gateId = null)
         {
             if (ActiveSlot < 0 || areaIndex <= 0) return;
-            CaptureCheckpoint(ActiveSlot, areaIndex, worldIndex);
+            CaptureCheckpoint(ActiveSlot, areaIndex, worldIndex, gateId);
         }
 
         /// <summary>What RESUME on <paramref name="slot"/> needs to do (MV-985), given
@@ -409,6 +416,7 @@ namespace MaxWorlds.Save
         {
             data.HasRunInProgress = false;
             data.CheckpointAreaIndex = 0;
+            data.CheckpointGateId = null;
             data.CheckpointWorldIndex = -1;
             data.CheckpointRigBoardWorldIndex = -1;
             data.CheckpointRigNodeIds = Array.Empty<string>();
