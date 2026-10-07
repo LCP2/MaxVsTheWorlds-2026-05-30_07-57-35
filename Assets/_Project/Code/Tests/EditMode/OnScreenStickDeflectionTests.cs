@@ -71,9 +71,13 @@ namespace MaxWorlds.Tests.EditMode
 
                     // AC4 (movementRange half): regression guard against the earlier, disproven
                     // "movementRange is resolution-dependent" theory on this same ticket — it must
-                    // stay at its original 90f, not be retuned as part of this fix.
-                    Assert.That(stick.movementRange, Is.EqualTo(90f),
-                        $"{label} stick: movementRange must stay 90f — MV-502's actual fix is useIsolatedInputActions, not a range retune");
+                    // stay at its MV-502 value, not be retuned for a resolution reason. MV-1104 (Lee,
+                    // "make control circles bigger") deliberately scales it by the shared
+                    // AbilityControlArt.ControlSizeScale factor for a feel-matches-the-bigger-art
+                    // reason, not a resolution one, so the pinned value now tracks that scale instead
+                    // of the bare 90f.
+                    Assert.That(stick.movementRange, Is.EqualTo(90f * AbilityControlArt.ControlSizeScale),
+                        $"{label} stick: movementRange must stay 90f * ControlSizeScale — MV-502's actual fix is useIsolatedInputActions, not a resolution-driven range retune");
                 }
             }
             finally

@@ -29,11 +29,12 @@ namespace MaxWorlds.UI
         /// <c>OnScreenControl</c>'s device-switch auto-cancel and isn't affected by the
         /// <c>useIsolatedInputActions</c> fix MV-502 applied to <c>HudController.AddOnScreenStick</c>'s
         /// move/aim pads.</summary>
-        public const float DragRadiusPixels = 90f;
+        public const float DragRadiusPixels = 90f * AbilityControlArt.ControlSizeScale;
 
         /// <summary>How far the visual knob itself travels, px — matches the move/aim knobs' own 26 px
-        /// offset at full deflection (<c>HudController.UpdateJoysticks</c>).</summary>
-        public const float KnobRadiusPixels = 26f;
+        /// offset at full deflection (<c>HudController.UpdateJoysticks</c>), scaled by the same MV-1104
+        /// factor.</summary>
+        public const float KnobRadiusPixels = 26f * AbilityControlArt.ControlSizeScale;
 
         /// <summary>Fraction of <see cref="DragRadiusPixels"/> the drag must clear to arm — big enough
         /// that a thumb resting near centre under pressure doesn't arm by accident, small enough that a

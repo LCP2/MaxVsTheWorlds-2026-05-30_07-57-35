@@ -99,8 +99,15 @@ namespace MaxWorlds.UI
         // else keeps its own inline literals until it, too, is next touched.
 
         /// <summary>RIG tap root (<see cref="BuildWeaponsButton"/>): top-right corner inset, replacing
-        /// the retired B/U ability slots that used to occupy this corner.</summary>
-        private const float RigCornerInset = 24f;
+        /// the retired B/U ability slots that used to occupy this corner.
+        /// MV-1104: narrowed 24 -> 6 — the Teleport joystick below grew to a 338-diameter, 2*169-unit
+        /// footprint (ring + touch pad) and cannot move in X (MV606HudReshuffleTests pins it within
+        /// 40 units of the aim stick's own X) or down in Y (it's already at its aim-stick-clearance
+        /// floor), so at 24 this tap root's own bottom edge (707) sat inside Teleport's own top edge
+        /// (709) at the iPhone 16 Pro / 12 mini landscape aspects — short by the ticket's 12px minimum
+        /// gap even before accounting for the overlap. Narrowing this (RIG moves up, not down, since
+        /// it's anchored from the top) opens that gap without resizing or moving Teleport.</summary>
+        private const float RigCornerInset = 6f;
 
         /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): bottom of the left
         /// play-area column (MV-645) — MAP, the Settings/Controls gear, Water Balloon and Force Field
@@ -114,7 +121,12 @@ namespace MaxWorlds.UI
         /// four gaps (this one plus the three below) were grown by the same ~12px so the column reads
         /// less crowded everywhere without any one element clipping on a narrow phone.</summary>
         private const float ForceFieldX = 150f;
-        private const float ForceFieldRise = 357f;
+        // MV-1104: the Move stick's own ring+touch-pad half-extent grew to
+        // (100+30)*ControlSizeScale = 169 about its new JoystickCornerOffset (189) centre, so its top
+        // edge now reaches 189+169 = 358 — FIELD/CAPTURE's old 357 clearance point sat almost exactly
+        // on top of it. Raised so FIELD/CAPTURE's own bottom edge (Rise - half of the scaled
+        // HydroButtonSize) clears that new 358 top edge by the ticket's 12px minimum gap.
+        private const float ForceFieldRise = 450f;
 
         /// <summary>TRAP button (MV-1035, repositioned MV-1068): the old (X=-360, Rise=820) was computed
         /// against the canvas's bottom-left corner, but the doc comment's "mirrors the Sentinel
@@ -127,15 +139,26 @@ namespace MaxWorlds.UI
         /// ticket; it clears every other active HUD control at every <see cref="RigBoardLayout.CaptureAspects"/>
         /// entry, so option 2 (stacking above FIELD) was not needed.</summary>
         private const float TrapButtonX = 330f;
-        private const float TrapButtonRise = 357f;
+        // MV-1104: same Move-stick clearance fix as ForceFieldRise above — TRAP shares FIELD's Rise.
+        private const float TrapButtonRise = 450f;
 
         /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
-        /// horizontally centred on the aim stick's own centre line (same -150 offset — see
-        /// <see cref="BuildJoysticks"/>), risen clear of the aim stick's full touch pad (half-size 100
-        /// + 30px fat-finger margin = top edge 280) plus a visible gap, with margin to spare across the
-        /// joystick's own level-driven size range.</summary>
-        private const float TeleportX = -150f;
-        private const float TeleportRise = 430f;
+        /// horizontally centred on the aim stick's own centre line (same <see cref="JoystickCornerOffset"/>
+        /// offset — see <see cref="BuildJoysticks"/>), risen clear of the aim stick's full touch pad
+        /// plus a visible gap, with margin to spare across the joystick's own level-driven size range.
+        /// MV-1104: both X and Rise grew with the aim stick's own bigger touch pad — X tracks
+        /// <see cref="JoystickCornerOffset"/> directly (it was already pinned to the aim stick's old
+        /// bare 150f offset, so this is the same relationship, not a new one — MV606HudReshuffleTests
+        /// is the sole guard pinning this joystick within 40 units of the aim stick's own X, so it
+        /// cannot move independently of it), and Rise was raised so this joystick's own bottom edge
+        /// clears the aim stick's new, bigger top edge (<see cref="JoystickCornerOffset"/> +
+        /// (100+30)*ControlSizeScale) by the ticket's 12px minimum gap. That leaves this joystick's
+        /// own top edge too close to the RIG tap target's bottom edge at the iPhone 16 Pro / 12 mini
+        /// landscape aspects — fixed on RIG's side instead (<see cref="RigCornerInset"/>) since this
+        /// joystick cannot move in X (above) or down in Y (it's already at its aim-stick-clearance
+        /// floor).</summary>
+        private const float TeleportX = -JoystickCornerOffset;
+        private const float TeleportRise = 540f;
 
         private HudModel _model;
         private PlayerHealth _health;
@@ -1171,7 +1194,7 @@ namespace MaxWorlds.UI
             {
                 float ang = Mathf.Atan2(move.y, move.x) * Mathf.Rad2Deg - 90f; // arrow art points up
                 _moveArrowRect.localRotation = Quaternion.Euler(0, 0, ang);
-                _moveKnob.anchoredPosition = move.normalized * 26f;
+                _moveKnob.anchoredPosition = move.normalized * (26f * AbilityControlArt.ControlSizeScale);
             }
             else _moveKnob.anchoredPosition = Vector2.zero;
 
@@ -1182,7 +1205,7 @@ namespace MaxWorlds.UI
             if (aiming)
             {
                 Vector3 f = _player.Facing;
-                _aimKnob.anchoredPosition = new Vector2(f.x, f.z).normalized * 26f;
+                _aimKnob.anchoredPosition = new Vector2(f.x, f.z).normalized * (26f * AbilityControlArt.ControlSizeScale);
             }
             else _aimKnob.anchoredPosition = Vector2.zero;
         }
@@ -1367,14 +1390,14 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(OnHydroButtonTapped);
 
-            _hydroLabel = AddText(root, 20f, HydroColor, TextAnchor.MiddleCenter);
+            _hydroLabel = AddText(root, 20f * AbilityControlArt.ControlSizeScale, HydroColor, TextAnchor.MiddleCenter);
             Stretch(_hydroLabel.rectTransform);
             _hydroLabel.text = "HYDRO";
             _hydroLabel.fontStyle = FontStyle.Bold;
             _hydroLabel.raycastTarget = false;
             _hydroLabel.resizeTextForBestFit = true;
-            _hydroLabel.resizeTextMinSize = 10;
-            _hydroLabel.resizeTextMaxSize = 22;
+            _hydroLabel.resizeTextMinSize = Mathf.RoundToInt(10f * AbilityControlArt.ControlSizeScale);
+            _hydroLabel.resizeTextMaxSize = Mathf.RoundToInt(22f * AbilityControlArt.ControlSizeScale);
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
@@ -1397,7 +1420,7 @@ namespace MaxWorlds.UI
         // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
         // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310) — the same slot
         // Dash occupied before MV-359 removed it.
-        private const float HydroButtonSize = 110f;
+        private const float HydroButtonSize = 110f * AbilityControlArt.ControlSizeScale;
         private const float HydroButtonInset = 400f;
         private const float HydroButtonRise = 330f;
 
@@ -1435,23 +1458,23 @@ namespace MaxWorlds.UI
             // an upper bound on what best-fit will ever resolve to — the exact MV-489 trap
             // (WeaponsScreen's base fontSize silently outranking resizeTextMaxSize). Base size must track
             // the raised cap below or it re-imposes the old 20pt ceiling on its own.
-            _forceFieldLabel = AddText(root, 32f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            _forceFieldLabel = AddText(root, 32f * AbilityControlArt.ControlSizeScale, ForceFieldLabelInk, TextAnchor.MiddleCenter);
             Anchor(_forceFieldLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             // Was 84x40 with resizeTextMaxSize 22 — the max was the binding constraint (best-fit
             // never draws past it regardless of box size), so it read unreadably small on an iPhone. Both
             // move together: the box widened enough to let the raised cap actually resolve, sized to clear
             // 1%/100%/FIELD (the widest case) against the ring's inner radius (see MV585ForceFieldLabelFontSizeTests).
-            _forceFieldLabel.rectTransform.sizeDelta = new Vector2(96f, 52f);
+            _forceFieldLabel.rectTransform.sizeDelta = new Vector2(96f, 52f) * AbilityControlArt.ControlSizeScale;
             _forceFieldLabel.rectTransform.anchoredPosition = Vector2.zero;
             _forceFieldLabel.text = "FIELD";
             _forceFieldLabel.fontStyle = FontStyle.Bold;
             _forceFieldLabel.raycastTarget = false;
             _forceFieldLabel.resizeTextForBestFit = true;
-            _forceFieldLabel.resizeTextMinSize = 10;
+            _forceFieldLabel.resizeTextMinSize = Mathf.RoundToInt(10f * AbilityControlArt.ControlSizeScale);
             var forceFieldLabelOutline = _forceFieldLabel.gameObject.AddComponent<Outline>();
             forceFieldLabelOutline.effectColor = BoneWhite;
             forceFieldLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
-            _forceFieldLabel.resizeTextMaxSize = 32;
+            _forceFieldLabel.resizeTextMaxSize = Mathf.RoundToInt(32f * AbilityControlArt.ControlSizeScale);
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
@@ -1497,19 +1520,19 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(OnTrapButtonTapped);
 
-            _trapLabel = AddText(root, 32f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            _trapLabel = AddText(root, 32f * AbilityControlArt.ControlSizeScale, ForceFieldLabelInk, TextAnchor.MiddleCenter);
             Anchor(_trapLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            _trapLabel.rectTransform.sizeDelta = new Vector2(96f, 52f);
+            _trapLabel.rectTransform.sizeDelta = new Vector2(96f, 52f) * AbilityControlArt.ControlSizeScale;
             _trapLabel.rectTransform.anchoredPosition = Vector2.zero;
             _trapLabel.text = "CAPTURE"; // MV-1089: player-facing name; code identifiers stay TRAP
             _trapLabel.fontStyle = FontStyle.Bold;
             _trapLabel.raycastTarget = false;
             _trapLabel.resizeTextForBestFit = true;
-            _trapLabel.resizeTextMinSize = 10;
+            _trapLabel.resizeTextMinSize = Mathf.RoundToInt(10f * AbilityControlArt.ControlSizeScale);
             var trapLabelOutline = _trapLabel.gameObject.AddComponent<Outline>();
             trapLabelOutline.effectColor = BoneWhite;
             trapLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
-            _trapLabel.resizeTextMaxSize = 32;
+            _trapLabel.resizeTextMaxSize = Mathf.RoundToInt(32f * AbilityControlArt.ControlSizeScale);
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
@@ -1534,7 +1557,14 @@ namespace MaxWorlds.UI
         // column onto its own left-edge spot) and the boss bar's y-band (rise 300, half 8) beneath
         // that — same "half-extent-plus-margin clearance" reasoning the Water Balloon/Teleport column
         // below uses for itself.
-        private const float SentinelJoystickRise = 820f;
+        // MV-1104: lowered from 820 — the joystick's own ring+touch-pad half-extent grew to
+        // (100+30)*ControlSizeScale = 169, and at 820 its top edge (989) cropped past the iPhone
+        // 16 Pro landscape aspect's ~979-unit effective ceiling (MV676HudPhoneAspectMarginTests'
+        // own log-blend compression). Lowered further to 720 (not just 740) because the FOCUS pill
+        // above it also needs its own 44-unit height plus a 12px gap inside that same ceiling —
+        // 740's own top edge (909) left only 49 units below the ceiling's usable 958, short of the
+        // 56 the pill needs (44 + 12). 720's top edge (889) leaves margin for both.
+        private const float SentinelJoystickRise = 720f;
         private const float SentinelJoystickX = 360f;
 
         private void BuildSentinelJoystick() => RebuildSentinelJoystick();
@@ -1579,7 +1609,8 @@ namespace MaxWorlds.UI
             var padRect = (RectTransform)pad.transform;
             padRect.SetParent(_sentinelRoot, false);
             padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            float padMargin = 30f * AbilityControlArt.ControlSizeScale;
+            padRect.offsetMin = new Vector2(-padMargin, -padMargin); padRect.offsetMax = new Vector2(padMargin, padMargin);
             var padImg = pad.GetComponent<Image>();
             padImg.color = new Color(0f, 0f, 0f, 0f);
             padImg.raycastTarget = true;
@@ -1621,7 +1652,14 @@ namespace MaxWorlds.UI
         // ~978-unit-tall canvas, and it clipped on real devices. +60 lands the top edge at ~902, the
         // same ~72-76-unit safety margin the MAP button (the column's own topmost element) already
         // carries — see MV676HudPhoneAspectMarginTests.
-        private const float FocusToggleRise = 60f;
+        // MV-1104: widened 60 -> 210 — the Sentinel joystick beneath grew to a (100+30)*ControlSizeScale
+        // = 169 half-extent (ring + touch pad), so the old 60px gap now sat the FOCUS pill entirely
+        // inside that touch pad. This pill's own center sits at SentinelJoystickRise + FocusToggleRise,
+        // and (with SentinelJoystickRise lowered to 720 above) needs this Rise >= 169 + 12px gap +
+        // this pill's own 22-unit half-height = 203 to clear the joystick, and <= 936 - 720 = 216 to
+        // keep this pill's own top edge under the iPhone 16 Pro landscape's effective ceiling
+        // (MV676HudPhoneAspectMarginTests). 210 sits in that range with margin either side.
+        private const float FocusToggleRise = 210f;
 
         private void BuildFocusToggle()
         {
@@ -1683,8 +1721,13 @@ namespace MaxWorlds.UI
         private const float AbilityControlColumnX = 150f;
         // MV-676: was 530 (a 30px gap above Force Field's own top edge) — raised to a 42px gap, part
         // of the same column-wide crowding fix as ForceFieldRise above.
-        private const float WaterBalloonJoystickRise = 554f;
-        private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
+        // MV-1104: raised 554 -> 678 — both FIELD below (now Rise 450, ring half 71.5, top edge 521.5)
+        // and this joystick's own ring half (now 130, up from 100) grew, so 554 no longer cleared
+        // FIELD's new top edge. 678 keeps a >12px ring-to-ring gap on both sides: FIELD's top edge
+        // (521.5) to this ring's bottom (548), and this ring's top (808) to MAP's bottom edge (834,
+        // unchanged — MAP isn't an ability control and doesn't scale).
+        private const float WaterBalloonJoystickRise = 678f;
+        private const float WaterBalloonJoystickMaxHalfSize = 100f * AbilityControlArt.ControlSizeScale;   // half of BuildJoystick's 200 px cap
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
@@ -1750,7 +1793,8 @@ namespace MaxWorlds.UI
             var padRect = (RectTransform)pad.transform;
             padRect.SetParent(_waterBalloonRoot, false);
             padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            float padMargin = 30f * AbilityControlArt.ControlSizeScale;
+            padRect.offsetMin = new Vector2(-padMargin, -padMargin); padRect.offsetMax = new Vector2(padMargin, padMargin);
             var padImg = pad.GetComponent<Image>();
             padImg.color = new Color(0f, 0f, 0f, 0f);
             padImg.raycastTarget = true;
@@ -1868,7 +1912,8 @@ namespace MaxWorlds.UI
             var padRect = (RectTransform)pad.transform;
             padRect.SetParent(_teleportRoot, false);
             padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            float padMargin = 30f * AbilityControlArt.ControlSizeScale;
+            padRect.offsetMin = new Vector2(-padMargin, -padMargin); padRect.offsetMax = new Vector2(padMargin, padMargin);
             var padImg = pad.GetComponent<Image>();
             padImg.color = new Color(0f, 0f, 0f, 0f);
             padImg.raycastTarget = true;
@@ -1893,36 +1938,42 @@ namespace MaxWorlds.UI
             RebuildTeleportJoystick();
         }
 
+        // MV-1104: the move/aim sticks' corner offset — was a bare 150f (clearing the pre-ticket ring
+        // half (100) + touch-pad margin (30) with a 20px safe-area margin). Both the ring and the pad
+        // grew by ControlSizeScale, so the offset must grow with them to keep the same clearance rather
+        // than pushing the touch pad off the safe area's edge.
+        private const float JoystickCornerOffset = (100f + 30f) * AbilityControlArt.ControlSizeScale + 20f;
+
         private void BuildJoysticks()
         {
             // Bottom-left: movement.
             var moveRoot = NewRect("Move Joystick", Root);
             _moveJoystickRoot = moveRoot;
             Anchor(moveRoot, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
-            moveRoot.anchoredPosition = new Vector2(150f, 150f);
-            moveRoot.sizeDelta = new Vector2(200f, 200f);
+            moveRoot.anchoredPosition = new Vector2(JoystickCornerOffset, JoystickCornerOffset);
+            moveRoot.sizeDelta = new Vector2(200f, 200f) * AbilityControlArt.ControlSizeScale;
             _moveRings = AddImage(moveRoot, HudTextures.TechRings(160, 3), TechRingColor, "Rings");
             Stretch(_moveRings.rectTransform); _moveRings.raycastTarget = false;
             _moveKnob = AddImage(moveRoot, HudTextures.Disc(96), new Color(TechRingColor.r, TechRingColor.g, TechRingColor.b, 0.9f), "Knob").rectTransform;
-            Center(_moveKnob, 64f);
+            Center(_moveKnob, 64f * AbilityControlArt.ControlSizeScale);
             _moveArrow = AddImage(moveRoot, HudTextures.Arrow(64), Color.white, "Arrow");
             _moveArrowRect = _moveArrow.rectTransform;
-            Center(_moveArrowRect, 40f);
-            _moveArrowRect.anchoredPosition = new Vector2(0f, 60f);
+            Center(_moveArrowRect, 40f * AbilityControlArt.ControlSizeScale);
+            _moveArrowRect.anchoredPosition = new Vector2(0f, 60f * AbilityControlArt.ControlSizeScale);
             _moveArrowRect.gameObject.SetActive(false);
 
             // Bottom-right: aim.
             var aimRoot = NewRect("Aim Joystick", Root);
             _aimJoystickRoot = aimRoot;
             Anchor(aimRoot, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            aimRoot.anchoredPosition = new Vector2(-150f, 150f);
-            aimRoot.sizeDelta = new Vector2(200f, 200f);
+            aimRoot.anchoredPosition = new Vector2(-JoystickCornerOffset, JoystickCornerOffset);
+            aimRoot.sizeDelta = new Vector2(200f, 200f) * AbilityControlArt.ControlSizeScale;
             _aimRings = AddImage(aimRoot, HudTextures.TechRings(160, 3), TechRingColor, "Rings");
             Stretch(_aimRings.rectTransform); _aimRings.raycastTarget = false;
             _aimKnob = AddImage(aimRoot, HudTextures.Disc(96), new Color(TechRingColor.r, TechRingColor.g, TechRingColor.b, 0.9f), "Knob").rectTransform;
-            Center(_aimKnob, 64f);
+            Center(_aimKnob, 64f * AbilityControlArt.ControlSizeScale);
             _aimCross = AddImage(aimRoot, HudTextures.Crosshair(96), TechRingColor, "Crosshair");
-            Center(_aimCross.rectTransform, 72f);
+            Center(_aimCross.rectTransform, 72f * AbilityControlArt.ControlSizeScale);
         }
 
         /// <summary>
@@ -1952,7 +2003,8 @@ namespace MaxWorlds.UI
             var rect = (RectTransform)pad.transform;
             rect.SetParent(joystickRoot, false);
             rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(-30f, -30f); rect.offsetMax = new Vector2(30f, 30f);
+            float touchMargin = 30f * AbilityControlArt.ControlSizeScale;
+            rect.offsetMin = new Vector2(-touchMargin, -touchMargin); rect.offsetMax = new Vector2(touchMargin, touchMargin);
 
             var img = pad.GetComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0f); // invisible touch surface
@@ -1960,7 +2012,7 @@ namespace MaxWorlds.UI
 
             var stick = pad.GetComponent<OnScreenStick>();
             stick.controlPath = controlPath;
-            stick.movementRange = 90f; // px drag for full deflection; tuned on device
+            stick.movementRange = 90f * AbilityControlArt.ControlSizeScale; // px drag for full deflection; tuned on device
             // MV-502: on a real touchscreen, InputSystemUIInputModule's own device-switch auto-cancel
             // fires OnPointerUp on this stick mid-drag (Touchscreen input alongside the stick's
             // synthetic Gamepad output looks like a device switch to the Input System), snapping it
