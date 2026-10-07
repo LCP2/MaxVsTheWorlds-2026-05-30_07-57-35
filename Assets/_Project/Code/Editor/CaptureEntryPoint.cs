@@ -153,6 +153,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1121UndertowBeam() => RunFromMenu(CapturePresets.All["mv1121undertowbeam"]);
         public static void CaptureMv1121UndertowBeam() => Run(CapturePresets.All["mv1121undertowbeam"]);
 
+        [MenuItem("MaxWorlds/Capture/Shed Laser Beam (MV-1097)")]
+        public static void MenuMv1097ShedLaserBeam() => RunFromMenu(CapturePresets.All["mv1097shedlaser"]);
+        public static void CaptureMv1097ShedLaserBeam() => Run(CapturePresets.All["mv1097shedlaser"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

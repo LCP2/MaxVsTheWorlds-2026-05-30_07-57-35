@@ -427,6 +427,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1063ReefFixCheck());
             Add(BuildMv1064UndertowLatchCheck());
             Add(BuildMv1121UndertowBeamCheck());
+            Add(BuildMv1097ShedLaserBeamCheck());
             return d;
         }
 
@@ -2243,6 +2244,121 @@ namespace MaxWorlds.Dev
                     if (undertowGo != null) Destroy(undertowGo);
                     if (ordinaryGo != null) Destroy(ordinaryGo);
                     if (bigGo != null) Destroy(bigGo);
+                },
+            };
+        }
+
+        // ---- Mv1097ShedLaserBeamCheck (MV-1097 AC2) -------------------------------------------
+
+        /// <summary>MV-1097 AC2: one capture of a shed Laser fitting mid-beam, World 1. Builds a
+        /// synthetic <see cref="MowerHutch"/> + Laser <see cref="ShedFitting"/> directly in the loaded
+        /// level's own largest open zone (same "spawn it fresh" technique
+        /// <see cref="BuildMv1121UndertowBeamCheck"/> uses for UNDERTOW, same CharacterController/
+        /// Awake-by-reflection recipe <c>Mv912ShedDamagesSentinelsTests.BuildMobileShed</c> uses) rather
+        /// than hunting a specific pre-authored shed's own corner turret — the fix being evidenced lives
+        /// in the fitting/rig, not in any one shed's placement, and a synthetic fitting gives a
+        /// deterministic frame with no real-level line-of-sight risk. The real <see cref="PlayerController"/>
+        /// is moved into range so the fitting's own real <c>Update()</c> loop drives the attack exactly as
+        /// it would in a live level; the shot is framed once <see cref="ShedFitting.LaserBeamLineForTests"/>
+        /// reports the Beam-phase full width.</summary>
+        private static CapturePreset BuildMv1097ShedLaserBeamCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float distance = 6f;
+            const int maxWaitFrames = 400;
+
+            GameObject hutchGo = null;
+            ShedFitting fitting = null;
+            PlayerController player = null;
+            Vector3 originalMaxPos = Vector3.zero;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let World 1's own build finish
+
+                player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 1 built no PlayerController to shoot");
+                originalMaxPos = player.transform.position;
+
+                Vector3 origin = CaptureDirector.OpenZoneCenter() ?? player.transform.position;
+
+                hutchGo = new GameObject("MV1097CaptureHutch");
+                hutchGo.transform.position = origin;
+                hutchGo.transform.localScale = new Vector3(2.25f, 1.5f, 2.25f);   // MV-541's shed footprint
+                var strayCol = hutchGo.GetComponent<BoxCollider>();
+                if (strayCol != null) Destroy(strayCol);
+                var cc = hutchGo.AddComponent<CharacterController>();
+                cc.center = Vector3.zero;
+                cc.height = 1f;
+                cc.radius = 0.5f;
+                var hutch = hutchGo.AddComponent<MowerHutch>();
+                typeof(MowerHutch).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(hutch, null);
+
+                var fittingGo = new GameObject("MV1097CaptureFitting");
+                fittingGo.transform.SetParent(hutchGo.transform, worldPositionStays: false);
+                fittingGo.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+                fittingGo.transform.localScale = Vector3.one * 0.5f;   // ShedFitting's own FittingSize
+                fitting = fittingGo.AddComponent<ShedFitting>();
+                fitting.Bind(hutch, ShedFittingKind.Laser);
+
+                player.transform.position = origin + Vector3.forward * 5f;
+                Physics.SyncTransforms();
+
+                int frame = 0;
+                LineRenderer line = null;
+                while (frame < maxWaitFrames)
+                {
+                    line ??= fitting.LaserBeamLineForTests;
+                    if (line != null && line.enabled && line.widthMultiplier >= 0.18f) break;
+                    yield return null;
+                    frame++;
+                }
+                if (fitting.LaserBeamLineForTests == null || !fitting.LaserBeamLineForTests.enabled ||
+                    fitting.LaserBeamLineForTests.widthMultiplier < 0.18f)
+                    throw new CaptureAbortException("the synthetic laser fitting never reached Beam phase within the capture's frame budget");
+
+                // A pitch-only FrameOn (every other preset's idiom) foreshortens this specific shot to a
+                // near-invisible hairline whenever the locked beam direction happens to point roughly
+                // along the camera's own forward axis -- framed broadside instead, off the resolved
+                // LockedBeamDirectionForTests, so the beam reads as a glowing bar regardless of which
+                // way the synthetic fitting happened to be facing when Beam locked.
+                Vector3 beamDir = fitting.LockedBeamDirectionForTests;
+                Vector3 side = Vector3.Cross(Vector3.up, beamDir);
+                side = side.sqrMagnitude > 0.01f ? side.normalized : Vector3.right;
+                Vector3 focus = fittingGo.transform.position + beamDir * 2.5f + Vector3.up * 0.4f;
+                Vector3 camPos = focus + side * distance + Vector3.up * (distance * 0.6f);
+                cam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation((focus - camPos).normalized, Vector3.up));
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1097shedlaser",
+                LogTag = "[MV1097Capture]",
+                Flag = "-mv1097shot",
+                ArmFile = "Temp/mv1097.arm",
+                HeadlessMarker = "Temp/mv1097.headless",
+                DoneFileName = "_mv1097_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 0;   // World 1
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                    DevMode.Enabled = true;
+                    DevMode.PauseSpawns = true;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1097", NoSetup) },
+                Cleanup = () =>
+                {
+                    if (hutchGo != null) Destroy(hutchGo);
+                    if (player != null) player.transform.position = originalMaxPos;
                 },
             };
         }
