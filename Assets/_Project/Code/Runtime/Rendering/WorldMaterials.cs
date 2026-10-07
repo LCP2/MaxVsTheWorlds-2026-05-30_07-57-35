@@ -247,21 +247,24 @@ namespace MaxWorlds.Rendering
         /// <see cref="s_reefCache"/> — but its two baked TEXTURES are not: they live in
         /// <see cref="StylizedTextures"/>'s own cache, which <see cref="StylizedTextures.Clear"/>
         /// sweeps on every biome change, same as every other generated texture in this project. So
-        /// the cache-hit path below re-checks that the material's base map SURVIVED the last sweep,
-        /// and re-points both slots at freshly-baked textures if it did not, rather than either (a)
-        /// exempting these two from the sweep — which would make them the only generated textures in
-        /// the project that outlive a palette change, for no reason tied to their own content, since
+        /// the cache-hit path below unconditionally re-points both slots at whatever
+        /// <see cref="StylizedTextures"/> currently holds for them, rather than either (a) exempting
+        /// these two from the sweep — which would make them the only generated textures in the
+        /// project that outlive a palette change, for no reason tied to their own content, since
         /// unlike a <see cref="Tinted"/> albedo they carry no biome colour of their own to begin with
-        /// — or (b) leaving the material holding a destroyed Texture2D, which is the MV-1053 dangling-
-        /// reference bug this class's own <see cref="MaterialLibrary.Clear"/> doc comment already
-        /// names for the Tinted case.
+        /// — or (b) re-pointing only when the current map reads back null (MV-1103: in a running
+        /// player <see cref="StylizedTextures.Clear"/>'s destroy is deferred to end of frame, so a
+        /// same-frame clear-then-fetch — exactly what a scene reload into World 3 does — finds the
+        /// stale texture still non-null, skips the re-point, and the floor goes dark a moment later
+        /// when that texture is actually destroyed). Deciding "stale" by identity against the source
+        /// of truth, not by nullness, is what MV-1103 fixed this to.
         /// </summary>
         private static Material ReefDeckFloorMaterial()
         {
             const string key = "M_ShipFloor";
             if (s_reefCache.TryGetValue(key, out var cached) && cached != null)
             {
-                if (cached.GetTexture("_BaseMap") == null) RefreshReefDeckTextures(cached);
+                RefreshReefDeckTextures(cached);
                 return cached;
             }
 
@@ -350,13 +353,18 @@ namespace MaxWorlds.Rendering
 
         /// <summary>Unlit, since this plane sits ~6 m below the floor with nothing ever casting light
         /// on it — same "bake the look into the texture, don't ask the shader to compute it" reasoning
-        /// <see cref="ReefGlassMaterial"/> already uses for the window gradient.</summary>
+        /// <see cref="ReefGlassMaterial"/> already uses for the window gradient.
+        ///
+        /// Same MV-1103 unconditional re-point as <see cref="ReefDeckFloorMaterial"/>'s own cache-hit
+        /// path, and for the same reason: this material's one baked texture also lives in
+        /// <see cref="StylizedTextures"/>'s own cache, swept by the same <see cref="StylizedTextures.Clear"/>.
+        /// </summary>
         private static Material ReefOceanVoidMaterial()
         {
             const string key = "M_OceanVoid";
             if (s_reefCache.TryGetValue(key, out var cached) && cached != null)
             {
-                if (cached.GetTexture("_BaseMap") == null) RefreshReefOceanVoidTexture(cached);
+                RefreshReefOceanVoidTexture(cached);
                 return cached;
             }
 
