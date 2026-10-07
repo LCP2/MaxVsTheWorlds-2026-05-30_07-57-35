@@ -75,12 +75,20 @@ namespace MaxWorlds.Pickups
         /// <c>DissolveVfx.maxGhosts</c> (12).</summary>
         private const int MaxLiveCells = 24;
 
-        /// <summary>MV-626, change 3: how long an uncollected power cell survives before expiring back
-        /// to the pool. A backstop, not the mechanism — <see cref="MaxLiveCells"/> above is what
-        /// actually bounds the population, since steady state at Domination kill rates (drop-rate ×
-        /// lifetime) can exceed it on its own. Generous on purpose: a player still working their way
-        /// toward a cell should not see it vanish out from under them.</summary>
-        private const float CellLifetimeSeconds = 30f;
+        /// <summary>MV-1101: how long a robot-dropped pickup (a Part or an Energy Cell) survives on the
+        /// ground before expiring back to the pool — tightened from the old flat 30s (MV-626) to force a
+        /// risk/reward choice instead of letting a drop sit forever. Only a drop <see
+        /// cref="MarkAgesOnGround"/> actually marks ages at all — a shed's cell cache, a boss drop, the
+        /// Weapon Core, a Morphing Module and a Rack Module are never marked and so never expire.</summary>
+        private const float RobotDropLifetimeSeconds = 10f;
+
+        /// <summary>MV-1101: for its last this-many seconds before expiring, a robot-dropped pickup
+        /// blinks (see <see cref="BlinkHz"/>) instead of vanishing with no warning.</summary>
+        private const float RobotDropBlinkWarningSeconds = 3f;
+
+        /// <summary>MV-1101: the warning blink's toggle rate — the visible/hidden state flips this many
+        /// times per second once a drop enters its last <see cref="RobotDropBlinkWarningSeconds"/>.</summary>
+        private const float BlinkHz = 6f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install() => EnsureInstalled();
@@ -125,10 +133,18 @@ namespace MaxWorlds.Pickups
         private readonly LinkedList<Pickup> _cellOrder = new LinkedList<Pickup>();
         private readonly Dictionary<Pickup, LinkedListNode<Pickup>> _cellNodes = new Dictionary<Pickup, LinkedListNode<Pickup>>(32);
 
-        /// <summary>Seconds since each live power cell was dropped (MV-626, change 3). Cells only —
-        /// Supercell/Device grants never fail to collect (see <see cref="SpawnDrop"/>), so they never
+        /// <summary>Seconds since each live robot-dropped pickup hit the ground (MV-626 change 3;
+        /// MV-1101 generalises it to Energy Cells and restricts it to robot-kill drops only — see <see
+        /// cref="MarkAgesOnGround"/>). Supercell/Device/WeaponCore/RackModule grants never fail to
+        /// collect (see <see cref="SpawnDrop"/>) and are never marked here either way, so they never
         /// pile up and are a different population (this ticket's own "Relationship" note).</summary>
-        private readonly Dictionary<Pickup, float> _cellAge = new Dictionary<Pickup, float>(32);
+        private readonly Dictionary<Pickup, float> _dropAge = new Dictionary<Pickup, float>(32);
+
+        /// <summary>MV-1101 item 5: pickups the current <see cref="Tick"/> call's Magneto-pull pass is
+        /// actively reeling in — a pull in flight pauses <see cref="TickCellLifetimes"/>'s ageing for
+        /// that pickup; the clock resumes the moment the pull stops (the pickup is simply absent from
+        /// this set on a later tick).</summary>
+        private readonly HashSet<Pickup> _pullingThisTick = new HashSet<Pickup>();
 
         private Transform _max;
         private int _largeKills;
@@ -184,7 +200,8 @@ namespace MaxWorlds.Pickups
             {
                 float ang = i * (Mathf.PI * 2f / cells);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                SpawnDrop(PickupKind.PowerCell, pos + off);
+                Pickup dropped = SpawnDrop(PickupKind.PowerCell, pos + off);
+                if (dropped != null) MarkAgesOnGround(dropped);   // MV-1101: a robot-kill Part ages
             }
 
             // MV-672: Power Cells (the new secondary currency) drop at a tunable fraction of the Parts
@@ -198,7 +215,8 @@ namespace MaxWorlds.Pickups
             {
                 float ang = i * (Mathf.PI * 2f / powerCellSecondaries);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                SpawnDrop(PickupKind.PowerCellSecondary, pos + off);
+                Pickup dropped = SpawnDrop(PickupKind.PowerCellSecondary, pos + off);
+                if (dropped != null) MarkAgesOnGround(dropped);   // MV-1101: a robot-kill Energy Cell ages too
             }
 
             // MV-401: exactly one Supercell per arena, from the last Bruiser destroyed in it — not every
@@ -469,11 +487,11 @@ namespace MaxWorlds.Pickups
             p.Place(pos);
             _live.Add(p);
 
+            // MV-626 change 2's population cap tracks every live PowerCell regardless of origin — MV-1101
+            // keeps that unconditional, but ground-lifetime ageing (_dropAge) is now opt-in per drop (see
+            // MarkAgesOnGround), not implied by kind alone, so a shed's cell cache never expires.
             if (kind == PickupKind.PowerCell)
-            {
                 _cellNodes[p] = _cellOrder.AddLast(p);
-                _cellAge[p] = 0f;
-            }
 
             // MV-972/MV-1038: registers (or RE-registers, for a pooled reuse) this drop's own zone tag
             // — same registration a robot-death/shed-destroyed/World-1-finale drop all funnel through
@@ -508,8 +526,14 @@ namespace MaxWorlds.Pickups
                 _cellOrder.Remove(node);
                 _cellNodes.Remove(p);
             }
-            _cellAge.Remove(p);
+            _dropAge.Remove(p);
         }
+
+        /// <summary>MV-1101: marks a freshly-dropped pickup as subject to the ground lifetime/blink —
+        /// called only for a robot-death drop (a Part or an Energy Cell, see <see cref="OnRobotDied"/>).
+        /// A shed's cell cache (<see cref="SpawnCellCache"/>/<see cref="PlacePartsCache"/>), a boss drop,
+        /// the Weapon Core, a Morphing Module and a Rack Module are never marked and so never expire.</summary>
+        private void MarkAgesOnGround(Pickup p) => _dropAge[p] = 0f;
 
         /// <summary>Forcibly returns a live cell to the pool without collecting it — used by the cap
         /// eviction and the lifetime backstop below, neither of which is a walk-over (see
@@ -527,84 +551,119 @@ namespace MaxWorlds.Pickups
             _cellPool.Push(p);
         }
 
-        /// <summary>MV-626, change 3: ages every live power cell and expires the ones past
-        /// <see cref="CellLifetimeSeconds"/>. Pulled out of <see cref="Update"/>'s main collect/Magneto
-        /// loop (which only concerns itself with cells near Max) so it always runs regardless of
-        /// whether Max has been found yet, and so it's directly testable with an explicit
+        /// <summary>MV-1101: expires a robot-dropped pickup once its ground lifetime elapses — same
+        /// "pool, don't destroy" shape as <see cref="RetireCell"/>, but kind-aware about which pool to
+        /// return to, since an Energy Cell's pool is <see cref="_powerCellSecondaryPool"/>, not
+        /// <see cref="_cellPool"/>. Clears the blink first so a pooled-and-reused pickup never pops back
+        /// out of the pool mid-blink.</summary>
+        private void RetireAgedDrop(int index, Pickup p)
+        {
+            UntrackCell(p);
+            _reserveFullTold.Remove(p);
+            MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
+            p.SetBlinkHidden(false);
+            p.gameObject.SetActive(false);
+            _live.RemoveAt(index);
+            (p.Kind == PickupKind.PowerCellSecondary ? _powerCellSecondaryPool : _cellPool).Push(p);
+        }
+
+        /// <summary>MV-626 change 3; MV-1101 generalises it to Energy Cells and adds the warning blink:
+        /// ages every live robot-dropped pickup (<see cref="_dropAge"/>) and expires the ones past
+        /// <see cref="RobotDropLifetimeSeconds"/>, blinking for the last <see
+        /// cref="RobotDropBlinkWarningSeconds"/> of that. A pickup <see cref="_pullingThisTick"/> marks
+        /// as actively Magneto-pulled this tick does not age at all (item 5) — <see cref="Tick"/> builds
+        /// that set immediately before calling this. Directly testable with an explicit
         /// <paramref name="dt"/> — same idiom as <c>DissolveVfx.TickGhosts</c>. Walks <see cref="_live"/>
         /// backward so RemoveAt during the walk is safe.</summary>
         private void TickCellLifetimes(float dt)
         {
+            float warnStart = RobotDropLifetimeSeconds - RobotDropBlinkWarningSeconds;
+
             for (int i = _live.Count - 1; i >= 0; i--)
             {
                 Pickup p = _live[i];
-                if (p.Kind != PickupKind.PowerCell) continue;
-                if (!_cellAge.TryGetValue(p, out float age)) continue;
+                if (!_dropAge.TryGetValue(p, out float age)) continue;
+                if (_pullingThisTick.Contains(p)) continue;   // MV-1101 item 5: clock paused mid-pull
 
                 age += dt;
-                if (age >= CellLifetimeSeconds) { RetireCell(i, p); continue; }
-                _cellAge[p] = age;
+                if (age >= RobotDropLifetimeSeconds) { RetireAgedDrop(i, p); continue; }
+                _dropAge[p] = age;
+
+                bool hidden = age >= warnStart && (Mathf.FloorToInt((age - warnStart) * BlinkHz) % 2) == 1;
+                p.SetBlinkHidden(hidden);
             }
         }
 
-        private void Update()
+        /// <summary>The director's own per-frame tick, driven by <see cref="Update"/> with
+        /// <c>Time.deltaTime</c> in play, and callable directly with an explicit <paramref name="dt"/>
+        /// (MV-1101) so a test can drive deterministic ageing without reflecting into a private
+        /// lifecycle method. Collect/Magneto-pull pass first (so <see cref="_pullingThisTick"/> reflects
+        /// this tick's pulls before ageing reads it), then <see cref="TickCellLifetimes"/>, which always
+        /// runs regardless of whether Max has been found yet.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
-            TickCellLifetimes(dt);
-
             if (_max == null)
             {
                 var g = GameObject.FindGameObjectWithTag("Player");
                 if (g != null) _max = g.transform;
             }
-            if (_max == null || _live.Count == 0) return;
 
-            Vector3 m = _max.position;
-            MapData map = EnemyNavigation.Map;
-            float r2 = CollectRadius * CollectRadius;
-            float magnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
-                MaxWorlds.Weapons.RigState.Level("e_mag"),
-                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
-                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
-            float cellMagnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
-                MaxWorlds.Weapons.RigState.Level("e_cmg"),
-                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
-                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
+            _pullingThisTick.Clear();
 
-            for (int i = _live.Count - 1; i >= 0; i--)
+            if (_max != null && _live.Count > 0)
             {
-                Pickup p = _live[i];
-                Vector3 pPos = p.transform.position;
-                float dx = pPos.x - m.x;
-                float dz = pPos.z - m.z;
-                float d2 = dx * dx + dz * dz;
-                // MV-1001: both the walk-over collect and the Magneto pull below are planar (XZ-only)
-                // distance checks, so without this a Max on the floor could collect — or Magneto-pull —
-                // a drop sitting on the deck above him, and vice versa. CombatLevel.SameLevel is the
-                // same floor-vs-deck comparison MV-944 already gives every targeting/damage site.
-                bool sameLevel = CombatLevel.SameLevel(map, m, pPos);
-                if (d2 <= r2 && sameLevel) { Collect(i, p); continue; }
-                _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
+                Vector3 m = _max.position;
+                MapData map = EnemyNavigation.Map;
+                float r2 = CollectRadius * CollectRadius;
+                float magnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
+                    MaxWorlds.Weapons.RigState.Level("e_mag"),
+                    MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
+                    MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
+                float cellMagnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
+                    MaxWorlds.Weapons.RigState.Level("e_cmg"),
+                    MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
+                    MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
 
-                // Part Magneto (MV-422, e_mag) / Cell Magneto (MV-848, e_cmg): a caught pickup flies to
-                // Max from range instead of waiting for a manual walk-over. Only power cells — devices
-                // stay a deliberate walk-over pickup. MV-439: Part Magneto never pulls once the PARTS
-                // reserve is full — an owned ability must not actively destroy the player's resources.
-                if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2)))
+                for (int i = _live.Count - 1; i >= 0; i--)
                 {
-                    Vector3 pos = p.transform.position;
-                    Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
-                    float step = MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullSpeed * dt;
-                    if (step * step >= d2) p.transform.position = new Vector3(m.x, pos.y, m.z);
-                    else p.transform.position = pos + toMax.normalized * step;
+                    Pickup p = _live[i];
+                    Vector3 pPos = p.transform.position;
+                    float dx = pPos.x - m.x;
+                    float dz = pPos.z - m.z;
+                    float d2 = dx * dx + dz * dz;
+                    // MV-1001: both the walk-over collect and the Magneto pull below are planar (XZ-only)
+                    // distance checks, so without this a Max on the floor could collect — or Magneto-pull —
+                    // a drop sitting on the deck above him, and vice versa. CombatLevel.SameLevel is the
+                    // same floor-vs-deck comparison MV-944 already gives every targeting/damage site.
+                    bool sameLevel = CombatLevel.SameLevel(map, m, pPos);
+                    if (d2 <= r2 && sameLevel) { Collect(i, p); continue; }
+                    _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
-                    // MV-1038 item 3: a Magneto-pulled pickup can cross a zone boundary mid-pull without
-                    // ever going through SpawnDrop's own RegisterPickup call — cheap no-op on the common
-                    // case (still the same zone), see ReregisterPickupIfZoneChanged's own doc.
-                    MapStaticBatchRoot.Active?.ReregisterPickupIfZoneChanged(p, p.transform.position);
+                    // Part Magneto (MV-422, e_mag) / Cell Magneto (MV-848, e_cmg): a caught pickup flies to
+                    // Max from range instead of waiting for a manual walk-over. Only power cells — devices
+                    // stay a deliberate walk-over pickup. MV-439: Part Magneto never pulls once the PARTS
+                    // reserve is full — an owned ability must not actively destroy the player's resources.
+                    if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2)))
+                    {
+                        _pullingThisTick.Add(p);   // MV-1101 item 5: pauses this pickup's ground lifetime below
+                        Vector3 pos = p.transform.position;
+                        Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
+                        float step = MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullSpeed * dt;
+                        if (step * step >= d2) p.transform.position = new Vector3(m.x, pos.y, m.z);
+                        else p.transform.position = pos + toMax.normalized * step;
+
+                        // MV-1038 item 3: a Magneto-pulled pickup can cross a zone boundary mid-pull without
+                        // ever going through SpawnDrop's own RegisterPickup call — cheap no-op on the common
+                        // case (still the same zone), see ReregisterPickupIfZoneChanged's own doc.
+                        MapStaticBatchRoot.Active?.ReregisterPickupIfZoneChanged(p, p.transform.position);
+                    }
                 }
             }
+
+            TickCellLifetimes(dt);
         }
+
+        private void Update() => Tick(Time.deltaTime);
 
         /// <summary>Whether Part Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled
         /// out as a pure function so the reserve-full guard is testable without a live scene. Public: the
