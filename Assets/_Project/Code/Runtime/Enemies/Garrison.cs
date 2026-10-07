@@ -140,7 +140,6 @@ namespace MaxWorlds.Enemies
             if (cfg == null || slots.Length == 0) return slots;
 
             List<Rect> deckRects = DeckFootprints(area, cfg, out float defaultDeckHeight, out List<float> deckHeights);
-            if (deckRects.Count == 0) return slots;
 
             for (int i = 0; i < slots.Length; i++)
             {
@@ -148,12 +147,23 @@ namespace MaxWorlds.Enemies
 
                 Vector3 pos = slots[i].Position;
                 float y = defaultDeckHeight;
+                bool matched = false;
                 for (int d = 0; d < deckRects.Count; d++)
                 {
                     if (!deckRects[d].Contains(new Vector2(pos.x, pos.z))) continue;
                     y = deckHeights[d];
+                    matched = true;
                     break;
                 }
+
+                // MV-1098: a level-1 entry that misses every deck rect is a config error (the authored
+                // x,z doesn't sit over a deck this area/overlay actually declares) — logged by area and
+                // entry so it can be tracked down, never silently dropped to floor height. It still gets
+                // the world's own default deck height rather than y=0; a level-1 slot is never meant to
+                // be walkable at floor level.
+                if (!matched)
+                    Debug.LogError($"[Garrison] level-1 entry in area '{area?.id}' at ({pos.x:F1}, {pos.z:F1}) " +
+                        $"is not over any deck rect - config error, placing at default deck height {defaultDeckHeight:F1}m.");
 
                 slots[i] = new Seed(new Vector3(pos.x, y, pos.z), slots[i].Kind, slots[i].Level);
             }
@@ -190,7 +200,13 @@ namespace MaxWorlds.Enemies
             heights = new List<float>();
             defaultDeckHeight = cfg?.dials?.deckHeight ?? 2.5f;
 
-            WorldArea deckSource = area != null && !string.IsNullOrEmpty(area.overlays) ? cfg?.Area(area.overlays) : area;
+            // MV-1098: area's own decks win whenever it authors any directly (the a17/a3 shape - the
+            // overlay, not the floor it overlays, carries the deck geometry its own garrison stands on).
+            // Only fall back to the overlay target's decks when area itself has none to offer, which is
+            // what keeps the a13/a15 shape (decks duplicated on both sides) working exactly as before.
+            WorldArea deckSource = (area?.decks != null && area.decks.Length > 0) ? area : null;
+            if (deckSource == null && area != null && !string.IsNullOrEmpty(area.overlays))
+                deckSource = cfg?.Area(area.overlays);
             if (deckSource?.decks == null) return rects;
 
             foreach (WorldDeck d in deckSource.decks)
