@@ -92,7 +92,7 @@ namespace MaxWorlds.Tests.EditMode
                 var move = FindRect(hudGo, "Move Joystick");
                 var aim = FindRect(hudGo, "Aim Joystick");
                 var field = FindRect(hudGo, "Force Field Button");
-                var sentinel = FindRect(hudGo, "Sentinel Joystick");
+                var sentinel = FindRect(hudGo, "Sentinel Button"); // MV-1113: retired joystick -> button
                 var focus = FindRect(hudGo, "Sentinel Focus Toggle");
                 var map = FindRect(hudGo, "Map Button");
                 var teleport = FindRect(hudGo, "Teleport Joystick");
@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(aim, Is.Not.Null, "fixture: the aim stick must exist");
                 Assert.That(field, Is.Not.Null, "fixture: the FIELD button must exist");
                 Assert.That(field.gameObject.activeInHierarchy, Is.True, "fixture: FIELD must be active under a maxed World 3 rig");
-                Assert.That(sentinel, Is.Not.Null, "fixture: the Sentinel joystick must exist");
+                Assert.That(sentinel, Is.Not.Null, "fixture: the SENTINEL button must exist");
                 Assert.That(sentinel.gameObject.activeInHierarchy, Is.True, "fixture: Sentinel must be active under a maxed World 3 rig");
                 Assert.That(focus, Is.Not.Null, "fixture: the FOCUS toggle must exist");
                 Assert.That(focus.gameObject.activeInHierarchy, Is.True, "fixture: FOCUS must be active under a maxed World 3 rig");

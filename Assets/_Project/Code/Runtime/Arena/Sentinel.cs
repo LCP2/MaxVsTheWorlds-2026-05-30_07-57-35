@@ -36,11 +36,13 @@ namespace MaxWorlds.Arena
     /// <see cref="MaxWorlds.Factories.MowerHutch"/> uses for its own death. MV-398 (same day)
     /// reversed only the "no repair" half: a damaged-but-alive sentinel now passively regens HP once
     /// left unhit for a while — see <see cref="Update"/> — but a destroyed one still never comes
-    /// back, and there is still no manual repair action. MV-604 later added the one exception to "no
-    /// recall": redeploying at the Slots cap recalls whichever sentinel is furthest from Max rather
-    /// than refusing — see <see cref="Recall"/>. A recall is deliberately NOT routed through
-    /// <see cref="Die"/> — it must never count as a death (no kill counter, no death VFX, no on-death
-    /// payout).
+    /// back, and there is still no manual repair action. MV-604 added a redeploy-at-cap recall
+    /// (furthest sentinel from Max); MV-1113 RETIRES it — the SENTINEL button's own deploy now simply
+    /// refuses at the cap ("FULL") instead, so <see cref="Recall"/> has no production caller left, kept
+    /// only as the shared "not a death" teardown shape <see cref="CancelArrival"/> also uses. A recall
+    /// is deliberately NOT routed through <see cref="Die"/> — it must never count as a death (no kill
+    /// counter, no death VFX, no on-death payout) — the same reason <see cref="CancelArrival"/> isn't
+    /// either.
     ///
     /// <see cref="Team"/> is <see cref="Team.Player"/> — Max's own device. <see cref="DamageRules"/>'s
     /// same-team rejection means a robot (Team.Enemy) CAN hit it, and Max's own primary (Team.Player)
@@ -355,6 +357,38 @@ namespace MaxWorlds.Arena
         private DestructibleHealth _health;
         private float _timeSinceDamage;
 
+        // --- MV-1113: teleport-style arrival (the SENTINEL button's own deploy path only) ---
+
+        /// <summary>Seconds this Sentinel's arrival effect has run; <see cref="float.PositiveInfinity"/>
+        /// (never arriving) for every Sentinel built the ordinary way — <see cref="Init"/> alone, via
+        /// the legacy aimed/parameterless overloads every existing test and caller still uses. Only
+        /// <see cref="BeginArrival"/>, called exclusively by the new SENTINEL-button deploy path
+        /// (<see cref="MaxWorlds.Weapons.PlayerAbilities.TryDeploySentinelNearMax"/>), starts the clock —
+        /// so nothing about a directly-<see cref="Init"/>-ed Sentinel's immediate damageability changes.</summary>
+        private float _arrivalElapsed = float.PositiveInfinity;
+
+        /// <summary>The exact 3.0s split from the ticket: 0 to <see cref="ArrivalColumnSeconds"/> is the
+        /// column-of-light/contracting-ring beat, <see cref="ArrivalColumnSeconds"/> to this is the
+        /// body's own scale-in.</summary>
+        public const float ArrivalSeconds = 3.0f;
+        private const float ArrivalColumnSeconds = 2.4f;
+        private const float ArrivalColumnWidth = 0.6f;
+        private const float ArrivalColumnHeight = 4f;
+        private const float ArrivalRingStartRadius = 1.2f;
+
+        private GameObject _arrivalColumn;
+        private GameObject _arrivalRing;
+        private Mesh _arrivalRingMesh;
+        private Vector3 _modelFullScale = Vector3.one;
+        private static Mesh s_cylinderMesh;
+        private static MaterialPropertyBlock s_arrivalTintBlock;
+
+        /// <summary>True while this Sentinel is still materialising — untargetable
+        /// (<see cref="TakeDamage"/>), silent (<see cref="TickSentinel"/> returns before any fire logic),
+        /// and skipped by every "nearest Sentinel" target pick (<see cref="SentinelTargeting.Nearest"/>,
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own Splicer target pick).</summary>
+        public bool IsArriving => _arrivalElapsed < ArrivalSeconds;
+
         /// <summary>MV-1005: the red hit-flash/spark/low-HP-smoke read Max's own machine gets on
         /// every landed hit — built in <see cref="Init"/> right after <see cref="BuildBody"/>, since
         /// it needs the body renderers to already exist.</summary>
@@ -471,6 +505,11 @@ namespace MaxWorlds.Arena
             _fallRecovery = new FallRecoveryState(position);
             InitHealth(maxHp);
             BuildBody();
+            // MV-1113: captured here, before anything can zero it for an arrival — BeginArrival (called
+            // separately, only by the new SENTINEL-button path) needs the REAL full scale BuildBody just
+            // set (not Vector3.one) to scale the body back in to, since MakeMetreSpace may not leave it
+            // at unit scale.
+            _modelFullScale = _model != null ? _model.localScale : Vector3.one;
             IgnorePlayerCollision();
             WorldHealthBar.Attach(gameObject, this, 1.9f, 1.2f, alwaysShow: true);
 
@@ -696,9 +735,138 @@ namespace MaxWorlds.Arena
             else DestroyImmediate(gameObject);
         }
 
+        /// <summary>MV-1113: starts the 3.0s teleport-style arrival — body hidden (scaled to zero) and
+        /// untargetable/undamageable/silent until <see cref="TickArrival"/> finishes it, driven every
+        /// <see cref="TickSentinel"/> alongside everything else so an EditMode test can drive it with the
+        /// same explicit dt it already drives the rest of this class with. Called exactly once,
+        /// immediately after a successful deploy through the new SENTINEL button path.</summary>
+        public void BeginArrival()
+        {
+            _arrivalElapsed = 0f;
+            if (_model != null) _model.localScale = Vector3.zero;
+            BuildArrivalVfx();
+        }
+
+        /// <summary>MV-1113: Max left the Sentinel's own deploy area before its 3.0s arrival finished —
+        /// the arrival is cancelled (ticket item 5). Mirrors <see cref="Recall"/>'s shape (registry
+        /// removal + destroy, no <see cref="Died"/>, no HudSignals) since this is neither a death nor a
+        /// recall — <see cref="MaxWorlds.Weapons.PlayerAbilities"/> is the one that refunds the cost.</summary>
+        public void CancelArrival()
+        {
+            _active.Remove(this);
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
+        }
+
+        private static Mesh CylinderMesh()
+        {
+            if (s_cylinderMesh == null) s_cylinderMesh = Resources.GetBuiltinResource<Mesh>("Cylinder.fbx");
+            return s_cylinderMesh;
+        }
+
+        /// <summary>Same <see cref="MaterialPropertyBlock"/> per-renderer-tint idiom
+        /// <see cref="MaxWorlds.UI.AbilityJoystickControlBase.ApplyArmedTint"/> uses — tints only this
+        /// renderer's draw call rather than every renderer sharing the cached alpha-blend material.</summary>
+        private static void TintRenderer(MeshRenderer renderer, Color color, float alpha)
+        {
+            if (renderer == null) return;
+            s_arrivalTintBlock ??= new MaterialPropertyBlock();
+            Color c = new Color(color.r, color.g, color.b, alpha);
+            renderer.GetPropertyBlock(s_arrivalTintBlock);
+            s_arrivalTintBlock.SetColor("_BaseColor", c);
+            s_arrivalTintBlock.SetColor("_Color", c);
+            renderer.SetPropertyBlock(s_arrivalTintBlock);
+        }
+
+        /// <summary>The column-of-light + contracting ground ring (ticket item 4) — built once, right as
+        /// <see cref="BeginArrival"/> starts, in this world's own sentinel colour (<see cref="ResolveStyle"/>,
+        /// already resolved at <see cref="Init"/>). Both reuse this project's existing VFX primitives
+        /// (<see cref="VfxMaterials.AlphaBlend(Texture2D)"/>, <see cref="WaterBalloonAimMesh.BuildLandingCircleInto"/>)
+        /// rather than authoring a new shader — the same "same visual language" instruction the ticket
+        /// gives for reusing Max's own teleport arrival.</summary>
+        private void BuildArrivalVfx()
+        {
+            Color tint = ResolveStyle(_worldIndex).Body;
+
+            _arrivalColumn = new GameObject("Arrival Column", typeof(MeshFilter), typeof(MeshRenderer));
+            _arrivalColumn.AddComponent<KeepsOwnMaterial>();
+            _arrivalColumn.transform.SetParent(transform, worldPositionStays: false);
+            _arrivalColumn.transform.localPosition = new Vector3(0f, ArrivalColumnHeight * 0.5f, 0f);
+            _arrivalColumn.transform.localScale = new Vector3(ArrivalColumnWidth, ArrivalColumnHeight * 0.5f, ArrivalColumnWidth);
+            var colFilter = _arrivalColumn.GetComponent<MeshFilter>();
+            colFilter.sharedMesh = CylinderMesh();
+            var colRenderer = _arrivalColumn.GetComponent<MeshRenderer>();
+            colRenderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            colRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            colRenderer.receiveShadows = false;
+            TintRenderer(colRenderer, tint, 0.65f);
+
+            _arrivalRing = new GameObject("Arrival Ring", typeof(MeshFilter), typeof(MeshRenderer));
+            _arrivalRing.AddComponent<KeepsOwnMaterial>();
+            _arrivalRing.transform.SetParent(transform, worldPositionStays: false);
+            _arrivalRing.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+            _arrivalRingMesh = new Mesh { name = "Arrival Ring" };
+            WaterBalloonAimMesh.BuildLandingCircleInto(_arrivalRingMesh, ArrivalRingStartRadius);
+            _arrivalRing.GetComponent<MeshFilter>().sharedMesh = _arrivalRingMesh;
+            var ringRenderer = _arrivalRing.GetComponent<MeshRenderer>();
+            ringRenderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            ringRenderer.receiveShadows = false;
+            TintRenderer(ringRenderer, tint, 0.8f);
+        }
+
+        /// <summary>MV-1113: 0 to <see cref="ArrivalColumnSeconds"/> contracts the ring from
+        /// <see cref="ArrivalRingStartRadius"/> down to the body's own footprint
+        /// (<see cref="ColliderRadius"/>) while the column fades out; <see cref="ArrivalColumnSeconds"/>
+        /// to <see cref="ArrivalSeconds"/> scales the body in from zero to <see cref="_modelFullScale"/>.</summary>
+        private void TickArrival(float dt)
+        {
+            _arrivalElapsed += dt;
+
+            if (_arrivalElapsed < ArrivalColumnSeconds)
+            {
+                float u = Mathf.Clamp01(_arrivalElapsed / ArrivalColumnSeconds);
+                if (_arrivalRingMesh != null)
+                    WaterBalloonAimMesh.BuildLandingCircleInto(_arrivalRingMesh, Mathf.Lerp(ArrivalRingStartRadius, ColliderRadius, u));
+                Color tint = ResolveStyle(_worldIndex).Body;
+                if (_arrivalColumn != null) TintRenderer(_arrivalColumn.GetComponent<MeshRenderer>(), tint, 0.65f * (1f - u));
+            }
+            else
+            {
+                EndArrivalVfx();
+                float bodyU = Mathf.Clamp01((_arrivalElapsed - ArrivalColumnSeconds) / (ArrivalSeconds - ArrivalColumnSeconds));
+                if (_model != null) _model.localScale = _modelFullScale * bodyU;
+            }
+
+            if (_arrivalElapsed >= ArrivalSeconds && _model != null) _model.localScale = _modelFullScale;
+        }
+
+        private void EndArrivalVfx()
+        {
+            // MV-1113: Application.isPlaying-gated like every other teardown in this class (Die,
+            // DestroyAllActive) — a bare Destroy logs "may not be called from edit mode" and fails this
+            // ticket's own EditMode test, which drives the whole arrival with an explicit dt.
+            if (_arrivalColumn != null)
+            {
+                if (Application.isPlaying) Destroy(_arrivalColumn); else DestroyImmediate(_arrivalColumn);
+                _arrivalColumn = null;
+            }
+            if (_arrivalRing != null)
+            {
+                if (Application.isPlaying) Destroy(_arrivalRing); else DestroyImmediate(_arrivalRing);
+                _arrivalRing = null;
+            }
+            if (_arrivalRingMesh != null)
+            {
+                if (Application.isPlaying) Destroy(_arrivalRingMesh); else DestroyImmediate(_arrivalRingMesh);
+                _arrivalRingMesh = null;
+            }
+        }
+
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            if (IsArriving) return; // MV-1113: untargetable/undamageable until the arrival finishes
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             if (info.Amount > 0f) _timeSinceDamage = 0f; // MV-398: (re)starts the regen delay below
             _health.TakeDamage(info.Amount);
@@ -741,6 +909,15 @@ namespace MaxWorlds.Arena
         {
             _timeSinceDamage += dt;
             TickHijack(dt);
+
+            // MV-1113: nothing else about this Sentinel ticks while it is still materialising — no
+            // regen, no movement, no fall-recovery, no firing. It is standing still at exactly the point
+            // the arrival search chose, for the whole 3.0s.
+            if (IsArriving)
+            {
+                TickArrival(dt);
+                return;
+            }
 
             bool inFloorSludge = MapSludgeDamage.IsInFloorSludge(EnemyNavigation.Map, transform.position);
             _sludgeTicker.Tick(dt, inFloorSludge, this, transform.position);
@@ -1228,6 +1405,15 @@ namespace MaxWorlds.Arena
             // the comment on that subscription). A no-op if Init() never ran (RigState.Changed -= a
             // handler that was never added is harmless).
             RigState.Changed -= RefreshFromRigState;
+
+            // MV-1113: if this Sentinel is destroyed (CancelArrival, DestroyAllActive, a level reset)
+            // mid-arrival, the column/ring GameObjects go with it as children — but the loose Mesh asset
+            // the ring's MeshFilter merely references would otherwise leak.
+            if (_arrivalRingMesh != null)
+            {
+                if (Application.isPlaying) Destroy(_arrivalRingMesh); else DestroyImmediate(_arrivalRingMesh);
+                _arrivalRingMesh = null;
+            }
 
             if (_ownedMaterials == null) return;
             for (int i = 0; i < _ownedMaterials.Length; i++)

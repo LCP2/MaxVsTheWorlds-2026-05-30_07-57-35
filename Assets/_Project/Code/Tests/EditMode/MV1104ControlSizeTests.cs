@@ -100,7 +100,7 @@ namespace MaxWorlds.Tests.EditMode
                 var aim = FindRect(hudGo, "Aim Joystick");
                 var field = FindRect(hudGo, "Force Field Button");
                 var trap = FindRect(hudGo, "Trap Button");
-                var sentinel = FindRect(hudGo, "Sentinel Joystick");
+                var sentinel = FindRect(hudGo, "Sentinel Button"); // MV-1113: retired joystick -> button
                 var teleport = FindRect(hudGo, "Teleport Joystick");
                 var focus = FindRect(hudGo, "Sentinel Focus Toggle");
                 var map = FindRect(hudGo, "Map Button");
@@ -113,7 +113,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(field.gameObject.activeInHierarchy, Is.True, "fixture: FIELD must be active under a maxed World 3 rig");
                 Assert.That(trap, Is.Not.Null, "fixture: the CAPTURE button must exist");
                 Assert.That(trap.gameObject.activeInHierarchy, Is.True, "fixture: CAPTURE must be active under a maxed World 3 rig");
-                Assert.That(sentinel, Is.Not.Null, "fixture: the Sentinel joystick must exist");
+                Assert.That(sentinel, Is.Not.Null, "fixture: the SENTINEL button must exist");
                 Assert.That(sentinel.gameObject.activeInHierarchy, Is.True, "fixture: Sentinel must be active under a maxed World 3 rig");
                 Assert.That(teleport, Is.Not.Null, "fixture: the Teleport joystick must exist");
                 Assert.That(teleport.gameObject.activeInHierarchy, Is.True, "fixture: Teleport must be active under a maxed World 3 rig");
@@ -139,7 +139,9 @@ namespace MaxWorlds.Tests.EditMode
                     ("Aim", aim, 200f),
                     ("FIELD", field, 110f),
                     ("CAPTURE", trap, 110f),
-                    ("Sentinel", sentinel, 200f),
+                    // MV-1113: Sentinel moved from a 200px joystick to a 110px round button, same size
+                    // as FIELD/CAPTURE — the ticket's own "same size as the FIELD button" instruction.
+                    ("Sentinel", sentinel, 110f),
                     ("Teleport", teleport, 200f),
                 };
                 foreach (var (id, rt, baseDiameter) in growth)

@@ -196,6 +196,16 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
+        /// <summary>MV-1113: refunds a Sentinel deploy whose arrival was cancelled (Max left the area
+        /// before the 3.0s arrival finished) — the symmetric bulk counterpart to
+        /// <see cref="TrySpendPowerCellSecondaries"/>.</summary>
+        public static void AddPowerCellSecondaries(int amount)
+        {
+            if (amount <= 0) return;
+            PowerCellsSecondary += amount;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+        }
+
         /// <summary>Grant one collected Supercell's cells instantly (MV-519, retiring MV-515's banked/
         /// cash-in model) — no bank, no cash-in step, no player action. Always adds the FULL
         /// <see cref="SupercellCellValue"/>, even past <see cref="Capacity"/>: unlike an ordinary cell

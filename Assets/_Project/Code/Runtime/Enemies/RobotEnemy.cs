@@ -847,7 +847,8 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < active.Count; i++)
             {
                 Sentinel s = active[i];
-                if (s == null || !s.IsAlive || s.IsHijacked) continue;
+                // MV-1113: a Sentinel still mid-arrival is untargetable — a Splicer must not channel on it.
+                if (s == null || !s.IsAlive || s.IsHijacked || s.IsArriving) continue;
                 if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, s.transform.position)) continue;
 
                 float sqr = (s.transform.position - transform.position).sqrMagnitude;

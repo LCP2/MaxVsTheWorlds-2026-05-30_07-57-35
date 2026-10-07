@@ -140,7 +140,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(4), "a refused deploy must not spend cells");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(countBeforeRefusal), "a refused deploy must not place a sentinel");
 
-                // ---------------------------------------------------------------- AC9: cap-recall still works
+                // ---------------------------------------------------------------- AC9: cap refusal (MV-1113 superseded MV-604's cap-recall)
                 RigState.AcquireCap("u_hp");  // reaches u_slt (u_hp's own RIG child), free draft path
                 RigState.AcquireCap("u_slt"); // level 1 -> 2 slots
                 RigState.RaiseLevel("u_slt"); // level 2 -> 3 slots, the new ceiling (was 3 raises pre-MV-623, now 2)
@@ -154,8 +154,11 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(abilities.TryDeploySentinel(new Vector3(50f, 0f, 0f)), Is.True);
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(3), "precondition: cap reached exactly");
 
-                Assert.That(abilities.TryDeploySentinel(new Vector3(1f, 0f, 0f)), Is.True,
-                    "deployment must never be refused for lack of a slot — MV-604's cap-recall must survive");
+                // MV-1113 (6 Oct 2026, the SENTINEL button rewrite) retires MV-604's redeploy-at-cap
+                // recall — the button now goes unavailable ("FULL") at the cap and a deploy there
+                // simply refuses, same as every other unaffordable/unready tap.
+                Assert.That(abilities.TryDeploySentinel(new Vector3(1f, 0f, 0f)), Is.False,
+                    "MV-1113: deployment at the cap must now be refused, not recall the furthest sentinel");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(3), "must stay at the cap, never grow past it");
             }
             finally

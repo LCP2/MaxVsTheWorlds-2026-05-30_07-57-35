@@ -208,16 +208,15 @@ namespace MaxWorlds.UI
         private Image _trapGlow, _trapRadial;
         private Text _trapLabel;
 
-        // The Sentinel deploy joystick (MV-362, aimed-placement MV-399, one sentinel only MV-422):
-        // hidden until AbilityKind.Sentinels is acquired, same tech-ring joystick shape Water
-        // Balloon/Teleport use below — a sentinel isn't cooldown-gated, so the radial covers/uncovers
-        // on cell cost + the deployment-slot cap instead of a cooldown sweep (same "empty bank reads
-        // as covered" idiom Water Balloon's own radial already uses for its cell gate).
-        private RectTransform _sentinelRoot;
-        private AbilityControlArt.JoystickVisual _sentinelVisual;
-        private Image _sentinelRadial;
-        private Image _sentinelDeniedIcon;
-        private int _sentinelBuiltLevel = -1;
+        // The SENTINEL button (MV-1113, retiring the MV-362/MV-399/MV-422 aimed-placement joystick):
+        // hidden until AbilityKind.Sentinels is acquired, same round action-button/radial-cooldown
+        // shape as Force Field/TRAP above — a tap deploys at a point the game itself picks (no aim),
+        // on a fixed 10s cooldown, unavailable ("FULL"/"NO PARTS") when every slot is in use or the
+        // cost can't be paid, and shaking with "NO ROOM" on a failed placement search.
+        private RectTransform _sentinelButtonRoot;
+        private Image _sentinelGlow, _sentinelRadial;
+        private Text _sentinelLabel;
+        private float _sentinelNoRoomFlash;
 
         private RectTransform _focusToggleRoot;
         private Image _focusToggleBg;
@@ -373,7 +372,7 @@ namespace MaxWorlds.UI
             BuildHomeButton();
             BuildHydroButton();
             BuildForceFieldButton();
-            BuildSentinelJoystick();
+            BuildSentinelButton();
             BuildTrapButton();
             BuildFocusToggle();
             BuildWaterBalloonJoystick();
@@ -480,7 +479,8 @@ namespace MaxWorlds.UI
         {
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
-            RebuildSentinelJoystickIfNeeded();
+            if (_sentinelButtonRoot != null)
+                _sentinelButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
             RefreshWaterBalloonAutoFireToggle();
             RefreshFocusToggle();
             if (_forceFieldButtonRoot != null)
@@ -762,7 +762,7 @@ namespace MaxWorlds.UI
 
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
-            UpdateSentinelJoystick();
+            UpdateSentinelButton(dt);
             UpdateTrapButton(dt);
             UpdateAbilityControls();
             UpdateJoysticks();
@@ -1135,23 +1135,51 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>Drives the Sentinel deploy joystick (MV-362, aimed MV-399, one sentinel only
-        /// MV-422) — no-op while hidden (not yet acquired). No cooldown: a sentinel is gated purely on
-        /// cell cost and the deployment-slot cap, so the radial simply covers/uncovers on that gate —
-        /// the same "empty bank reads as covered" idiom <see cref="UpdateAbilityControls"/> already
-        /// uses for Water Balloon's own cell gate — and the label keeps the live slot-count readout
-        /// the old buttons showed.</summary>
-        private void UpdateSentinelJoystick()
+        /// <summary>Drives the SENTINEL button (MV-1113) — no-op while hidden (not yet acquired). Shows
+        /// a radial cooldown sweep with the whole seconds remaining as the button's own label text,
+        /// dims to "FULL"/"NO PARTS" when every slot is in use or the cost can't be paid, and shakes
+        /// with a "NO ROOM" flash for a moment after a tap whose placement search found nowhere to land
+        /// — same ready-glow-pulse shape <see cref="UpdateForceFieldButton"/>/<see cref="UpdateTrapButton"/>
+        /// already use.</summary>
+        private void UpdateSentinelButton(float dt)
         {
+            if (_sentinelButtonRoot == null || !_sentinelButtonRoot.gameObject.activeSelf) return;
             if (_abilities == null) return;
-            if (_sentinelRadial == null || _sentinelRoot == null || !_sentinelRoot.gameObject.activeSelf) return;
 
-            _sentinelRadial.fillAmount = _abilities.SentinelReady ? 0f : 1f;
-            if (_sentinelDeniedIcon != null)
-                _sentinelDeniedIcon.gameObject.SetActive(
-                    MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary < PlayerAbilities.SentinelCost);
-            if (_sentinelVisual.Label != null)
-                _sentinelVisual.Label.text = $"SEN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
+            _sentinelNoRoomFlash = Mathf.Max(0f, _sentinelNoRoomFlash - dt * 1.6f);
+
+            float cooldown = _abilities.SentinelCooldownRemaining;
+            bool slotAvailable = _abilities.SentinelSlotAvailable;
+            bool ready = _abilities.SentinelReady;
+            bool canDeployNow = _abilities.SentinelCanDeployNow;
+
+            if (_sentinelNoRoomFlash > 0f)
+            {
+                _sentinelLabel.text = "NO ROOM";
+                float shake = Mathf.Sin(Time.unscaledTime * 40f) * 6f * _sentinelNoRoomFlash;
+                _sentinelButtonRoot.anchoredPosition = new Vector2(SentinelButtonX + shake, SentinelButtonRise);
+            }
+            else
+            {
+                _sentinelButtonRoot.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise);
+
+                if (cooldown > 0f) _sentinelLabel.text = Mathf.CeilToInt(cooldown) + "s";
+                else if (!slotAvailable) _sentinelLabel.text = "FULL";
+                else if (!ready) _sentinelLabel.text = "NO PARTS";
+                else _sentinelLabel.text = "SENTINEL";
+            }
+
+            // Same "empty bank reads as covered" idiom UpdateAbilityControls already uses for Water
+            // Balloon's own cell gate — a full radial cover while unavailable for ANY reason, not just
+            // the cooldown sweep.
+            _sentinelRadial.fillAmount = cooldown > 0f
+                ? Mathf.Clamp01(cooldown / PlayerAbilities.SentinelCooldownSeconds)
+                : (canDeployNow ? 0f : 1f);
+
+            float readyPulse = canDeployNow ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+            Color glow = Color.Lerp(ReadyGlow, SentinelColor, 0.5f);
+            glow.a = canDeployNow ? Mathf.Clamp01(readyPulse) : 0f;
+            _sentinelGlow.color = glow;
         }
 
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
@@ -1552,37 +1580,57 @@ namespace MaxWorlds.UI
         /// nothing to gate here beyond the button existing at all.</summary>
         private void OnTrapButtonTapped() => _abilities?.TryDropTrap();
 
-        // The Sentinel deploy joystick (MV-362, aimed placement MV-399, one sentinel only MV-422):
-        // well clear of Hydro's own stack below (top edge 385, MV-606: Force Field moved off this
-        // column onto its own left-edge spot) and the boss bar's y-band (rise 300, half 8) beneath
-        // that — same "half-extent-plus-margin clearance" reasoning the Water Balloon/Teleport column
-        // below uses for itself.
-        // MV-1104: lowered from 820 — the joystick's own ring+touch-pad half-extent grew to
-        // (100+30)*ControlSizeScale = 169, and at 820 its top edge (989) cropped past the iPhone
-        // 16 Pro landscape aspect's ~979-unit effective ceiling (MV676HudPhoneAspectMarginTests'
-        // own log-blend compression). Lowered further to 720 (not just 740) because the FOCUS pill
-        // above it also needs its own 44-unit height plus a 12px gap inside that same ceiling —
-        // 740's own top edge (909) left only 49 units below the ceiling's usable 958, short of the
-        // 56 the pill needs (44 + 12). 720's top edge (889) leaves margin for both.
-        private const float SentinelJoystickRise = 720f;
-        private const float SentinelJoystickX = 360f;
+        // The SENTINEL button (MV-1113, retiring the MV-362/MV-399/MV-422 joystick): well clear of
+        // Hydro's own stack below (top edge 385, MV-606: Force Field moved off this column onto its
+        // own left-edge spot) and the boss bar's y-band (rise 300, half 8) beneath that — same
+        // "half-extent-plus-margin clearance" reasoning the Water Balloon/Teleport column below uses
+        // for itself. Kept at the joystick's own old position/name-root (720/360) — the ticket's own
+        // "same HUD position" instruction — even though a plain button no longer needs the extra
+        // ring+touch-pad half-extent margin the old MV-1104 comment here was sized around.
+        private const float SentinelButtonRise = 720f;
+        private const float SentinelButtonX = 360f;
 
-        private void BuildSentinelJoystick() => RebuildSentinelJoystick();
-
-        private void RebuildSentinelJoystick()
+        /// <summary>
+        /// The SENTINEL button (MV-1113) — same round action-button shape as Force Field/TRAP, at the
+        /// SAME HUD position the retired aimed-placement joystick occupied. A tap deploys at a point
+        /// the game itself picks (<see cref="PlayerAbilities.TryDeploySentinelNearMax"/>) rather than
+        /// anywhere Max aims. Hidden until <see cref="AbilityKind.Sentinels"/> is acquired.
+        /// </summary>
+        private void BuildSentinelButton()
         {
-            if (_sentinelRoot != null) Destroy(_sentinelRoot.gameObject);
+            var root = NewRect("Sentinel Button", Root);
+            Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise);
+            root.sizeDelta = new Vector2(HydroButtonSize, HydroButtonSize);
+            _sentinelButtonRoot = root;
 
-            int level = RigState.Level("u_dmg");
-            int maxLevel = RigBoard.MaxLevel("u_dmg");
-            var anchoredPos = new Vector2(SentinelJoystickX, SentinelJoystickRise);
-            _sentinelVisual = AbilityControlArt.BuildJoystick(
-                Root, "Sentinel Joystick", anchoredPos, SentinelColor, "SEN", level, maxLevel);
-            _sentinelRoot = _sentinelVisual.Root;
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _sentinelGlow = glow;
 
-            // No cooldown — covers/uncovers on the cell-cost + deployment-cap gate instead, same
-            // "empty bank reads as covered" idiom Water Balloon's own radial uses (UpdateAbilityControls).
-            var radial = AddImage(_sentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), SentinelColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnSentinelButtonTapped);
+
+            _sentinelLabel = AddText(root, 32f * AbilityControlArt.ControlSizeScale, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            Anchor(_sentinelLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _sentinelLabel.rectTransform.sizeDelta = new Vector2(96f, 52f) * AbilityControlArt.ControlSizeScale;
+            _sentinelLabel.rectTransform.anchoredPosition = Vector2.zero;
+            _sentinelLabel.text = "SENTINEL";
+            _sentinelLabel.fontStyle = FontStyle.Bold;
+            _sentinelLabel.raycastTarget = false;
+            _sentinelLabel.resizeTextForBestFit = true;
+            _sentinelLabel.resizeTextMinSize = Mathf.RoundToInt(10f * AbilityControlArt.ControlSizeScale);
+            var sentinelLabelOutline = _sentinelLabel.gameObject.AddComponent<Outline>();
+            sentinelLabelOutline.effectColor = BoneWhite;
+            sentinelLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
+            _sentinelLabel.resizeTextMaxSize = Mathf.RoundToInt(32f * AbilityControlArt.ControlSizeScale);
+
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
             radial.type = Image.Type.Filled;
             radial.fillMethod = Image.FillMethod.Radial360;
@@ -1592,47 +1640,18 @@ namespace MaxWorlds.UI
             radial.raycastTarget = false;
             _sentinelRadial = radial;
 
-            // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
-            // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
-            // MV-673: Sentinel deploy now gates on the Power Cells secondary currency, not Parts —
-            // the denied icon must say so rather than reusing the Parts battery glyph.
-            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellSecondaryDenied(64), Color.white, "Insufficient Power Cells");
-            denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
-            denied.rectTransform.anchoredPosition = Vector2.zero;
-            denied.raycastTarget = false;
-            denied.gameObject.SetActive(false);
-            _sentinelDeniedIcon = denied;
-
-            var pad = new GameObject("Sentinel Touch", typeof(RectTransform), typeof(Image));
-            var padRect = (RectTransform)pad.transform;
-            padRect.SetParent(_sentinelRoot, false);
-            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            float padMargin = 30f * AbilityControlArt.ControlSizeScale;
-            padRect.offsetMin = new Vector2(-padMargin, -padMargin); padRect.offsetMax = new Vector2(padMargin, padMargin);
-            var padImg = pad.GetComponent<Image>();
-            padImg.color = new Color(0f, 0f, 0f, 0f);
-            padImg.raycastTarget = true;
-
-            var control = pad.AddComponent<SentinelJoystickControl>();
-            control.Init(_sentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
-                _sentinelVisual.Rings);
-
-            _sentinelBuiltLevel = level;
-            _sentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
         }
 
-        private void RebuildSentinelJoystickIfNeeded()
+        /// <summary>Tapping SENTINEL (MV-1113): deploy at a point the game itself picks. A "NO ROOM"
+        /// outcome flashes/shakes the button (<see cref="UpdateSentinelButton"/>) rather than reading as
+        /// silence — the same "a press must never answer with nothing" reasoning
+        /// <see cref="MaxWorlds.UI.AbilityJoystickControlBase"/>'s own doc gives for its dimmed-red preview.</summary>
+        private void OnSentinelButtonTapped()
         {
-            int level = RigState.Level("u_dmg");
-            if (level == _sentinelBuiltLevel)
-            {
-                if (_sentinelRoot != null)
-                    _sentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
-                return;
-            }
-            RebuildSentinelJoystick();
+            if (_abilities == null) return;
+            if (_abilities.TryDeploySentinelNearMax() == PlayerAbilities.SentinelDeployOutcome.NoRoom)
+                _sentinelNoRoomFlash = 1f;
         }
 
         /// <summary>MV-636: a small pill sitting above the Sentinel joystick, reading "FOCUS ON"/
@@ -1652,12 +1671,13 @@ namespace MaxWorlds.UI
         // ~978-unit-tall canvas, and it clipped on real devices. +60 lands the top edge at ~902, the
         // same ~72-76-unit safety margin the MAP button (the column's own topmost element) already
         // carries — see MV676HudPhoneAspectMarginTests.
-        // MV-1104: widened 60 -> 210 — the Sentinel joystick beneath grew to a (100+30)*ControlSizeScale
-        // = 169 half-extent (ring + touch pad), so the old 60px gap now sat the FOCUS pill entirely
-        // inside that touch pad. This pill's own center sits at SentinelJoystickRise + FocusToggleRise,
-        // and (with SentinelJoystickRise lowered to 720 above) needs this Rise >= 169 + 12px gap +
-        // this pill's own 22-unit half-height = 203 to clear the joystick, and <= 936 - 720 = 216 to
-        // keep this pill's own top edge under the iPhone 16 Pro landscape's effective ceiling
+        // MV-1104: widened 60 -> 210 — the old Sentinel joystick (retired MV-1113) grew to a
+        // (100+30)*ControlSizeScale = 169 half-extent (ring + touch pad), so the old 60px gap now sat
+        // the FOCUS pill entirely inside that touch pad. This pill's own center sits at
+        // SentinelButtonRise + FocusToggleRise, and (with SentinelButtonRise at 720) needs this Rise
+        // >= 169 + 12px gap + this pill's own 22-unit half-height = 203 to clear the button beneath it
+        // (now smaller than the joystick was, so this margin is generous, not tight), and <= 936 - 720
+        // = 216 to keep this pill's own top edge under the iPhone 16 Pro landscape's effective ceiling
         // (MV676HudPhoneAspectMarginTests). 210 sits in that range with margin either side.
         private const float FocusToggleRise = 210f;
 
@@ -1666,7 +1686,7 @@ namespace MaxWorlds.UI
             var root = NewRect("Sentinel Focus Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             root.sizeDelta = new Vector2(140f, 44f);
-            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + FocusToggleRise);
+            root.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise + FocusToggleRise);
             _focusToggleRoot = root;
 
             var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), SentinelColor, "BG");

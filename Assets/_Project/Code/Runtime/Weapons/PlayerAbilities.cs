@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -60,6 +61,12 @@ namespace MaxWorlds.Weapons
         // --- TRAP (MV-1035, World 3's PRIMARY ability) ---
         private RobotTrap _activeTrap;
         private float _trapCooldown;    // > 0 while cooling down, only starts once a trap converts
+
+        // --- Sentinel button deploy (MV-1113) ---
+        private float _sentinelCooldown;        // > 0 while cooling down, starts on every successful deploy
+        private Sentinel _arrivingSentinel;     // the one Sentinel currently mid-arrival, if any (at most one: the cooldown outlasts the 3.0s arrival)
+        private int _arrivingAreaIndex;         // Max's own area index at the moment that deploy happened
+        private int _arrivingCost;              // what was actually spent, refunded if the arrival is cancelled
 
         /// <summary>Owned (RIG node <c>p_trp</c> at level &gt;= 1) — a PRIMARY-track node, so this reads
         /// <see cref="RigState"/> directly rather than <see cref="WeaponSystemState.IsAcquired"/>: PRIMARY
@@ -174,15 +181,24 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>Every cooldown this component owns, advanced by an explicit <paramref name="dt"/> —
+        /// split out of <see cref="Update"/> (MV-1113) so an EditMode test can drive the SENTINEL
+        /// button's own 10s cooldown and arrival-cancellation watch without <see cref="Time.deltaTime"/>,
+        /// the same "Tick split out for an explicit dt" shape <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/>/
+        /// <see cref="MaxWorlds.Arena.Sentinel.TickSentinel"/> already use for themselves.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             _waterBalloonCooldown = Mathf.Max(0f, _waterBalloonCooldown - dt);
             _teleportCooldown = Mathf.Max(0f, _teleportCooldown - dt);
             _forceFieldCooldown = Mathf.Max(0f, _forceFieldCooldown - dt);
             _trapCooldown = Mathf.Max(0f, _trapCooldown - dt);
+            _sentinelCooldown = Mathf.Max(0f, _sentinelCooldown - dt);
 
             if (_forceFieldBubble != null) _forceFieldBubble.SetFraction(ForceFieldAbsorbFraction);
+
+            TickSentinelArrivalWatch();
         }
 
         /// <summary>Throw a Water Balloon toward <paramref name="aimDirection"/> (WV-240 drives this
@@ -717,19 +733,55 @@ namespace MaxWorlds.Weapons
         public static int SentinelCost => AbilityTuning.SentinelCost(
             RigState.Level("u_cst"), AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel);
 
-        /// <summary>Owned AND enough Power Cells banked — what an on-screen deploy control gates its
-        /// press on (same shape as <see cref="ForceFieldReady"/>). MV-604 (DECISION, Lee 26 Aug 2026
-        /// playtest): deliberately does NOT check the Slots cap any more — deployment must never be
-        /// refused for lack of a slot, since redeploying at the cap now recalls the furthest sentinel
-        /// instead (see <see cref="TryDeploySentinel(Vector3)"/>). MV-673: reads the Power Cells
-        /// secondary bank, matching what a deploy actually spends now — not Parts.</summary>
+        /// <summary>Owned AND enough Power Cells banked — ONE of three independent gates the SENTINEL
+        /// button's own tap reads (see <see cref="SentinelSlotAvailable"/>, <see cref="SentinelCooldownRemaining"/>).
+        /// MV-1113 (SUPERSEDES MV-604's 26 Aug 2026 playtest DECISION): the Slots cap is no longer
+        /// bypassed by a redeploy-time recall — the button now goes unavailable ("FULL") at the cap
+        /// instead, per Lee's 6 Oct 2026 button-states spec — so this property alone deliberately still
+        /// says nothing about the cap; <see cref="SentinelCanDeployNow"/> is the one that folds all three
+        /// gates together. MV-673: reads the Power Cells secondary bank, matching what a deploy actually
+        /// spends now — not Parts.</summary>
         public bool SentinelReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
             PickupWallet.PowerCellsSecondary >= SentinelCost;
 
+        /// <summary>MV-1113: a deployment slot is free right now — the button's own "FULL" gate.</summary>
+        public bool SentinelSlotAvailable => SentinelDeployedCount < SentinelDeploymentCap;
+
+        /// <summary>MV-1113: seconds left before the SENTINEL button can deploy again, 0 when ready —
+        /// starts counting down only after a successful deploy (never after a refused tap or a NO ROOM
+        /// outcome), same "cooldown only starts on a real action" shape <see cref="TrapCooldownRemaining"/>
+        /// already uses.</summary>
+        public float SentinelCooldownRemaining => Mathf.Max(0f, _sentinelCooldown);
+
+        /// <summary>MV-1113: owned, affordable, a slot free, AND off cooldown — what the SENTINEL
+        /// button's own tap actually gates on (the three independent "unavailable" reasons: not owned —
+        /// the button is hidden entirely — "NO PARTS", "FULL", and the radial cooldown sweep).</summary>
+        public bool SentinelCanDeployNow => SentinelReady && SentinelSlotAvailable && _sentinelCooldown <= 0f;
+
+        /// <summary>MV-1113: the SENTINEL button's own cooldown, seconds — fixed, never reduced by any
+        /// RIG axis (Lee's own words: "a slow cooldown to prevent me adding sentinels quickly" — a
+        /// deliberate brake, not a track to buy down).</summary>
+        public const float SentinelCooldownSeconds = 10f;
+
         /// <summary>How close an aimed placement point must stay to an existing sentinel or a live
-        /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC).</summary>
+        /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC). MV-1113:
+        /// the arrival search below reuses this unchanged for the "at least 1.5 m from other sentinels"
+        /// predicate; robots/bosses use their OWN larger, relaxable <see cref="SentinelArrivalEnemyClearanceMin"/>
+        /// instead of this constant (see <see cref="IsValidSentinelPlacement"/> vs <see cref="IsArrivalCandidateValid"/>).</summary>
         public const float SentinelPlacementClearance = 1.5f;
+
+        /// <summary>MV-1113: the arrival search's own three distance rules (ticket item 3) — how far from
+        /// Max a candidate point must sit, the clearance it must keep from every awake enemy robot/boss
+        /// (relaxed in <see cref="SentinelArrivalEnemyClearanceStep"/> steps down to
+        /// <see cref="SentinelArrivalEnemyClearanceFloor"/> when nothing qualifies at the full distance).</summary>
+        public const float SentinelArrivalMinDistance = 2.5f;
+        public const float SentinelArrivalMaxDistance = 4.5f;
+        public const float SentinelArrivalEnemyClearanceMin = 3f;
+        public const float SentinelArrivalEnemyClearanceFloor = 1.5f;
+        public const float SentinelArrivalEnemyClearanceStep = 0.5f;
+        private const float ArrivalRadiusStep = 0.25f;
+        private const int ArrivalAngleSamples = 24; // 15 degree steps
 
         /// <summary>How far a deploy point must clear a wall or a gate/doorway span (MV-579 item 4):
         /// the sentinel's own body radius (0.25 m, see <see cref="Sentinel"/>'s CreatePrimitive
@@ -744,10 +796,9 @@ namespace MaxWorlds.Weapons
         /// narrower) a resolved deploy/follow point is pulled back.</summary>
         public const float SentinelDeckEdgeMargin = 0.5f;
 
-        /// <summary>MV-864: the same margin <see cref="SentinelJoystickControl"/> used to clamp the
-        /// reticle into Max's own room before this ticket (MV-399's <c>ZoneEdgeMargin</c>) — kept
-        /// identical so ordinary floor placement is unchanged; the floor was never the bug this ticket
-        /// fixes.</summary>
+        /// <summary>MV-864: the same margin the retired (MV-1113) aimed-placement joystick used to
+        /// clamp its reticle into Max's own room (MV-399's <c>ZoneEdgeMargin</c>) — kept identical so
+        /// ordinary floor placement is unchanged; the floor was never the bug the MV-864 ticket fixed.</summary>
         private const float SentinelFloorEdgeMargin = 1.5f;
 
         /// <summary>MV-864: how far the nearest point on a deck's own rect may sit from the raw aim
@@ -760,8 +811,8 @@ namespace MaxWorlds.Weapons
         /// when he is standing on one, his current room's floor otherwise — so a Sentinel is never
         /// deployed hanging in mid-air off a deck's edge or over/in a wall. Degrades to
         /// <paramref name="aimedPoint"/> unchanged with no level loaded (a bare EditMode test fixture
-        /// has none, the same no-level fallback <see cref="MaxWorlds.UI.SentinelJoystickControl"/>
-        /// already used before this ticket). <paramref name="resolved"/> is only ever
+        /// has none — the same no-level fallback every caller of this already relies on).
+        /// <paramref name="resolved"/> is only ever
         /// <paramref name="aimedPoint"/> itself when this returns false, so a caller that ignores the
         /// bool still gets its old raw aim back rather than a stale/default Vector3.</summary>
         public bool TryResolveSentinelSurfacePoint(Vector3 aimedPoint, out Vector3 resolved)
@@ -813,32 +864,36 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>Deploy the sentinel at Max's own current position — the convenience shape older
-        /// callers/tests still use. MV-399 reverses MV-362's "deployed at Max's position, not aimed at
-        /// range" DECISION for the on-screen control (see the aimed overload below), but Max's own
-        /// feet remain a perfectly valid drop point.</summary>
+        /// callers/tests still use (no SENTINEL button, no arrival window — see
+        /// <see cref="TryDeploySentinelNearMax"/> for the real player-facing path).</summary>
         public bool TryDeploySentinel() => TryDeploySentinel(transform.position);
 
-        /// <summary>Deploy the sentinel at an aimed <paramref name="position"/> (MV-399's placement
-        /// joystick). Returns false (nothing spent, nothing deployed) if unowned, the bank can't cover
-        /// the cost, the aim doesn't resolve onto any walkable surface at Max's own level
+        /// <summary>Deploy the sentinel at an exact <paramref name="position"/> — the legacy
+        /// aimed-placement shape (MV-399's now-retired joystick) that existing tests still exercise
+        /// directly. Production has no live caller of this any more (MV-1113 retired the joystick); the
+        /// real player-facing deploy is <see cref="TryDeploySentinelNearMax"/>, which picks its own point
+        /// via <see cref="TryFindSentinelArrivalPoint"/> and then calls <see cref="TryDeploySentinelCore"/>
+        /// (shared by both) to actually spend and spawn. No arrival window, no cooldown — those are
+        /// MV-1113's SENTINEL-button-only additions, layered on top only by the new path.</summary>
+        public bool TryDeploySentinel(Vector3 position) => TryDeploySentinelCore(position, out _);
+
+        /// <summary>The shared "spend + spawn" core both <see cref="TryDeploySentinel(Vector3)"/> and
+        /// <see cref="TryDeploySentinelNearMax"/> call. Returns false (nothing spent, nothing deployed)
+        /// if unowned/unaffordable, the Slots cap is already reached (MV-1113 SUPERSEDES MV-604's
+        /// redeploy-time recall — the cap now simply refuses, matching the SENTINEL button's own "FULL"
+        /// state), the point doesn't resolve onto any walkable surface at Max's own level
         /// (<see cref="TryResolveSentinelSurfacePoint"/>, MV-864), or the resolved point is already
         /// occupied (<see cref="IsValidSentinelPlacement"/>). Reads every RIG axis (Health/Range/Move)
-        /// fresh at deploy time (MV-422).
-        ///
-        /// MV-604 (DECISION, Lee 26 Aug 2026 playtest): deployment is never refused for lack of a
-        /// slot any more. At the Slots cap, this recalls whichever deployed sentinel is currently
-        /// FURTHEST from Max — <see cref="RecallFurthestSentinel"/> — THEN places the new one, so the
-        /// slot always frees rather than locking the ability out once every sentinel is standing in
-        /// a cleared area with nothing left to kill it.</summary>
-        public bool TryDeploySentinel(Vector3 position)
+        /// fresh at deploy time (MV-422).</summary>
+        private bool TryDeploySentinelCore(Vector3 position, out Sentinel sentinel)
         {
+            sentinel = null;
             if (!SentinelReady) return false;
+            if (!SentinelSlotAvailable) return false;
             if (!TryResolveSentinelSurfacePoint(position, out Vector3 surfacePoint)) return false;
             if (!IsValidSentinelPlacement(surfacePoint)) return false;
             // MV-673: Sentinel deploy spends the Power Cells secondary currency, not Parts.
             if (!PickupWallet.TrySpendPowerCellSecondaries(SentinelCost)) return false;
-
-            if (SentinelDeployedCount >= SentinelDeploymentCap) RecallFurthestSentinel();
 
             float maxHp = AbilityTuning.SentinelMaxHp(
                 RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
@@ -847,26 +902,180 @@ namespace MaxWorlds.Weapons
             float moveSpeed = AbilityTuning.SentinelMoveSpeed(
                 RigState.Level("u_mov"), AbilityTuning.DefaultSentinelMoveSpeedPerLevel);
 
-            var sentinel = new GameObject("Sentinel").AddComponent<Sentinel>();
+            sentinel = new GameObject("Sentinel").AddComponent<Sentinel>();
             sentinel.Init(surfacePoint, maxHp, range, AbilityTuning.DefaultSentinelFireInterval,
                 moveSpeed, AbilityTuning.DefaultSentinelStandoffDistance, transform);
             return true;
         }
 
-        /// <summary>MV-604: recalls whichever deployed sentinel is furthest from Max right now (world
-        /// distance, measured at the moment of THIS deploy — not cached, not the oldest, not the
-        /// nearest). <see cref="Sentinel.Recall"/> is not a death — see its own doc.</summary>
-        private void RecallFurthestSentinel()
+        /// <summary>Outcome of a tap on the SENTINEL button (MV-1113).</summary>
+        public enum SentinelDeployOutcome
         {
-            Sentinel furthest = null;
-            float bestSq = -1f;
+            /// <summary>A sentinel was placed and has begun its 3.0s arrival.</summary>
+            Deployed,
+            /// <summary>Unowned, on cooldown, unaffordable, or every slot is in use — the button itself
+            /// was already showing this as unavailable; nothing was spent, no cooldown started.</summary>
+            NotReady,
+            /// <summary>Owned, affordable, off cooldown, a slot free — but no point near Max satisfied
+            /// enough of item 3's predicates even at the most relaxed enemy clearance. Nothing was
+            /// spent, no cooldown started (ticket item 3's own "nothing is spent and no cooldown
+            /// starts").</summary>
+            NoRoom,
+        }
+
+        /// <summary>The real player-facing deploy path (MV-1113): tapping the SENTINEL button. Unlike
+        /// <see cref="TryDeploySentinel(Vector3)"/>, Max never aims — the game picks the landing point
+        /// itself (<see cref="TryFindSentinelArrivalPoint"/>), charges the cost at the tap, starts the
+        /// 10s cooldown, and gives the placed sentinel a 3.0s teleport-style arrival
+        /// (<see cref="Sentinel.BeginArrival"/>) during which it is untargetable, undamageable, and
+        /// silent. If Max leaves the sentinel's own deploy area before the arrival finishes, the deploy
+        /// is cancelled and the cost returned — see <see cref="TickSentinelArrivalWatch"/>.</summary>
+        public SentinelDeployOutcome TryDeploySentinelNearMax()
+        {
+            if (_sentinelCooldown > 0f) return SentinelDeployOutcome.NotReady;
+            if (!SentinelReady) return SentinelDeployOutcome.NotReady;
+            if (!SentinelSlotAvailable) return SentinelDeployOutcome.NotReady;
+
+            if (!TryFindSentinelArrivalPoint(out Vector3 point)) return SentinelDeployOutcome.NoRoom;
+
+            int cost = SentinelCost; // captured BEFORE TryDeploySentinelCore spends it, for a possible refund
+            if (!TryDeploySentinelCore(point, out Sentinel sentinel)) return SentinelDeployOutcome.NoRoom;
+
+            _sentinelCooldown = SentinelCooldownSeconds;
+            sentinel.BeginArrival();
+
+            _arrivingSentinel = sentinel;
+            _arrivingCost = cost;
+            MapData map = EnemyNavigation.Map;
+            _arrivingAreaIndex = map != null ? AreaIndexAt(map, transform.position) : -1;
+
+            return SentinelDeployOutcome.Deployed;
+        }
+
+        /// <summary>MV-1113 item 5: if Max leaves <see cref="_arrivingAreaIndex"/> before
+        /// <see cref="_arrivingSentinel"/> finishes its 3.0s arrival, the deploy is cancelled
+        /// (<see cref="Sentinel.CancelArrival"/> — not a death, not a recall) and its cost refunded. At
+        /// most one Sentinel is ever mid-arrival from this component at once — the 10s cooldown
+        /// comfortably outlasts the 3.0s arrival, so a second deploy can never start while this one is
+        /// still watching.</summary>
+        private void TickSentinelArrivalWatch()
+        {
+            if (_arrivingSentinel == null) return;
+
+            if (!_arrivingSentinel.IsArriving) { _arrivingSentinel = null; return; } // finished normally
+
+            MapData map = EnemyNavigation.Map;
+            int nowArea = map != null ? AreaIndexAt(map, transform.position) : _arrivingAreaIndex;
+            if (nowArea == _arrivingAreaIndex) return;
+
+            _arrivingSentinel.CancelArrival();
+            _arrivingSentinel = null;
+            PickupWallet.AddPowerCellSecondaries(_arrivingCost);
+        }
+
+        private static int AreaIndexAt(MapData map, Vector3 position)
+        {
+            MapZone zone = map.ZoneAt(position.x, position.y, position.z);
+            return zone?.AreaIndex ?? -1;
+        }
+
+        /// <summary>MV-1113 item 3: searches for a sentinel arrival point near Max, trying the full
+        /// <see cref="SentinelArrivalEnemyClearanceMin"/> enemy clearance first and relaxing it in
+        /// <see cref="SentinelArrivalEnemyClearanceStep"/> steps down to
+        /// <see cref="SentinelArrivalEnemyClearanceFloor"/> only when nothing qualifies at a tighter
+        /// clearance. Returns the first relaxation step that finds ANY qualifying candidate, choosing
+        /// (within that step) whichever candidate sits farthest from its own nearest enemy.</summary>
+        private bool TryFindSentinelArrivalPoint(out Vector3 point)
+        {
+            Vector3 maxPos = transform.position;
+            MapData map = EnemyNavigation.Map;
+
+            for (float clearance = SentinelArrivalEnemyClearanceMin;
+                 clearance >= SentinelArrivalEnemyClearanceFloor - 1e-3f;
+                 clearance -= SentinelArrivalEnemyClearanceStep)
+            {
+                if (TryBestArrivalCandidate(map, maxPos, clearance, out point)) return true;
+            }
+
+            point = maxPos;
+            return false;
+        }
+
+        private bool TryBestArrivalCandidate(MapData map, Vector3 maxPos, float enemyClearance, out Vector3 best)
+        {
+            best = maxPos;
+            float bestNearestEnemyDist = -1f;
+            bool found = false;
+
+            int radiusSteps = Mathf.RoundToInt((SentinelArrivalMaxDistance - SentinelArrivalMinDistance) / ArrivalRadiusStep);
+            for (int ri = 0; ri <= radiusSteps; ri++)
+            {
+                float radius = SentinelArrivalMinDistance + ri * ArrivalRadiusStep;
+                for (int ai = 0; ai < ArrivalAngleSamples; ai++)
+                {
+                    float angle = ai * (360f / ArrivalAngleSamples) * Mathf.Deg2Rad;
+                    Vector3 candidate = maxPos + new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
+                    candidate.y = maxPos.y;
+
+                    if (!IsArrivalCandidateValid(map, maxPos, candidate, enemyClearance, out float nearestEnemyDist)) continue;
+
+                    if (nearestEnemyDist > bestNearestEnemyDist)
+                    {
+                        bestNearestEnemyDist = nearestEnemyDist;
+                        best = candidate;
+                        found = true;
+                    }
+                }
+            }
+            return found;
+        }
+
+        /// <summary>Every predicate from ticket item 3 except the distance-from-Max band, which is
+        /// guaranteed by construction (<see cref="TryBestArrivalCandidate"/> only ever samples within
+        /// [<see cref="SentinelArrivalMinDistance"/>, <see cref="SentinelArrivalMaxDistance"/>]).</summary>
+        private bool IsArrivalCandidateValid(MapData map, Vector3 maxPos, Vector3 candidate, float enemyClearance, out float nearestEnemyDist)
+        {
+            nearestEnemyDist = float.MaxValue;
+
+            // On Max's own level, on walkable ground inside Max's current area.
+            if (map != null && !map.IsWalkable(maxPos, candidate)) return false;
+
+            // At least `enemyClearance` from every awake enemy robot and boss.
+            foreach (RobotEnemy robot in RobotEnemy.Active)
+            {
+                if (robot == null || !robot.IsAwake) continue;
+                float d = FlatDistance(robot.transform.position, candidate);
+                if (d < nearestEnemyDist) nearestEnemyDist = d;
+                if (d < enemyClearance) return false;
+            }
+            foreach (Vector3 bossPos in BossCensus.LivingPositions())
+            {
+                float d = FlatDistance(bossPos, candidate);
+                if (d < nearestEnemyDist) nearestEnemyDist = d;
+                if (d < enemyClearance) return false;
+            }
+
+            // At least SentinelPlacementClearance from other sentinels.
             foreach (Sentinel s in Sentinel.Active)
             {
                 if (s == null) continue;
-                float d = (s.transform.position - transform.position).sqrMagnitude;
-                if (d > bestSq) { bestSq = d; furthest = s; }
+                if (FlatDistance(s.transform.position, candidate) < SentinelPlacementClearance) return false;
             }
-            furthest?.Recall();
+
+            // Not in a doorway or gate mouth (the existing wall/threshold refusal rule).
+            if (CoverLayer.Exists &&
+                Physics.CheckSphere(candidate, SentinelWallClearance, CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
+
+            // Not in sludge.
+            if (MapSlowZones.Instance.SpeedMultiplierAt(candidate) < 1f) return false;
+
+            // Clear line of sight to Max.
+            if (!LineOfSight.Clear(candidate, maxPos)) return false;
+
+            return true;
         }
 
         // --- TRAP (MV-1035) ---

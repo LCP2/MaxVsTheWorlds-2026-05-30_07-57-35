@@ -1,24 +1,23 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
-using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-399: Sentinel deployment moves from "always at Max's feet" (MV-362) to an aimed placement
-    /// joystick, reusing Teleport/Water Balloon's shared press/drag/release layer (MV-372). Covers the
-    /// new pure math (<see cref="MapZone.Clamp"/>), the aimed-position overload's cost/cap/overlap
-    /// gating, and the joystick control's own arm/disarm + placement-reticle lifecycle — the same shape
-    /// <c>AbilityJoystickArmDisarmTests</c> already proves for Teleport/Water Balloon. MV-422 collapses
-    /// the Wall/Gunner split to one sentinel, one <see cref="SentinelJoystickControl"/>.
+    /// MV-399: Sentinel deployment moved from "always at Max's feet" (MV-362) to an aimed-placement
+    /// joystick. MV-1113 retired that joystick entirely in favour of a SENTINEL button whose deploy
+    /// point the game itself picks (see <c>MV1113SentinelButtonDeployTests</c>) — the joystick-specific
+    /// arm/disarm + placement-reticle tests this file used to carry were culled with it (the class they
+    /// exercised no longer exists). What remains here is the pure math (<see cref="MapZone.Clamp"/>)
+    /// and the exact-position overload's own cost/cap/overlap gating
+    /// (<see cref="PlayerAbilities.TryDeploySentinel(Vector3)"/>), which MV-1113's new deploy path still
+    /// calls internally once it has picked a point.
     /// </summary>
     public sealed class SentinelPlacementTests
     {
@@ -196,86 +195,5 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        // ---------------------------------------------------------------- SentinelJoystickControl
-
-        private GameObject _max;
-        private GameObject _pad;
-
-        private SentinelJoystickControl NewControl()
-        {
-            var abilities = _max.GetComponent<PlayerAbilities>();
-            var control = _pad.AddComponent<SentinelJoystickControl>();
-            var knob = new GameObject("Knob", typeof(RectTransform)).GetComponent<RectTransform>();
-            control.Init(knob, _max.transform, abilities, rings: null);
-            return control;
-        }
-
-        private static PointerEventData At(Vector2 pos) => new PointerEventData(EventSystem.current) { position = pos };
-
-        [Test]
-        public void PressingShowsThePlacementCircleAndReleasingHidesIt()
-        {
-            WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(100);
-            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
-            _max = NewMax();
-            _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl();
-            try
-            {
-                control.OnPointerDown(At(new Vector2(0f, 0f)));
-                Assert.That(control.PlacementCircleVisible, Is.True,
-                    "MV-399 AC1: activating deployment must show a placement reticle");
-
-                control.OnPointerUp(At(new Vector2(0f, 0f)));
-                Assert.That(control.PlacementCircleVisible, Is.False);
-            }
-            finally { Sentinel.DestroyAllActive(); Object.DestroyImmediate(_max); Object.DestroyImmediate(_pad); }
-        }
-
-        [Test]
-        public void DraggingPastTheDeadZoneAndReleasingDeploysAwayFromMax()
-        {
-            WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(100);
-            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
-            _max = NewMax();
-            _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl();
-            try
-            {
-                control.OnPointerDown(At(new Vector2(0f, 0f)));
-                control.OnDrag(At(new Vector2(0f, 40f))); // well past the 13.5px arm threshold
-                control.OnPointerUp(At(new Vector2(0f, 40f)));
-
-                Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
-                Assert.That(Vector3.Distance(Sentinel.Active[0].transform.position, _max.transform.position),
-                    Is.GreaterThan(0.1f),
-                    "MV-399 AC2: an armed release must deploy away from Max, not at his feet");
-            }
-            finally { Sentinel.DestroyAllActive(); Object.DestroyImmediate(_max); Object.DestroyImmediate(_pad); }
-        }
-
-        [Test]
-        public void ReleasingWhileStillInTheDeadZoneDeploysNothing()
-        {
-            WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(100); // clamps to PickupWallet.Capacity (20 at Cell Storage level 0)
-            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
-            int cellsBefore = PickupWallet.PowerCellsSecondary;
-            _max = NewMax();
-            _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl();
-            try
-            {
-                control.OnPointerDown(At(new Vector2(0f, 0f)));
-                control.OnDrag(At(new Vector2(0f, 2f))); // inside the dead zone
-                control.OnPointerUp(At(new Vector2(0f, 2f)));
-
-                Assert.That(Sentinel.Active.Count, Is.EqualTo(0));
-                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(cellsBefore), "an unarmed release must spend nothing");
-            }
-            finally { Sentinel.DestroyAllActive(); Object.DestroyImmediate(_max); Object.DestroyImmediate(_pad); }
-        }
     }
 }
