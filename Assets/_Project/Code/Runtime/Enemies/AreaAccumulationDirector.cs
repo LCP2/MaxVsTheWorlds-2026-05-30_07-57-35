@@ -333,6 +333,7 @@ namespace MaxWorlds.Enemies
             _physicalArea = 1;
             _physicalAreaHistory.Clear();
             _physicalAreaHistory.Add(1);
+            LastEnteredGateId = null;
             FillArea(1);
         }
 
@@ -359,13 +360,21 @@ namespace MaxWorlds.Enemies
         /// MV-524 part 2: also where a mid-run checkpoint is captured — the ticket's own choice of hook
         /// ("capture a checkpoint on area entry"). <see cref="SaveSystem.CaptureActiveCheckpoint"/> is a
         /// no-op with no active profile (capture/press-kit/perf-capture runs, tests), so this is safe to
-        /// call unconditionally.</summary>
-        public void EnterArea(int areaIndex)
+        /// call unconditionally.
+        ///
+        /// MV-1096: <paramref name="gateId"/> is the specific gate (<see cref="MaxWorlds.Arena.BackyardPath.WireAreaGatesToPopulation"/>'s
+        /// own wiring already knows which one broke) — recorded into <see cref="LastEnteredGateId"/>
+        /// BEFORE the early-return guard below, since that guard exists only to keep this area's own
+        /// population a one-shot and must never block a two-level area's SECOND gate (World 2's
+        /// a10/a11/a12, floor then deck) from updating which gate Max most recently walked through.</summary>
+        public void EnterArea(int areaIndex, string gateId = null)
         {
+            if (!string.IsNullOrEmpty(gateId)) LastEnteredGateId = gateId;
+
             if (areaIndex <= CurrentArea) return;
             CurrentArea = areaIndex;
             FillArea(areaIndex);
-            SaveSystem.CaptureActiveCheckpoint(areaIndex, ActiveWorldIndex);
+            SaveSystem.CaptureActiveCheckpoint(areaIndex, ActiveWorldIndex, LastEnteredGateId);
 
             // MV-993: a forced telemetry row + flush right on entry, chasing the a20->a21 crossing hard
             // crash — see Bootstrap.RecordAreaEntry's own doc comment for why this can't wait for the
@@ -373,6 +382,14 @@ namespace MaxWorlds.Enemies
             // CaptureActiveCheckpoint above, safe to call unconditionally.
             Bootstrap.RecordAreaEntry($"area{areaIndex}");
         }
+
+        /// <summary>MV-1096: the id of the gate Max most recently, physically, walked through — see
+        /// <see cref="EnterArea"/>. Null until the first one (area 1, which nothing gates) or when no
+        /// world config is loaded. What <see cref="SaveSystem.CaptureActiveCheckpoint"/> is given both
+        /// here and from <see cref="MaxWorlds.Arena.WorldRunner.CapturePauseCheckpoint"/>, so a save
+        /// always carries the SAME answer to "which gate" regardless of which of the two triggers wrote
+        /// it.</summary>
+        public string LastEnteredGateId { get; private set; }
 
         /// <summary>The 1-based area number of an "area&lt;N&gt;" zone id, or 0 for anything else
         /// (the compost clearing, an unrecognised id, standing in the void). A caller that already has
@@ -514,6 +531,119 @@ namespace MaxWorlds.Enemies
             _queue.RemoveQueued(areaIndex);
             _filledAreas.Remove(areaIndex);
             FillArea(areaIndex);
+        }
+
+        /// <summary>MV-1096: the gate-identified RESUME's own population restore for
+        /// <paramref name="areaIndex"/> — unlike <see cref="RestoreArea"/>, which always re-solves an
+        /// area's WHOLE authored composition (every level at once), this restores ONLY
+        /// <paramref name="level"/>'s own authored garrison (<see cref="WorldArea.GarrisonForVisit"/>)
+        /// for an in-place-deck area (World 2's a10/a11/a12, <see cref="IsInPlaceDeckArea"/>) — the
+        /// other level is left exactly as a fresh cold boot leaves it: either already cleared (behind
+        /// Max, nothing to restore) or not yet reached (ahead of him, restored for real once its own
+        /// gate breaks). An ordinary (non-in-place-deck) area ignores <paramref name="level"/> entirely
+        /// and behaves exactly like <see cref="RestoreArea"/> — the distinction only exists for the
+        /// shape this ticket fixes.</summary>
+        public void RestoreAreaAtLevel(int areaIndex, int level)
+        {
+            if (areaIndex <= 0 || _map == null || _queue == null) return;
+            if (!IsInPlaceDeckArea(areaIndex)) { RestoreArea(areaIndex); return; }
+
+            WorldArea area = _worldCfg?.AreaByIndex(areaIndex);
+            if (area == null) return;
+
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone == null) return;
+
+            foreach (RobotEnemy robot in Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+            {
+                if (robot == null || !robot.IsAlive) continue;
+                Vector3 p = robot.transform.position;
+                MapZone at = _map.ZoneAt(p.x, p.z);
+                if (at != null && at.id == zone.id) robot.Despawn();
+            }
+
+            _queue.RemoveQueued(areaIndex);
+            _pendingGarrisonByArea.Remove(areaIndex);
+            // Both guards set, same as an ordinary FillArea/PlacePendingGarrison completion — nothing
+            // past this point ever re-seeds areaIndex again this session, the other level included: it
+            // is either already cleared (behind Max) or still ahead of him, restored for real once he
+            // actually reaches it.
+            _filledAreas.Add(areaIndex);
+            _garrisonPlacedAreas.Add(areaIndex);
+
+            WorldGarrisonEntry[] entries = area.GarrisonForVisit(level);
+            if (entries.Length == 0) return;
+
+            _queue.FillExact(ComposeFromEntries(entries), areaIndex);
+
+            Garrison.Seed[] slots = Garrison.SeedSlots(area, entries.Length, _worldCfg, level);
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (!_queue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
+
+                EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
+                    .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
+                    .Toughened(DifficultyDirector.ToughnessMultiplier);
+
+                RobotEnemy e = Take(kind, archetype);
+                Vector3 pos = slots[i].Position;
+                // MV-697: pos.y already carries the deck height for a level-1 slot (0 for a floor one).
+                pos.y += archetype.SpawnHeight;
+                e.transform.position = pos;
+                e.transform.rotation = Quaternion.identity;
+
+                var cc = e.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(e.transform, cc, out string reason))
+                {
+                    CharacterControllerSafety.LogRefusal("AreaAccumulationDirector.RestoreAreaAtLevel",
+                        e.gameObject.name, reason, pos, e.transform.lossyScale);
+                    PushToPool(kind, e);
+                    continue;
+                }
+
+                e.gameObject.SetActive(true);
+                e.SetLevel(slots[i].Level);
+                if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
+                if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
+                _areaByRobot[e] = areaIndex;
+                e.SetAreaIndex(areaIndex);
+
+                // Same ordering requirement as SeedGarrison/PlacePendingGarrison: BeginDormant() after
+                // SetActive(true), since OnEnable() runs ResetState() and would otherwise wipe it.
+                e.BeginDormant(authoredSlot: true);
+
+                LetThePlayerThrough(e.gameObject);
+            }
+        }
+
+        /// <summary>The <see cref="DifficultyEngine.Composition"/> <paramref name="entries"/>' own
+        /// authored kinds resolve to (MV-1096) — what <see cref="RestoreAreaAtLevel"/> fills the queue
+        /// with before withdrawing each one back out via <see cref="AreaSpawnQueue.TryTakeForGarrison"/>,
+        /// so this restore's live-cap bookkeeping stays correct even though nothing here goes through
+        /// the ordinary ambient <see cref="FillArea"/> solve.</summary>
+        private static DifficultyEngine.Composition ComposeFromEntries(WorldGarrisonEntry[] entries)
+        {
+            var c = new WorldComposition();
+            foreach (WorldGarrisonEntry g in entries)
+            {
+                if (g == null || !EnemyKindNames.TryParse(g.kind, out EnemyKind kind)) continue;
+                switch (kind)
+                {
+                    case EnemyKind.Rusher: c.rusher++; break;
+                    case EnemyKind.Bruiser: c.bruiser++; break;
+                    case EnemyKind.Heavy: c.heavy++; break;
+                    case EnemyKind.Brute: c.brute++; break;
+                    case EnemyKind.Gunner: c.gunner++; break;
+                    case EnemyKind.Launcher: c.launcher++; break;
+                    case EnemyKind.Blinker: c.blinker++; break;
+                    case EnemyKind.Bolter: c.bolter++; break;
+                    case EnemyKind.Lurker: c.lurker++; break;
+                    case EnemyKind.Turret: c.turret++; break;
+                    case EnemyKind.Sludger: c.sludger++; break;
+                    case EnemyKind.Charger: c.charger++; break;
+                }
+            }
+            return c.ToEngineComposition();
         }
 
         /// <summary>MV-951: strips every robot already standing in an area BEFORE
