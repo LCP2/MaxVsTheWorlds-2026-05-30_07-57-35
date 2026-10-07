@@ -428,6 +428,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1064UndertowLatchCheck());
             Add(BuildMv1121UndertowBeamCheck());
             Add(BuildMv1097ShedLaserBeamCheck());
+            Add(BuildMv1112GroundFillCheck());
             return d;
         }
 
@@ -1620,6 +1621,78 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-742-stormdrain", NoSetup) },
+            };
+        }
+
+        // ---- Mv1112GroundFillCheck (MV-1112 AC2) ----------------------------------------------
+
+        /// <summary>MV-1112's own AC2 capture: standing in World 2's entry stub (the "start room"),
+        /// looking toward its west wall -- exactly where Lee's own phone screenshot showed the
+        /// clear-colour void this ticket replaces with <see cref="MaxWorlds.Arena.World2GroundFill"/>'s
+        /// solid ground. Same real-build idiom as <see cref="BuildMv1094EdgeWallCheck"/>: boots the
+        /// real World 2 config through <c>BackyardPath.Awake</c>, teleports Max there rather than
+        /// walking him (same collider-disable/teleport/re-enable shape), the fixed rig's own committed
+        /// pose. The stub's own authored rect (world2_config.json: origin (2,107), size 6x6) puts its
+        /// centre at x=5, z=110 and its west wall at x=2 -- framed 2 m clear of that wall, close enough
+        /// to keep the former void (now ground fill) in frame on the left of screen, matching Lee's own
+        /// evidence shot's framing. ONE capture only, per the ticket's own "do not iterate" instruction.</summary>
+        private static CapturePreset BuildMv1112GroundFillCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            static Vector3 StubNearWest(float y) => new Vector3(4f, y, 110f);
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + StormdrainDressing/World2GroundFill finish
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (rig == null) throw new CaptureAbortException("no FixedAngleCameraRig in the scene");
+
+                var max = GameObject.FindGameObjectWithTag("Player");
+                if (max == null) throw new CaptureAbortException("World 2 built no Player-tagged Max to shoot");
+
+                var cc = max.GetComponent<CharacterController>();
+                bool was = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                Vector3 target = StubNearWest(max.transform.position.y);
+                max.transform.position = target;
+                if (cc != null) cc.enabled = was;
+                Physics.SyncTransforms();
+
+                float until = Time.unscaledTime + 1.5f;
+                while (Time.unscaledTime < until) yield return null;
+
+                rig.RestingPose(target, out Vector3 camPos, out Quaternion camRot);
+                cam.transform.SetPositionAndRotation(camPos, camRot);
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1112groundfill",
+                LogTag = "[MV1112Capture]",
+                Flag = "-mv1112shot",
+                ArmFile = "Temp/mv1112.arm",
+                HeadlessMarker = "Temp/mv1112.headless",
+                DoneFileName = "_mv1112_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // World 2 is index 1 -- same WorldIndex seeding idiom as BuildMv742StormdrainCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1112-stub-west", NoSetup) },
             };
         }
 

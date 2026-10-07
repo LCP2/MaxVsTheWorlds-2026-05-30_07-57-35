@@ -226,6 +226,9 @@ namespace MaxWorlds.Arena
                 // uses for World 3's gates just above, scoped to this world only.
                 foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
                     gate.ApplyStormdrainGateSkin();
+                // MV-1112: the ground outside every World 2 wall used to be the camera's own clear
+                // colour (Lee: "the area to the left of start should be solid ground") — this fills it.
+                World2GroundFill.Build(_map, host);
             }
         }
 

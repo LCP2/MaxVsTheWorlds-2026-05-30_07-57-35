@@ -157,6 +157,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1097ShedLaserBeam() => RunFromMenu(CapturePresets.All["mv1097shedlaser"]);
         public static void CaptureMv1097ShedLaserBeam() => Run(CapturePresets.All["mv1097shedlaser"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Ground Fill (MV-1112)")]
+        public static void MenuMv1112GroundFill() => RunFromMenu(CapturePresets.All["mv1112groundfill"]);
+        public static void CaptureMv1112GroundFill() => Run(CapturePresets.All["mv1112groundfill"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
