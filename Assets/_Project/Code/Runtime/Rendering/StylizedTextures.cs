@@ -726,6 +726,13 @@ namespace MaxWorlds.Rendering
         /// self-heals — it notices a destroyed base map on next access and re-points the (still-live)
         /// material at a freshly rebuilt one — so this Clear() can sweep these two exactly like every
         /// other entry here without leaving anything dangling.</summary>
+        /// <summary>MV-1103 test seam: when set, <see cref="Clear"/> hands a swept texture here
+        /// instead of destroying it, so an EditMode test can simulate a running player's deferred
+        /// <c>Object.Destroy</c> — the destroy actually lands later, under the test's own control,
+        /// rather than synchronously inside this call the way <c>DestroyImmediate</c> always does in
+        /// the editor. Nothing in the game sets this.</summary>
+        public static System.Action<Texture2D> DestroyOverrideForTests;
+
         public static void Clear()
         {
             var keys = new List<string>(s_cache.Keys);
@@ -736,7 +743,8 @@ namespace MaxWorlds.Rendering
                 var t = s_cache[key];
                 s_cache.Remove(key);
                 if (t == null) continue;
-                if (Application.isPlaying) Object.Destroy(t);
+                if (DestroyOverrideForTests != null) DestroyOverrideForTests(t);
+                else if (Application.isPlaying) Object.Destroy(t);
                 else Object.DestroyImmediate(t);
             }
             // The height field is palette-independent, so it survives: it is the expensive half.
