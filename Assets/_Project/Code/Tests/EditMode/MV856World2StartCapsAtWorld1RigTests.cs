@@ -20,6 +20,11 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Fails on base commit f98494d (main HEAD before this ticket): e_ff lands at 7 not 5, u_dmg at
     /// 10 not 5, and e_cmg at 5 not 0 — quoted in the fix comment.
+    ///
+    /// MV-1095 (Lee, 2026-10-06) supersedes this test's own original SUPPORT assertions: a real
+    /// player arriving in World 2 has the sentinel family LOCKED again, re-earned through World 2's
+    /// own unlock cadence, so this dev entry point must land SUPPORT locked too, not capped-and-owned
+    /// at World 1's levels. Updated in place rather than left to rot red.
     /// </summary>
     public sealed class MV856World2StartCapsAtWorld1RigTests
     {
@@ -54,18 +59,26 @@ namespace MaxWorlds.Tests.EditMode
             IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
 
             Assert.AreEqual(8, RigState.Level("e_ff"), "MV-989: e_ff must cap at World 1's own maxLevel (8), not World 2's (10)");
-            Assert.AreEqual(8, RigState.Level("u_dmg"), "u_dmg must cap at World 1's own maxLevel (8, MV-947), not World 2's (10)");
             Assert.AreEqual(0, RigState.Level("e_cmg"), "e_cmg does not exist on World 1's board and must stay unowned");
             Assert.AreEqual(0, RigState.Level("p_cap"), "p_cap (PRIMARY) must stay untouched by the World 2 additions");
             Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg is the owned-but-unupgraded floor the morph itself grants");
 
-            foreach (string category in new[] { "ENERGY", "MOVE", "SUPPORT" })
+            foreach (string category in new[] { "ENERGY", "MOVE" })
             foreach (string id in RigBoard.AllIds)
             {
                 if (RigBoard.Category(id) != category) continue;
                 int expected = world1MaxLevels.TryGetValue(id, out int cap) ? cap : 0;
                 Assert.AreEqual(expected, RigState.Level(id),
                     $"{id} ({category}) must sit at World 1's own board-authored maxLevel (0 if absent from World 1's board)");
+            }
+
+            // SUPPORT — MV-1095: LOCKED, same as a real player arriving in World 2 with the sentinel
+            // family never earned in World 1 (a fresh dev slot has nothing to remember/restore).
+            Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "SUPPORT must be LOCKED on a World 2 arrival (MV-1095)");
+            foreach (string id in RigBoard.AllIds)
+            {
+                if (RigBoard.Category(id) != "SUPPORT") continue;
+                Assert.AreEqual(0, RigState.Level(id), $"{id} (SUPPORT) must be unowned while the family is locked");
             }
         }
     }

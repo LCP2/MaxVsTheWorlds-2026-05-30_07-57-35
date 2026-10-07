@@ -325,17 +325,20 @@ namespace MaxWorlds.Weapons
         /// fully reset and LOCKED (MV-727: reverses MV-694's "immediately cell-buyable" shape — SECONDARY
         /// now stays closed until the player finds and collects World 2's Rack Module pickup, which
         /// unlocks it and grants <c>s_rkt</c> outright; see <see cref="MaxWorlds.Pickups.PickupDirector"/>),
-        /// while ENERGY/MOVE/SUPPORT carry across untouched. Switches <see cref="RigBoard"/>'s active
-        /// board to <paramref name="worldIndex"/>'s first (<see cref="RigBoardLibrary.ForWorld"/>) —
-        /// PRIMARY's ids are redefined by every world's own file, so that category is rebuilt from
-        /// scratch rather than merged; ENERGY/MOVE/SUPPORT keep the same ids on every board, so their
-        /// levels/unlocks are preserved by carrying them across the switch explicitly. SECONDARY sits in
-        /// between: World 2 redefines it from World 1's Water Balloon tree to the Shoulder Rack (rebuilt
-        /// from scratch, same as PRIMARY), but World 3's board keeps World 2's Shoulder Rack ids
-        /// unchanged, so MV-1017 carries SECONDARY's levels/unlock across the World 2 -> World 3 morph
-        /// the same way ENERGY/MOVE/SUPPORT already do — see the <c>worldIndex &gt;= 2</c> branch below.
-        /// Call directly to apply the morph immediately (fixtures, a pre-existing save's silent
-        /// catch-up); THE RIG's own open ceremony goes through
+        /// while ENERGY/MOVE carry across untouched and SUPPORT is LOCKED again (MV-1095, Lee,
+        /// 2026-10-06: every new world re-earns the sentinel family through its own unlock cadence —
+        /// its prior levels are remembered, not carried, so <see cref="RigState.UnlockCategory"/> can
+        /// restore them for free once re-earned; SLOTS alone is never restored). Switches
+        /// <see cref="RigBoard"/>'s active board to <paramref name="worldIndex"/>'s first
+        /// (<see cref="RigBoardLibrary.ForWorld"/>) — PRIMARY's ids are redefined by every world's own
+        /// file, so that category is rebuilt from scratch rather than merged; ENERGY/MOVE keep the same
+        /// ids on every board, so their levels/unlocks are preserved by carrying them across the switch
+        /// explicitly. SECONDARY sits in between: World 2 redefines it from World 1's Water Balloon
+        /// tree to the Shoulder Rack (rebuilt from scratch, same as PRIMARY), but World 3's board keeps
+        /// World 2's Shoulder Rack ids unchanged, so MV-1017 carries SECONDARY's levels/unlock across
+        /// the World 2 -&gt; World 3 morph the same way ENERGY/MOVE already do — see the
+        /// <c>worldIndex &gt;= 2</c> branch below. Call directly to apply the morph immediately
+        /// (fixtures, a pre-existing save's silent catch-up); THE RIG's own open ceremony goes through
         /// <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
         public static void ApplyWeaponCoreMorph(int worldIndex)
         {
@@ -343,18 +346,26 @@ namespace MaxWorlds.Weapons
             foreach (KeyValuePair<string, int> kv in RigState.SnapshotLevels())
             {
                 string category = RigBoard.Category(kv.Key);
-                if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
+                if (category == "ENERGY" || category == "MOVE")
                     preservedLevels[kv.Key] = kv.Value;
+                else if (category == "SUPPORT")
+                    // MV-1095 (Lee, 2026-10-06): SUPPORT is LOCKED again on every new-world arrival,
+                    // not carried across like ENERGY/MOVE — remembered instead (every node except
+                    // SLOTS) so RigState.UnlockCategory can restore it for free once the player
+                    // re-earns the family through this world's own unlock cadence.
+                    RigState.RememberSupportLevelIfOwned(kv.Key, kv.Value);
                 else if (worldIndex >= 2 && category == "SECONDARY")
                     preservedLevels[kv.Key] = kv.Value;
             }
 
             var preservedCategories = new List<string>();
             foreach (string category in RigState.SnapshotUnlockedCategories())
-                if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
+                if (category == "ENERGY" || category == "MOVE")
                     preservedCategories.Add(category);
                 else if (worldIndex >= 2 && category == "SECONDARY")
                     preservedCategories.Add(category);
+            // MV-1095: SUPPORT deliberately omitted here too — RestoreSnapshot below replaces the
+            // whole tree wholesale, so leaving it out of both lists is what actually locks it.
 
             // MV-1023: one source of truth for the board switch + ActivePrimary/SecondaryKind — see
             // ApplyWorldLoadout's own doc for why RESUME needs this same mapping available standalone.

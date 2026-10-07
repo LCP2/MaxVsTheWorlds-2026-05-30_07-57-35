@@ -34,6 +34,21 @@ namespace MaxWorlds.Weapons
         /// weapon — see <see cref="SecondaryLocked"/>.</summary>
         private static bool s_secondaryMysteryActive;
 
+        /// <summary>MV-1095: SUPPORT family node levels (level &gt;= 1) remembered from the last time
+        /// the family was LOCKED on a new-world arrival — every id except <see cref="SupportSlotsId"/>
+        /// (Lee, 2026-10-06: every other sentinel upgrade carries the re-lock for free; SLOTS does not
+        /// — the player re-buys every slot at full price, no refund for parts already spent on it).
+        /// <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> is the only writer
+        /// (<see cref="RememberSupportLevelIfOwned"/>); <see cref="UnlockCategory"/> is the only
+        /// reader, and clears it the instant it restores — a one-shot restore, not a standing
+        /// override. Persisted via <see cref="SnapshotRememberedSupportLevels"/>/
+        /// <see cref="RestoreRememberedSupportLevels"/> so death/RESUME/cold boot don't lose it.</summary>
+        private static readonly Dictionary<string, int> s_rememberedSupportLevels = new Dictionary<string, int>();
+
+        /// <summary>MV-1095: the SUPPORT family's own SLOTS node — deliberately excluded from
+        /// <see cref="s_rememberedSupportLevels"/>, both when capturing and when restoring.</summary>
+        private const string SupportSlotsId = "u_slt";
+
         static RigState() => ResetLevels();
 
         /// <summary>MV-689: SECONDARY is technically UNLOCKED right after a Weapon Core morph (its root,
@@ -75,6 +90,18 @@ namespace MaxWorlds.Weapons
         {
             if (string.IsNullOrEmpty(category)) return false;
             if (!s_unlockedCategories.Add(category)) return false;
+
+            // MV-1095: SUPPORT's own re-earn restores whatever the family held before its last LOCK
+            // (every node except SLOTS, see s_rememberedSupportLevels) — free, no part/cell cost, a
+            // one-shot restore cleared immediately so a later lock-then-relock cycle starts clean
+            // rather than replaying a stale restore from two worlds ago.
+            if (category == "SUPPORT" && s_rememberedSupportLevels.Count > 0)
+            {
+                foreach (KeyValuePair<string, int> kv in s_rememberedSupportLevels)
+                    if (RigBoard.Exists(kv.Key)) s_levels[kv.Key] = Math.Min(kv.Value, RigBoard.MaxLevel(kv.Key));
+                s_rememberedSupportLevels.Clear();
+            }
+
             Changed?.Invoke();
             return true;
         }
@@ -182,6 +209,36 @@ namespace MaxWorlds.Weapons
         public static IReadOnlyCollection<string> SnapshotUnlockedCategories() =>
             new List<string>(s_unlockedCategories);
 
+        /// <summary>MV-1095: captures <paramref name="id"/>'s pre-morph level into the SUPPORT
+        /// family's remembered set — called only by <c>WeaponSystemState.ApplyWeaponCoreMorph</c>
+        /// while it sweeps every node's current level deciding what to carry across a world morph, for
+        /// every SUPPORT id (a no-op for any other category's id would be a caller bug, but this trusts
+        /// the single call site rather than re-checking <see cref="RigBoard.Category"/> itself). A
+        /// no-op for <see cref="SupportSlotsId"/> or a level &lt;= 0 — nothing owned, nothing to
+        /// remember.</summary>
+        public static void RememberSupportLevelIfOwned(string id, int level)
+        {
+            if (level <= 0 || id == SupportSlotsId) return;
+            s_rememberedSupportLevels[id] = level;
+        }
+
+        /// <summary>SUPPORT family levels currently remembered from the last LOCK (MV-1095, a mid-run
+        /// resume checkpoint snapshot) — same "fresh copy, caller owns it" contract as
+        /// <see cref="SnapshotLevels"/>.</summary>
+        public static IReadOnlyDictionary<string, int> SnapshotRememberedSupportLevels() =>
+            new Dictionary<string, int>(s_rememberedSupportLevels);
+
+        /// <summary>Overwrite the SUPPORT family's remembered-levels set from a captured checkpoint
+        /// (MV-1095) — replaces wholesale, same shape as <see cref="RestoreSnapshot"/>, since a restore
+        /// always starts from <see cref="Reset"/>'s empty baseline in practice.</summary>
+        public static void RestoreRememberedSupportLevels(IReadOnlyDictionary<string, int> levels)
+        {
+            s_rememberedSupportLevels.Clear();
+            if (levels == null) return;
+            foreach (KeyValuePair<string, int> kv in levels)
+                s_rememberedSupportLevels[kv.Key] = kv.Value;
+        }
+
         /// <summary>Overwrite the whole tree from a captured checkpoint (MV-557: a mid-run resume
         /// restore, not a draft/spend) — replaces levels and unlocked categories wholesale rather than
         /// merging, since a restore always starts from <see cref="Reset"/>'s baseline in practice. Fires
@@ -216,6 +273,7 @@ namespace MaxWorlds.Weapons
             s_levels.Clear();
             s_unlockedCategories.Clear();
             s_secondaryMysteryActive = false;
+            s_rememberedSupportLevels.Clear();   // MV-1095: a fresh run carries nothing to restore
             foreach (string id in RigBoard.AllIds)
             {
                 int start = RigBoard.StartLevel(id);

@@ -53,6 +53,17 @@ namespace MaxWorlds.Save
         /// <see cref="WeaponCorePending"/>.</summary>
         public bool RackModulePending;
 
+        /// <summary>SUPPORT family node ids remembered from the last time it was LOCKED on a new-world
+        /// arrival (MV-1095), parallel to <see cref="SupportRememberedLevels"/> — the persisted twin of
+        /// <see cref="MaxWorlds.Weapons.RigState.SnapshotRememberedSupportLevels"/>; <c>JsonUtility</c>
+        /// can't serialize a <c>Dictionary</c>, hence the parallel-array split, same idiom as
+        /// <see cref="CheckpointRigNodeIds"/>.</summary>
+        public string[] SupportRememberedIds = Array.Empty<string>();
+
+        /// <summary>SUPPORT family node levels remembered from the last lock, parallel to
+        /// <see cref="SupportRememberedIds"/>.</summary>
+        public int[] SupportRememberedLevels = Array.Empty<int>();
+
         // --- Mid-run checkpoint (MV-557 schema; captured/restored for real as of MV-524 parts 2/3) ---
         // Written by SaveSystem.CaptureActiveCheckpoint (AreaAccumulationDirector.EnterArea and
         // WorldRunner's pause/focus handlers) and read by SaveSystem.RestoreCheckpoint (HomeScreen's

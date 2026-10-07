@@ -209,6 +209,20 @@ namespace MaxWorlds.Save
 
             var categories = new List<string>(RigState.SnapshotUnlockedCategories());
             data.CheckpointUnlockedCategories = categories.ToArray();
+
+            // MV-1095: the SUPPORT family's own remembered-levels set — a cold-boot RESUME between a
+            // world-entry LOCK and re-earning the family through this world's own cadence must not
+            // lose what's owed back.
+            IReadOnlyDictionary<string, int> remembered = RigState.SnapshotRememberedSupportLevels();
+            data.SupportRememberedIds = new string[remembered.Count];
+            data.SupportRememberedLevels = new int[remembered.Count];
+            int ri = 0;
+            foreach (KeyValuePair<string, int> kv in remembered)
+            {
+                data.SupportRememberedIds[ri] = kv.Key;
+                data.SupportRememberedLevels[ri] = kv.Value;
+                ri++;
+            }
             // MV-951: a capture must never write an area index lower than the checkpoint it was
             // restored from — WorldRunner.ResumeCheckpoint/Continue land CurrentArea one area BEHIND
             // the checkpoint (standing at the gate looking in), so a pause/focus capture taken before
@@ -293,6 +307,12 @@ namespace MaxWorlds.Save
             for (int i = 0; i < count; i++) levels[data.CheckpointRigNodeIds[i]] = data.CheckpointRigNodeLevels[i];
 
             RigState.RestoreSnapshot(levels, data.CheckpointUnlockedCategories ?? Array.Empty<string>());
+
+            // MV-1095: the mirror of the capture-side write above.
+            var remembered = new Dictionary<string, int>();
+            int rcount = Math.Min(data.SupportRememberedIds?.Length ?? 0, data.SupportRememberedLevels?.Length ?? 0);
+            for (int ri = 0; ri < rcount; ri++) remembered[data.SupportRememberedIds[ri]] = data.SupportRememberedLevels[ri];
+            RigState.RestoreRememberedSupportLevels(remembered);
             PickupWallet.SetPowerCells(data.CheckpointPowerCells);
             PickupWallet.SetPowerCellSecondary(data.CheckpointPowerCellsSecondary);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
@@ -394,6 +414,8 @@ namespace MaxWorlds.Save
             data.CheckpointRigNodeIds = Array.Empty<string>();
             data.CheckpointRigNodeLevels = Array.Empty<int>();
             data.CheckpointUnlockedCategories = Array.Empty<string>();
+            data.SupportRememberedIds = Array.Empty<string>();
+            data.SupportRememberedLevels = Array.Empty<int>();
             data.CheckpointPowerCells = 0;
             data.CheckpointPowerCellsSecondary = 0;
             data.CheckpointDeathsTaken = 0;
