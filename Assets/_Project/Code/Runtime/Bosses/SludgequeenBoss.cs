@@ -71,6 +71,10 @@ namespace MaxWorlds.Bosses
         private float _preferSign;
         private readonly ZoneRouteBudget _routeBudget = new ZoneRouteBudget();
 
+        // This boss's own authored area (MV-572), same convention as BigBermudaBoss's own _wakeArea.
+        // MV-1110 retired its old job of gating the wake itself (see TickDormant/IsWithinWakeRange above)
+        // in favour of a proximity + line-of-sight test against the boss's own post; kept set via
+        // SetWakeArea for whenever this boss is wired into MapRuntime.BuildBoss for real.
         private Rect _wakeArea;
         private Rect _arenaBounds;
         private Rect[] _dryZones = Array.Empty<Rect>();
@@ -241,10 +245,23 @@ namespace MaxWorlds.Bosses
             return AreaAccumulationDirector.AreaIndexOf(zone.id);
         }
 
+        /// <summary>MV-1110: same shared wake rule as <see cref="BigBermudaBoss.TickDormant"/> — within
+        /// <see cref="BossTuning.WakeRadius"/> of her own post, with clear line of sight, rather than
+        /// simply entering her authored area.</summary>
         private void TickDormant()
         {
             if (_target == null) { AcquireTarget(); return; }
-            if (_wakeArea.Contains(new Vector2(_target.position.x, _target.position.z))) Wake();
+            if (IsWithinWakeRange(_target.position)) Wake();
+        }
+
+        /// <summary>Same test as <see cref="BigBermudaBoss.IsWithinWakeRange"/> — range AND sight
+        /// together, not either alone.</summary>
+        private bool IsWithinWakeRange(Vector3 targetPosition)
+        {
+            Vector3 to = targetPosition - transform.position;
+            to.y = 0f;
+            if (to.magnitude > BossTuning.WakeRadius) return false;
+            return LineOfSight.Between(transform, _target);
         }
 
         private void Update()
@@ -587,6 +604,15 @@ namespace MaxWorlds.Bosses
 
         public void TakeDamage(in DamageInfo info)
         {
+            // MV-1110: same "a hit landing is itself a wake trigger" rule as BigBermudaBoss.TakeDamage —
+            // consumed as the wake, not as damage.
+            if (_phase == Phase.Dormant)
+            {
+                if (!DamageRules.Applies(info.Attacker, Team)) return;
+                Wake();
+                return;
+            }
+
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);

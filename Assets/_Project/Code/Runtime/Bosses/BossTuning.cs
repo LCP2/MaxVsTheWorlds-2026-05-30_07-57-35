@@ -26,6 +26,17 @@ namespace MaxWorlds.Bosses
     /// </summary>
     public static class BossTuning
     {
+        // ---------------------------------------------------------------- wake rule (MV-1110)
+
+        /// <summary>How close Max has to stand, with a clear line of sight, before a Dormant boss wakes
+        /// (MV-1110) — shared by every boss in every world (<see cref="BigBermudaBoss"/> and
+        /// <see cref="SludgequeenBoss"/> each read this directly rather than carrying their own copy).
+        /// Entering the boss's authored area used to be the whole wake test, so a boss authored deep
+        /// inside a large area (World 1's area 30 is 44x56 m) was already walking toward Max before he
+        /// had even seen it (Lee, device, 2026-10-06). The area itself is no longer consulted at all —
+        /// a boss now stands at its own authored post until Max is close enough to actually notice it.</summary>
+        public const float WakeRadius = 16f;
+
         // ---------------------------------------------------------------- the fight's length
 
         /// <summary>Boss HP. THIS is the fight-length knob — the only one. At the DPS a player

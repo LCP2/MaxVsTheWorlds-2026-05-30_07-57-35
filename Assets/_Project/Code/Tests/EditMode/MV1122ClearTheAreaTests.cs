@@ -337,7 +337,18 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---------- AC1d: exactly one edge arrow when the camera can't see one of the three ----------
                 RobotEnemy[] counted = { garrisonA, garrisonB, bossThrown };
-                Vector3 c0 = counted[0].transform.position;
+                // Anchor counted[0] at the zone's own centre rather than wherever it happened to be
+                // authored: FindObjectsByType's traversal order (and so which ambient robot lands at
+                // a30Enemies[0]) depends on Unity's own instance-ID layout, which shifts with how many
+                // objects earlier tests in the same run created -- a robot authored near a30's edge
+                // would leave no room for the "clamped far candidate" below to clear visibleHalf, and
+                // which robot that is was never something this fixture controlled. The ring/AC1c checks
+                // above already ran against its original authored spot, so moving it now is safe.
+                Vector3 c0 = new Vector3(
+                    (a30Zone.XMin + a30Zone.XMax) * 0.5f,
+                    counted[0].transform.position.y,
+                    (a30Zone.ZMin + a30Zone.ZMax) * 0.5f);
+                counted[0].transform.position = c0;
                 float visibleHalf = Mathf.Max(2f, Mathf.Min(a30Zone.XMax - a30Zone.XMin, a30Zone.ZMax - a30Zone.ZMin) * 0.15f);
                 counted[1].transform.position = c0 + new Vector3(visibleHalf * 0.2f, 0f, 0f);
                 Vector3 farCandidate = c0 + new Vector3(visibleHalf * 4f, 0f, visibleHalf * 4f);
