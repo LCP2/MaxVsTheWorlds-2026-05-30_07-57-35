@@ -48,6 +48,15 @@ namespace MaxWorlds.Arena
     {
         public const string ConstraintsResourcePath = "Worlds/level_design_constraints";
 
+        private static readonly HashSet<string> LoggedMessages = new HashSet<string>();
+
+        /// <summary>Clears the set of already-logged messages so a test can assert fresh logging
+        /// behaviour without depending on another test's run order (MV-1138). Public, not internal:
+        /// this project has no <c>InternalsVisibleTo</c> back from the EditMode test assembly (see
+        /// <see cref="MapRuntime"/>'s own doc comment), so an internal member here would not compile
+        /// from the test that needs it.</summary>
+        public static void ResetLoggedForTests() => LoggedMessages.Clear();
+
         public static bool TryLoadConstraints(out LevelDesignConstraints constraints, out string reason)
         {
             TextAsset asset = Resources.Load<TextAsset>(ConstraintsResourcePath);
@@ -99,13 +108,22 @@ namespace MaxWorlds.Arena
         {
             if (!TryLoadConstraints(out LevelDesignConstraints constraints, out string reason))
             {
-                Debug.LogWarning($"[LevelDesignVerifier] constraints not checked: {reason}");
+                LogOnce($"constraints not checked: {reason}");
                 return;
             }
 
             List<string> violations = Violations(cfg, constraints);
             foreach (string v in violations)
-                Debug.LogWarning($"[LevelDesignVerifier] {v}");
+                LogOnce(v);
+        }
+
+        /// <summary>Logs a message the first time it is seen and never again — hundreds of EditMode
+        /// tests and every world load were each re-emitting the same few hundred warnings with a full
+        /// stack trace, writing ~137,000 warnings into a single test run's log (MV-1138).</summary>
+        private static void LogOnce(string message)
+        {
+            if (!LoggedMessages.Add(message)) return;
+            Debug.LogWarning($"[LevelDesignVerifier] {message}");
         }
 
         private static void VerifyMinRoomDimension(WorldConfig cfg, LevelDesignConstraints constraints, List<string> violations)
