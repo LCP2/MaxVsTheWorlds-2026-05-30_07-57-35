@@ -30,7 +30,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("replicator")]
-    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor, IExitZoneSource
+    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor, IExitZoneSource, IFactoryDoorFacing
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
@@ -539,6 +539,13 @@ namespace MaxWorlds.Factories
         /// (<see cref="QueueSlotSpacing"/> out) and each further slot one more spacing beyond it. Public
         /// so a test can read a slot back without re-deriving this formula.</summary>
         public Vector3 QueueSlotPosition(int slot) => HatchPosition + HatchOutwardNormal * (QueueSlotSpacing * (slot + 1));
+
+        /// <summary>MV-1107: <see cref="IFactoryDoorFacing"/> — this box's own authored IN-face
+        /// direction, the same one <see cref="HatchOutwardNormal"/> already resolves off
+        /// <c>SetFacing</c>'s rotation. Always non-null: every Replicator carries a facing (defaulted
+        /// to "S" by <see cref="MaxWorlds.Arena.WorldMapLoader"/>), unlike a shed, which carries
+        /// none at all.</summary>
+        Vector3? IFactoryDoorFacing.AuthoredDoorOutward => HatchOutwardNormal;
 
         /// <summary>MV-808: the output face's own world position — the same hatch-mirroring reasoning
         /// as <see cref="HatchPosition"/>, read off <see cref="_outputLip"/> instead of <see cref="_hatch"/>.</summary>

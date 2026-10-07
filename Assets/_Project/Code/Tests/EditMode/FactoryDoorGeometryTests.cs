@@ -30,41 +30,47 @@ namespace MaxWorlds.Tests.EditMode
             clearances[IndexOf(Vector3.forward)] = 3f;
             clearances[IndexOf(Vector3.back)] = 3f;
 
-            int face = FactoryDoorGeometry.ChooseFace(clearances, Vector3.zero);
+            int face = FactoryDoorGeometry.ChooseFace(clearances, blocked: null);
 
             Assert.That(FactoryDoorGeometry.Faces[face], Is.EqualTo(Vector3.left));
         }
 
         [Test]
-        public void ASymmetricRoomBreaksTheTieTowardThePlayer()
+        public void ABlockedFaceIsSkippedEvenWithTheMostClearance()
         {
-            // The Mower Hutch sits dead centre in its shed, so two opposite walls are equally open.
-            // Array order must not be what decides it.
+            // MV-1107: a raycast-only probe never sees a colliderless prop (a decorative pipe run, a
+            // kerb) sitting in a face's own ramp footprint — resolved renderer bounds do, and that face
+            // must lose even though its raw clearance reads best. No player involved: the face choice
+            // must never depend on where the player happens to stand at build time.
             var clearances = new float[4];
-            clearances[IndexOf(Vector3.left)] = 9f;
+            clearances[IndexOf(Vector3.left)] = 12f;
             clearances[IndexOf(Vector3.right)] = 9f;
-            clearances[IndexOf(Vector3.forward)] = 7f;
-            clearances[IndexOf(Vector3.back)] = 7f;
+            clearances[IndexOf(Vector3.forward)] = 3f;
+            clearances[IndexOf(Vector3.back)] = 3f;
 
-            int face = FactoryDoorGeometry.ChooseFace(clearances, Vector3.left * 20f);
+            var blocked = new bool[4];
+            blocked[IndexOf(Vector3.left)] = true; // a pipe run with no collider sits right there
 
-            Assert.That(FactoryDoorGeometry.Faces[face], Is.EqualTo(Vector3.left));
-        }
-
-        [Test]
-        public void ClearanceOutranksThePlayerWhenTheNearWallIsShut()
-        {
-            // Facing the player is a tie-break, not a trump card: a door onto a wall 30 cm away is
-            // useless however well it faces him.
-            var clearances = new float[4];
-            clearances[IndexOf(Vector3.right)] = 11f;
-            clearances[IndexOf(Vector3.left)] = 0.3f;
-            clearances[IndexOf(Vector3.forward)] = 0.4f;
-            clearances[IndexOf(Vector3.back)] = 0.4f;
-
-            int face = FactoryDoorGeometry.ChooseFace(clearances, Vector3.left * 20f);
+            int face = FactoryDoorGeometry.ChooseFace(clearances, blocked);
 
             Assert.That(FactoryDoorGeometry.Faces[face], Is.EqualTo(Vector3.right));
+        }
+
+        [Test]
+        public void EveryFaceBlockedStillPicksTheMostOpenOne()
+        {
+            // A door has to go somewhere even if every candidate footprint reads occupied.
+            var clearances = new float[4];
+            clearances[IndexOf(Vector3.left)] = 9f;
+            clearances[IndexOf(Vector3.right)] = 4f;
+            clearances[IndexOf(Vector3.forward)] = 3f;
+            clearances[IndexOf(Vector3.back)] = 3f;
+
+            var blocked = new[] { true, true, true, true };
+
+            int face = FactoryDoorGeometry.ChooseFace(clearances, blocked);
+
+            Assert.That(FactoryDoorGeometry.Faces[face], Is.EqualTo(Vector3.left));
         }
 
         [Test]
@@ -76,7 +82,7 @@ namespace MaxWorlds.Tests.EditMode
             clearances[IndexOf(Vector3.left)] = 2f;
             clearances[IndexOf(Vector3.right)] = 2f;
 
-            int face = FactoryDoorGeometry.ChooseFace(clearances, Vector3.zero);
+            int face = FactoryDoorGeometry.ChooseFace(clearances, blocked: null);
 
             Assert.That(FactoryDoorGeometry.Faces[face], Is.EqualTo(Vector3.forward));
         }

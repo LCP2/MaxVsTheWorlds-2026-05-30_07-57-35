@@ -28,43 +28,54 @@ namespace MaxWorlds.VFX
         /// shed is symmetric, but the west wall has the opening onto the lawn, so a probe that way
         /// travels out into the lawn while the other three stop at a wall.
         ///
-        /// <paramref name="towardPlayer"/> breaks ties, which matters because a factory centred in a
-        /// symmetric room has two equally open sides and picking by array order would put the door on
-        /// whichever one the enum happened to list first. Ties are common, not exotic.
+        /// MV-1107: a face <paramref name="blocked"/> marks is skipped outright, whatever its own
+        /// clearance reads — a raycast-only clearance can't see a colliderless prop (a decorative pipe
+        /// run, a kerb) sitting right where the ramp would go, which is how a door used to land facing
+        /// one. There is no player tie-break any more: the face choice must never depend on where the
+        /// player happens to stand at build time (MV-1107's own root cause), so a genuine tie resolves
+        /// to the lowest face index — deterministic, not positional.
         /// </summary>
         /// <param name="clearances">Metres of open ground off each face, indexed like <see cref="Faces"/>.</param>
-        /// <param name="towardPlayer">Direction to the player. Zero if there isn't one yet.</param>
-        public static int ChooseFace(float[] clearances, Vector3 towardPlayer)
+        /// <param name="blocked">True for a face whose own candidate ramp footprint is occupied by
+        /// some other renderer — never chosen unless every face is. Null treats every face as open.</param>
+        public static int ChooseFace(float[] clearances, bool[] blocked)
         {
             if (clearances == null || clearances.Length == 0) return 0;
 
-            Vector3 pull = towardPlayer;
-            pull.y = 0f;
-            pull = pull.sqrMagnitude < 1e-6f ? Vector3.zero : pull.normalized;
-
-            int best = 0;
+            int best = -1;
             float bestClear = float.NegativeInfinity;
-            float bestPull = float.NegativeInfinity;
 
             for (int i = 0; i < clearances.Length && i < Faces.Length; i++)
             {
-                float clear = clearances[i];
-                float toward = pull == Vector3.zero ? 0f : Vector3.Dot(Faces[i], pull);
-
-                // Within a whisker of each other counts as the same clearance — otherwise a 1 cm
-                // difference in where a probe happened to land silently outranks facing the player.
-                bool clearlyBetter = clear > bestClear + 0.25f;
-                bool tiedButFacesPlayer = clear > bestClear - 0.25f && toward > bestPull;
-
-                if (clearlyBetter || tiedButFacesPlayer)
-                {
-                    best = i;
-                    bestClear = Mathf.Max(clear, bestClear);
-                    bestPull = toward;
-                }
+                if (blocked != null && i < blocked.Length && blocked[i]) continue;
+                if (clearances[i] > bestClear) { bestClear = clearances[i]; best = i; }
             }
 
-            return best;
+            // Every face blocked — a door still has to go somewhere, so fall back to whichever one
+            // has the most open ground rather than building nothing.
+            if (best < 0)
+            {
+                for (int i = 0; i < clearances.Length && i < Faces.Length; i++)
+                    if (clearances[i] > bestClear) { bestClear = clearances[i]; best = i; }
+            }
+
+            return best < 0 ? 0 : best;
+        }
+
+        /// <summary>MV-1107: the world AABB a ramp built outward from <paramref name="doorway"/> along
+        /// <paramref name="outward"/> would occupy — used to test a candidate face against scene
+        /// renderers BEFORE anything is built there (see <see cref="ChooseFace(float[], bool[])"/>'s own
+        /// caller). <paramref name="outward"/> is always one of <see cref="Faces"/>, so the box this
+        /// describes is always axis-aligned and a plain min/max suffices.</summary>
+        public static Bounds RampFootprint(Vector3 doorway, Vector3 outward, float sillHeight, float rampRun, float halfWidth)
+        {
+            Vector3 across = Vector3.Cross(Vector3.up, outward);
+            Vector3 corner0 = doorway - across * halfWidth;
+            Vector3 corner1 = doorway + across * halfWidth + outward * rampRun + Vector3.up * sillHeight;
+
+            var bounds = new Bounds();
+            bounds.SetMinMax(Vector3.Min(corner0, corner1), Vector3.Max(corner0, corner1));
+            return bounds;
         }
 
         /// <summary>
