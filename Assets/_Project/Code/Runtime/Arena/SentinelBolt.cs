@@ -36,6 +36,7 @@ namespace MaxWorlds.Arena
         private float _flightSeconds;
         private float _age;
         private bool _spent;
+        private bool _externallyDriven;
         private GroundRing _groundGlow;
         private float _groundGlowRadius;
         private Color _boltColor;
@@ -46,9 +47,13 @@ namespace MaxWorlds.Arena
         /// <paramref name="boltColor"/>/<paramref name="thicknessScale"/> are the firing
         /// <see cref="Sentinel"/>'s own already-resolved per-world style (MV-1069) — defaulted to
         /// <see cref="BoltColor"/>/1x so every pre-existing caller/test that doesn't pass one keeps
-        /// today's uniform red, <see cref="SizeScale"/>-only bolt.</summary>
+        /// today's uniform red, <see cref="SizeScale"/>-only bolt. <paramref name="externallyDriven"/>
+        /// (MV-1125) suppresses this bolt's own <see cref="Update"/> tick — for a caller (e.g.
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate"/>'s exit beat) that already drives <see cref="Tick"/>
+        /// itself once a frame; without it, a bolt fired from Play mode got ticked TWICE a frame (its own
+        /// Update AND the owner's explicit Tick call), arriving in roughly half the intended flight time.</summary>
         public static SentinelBolt Fire(Vector3 muzzle, Vector3 impactPoint, float speed,
-            Color? boltColor = null, float thicknessScale = 1f)
+            Color? boltColor = null, float thicknessScale = 1f, bool externallyDriven = false)
         {
             Color color = boltColor ?? BoltColor;
 
@@ -61,6 +66,7 @@ namespace MaxWorlds.Arena
             BuildVisual(go.transform, color, thicknessScale);
 
             var bolt = go.AddComponent<SentinelBolt>();
+            bolt._externallyDriven = externallyDriven;
             bolt.Init(muzzle, impactPoint, speed, color);
             return bolt;
         }
@@ -79,7 +85,11 @@ namespace MaxWorlds.Arena
             UpdateGroundGlow();
         }
 
-        private void Update() => Tick(Time.deltaTime);
+        private void Update()
+        {
+            if (_externallyDriven) return;
+            Tick(Time.deltaTime);
+        }
 
         /// <summary>Advance one step. Public — same reason <see cref="MaxWorlds.Weapons.SeekerPulse.Tick"/>
         /// is public — so an EditMode test can drive the straight-line flight deterministically without

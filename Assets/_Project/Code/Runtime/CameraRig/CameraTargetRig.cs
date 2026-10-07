@@ -37,6 +37,11 @@ namespace MaxWorlds.CameraRig
         /// the same frame by <see cref="LateUpdate"/>.</summary>
         private bool _focusOverrideActive;
 
+        /// <summary>MV-1125 test seam: the last <paramref name="t"/> <see cref="ApplyFocusOverride"/>
+        /// resolved (clamped 0-1) — a resolved runtime value, not an authored constant, since it only
+        /// ever reflects whatever progress the caller's own beat timeline actually drove.</summary>
+        public float FocusWeight { get; private set; }
+
         private void Awake()
         {
             if (subject != null)
@@ -55,8 +60,9 @@ namespace MaxWorlds.CameraRig
         public void ApplyFocusOverride(Vector3 target, float t)
         {
             _focusOverrideActive = true;
+            FocusWeight = Mathf.Clamp01(t);
             Vector3 basePos = subject != null ? subject.position : transform.position;
-            transform.position = Vector3.Lerp(basePos, target, Mathf.Clamp01(t));
+            transform.position = Vector3.Lerp(basePos, target, FocusWeight);
         }
 
         /// <summary>Ends the override — the next <see cref="LateUpdate"/> resumes ordinary

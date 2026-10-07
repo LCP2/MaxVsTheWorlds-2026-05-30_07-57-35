@@ -2146,6 +2146,10 @@ namespace MaxWorlds.UI
             ? System.Text.RegularExpressions.Regex.Replace(_objectiveLabel.text, "<.*?>", string.Empty)
             : null;
 
+        /// <summary>MV-1125 test seam: the strip's own resolved border colour — same "public property,
+        /// not reflection" shape as <see cref="ObjectiveText"/>.</summary>
+        public Color ObjectiveBorderColor => _objectiveBorder != null ? _objectiveBorder.color : default;
+
         private void RefreshArenaText(bool prominent)
         {
             // MV-1078: a stale HudController left over from an earlier EditMode test (one that built a
