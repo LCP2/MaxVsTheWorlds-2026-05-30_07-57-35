@@ -94,6 +94,7 @@ namespace MaxWorlds.Dev
             _captureCam = CreateCaptureCamera();
 
             yield return CaptureRigBoard();
+            RunFamilyPanelContainmentCheck();
             yield return CaptureWeaponsButton();
             yield return CaptureMapScreen();
 
@@ -1474,6 +1475,129 @@ namespace MaxWorlds.Dev
 
             checkedCount = localChecked;
             fails = localFails;
+        }
+
+        /// <summary>MV-1109: every family's own node hex, cost chip and name label must lie inside that
+        /// family's own background panel's VERTICAL extent (<see cref="RigBoardLayout.ComputeFamilyPanelBounds"/>
+        /// — the same content-derived rect <c>WeaponsScreen.BuildCategoryPanels</c> actually draws), and
+        /// no two family panels may overlap. Pure geometry, no pixel sampling — same style as
+        /// <see cref="CheckYBoundsContainment"/> above.
+        ///
+        /// Vertical only, deliberately: horizontal (left/right) containment is MV-594's own already-
+        /// shipped, already-tested concern (<c>MV594RigBoardFixTests</c>), and this ticket's own defect,
+        /// root cause and fix are all about the bottom edge. Confirmed live running this exact check with
+        /// a horizontal term included: World 3's own PRIMARY/ENERGY/MOVE/SUPPORT columns clip 3-5 ref px
+        /// of their own outermost ability hex at the phone aspect ONLY (16x9/ipad-mini both clear) — a
+        /// pre-existing <c>BuildColumnLayout</c> column-width rounding gap for a denser tree than World
+        /// 1's, unrelated to panel height and out of this ticket's own "node positions... unchanged"
+        /// scope. Filed separately rather than silently absorbed into this ticket's own fix.</summary>
+        private static void CheckFamilyPanelContainsNodes(IReadOnlyList<RigCategoryLayout> categories,
+            IReadOnlyList<RigAbilityLayout> abilities, float radiusCategory, float radiusAbility, bool phoneMode,
+            out int checkedCount, out List<string> fails)
+        {
+            const float Tolerance = 0.5f;
+            var localFails = new List<string>();
+            int localChecked = 0;
+            int n = categories.Count;
+            var bounds = RigBoardLayout.ComputeFamilyPanelBounds(categories, abilities, radiusCategory, radiusAbility, phoneMode);
+
+            float labelOffset = phoneMode ? RigBoardLayout.LabelOffsetYPhone(radiusAbility) : RigBoardLayout.LabelOffsetY(radiusAbility);
+            float labelHalfH = (phoneMode ? RigBoardLayout.LabelBoxHeightPhone : RigBoardLayout.LabelBoxHeight) * 0.5f;
+            float chipOffset = RigBoardLayout.CostChipOffsetY(radiusAbility, phoneMode);
+            float chipHalfH = RigBoardLayout.CostChipHalfHeight(phoneMode);
+
+            for (int i = 0; i < n; i++)
+            {
+                var p = bounds[i];
+                localChecked++;
+                float catTop = categories[i].Y - radiusCategory, catBottom = categories[i].Y + radiusCategory;
+                if (catTop < p.Top - Tolerance || catBottom > p.Bottom + Tolerance)
+                    localFails.Add($"{categories[i].Id} category hex escapes its own panel (hex=[{RigBoardConformance.Fmt(catTop)},{RigBoardConformance.Fmt(catBottom)}] panel=[{RigBoardConformance.Fmt(p.Top)},{RigBoardConformance.Fmt(p.Bottom)}])");
+
+                foreach (var ab in abilities)
+                {
+                    if (ab.Category != categories[i].Id) continue;
+                    localChecked++;
+
+                    float hexTop = ab.Y - radiusAbility, hexBottom = ab.Y + radiusAbility;
+                    if (hexTop < p.Top - Tolerance || hexBottom > p.Bottom + Tolerance)
+                        localFails.Add($"{ab.Id} hex escapes '{categories[i].Id}' panel (hex=[{RigBoardConformance.Fmt(hexTop)},{RigBoardConformance.Fmt(hexBottom)}] panel=[{RigBoardConformance.Fmt(p.Top)},{RigBoardConformance.Fmt(p.Bottom)}])");
+
+                    float labelBottom = ab.Y + labelOffset + labelHalfH, labelTop = ab.Y + labelOffset - labelHalfH;
+                    if (labelBottom > p.Bottom + Tolerance || labelTop < p.Top - Tolerance)
+                        localFails.Add($"{ab.Id} label escapes '{categories[i].Id}' panel (bottom={RigBoardConformance.Fmt(labelBottom)} panelBottom={RigBoardConformance.Fmt(p.Bottom)})");
+
+                    float chipBottom = ab.Y + chipOffset + chipHalfH;
+                    if (chipBottom > p.Bottom + Tolerance)
+                        localFails.Add($"{ab.Id} cost chip escapes '{categories[i].Id}' panel");
+                }
+            }
+
+            // No two family panels may overlap — families sit in side-by-side columns, so this is really
+            // the horizontal non-overlap MV-594's own neighbour clamp already establishes, reconfirmed
+            // here now that the vertical extent (height) is content-derived too.
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                {
+                    bool overlapX = bounds[i].Left < bounds[j].Right - Tolerance && bounds[j].Left < bounds[i].Right - Tolerance;
+                    bool overlapY = bounds[i].Top < bounds[j].Bottom - Tolerance && bounds[j].Top < bounds[i].Bottom - Tolerance;
+                    if (overlapX && overlapY)
+                        localFails.Add($"'{categories[i].Id}' and '{categories[j].Id}' panels overlap");
+                }
+
+            checkedCount = localChecked;
+            fails = localFails;
+        }
+
+        /// <summary>MV-1109: runs <see cref="CheckFamilyPanelContainsNodes"/> for every shipped board
+        /// (World 1/2/3) at every aspect the report already covers — 16x9/phone/ipad-mini, the three
+        /// <see cref="RunConformanceChecks"/> actually measures (rig-16x10 is captured but never
+        /// conformance-checked either, same precedent). Pure geometry (no capture/render needed), so this
+        /// drives <see cref="RigBoard"/>/<see cref="RigBoardLayout"/>'s own world switch directly instead
+        /// of threading through the screenshot pipeline — there is no rig-world3-* capture at all (World
+        /// 3's own board has never been screenshotted by this harness; World 2's only capture is
+        /// rig-world2-16x9, see <see cref="ApplyRigFixtureWorld2Morph"/>), so a capture-gated check could
+        /// never reach World 3. Restores whichever world was active before it ran.</summary>
+        private void RunFamilyPanelContainmentCheck()
+        {
+            int savedWorld = RigBoard.ActiveWorldIndex;
+            var aspects = new (string Name, int W, int H)[]
+            {
+                ("16x9", 1920, 1080),
+                ("phone", 2340, 1080),
+                ("ipad-mini", 1078, 815),
+            };
+
+            for (int world = 0; world < 3; world++)
+            {
+                RigBoard.UseWorld(world);
+                RigBoardLayout.UseWorld(world);
+
+                foreach (var aspect in aspects)
+                {
+                    bool phoneMode = WeaponsScreen.IsPhoneLayout((float)aspect.W / aspect.H);
+                    var categories = phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
+                    var abilities = phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
+                    float radiusCategory = phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
+                    float radiusAbility = phoneMode ? RigBoardLayout.RadiusAbilityPhone : RigBoardLayout.RadiusAbility;
+
+                    CheckFamilyPanelContainsNodes(categories, abilities, radiusCategory, radiusAbility, phoneMode,
+                        out int checkedCount, out var fails);
+
+                    string detail = fails.Count == 0
+                        ? $"{checkedCount}/{checkedCount} rects contained, no panel overlap"
+                        : $"{fails.Count} failing — {string.Join("; ", fails)}";
+                    string sectionName = $"world{world + 1}-{aspect.Name}";
+                    if (fails.Count > 0) _failures.Add($"conformance/{sectionName}/family-panel-contains-nodes: {detail}");
+
+                    Log($"conformance/{sectionName}: family-panel-contains-nodes {(fails.Count == 0 ? "PASS" : "FAIL")}");
+                    WriteConformanceReport(sectionName, aspect.W, aspect.H,
+                        new List<string> { RigBoardConformance.PassFailLine("family-panel-contains-nodes", fails.Count == 0, detail) });
+                }
+            }
+
+            RigBoard.UseWorld(savedWorld);
+            RigBoardLayout.UseWorld(savedWorld);
         }
 
         /// <summary>MV-480: one growing report file across all three measured aspects instead of the

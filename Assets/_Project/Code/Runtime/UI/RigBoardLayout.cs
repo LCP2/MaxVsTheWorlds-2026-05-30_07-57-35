@@ -652,6 +652,101 @@ namespace MaxWorlds.UI
         public static float RegionBorderAlphaLit { get { EnsureLoaded(); return s_geometry.regionRect?.borderAlphaLit ?? 0.037f; } }
         public static float RegionBorderAlphaDark { get { EnsureLoaded(); return s_geometry.regionRect?.borderAlphaDark ?? 0.010f; } }
 
+        /// <summary>MV-1109: an ability label's own text-box height — matches
+        /// <c>WeaponsScreen.BuildNodeShell</c>'s own <c>label.rectTransform.sizeDelta</c> y term, factored
+        /// out here (not just inlined there) so <see cref="ComputeFamilyPanelBounds"/> can derive a
+        /// label's resolved bottom edge without a second copy of the literal drifting from the real one.</summary>
+        public static float LabelBoxHeight => 24f;
+        public static float LabelBoxHeightPhone => 52f;
+
+        /// <summary>MV-1109: the pad added below the lowest label in a family when
+        /// <see cref="ComputeFamilyPanelBounds"/> derives that family's panel bottom edge.</summary>
+        public const float RegionRectBottomPad = 16f;
+
+        /// <summary>One family's background panel rect in board-local (x-right, y-down) reference space.
+        /// Left/right were already content-derived (MV-594: the real bounds of the category node plus
+        /// every ability node in the family, padded by <see cref="RegionRectPadX"/> and clamped so a
+        /// panel can never cross the midpoint with a neighbour's own node bounds); top/bottom are now too
+        /// (MV-1109). Bottom is the lowest point any ability's own NAME LABEL reaches — labels sit well
+        /// below every node's hex and cost chip (<see cref="LabelOffsetY"/>'s "+r+46" vs the chip's own
+        /// midpoint-of-pill-and-label position, see <see cref="CostChipOffsetY"/>) — plus
+        /// <see cref="RegionRectBottomPad"/>. The fixed JSON <c>regionRect.h</c> this replaces was sized
+        /// for standard mode's own row schedule and silently reused for phone mode's much deeper one (top
+        /// 0 vs standard's 150, same shared height): phone mode's own tier3 row already sits past that
+        /// fixed bottom before any label is even added — the defect Lee's own device screenshot caught.
+        ///
+        /// Pure function over layout data — both <c>WeaponsScreen.BuildCategoryPanels</c> (the live
+        /// renderer) and the ui-screens conformance pass call this, so the drawn panel and the checked
+        /// panel can never drift apart from each other.</summary>
+        public readonly struct RigFamilyPanelBounds
+        {
+            public readonly float Left, Right, Top, Bottom;
+            public RigFamilyPanelBounds(float left, float right, float top, float bottom)
+            { Left = left; Right = right; Top = top; Bottom = bottom; }
+        }
+
+        public static RigFamilyPanelBounds[] ComputeFamilyPanelBounds(IReadOnlyList<RigCategoryLayout> categories,
+            IReadOnlyList<RigAbilityLayout> abilities, float categoryRadius, float abilityRadius, bool phoneMode)
+        {
+            EnsureLoaded();
+            int n = categories.Count;
+            var result = new RigFamilyPanelBounds[n];
+            if (n == 0) return result;
+
+            float padX = RegionRectPadX;
+            float top = phoneMode ? RegionRectYPhone : RegionRectY;
+            float labelOffset = phoneMode ? LabelOffsetYPhone(abilityRadius) : LabelOffsetY(abilityRadius);
+            float labelHalfHeight = (phoneMode ? LabelBoxHeightPhone : LabelBoxHeight) * 0.5f;
+
+            // MV-594's own nodeLeft/nodeRight pass, plus a vertical nodeBottom alongside it — the real
+            // min/max/max-depth bounds of the category node plus every ability node in each family.
+            var nodeLeft = new float[n];
+            var nodeRight = new float[n];
+            var nodeBottom = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                float left = categories[i].X - categoryRadius;
+                float right = categories[i].X + categoryRadius;
+                float bottom = categories[i].Y + categoryRadius;
+                foreach (var ab in abilities)
+                {
+                    if (ab.Category != categories[i].Id) continue;
+                    left = Mathf.Min(left, ab.X - abilityRadius);
+                    right = Mathf.Max(right, ab.X + abilityRadius);
+                    bottom = Mathf.Max(bottom, ab.Y + labelOffset + labelHalfHeight);
+                }
+                nodeLeft[i] = left; nodeRight[i] = right; nodeBottom[i] = bottom;
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                float leftLimit = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (nodeRight[i - 1] + nodeLeft[i]) * 0.5f;
+                float rightLimit = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (nodeRight[i] + nodeLeft[i + 1]) * 0.5f;
+                float left = Mathf.Max(nodeLeft[i] - padX, leftLimit);
+                float right = Mathf.Min(nodeRight[i] + padX, rightLimit);
+                result[i] = new RigFamilyPanelBounds(left, right, top, nodeBottom[i] + RegionRectBottomPad);
+            }
+            return result;
+        }
+
+        /// <summary>MV-1109: an ability node's cost-chip vertical centre, board-space (+Y down) — mirrors
+        /// <c>WeaponsScreen.BuildAbilityNode</c>'s own local-space (+Y up) <c>costTagY</c>, the real
+        /// midpoint between the level pill's own bottom edge and the label's own top edge. Used only by
+        /// the conformance check/EditMode test proving the chip (which this midpoint keeps above the
+        /// label always) never escapes a family panel either — not consumed by <c>BuildAbilityNode</c>
+        /// itself, which keeps its own working local-space formula unchanged.</summary>
+        public static float CostChipOffsetY(float r, bool phoneMode)
+        {
+            EnsureLoaded();
+            float pillBottom = LevelPillOffsetY(r) + LevelPillH * 0.5f;
+            float labelOffset = phoneMode ? LabelOffsetYPhone(r) : LabelOffsetY(r);
+            float labelTop = labelOffset - (phoneMode ? LabelBoxHeightPhone : LabelBoxHeight) * 0.5f;
+            return (pillBottom + labelTop) * 0.5f;
+        }
+
+        public static float CostChipHalfHeight(bool phoneMode) =>
+            (phoneMode ? CostFontSizePhone : CostFontSize) * 1.2f * 0.5f;
+
         public static float IconScaleAbility { get { EnsureLoaded(); return s_geometry.iconScaleAbility; } }
         public static float IconScaleCategory { get { EnsureLoaded(); return s_geometry.iconScaleCategory; } }
         public static float IconScaleFusion { get { EnsureLoaded(); return s_geometry.iconScaleFusion; } }
