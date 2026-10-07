@@ -187,24 +187,27 @@ namespace MaxWorlds.Rendering
             root.AddComponent<ReefCircuitFlow>().Configure(WorldMaterials.M_Circuit_Cyan, CircuitScrollSpeed);
         }
 
-        // MV-1054, change item 2: every structural wall on the map's outer edge becomes observation
-        // glass — a low dark frame, a translucent cyan-blue pane, a cyan top strip, and dark mullions
-        // every 4 m along its length.
+        // MV-1094: the observation-glass pane and its mullions (MV-1054) are withdrawn for outer-edge
+        // walls — on a phone the translucent pane read as no wall at all over a dark void (Lee, World 3
+        // areas 10/11). An outer-edge wall keeps its ordinary M_ShipWall skin from DressHull's own sweep
+        // above; only the dark foot frame and cyan top strip survive, so the map edge still reads as
+        // distinct from an interior partition.
         private const float GlassFrameHeight = 0.12f;
         private const float GlassTopStripHeight = 0.12f;
-        private const float GlassMullionWidth = 0.08f;
-        private const float GlassMullionPitch = 4f;
         private const float GlassProud = 0.02f;   // same anti-z-fight idiom as CircuitStripProud
 
-        /// <summary>Re-skins every outer-edge wall in <paramref name="walls"/> (<see cref="StructuralWall.IsOuterEdge"/>,
-        /// set by <c>MapRuntime.Build</c> from the wall solver's own room-adjacency data — the only
-        /// thing that can tell a hull wall from an interior partition on a non-convex, spiral-shaped
-        /// map) into observation glass. The wall's own renderer becomes the pane
-        /// (<see cref="WorldMaterials.M_GlassOcean"/>); frame, strip and mullions are new, collider-
-        /// free overlay geometry parented under one "Observation Glass" root (own sibling of "Circuit
-        /// Spine" and "Reef Props" — <c>MapRuntime.TagReefDressing</c> looks it up by that exact name
-        /// to keep it zone-gated the same way). Wall colliders are untouched (ticket, "Change" 2):
-        /// same "collider stays, art swaps" contract every other Reef dressing case keeps.</summary>
+        /// <summary>Adds a dark foot frame and a cyan top strip to every outer-edge wall in
+        /// <paramref name="walls"/> (<see cref="StructuralWall.IsOuterEdge"/>, set by
+        /// <c>MapRuntime.Build</c> from the wall solver's own room-adjacency data — the only thing that
+        /// can tell a hull wall from an interior partition on a non-convex, spiral-shaped map). The
+        /// wall's own renderer and material are untouched (MV-1094: it keeps the same M_ShipWall every
+        /// interior wall wears, set by <see cref="DressHull"/>'s own sweep just above this call) — frame
+        /// and strip are new, collider-free overlay geometry parented under one "Observation Glass" root
+        /// (own sibling of "Circuit Spine" and "Reef Props" — <c>MapRuntime.TagReefDressing</c> looks it
+        /// up by that exact name to keep it zone-gated the same way; kept as-is rather than renamed, since
+        /// that lookup is a second, independent reference this pass has no reason to touch). Wall
+        /// colliders are untouched: same "collider stays, art overlays" contract every other Reef
+        /// dressing case keeps.</summary>
         private static void BuildObservationGlass(Transform host, List<StructuralWall> walls)
         {
             if (walls.Count == 0) return;
@@ -219,8 +222,6 @@ namespace MaxWorlds.Rendering
                 Renderer wr = wall.GetComponent<Renderer>();
                 if (wr == null) continue;
 
-                wr.sharedMaterial = WorldMaterials.M_GlassOcean;
-
                 if (root == null)
                 {
                     root = new GameObject("Observation Glass");
@@ -229,36 +230,12 @@ namespace MaxWorlds.Rendering
                 }
 
                 Vector3 scale = wt.lossyScale;
-                bool alongX = scale.x >= scale.z;
-                float length = alongX ? scale.x : scale.z;
                 float height = scale.y;
 
                 GlassBar(root.transform, $"{wt.name} Glass Frame", wt.position, scale,
                     GlassFrameHeight, -height * 0.5f + GlassFrameHeight * 0.5f, WorldMaterials.M_MetalDark);
                 GlassBar(root.transform, $"{wt.name} Glass Strip", wt.position, scale,
                     GlassTopStripHeight, height * 0.5f - GlassTopStripHeight * 0.5f, WorldMaterials.M_Circuit_Cyan);
-
-                int mullions = Mathf.Max(0, Mathf.FloorToInt(length / GlassMullionPitch));
-                for (int i = 1; i <= mullions; i++)
-                {
-                    float offset = -length * 0.5f + i * GlassMullionPitch;
-                    if (offset >= length * 0.5f - 0.01f) continue;
-
-                    Vector3 pos = alongX
-                        ? new Vector3(wt.position.x + offset, wt.position.y, wt.position.z)
-                        : new Vector3(wt.position.x, wt.position.y, wt.position.z + offset);
-
-                    GameObject mullion = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    mullion.name = $"{wt.name} Mullion {i}";
-                    mullion.transform.SetParent(root.transform, false);
-                    mullion.transform.position = pos;
-                    mullion.transform.localScale = alongX
-                        ? new Vector3(GlassMullionWidth, height + GlassProud, scale.z + GlassProud)
-                        : new Vector3(scale.x + GlassProud, height + GlassProud, GlassMullionWidth);
-                    StripColliders(mullion);
-                    var mRend = mullion.GetComponent<Renderer>();
-                    if (mRend != null) mRend.sharedMaterial = WorldMaterials.M_MetalDark;
-                }
             }
         }
 
@@ -279,17 +256,16 @@ namespace MaxWorlds.Rendering
         }
 
         // MV-1055, change item 2: small violet accent lamps mounted along the top of every hull
-        // wall, roughly every 6 m — the ticket's own pitch, distinct from the 4 m glass-mullion
-        // pitch above (a different rhythm reads as two different kit pieces, not one mis-spaced).
+        // wall, roughly every 6 m — the ticket's own pitch.
         private const float WallLampPitch = 6f;
         private const float WallLampDiameter = 0.18f;
         private const float WallLampProud = 0.05f;   // perches on the wall's own top face, not embedded
 
         /// <summary>One small violet bead per <see cref="WallLampPitch"/> along EVERY built wall
-        /// (not just the outer-edge glass walls <see cref="BuildObservationGlass"/> re-skins) —
+        /// (not just the outer-edge walls <see cref="BuildObservationGlass"/> trims with a frame/strip) —
         /// "hull walls" in the ticket's own words, and every <see cref="StructuralWall"/> IS hull
         /// plate in World 3. Evenly spread along each wall's own length (same "(i + 0.5) / count"
-        /// centring idiom <see cref="BuildObservationGlass"/>'s own mullion loop uses), never flush
+        /// centring idiom <see cref="BuildWallLamps"/> itself uses below), never flush
         /// with an end cap, so a short wall still reads as dressed rather than empty.</summary>
         private static void BuildWallLamps(Transform host, List<StructuralWall> walls)
         {

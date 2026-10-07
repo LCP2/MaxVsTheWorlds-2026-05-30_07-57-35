@@ -65,10 +65,11 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(circuit.sharedMaterial.IsKeywordEnabled("_EMISSION"),
                     "the circuit material must have emission enabled — a cyan spine that isn't lit is just paint");
 
-                // AC3: every built wall wears M_ShipWall, EXCEPT an outer-edge one (MV-1054:
-                // ReefKit.DressHull now also runs BuildObservationGlass, which re-skins exactly those
-                // walls to the observation-glass pane material instead) — and the count still matches
-                // the map's own solved walls either way.
+                // AC3: every built wall wears M_ShipWall, outer-edge included (MV-1094: the
+                // observation-glass pane swap MV-1054 gave outer-edge walls is withdrawn — on a phone
+                // the translucent pane read as no wall at all over a dark void, so an outer-edge wall
+                // keeps the same material an interior wall wears) — and the count still matches the
+                // map's own solved walls.
                 List<StructuralWall> wallComponents = AllWallComponents(root3.transform);
                 int expectedWalls = MapGeometry.Walls(map3).Count;
                 Assert.Greater(expectedWalls, 0, "precondition: World 3's own map must solve to some walls");
@@ -77,9 +78,8 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (StructuralWall w in wallComponents)
                 {
                     Renderer r = w.GetComponent<Renderer>();
-                    Material expected = w.IsOuterEdge ? WorldMaterials.M_GlassOcean : WorldMaterials.M_ShipWall;
-                    string expectedName = w.IsOuterEdge ? "M_GlassOcean (MV-1054 observation glass)" : "M_ShipWall";
-                    Assert.AreSame(expected, r.sharedMaterial, $"wall '{w.name}' must wear {expectedName} by identity");
+                    Assert.AreSame(WorldMaterials.M_ShipWall, r.sharedMaterial,
+                        $"wall '{w.name}' (IsOuterEdge={w.IsOuterEdge}) must wear M_ShipWall by identity");
                 }
                 Assert.IsTrue(wallComponents.Exists(w => w.IsOuterEdge),
                     "precondition: World 3's own map must solve at least one outer-edge wall, or MV-1054's own pass never ran");
