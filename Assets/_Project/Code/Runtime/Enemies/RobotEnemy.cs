@@ -716,11 +716,18 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Max's own transform — fixed the moment it's acquired, and what every distance
         /// comparison in <see cref="RetargetIfNeeded"/> measures against even while <see cref="target"/>
-        /// is pointed at a Sentinel (MV-362).</summary>
+        /// is pointed at a Sentinel or a captured robot (MV-362, extended MV-1092).</summary>
         private Transform _playerTarget;
 
-        /// <summary>The Sentinel currently being engaged, or null while targeting Max (MV-362).</summary>
+        /// <summary>The Sentinel currently being engaged, or null while targeting Max or a captured
+        /// robot (MV-362).</summary>
         private Sentinel _engagedSentinel;
+
+        /// <summary>The captured (<see cref="Core.Team.Player"/>) robot currently being engaged, or
+        /// null while targeting Max or a Sentinel (MV-1092) — the same proximity engage test
+        /// <see cref="_engagedSentinel"/> already gets, extended rather than duplicated; see
+        /// <see cref="RetargetIfNeeded"/>.</summary>
+        private RobotEnemy _engagedCapturedRobot;
         private float _health;
 
         // --- MV-716: Splicer (enemy -> Sentinel) ---------------------------------------------------
@@ -1586,6 +1593,7 @@ namespace MaxWorlds.Enemies
             }
             _playerTarget = target;
             _engagedSentinel = null;
+            _engagedCapturedRobot = null;
             _targetDamageable = target != null ? target.GetComponent<IDamageable>() : null;
 
             // A robot is dispatched toward the fight, not born knowing where it is. Without a seed
@@ -1594,20 +1602,26 @@ namespace MaxWorlds.Enemies
             if (target != null) _sight.Spawn(target.position);
         }
 
-        /// <summary>Re-decide whether to chase Max or the nearest Sentinel (MV-362) — proximity-based
-        /// only ("must NOT always prefer sentinels over Max"), checked once per Chase tick, never
+        /// <summary>Re-decide whether to chase Max, the nearest Sentinel, or the nearest captured
+        /// robot (MV-362, extended MV-1092: "if my robots are closer than I am then enemies should
+        /// attack them instead of me" — Lee, 2026-10-06) — proximity-based only ("must NOT always
+        /// prefer a Sentinel/captured robot over Max"), checked once per Chase tick, never
         /// mid-Telegraph/Lunge (same "no info through the wind-up" rule the state machine already
         /// locks everything else against). Blinker is excluded outright: its answer to an obstacle is
         /// to blink past it, not to fight it (spec: "Blinkers can teleport past a wall entirely") —
-        /// every other kind treats a close, blocking sentinel as a real target, ranged kinds shooting
-        /// it from their existing standoff band exactly as they would Max.</summary>
+        /// every other kind treats a close, blocking Sentinel/captured robot as a real target, ranged
+        /// kinds shooting it from their existing standoff band exactly as they would Max.
+        ///
+        /// One shared engage test (<see cref="SentinelTargeting.ShouldEngageSentinel"/>) decides
+        /// against whichever of the two non-Max candidates is actually nearer — a Sentinel never loses
+        /// to a farther captured robot, and vice versa — rather than running two separate rules.</summary>
         private void RetargetIfNeeded()
         {
             if (Kind == EnemyKind.Blinker) return;
 
             // MV-1015: a converted robot fights the rest of the swarm, not Max or a Sentinel — its
-            // own retarget pass runs instead of the Max/Sentinel dance below, and runs even with no
-            // Max in the world (a converted robot can still find another robot to fight).
+            // own retarget pass runs instead of the Max/Sentinel/captured-robot dance below, and runs
+            // even with no Max in the world (a converted robot can still find another robot to fight).
             if (IsConverted)
             {
                 RetargetToNearestEnemyRobot();
@@ -1616,39 +1630,87 @@ namespace MaxWorlds.Enemies
 
             if (_playerTarget == null) return;
 
-            // The sentinel we were fighting died since the last tick — fall back to Max before
-            // re-evaluating, so a dead Sentinel's Transform is never read below.
-            if (_engagedSentinel != null && !_engagedSentinel.IsAlive)
+            // Whatever this robot was engaging died since the last tick — fall back to Max before
+            // re-evaluating, so a dead Transform is never read below.
+            if ((_engagedSentinel != null && !_engagedSentinel.IsAlive) ||
+                (_engagedCapturedRobot != null && !_engagedCapturedRobot.IsAlive))
             {
                 _engagedSentinel = null;
+                _engagedCapturedRobot = null;
                 RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
             }
 
-            // MV-944: a Sentinel on the other combat level is never a valid engage target — this robot
-            // must fall through to Max exactly as if no Sentinel existed at all (still gated same-level
-            // itself at the actual fire/contact sites below, since Max can also be off-level).
+            // MV-944: a candidate on the other combat level is never valid — this robot must fall
+            // through to Max exactly as if it didn't exist (still gated same-level itself at the
+            // actual fire/contact sites below, since Max can also be off-level).
             MapData map = EnemyNavigation.Map;
             float distToPlayer = Vector3.Distance(transform.position, _playerTarget.position);
-            Sentinel nearest = SentinelTargeting.Nearest(transform.position);
-            bool nearestSameLevel = nearest != null
-                && CombatLevel.SameLevel(map, transform.position, nearest.transform.position);
-            float distToSentinel = nearestSameLevel
-                ? Vector3.Distance(transform.position, nearest.transform.position)
+
+            Sentinel nearestSentinel = SentinelTargeting.Nearest(transform.position);
+            if (nearestSentinel != null &&
+                !CombatLevel.SameLevel(map, transform.position, nearestSentinel.transform.position))
+                nearestSentinel = null;
+            float distToSentinel = nearestSentinel != null
+                ? Vector3.Distance(transform.position, nearestSentinel.transform.position)
                 : float.MaxValue;
 
-            bool engageSentinel = nearestSameLevel &&
-                SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToSentinel, SentinelTargeting.AggroRadius);
+            RobotEnemy nearestCaptured = NearestCapturedRobot(map);
+            float distToCaptured = nearestCaptured != null
+                ? Vector3.Distance(transform.position, nearestCaptured.transform.position)
+                : float.MaxValue;
 
-            if (engageSentinel && nearest != _engagedSentinel)
+            // Whichever of the two is actually closer is the one candidate run against Max below.
+            bool preferSentinel = distToSentinel <= distToCaptured;
+            float distToCandidate = preferSentinel ? distToSentinel : distToCaptured;
+            bool haveCandidate = preferSentinel ? nearestSentinel != null : nearestCaptured != null;
+
+            bool engageCandidate = haveCandidate &&
+                SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToCandidate, SentinelTargeting.AggroRadius);
+
+            Sentinel engageSentinelNow = engageCandidate && preferSentinel ? nearestSentinel : null;
+            RobotEnemy engageCapturedNow = engageCandidate && !preferSentinel ? nearestCaptured : null;
+
+            if (engageSentinelNow != null && engageSentinelNow != _engagedSentinel)
             {
-                _engagedSentinel = nearest;
-                RetargetTo(nearest.transform, nearest);
+                _engagedSentinel = engageSentinelNow;
+                _engagedCapturedRobot = null;
+                RetargetTo(engageSentinelNow.transform, engageSentinelNow);
             }
-            else if (!engageSentinel && _engagedSentinel != null)
+            else if (engageCapturedNow != null && engageCapturedNow != _engagedCapturedRobot)
+            {
+                _engagedCapturedRobot = engageCapturedNow;
+                _engagedSentinel = null;
+                RetargetTo(engageCapturedNow.transform, engageCapturedNow);
+            }
+            else if (!engageCandidate && (_engagedSentinel != null || _engagedCapturedRobot != null))
             {
                 _engagedSentinel = null;
+                _engagedCapturedRobot = null;
                 RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
             }
+        }
+
+        /// <summary>MV-1092: the nearest live captured (<see cref="Core.Team.Player"/>) robot
+        /// (<see cref="Converted"/>) sharing this robot's own combat level — the other half of the
+        /// engage candidate <see cref="RetargetIfNeeded"/> weighs against a Sentinel, picked the same
+        /// "closer wins" way <see cref="SentinelTargeting.Nearest"/> already picks a Sentinel. No
+        /// line-of-sight gate, matching <see cref="SentinelTargeting.Nearest"/>'s own same-level-only
+        /// rule — a captured robot is exactly as "known about" as a Sentinel, never more cautiously.</summary>
+        private RobotEnemy NearestCapturedRobot(MapData map)
+        {
+            RobotEnemy best = null;
+            float bestSq = float.MaxValue;
+            IReadOnlyList<RobotEnemy> converted = Converted;
+            for (int i = 0; i < converted.Count; i++)
+            {
+                RobotEnemy robot = converted[i];
+                if (robot == null || robot == this || !robot.IsAlive) continue;
+                if (!CombatLevel.SameLevel(map, transform.position, robot.transform.position)) continue;
+
+                float d = (robot.transform.position - transform.position).sqrMagnitude;
+                if (d < bestSq) { bestSq = d; best = robot; }
+            }
+            return best;
         }
 
         /// <summary>Point <see cref="target"/>/<see cref="_targetDamageable"/> at a new goal and give
@@ -2915,8 +2977,9 @@ namespace MaxWorlds.Enemies
         /// <summary>Bolter's straight-line bolt (MV-539, retargeting fixed MV-622): fired once, on the
         /// first tick of the state — the same "already acted this cycle" gate <see cref="TickMissileFire"/>
         /// uses to gate its own launch to one shot. Aimed at <see cref="target"/>, the MV-362 retargeting
-        /// rule's own current answer — the engaged Sentinel while <see cref="_engagedSentinel"/> is set,
-        /// Max otherwise — exactly like every other kind's ranged fire already follows it.</summary>
+        /// rule's own current answer — the engaged Sentinel or captured robot while
+        /// <see cref="_engagedSentinel"/>/<see cref="_engagedCapturedRobot"/> is set, Max otherwise —
+        /// exactly like every other kind's ranged fire already follows it.</summary>
         private void TickBolt(float dt)
         {
             if (!_dealtThisLunge)

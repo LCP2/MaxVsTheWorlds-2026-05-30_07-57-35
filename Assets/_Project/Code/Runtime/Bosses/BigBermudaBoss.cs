@@ -470,6 +470,16 @@ namespace MaxWorlds.Bosses
                 if (DamageIfTouching(s != null ? s.transform : null, bossRadius)) hitSomething = true;
             }
 
+            // MV-1092: a captured robot standing against the boss hurts exactly like a Sentinel does
+            // -- this is passive AoE presence damage, not the single-target engage rule RetargetIfNeeded
+            // picks _target from, so every live captured robot in reach is checked, not just one.
+            IReadOnlyList<RobotEnemy> captured = RobotEnemy.Converted;
+            for (int i = 0; i < captured.Count; i++)
+            {
+                RobotEnemy r = captured[i];
+                if (DamageIfTouching(r != null ? r.transform : null, bossRadius)) hitSomething = true;
+            }
+
             if (hitSomething) _contactCooldownTimer = BossTuning.ContactCooldown;
         }
 
