@@ -63,6 +63,10 @@ namespace MaxWorlds.UI
             }
         }
 
+        /// <summary>The circle's resolved world position — a test can read where the player would
+        /// actually see it land (MV-1100).</summary>
+        public Vector3 LandingCirclePosition => _circleGo != null ? _circleGo.transform.position : Vector3.zero;
+
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Teleport);
 
         protected override bool AbilityReady => _abilities != null && _abilities.TeleportReady;
@@ -131,8 +135,12 @@ namespace MaxWorlds.UI
             float distance = Mathf.Max(0.15f, maxDistance * DistanceFraction);
 
             Vector3 landing = _origin.position + Direction * distance;
+            // MV-1100: drawn on the surface the landing point itself sits on — the deck top when it's
+            // over one, the area floor otherwise — not a fixed y=0.01, which used to draw the circle
+            // on the floor below a raised World 2 deck Max was aiming from.
+            float surfaceY = GroundMarkHeights.SurfaceAt(landing).y;
             _circleGo.transform.SetPositionAndRotation(
-                new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
+                new Vector3(landing.x, surfaceY + 0.01f, landing.z), Quaternion.identity);
             WaterBalloonAimMesh.BuildLandingCircleInto(RetainedMesh(_circleGo), LandingRadius);
 
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);

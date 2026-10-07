@@ -72,6 +72,11 @@ namespace MaxWorlds.VFX
         /// <summary>Current drawn alpha — a test can read what the player would actually see.</summary>
         public float Alpha => _alpha;
 
+        /// <summary>The quad's resolved world position — a test can read where the player would
+        /// actually see the wedge drawn, through the same <see cref="Tick"/> production code drives
+        /// every frame, rather than reflecting into a private field.</summary>
+        public Vector3 ResolvedPosition => _quadGo != null ? _quadGo.transform.position : Vector3.zero;
+
         /// <summary>
         /// Build the reticle from the gadget's REAL numbers. Callers pass what the weapon actually
         /// does, never a shape someone liked the look of — that's the ticket's whole point, and it's
@@ -112,19 +117,27 @@ namespace MaxWorlds.VFX
         public void SetAiming(bool aiming) => _target = aiming ? AimingAlpha : IdleAlpha;
         private float _target = IdleAlpha;
 
-        private void LateUpdate()
+        private void LateUpdate() => Tick(Time.deltaTime);
+
+        /// <summary>The real per-frame update, pulled out of <see cref="LateUpdate"/> so a test can
+        /// drive it directly (MV-1100) instead of reflecting into a private method.</summary>
+        public void Tick(float deltaTime)
         {
             if (_owner == null || _quadGo == null) return;
 
             // Rate in alpha-units per second, so the full idle→aiming travel takes ~1/FadeSpeed s
             // regardless of what those two alphas happen to be tuned to.
             float rate = (AimingAlpha - IdleAlpha) * FadeSpeed;
-            _alpha = Mathf.MoveTowards(_alpha, _target, rate * Time.deltaTime);
+            _alpha = Mathf.MoveTowards(_alpha, _target, rate * deltaTime);
 
-            // Flatten onto the lawn and yaw to face where Max is pointing. Max's origin is his
-            // capsule's centre, a metre off the ground — a mark that inherited that would float.
+            // Flatten onto the surface Max is actually standing on — the deck top when he's on one,
+            // the area floor otherwise (MV-1100: this used to flatten straight to a fixed GroundLift
+            // above WORLD y=0, so the wedge drew on the floor below any raised World 2 deck he was
+            // standing on) — and yaw to face where Max is pointing. Max's origin is his capsule's
+            // centre, a metre off the ground — a mark that inherited that would float.
             Vector3 p = _owner.position;
-            _quadGo.transform.position = new Vector3(p.x, GroundLift, p.z);
+            float surfaceY = GroundMarkHeights.SurfaceAt(p).y;
+            _quadGo.transform.position = new Vector3(p.x, surfaceY + GroundLift, p.z);
 
             Vector3 f = _owner.forward; f.y = 0f;
             if (f.sqrMagnitude > 1e-4f)
