@@ -10,14 +10,18 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-714 — UNDERTOW, World 3's primary: the lance's piercing cap (AC1) and its DPS tracking the
-    /// RCDA's within 10% (AC5). MV-1034 removed the charge/cavitation shot entirely (Lee: it didn't work
-    /// as a design), so the AC2 (charge/release)/AC3 (implosion pull+stagger)/AC4 (cooldown refusal)
-    /// cases this test used to carry are culled along with the code they covered — see
+    /// MV-714 — UNDERTOW, World 3's primary: the lance's piercing cap (AC1) and its DPS ratio against
+    /// the RCDA (AC5). MV-1034 removed the charge/cavitation shot entirely (Lee: it didn't work as a
+    /// design), so the AC2 (charge/release)/AC3 (implosion pull+stagger)/AC4 (cooldown refusal) cases
+    /// this test used to carry are culled along with the code they covered — see
     /// <c>CavitationBubble</c>/<c>CavitationImplosion</c>'s removal. All remaining assertions read
     /// RESOLVED values — a robot's actual <see cref="RobotEnemy.HealthCurrent"/>, a live
     /// <see cref="Undertow.DamagePerSecond"/> vs <see cref="WaterBlaster.DamagePerSecond"/> ratio — never
     /// an authored constant (MV-465 Tier 2).
+    ///
+    /// MV-1106 (Lee: "the primary weapon much too weak") gave UNDERTOW its own base damage constant,
+    /// double the RCDA's rather than tracking it within 10% — AC5's own ratio assertion below now
+    /// expects 2.0, not 1.0.
     ///
     /// Fails on 43c8d6e (MV-704, the commit before MV-714): none of <see cref="Undertow"/> or
     /// <see cref="WeaponCatalog.PrimaryKind.Undertow"/> exist on that commit, so this test does not
@@ -134,9 +138,11 @@ namespace MaxWorlds.Tests.EditMode
 
                 Assert.Greater(blaster.DamagePerSecond, 0f, "test precondition: the RCDA comparison has zero DPS");
                 float ratio = undertow.DamagePerSecond / blaster.DamagePerSecond;
-                Assert.That(ratio, Is.InRange(0.9f, 1.1f),
-                    $"UNDERTOW's lance DPS ({undertow.DamagePerSecond:0.00}) should track the RCDA's own DPS " +
-                    $"({blaster.DamagePerSecond:0.00}) within +/-10% at base level — ratio was {ratio:0.000}");
+                // MV-1106 (Lee: "the primary weapon much too weak") gave UNDERTOW its own base damage
+                // constant, double the RCDA's rather than tracking it — AC5 above is superseded.
+                Assert.That(ratio, Is.InRange(1.9f, 2.1f),
+                    $"UNDERTOW's lance DPS ({undertow.DamagePerSecond:0.00}) should be double the RCDA's own DPS " +
+                    $"({blaster.DamagePerSecond:0.00}) at base level (MV-1106) — ratio was {ratio:0.000}");
             }
             finally
             {

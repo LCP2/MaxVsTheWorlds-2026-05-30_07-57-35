@@ -41,7 +41,10 @@ namespace MaxWorlds.Combat
     [MaxWorlds.Core.PerfSection("combat")]
     public sealed class Undertow : MonoBehaviour, IPrimaryEnergy
     {
-        public const float DefaultDamagePerTick = WaterBlaster.DefaultDamagePerTick;
+        /// <summary>MV-1106 (Lee, 2026-10-06): "the primary weapon much too weak" — UNDERTOW gets its
+        /// own base damage constant, 8 per tick (80/s at Power 0), twice <see cref="WaterBlaster"/>'s 4
+        /// rather than inheriting it. World 1/2's RCDA/LPPE are untouched — this is World 3 only.</summary>
+        public const float DefaultDamagePerTick = 8f;
 
         public const float DefaultFireInterval = 0.1f;
 

@@ -217,8 +217,12 @@ namespace MaxWorlds.Weapons
             int salvoLevel = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.Salvo);
             int salvoCount = AbilityTuning.ShoulderRackSalvoCount(salvoLevel, AbilityTuning.DefaultShoulderRackMaxSalvoCount);
 
+            // MV-1106: World 3's own (lower) rocket damage, read off RigBoard.ActiveWorldIndex the same
+            // way RigFusionState already scopes itself to the active world — World 1/2 are untouched.
+            int worldIndex = RigBoard.ActiveWorldIndex;
             float damage = AbilityTuning.ShoulderRackRocketDamage(
-                rocketLevel, AbilityTuning.DefaultShoulderRackBaseDamage, AbilityTuning.DefaultShoulderRackDamagePerLevel);
+                rocketLevel, AbilityTuning.ShoulderRackBaseDamageForWorld(worldIndex),
+                AbilityTuning.ShoulderRackDamagePerLevelForWorld(worldIndex));
 
             // Shared with the Water Balloon (both are SECONDARY-family splash weapons off s_spl) — see
             // ShoulderRackTrackKind's class doc for why this reads WaterBalloonTrackLevel directly
