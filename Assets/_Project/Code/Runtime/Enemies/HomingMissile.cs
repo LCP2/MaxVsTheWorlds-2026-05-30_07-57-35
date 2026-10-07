@@ -280,9 +280,15 @@ namespace MaxWorlds.Enemies
             if (_trail != null) _trail.Clear();
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame flight-state step, split out of <see cref="Update"/> (MV-1105) so an
+        /// EditMode test can drive a fired missile to a real impact — no private call, no reflection —
+        /// the same public "Tick(dt)" seam <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/> and
+        /// <see cref="MaxWorlds.Arena.Sentinel.TickSentinel"/> already carry for the identical
+        /// reason.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             switch (_state)
             {
                 case FlightState.Flying: TickFlying(dt); break;
@@ -426,7 +432,7 @@ namespace MaxWorlds.Enemies
             }
 
             HudSignals.EmitMissileImpact(transform.position, dealtDamage ? _damage : 0f);
-            Destroy(gameObject);
+            DestroySelf();
         }
 
         /// <summary>Detonation against solid geometry (MV-364) — never damages the target. A missile
@@ -439,7 +445,18 @@ namespace MaxWorlds.Enemies
         {
             _state = FlightState.Detonated;
             HudSignals.EmitMissileImpact(transform.position, 0f);
-            Destroy(gameObject);
+            DestroySelf();
+        }
+
+        /// <summary>MV-1105: <see cref="Destroy(UnityEngine.Object)"/> is a same-frame no-op outside
+        /// Play mode (logged as illegal and otherwise ignored) — harmless for a live game, where this
+        /// missile is always fired and detonated in Play mode, but it left a missile an EditMode test
+        /// drove to impact alive in the scene instead of actually going away. Same
+        /// <c>Application.isPlaying</c> split <see cref="Strip"/> already uses for this exact reason.</summary>
+        private void DestroySelf()
+        {
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
         }
     }
 }

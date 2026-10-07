@@ -145,9 +145,16 @@ namespace MaxWorlds.Enemies
             _direction = _totalDistance > 1e-4f ? flat / _totalDistance : Vector3.forward;
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame lob step, split out of <see cref="Update"/> (MV-1105) so an EditMode
+        /// test can drive a fired glob to a real impact — no private call, no reflection — the same
+        /// public "Tick(dt)" seam <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/> and
+        /// <see cref="MaxWorlds.Arena.Sentinel.TickSentinel"/> already carry for the identical
+        /// reason.</summary>
+        public void Tick(float dt)
         {
-            _traveled += _speed * Time.deltaTime;
+            _traveled += _speed * dt;
 
             float t = _totalDistance > 0f ? Mathf.Clamp01(_traveled / _totalDistance) : 1f;
             Vector3 flatPos = _origin + _direction * (_totalDistance * t);
@@ -175,7 +182,21 @@ namespace MaxWorlds.Enemies
             }
 
             CorrosionPuddle.Spawn(impactPoint, _puddleRadius, _puddleDuration);
-            Destroy(gameObject);
+            DestroySelf();
+        }
+
+        /// <summary>MV-1105: <see cref="Destroy(UnityEngine.Object)"/> is a same-frame no-op outside
+        /// Play mode (logged as illegal and otherwise ignored) — harmless for a live game, where this
+        /// glob is always fired and detonated in Play mode, but it left a glob an EditMode test drove
+        /// to impact alive and still arrived (<c>_traveled &gt;= _totalDistance</c> stays true), so the
+        /// very next <see cref="Tick"/> detonated it AGAIN — re-damaging its target and re-spawning a
+        /// puddle every tick for the rest of the run instead of actually going away. Same
+        /// <c>Application.isPlaying</c> split <see cref="Strip"/> already uses for this exact
+        /// reason.</summary>
+        private void DestroySelf()
+        {
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
         }
 
         private static float HorizontalDistanceSq(Vector3 a, Vector3 b)

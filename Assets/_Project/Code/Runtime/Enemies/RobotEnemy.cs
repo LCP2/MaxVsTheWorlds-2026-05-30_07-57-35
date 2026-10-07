@@ -1607,18 +1607,20 @@ namespace MaxWorlds.Enemies
         /// attack them instead of me" — Lee, 2026-10-06) — proximity-based only ("must NOT always
         /// prefer a Sentinel/captured robot over Max"), checked once per Chase tick, never
         /// mid-Telegraph/Lunge (same "no info through the wind-up" rule the state machine already
-        /// locks everything else against). Blinker is excluded outright: its answer to an obstacle is
-        /// to blink past it, not to fight it (spec: "Blinkers can teleport past a wall entirely") —
-        /// every other kind treats a close, blocking Sentinel/captured robot as a real target, ranged
-        /// kinds shooting it from their existing standoff band exactly as they would Max.
+        /// locks everything else against). MV-1105: Blinker used to be excluded outright here on the
+        /// theory that "its answer to an obstacle is to blink past it, not to fight it" — but that
+        /// conflated two different questions. <see cref="UsesGridRoute"/>-style obstacle ROUTING is a
+        /// separate concern (Blinker still answers a wall by teleporting past it, unchanged); this
+        /// method only decides WHO to fight, and the ticket's own scope names Blinker
+        /// as one of the twelve kinds that must be able to engage and damage a Sentinel exactly like
+        /// every other kind, ranged ones included (shooting/lunging from their existing standoff band
+        /// or teleport-flank exactly as they would Max).
         ///
         /// One shared engage test (<see cref="SentinelTargeting.ShouldEngageSentinel"/>) decides
         /// against whichever of the two non-Max candidates is actually nearer — a Sentinel never loses
         /// to a farther captured robot, and vice versa — rather than running two separate rules.</summary>
         private void RetargetIfNeeded()
         {
-            if (Kind == EnemyKind.Blinker) return;
-
             // MV-1015: a converted robot fights the rest of the swarm, not Max or a Sentinel — its
             // own retarget pass runs instead of the Max/Sentinel/captured-robot dance below, and runs
             // even with no Max in the world (a converted robot can still find another robot to fight).
@@ -2684,11 +2686,17 @@ namespace MaxWorlds.Enemies
             bool hunting = !_sight.HasSight;
             float speed = EffectiveMoveSpeed;
 
-            // MV-434: a non-lunging kind (Bruiser/Heavy/Brute) presses against Max rather than
-            // pushing through him — stop closing once already at the body-separation distance,
-            // but keep facing him (FaceAndMove below still runs) and keep TickContactTouch running
-            // so its cooldown keeps ticking while it stands in contact.
-            if (!LungesAsKind(Kind) && dist <= MinBodyDistance) speed = 0f;
+            // MV-434: a non-lunging kind (Bruiser/Heavy/Brute/Sludger) presses against its engaged
+            // target rather than pushing through it — stop closing once already at the body-
+            // separation distance, but keep facing it (FaceAndMove below still runs) and keep
+            // TickContactTouch running so its cooldown keeps ticking while it stands in contact.
+            // MV-1105: capped at contactRadius too — MinBodyDistance is pure collider geometry
+            // (ColliderRadius + PlayerRadius + margin) with no idea what this kind's own contactRadius
+            // is, and for the Sludger (contactRadius 1.0 m, MinBodyDistance ~1.1 m) that let it halt
+            // just OUTSIDE the range TickContactTouch needs to ever land a hit — parked a few
+            // centimetres short of its own attack, forever. Every other touch kind already authors
+            // contactRadius above its own MinBodyDistance, so this is a no-op change for them.
+            if (!LungesAsKind(Kind) && dist <= Mathf.Min(MinBodyDistance, contactRadius)) speed = 0f;
 
             // MV-447 cause 4: holding in the standoff band means standing still, not creeping — `dir`
             // is already the face-Max direction set above, so this only zeroes the move.
