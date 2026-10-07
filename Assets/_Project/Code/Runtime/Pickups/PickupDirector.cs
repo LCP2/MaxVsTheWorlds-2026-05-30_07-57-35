@@ -407,6 +407,12 @@ namespace MaxWorlds.Pickups
             HudSignals.EmitWeaponCoreDropped();
         }
 
+        /// <summary>A thin public wrapper around <see cref="SpawnDrop"/> (private), same shape as
+        /// <see cref="SpawnWeaponCore"/>/<see cref="PlacePartsCache"/>, for an EditMode test that needs a
+        /// pickup at an EXACT position (MV-1099) rather than reflecting into <see cref="SpawnDrop"/>
+        /// itself.</summary>
+        public Pickup PlacePickupAt(PickupKind kind, Vector3 pos) => SpawnDrop(kind, pos);
+
         /// <summary>MV-964: banks any Weapon Core still on the ground exactly as if Max had walked over
         /// it — <see cref="MaxWorlds.Intro.WorldJoinSequence"/> calls this the instant Max crosses the
         /// world's finale door, so a core he never walked over in the open can't block progress into the
@@ -691,7 +697,16 @@ namespace MaxWorlds.Pickups
                     // Max from range instead of waiting for a manual walk-over. Only power cells — devices
                     // stay a deliberate walk-over pickup. MV-439: Part Magneto never pulls once the PARTS
                     // reserve is full — an owned ability must not actively destroy the player's resources.
-                    if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2)))
+                    // MV-1099: and only while every 0.5 m sample along the straight path to Max still
+                    // reads as Max's OWN walkable surface (MagnetoPathClear) -- Lee's report was a pickup
+                    // dragged across a deck-strip gap or into a parapet, left stuck there forever the
+                    // instant it stopped reading as "same level" (sameLevel above is CombatLevel.SameLevel's
+                    // own coarse floor-vs-deck check, which treats every deck as one abstract "deck"
+                    // regardless of which physical strip). Checked BEFORE every step, so a pull that fails
+                    // this frame simply never advances past wherever it already validly sat -- there is no
+                    // separate "snap back" state to write.
+                    if (sameLevel && (MagnetoShouldPull(p.Kind, magnetoRadius, d2) || CellMagnetoShouldPull(p.Kind, cellMagnetoRadius, d2))
+                        && MagnetoPathClear(map, pPos, m))
                     {
                         _pullingThisTick.Add(p);   // MV-1101 item 5: pauses this pickup's ground lifetime below
                         Vector3 pos = p.transform.position;
@@ -712,6 +727,36 @@ namespace MaxWorlds.Pickups
         }
 
         private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>MV-1099: whether a Magneto pull may advance <paramref name="from"/> (the pickup)
+        /// toward <paramref name="to"/> (Max) this frame — every 0.5 m sample along the straight line
+        /// still reads as <paramref name="to"/>'s own walkable surface (<see cref="MapData.IsWalkable"/>).
+        /// Data-only, deliberately: an earlier version of this gate also raycast the Cover layer, but a
+        /// deck's parapet is deliberately kept OFF that layer (it blocks <c>CharacterController.Move</c>
+        /// directly, not a raycast), so the raycast half could never catch the exact parapet/gap case this
+        /// ticket is about, and it added a real <c>Physics.Raycast</c> into a scene this project
+        /// deliberately never auto-syncs (<c>Physics.autoSyncTransforms</c> is off project-wide,
+        /// <c>DynamicsManager.asset</c>) — a stale-collider-pose coupling to every other EditMode fixture's
+        /// leftover geometry that is not worth paying for what <see cref="MapData.IsWalkable"/> already
+        /// answers on its own: a zone's own footprint rect (floor) or a deck's own rect (deck) IS the
+        /// wall/parapet boundary in this rect-based map model, so walking the path's samples through it
+        /// already refuses a pull that would cross into a different room or off a deck's own strip.
+        /// Degrades to true (never blocks, no live map) with no live <see cref="MapData"/> — the same
+        /// degrade every other null-map helper in this file already uses.</summary>
+        private static bool MagnetoPathClear(MapData map, Vector3 from, Vector3 to)
+        {
+            if (map == null) return true;
+
+            const float SampleStep = 0.5f;
+            float dist = Vector3.Distance(from, to);
+            int samples = Mathf.Max(1, Mathf.CeilToInt(dist / SampleStep));
+            for (int i = 0; i <= samples; i++)
+            {
+                Vector3 point = Vector3.Lerp(from, to, (float)i / samples);
+                if (!map.IsWalkable(to, point)) return false;
+            }
+            return true;
+        }
 
         /// <summary>Whether Part Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled
         /// out as a pure function so the reserve-full guard is testable without a live scene. Public: the
