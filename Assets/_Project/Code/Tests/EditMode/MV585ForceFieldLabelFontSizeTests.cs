@@ -78,11 +78,17 @@ namespace MaxWorlds.Tests.EditMode
                 var label = buttonRoot.GetComponentInChildren<Text>(true);
                 Assert.That(label, Is.Not.Null, "fixture: Force Field Button must carry a label");
 
-                // AC3: the button itself must not have grown to make room.
+                // AC3: the button itself must not have grown PAST MV-1104's own shared scale — this
+                // ticket's own fix must not grow it a second time to make the label fit.
+                // MV-1104 (Lee, "make control circles bigger"): every circular HUD control, FIELD
+                // included, now draws at 1.3x (AbilityControlArt.ControlSizeScale) its MV-585-era size —
+                // 110 * 1.3 = 143. That growth is MV-1104's, not a label-legibility workaround, so this
+                // guard now pins the *scaled* size instead of the bare pre-MV-1104 110.
                 float hydroButtonSize = (float)typeof(HudController)
                     .GetField("HydroButtonSize", BindingFlags.NonPublic | BindingFlags.Static)
                     .GetValue(null);
-                Assert.That(hydroButtonSize, Is.EqualTo(110f), "AC3: HydroButtonSize must stay at 110");
+                Assert.That(hydroButtonSize, Is.EqualTo(110f * AbilityControlArt.ControlSizeScale).Within(0.01f),
+                    "AC3: HydroButtonSize must stay at MV-1104's scaled 143 (110 * ControlSizeScale), not grow further");
 
                 float outerPx = RingTextureSize * 0.5f - 1f;
                 float outerBandPx = outerPx * RingCount / RingCount;

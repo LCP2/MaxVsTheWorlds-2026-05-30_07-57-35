@@ -26,6 +26,14 @@ namespace MaxWorlds.UI
         /// has to be findable at a glance, not mistaken for background chrome.</summary>
         public const float MinProminence = 0.4f;
 
+        /// <summary>MV-1104 (Lee, 2026-10-06, "make control circles bigger"): every circular on-screen
+        /// control — move stick, aim stick, every ability joystick, every round ability button — is
+        /// drawn at this single shared multiple of its pre-MV-1104 size, about its own centre: rings,
+        /// knob, icon and label together. Touch areas, drag radius and knob travel scale by the same
+        /// factor so the feel matches the enlarged art. This is Lee's own ruling via the shaping chat;
+        /// do not re-tune without a new ticket.</summary>
+        public const float ControlSizeScale = 1.3f;
+
         /// <summary>
         /// How prominent a control reads at <paramref name="level"/> of <paramref name="maxLevel"/>:
         /// <see cref="MinProminence"/> at level 1, rising to 1 at the level cap. A single-level ability
@@ -127,7 +135,7 @@ namespace MaxWorlds.UI
             Color color, string label, int level, int maxLevel)
         {
             float prominence = Prominence(level, maxLevel);
-            float baseSize = 200f * Mathf.Lerp(0.8f, 1f, prominence);
+            float baseSize = 200f * ControlSizeScale * Mathf.Lerp(0.8f, 1f, prominence);
 
             var root = NewRect(name, parent);
             Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f));
@@ -140,7 +148,7 @@ namespace MaxWorlds.UI
             rings.raycastTarget = false;
 
             var knob = AddImage(root, HudTextures.Disc(96), Fade(color, 0.9f), "Knob").rectTransform;
-            float knobSize = 64f * Mathf.Lerp(0.85f, 1.15f, prominence);
+            float knobSize = 64f * ControlSizeScale * Mathf.Lerp(0.85f, 1.15f, prominence);
             knob.anchorMin = knob.anchorMax = new Vector2(0.5f, 0.5f);
             knob.pivot = new Vector2(0.5f, 0.5f);
             knob.sizeDelta = new Vector2(knobSize, knobSize);
@@ -148,10 +156,11 @@ namespace MaxWorlds.UI
 
             AddDetailPips(root, baseSize, color, level, maxLevel);
 
-            var lbl = AddText(root, Mathf.Lerp(14f, 18f, prominence), Fade(color, Mathf.Lerp(0.75f, 1f, prominence)));
+            var lbl = AddText(root, Mathf.Lerp(14f, 18f, prominence) * ControlSizeScale,
+                Fade(color, Mathf.Lerp(0.75f, 1f, prominence)));
             Anchor(lbl.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
-            lbl.rectTransform.sizeDelta = new Vector2(baseSize, 22f);
-            lbl.rectTransform.anchoredPosition = new Vector2(0f, -6f);
+            lbl.rectTransform.sizeDelta = new Vector2(baseSize, 22f * ControlSizeScale);
+            lbl.rectTransform.anchoredPosition = new Vector2(0f, -6f * ControlSizeScale);
             lbl.text = label;
             lbl.fontStyle = FontStyle.Bold;
 
@@ -168,7 +177,7 @@ namespace MaxWorlds.UI
             int pips = Mathf.Clamp(level - 1, 0, Mathf.Max(0, maxLevel - 1));
             if (pips <= 0) return;
 
-            float radius = size * 0.5f - 6f;
+            float radius = size * 0.5f - 6f * ControlSizeScale;
             for (int i = 0; i < pips; i++)
             {
                 // Spread evenly starting at the top, going clockwise — matches the cooldown radial's
@@ -180,7 +189,7 @@ namespace MaxWorlds.UI
                 var pip = AddImage(root, HudTextures.Disc(32), color, $"Pip{i}");
                 pip.rectTransform.anchorMin = pip.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
                 pip.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-                pip.rectTransform.sizeDelta = new Vector2(10f, 10f);
+                pip.rectTransform.sizeDelta = new Vector2(10f * ControlSizeScale, 10f * ControlSizeScale);
                 pip.rectTransform.anchoredPosition = pos;
                 pip.raycastTarget = false;
             }
