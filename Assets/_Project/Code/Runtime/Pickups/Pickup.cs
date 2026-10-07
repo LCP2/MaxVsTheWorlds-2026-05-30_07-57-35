@@ -54,6 +54,26 @@ namespace MaxWorlds.Pickups
         private float _baseY = FloatHeight;
         private GroundRing _glowRing;   // MV-698: only the Weapon Core carries one of its own
 
+        /// <summary>MV-1101: true while this pickup is in the "hidden" half of its ground-lifetime
+        /// warning blink. See <see cref="SetBlinkHidden"/>.</summary>
+        private bool _blinkHidden;
+
+        /// <summary>MV-1101: true while this pickup is in the "hidden" half of its warning blink —
+        /// public so an EditMode test can assert the resolved blink state directly, no reflection.</summary>
+        public bool IsBlinkHidden => _blinkHidden;
+
+        /// <summary>MV-1101: toggles this pickup's prop AND ground ring together — every <see
+        /// cref="Renderer"/> under it, since a ring (<c>PickupArtDirector.DressGroundRing</c>) and any
+        /// extra dressed art are children of this transform. Renderer.enabled, not GameObject.SetActive:
+        /// the pickup must stay "alive" (still walk-over/Magneto-collidable, still ticking its own
+        /// spin/bob) through the whole blink — only its visibility toggles.</summary>
+        public void SetBlinkHidden(bool hidden)
+        {
+            if (_blinkHidden == hidden) return;
+            _blinkHidden = hidden;
+            foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = !hidden;
+        }
+
         // MV-527: PickupArtDirector used to find every currently-placed pickup with a per-frame
         // FindObjectsByType<Pickup>(Include) scan — same idiom RobotEnemy._active already replaces for
         // enemies. A pickup only needs animating (spin/glisten/ring pulse) while it's actually placed on
@@ -165,6 +185,8 @@ namespace MaxWorlds.Pickups
         /// safe and fixes both without depending on Unity's OnEnable timing at all.</summary>
         public void Place(Vector3 groundPos)
         {
+            SetBlinkHidden(false);   // MV-1101: a pooled pickup must never pop back out mid-blink-hidden
+
             // MV-1001: the old code hard-coded _baseY = FloatHeight, so every drop hovered above the
             // FLOOR regardless of groundPos.y — a robot killed on an upper deck dropped loot that hung
             // in the air over the ground level underneath it. GroundMarkHeights.SurfaceAt reads the

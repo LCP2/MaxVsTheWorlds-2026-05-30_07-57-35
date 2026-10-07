@@ -63,12 +63,21 @@ namespace MaxWorlds.Tests.EditMode
             DevTuning.Reset();
         }
 
-        private static void SpawnDrop(PickupDirector director, PickupKind kind, Vector3 pos) =>
-            typeof(PickupDirector).GetMethod("SpawnDrop", BindingFlags.NonPublic | BindingFlags.Instance)
+        private static Pickup SpawnDrop(PickupDirector director, PickupKind kind, Vector3 pos) =>
+            (Pickup)typeof(PickupDirector).GetMethod("SpawnDrop", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(director, new object[] { kind, pos, default(MaxWorlds.Upgrades.PartKind), default(AbilityKind) });
 
-        private static void SpawnCellAt(PickupDirector director, Vector3 pos) =>
-            SpawnDrop(director, PickupKind.PowerCell, pos);
+        private static void MarkAgesOnGround(PickupDirector director, Pickup p) =>
+            typeof(PickupDirector).GetMethod("MarkAgesOnGround", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(director, new object[] { p });
+
+        // MV-1101: only a robot-kill drop ages now (a shed's cell cache never does), so this fixture's
+        // generic "spawn a cell" helper must mark it explicitly to keep exercising the lifetime path.
+        private static void SpawnCellAt(PickupDirector director, Vector3 pos)
+        {
+            Pickup p = SpawnDrop(director, PickupKind.PowerCell, pos);
+            if (p != null) MarkAgesOnGround(director, p);
+        }
 
         private static void TickLifetimes(PickupDirector director, float dt) =>
             typeof(PickupDirector).GetMethod("TickCellLifetimes", BindingFlags.NonPublic | BindingFlags.Instance)
@@ -86,8 +95,10 @@ namespace MaxWorlds.Tests.EditMode
             (int)typeof(PickupDirector).GetField("MaxLiveCells", BindingFlags.NonPublic | BindingFlags.Static)
                 .GetValue(null);
 
+        // MV-1101: renamed from CellLifetimeSeconds (30s, MV-626) — now 10s, and only a robot-kill drop
+        // (see MarkAgesOnGround) ever reaches it at all.
         private static float CellLifetimeSeconds() =>
-            (float)typeof(PickupDirector).GetField("CellLifetimeSeconds", BindingFlags.NonPublic | BindingFlags.Static)
+            (float)typeof(PickupDirector).GetField("RobotDropLifetimeSeconds", BindingFlags.NonPublic | BindingFlags.Static)
                 .GetValue(null);
 
         private static void FillReserve()
