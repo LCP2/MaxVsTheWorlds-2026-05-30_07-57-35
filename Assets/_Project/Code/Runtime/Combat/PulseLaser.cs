@@ -22,7 +22,7 @@ namespace MaxWorlds.Combat
     /// <see cref="SeekerPulse"/>, since the combo spans many short-lived pulse instances fired over time.
     /// </summary>
     [MaxWorlds.Core.PerfSection("combat")]
-    public sealed class PulseLaser : MonoBehaviour
+    public sealed class PulseLaser : MonoBehaviour, IPrimaryEnergy
     {
         public const float DefaultPulseInterval = 0.22f;
         public const float DefaultDamagePerPulse = 9f;
@@ -168,9 +168,15 @@ namespace MaxWorlds.Combat
             if (aimSource == null) aimSource = GetComponent<PlayerController>();
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The real per-frame update, pulled out to its own explicit-<paramref name="dt"/>
+        /// method (MV-1088: same shape <see cref="MaxWorlds.Combat.Undertow.Tick"/> already established)
+        /// so an EditMode test can drive a controlled amount of drain through the SAME logic
+        /// <see cref="Update"/> calls, instead of reading Unity's own near-zero-in-EditMode
+        /// <see cref="Time.deltaTime"/>.</summary>
+        private void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             // MV-846: buying a CAPACITY level must raise the tank's max immediately and hand the
             // difference straight to the current charge (EnergyPool.Retune's own "a bigger tank you
             // have to earn back is a worse upgrade than one that just tops you up" rule) — checked

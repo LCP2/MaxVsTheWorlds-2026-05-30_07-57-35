@@ -119,6 +119,7 @@ namespace MaxWorlds.Player
 
         private WaterBlaster _blaster;
         private PulseLaser _pulseLaser;
+        private Undertow _undertow;
         private PlayerAbilities _abilities;
 
         /// <summary>MV-1005: Max's own red hit-flash/spark/low-HP-smoke read — built in
@@ -173,20 +174,36 @@ namespace MaxWorlds.Player
             _damageFeedback.SetExternalBodySource(() => MaxRig.Instance != null ? MaxRig.Instance.BodyRenderers : null);
         }
 
-        /// <summary>MV-760: the equipped primary's tank, 0..1, for the floating gauge — the LPPE's
-        /// <see cref="PulseLaser.EnergyNormalized"/> while it's the active primary, the RCDA's
-        /// <see cref="WaterBlaster.WaterNormalized"/> otherwise. Both resolved lazily and cached, since
-        /// whichever primary is attached may not exist yet on the frame this runs.</summary>
-        private float PrimaryEnergyNormalized()
+        /// <summary>MV-760, generalised by MV-1088: the equipped primary's own tank, 0..1, for the
+        /// floating gauge — resolved through <see cref="IPrimaryEnergy"/> from whichever component
+        /// <see cref="WeaponSystemState.ActivePrimary"/> actually names, instead of special-casing the
+        /// LPPE and falling through to the RCDA for anything else (the fallthrough that silently
+        /// swallowed UNDERTOW: its own tank drained in World 3, but nothing read it, so the gauge showed
+        /// the idle RCDA's full tank). Every primary resolved lazily and cached, since whichever one is
+        /// attached may not exist yet on the frame this runs. Public so an EditMode test can read exactly
+        /// what the gauge is given, through the real entry point rather than a reflected field.</summary>
+        public float PrimaryEnergyNormalized()
         {
-            if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe)
-            {
-                if (_pulseLaser == null) _pulseLaser = GetComponent<PulseLaser>();
-                return _pulseLaser != null ? _pulseLaser.EnergyNormalized : 1f;
-            }
+            IPrimaryEnergy active = ActivePrimaryEnergySource();
+            return active != null ? active.EnergyNormalized : 1f;
+        }
 
-            if (_blaster == null) _blaster = GetComponent<WaterBlaster>();
-            return _blaster != null ? _blaster.WaterNormalized : 1f;
+        private IPrimaryEnergy ActivePrimaryEnergySource()
+        {
+            switch (WeaponSystemState.ActivePrimary)
+            {
+                case WeaponCatalog.PrimaryKind.Lppe:
+                    if (_pulseLaser == null) _pulseLaser = GetComponent<PulseLaser>();
+                    return _pulseLaser;
+
+                case WeaponCatalog.PrimaryKind.Undertow:
+                    if (_undertow == null) _undertow = GetComponent<Undertow>();
+                    return _undertow;
+
+                default:
+                    if (_blaster == null) _blaster = GetComponent<WaterBlaster>();
+                    return _blaster;
+            }
         }
 
         /// <summary>Every current contact-damage cooldown (<see cref="MaxWorlds.Enemies.RobotCompositionTuning.DefaultContactCooldown"/>,

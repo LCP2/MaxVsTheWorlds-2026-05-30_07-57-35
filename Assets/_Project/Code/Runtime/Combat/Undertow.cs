@@ -39,7 +39,7 @@ namespace MaxWorlds.Combat
     /// take a hit any other way.
     /// </summary>
     [MaxWorlds.Core.PerfSection("combat")]
-    public sealed class Undertow : MonoBehaviour
+    public sealed class Undertow : MonoBehaviour, IPrimaryEnergy
     {
         public const float DefaultDamagePerTick = WaterBlaster.DefaultDamagePerTick;
 

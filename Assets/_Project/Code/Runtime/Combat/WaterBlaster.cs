@@ -33,7 +33,7 @@ namespace MaxWorlds.Combat
     /// into fire gating or damage.
     /// </summary>
     [MaxWorlds.Core.PerfSection("combat")]
-    public sealed class WaterBlaster : MonoBehaviour
+    public sealed class WaterBlaster : MonoBehaviour, IPrimaryEnergy
     {
         /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280, widened MV-289): the
         /// 0.6 recut's 3m base — combined with the recalibrated robots and an under-tough Max — made
@@ -139,6 +139,11 @@ namespace MaxWorlds.Combat
         /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-299). 1 before <see cref="Awake"/> has
         /// built the tank, so an unbuilt/isolated instance never reads as empty.</summary>
         public float WaterNormalized => _tank != null ? _tank.Normalized : 1f;
+
+        /// <summary>MV-1088: <see cref="IPrimaryEnergy"/>'s generic name for the same tank
+        /// <see cref="WaterNormalized"/> already exposes — explicit so the RCDA's own public API keeps
+        /// its established name for every existing caller/test.</summary>
+        float IPrimaryEnergy.EnergyNormalized => WaterNormalized;
 
         /// <summary>Water one tick costs, given the current Depletion Rate track level (MV-299) and the
         /// weapon's actual current output (MV-368) — the authored per-second drain
@@ -293,10 +298,15 @@ namespace MaxWorlds.Combat
             _reticle.Init(transform, range, coneHalfAngle);
         }
 
-        private void Update()
-        {
-            float dt = Time.deltaTime;
+        private void Update() => Tick(Time.deltaTime);
 
+        /// <summary>The real per-frame update, pulled out to its own explicit-<paramref name="dt"/>
+        /// method (MV-1088: same shape <see cref="MaxWorlds.Combat.Undertow.Tick"/> already established)
+        /// so an EditMode test can drive a controlled amount of drain through the SAME logic
+        /// <see cref="Update"/> calls, instead of reading Unity's own near-zero-in-EditMode
+        /// <see cref="Time.deltaTime"/>.</summary>
+        private void Tick(float dt)
+        {
             // The Hydro burst (YT-215) is still a pressable HUD button/cooldown clock, so it still
             // needs a frame tick; it used to ride along on the tether's LateUpdate (HoseTether owned
             // the leash it released), but the leash is gone (WV-233), so the weapon — the other thing
