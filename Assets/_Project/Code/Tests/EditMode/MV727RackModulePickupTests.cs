@@ -12,7 +12,15 @@ namespace MaxWorlds.Tests.EditMode
     /// landed (<see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>), making <c>s_rkt</c> immediately
     /// cell-buyable with no shed/Replicator involved. This ticket reverses that: SECONDARY stays
     /// LOCKED for the whole run until the player walks over the Rack Module the first Replicator
-    /// drops, at which point it unlocks AND grants <c>s_rkt</c> at level 1 outright, for free.
+    /// drops.
+    ///
+    /// MV-1090 updated this test's own assertions: collecting the module used to unlock SECONDARY and
+    /// grant <c>s_rkt</c> in the SAME instant Collect ran, which let the Shoulder Rack start
+    /// auto-firing before the player had ever opened THE RIG to see the reveal — the bug MV-1090 fixes.
+    /// Collecting now only BANKS the module (<see cref="PendingMorphingModule.RackModulePending"/>); the
+    /// unlock + grant move to THE RIG's next open (<c>MV1090RackModuleBankedUntilRevealTests</c> covers
+    /// that half end to end). This test still proves the one thing that belongs at the Collect call
+    /// site: the grant does NOT happen there, and nothing is spent banking it.
     ///
     /// Fails on base commit 43c8d6e: <c>PickupKind</c> has no <c>RackModule</c> member at all, so this
     /// does not compile against that commit (CS0117 "'PickupKind' does not contain a definition for
@@ -35,12 +43,13 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Reset();   // also resets RigState and RigBoard back to World 1
             PickupWallet.Reset();
+            PendingMorphingModule.Reset();
             // World 2's board is where s_rkt actually lives (MV-732 removed it from World 1's file).
             RigBoard.UseWorld(1);
         }
 
         [Test]
-        public void CollectingTheRackModulePickupUnlocksSecondaryAndGrantsTheRackForFree_MV727()
+        public void CollectingTheRackModulePickupBanksItWithoutUnlockingOrGrantingAnything_MV727()
         {
             // Arrange: a fresh World 2 run — SECONDARY locked, s_rkt unowned, same as right after a
             // real Weapon Core morph now leaves it (this ticket's own reversal of MV-694).
@@ -63,11 +72,14 @@ namespace MaxWorlds.Tests.EditMode
                 Pickup module = FindLive(director, PickupKind.RackModule);
                 InvokeCollect(director, module);
 
-                // Assert: the RESOLVED state -- SECONDARY unlocked, s_rkt at L1, no currency spent.
-                Assert.IsTrue(RigState.IsCategoryUnlocked("SECONDARY"),
-                    "collecting the Rack Module must unlock SECONDARY outright");
-                Assert.AreEqual(1, RigState.Level("s_rkt"),
-                    "collecting the Rack Module must grant s_rkt at level 1, not just reach it");
+                // Assert: the RESOLVED state -- MV-1090 banks only; nothing unlocks or grants yet, and
+                // nothing is spent banking it.
+                Assert.IsTrue(PendingMorphingModule.RackModulePending,
+                    "MV-1090: collecting the Rack Module must bank it, waiting for THE RIG's next open");
+                Assert.IsFalse(RigState.IsCategoryUnlocked("SECONDARY"),
+                    "MV-1090: collecting must NOT unlock SECONDARY -- that waits for THE RIG's open-time reveal");
+                Assert.AreEqual(0, RigState.Level("s_rkt"),
+                    "MV-1090: collecting must NOT grant s_rkt -- that waits for THE RIG's open-time reveal");
                 Assert.AreEqual(cellsBefore, PickupWallet.PowerCells,
                     "the grant must cost no Parts");
                 Assert.AreEqual(powerCellsSecondaryBefore, PickupWallet.PowerCellsSecondary,

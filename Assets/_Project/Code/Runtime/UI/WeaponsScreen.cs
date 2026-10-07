@@ -812,6 +812,12 @@ namespace MaxWorlds.UI
 
             WeaponSystemState.OpenWeaponCoreMorphIfPending(CurrentWorldIndex());
 
+            if (PendingMorphingModule.RackModulePending)
+            {
+                OpenRackModuleReveal();
+                return;
+            }
+
             if (PendingMorphingModule.HasPending)
             {
                 OpenMorphingModuleDraft(PendingMorphingModule.Take());
@@ -918,6 +924,34 @@ namespace MaxWorlds.UI
 
             Refresh();
             _screenRoot.gameObject.SetActive(true);
+        }
+
+        /// <summary>MV-1090: resolves a banked Rack Module (<see cref="PendingMorphingModule.RackModulePending"/>)
+        /// the moment THE RIG opens — unlocks SECONDARY and grants <c>s_rkt</c> at level 1, both at once
+        /// (unlike <see cref="GrantDraftCandidate"/>, which only ever does one or the other), then plays
+        /// the exact same family reveal <see cref="StartCeremony"/> gives a Device's 1-candidate grant.
+        /// The grant happens immediately, same as every other draft path — the ceremony only gates what
+        /// the player can SEE/SPEND while it plays, never when the grant itself lands.</summary>
+        private void OpenRackModuleReveal()
+        {
+            PendingMorphingModule.TakeRackModule();
+            RigState.UnlockCategory("SECONDARY");
+            // MV-435: every RIG grant routes through WeaponSystemState so Changed fires — granting
+            // straight off the model layer here would leave the HUD never told to refresh.
+            WeaponSystemState.AcquireById("s_rkt");
+
+            if (_canvas == null) Build();
+            if (!_open)
+            {
+                _open = true;
+                _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
+                Time.timeScale = 0f;
+                ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
+            }
+
+            Refresh();
+            _screenRoot.gameObject.SetActive(true);
+            StartCeremony("SECONDARY");
         }
 
         // ------------------------------------------------------------------ live state

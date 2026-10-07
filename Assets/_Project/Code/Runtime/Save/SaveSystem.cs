@@ -248,6 +248,9 @@ namespace MaxWorlds.Save
             foreach (PartKind kind in UpgradeState.Installed) installedParts.Add(kind.ToString());
             data.CheckpointInstalledParts = installedParts.ToArray();
             data.WeaponCorePending = PendingMorphingModule.WeaponCorePending;
+            // MV-1090: same reasoning as WeaponCorePending above — a cold-boot RESUME between collecting
+            // a Rack Module and opening THE RIG must not silently lose the banked unlock.
+            data.RackModulePending = PendingMorphingModule.RackModulePending;
 
             // MV-951: MapRuntime.Build unconditionally zeroes the Invasion Level clock on every cold
             // boot (a new scene build) — a resumed run must not appear back at area 5 fighting area-1
@@ -307,6 +310,7 @@ namespace MaxWorlds.Save
                 if (Enum.TryParse(name, out PartKind kind)) installedParts.Add(kind);
             UpgradeState.RestoreInstalled(installedParts);
             PendingMorphingModule.RestoreWeaponCorePending(data.WeaponCorePending);
+            PendingMorphingModule.RestoreRackModulePending(data.RackModulePending);
             MaxWorlds.Enemies.DifficultyDirector.RestoreClock(
                 data.CheckpointEscalationElapsed, data.CheckpointEscalationShedSkipSeconds, data.CheckpointEscalationShedsDestroyed);
 

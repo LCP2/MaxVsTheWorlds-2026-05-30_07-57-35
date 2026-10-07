@@ -674,12 +674,13 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitWeaponCoreCollected();
                     break;
                 case PickupKind.RackModule:
-                    // MV-727: unlocks SECONDARY AND grants s_rkt at level 1 outright, in the same
-                    // instant — unlike a Device's banked draft, there is no later "open THE RIG to
-                    // resolve it" step and no cell cost. UnlockCategory must run first: AcquireCap's
-                    // IsReached check for a root node is exactly "is its own category unlocked".
-                    RigState.UnlockCategory("SECONDARY");
-                    RigState.AcquireCap("s_rkt");
+                    // MV-1090: banks only, same shape as a Device's PendingMorphingModule draft — MV-727
+                    // used to unlock SECONDARY and grant s_rkt in this same instant, which let the
+                    // Shoulder Rack start auto-firing before the player had ever opened THE RIG to see
+                    // the reveal. The unlock + free grant now happen together when THE RIG's next open
+                    // resolves the banked module (WeaponsScreen.Open), the same deferred moment every
+                    // other ability family already waits for.
+                    PendingMorphingModule.SetRackModule();
                     HudSignals.EmitPickup(p.transform.position, "SHOULDER RACK",
                         MaxWorlds.VFX.WeaponPartArt.RackModuleGlow);
                     break;
