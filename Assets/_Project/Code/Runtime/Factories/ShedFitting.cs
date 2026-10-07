@@ -59,6 +59,11 @@ namespace MaxWorlds.Factories
         private const float LaserTelegraphTime = 0.5f;
         private const float LaserBeamTime = 1.1f;
 
+        /// <summary>MV-1097 ticket item 3: "half-width 0.6 m, exactly as RobotEnemy.TickBeam does" — its
+        /// own <c>contactRadius</c> for the Gunner archetype, reused here as a fixed authored number
+        /// rather than read off that unrelated class.</summary>
+        private const float LaserBeamHalfWidth = 0.6f;
+
         // --- Missile: the Launcher's own splash numbers (EnemyArchetype.Launcher) reused verbatim. ---
         private const float MissileSpeed = 4.5f;
         private const float MissileDamage = 22f;
@@ -100,6 +105,21 @@ namespace MaxWorlds.Factories
         /// world-independent-emission regression guard, same shape as
         /// <see cref="MaxWorlds.Enemies.HomingMissile.ShaftColorForTests"/>.</summary>
         public static Color FittingColorForTests => DomeColor;
+
+        /// <summary>MV-1097 test-only accessor — the barrel-tip world position the laser telegraph/beam
+        /// line should originate from, read off the built <see cref="ShedTurretRig"/> rather than
+        /// re-derived, so a test asserting the line's start point needs no knowledge of the rig's own
+        /// internal layout. Null before <see cref="Bind"/> has built a rig.</summary>
+        public Vector3? LaserBarrelTipForTests => _turretRig != null && _turretRig.MuzzleTip != null
+            ? _turretRig.MuzzleTip.position : (Vector3?)null;
+
+        /// <summary>MV-1097 test-only accessor — the laser's own LineRenderer (see
+        /// <see cref="ShedTurretRig.LaserBeamLineForTests"/>), null before the rig has drawn one.</summary>
+        public LineRenderer LaserBeamLineForTests => _turretRig?.LaserBeamLineForTests;
+
+        /// <summary>MV-1097 test-only accessor — the direction <see cref="TickBeam"/> is actually testing
+        /// hits against right now, locked at the instant Beam began; meaningless outside Phase.Beam.</summary>
+        public Vector3 LockedBeamDirectionForTests => _lockedBeamDir;
 
         /// <summary>A private material clone (never MaterialLibrary's own cached instance) carrying
         /// MV-857/861/911's world-compensation emission, so this turret reads no darker in World 2 fog
@@ -146,6 +166,12 @@ namespace MaxWorlds.Factories
         private Phase _phase;
         private float _phaseTimer;
         private float _cooldownTimer;
+
+        /// <summary>MV-1097: the Laser's beam direction, locked the instant Telegraph ends — never
+        /// re-read from <see cref="_target"/> again until the next attack, which is what makes the beam
+        /// dodgeable (ticket item 2/3): side-stepping off this line during Beam stops the damage even
+        /// though <see cref="_target"/> itself has moved.</summary>
+        private Vector3 _lockedBeamDir;
 
         /// <summary>MV-1058: the turret body this fitting drives (facing yaw + fire recoil) but never
         /// builds the logic for; see <see cref="BuildTurretVisual"/>.</summary>
@@ -240,9 +266,13 @@ namespace MaxWorlds.Factories
             // MV-1058: the rig ticks (facing + recoil decay) every step this fitting is alive, regardless
             // of which combat phase below returns early — a turret that only turned to face while firing
             // would sit frozen aimed at whatever it last shot, which is not "tracks its current target".
+            // MV-1097: EXCEPT during Phase.Beam — the muzzle tip the beam line originates from is a
+            // child of this same yaw, so re-facing a live target there would visibly swing the barrel
+            // (and the line's own start point) away from the LOCKED direction the beam is actually
+            // testing hits against, disconnecting the line from the turret it's supposed to fire from.
             if (_turretRig != null)
             {
-                if (_target != null) _turretRig.Face(_target.position - transform.position);
+                if (_target != null && _phase != Phase.Beam) _turretRig.Face(_target.position - transform.position);
                 _turretRig.Tick(dt);
             }
 
@@ -284,31 +314,51 @@ namespace MaxWorlds.Factories
             _cooldownTimer = StatsFor(_kind).Cadence;
         }
 
+        /// <summary>MV-1097 ticket item 1: draws the pulsing aim line every tick (still tracking the
+        /// target — the direction only locks once this hands off to <see cref="TickBeam"/>), then, the
+        /// instant the telegraph completes, locks <see cref="_lockedBeamDir"/> and starts the Beam phase
+        /// with the full-width line already showing from the same tick.</summary>
         private void TickTelegraph(float dt)
         {
             _phaseTimer += dt;
+            if (_target != null) _turretRig?.ShowTelegraph(_target.position, _phaseTimer);
             if (_phaseTimer < LaserTelegraphTime) return;
+
+            Vector3 dir = _target != null ? _target.position - transform.position : transform.forward;
+            dir.y = 0f;
+            _lockedBeamDir = dir.sqrMagnitude > 1e-6f ? dir.normalized : transform.forward;
+
             _phase = Phase.Beam;
             _phaseTimer = 0f;
+            _turretRig?.ShowBeam(_lockedBeamDir, StatsFor(_kind).Range);
         }
 
+        /// <summary>MV-1097 ticket items 2/3: damage now tests <see cref="_lockedBeamDir"/> via
+        /// <see cref="BeamGeometry.Hits"/> — the direction committed the instant Telegraph ended, never
+        /// re-aimed at <see cref="_target"/>'s live position — so a target that steps outside the beam's
+        /// own half-width takes nothing even though it is still in range and sighted. This is the fix for
+        /// the ticket's own root cause: the old body re-read <c>_target.position</c> every tick, which is
+        /// an aimbot that tracked the target through the whole beam and made it undodgeable.</summary>
         private void TickBeam(float dt)
         {
             _phaseTimer += dt;
 
-            if (InRangeAndSighted())
+            if (_target != null && _targetDamageable != null && _targetDamageable.IsAlive &&
+                LineOfSight.Between(transform, _target) &&
+                BeamGeometry.Hits(transform.position, _lockedBeamDir, StatsFor(_kind).Range, LaserBeamHalfWidth, _target.position))
             {
-                if (_targetDamageable != null && _targetDamageable.IsAlive)
-                {
-                    Vector3 dir = _target.position - transform.position; dir.y = 0f;
-                    _targetDamageable.TakeDamage(new DamageInfo(
-                        LaserDps * dt, transform.position, dir.normalized, Team.Enemy));
-                }
+                _targetDamageable.TakeDamage(new DamageInfo(
+                    LaserDps * dt, transform.position, _lockedBeamDir, Team.Enemy));
             }
 
-            if (_phaseTimer < LaserBeamTime) return;
+            if (_phaseTimer < LaserBeamTime)
+            {
+                _turretRig?.ShowBeam(_lockedBeamDir, StatsFor(_kind).Range);
+                return;
+            }
             _phase = Phase.Idle;
             _cooldownTimer = Mathf.Max(0f, StatsFor(_kind).Cadence - LaserTelegraphTime - LaserBeamTime);
+            _turretRig?.HideBeam();
         }
 
         private void Fire()
