@@ -23,9 +23,17 @@ namespace MaxWorlds.UI
         private const float Line2SizeFraction = 0.105f;
         private const float Line3SizeFraction = 0.034f;
 
+        // MV-1125: Beat B's own "EXIT OPEN" treatment — a shallower full-width band, large white text
+        // (not the small cyan Line1 slot Beat A's copy uses) and a green underline. Ticket's own numbers.
+        private const float ExitBandHeightFraction = 0.14f;
+        private const float ExitTextSizeFraction = 0.093f;
+        private const float ExitUnderlineHeightFraction = 0.006f;
+        private static readonly Color ExitUnderlineColor = new Color(0.208f, 0.878f, 0.420f); // #35E06B
+
         private RectTransform _root;
         private Image _band;
         private Text _line1, _line2, _line3;
+        private Image _exitUnderline;
         private CanvasGroup _group;
 
         public Text Line1 => _line1;
@@ -74,6 +82,8 @@ namespace MaxWorlds.UI
             banner._line1 = BuildLine(root, "Line1", new Color(0.4f, 0.95f, 1f));
             banner._line2 = BuildLine(root, "Line2", Color.white);
             banner._line3 = BuildLine(root, "Line3", new Color(0.812f, 0.847f, 0.878f));
+            banner._exitUnderline = NewImage(root, "ExitUnderline", ExitUnderlineColor);
+            banner._exitUnderline.gameObject.SetActive(false);
 
             banner.Layout();
             return banner;
@@ -153,6 +163,7 @@ namespace MaxWorlds.UI
         public void Show(string line1, string line2, string line3, float alpha)
         {
             Layout();
+            _exitUnderline.gameObject.SetActive(false);
             _line1.text = line1 ?? string.Empty;
             _line2.text = line2 ?? string.Empty;
             _line3.text = line3 ?? string.Empty;
@@ -161,6 +172,44 @@ namespace MaxWorlds.UI
 
         /// <summary>Two-line overload — Beat B's "EXIT OPEN" never had a third line.</summary>
         public void Show(string line1, string line2, float alpha) => Show(line1, line2, string.Empty, alpha);
+
+        /// <summary>MV-1125, Beat B's own "EXIT OPEN" treatment: a shallower full-width dark band (14% of
+        /// the real, resolved canvas height), the centre line large and white (9.3%, not Line1's small
+        /// cyan 4.6% the old two-line <see cref="Show(string,string,float)"/> call put it in) with a
+        /// green underline beneath it — the fix for AC2(d)'s floor (90 px at 2556x1179), which the old
+        /// placement (54 px at that resolution) fell under.</summary>
+        public void ShowExitOpen(float alpha)
+        {
+            LayoutExit();
+            _line1.text = string.Empty;
+            _line2.text = "EXIT OPEN";
+            _line3.text = string.Empty;
+            _exitUnderline.gameObject.SetActive(true);
+            _group.alpha = Mathf.Clamp01(alpha);
+        }
+
+        private void LayoutExit()
+        {
+            Canvas canvas = _root.GetComponentInParent<Canvas>();
+            float canvasHeight = canvas != null ? Mathf.Max(1f, ((RectTransform)canvas.transform).rect.height) : RefH;
+
+            float bandHeight = canvasHeight * ExitBandHeightFraction;
+            float bandTop = canvasHeight * BandTopFraction;
+
+            PositionTopAnchored(_band.rectTransform, bandTop, bandHeight, stretchWidth: true);
+            _band.rectTransform.sizeDelta = new Vector2(0f, bandHeight);
+
+            float textSize = canvasHeight * ExitTextSizeFraction;
+            float textCentreInset = bandTop + bandHeight * 0.5f;
+            PlaceLine(_line2, canvasHeight, textCentreInset, textSize);
+
+            float underlineHeight = Mathf.Max(2f, canvasHeight * ExitUnderlineHeightFraction);
+            float underlineWidth = textSize * 4.2f;
+            RectTransform urt = _exitUnderline.rectTransform;
+            urt.anchorMin = new Vector2(0.5f, 1f); urt.anchorMax = new Vector2(0.5f, 1f); urt.pivot = new Vector2(0.5f, 1f);
+            urt.sizeDelta = new Vector2(underlineWidth, underlineHeight);
+            urt.anchoredPosition = new Vector2(0f, -(textCentreInset + textSize * 0.62f));
+        }
 
         public void Hide() => _group.alpha = 0f;
 

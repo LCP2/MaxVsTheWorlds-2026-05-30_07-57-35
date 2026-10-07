@@ -256,22 +256,72 @@ namespace MaxWorlds.VFX
         private const float ExitBeatDoorOpenTime = 1.0f;
         private const float ExitBeatHoldUntil = 2.2f;
         private const float ExitBeatBurstFadeSeconds = 0.3f;
-        private const float ExitBeatBurstRadius = 1.5f; // 3 m across
-        private const float ExitBeatNearDoorSkipDistance = 8f;
+        private const float ExitBeatBurstDiameter = 1.5f; // MV-1125: a camera-facing flare, not a flat disc
         private const float ExitBeatBoltSpeedFloor = 1f;
 
         private bool _exitBeatActive;
         private float _exitBeatTime;
-        private bool _exitBeatSkipTravel;
         private bool _exitBeatDoorOpened;
         private Vector3 _exitBeatDoorPosition;
+        private Vector3 _exitBeatWedgeDirection;
         private CameraTargetRig _exitBeatCameraRig;
         private SentinelBolt _exitBeatBolt;
-        private GroundRing _exitBeatBurstRing;
+        private CameraFacingFlare _exitBeatBurstFlare;
 
         private FinaleBanner _banner;
         private readonly List<RobotEnemy> _frozenRobots = new List<RobotEnemy>(16);
         private PlayerController _frozenPlayer;
+
+        // ---------------------------------------------------------------- MV-1125: the door's own jamb
+        // lamp (red while shut, green once open), the floor light wedge that marks the open doorway, and
+        // the post-beat chevron trail leading Max to it.
+
+        private const float ExitLampDiameter = 0.38f;
+        private static readonly Color ExitLampLockedColor = new Color(0.90f, 0.15f, 0.10f);
+        private static readonly Color ExitLampOpenColor = new Color(0.208f, 0.878f, 0.420f); // #35E06B
+        private static readonly int ExitLampColorId = Shader.PropertyToID("_BaseColor");
+
+        private GameObject _exitLampGo;
+        private MeshRenderer _exitLampRenderer;
+        private MaterialPropertyBlock _exitLampMpb;
+
+        private const float ExitWedgeNearWidth = 3f;
+        private const float ExitWedgeFarWidth = 6f;
+        private const float ExitWedgeLength = 7f;
+        private static readonly Color ExitWedgeColor = new Color(1f, 0.92f, 0.78f, 0.35f);
+        private GroundWedge _exitWedge;
+
+        private const float ExitTrailStepDistance = 2f;
+        private const int ExitTrailMaxChevrons = 12;
+        private static readonly Color ExitTrailChevronColor = new Color(0.616f, 1f, 0.710f, 0.9f); // #9DFFB5 @ .9
+        private static readonly Color ExitTrailBorderColor = new Color(0.208f, 0.878f, 0.420f); // #35E06B
+
+        private bool _trailActive;
+        private Vector3 _trailDoorPosition;
+        private readonly List<GroundChevron> _trailChevrons = new List<GroundChevron>(ExitTrailMaxChevrons);
+
+        /// <summary>MV-1125 test seam: how many chevrons the trail is currently showing.</summary>
+        public int ExitTrailChevronCount { get; private set; }
+
+        /// <summary>MV-1125 test seam: the i'th live chevron's own resolved world position.</summary>
+        public Vector3 ExitTrailChevronPosition(int i) => _trailChevrons[i].transform.position;
+
+        /// <summary>MV-1125 test seam: the i'th live chevron's own resolved facing.</summary>
+        public Vector3 ExitTrailChevronForward(int i) => _trailChevrons[i].transform.forward;
+
+        /// <summary>MV-1125 test seam: the exit door lamp's own resolved rendered colour, read back off
+        /// its renderer's MaterialPropertyBlock — not a cached field copy of whichever constant last set
+        /// it.</summary>
+        public Color ExitDoorLampColor
+        {
+            get
+            {
+                if (_exitLampRenderer == null) return default;
+                var mpb = new MaterialPropertyBlock();
+                _exitLampRenderer.GetPropertyBlock(mpb);
+                return mpb.GetColor(ExitLampColorId);
+            }
+        }
 
         private void Awake()
         {
@@ -303,6 +353,7 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
+            HudSignals.FinaleGateCrossed += OnFinaleGateCrossedForTrail;
         }
 
         private void OnDisable()
@@ -310,6 +361,7 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
+            HudSignals.FinaleGateCrossed -= OnFinaleGateCrossedForTrail;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
@@ -318,6 +370,9 @@ namespace MaxWorlds.VFX
             HideExitBeatVisuals();
             HideCoreBeacon();
             HideCleanupVisuals();
+            if (_exitLampGo != null) _exitLampGo.SetActive(false);
+            _exitWedge?.Hide();
+            foreach (GroundChevron c in _trailChevrons) c?.Hide();
             if (_banner != null) { _banner.DestroySelf(); _banner = null; }
         }
 
@@ -1106,21 +1161,27 @@ namespace MaxWorlds.VFX
             _exitBeatDoorOpened = false;
             _exitBeatDoorPosition = doorPosition;
 
-            Transform max = MaxTransform();
-            Vector3 maxPos = max != null ? max.position : Vector3.zero;
-            float dist = Vector2.Distance(new Vector2(maxPos.x, maxPos.z), new Vector2(doorPosition.x, doorPosition.z));
-            _exitBeatSkipTravel = dist < ExitBeatNearDoorSkipDistance;
-
+            // MV-1125: the camera always travels to the door now -- a short move is still a move (Lee,
+            // 2026-10-03: "the exit opening must be an event the player sees"). The old near-door skip
+            // (ExitBeatNearDoorSkipDistance) meant a player already standing close to the exit saw
+            // nothing happen at all.
             _exitBeatCameraRig = FindFirstObjectByType<CameraTargetRig>();
 
             SuspendGameplayForBeat();
+            FindFirstObjectByType<HudController>()?.SetControlsHidden(true);
 
             // MV-1079 step 1: the bolt and its ground glow fly for exactly the travel window
-            // (0.00-1.00 s) regardless of the 8 m skip — "the bolt and burst still play" even when the
-            // camera itself doesn't travel.
+            // (0.00-1.00 s). MV-1125: externallyDriven -- this bolt is ticked explicitly below
+            // (_exitBeatBolt?.Tick(dt)), so its own Update() must not ALSO tick it, or it arrives in
+            // roughly half the intended 1.0 s (the double-tick the ticket's own hypothesis named).
             Vector3 origin = GadgetPosition();
             float speed = Mathf.Max(ExitBeatBoltSpeedFloor, Vector3.Distance(origin, doorPosition) / ExitBeatDoorOpenTime);
-            _exitBeatBolt = SentinelBolt.Fire(origin, doorPosition, speed, ExitBeatColor());
+            _exitBeatBolt = SentinelBolt.Fire(origin, doorPosition, speed, ExitBeatColor(), externallyDriven: true);
+
+            Vector3 toOrigin = origin - doorPosition; toOrigin.y = 0f;
+            _exitBeatWedgeDirection = toOrigin.sqrMagnitude > 1e-4f ? toOrigin.normalized : Vector3.forward;
+
+            ShowExitDoorLamp(doorPosition, ExitLampLockedColor);
         }
 
         /// <summary>Advance Beat B by <paramref name="dt"/> seconds. Public — same test-driving contract
@@ -1132,7 +1193,7 @@ namespace MaxWorlds.VFX
 
             _exitBeatBolt?.Tick(dt);
 
-            if (!_exitBeatSkipTravel && _exitBeatCameraRig != null)
+            if (_exitBeatCameraRig != null)
             {
                 float travel;
                 if (_exitBeatTime <= ExitBeatDoorOpenTime)
@@ -1150,6 +1211,8 @@ namespace MaxWorlds.VFX
                 _exitBeatDoorOpened = true;
                 Open(); // MV-1079: moved here from the instant the final robot died — see class doc.
                 PlayExitBeatBurst();
+                ShowExitDoorLamp(_exitBeatDoorPosition, ExitLampOpenColor);
+                ShowExitLightWedge();
             }
 
             UpdateExitBeatBurst();
@@ -1161,30 +1224,35 @@ namespace MaxWorlds.VFX
                 if (_exitBeatCameraRig != null) _exitBeatCameraRig.EndFocusOverride();
                 HideExitBeatVisuals();
                 RestoreGameplayForBeat();
+                FindFirstObjectByType<HudController>()?.SetControlsHidden(false);
+                BeginExitTrail(_exitBeatDoorPosition);
             }
         }
 
-        /// <summary>MV-1079, Beat B step 2: an additive burst about 3 m across at the door, the instant
-        /// it opens.</summary>
+        /// <summary>MV-1079, Beat B step 2: a camera-facing additive flare 1.5 m across at the door, the
+        /// instant it opens. MV-1125: replaces the old flat <see cref="GroundRing"/> disc (not on the
+        /// ground, not facing the camera, per the class doc's own observation) with a
+        /// <see cref="CameraFacingFlare"/>, the same fix Beat A's own flash already got (MV-1131).</summary>
         private void PlayExitBeatBurst()
         {
-            if (_exitBeatBurstRing == null) _exitBeatBurstRing = GroundRing.Create("MV-1079 Exit Burst", additive: true);
-            _exitBeatBurstRing.Show(_exitBeatDoorPosition, ExitBeatBurstRadius, ExitBeatColor());
+            if (_exitBeatBurstFlare == null) _exitBeatBurstFlare = CameraFacingFlare.Create("MV-1125 Exit Burst Flare");
+            _exitBeatBurstFlare.Show(_exitBeatDoorPosition, ExitBeatBurstDiameter, ExitBeatColor());
         }
 
         private void UpdateExitBeatBurst()
         {
-            if (_exitBeatBurstRing == null || !_exitBeatBurstRing.Visible) return;
+            if (_exitBeatBurstFlare == null || !_exitBeatBurstFlare.Visible) return;
             float sinceOpen = _exitBeatTime - ExitBeatDoorOpenTime;
             float t = Mathf.Clamp01(sinceOpen / ExitBeatBurstFadeSeconds);
-            if (t >= 1f) { _exitBeatBurstRing.Hide(); return; }
+            if (t >= 1f) { _exitBeatBurstFlare.Hide(); return; }
             Color c = ExitBeatColor();
             c.a = 1f - t;
-            _exitBeatBurstRing.Show(_exitBeatDoorPosition, ExitBeatBurstRadius, c);
+            _exitBeatBurstFlare.Show(_exitBeatDoorPosition, ExitBeatBurstDiameter, c);
         }
 
         /// <summary>MV-1079, Beat B step 3: the centre banner reads "EXIT OPEN" from the instant the door
-        /// opens (1.00 s) to 2.40 s.</summary>
+        /// opens (1.00 s) to 2.40 s. MV-1125: now the scaled HUD canvas's own large white treatment
+        /// (<see cref="FinaleBanner.ShowExitOpen"/>) rather than Line1's small cyan slot.</summary>
         private void UpdateExitBeatBanner()
         {
             const float BannerStart = ExitBeatDoorOpenTime;
@@ -1196,14 +1264,109 @@ namespace MaxWorlds.VFX
             }
 
             if (_banner == null) _banner = FinaleBanner.Create();
-            _banner.Show("EXIT OPEN", string.Empty, 1f);
+            _banner.ShowExitOpen(1f);
         }
 
         private void HideExitBeatVisuals()
         {
-            _exitBeatBurstRing?.Hide();
+            _exitBeatBurstFlare?.Hide();
             _banner?.Hide();
         }
+
+        /// <summary>MV-1125: the door's own jamb lamp — a small emissive sphere, red while the door is
+        /// locked and green (<see cref="ExitLampOpenColor"/>) once it's open. Built lazily, moved/retinted
+        /// in place thereafter (never rebuilt) so it keeps reading as the SAME fixture across the beat.</summary>
+        private void ShowExitDoorLamp(Vector3 doorPosition, Color color)
+        {
+            if (_exitLampGo == null)
+            {
+                _exitLampGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                _exitLampGo.name = "MV-1125 Exit Door Lamp";
+                Collider col = _exitLampGo.GetComponent<Collider>();
+                if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
+
+                _exitLampRenderer = _exitLampGo.GetComponent<MeshRenderer>();
+                _exitLampRenderer.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+                _exitLampRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _exitLampRenderer.receiveShadows = false;
+                _exitLampGo.transform.localScale = Vector3.one * ExitLampDiameter;
+                _exitLampMpb = new MaterialPropertyBlock();
+            }
+
+            if (!_exitLampGo.activeSelf) _exitLampGo.SetActive(true);
+            _exitLampGo.transform.position = doorPosition + Vector3.up * 1.2f;
+
+            _exitLampRenderer.GetPropertyBlock(_exitLampMpb);
+            _exitLampMpb.SetColor(ExitLampColorId, color);
+            _exitLampRenderer.SetPropertyBlock(_exitLampMpb);
+        }
+
+        /// <summary>MV-1125: the flat additive light wedge marking the open doorway — shown once, the
+        /// instant the door opens, and left up (it "stays while the door is open").</summary>
+        private void ShowExitLightWedge()
+        {
+            if (_exitWedge == null)
+                _exitWedge = GroundWedge.Create("MV-1125 Exit Light Wedge", ExitWedgeNearWidth, ExitWedgeFarWidth, ExitWedgeLength);
+            _exitWedge.Show(_exitBeatDoorPosition, _exitBeatWedgeDirection, ExitWedgeColor);
+        }
+
+        /// <summary>MV-1125: after the exit beat ends, until Max crosses the door line — the objective
+        /// strip reads "GO TO THE EXIT" and a chevron trail leads him there (<see cref="RefreshExitTrail"/>).
+        /// Ends on <see cref="HudSignals.FinaleGateCrossed"/> (<see cref="OnFinaleGateCrossedForTrail"/>),
+        /// the same signal both <see cref="WorldJoinSequence"/>'s own corridor crossing and THIS class's
+        /// own last-world crossing check (<see cref="Update"/>) raise, so one subscription covers both.</summary>
+        private void BeginExitTrail(Vector3 doorPosition)
+        {
+            _trailActive = true;
+            _trailDoorPosition = doorPosition;
+            HudSignals.EmitObjective("GO TO THE EXIT", ExitTrailBorderColor);
+            RefreshExitTrail();
+        }
+
+        /// <summary>Recomputes the chevron trail from Max's CURRENT position toward the door, stepping
+        /// <see cref="ExitTrailStepDistance"/> m at a time along <see cref="EnemyNavigation.Waypoint"/> —
+        /// the same "where would a robot walk" router every robot in the arena already asks, so the trail
+        /// follows a real walkable route (a straight line when Max and the door are in the same room,
+        /// same as <see cref="EnemyNavigation.Waypoint"/> itself resolves that case). Public — the test can
+        /// drive this directly after moving Max, and <see cref="Update"/> calls it every live frame so the
+        /// trail re-lays itself as he actually walks.</summary>
+        public void RefreshExitTrail()
+        {
+            if (!_trailActive) return;
+
+            Transform max = MaxTransform();
+            Vector3 cursor = max != null ? max.position : Vector3.zero;
+
+            int shown = 0;
+            for (; shown < ExitTrailMaxChevrons; shown++)
+            {
+                Vector3 waypoint = EnemyNavigation.Waypoint(cursor, _trailDoorPosition);
+                Vector3 delta = waypoint - cursor; delta.y = 0f;
+                if (delta.magnitude <= ExitTrailStepDistance) break;
+
+                Vector3 dir = delta.normalized;
+                Vector3 next = cursor + dir * ExitTrailStepDistance;
+
+                if (shown >= _trailChevrons.Count) _trailChevrons.Add(GroundChevron.Create($"MV-1125 Exit Chevron {shown}"));
+                _trailChevrons[shown].Show(next, dir, ExitTrailChevronColor);
+
+                cursor = next;
+            }
+
+            for (int i = shown; i < _trailChevrons.Count; i++) _trailChevrons[i].Hide();
+            ExitTrailChevronCount = shown;
+        }
+
+        private void EndExitTrail()
+        {
+            if (!_trailActive) return;
+            _trailActive = false;
+            foreach (GroundChevron c in _trailChevrons) c.Hide();
+            ExitTrailChevronCount = 0;
+            HudSignals.EmitObjective(null, default);
+        }
+
+        private void OnFinaleGateCrossedForTrail() => EndExitTrail();
 
         /// <summary>The new primary's own glow colour — the bolt and the door-open burst both play in it
         /// (ticket: "in the new weapon's glow colour"). Falls back to the LPPE/RCDA lens family
@@ -1231,6 +1394,7 @@ namespace MaxWorlds.VFX
             // does so explicitly and unclamped through the public TickCleanup(dt) itself.
             if (_cleanupActive && !IsOpen) TickCleanup(Mathf.Min(Time.unscaledDeltaTime, 0.1f));
             if (_exitBeatActive) TickExitBeat(Time.unscaledDeltaTime);
+            if (_trailActive) RefreshExitTrail();
 
             if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;
 
