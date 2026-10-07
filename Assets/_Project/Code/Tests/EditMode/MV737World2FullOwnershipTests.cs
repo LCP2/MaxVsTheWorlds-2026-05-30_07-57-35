@@ -13,12 +13,18 @@ namespace MaxWorlds.Tests.EditMode
     /// (<see cref="HomeScreen.StartSlotWorld2"/>, MV-726) must land THE RIG in World 1's own EXIT
     /// state, not a fresh, empty World 1 RIG — a player who reaches World 2 the intended way has
     /// spent a whole World 1 on the board first. Asserts the RESOLVED <see cref="RigState"/> after
-    /// the World 2 start: every ENERGY/MOVE/SUPPORT node at its own board-authored max level on
+    /// the World 2 start: every ENERGY/MOVE node at its own board-authored max level on
     /// <c>rig_board.json</c> — World 1's board, not World 2's (<see cref="RigBoard.SnapshotMaxLevels"/>,
     /// never a number written into this test; MV-856 tightened this from World 2's own, higher caps,
     /// which handed out levels/nodes World 1 never offered), PRIMARY's upgrade tracks unbought,
     /// SECONDARY entirely mystery-locked with nothing owned, every FORGE fusion unforged, and the
     /// wallet empty.
+    ///
+    /// MV-1095 (Lee, 2026-10-06) supersedes this test's own original SUPPORT assertions: a real
+    /// player arriving in World 2 has the sentinel family LOCKED again, same as SECONDARY, re-earned
+    /// through World 2's own unlock cadence — so this dev entry point must land SUPPORT locked too,
+    /// not unlocked-and-maxed as MV-737 originally asked for. Updated in place rather than left to
+    /// rot red; MV-1095's own new test covers the restore-on-re-unlock behaviour this ticket doesn't.
     ///
     /// PRIMARY's own root node (<c>p_dmg</c>) is asserted at level 1, not 0: that is the same
     /// run-start ownership floor <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already grants
@@ -74,11 +80,11 @@ namespace MaxWorlds.Tests.EditMode
 
             HomeScreen.StartSlotWorld2(0);
 
-            // ENERGY / MOVE / SUPPORT — fully owned up to World 1's own cap: unlocked, every node
-            // World 1's board defines sits at that board's maxLevel; a node only World 2's board
-            // defines (e.g. e_cmg) stays at 0 (MV-856).
+            // ENERGY / MOVE — fully owned up to World 1's own cap: unlocked, every node World 1's
+            // board defines sits at that board's maxLevel; a node only World 2's board defines (e.g.
+            // e_cmg) stays at 0 (MV-856).
             IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
-            foreach (string category in new[] { "ENERGY", "MOVE", "SUPPORT" })
+            foreach (string category in new[] { "ENERGY", "MOVE" })
             {
                 Assert.IsTrue(RigState.IsCategoryUnlocked(category), $"{category} must be unlocked");
                 foreach (string id in RigBoard.AllIds)
@@ -88,6 +94,15 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.AreEqual(expected, RigState.Level(id),
                         $"{id} ({category}) must sit at World 1's own board-authored maxLevel (0 if absent from World 1's board)");
                 }
+            }
+
+            // SUPPORT — MV-1095: LOCKED, same as a real player arriving in World 2 with the sentinel
+            // family never earned in World 1 (a fresh dev slot has nothing to remember/restore).
+            Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "SUPPORT must be LOCKED on a World 2 arrival (MV-1095)");
+            foreach (string id in RigBoard.AllIds)
+            {
+                if (RigBoard.Category(id) != "SUPPORT") continue;
+                Assert.AreEqual(0, RigState.Level(id), $"{id} (SUPPORT) must be unowned while the family is locked");
             }
 
             // PRIMARY — LPPE, no upgrades: owned baseline only, every upgrade track unbought.

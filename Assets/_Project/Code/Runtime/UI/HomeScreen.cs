@@ -267,12 +267,15 @@ namespace MaxWorlds.UI
         ///
         /// <paramref name="maxRig"/> selects which populated state the button hands the tester:
         /// <list type="bullet">
-        /// <item>false (WORLD 2, MV-737): World 1's own EXIT state — ENERGY/MOVE/SUPPORT additionally
-        /// unlocked and maxed to World 1's own level caps (<see cref="UnlockAndMaxCategory"/>, capped via
-        /// <see cref="RigBoard.SnapshotMaxLevels"/> — MV-856: never World 2's own higher caps/extra nodes,
-        /// which stay for the player to buy in World 2), PRIMARY left on the morph's
-        /// owned-but-unupgraded floor, SECONDARY mystery-locked untouched, exactly as a player who
-        /// cleared World 1 would arrive.</item>
+        /// <item>false (WORLD 2, MV-737; SUPPORT carve-out MV-1095): World 1's own EXIT state —
+        /// ENERGY/MOVE additionally unlocked and maxed to World 1's own level caps
+        /// (<see cref="UnlockAndMaxCategory"/>, capped via <see cref="RigBoard.SnapshotMaxLevels"/> —
+        /// MV-856: never World 2's own higher caps/extra nodes, which stay for the player to buy in
+        /// World 2), PRIMARY left on the morph's owned-but-unupgraded floor, SECONDARY mystery-locked
+        /// untouched, SUPPORT LOCKED (MV-1095: a real player arriving this way has it locked too, same
+        /// as SECONDARY — <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already remembers
+        /// whatever this dev jump would otherwise have maxed, which is nothing on a fresh dev slot),
+        /// exactly as a player who cleared World 1 would arrive.</item>
         /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
         /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>
         /// (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content, not to make the tester
@@ -304,7 +307,9 @@ namespace MaxWorlds.UI
                 IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
                 UnlockAndMaxCategory("ENERGY", world1MaxLevels);
                 UnlockAndMaxCategory("MOVE", world1MaxLevels);
-                UnlockAndMaxCategory("SUPPORT", world1MaxLevels);
+                // MV-1095: SUPPORT is deliberately NOT unlocked/maxed here any more — a real player
+                // arriving this way has the family LOCKED (ApplyWeaponCoreMorph above already does
+                // that), re-earned through this world's own cadence, same as SECONDARY.
             }
         }
 
