@@ -63,6 +63,47 @@ namespace MaxWorlds.CameraRig
             return new Vector2(hit.x, hit.z).magnitude;
         }
 
+        /// <summary>
+        /// The ground-plane rectangle (world X/Z, <see cref="Rect"/>'s Y mapping to world Z — same
+        /// convention <see cref="MaxWorlds.Arena.WorldArea.Footprint"/> already uses) actually
+        /// visible around <paramref name="lookAt"/> at camera <paramref name="distance"/> (MV-1110) —
+        /// the bounding box of all four frustum corners' own ground hits. Unlike <see cref="SafeVisibleRadius"/>'s
+        /// single "safe circle" (the tightest of the four EDGE midpoints, meant to guarantee an
+        /// arbitrary circle around the look-at point is fully on screen), this is the actual shape the
+        /// player's screen shows — what "is this specific point on screen" has to check against, not
+        /// "is everything within some radius on screen".
+        /// </summary>
+        public static Rect GroundRect(
+            Vector3 lookAt, float distance, float pitchDegrees, float verticalFovDegrees, float aspect)
+        {
+            float pitch = pitchDegrees * Mathf.Deg2Rad;
+            float sin = Mathf.Sin(pitch);
+            float cos = Mathf.Cos(pitch);
+            float tanV = Mathf.Tan(verticalFovDegrees * 0.5f * Mathf.Deg2Rad);
+            float tanH = tanV * Mathf.Max(0.01f, aspect); // tan(atan(tanV*aspect)) == tanV*aspect
+
+            Vector3 camPos = lookAt + new Vector3(0f, distance * sin, -distance * cos);
+
+            float minX = float.PositiveInfinity, maxX = float.NegativeInfinity;
+            float minZ = float.PositiveInfinity, maxZ = float.NegativeInfinity;
+
+            float[] us = { -tanH, tanH };
+            float[] vs = { -tanV, tanV };
+            foreach (float u in us)
+            foreach (float v in vs)
+            {
+                Vector3 dir = new Vector3(u, -sin + v * cos, cos + v * sin);
+                if (dir.y >= -1e-5f) continue; // at/above the horizon -- never reaches the ground
+
+                float t = -camPos.y / dir.y;
+                Vector3 hit = camPos + dir * t;
+                minX = Mathf.Min(minX, hit.x); maxX = Mathf.Max(maxX, hit.x);
+                minZ = Mathf.Min(minZ, hit.z); maxZ = Mathf.Max(maxZ, hit.z);
+            }
+
+            return Rect.MinMaxRect(minX, minZ, maxX, maxZ);
+        }
+
         /// <summary>The camera distance whose <see cref="SafeVisibleRadius"/> equals
         /// <paramref name="desiredRadius"/> — the unit-distance radius scaled up, per the class
         /// summary. Falls back to <see cref="FixedAngleCameraRig.MaxDistance"/> if the geometry can't

@@ -21,8 +21,9 @@ namespace MaxWorlds.Tests.EditMode
     /// (<see cref="WorldFinaleGate"/>) never opened because it waited on <see cref="HudSignals.RunComplete"/>
     /// (every robot in a30 dead), which never landed with other a30 robots still alive.
     ///
-    /// Drives the REAL, edited <c>world1_config.json</c> (a30_boss1 moved to (316,127); 15 top-left
-    /// garrison entries removed) through the actual map build, so this test is also AC2's evidence --
+    /// Drives the REAL, edited <c>world1_config.json</c> (a30_boss1 moved to (316,127) by MV-956, then
+    /// to (329,110) by MV-1110's own post-at-the-exit-door fix; 15 top-left garrison entries removed)
+    /// through the actual map build, so this test is also AC2's evidence --
     /// asserted on the built scene, not the JSON. AC1's two kill orders then run against fresh boss pairs
     /// at those exact authored positions, with a30's OTHER (still-alive, still-built) garrison and area
     /// 1's own ambient population left untouched throughout -- this test never fires
@@ -130,10 +131,10 @@ namespace MaxWorlds.Tests.EditMode
                 "world1_config.json's a30_boss2 was not built");
 
             Vector3 builtBoss1Pos = boss1Go.transform.position;
-            Assert.AreEqual(316f, builtBoss1Pos.x, 0.5f,
-                "AC2: a30_boss1's BUILT position must resolve to the authored move (x=316)");
-            Assert.AreEqual(127f, builtBoss1Pos.z, 0.5f,
-                "AC2: a30_boss1's BUILT position must resolve to the authored move (z=127)");
+            Assert.AreEqual(329f, builtBoss1Pos.x, 0.5f,
+                "AC2/MV-1110: a30_boss1's BUILT position must resolve to the authored post (x=329)");
+            Assert.AreEqual(110f, builtBoss1Pos.z, 0.5f,
+                "AC2/MV-1110: a30_boss1's BUILT position must resolve to the authored post (z=110)");
 
             var areaDirector = _root.AddComponent<AreaAccumulationDirector>();
             areaDirector.ConfigureWorld(cfg);
@@ -216,7 +217,7 @@ namespace MaxWorlds.Tests.EditMode
             // --- AC1 reversed: a fresh pair at the SAME authored positions, killed in the OPPOSITE
             // order -- a30_boss1 (north) first this time, so the orb must follow a30_boss2 (south). ---
             BigBermudaBoss boss1b = NewBoss("a30_boss1 (phase 2)");
-            boss1b.transform.position = new Vector3(316f, 1.5f, 127f);
+            boss1b.transform.position = new Vector3(329f, 1.5f, 110f);
             BigBermudaBoss boss2b = NewBoss("a30_boss2 (phase 2)");
             boss2b.transform.position = new Vector3(320f, 1.5f, 86f);
 

@@ -86,10 +86,11 @@ namespace MaxWorlds.Bosses
         // every single frame when nothing has changed since the last one.
         private readonly ZoneRouteBudget _routeBudget = new ZoneRouteBudget();
 
-        // The area whose floor wakes this boss (MV-572) — MapRuntime.BuildBoss hands this in right
-        // after AddComponent, from the same WorldArea/MapZone footprint the boss was authored inside.
-        // Defaults to an empty Rect, which Contains() never satisfies, so a boss nobody assigns one to
-        // (a stray scene-authored instance) simply never wakes rather than waking on any stray position.
+        // This boss's own authored area (MV-572) — MapRuntime.BuildBoss hands this in right after
+        // AddComponent, from the same WorldArea/MapZone footprint the boss was authored inside. MV-1110
+        // retired its old job of gating the wake itself (see TickDormant/IsWithinWakeRange); it is kept
+        // for ClampLandingToArea/CountLandedAddsInArea, which still need to know the boss's own room so
+        // a flung add can never land, or hold a cap slot, outside it.
         private Rect _wakeArea;
 
         /// <summary>MV-1122: this boss's own 1-based area (<see cref="ResolveAreaIndex"/>), resolved
@@ -303,12 +304,30 @@ namespace MaxWorlds.Bosses
             return AreaAccumulationDirector.AreaIndexOf(zone.id);
         }
 
-        /// <summary>Wakes the instant Max's planar position enters this boss's own authored area
-        /// (<see cref="_wakeArea"/>, set by <see cref="SetWakeArea"/>) — visible and asleep until then.</summary>
+        /// <summary>Wakes once Max is within <see cref="BossTuning.WakeRadius"/> of this boss's own
+        /// authored post, with a clear line of sight (MV-1110) — visible and asleep (not approaching)
+        /// until then. Entering the boss's authored area (<see cref="_wakeArea"/>, still set by
+        /// <see cref="SetWakeArea"/> for <see cref="ClampLandingToArea"/>'s own unrelated use) used to be
+        /// the whole test, so a boss authored deep inside a large area was already walking toward Max
+        /// before he had even seen it (Lee, device, 2026-10-06: "Big Bermuda two has already made its
+        /// way down before I've even seen it").</summary>
         private void TickDormant()
         {
             if (_target == null) { AcquireTarget(); return; }
-            if (_wakeArea.Contains(new Vector2(_target.position.x, _target.position.z))) Wake();
+            if (IsWithinWakeRange(_target.position)) Wake();
+        }
+
+        /// <summary>True when <paramref name="targetPosition"/> is within <see cref="BossTuning.WakeRadius"/>
+        /// (planar) of this boss's own post AND has a clear <see cref="LineOfSight"/> to it — the shared
+        /// wake test every boss in every world now uses (MV-1110). Line of sight alone would wake a boss
+        /// the instant Max steps in range from behind a wall he can't see through; range alone would wake
+        /// it from clean across an open area. Both together are what "Max can actually see it" means.</summary>
+        private bool IsWithinWakeRange(Vector3 targetPosition)
+        {
+            Vector3 to = targetPosition - transform.position;
+            to.y = 0f;
+            if (to.magnitude > BossTuning.WakeRadius) return false;
+            return LineOfSight.Between(transform, _target);
         }
 
         private void Update()
@@ -891,6 +910,19 @@ namespace MaxWorlds.Bosses
         // --- IDamageable ---
         public void TakeDamage(in DamageInfo info)
         {
+            // MV-1110: a hit landing is itself a wake trigger, same spirit as this class's own "no free
+            // first hit" ContactCooldown convention — the shot that reaches a Dormant boss wakes it
+            // rather than being silently dropped, even if Max hasn't yet stood inside WakeRadius with
+            // line of sight. Consumed as the wake, not as damage: Wake() moves straight to Intro, which
+            // (like Dormant) is not IsAlive yet, so this first hit deals no HP loss -- exactly as today's
+            // "invulnerable until engaged" already behaves for the Intro window.
+            if (_phase == Phase.Dormant)
+            {
+                if (!DamageRules.Applies(info.Attacker, Team)) return;
+                Wake();
+                return;
+            }
+
             if (!IsAlive) return; // invulnerable until engaged; nothing after death
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
