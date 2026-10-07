@@ -429,6 +429,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1121UndertowBeamCheck());
             Add(BuildMv1097ShedLaserBeamCheck());
             Add(BuildMv1112GroundFillCheck());
+            Add(BuildMv1113SentinelArrival());
             return d;
         }
 
@@ -1693,6 +1694,70 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1112-stub-west", NoSetup) },
+            };
+        }
+
+        // ---- MV1113SentinelArrival (MV-1113 AC2) ----------------------------------------------
+
+        /// <summary>Deploys one Sentinel directly through <see cref="Sentinel.Init"/>/<see cref="Sentinel.BeginArrival"/>
+        /// (same "construct the real component, not a screenshot of prose" idiom <see cref="BuildMv616SentinelBeam"/>
+        /// uses) and captures it exactly <c>CaptureAtSeconds</c> into its 3.0s teleport-style arrival —
+        /// real <see cref="Sentinel.Update"/>/<see cref="Sentinel.TickSentinel"/> ticking, not a scripted
+        /// pose, waited out on <see cref="Time.unscaledTime"/> (MV-1032: survives a frozen
+        /// <see cref="Time.timeScale"/>). ONE capture only, per the ticket's own "do not iterate"
+        /// instruction; Lee judges the look on staging.</summary>
+        private static CapturePreset BuildMv1113SentinelArrival()
+        {
+            const float pitch = 60f;
+            const float distance = 6f;
+            const float captureAtSeconds = 1.5f;
+
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press", "sentinel-arrival"));
+            const string mirrorPath = @"C:\Dev\MaxVsTheWorlds-Images\MV-1113-sentinel-arrival.png";
+
+            GameObject sentinelGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                sentinelGo = new GameObject("MV1113CaptureSentinel");
+                var sentinel = sentinelGo.AddComponent<Sentinel>();
+                sentinel.Init(focus, maxHp: 60f, range: 8f, fireInterval: 0.5f,
+                    moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
+                sentinel.BeginArrival();
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus; camFocus.y = 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                float startedAt = Time.unscaledTime;
+                while (Time.unscaledTime - startedAt < captureAtSeconds) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1113sentinelarrival",
+                LogTag = "[MV1113Capture]",
+                Flag = "-mv1113shot",
+                ArmFile = "Temp/mv1113.arm",
+                HeadlessMarker = "Temp/mv1113.headless",
+                DoneFileName = "_mv1113_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard BuildMv616SentinelBeam's own preset uses: on a fresh
+                    // profile (no slot picked yet) HomeScreen's pick-a-slot modal freezes
+                    // Time.timeScale at 0, starving every ParticleSystem of simulation.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1113-sentinel-arrival", Setup, new[] { mirrorPath }) },
+                Cleanup = () => { if (sentinelGo != null) Destroy(sentinelGo); },
             };
         }
 

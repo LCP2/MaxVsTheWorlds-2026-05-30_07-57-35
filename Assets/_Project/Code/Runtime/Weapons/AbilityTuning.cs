@@ -534,13 +534,6 @@ namespace MaxWorlds.Weapons
         /// read as 1). Every level now buys exactly one slot, no dead step.</summary>
         public static int SentinelDeploymentSlots(int level) => 1 + Mathf.Max(0, level);
 
-        /// <summary>How far the aimed placement joystick's reticle reaches, metres (MV-399, reversing
-        /// MV-362's "deployed at Max's position" DECISION per Lee's 15 Aug 2026 request). Fixed, not
-        /// leveled — same "authored, not a track" shape as <see cref="DefaultSentinelCost"/>.
-        /// Matches <see cref="DefaultTeleportBaseDistance"/> rather than a fresh number: both need a
-        /// single drag to cover "anywhere in the current arena" from one spot in the room.</summary>
-        public const float DefaultSentinelPlacementRange = DefaultTeleportBaseDistance;
-
         // --- Magneto (MV-422, e_mag) ---
 
         /// <summary>Cell pull radius at Magneto Level 1, metres (MV-422: "3 m at level 1").</summary>

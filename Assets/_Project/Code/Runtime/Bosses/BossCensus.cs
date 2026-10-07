@@ -203,6 +203,17 @@ namespace MaxWorlds.Bosses
             return false;
         }
 
+        /// <summary>MV-1113: every living boss's current world position — what the Sentinel arrival
+        /// search reads to keep a deploy point clear of a boss, the same way it already keeps clear of
+        /// every awake <c>RobotEnemy</c>. Area-unfiltered, unlike <see cref="AnyLivingIn"/> — a boss
+        /// fight occupies its whole arena, so every living boss counts regardless of which area it is
+        /// keyed to.</summary>
+        public static IEnumerable<Vector3> LivingPositions()
+        {
+            foreach (MonoBehaviour boss in Living)
+                if (boss != null) yield return boss.transform.position;
+        }
+
         /// <summary>Has <paramref name="areaIndex"/>'s boss already been beaten (MV-995) — either earlier
         /// THIS fight (<see cref="ReportDefeated"/>) or on a prior run, restored via
         /// <see cref="ApplyCheckpointDefeatedAreas"/>? This is what a boss's own <c>Wake()</c> must check

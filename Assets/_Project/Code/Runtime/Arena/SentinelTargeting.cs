@@ -38,7 +38,8 @@ namespace MaxWorlds.Arena
             for (int i = 0; i < active.Count; i++)
             {
                 Sentinel s = active[i];
-                if (s == null || !s.IsAlive) continue;
+                // MV-1113: a Sentinel still mid-arrival is untargetable — enemies must not engage it.
+                if (s == null || !s.IsAlive || s.IsArriving) continue;
                 float d = (s.transform.position - from).sqrMagnitude;
                 if (d < bestSq) { bestSq = d; best = s; }
             }
