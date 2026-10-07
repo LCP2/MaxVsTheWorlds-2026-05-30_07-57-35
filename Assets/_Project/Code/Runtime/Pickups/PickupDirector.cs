@@ -503,7 +503,11 @@ namespace MaxWorlds.Pickups
                 PickupKind.RackModule => _rackModulePool,
                 _ => _cellPool,
             };
-            Pickup p = pool.Count > 0 ? pool.Pop() : Pickup.Create(kind);
+            // MV-1147: a pooled entry can have been destroyed out from under the director while sitting
+            // in the pool — skip any such stale entries rather than handing one out as a live drop.
+            Pickup p = null;
+            while (pool.Count > 0 && p == null) p = pool.Pop();
+            if (p == null) p = Pickup.Create(kind);
             p.Part = part;
             p.Ability = ability;
             p.transform.SetParent(transform, worldPositionStays: false);
@@ -529,13 +533,28 @@ namespace MaxWorlds.Pickups
         }
 
         /// <summary>MV-626, change 2: evicts the single oldest live cell when the cap is about to be
-        /// exceeded — the actual accumulation bound, independent of the reserve-full gate above.</summary>
+        /// exceeded — the actual accumulation bound, independent of the reserve-full gate above.
+        /// MV-1147: the oldest tracked cell can have been destroyed out from under the director (its
+        /// GameObject torn down by something other than this file's own pool/collect paths) — handing a
+        /// destroyed Pickup straight to <see cref="RetireCell"/> dereferences it and throws. Same
+        /// <c>!= null</c> idiom <see cref="CollectGroundedWeaponCore"/> already uses: drop the stale
+        /// bookkeeping and keep looking for a live oldest instead.</summary>
         private void RecycleOldestCellIfAtCap()
         {
-            if (_cellOrder.Count < MaxLiveCells) return;
-            Pickup oldest = _cellOrder.First.Value;
-            int index = _live.IndexOf(oldest);
-            if (index >= 0) RetireCell(index, oldest);
+            while (_cellOrder.Count >= MaxLiveCells)
+            {
+                Pickup oldest = _cellOrder.First.Value;
+                int index = _live.IndexOf(oldest);
+                if (oldest == null)
+                {
+                    UntrackCell(oldest);
+                    if (index >= 0) _live.RemoveAt(index);
+                    continue;
+                }
+                if (index >= 0) RetireCell(index, oldest);
+                else UntrackCell(oldest);
+                return;
+            }
         }
 
         /// <summary>Drops <paramref name="p"/>'s cap/lifetime bookkeeping — a no-op for a non-cell kind,
@@ -605,6 +624,9 @@ namespace MaxWorlds.Pickups
             for (int i = _live.Count - 1; i >= 0; i--)
             {
                 Pickup p = _live[i];
+                // MV-1147: a tracked drop destroyed out from under the director — drop it rather than
+                // dereference it below (SetBlinkHidden, RetireAgedDrop's own renderer lookup).
+                if (p == null) { UntrackCell(p); _reserveFullTold.Remove(p); _live.RemoveAt(i); continue; }
                 if (!_dropAge.TryGetValue(p, out float age)) continue;
                 if (_pullingThisTick.Contains(p)) continue;   // MV-1101 item 5: clock paused mid-pull
 
@@ -650,6 +672,9 @@ namespace MaxWorlds.Pickups
                 for (int i = _live.Count - 1; i >= 0; i--)
                 {
                     Pickup p = _live[i];
+                    // MV-1147: a tracked drop destroyed out from under the director — drop it rather
+                    // than dereference it below (transform, Collect, the Magneto pull).
+                    if (p == null) { UntrackCell(p); _reserveFullTold.Remove(p); _live.RemoveAt(i); continue; }
                     Vector3 pPos = p.transform.position;
                     float dx = pPos.x - m.x;
                     float dz = pPos.z - m.z;

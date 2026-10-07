@@ -43,6 +43,13 @@ namespace MaxWorlds.Tests.EditMode
             SaveSystem.ActiveSlot = 0;
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 0 });
 
+            // MV-1147: an earlier test class's PickupDirector/Pickup/reserve can otherwise survive into
+            // this fixture's BuildFixture() -- same sweep [TearDown] already runs, just run on entry too,
+            // so Case 1 never inherits a stale director, a dangling cell reference, or a full reserve
+            // left over from a class that sorts before this one (see SweepStrayActors' own doc for why).
+            SweepStrayActors();
+            PickupWallet.Reset();
+
             DevTuning.Reset();
             RobotEnemy.ResetRegistry();
             _suppressedAmbientCameras = CameraTestUtil.SuppressAmbientMainCameras();
