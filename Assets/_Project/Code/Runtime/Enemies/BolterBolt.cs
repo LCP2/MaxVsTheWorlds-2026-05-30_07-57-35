@@ -166,10 +166,11 @@ namespace MaxWorlds.Enemies
             Mathf.Max(0f, receiverMaxHealth) * DamagePercentOfMaxHealth;
 
         /// <summary>A hit: damage is resolved live off the hit receiver's OWN max health (AC1) via
-        /// <see cref="DamageFor"/>, and only ever applied to a <see cref="PlayerHealth"/> or
-        /// <see cref="Sentinel"/> receiver (MV-622) — still never a robot or a shed, even though both can
-        /// implement <see cref="IDamageable"/> under the same <c>Team.Player</c> the friendly-fire rule
-        /// alone would let through.</summary>
+        /// <see cref="DamageFor"/>, and only ever applied to a <see cref="PlayerHealth"/>, a
+        /// <see cref="Sentinel"/> (MV-622), or a captured (<see cref="Team.Player"/>) robot (MV-1092) —
+        /// still never an ordinary enemy robot or a shed, even though all of these can implement
+        /// <see cref="IDamageable"/> under the same <c>Team.Player</c> the friendly-fire rule alone
+        /// would let through.</summary>
         private void Detonate()
         {
             if (_targetDamageable is PlayerHealth player && player.IsAlive)
@@ -181,6 +182,12 @@ namespace MaxWorlds.Enemies
             {
                 sentinel.TakeDamage(new DamageInfo(
                     DamageFor(sentinel.HealthMax), transform.position, _direction, Team.Enemy));
+            }
+            else if (_targetDamageable is RobotEnemy capturedRobot && capturedRobot.IsAlive &&
+                     capturedRobot.Team == Team.Player)
+            {
+                capturedRobot.TakeDamage(new DamageInfo(
+                    DamageFor(capturedRobot.MaxHealth), transform.position, _direction, Team.Enemy));
             }
 
             Destroy(gameObject);

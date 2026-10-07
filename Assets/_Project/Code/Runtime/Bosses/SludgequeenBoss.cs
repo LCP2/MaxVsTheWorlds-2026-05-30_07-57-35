@@ -361,6 +361,14 @@ namespace MaxWorlds.Bosses
                 if (DamageIfTouching(s != null ? s.transform : null, bossRadius)) hitSomething = true;
             }
 
+            // MV-1092: a captured robot standing against the boss hurts exactly like a Sentinel does.
+            IReadOnlyList<RobotEnemy> captured = RobotEnemy.Converted;
+            for (int i = 0; i < captured.Count; i++)
+            {
+                RobotEnemy r = captured[i];
+                if (DamageIfTouching(r != null ? r.transform : null, bossRadius)) hitSomething = true;
+            }
+
             if (hitSomething) _contactCooldownTimer = SludgequeenTuning.ContactCooldown;
         }
 
