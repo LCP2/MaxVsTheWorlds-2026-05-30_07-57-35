@@ -707,7 +707,6 @@ namespace MaxWorlds.UI
         private float CostFontSize => _phoneMode ? RigBoardLayout.CostFontSizePhone : RigBoardLayout.CostFontSize;
         private float CostIconSize => _phoneMode ? RigBoardLayout.CostIconSizePhone : RigBoardLayout.CostIconSize;
         private float ForgeDividerY => _phoneMode ? RigBoardLayout.ForgeDividerYPhone : RigBoardLayout.ForgeDividerY;
-        private float RegionRectY => _phoneMode ? RigBoardLayout.RegionRectYPhone : RigBoardLayout.RegionRectY;
 
         private int _lastScreenWidth, _lastScreenHeight;
 
@@ -2021,63 +2020,38 @@ namespace MaxWorlds.UI
         /// plus every ability node whose <c>Category</c> matches it), not to a shared midpoint with its
         /// neighbours (MV-594: midpoint-tiled panels put the visible box's edge wherever the NEXT
         /// family's centre happened to sit, unrelated to where this family's own nodes actually are —
-        /// dead space for a narrow family, a tight crop for one with a close neighbour). Panels may now
-        /// have gaps between them; that is correct, a gap is what makes a box read as "this one family".
-        /// Drawn before the nodes so they sit behind everything.</summary>
+        /// dead space for a narrow family, a tight crop for one with a close neighbour) and not to a
+        /// fixed height either (MV-1109: the old shared <c>RegionRectH</c> was sized for standard mode's
+        /// own row schedule and silently reused for phone mode's deeper one, leaving a family's own
+        /// lowest label hanging below its panel on plain black — see
+        /// <see cref="RigBoardLayout.ComputeFamilyPanelBounds"/>'s own doc comment for the numbers).
+        /// Panels may now have gaps between them; that is correct, a gap is what makes a box read as
+        /// "this one family". Drawn before the nodes so they sit behind everything.</summary>
         private void BuildCategoryPanels(RectTransform boardRoot)
         {
             var categories = Categories;
             var abilities = Abilities;
             int n = categories.Count;
             if (n == 0) return;
-            float y = RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
-            float catR = RadiusCategory, abR = RadiusAbility, padX = RigBoardLayout.RegionRectPadX;
+            float radius = RigBoardLayout.RegionRectRadius;
+            float catR = RadiusCategory, abR = RadiusAbility;
 
-            // MV-594 pass 1: each family's true node bounds (its own category node plus every ability
-            // node whose Category matches it) — naturally handles an asymmetric family (more children on
-            // one side than the other) since it is a real min/max, never a symmetric half-width about the
-            // category centre. Categories are already left-to-right by X (BuildColumnLayout's own cursor
-            // walk), so index-adjacent entries are true neighbours for pass 2.
-            var nodeLeft = new float[n];
-            var nodeRight = new float[n];
-            for (int i = 0; i < n; i++)
-            {
-                float left = categories[i].X - catR;
-                float right = categories[i].X + catR;
-                foreach (var ab in abilities)
-                {
-                    if (ab.Category != categories[i].Id) continue;
-                    left = Mathf.Min(left, ab.X - abR);
-                    right = Mathf.Max(right, ab.X + abR);
-                }
-                nodeLeft[i] = left;
-                nodeRight[i] = right;
-            }
+            // MV-1109: left/right/top/bottom all come from the same content-derived pass now, shared with
+            // the ui-screens conformance check so the drawn panel and the checked panel can never drift
+            // apart from each other.
+            var bounds = RigBoardLayout.ComputeFamilyPanelBounds(categories, abilities, catR, abR, _phoneMode);
 
             for (int i = 0; i < n; i++)
             {
-                // MV-594 pass 2: pad outward by RegionRectPadX, clamped so a panel can never cross the
-                // midpoint with a neighbour's own node bounds (which would engulf one of ITS nodes — the
-                // exact defect this ticket removes) or, at the two outer edges, past this family's own
-                // board-edge reservation (ColumnHalfWidth — the same edge the pre-fix layout already
-                // respected, and correct in both standard and phone mode since it is itself mode-resolved).
-                // In this data set every family sits closer to its neighbour than 2x padX, so every
-                // boundary clamps all the way down to leftLimit/rightLimit — panels land exactly on each
-                // family's own true half-width (touching, no visible gap) rather than the old midpoint-
-                // of-centres line that spilled into a neighbour's own column. See the MV-594 fix comment
-                // for the numbers; the panel still never re-overlaps a neighbour's nodes.
-                float leftLimit = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (nodeRight[i - 1] + nodeLeft[i]) * 0.5f;
-                float rightLimit = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (nodeRight[i] + nodeLeft[i + 1]) * 0.5f;
-                float left = Mathf.Max(nodeLeft[i] - padX, leftLimit);
-                float right = Mathf.Min(nodeRight[i] + padX, rightLimit);
-                float w = right - left;
+                float left = bounds[i].Left, right = bounds[i].Right, top = bounds[i].Top, bottom = bounds[i].Bottom;
+                float w = right - left, h = bottom - top;
 
                 float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
                 var panel = AddImage(boardRoot, HudTextures.RoundedBox(64, cornerFraction),
                     new Color(1f, 1f, 1f, RigBoardLayout.RegionOpacityDark), $"{categories[i].Id} Panel");
                 Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
                 panel.rectTransform.sizeDelta = new Vector2(w, h);
-                panel.rectTransform.anchoredPosition = new Vector2(left, -y);
+                panel.rectTransform.anchoredPosition = new Vector2(left, -top);
                 panel.type = Image.Type.Sliced;
                 panel.raycastTarget = false;
                 _categoryPanels[categories[i].Id] = panel;
@@ -2088,7 +2062,7 @@ namespace MaxWorlds.UI
                     Color.clear, $"{categories[i].Id} Panel Border");
                 Anchor(border.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
                 border.rectTransform.sizeDelta = new Vector2(w, h);
-                border.rectTransform.anchoredPosition = new Vector2(left, -y);
+                border.rectTransform.anchoredPosition = new Vector2(left, -top);
                 border.type = Image.Type.Sliced;
                 border.raycastTarget = false;
                 _categoryPanelBorders[categories[i].Id] = border;
@@ -2632,7 +2606,7 @@ namespace MaxWorlds.UI
                 // Caught live: "FORCE FIELDSTORAGE" — ENERGY's own two tier-1 labels overlapping each
                 // other, not bleeding into a different family, so tighter spacing alone couldn't fix it
                 // without either cramming hexes together or capping label width somehow.
-                label.rectTransform.sizeDelta = new Vector2(RigBoardLayout.PhoneLabelBoxWidth, 52f);
+                label.rectTransform.sizeDelta = new Vector2(RigBoardLayout.PhoneLabelBoxWidth, RigBoardLayout.LabelBoxHeightPhone);
                 label.horizontalOverflow = HorizontalWrapMode.Wrap;
                 label.resizeTextForBestFit = true;
                 label.resizeTextMinSize = Mathf.RoundToInt(RigBoardLayout.PhoneLabelFontSizeMin);
@@ -2640,7 +2614,7 @@ namespace MaxWorlds.UI
             }
             else
             {
-                label.rectTransform.sizeDelta = new Vector2(r * 3f, 24f);
+                label.rectTransform.sizeDelta = new Vector2(r * 3f, RigBoardLayout.LabelBoxHeight);
             }
 
             // MV-424: the Morphing Module draft's numbered badge (1-3), centred above the hex — a
