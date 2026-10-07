@@ -642,6 +642,10 @@ namespace MaxWorlds.Weapons
             {
                 RobotEnemy robot = active[i];
                 if (robot == null || !robot.IsAlive) continue;
+                // MV-1089: never pop a robot a TRAP is holding or has converted — same two-part
+                // exclusion (held is still Team.Enemy, captured flips to Team.Player) every other
+                // player-side weapon applies.
+                if (robot.Team != Team.Enemy || robot.IsTrapHeld) continue;
                 if (!CombatLevel.SameLevel(map, center, robot.transform.position)) continue;
 
                 Vector3 rp = robot.transform.position;

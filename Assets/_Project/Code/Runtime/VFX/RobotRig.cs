@@ -239,6 +239,14 @@ namespace MaxWorlds.VFX
         /// inside it, so the punch fires exactly once per attack rather than re-triggering every frame.</summary>
         private RobotEnemy.State _lastState = RobotEnemy.State.Chase;
 
+        /// <summary>MV-1089: the capture-tint colour last written to <see cref="_bodyMpb"/> — null while
+        /// no TRAP conversion has ever touched this robot. Same "skip the write once settled" idiom as
+        /// <see cref="_lastAppliedBodyHeat"/>, except this one never resets back to null for as long as
+        /// the robot stays converted: the colour settles at <see cref="RobotEnemy.TrapAllyColor"/> and is
+        /// never read fresh again for the rest of this robot's life, unlike heat (which fluctuates every
+        /// frame with windup/flash).</summary>
+        private Color? _lastAppliedCaptureColor;
+
         /// <summary>The Gunner's laser (MV-312) — built lazily, and only ever for that one kind; see
         /// <see cref="UpdateBeamVfx"/>.</summary>
         private LineRenderer _beamLine;
@@ -262,6 +270,30 @@ namespace MaxWorlds.VFX
         /// before the rig has built. See <see cref="RobotSkinDiagnostics"/>.</summary>
         public Color CurrentBodyColor =>
             _bodyMat != null && _bodyMat.HasProperty(BaseColorId) ? _bodyMat.GetColor(BaseColorId) : Color.clear;
+
+        /// <summary>MV-1089: what this robot's body submesh is ACTUALLY drawing right now — the live
+        /// <see cref="MaterialPropertyBlock"/> override (the pull tint, the capture tint, or the windup/
+        /// flash heat) when one is set, <see cref="CurrentBodyColor"/> otherwise. <see cref="CurrentBodyColor"/>
+        /// alone is exactly the gap <see cref="RobotSkinDiagnostics"/>' own doc comment warns about — a
+        /// shared material's colour proves nothing about what a property block is overriding on top of
+        /// it on THIS instance — so a test asserting the capture tint actually reached the screen reads
+        /// this, not that.</summary>
+        public Color ResolvedBodyColor
+        {
+            get
+            {
+                if (_combinedRenderer == null || _bodyMaterialIndex < 0) return CurrentBodyColor;
+                var mpb = new MaterialPropertyBlock();
+                _combinedRenderer.GetPropertyBlock(mpb, _bodyMaterialIndex);
+                return !mpb.isEmpty ? mpb.GetColor(BaseColorId) : CurrentBodyColor;
+            }
+        }
+
+        /// <summary>MV-1089: true while this robot's body submesh is an enabled renderer on screen — the
+        /// "ENABLED body renderer" half of the capture ticket's own acceptance criterion, read off the
+        /// real <see cref="Renderer.enabled"/> flag rather than assumed from <see cref="Built"/> alone
+        /// (a Lurker/Anglerfish body can be built but switched off, see <see cref="RobotEnemy.SetBodyVisible"/>).</summary>
+        public bool BodyRendererEnabled => _combinedRenderer != null && _combinedRenderer.enabled;
 
         // ---------------------------------------------------------------- lifecycle
 
@@ -731,6 +763,30 @@ namespace MaxWorlds.VFX
             UpdateTeleportExpand();
             UpdateReefInflate();
 
+            // MV-1089: a TRAP capture reads unambiguously, same "flat override, never blended with the
+            // windup/flash/teleport heat below" reasoning as the pull tint further down — a captured
+            // ally must stay green regardless of whatever tell its own state is running (it can fight
+            // other robots once converted, MV-1015, which would otherwise flash it the enemy windup
+            // amber). Driven off RobotEnemy's own already-integrated TrapConversionProgress01 rather
+            // than a dt here, so it is correct even on a dt<=0 frame (paused, or an EditMode test that
+            // never crosses a real Unity frame boundary) — unlike the windup/flash/pull-tint blocks
+            // below, which all need a real dt and so run after the early-out just below this.
+            bool captureTint = _enemy.IsTrapConverting || _enemy.IsConverted;
+            if (captureTint && _combinedRenderer != null && _bodyMaterialIndex >= 0 && _bodyMat != null)
+            {
+                Color captureColor = Color.Lerp(CurrentBodyColor, RobotEnemy.TrapAllyColor, _enemy.TrapConversionProgress01);
+                if (!_lastAppliedCaptureColor.HasValue || _lastAppliedCaptureColor.Value != captureColor)
+                {
+                    _lastAppliedCaptureColor = captureColor;
+                    _bodyMpb ??= new MaterialPropertyBlock();
+                    _combinedRenderer.GetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                    _bodyMpb.SetColor(BaseColorId, captureColor);
+                    if (_bodyMat.HasProperty(EmissionId)) _bodyMpb.SetColor(EmissionId, Color.black);
+                    _combinedRenderer.SetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                    _lastAppliedBodyHeat = null; // force the heat block to re-assert if capture ever stops mid-lerp
+                }
+            }
+
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
 
@@ -768,7 +824,7 @@ namespace MaxWorlds.VFX
                 _lastAppliedBodyHeat = null; // force the heat block to re-assert even if heat is unchanged
             }
 
-            if (!pulled)
+            if (!pulled && !captureTint)
             {
                 // The chassis heats WITH the eye, but only in emission and only a little: the body has
                 // to stay its own turquoise/violet or it stops reading as its kind. Same trick the boss

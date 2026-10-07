@@ -1096,7 +1096,7 @@ namespace MaxWorlds.UI
             }
             else
             {
-                _trapLabel.text = "TRAP";
+                _trapLabel.text = "CAPTURE"; // MV-1089: player-facing name; code identifiers stay TRAP
                 _trapRadial.fillAmount = _abilities.TrapCooldownRemaining > 0f
                     ? Mathf.Clamp01(_abilities.TrapCooldownRemaining / RobotTrap.ConversionCooldownSeconds)
                     : 0f;
@@ -1498,7 +1498,7 @@ namespace MaxWorlds.UI
             Anchor(_trapLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             _trapLabel.rectTransform.sizeDelta = new Vector2(96f, 52f);
             _trapLabel.rectTransform.anchoredPosition = Vector2.zero;
-            _trapLabel.text = "TRAP";
+            _trapLabel.text = "CAPTURE"; // MV-1089: player-facing name; code identifiers stay TRAP
             _trapLabel.fontStyle = FontStyle.Bold;
             _trapLabel.raycastTarget = false;
             _trapLabel.resizeTextForBestFit = true;

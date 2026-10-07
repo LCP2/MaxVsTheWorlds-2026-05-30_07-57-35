@@ -267,6 +267,10 @@ namespace MaxWorlds.UI
         /// itself, not just the binary <see cref="Showing"/> it eventually drives.</summary>
         public float VisibilityAlpha => _canvasGroup != null ? _canvasGroup.alpha : 1f;
 
+        /// <summary>MV-1089: the fill's own resolved colour right now — exposed so a test can assert the
+        /// "player-side bar colour" rule for a captured robot without reading pixels.</summary>
+        public Color FillColor => _fill != null ? _fill.color : Color.clear;
+
         /// <summary>Unity draw-order for this bar's world-space canvas (MV-747) — Max's is always
         /// higher than any enemy's. Exposed so a test can assert the ORDERING directly rather than
         /// re-deriving it from on-screen geometry, per the acceptance criterion's own wording.</summary>
@@ -372,7 +376,18 @@ namespace MaxWorlds.UI
             _trapMarker.text = isAlly ? "ALLY" : "HELD";
             _trapMarker.color = isAlly ? TrapAllyMarkerColor : TrapHeldMarkerColor;
             _trapMarker.gameObject.SetActive(show);
+
+            // MV-1089: once captured, this bar shows permanently (not only on damage/target) in the
+            // player-side colour treatment — this is the trap's own conversion-complete call
+            // (RobotEnemy.TickTrapConversion's (converted, converted) pair), and conversion is
+            // permanent (MV-1035), so nothing ever needs to clear this back off.
+            if (isAlly) _capturedAlwaysShow = true;
         }
+
+        /// <summary>MV-1089: true once this robot's TRAP conversion has completed — see
+        /// <see cref="SetTrapMarker"/>'s own doc comment for where it's set. Read by <see cref="Refresh"/>
+        /// (permanent visibility) and the fill-colour calls (player-side desaturated treatment).</summary>
+        private bool _capturedAlwaysShow;
 
         private void Build()
         {
@@ -727,7 +742,10 @@ namespace MaxWorlds.UI
         /// both, since <see cref="Refresh"/> resets it to zero on either. A hit bar always shows its
         /// own plate; only once it falls into the fade-out tail does <see cref="ResolveGroups"/>
         /// consider it for merging.</summary>
-        private bool IsHitLive => _secondsSinceTrigger <= TriggerHoldSeconds;
+        /// <summary>MV-1089: a captured robot (<see cref="_capturedAlwaysShow"/>) is hit-live forever —
+        /// it must always show its own plate per the ticket's "permanently", never folded into a
+        /// same-name group leader's "NAME x N" the moment its own fade-out tail starts.</summary>
+        private bool IsHitLive => _capturedAlwaysShow || _secondsSinceTrigger <= TriggerHoldSeconds;
 
         private static int Find(List<int> parent, int i)
         {
@@ -923,7 +941,9 @@ namespace MaxWorlds.UI
             {
                 float n = Mathf.Clamp01(normalizedAvg);
                 _fill.fillAmount = n;
-                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy);
+                // MV-1089: a captured robot's bar reads in the player-side (desaturated-when-healthy)
+                // treatment, same as Max's own — it's an ally now, not a threat to colour-code.
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy || _capturedAlwaysShow);
             }
         }
 
@@ -962,7 +982,9 @@ namespace MaxWorlds.UI
             _lastNormalizedHealth = n;
             _hasNormalizedHealthBaseline = true;
 
-            float visibilityAlpha = _alwaysShow ? 1f : AlphaSinceTrigger(_secondsSinceTrigger);
+            // MV-1089: a captured robot shows its bar permanently, same as _alwaysShow — it earned
+            // that by being converted, not by the fade timer below.
+            float visibilityAlpha = (_alwaysShow || _capturedAlwaysShow) ? 1f : AlphaSinceTrigger(_secondsSinceTrigger);
             if (_canvasGroup != null) _canvasGroup.alpha = visibilityAlpha;
 
             bool wouldShowBar = _alwaysShow || visibilityAlpha > 0f;
@@ -1029,8 +1051,9 @@ namespace MaxWorlds.UI
                 _fill.fillAmount = n;
                 // Shared ramp: cool neutral → yellow → orange → red, flashing when critical (YT-121,
                 // MV-788). unscaled time so it keeps pulsing even if the game is paused on a low-health
-                // beat.
-                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy);
+                // beat. MV-1089: a captured robot gets the player-side (desaturated-when-healthy)
+                // treatment, same as Max's own.
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy || _capturedAlwaysShow);
 
                 if (_secondaryFill != null && _secondary != null)
                     _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());
