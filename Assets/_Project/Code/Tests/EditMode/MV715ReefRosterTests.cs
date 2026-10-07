@@ -44,7 +44,10 @@ namespace MaxWorlds.Tests.EditMode
             AssertReefReskin(world3, EnemyKind.Rusher, "SCRAP EEL");
             AssertReefReskin(world3, EnemyKind.Bruiser, "SALVAGE CRAB");
             AssertReefReskin(world3, EnemyKind.Heavy, "CABLE TENTACLE");
-            AssertReefReskin(world3, EnemyKind.Brute, "DREDGE HULK");
+            // MV-1106 (Lee: "these Dredge Hulk robots need too much damage to destroy") gives the Brute
+            // override its own maxHealth (300) — the one kind this ticket deliberately moves off the
+            // base table; every other kind below still must not move.
+            AssertReefReskin(world3, EnemyKind.Brute, "DREDGE HULK", expectedMaxHealth: 300f);
             AssertReefReskin(world3, EnemyKind.Gunner, "MINE URCHIN");
             AssertReefReskin(world3, EnemyKind.Launcher, "PUFFER MINE");
             AssertReefReskin(world3, EnemyKind.Blinker, "ANGLERFISH-BOT");
@@ -143,7 +146,8 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        private static void AssertReefReskin(WorldConfig world3, EnemyKind kind, string expectedName)
+        private static void AssertReefReskin(WorldConfig world3, EnemyKind kind, string expectedName,
+            float? expectedMaxHealth = null)
         {
             EnemyArchetype reef = EnemyArchetype.For(kind, world3);
             EnemyArchetype baseArchetype = EnemyArchetype.Of(kind);
@@ -154,8 +158,10 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(baseArchetype.MoveSpeed, reef.MoveSpeed, 1e-4f,
                 $"{kind}'s Reef reskin must not move MoveSpeed off the base table");
-            Assert.AreEqual(baseArchetype.MaxHealth, reef.MaxHealth, 1e-4f,
-                $"{kind}'s Reef reskin must not move MaxHealth off the base table");
+            Assert.AreEqual(expectedMaxHealth ?? baseArchetype.MaxHealth, reef.MaxHealth, 1e-4f,
+                expectedMaxHealth.HasValue
+                    ? $"{kind}'s Reef reskin must carry its own overridden MaxHealth"
+                    : $"{kind}'s Reef reskin must not move MaxHealth off the base table");
             Assert.AreEqual(baseArchetype.ContactDamage, reef.ContactDamage, 1e-4f,
                 $"{kind}'s Reef reskin must not move ContactDamage off the base table");
         }

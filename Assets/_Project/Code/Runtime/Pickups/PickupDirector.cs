@@ -65,6 +65,13 @@ namespace MaxWorlds.Pickups
 
         private const float ScatterRadius = 0.9f;
 
+        /// <summary>MV-1106 (Lee, 2026-10-06): "these Dredge Hulk robots ... don't drop anything" —
+        /// every World 3 Brute (the Dredge Hulk skin, world3_config.json) killed drops this many parts
+        /// ALWAYS, on top of whatever the per-area roll (<see cref="ResolveCellDrop"/>) already gives —
+        /// a floor independent of that roll's own fractional accumulator, which can land a given kill's
+        /// share at zero. See <see cref="OnRobotDied"/>.</summary>
+        private const int DredgeHulkGuaranteedPartDrops = 2;
+
         /// <summary>MV-626, change 2: uncollected power cells allowed live on the ground at once,
         /// oldest recycled first once this is hit — the actual bound on the accumulation this ticket
         /// fixes, independent of the reserve-full gate in <see cref="SpawnDrop"/> (which only stops
@@ -202,6 +209,22 @@ namespace MaxWorlds.Pickups
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
                 Pickup dropped = SpawnDrop(PickupKind.PowerCell, pos + off);
                 if (dropped != null) MarkAgesOnGround(dropped);   // MV-1101: a robot-kill Part ages
+            }
+
+            // MV-1106: a World 3 Brute (Dredge Hulk) always drops its own guaranteed parts too, whether
+            // it came from a reactor (shed) or the area garrison — Die() reaches this listener through
+            // the same DropSignals.EmitRobotDied call regardless of how the robot was placed, so this
+            // is additive insurance against ResolveCellDrop's own roll landing at zero, not a fix to a
+            // broken path.
+            if (kind == EnemyKind.Brute && ResolvePlayedWorldIndex() >= 2)
+            {
+                for (int i = 0; i < DredgeHulkGuaranteedPartDrops; i++)
+                {
+                    float ang = i * (Mathf.PI * 2f / DredgeHulkGuaranteedPartDrops) + 0.5f; // offset off the ring above
+                    Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                    Pickup dropped = SpawnDrop(PickupKind.PowerCell, pos + off);
+                    if (dropped != null) MarkAgesOnGround(dropped);
+                }
             }
 
             // MV-672: Power Cells (the new secondary currency) drop at a tunable fraction of the Parts

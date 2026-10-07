@@ -99,7 +99,8 @@
   {
    "kind": "brute",
    "displayName": "DREDGE HULK",
-   "skin": "reef"
+   "skin": "reef",
+   "maxHealth": 300
   },
   {
    "kind": "gunner",

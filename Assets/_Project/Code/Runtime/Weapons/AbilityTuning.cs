@@ -103,6 +103,25 @@ namespace MaxWorlds.Weapons
         public static float ShoulderRackRocketDamage(int level, float baseDamage, float perLevel) =>
             Mathf.Max(0f, baseDamage) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
 
+        /// <summary>MV-1106 (Lee, 2026-10-06): "rockets are too powerful... Review damage" — World 3
+        /// only, 20 + 4/level (was 30 + 6). World 1 has no Shoulder Rack; World 2 is untouched.</summary>
+        public const float DefaultShoulderRackBaseDamageWorld3 = 20f;
+
+        /// <summary>MV-1106 counterpart to <see cref="DefaultShoulderRackBaseDamageWorld3"/>.</summary>
+        public const float DefaultShoulderRackDamagePerLevelWorld3 = 4f;
+
+        /// <summary>The Shoulder Rack's base rocket damage for <paramref name="worldIndex"/> (0-based:
+        /// World 1 = 0, World 2 = 1, World 3 = 2, same convention as
+        /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.WorldPartsMultiplier"/>) — World 3 alone reads
+        /// its own lower number (MV-1106); every earlier world keeps <see cref="DefaultShoulderRackBaseDamage"/>.</summary>
+        public static float ShoulderRackBaseDamageForWorld(int worldIndex) =>
+            worldIndex >= 2 ? DefaultShoulderRackBaseDamageWorld3 : DefaultShoulderRackBaseDamage;
+
+        /// <summary>The Shoulder Rack's per-level rocket damage step for <paramref name="worldIndex"/> —
+        /// see <see cref="ShoulderRackBaseDamageForWorld"/>.</summary>
+        public static float ShoulderRackDamagePerLevelForWorld(int worldIndex) =>
+            worldIndex >= 2 ? DefaultShoulderRackDamagePerLevelWorld3 : DefaultShoulderRackDamagePerLevel;
+
         /// <summary>Rockets fired per salvo at a maxed Salvo (<c>s_sal</c>) track — the AC's own
         /// "SalvoCount (1, s_sal -&gt; 3)".</summary>
         public const int DefaultShoulderRackMaxSalvoCount = 3;

@@ -82,7 +82,9 @@ namespace MaxWorlds.Tests.EditMode
             robot.Apply(EnemyArchetype.Rusher);
             RobotEnemyOnEnable.Invoke(robot, null); // seeds Active/ResetState -- Awake/OnEnable don't run outside Play mode
             go.transform.position = position;
-            RobotEnemyHealthField.SetValue(robot, 100f); // survives every tick in this test
+            // MV-1106 doubled Undertow's base damage to 8/tick (was 4); 20 ticks at the new rate is up
+            // to 160 damage, so 100 no longer survives the full hold -- bumped with headroom to spare.
+            RobotEnemyHealthField.SetValue(robot, 300f); // survives every tick in this test
             return robot;
         }
 
