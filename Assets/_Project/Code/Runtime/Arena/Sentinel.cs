@@ -1161,6 +1161,10 @@ namespace MaxWorlds.Arena
         private bool IsEligibleTarget(RobotEnemy robot, float rangeSq)
         {
             if (!robot.IsAlive || !robot.IsDamageable) return false;
+            // MV-1089: IsDamageable alone only excludes a robot a TRAP is still HOLDING — once it
+            // converts, IsDamageable flips back to true (an ally can be hurt by enemies) but this
+            // Sentinel must still never fire on it, so the Team check is required on top.
+            if (robot.Team != Team.Enemy) return false;
             if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, robot.transform.position)) return false;
 
             Vector3 rp = robot.transform.position;

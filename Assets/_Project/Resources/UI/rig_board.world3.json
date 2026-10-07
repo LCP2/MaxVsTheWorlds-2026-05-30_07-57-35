@@ -222,7 +222,7 @@
       "x": 130,
       "y": 740,
       "icon": "trp",
-      "label": "TRAP",
+      "label": "CAPTURE",
       "maxLevel": 1,
       "kind": "cap",
       "parent": "p_dmg",

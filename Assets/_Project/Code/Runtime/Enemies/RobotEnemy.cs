@@ -907,8 +907,11 @@ namespace MaxWorlds.Enemies
 
         // --- MV-1035: TRAP ability (Ghostbusters-style catch -> hold -> convert) ---------------------
 
-        /// <summary>The ally body colour a TRAP conversion lerps toward (spec: #5BE35A).</summary>
-        private static readonly Color TrapAllyColor = new Color(0.357f, 0.890f, 0.353f);
+        /// <summary>The ally body colour a TRAP conversion lerps toward (spec: #5BE35A). Public
+        /// (MV-1089): <see cref="MaxWorlds.VFX.RobotRig"/> is what actually drives a real robot's
+        /// visible body colour (see <see cref="BeginTrapConversion"/>'s own doc comment for why
+        /// <see cref="_skin"/> alone never reaches the screen), so it needs this value too.</summary>
+        public static readonly Color TrapAllyColor = new Color(0.357f, 0.890f, 0.353f);
 
         /// <summary>How long the orange-&gt;green body lerp takes once a trap starts converting what it
         /// holds (spec: ~4.5s).</summary>
@@ -926,6 +929,15 @@ namespace MaxWorlds.Enemies
         public bool IsTrapHeld => _trapHeld;
 
         public bool IsTrapConverting => _trapConverting;
+
+        /// <summary>0 while not converting; the conversion lerp's own progress while
+        /// <see cref="IsTrapConverting"/>; 1 once <see cref="IsConverted"/> (and forever after, until
+        /// this robot dies) — what <see cref="MaxWorlds.VFX.RobotRig"/> reads to drive the body tint
+        /// itself (MV-1089), since a RobotRig-built body carries no <see cref="CharacterSkin"/> for
+        /// <see cref="BeginTrapConversion"/>'s own write to ever reach.</summary>
+        public float TrapConversionProgress01 =>
+            IsConverted ? 1f
+            : (_trapConverting && TrapConversionSeconds > 0f ? Mathf.Clamp01(_trapConvertElapsed / TrapConversionSeconds) : 0f);
 
         /// <summary>Eligible to be caught by a TRAP right now (MV-1035): alive, on the enemy team, not
         /// already converted or held, and not a Splicer mid-channel (spec: "Splicers mid-channel are
@@ -948,7 +960,17 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Starts the orange-&gt;green conversion lerp (MV-1035) — still frozen/untargetable.
         /// Caches this body's current colour as the lerp's start so the fade always begins from whatever
-        /// it actually looked like, not an assumed default.</summary>
+        /// it actually looked like, not an assumed default.
+        ///
+        /// MV-1089: <see cref="_skin"/> is <see langword="null"/> for every real, RobotRig-built robot —
+        /// <see cref="MaxWorlds.VFX.CharacterSkinDirector"/> never attaches a <see cref="CharacterSkin"/>
+        /// to a body carrying <see cref="MaxWorlds.VFX.SelfDrivenTint"/>, which every
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> part does (the same wrong-object shape MV-1071 fixed for
+        /// Max's hit flash). The write below is therefore a no-op on a real game robot; it is kept for a
+        /// test double that attaches its own <see cref="CharacterSkin"/> directly. The write that actually
+        /// reaches the screen is <see cref="MaxWorlds.VFX.RobotRig"/>'s own capture-tint block in
+        /// <c>LateUpdate</c>, which reads <see cref="TrapConversionProgress01"/> straight off this robot
+        /// instead.</summary>
         public void BeginTrapConversion()
         {
             if (!_trapHeld || _trapConverting) return;
@@ -960,7 +982,8 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Advances the TRAP conversion colour lerp — call every frame while converting.
         /// Completes the conversion (via <see cref="TryConvert(bool)"/>, health-gate bypassed) and
-        /// returns true the instant the lerp reaches its end.</summary>
+        /// returns true the instant the lerp reaches its end. See <see cref="BeginTrapConversion"/>'s own
+        /// doc comment for why the <see cref="_skin"/> write below never reaches a real robot's screen.</summary>
         public bool TickTrapConversion(float dt)
         {
             if (!_trapConverting) return false;

@@ -193,6 +193,10 @@ namespace MaxWorlds.Weapons
             {
                 RobotEnemy robot = active[i];
                 if (robot == null || !robot.IsAlive || robot.IsDormant) continue;
+                // MV-1089: never lock a robot a TRAP is holding or has converted — held is still
+                // Team.Enemy (IsTrapHeld catches it), captured flips to Team.Player (the Team check
+                // catches it), same two-part exclusion WaterBlaster/Undertow already apply.
+                if (robot.Team != Team.Enemy || robot.IsTrapHeld) continue;
                 // MV-944: the rack never locks a robot standing on the other combat level.
                 if (!CombatLevel.SameLevel(map, transform.position, robot.transform.position)) continue;
 
