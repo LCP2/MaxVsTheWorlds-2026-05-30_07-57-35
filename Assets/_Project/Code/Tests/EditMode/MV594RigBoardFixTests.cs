@@ -168,9 +168,10 @@ namespace MaxWorlds.Tests.EditMode
             // ---------------------------------------------------------------- AC3: RegionRectPadX is actually read
             //
             // The authored 88 saturates the clamp above at every boundary in the real data (its own
-            // interior half-gap is ~18.7 standard / ~7.1 phone), so a panel WIDTH measured only at 88
-            // would look identical whether or not the code ever consulted RegionRectPadX at all. Drive it
-            // to two small values safely under that saturation point instead and confirm ENERGY's panel
+            // interior half-gap is RigBoardLayout.ColumnEdgeMargin-sized post MV-1149, a few px rather
+            // than a hand-tuned design margin), so a panel WIDTH measured only at 88 would look identical
+            // whether or not the code ever consulted RegionRectPadX at all. Drive it to two small values
+            // safely under that saturation point instead and confirm ENERGY's panel
             // (an interior family, clamped on both sides) tracks the change 1:1 on each edge. Toggling
             // through a phone-mode aspect and back forces WeaponsScreen to rebuild the board (it only
             // rebuilds panels on a phone/standard verdict flip), so each measurement reflects the padX
@@ -185,18 +186,22 @@ namespace MaxWorlds.Tests.EditMode
             // MV-694 had shrunk the interior gap on ENERGY's SECONDARY-facing side (the Shoulder Rack's
             // own s_rkt/s_sal/s_rld widened the SECONDARY column), which saturated the previous 5/15
             // probe before 15px and forced a tighter 2/5 pair. MV-732 removed those nodes from World 1's
-            // board, restoring the wider gap, so the probe reverts to 5/15. The property under test
-            // (padX is actually read, not hardcoded) is unchanged; only the two synthetic calibration
-            // values move.
-            const float ProbeLow = 5f, ProbeHigh = 15f;
+            // board, restoring the wider gap, so the probe reverted to 5/15. MV-1149's column-width fix
+            // shrunk it again, deliberately this time: the pre-fix gap was never a real margin, it was
+            // the old column-width formula's own bug (scaling abilityRadius along with everything else)
+            // accidentally leaving ~18.7 raw px of slack on World 1, where BuildColumnLayout's own fixed
+            // ColumnEdgeMargin (8px) is the real, intentional clearance post-fix — so the probe drops to
+            // 2/6, both safely under that new saturation point. The property under test (padX is
+            // actually read, not hardcoded) is unchanged; only the two synthetic calibration values move.
+            const float ProbeLow = 2f, ProbeHigh = 6f;
             RebuildStandardWith(ProbeLow);
-            float widthAt5 = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
+            float widthAtLow = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
 
             RebuildStandardWith(ProbeHigh);
-            float widthAt15 = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
+            float widthAtHigh = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
 
-            Assert.That(widthAt15 - widthAt5, Is.EqualTo(2f * (ProbeHigh - ProbeLow)).Within(0.5f),
-                $"ENERGY panel width must grow by 2x the RegionRectPadX delta when neither value saturates the neighbour clamp ({ProbeLow}px -> {widthAt5:0.0}, {ProbeHigh}px -> {widthAt15:0.0})");
+            Assert.That(widthAtHigh - widthAtLow, Is.EqualTo(2f * (ProbeHigh - ProbeLow)).Within(0.5f),
+                $"ENERGY panel width must grow by 2x the RegionRectPadX delta when neither value saturates the neighbour clamp ({ProbeLow}px -> {widthAtLow:0.0}, {ProbeHigh}px -> {widthAtHigh:0.0})");
         }
     }
 }

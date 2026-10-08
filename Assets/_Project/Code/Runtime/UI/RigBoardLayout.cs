@@ -298,6 +298,12 @@ namespace MaxWorlds.UI
         // gets a wide column and a narrow one a narrow column, never a uniform share.
         private const float StandardNodeGap = 20f;
 
+        /// <summary>MV-1149: the real clearance <see cref="BuildColumnLayout"/>'s own column-width pass
+        /// guarantees beyond a node's bare hex radius on every family's outermost side, standard and
+        /// phone alike — see that method's own doc comment for why a node's hex needs this reserved
+        /// unscaled rather than folded into the column-width sum that scale shrinks.</summary>
+        private const float ColumnEdgeMargin = 8f;
+
         /// <summary>Both modes leave this much clear board on each outer edge (PRIMARY's own left,
         /// SUPPORT's own right) instead of packing columns flush to the 1920-wide frame's own edges — a
         /// pure-background strip <c>UiScreensDirector</c>'s probe 6 (json x=20) samples to confirm
@@ -361,7 +367,7 @@ namespace MaxWorlds.UI
 
             var offsetUnits = new Dictionary<string, float>();
             var depthOf = new Dictionary<string, int>();
-            var rawHalfWidth = new Dictionary<string, float>();
+            var maxAbsByCategory = new Dictionary<string, float>();
 
             foreach (var cat in rawCategories)
             {
@@ -391,13 +397,36 @@ namespace MaxWorlds.UI
                 }
                 Assign("", 0f, 1);
 
-                rawHalfWidth[cat.id] = Mathf.Max(maxAbs * nodeSpacing + abilityRadius, categoryRadius);
+                maxAbsByCategory[cat.id] = maxAbs;
             }
 
-            float totalRaw = 0f;
-            foreach (var cat in rawCategories) totalRaw += rawHalfWidth[cat.id] * 2f;
-            float scale = totalRaw > 0f ? targetWidth / totalRaw : 1f;
+            // MV-1149: a node's own hex never scales — only its POSITION does (see PhoneNodeSpacing's
+            // own doc comment) — so the ability-radius budget has to be reserved at its real, unscaled
+            // size before solving for `scale`, not folded into the sum that gets scaled down with
+            // everything else. The previous formula (scale = targetWidth / sum(maxAbs*nodeSpacing +
+            // abilityRadius)) scaled the +abilityRadius term along with the rest of each column's half-
+            // width, so the final boundary (maxAbs*finalSpacing + abilityRadius*scale) fell short of the
+            // real hex edge (maxAbs*finalSpacing + abilityRadius) by abilityRadius*(1-scale) whenever
+            // scale < 1. World 1's sparser tree kept scale comfortably above 1 (where the same mismatch
+            // only widened a column's margin, never shrank it), so this stayed latent until World 3's
+            // denser tree pushed scale under 1 and the outermost node in several families clipped by
+            // exactly that amount — 3-5 reference px, matching every escape this ticket reported.
+            //
+            // ColumnEdgeMargin reserves a few px more than the bare minimum so a boundary sits with real
+            // clearance rather than exactly on the knife-edge (where float rounding could reopen the same
+            // clip) — comfortably over the 3-5px this ticket measured, well under the ~18.7px the old
+            // formula's own scale-the-radius bug happened to leave on World 1 as an unintentional side
+            // effect (not a deliberate margin, so not a baseline worth preserving).
+            float totalSpan = 0f;
+            foreach (var cat in rawCategories) totalSpan += maxAbsByCategory[cat.id] * nodeSpacing * 2f;
+            float effectiveRadius = abilityRadius + ColumnEdgeMargin;
+            float reserved = 2f * effectiveRadius * rawCategories.Length;
+            float scale = totalSpan > 0f ? Mathf.Max((targetWidth - reserved) / totalSpan, 0f) : 1f;
             float finalSpacing = nodeSpacing * scale;
+
+            var columnHalfWidth = new Dictionary<string, float>();
+            foreach (var cat in rawCategories)
+                columnHalfWidth[cat.id] = Mathf.Max(maxAbsByCategory[cat.id] * finalSpacing + effectiveRadius, categoryRadius);
 
             // MV-472: centred on the fixed 1920-wide reference frame's own midpoint (960) — the pivot
             // WeaponsScreen's _boardScaleRoot/_boardRoot machinery actually scales/positions around —
@@ -412,7 +441,7 @@ namespace MaxWorlds.UI
             var categoryHalfWidth = new Dictionary<string, float>();
             foreach (var cat in rawCategories)
             {
-                float w = rawHalfWidth[cat.id] * 2f * scale;
+                float w = columnHalfWidth[cat.id] * 2f;
                 categoryX[cat.id] = cursor + w * 0.5f;
                 categoryHalfWidth[cat.id] = w * 0.5f;
                 cursor += w;
