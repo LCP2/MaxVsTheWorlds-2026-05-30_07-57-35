@@ -148,6 +148,17 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
+        /// <summary>MV-1117: refunds a Sentinel deploy (now paid in Parts, see
+        /// <see cref="MaxWorlds.Weapons.PlayerAbilities.SentinelReady"/>) whose arrival was cancelled —
+        /// the Parts-bank counterpart to <see cref="AddPowerCellSecondaries"/>, uncapped the same way:
+        /// a refund must always return exactly what was spent, never clamped to <see cref="Capacity"/>.</summary>
+        public static void AddPowerCells(int amount)
+        {
+            if (amount <= 0) return;
+            PowerCells += amount;
+            PowerCellsChanged?.Invoke(PowerCells);
+        }
+
         // ------------------------------------------------------------------ Power Cells (MV-672)
         //
         // A second, separate, scarcer currency ("Power Cells" to the player) — NOT the same balance as

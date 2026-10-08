@@ -272,6 +272,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(abilities.SentinelReady, "AC3: the family must be usable again once restored");
                 Assert.IsTrue(abilities.TryDeploySentinel(), "AC3: a deploy must now succeed");
                 Assert.AreEqual(1, Sentinel.Active.Count);
+                // MV-1117: that deploy itself now spends Parts (SentinelCost, not a secondary-bank cell)
+                // — top the wallet back up to its pre-deploy baseline so Act 4/5's "the restore costs
+                // nothing" checks below stay about the RESTORE, not this unrelated deploy sanity check.
+                PickupWallet.SetPowerCells(partsBeforeAnyLock);
 
                 // ---------------------------------------------------------------- Act 4: save, then a cold-boot resume
                 SaveSystem.ActiveSlot = 0;

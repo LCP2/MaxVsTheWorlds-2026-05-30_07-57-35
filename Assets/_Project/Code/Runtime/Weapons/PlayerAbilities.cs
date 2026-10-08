@@ -728,22 +728,23 @@ namespace MaxWorlds.Weapons
         /// level reset) frees its slot automatically.</summary>
         public static int SentinelDeployedCount => Sentinel.Active.Count;
 
-        /// <summary>Power cells deploying the sentinel costs right now, from the Cost (<c>u_cst</c>)
+        /// <summary>Parts deploying the sentinel costs right now, from the Cost (<c>u_cst</c>)
         /// axis's current level.</summary>
         public static int SentinelCost => AbilityTuning.SentinelCost(
             RigState.Level("u_cst"), AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel);
 
-        /// <summary>Owned AND enough Power Cells banked — ONE of three independent gates the SENTINEL
+        /// <summary>Owned AND enough Parts banked — ONE of three independent gates the SENTINEL
         /// button's own tap reads (see <see cref="SentinelSlotAvailable"/>, <see cref="SentinelCooldownRemaining"/>).
         /// MV-1113 (SUPERSEDES MV-604's 26 Aug 2026 playtest DECISION): the Slots cap is no longer
         /// bypassed by a redeploy-time recall — the button now goes unavailable ("FULL") at the cap
         /// instead, per Lee's 6 Oct 2026 button-states spec — so this property alone deliberately still
         /// says nothing about the cap; <see cref="SentinelCanDeployNow"/> is the one that folds all three
-        /// gates together. MV-673: reads the Power Cells secondary bank, matching what a deploy actually
-        /// spends now — not Parts.</summary>
+        /// gates together. MV-1117: reads <see cref="PickupWallet.PowerCells"/> (Parts), not the Power
+        /// Cells secondary bank MV-673 had this pinned to — Lee's device playtest found Magneto auto-
+        /// draining every secondary cell into the Shoulder Rack/Balloon before a deploy ever got one.</summary>
         public bool SentinelReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
-            PickupWallet.PowerCellsSecondary >= SentinelCost;
+            PickupWallet.PowerCells >= SentinelCost;
 
         /// <summary>MV-1113: a deployment slot is free right now — the button's own "FULL" gate.</summary>
         public bool SentinelSlotAvailable => SentinelDeployedCount < SentinelDeploymentCap;
@@ -892,8 +893,9 @@ namespace MaxWorlds.Weapons
             if (!SentinelSlotAvailable) return false;
             if (!TryResolveSentinelSurfacePoint(position, out Vector3 surfacePoint)) return false;
             if (!IsValidSentinelPlacement(surfacePoint)) return false;
-            // MV-673: Sentinel deploy spends the Power Cells secondary currency, not Parts.
-            if (!PickupWallet.TrySpendPowerCellSecondaries(SentinelCost)) return false;
+            // MV-1117: Sentinel deploy spends Parts, not the Power Cells secondary bank MV-673 had
+            // this on — see SentinelReady's own doc comment for why.
+            if (!PickupWallet.TrySpendPowerCells(SentinelCost)) return false;
 
             float maxHp = AbilityTuning.SentinelMaxHp(
                 RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
@@ -970,7 +972,7 @@ namespace MaxWorlds.Weapons
 
             _arrivingSentinel.CancelArrival();
             _arrivingSentinel = null;
-            PickupWallet.AddPowerCellSecondaries(_arrivingCost);
+            PickupWallet.AddPowerCells(_arrivingCost);
         }
 
         private static int AreaIndexAt(MapData map, Vector3 position)

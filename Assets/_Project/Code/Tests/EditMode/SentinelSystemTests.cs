@@ -232,8 +232,8 @@ namespace MaxWorlds.Tests.EditMode
             // MV-397, the exact repro Lee hit: base case, one free slot (u_slt at level 0) — deploy,
             // let it die, deploy again.
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(100);
-            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
+            PickupWallet.SetPowerCells(100);   // MV-1117: a Sentinel deploy now spends Parts, not the secondary bank below
+            PickupWallet.SetPowerCellSecondary(100);
 
             var maxGo = new GameObject("Max");
             var abilities = maxGo.AddComponent<PlayerAbilities>();
@@ -275,8 +275,8 @@ namespace MaxWorlds.Tests.EditMode
         public void RedeployAtCapIsRefusedAndLiveUpgradesReachAnAlreadyDeployedSentinel_MV1113()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(999);
-            PickupWallet.SetPowerCellSecondary(999);   // MV-673: a Sentinel deploy now spends this bank, not Parts
+            PickupWallet.SetPowerCells(999);   // MV-1117: a Sentinel deploy now spends Parts, not the secondary bank below
+            PickupWallet.SetPowerCellSecondary(999);
 
             RigState.AcquireCap("u_hp");  // reaches u_slt (u_hp's own RIG child)
             RigState.AcquireCap("u_slt"); // level 1 -> cap 1

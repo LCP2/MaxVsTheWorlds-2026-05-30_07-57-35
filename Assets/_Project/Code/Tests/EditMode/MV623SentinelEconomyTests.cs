@@ -111,9 +111,9 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             // ---------------------------------------------------------------- AC7: deploy cost
-            Assert.That(AbilityTuning.DefaultSentinelCost, Is.EqualTo(5));
+            Assert.That(AbilityTuning.DefaultSentinelCost, Is.EqualTo(20));
             Assert.That(AbilityTuning.SentinelCost(
-                0, AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel), Is.EqualTo(5));
+                0, AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel), Is.EqualTo(20));
 
             // ---------------------------------------------------------------- AC8: deploy actually charges
             // Fresh RIG/wallet state: only u_sen owned (deploy needs acquisition, not slot spend).
@@ -122,22 +122,22 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Reset();
             RigState.UnlockCategory(RigBoard.Category("u_sen"));
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            // MV-673: a Sentinel deploy now spends the Power Cells secondary bank, not Parts.
-            PickupWallet.SetPowerCellSecondary(5);
+            // MV-1117: a Sentinel deploy now spends Parts, not the Power Cells secondary bank.
+            PickupWallet.SetPowerCells(20);
 
             var maxGo = new GameObject("Max");
             var abilities = maxGo.AddComponent<PlayerAbilities>();
             try
             {
                 Assert.That(abilities.TryDeploySentinel(new Vector3(5f, 0f, 0f)), Is.True);
-                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(0), "the deploy must cost exactly 5 cells");
+                Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "the deploy must cost exactly 20 parts");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
 
-                PickupWallet.SetPowerCellSecondary(4);
+                PickupWallet.SetPowerCells(19);
                 int countBeforeRefusal = Sentinel.Active.Count;
                 Assert.That(abilities.TryDeploySentinel(new Vector3(20f, 0f, 0f)), Is.False,
-                    "4 cells must not afford the 5-cell deploy");
-                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(4), "a refused deploy must not spend cells");
+                    "19 parts must not afford the 20-part deploy");
+                Assert.That(PickupWallet.PowerCells, Is.EqualTo(19), "a refused deploy must not spend parts");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(countBeforeRefusal), "a refused deploy must not place a sentinel");
 
                 // ---------------------------------------------------------------- AC9: cap refusal (MV-1113 superseded MV-604's cap-recall)
@@ -147,7 +147,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(PlayerAbilities.SentinelDeploymentCap, Is.EqualTo(3));
 
                 Sentinel.DestroyAllActive();
-                PickupWallet.SetPowerCellSecondary(999);
+                PickupWallet.SetPowerCells(999);
 
                 Assert.That(abilities.TryDeploySentinel(new Vector3(5f, 0f, 0f)), Is.True);
                 Assert.That(abilities.TryDeploySentinel(new Vector3(20f, 0f, 0f)), Is.True);

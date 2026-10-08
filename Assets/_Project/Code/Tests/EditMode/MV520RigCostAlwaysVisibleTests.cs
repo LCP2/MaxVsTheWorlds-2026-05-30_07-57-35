@@ -59,6 +59,12 @@ namespace MaxWorlds.Tests.EditMode
             // ---------------------------------------------------------------- AC1: every node has an active, non-empty cost text
             foreach (string id in RigBoard.AllIds)
             {
+                // MV-1117: u_slt's generic cost tag is now unconditionally off — it shows its own
+                // dedicated, always-visible Sentinel deploy-price line instead (NodeSentinelPriceText),
+                // a different number from this tag's unlock/upgrade price that would otherwise disappear
+                // once the node is maxed. Same carve-out precedent as MV949UpgradeCostNeverDropsBelowUnlockTests.
+                if (id == "u_slt") continue;
+
                 var text = _screen.NodeCostText(id);
                 Assert.That(text, Is.Not.Null, $"'{id}' built no cost-text component");
                 Assert.That(text.gameObject.activeInHierarchy, Is.True,
