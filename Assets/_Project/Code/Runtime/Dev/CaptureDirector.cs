@@ -1264,8 +1264,22 @@ namespace MaxWorlds.Dev
 
                 for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
 
+                // MV-1132: walk her forward in real time (this is Play mode, so the rig's own
+                // LateUpdate is actually running every frame) long enough to clear more than one full
+                // stride cycle, so the shot below lands mid-stride -- some feet planted, some stepping
+                // -- rather than catching her standing still on all six.
+                float walked = 0f;
+                const float walkSeconds = 2.5f;
+                while (walked < walkSeconds)
+                {
+                    float dt = Time.deltaTime;
+                    bossGo.transform.position += new Vector3(BossTuning.MoveSpeed * dt, 0f, 0f);
+                    walked += dt;
+                    yield return null;
+                }
+
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
-                Vector3 camFocus = focus + Vector3.up * 2.2f;   // roughly mid-height on the drum
+                Vector3 camFocus = bossGo.transform.position + Vector3.up * 2.2f;   // follow the walk, roughly mid-height on the drum
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
                 // Same first-manual-Render() warm-up MV693Replicator's own preset needed — URP's

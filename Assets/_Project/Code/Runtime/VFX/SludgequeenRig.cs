@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
@@ -166,6 +167,21 @@ namespace MaxWorlds.VFX
         private readonly Transform[] _legKnees = new Transform[LegCount];
         private readonly Transform[] _legFeet = new Transform[LegCount];
 
+        /// <summary>The upper/lower leg beam meshes (MV-1132) — repositioned every tick to join the
+        /// hip to the live (IK-solved) knee, and the knee to the live foot. Their meshes keep the
+        /// authored lengths baked in at build time (see <see cref="_upperLegLength"/>/
+        /// <see cref="_lowerLegLength"/>): the two-bone solve in <see cref="SolveKnee"/> guarantees the
+        /// live hip-knee and knee-foot distances always equal those same lengths, so the mesh never
+        /// needs rebuilding, only re-aiming.</summary>
+        private readonly Transform[] _legUpperParts = new Transform[LegCount];
+        private readonly Transform[] _legLowerParts = new Transform[LegCount];
+        private float _upperLegLength, _lowerLegLength;
+
+        private readonly float[] _legAngleDeg = new float[LegCount];
+        private HexapodGaitDriver _gait;
+        private float _rigScale;
+        private readonly List<FootfallAnim> _footfallRings = new List<FootfallAnim>();
+
         private readonly Transform[] _chuteFeet = new Transform[2];
         private readonly Transform[] _nozzleMouths = new Transform[2];
 
@@ -221,10 +237,14 @@ namespace MaxWorlds.VFX
             var placeholder = _boss.GetComponent<MeshRenderer>();
             if (placeholder != null) placeholder.enabled = false;
 
-            transform.localScale = Vector3.one * (_boss.transform.localScale.x / AuthoredBodyWidth);
+            _rigScale = _boss.transform.localScale.x / AuthoredBodyWidth;
+            transform.localScale = Vector3.one * _rigScale;
 
             Build();
             Follow();
+
+            _gait = new HexapodGaitDriver(_legAngleDeg, FootRadius * _rigScale, FootY * _rigScale,
+                _rigScale, transform.position, transform.eulerAngles.y);
 
             // MV-1127: hand the fight ticket the exact transforms it fires lobs/releases sludgers from
             // -- same "rig hands the boss what it built" flow FitColliderTo already uses below.
@@ -463,6 +483,7 @@ namespace MaxWorlds.VFX
             for (int i = 0; i < LegCount; i++)
             {
                 float angleDeg = 30f + i * (360f / LegCount);
+                _legAngleDeg[i] = angleDeg;
                 Vector3 dir = AngleDir(angleDeg);
 
                 Vector3 hipPos = dir * HipRadius + Vector3.up * HipY;
@@ -475,7 +496,7 @@ namespace MaxWorlds.VFX
                 _legHips[i] = hipGo.transform;
 
                 Vector3 kneeLocal = kneePos - hipPos;
-                CharacterPart.Add(hipGo.transform, CharacterMeshes.Beam(kneeLocal.magnitude, UpperLegR0, UpperLegR1, LegSegmentSides),
+                _legUpperParts[i] = CharacterPart.Add(hipGo.transform, CharacterMeshes.Beam(kneeLocal.magnitude, UpperLegR0, UpperLegR1, LegSegmentSides),
                     s_nearBlack, kneeLocal * 0.5f, Quaternion.FromToRotation(Vector3.up, kneeLocal.normalized), Vector3.one, "UpperLeg");
 
                 var kneeGo = new GameObject($"Leg{i}Knee");
@@ -487,7 +508,7 @@ namespace MaxWorlds.VFX
                     Quaternion.identity, Vector3.one * KneeBallDiameter, "KneeBall");
 
                 Vector3 footLocal = footPos - kneePos;
-                CharacterPart.Add(kneeGo.transform, CharacterMeshes.Beam(footLocal.magnitude, LowerLegR0, LowerLegR1, LegSegmentSides),
+                _legLowerParts[i] = CharacterPart.Add(kneeGo.transform, CharacterMeshes.Beam(footLocal.magnitude, LowerLegR0, LowerLegR1, LegSegmentSides),
                     s_nearBlack, footLocal * 0.5f, Quaternion.FromToRotation(Vector3.up, footLocal.normalized), Vector3.one, "LowerLeg");
 
                 var footGo = new GameObject($"Leg{i}Foot");
@@ -497,6 +518,14 @@ namespace MaxWorlds.VFX
 
                 CharacterPart.Add(footGo.transform, CharacterMeshes.Prism(8, 0.22f, 0.18f, 0.1f, 0.3f),
                     s_nearBlack, Vector3.zero, Quaternion.identity, Vector3.one, "FootPad");
+
+                if (i == 0)
+                {
+                    // World units: kneeLocal/footLocal are authored-local, and this transform carries
+                    // the rig's own uniform scale.
+                    _upperLegLength = kneeLocal.magnitude * _rigScale;
+                    _lowerLegLength = footLocal.magnitude * _rigScale;
+                }
             }
         }
 
@@ -530,7 +559,16 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (_boss == null) return;
+            Tick(Time.deltaTime);
+        }
+
+        /// <summary>Everything this rig does once a frame, with an explicit <paramref name="dt"/> —
+        /// pulled out of <see cref="LateUpdate"/> so a test can drive it at a controlled rate (MV-1132's
+        /// own "ticked at 60 Hz") rather than depending on <see cref="Time.deltaTime"/>.</summary>
+        private void Tick(float dt)
+        {
             Follow();
+            UpdateGait(dt);
 
             if (_dying) TickDeath();
         }
@@ -541,6 +579,119 @@ namespace MaxWorlds.VFX
             var at = new Vector3(p.x, 0f, p.z);
             var facing = Quaternion.Euler(0f, _boss.transform.eulerAngles.y, 0f);
             transform.SetPositionAndRotation(at, facing);
+        }
+
+        /// <summary>MV-1132: advances the planted-foot walk, re-aims every leg's upper/lower segment at
+        /// the result (<see cref="SolveKnee"/>), sinks the body while any foot is airborne, and spawns a
+        /// footfall ring on the tick a foot lands.</summary>
+        private void UpdateGait(float dt)
+        {
+            if (_gait == null) return;
+
+            // The gait reasons about the body's CLEAN (undipped) position — the dip below is a purely
+            // cosmetic sink applied to the hips afterward, never something a planted foot's home should
+            // react to.
+            _gait.Tick(transform.position, transform.eulerAngles.y, dt);
+
+            // Apply the dip to the body (and therefore every hip, its child) BEFORE solving the knees,
+            // so a dipped hip bends its leg to still reach the foot's unaffected target below.
+            transform.position += Vector3.up * _gait.BodyDipOffset;
+
+            for (int i = 0; i < LegCount; i++)
+            {
+                Vector3 footWorld = _gait.FootPosition(i);
+                // Knee moves first: it is the foot's own parent, so setting the foot's world position
+                // before the knee moves would only be undone the instant the knee (and the hierarchy
+                // under it) moves afterward.
+                SolveKnee(i, footWorld);
+                _legFeet[i].position = footWorld;
+                if (_gait.JustLanded(i)) SpawnFootfallRing(footWorld);
+            }
+
+            TickFootfallRings(dt);
+        }
+
+        /// <summary>Two-bone IK (MV-1132 Change #1): places <paramref name="leg"/>'s knee in the
+        /// vertical plane through its hip and <paramref name="footWorld"/>, bowed toward world-up (the
+        /// "upper side" the ticket asks for) by the law-of-cosines angle that keeps the hip-knee and
+        /// knee-foot distances exactly <see cref="_upperLegLength"/>/<see cref="_lowerLegLength"/> —
+        /// those lengths never change, so the already-built beam meshes (baked to that same length at
+        /// <see cref="BuildLegs"/> time) only ever need re-aiming, never rebuilding.</summary>
+        private void SolveKnee(int leg, Vector3 footWorld)
+        {
+            Vector3 hipWorld = _legHips[leg].position;
+            Vector3 toFoot = footWorld - hipWorld;
+            float d = Mathf.Clamp(toFoot.magnitude, Mathf.Abs(_upperLegLength - _lowerLegLength) + 0.001f,
+                _upperLegLength + _lowerLegLength - 0.001f);
+            Vector3 dir = toFoot.normalized;
+
+            float cosA = (_upperLegLength * _upperLegLength + d * d - _lowerLegLength * _lowerLegLength)
+                / (2f * _upperLegLength * d);
+            float angleA = Mathf.Acos(Mathf.Clamp(cosA, -1f, 1f));
+
+            Vector3 bendDir = (Vector3.up - dir * Vector3.Dot(Vector3.up, dir));
+            bendDir = bendDir.sqrMagnitude > 1e-8f ? bendDir.normalized : Vector3.up;
+
+            Vector3 kneeWorld = hipWorld + dir * (_upperLegLength * Mathf.Cos(angleA))
+                + bendDir * (_upperLegLength * Mathf.Sin(angleA));
+            _legKnees[leg].position = kneeWorld;
+
+            AimBeam(_legUpperParts[leg], hipWorld, kneeWorld);
+            AimBeam(_legLowerParts[leg], kneeWorld, footWorld);
+        }
+
+        private static void AimBeam(Transform beam, Vector3 from, Vector3 to)
+        {
+            if (beam == null) return;
+            Vector3 d = to - from;
+            float mag = d.magnitude;
+            if (mag <= 1e-6f) return;
+            beam.position = (from + to) * 0.5f;
+            beam.rotation = Quaternion.FromToRotation(Vector3.up, d / mag);
+        }
+
+        // ---------------------------------------------------------------- footfall rings (MV-1132 AC1i)
+
+        private sealed class FootfallAnim
+        {
+            public GroundRing Ring;
+            public Vector3 Origin;
+            public float Elapsed;
+        }
+
+        private const float FootfallLife = 0.45f;
+        private const float FootfallStartRadiusAuthored = 0.3f;
+        private const float FootfallMaxRadiusAuthored = 1.0f;
+        private const float FootfallStartAlpha = 0.55f;
+        private static readonly Color FootfallColor = new Color(0.80f, 0.78f, 0.70f);
+
+        private void SpawnFootfallRing(Vector3 worldPos)
+        {
+            var ring = GroundRing.Create("SludgequeenFootfallRing");
+            _footfallRings.Add(new FootfallAnim { Ring = ring, Origin = worldPos, Elapsed = 0f });
+        }
+
+        private void TickFootfallRings(float dt)
+        {
+            for (int i = _footfallRings.Count - 1; i >= 0; i--)
+            {
+                var anim = _footfallRings[i];
+                anim.Elapsed += dt;
+                float f = Mathf.Clamp01(anim.Elapsed / FootfallLife);
+                float radius = Mathf.Lerp(FootfallStartRadiusAuthored * _rigScale, FootfallMaxRadiusAuthored * _rigScale, f);
+                float alpha = FootfallStartAlpha * (1f - f);
+                anim.Ring.Show(anim.Origin, radius, new Color(FootfallColor.r, FootfallColor.g, FootfallColor.b, alpha));
+
+                if (f >= 1f)
+                {
+                    anim.Ring.Hide();
+                    // Same Application.isPlaying guard GroundRing.Create's own collider cleanup uses —
+                    // Destroy() logs an error outside Play mode (an EditMode test drives this directly).
+                    if (Application.isPlaying) Destroy(anim.Ring.gameObject);
+                    else DestroyImmediate(anim.Ring.gameObject);
+                    _footfallRings.RemoveAt(i);
+                }
+            }
         }
 
         /// <summary>The alarm lamp's health tell (AC1f): dark red above half health, bright red at or
@@ -599,6 +750,7 @@ namespace MaxWorlds.VFX
             if (_dying) return;
             _dying = true;
             _dieTimer = 0f;
+            _gait?.Freeze();   // MV-1132 Change #9: no new step starts; feet mid-step drop where they are.
         }
 
     }
