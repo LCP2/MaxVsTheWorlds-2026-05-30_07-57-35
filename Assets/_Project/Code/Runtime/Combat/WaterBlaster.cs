@@ -227,7 +227,13 @@ namespace MaxWorlds.Combat
         /// </summary>
         public void RefreshUpgrades()
         {
-            if (_reticle != null) _reticle.Init(transform, Range, ConeHalfAngle);
+            // MV-1128: the reticle is the SAME shared [DisallowMultipleComponent] AimReticle instance
+            // Undertow also self-attaches to on this GameObject -- without this gate, whichever weapon's
+            // own WeaponSystemState.Changed handler happened to run last this frame would stomp the
+            // other's fit, and in World 3 that meant the RCDA's stale 6m/8deg shape stuck permanently
+            // even though UNDERTOW was the one actually firing (the bug this ticket fixes).
+            if (_reticle != null && WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Rcda)
+                _reticle.Init(transform, Range, ConeHalfAngle);
             if (_vfx != null) _vfx.Init(Range, Mathf.Max(radius, streamVisualRadius), ConeHalfAngle, VisualStrength);
         }
 
@@ -292,10 +298,12 @@ namespace MaxWorlds.Combat
             _vfx.Init(range, Mathf.Max(radius, streamVisualRadius), coneHalfAngle, VisualStrength);
 
             // The aim reticle (YT-84) is built from THIS gadget's real reach and spread, so a future
-            // Beam or Lob draws its own shape without anyone authoring one.
+            // Beam or Lob draws its own shape without anyone authoring one. MV-1128: only fit it here
+            // while the RCDA is actually the active primary -- see RefreshUpgrades' own matching gate.
             _reticle = GetComponent<AimReticle>();
             if (_reticle == null) _reticle = gameObject.AddComponent<AimReticle>();
-            _reticle.Init(transform, range, coneHalfAngle);
+            if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Rcda)
+                _reticle.Init(transform, range, coneHalfAngle);
         }
 
         private void Update() => Tick(Time.deltaTime);

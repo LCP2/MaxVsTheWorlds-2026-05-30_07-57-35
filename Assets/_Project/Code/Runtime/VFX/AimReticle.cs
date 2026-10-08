@@ -77,6 +77,14 @@ namespace MaxWorlds.VFX
         /// every frame, rather than reflecting into a private field.</summary>
         public Vector3 ResolvedPosition => _quadGo != null ? _quadGo.transform.position : Vector3.zero;
 
+        /// <summary>MV-1128: the range/half-angle this reticle was last built FROM — what it was
+        /// actually told, by whichever weapon called <see cref="Init"/> last. A test reads these to
+        /// confirm the real caller (not a hardcoded shape) fed this shared, [DisallowMultipleComponent]
+        /// component its own true numbers, since two different weapons can self-attach to the same
+        /// player and both reach for this one instance.</summary>
+        public float ResolvedRange { get; private set; }
+        public float ResolvedHalfAngleDeg { get; private set; }
+
         /// <summary>
         /// Build the reticle from the gadget's REAL numbers. Callers pass what the weapon actually
         /// does, never a shape someone liked the look of — that's the ticket's whole point, and it's
@@ -109,6 +117,8 @@ namespace MaxWorlds.VFX
 
             _quadGo.GetComponent<MeshFilter>().sharedMesh =
                 AimReticleMesh.Build(range, coneHalfAngle);
+            ResolvedRange = range;
+            ResolvedHalfAngleDeg = coneHalfAngle;
 
             _alpha = IdleAlpha;   // it's already on when the run starts; it doesn't fade in
         }
