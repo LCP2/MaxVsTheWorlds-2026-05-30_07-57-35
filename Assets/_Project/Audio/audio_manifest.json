@@ -153,6 +153,13 @@
             "durationSeconds": 0.7,
             "promptInfluence": 0.5,
             "loop": false
+        },
+        {
+            "id": "UndertowLoop",
+            "prompt": "Continuous sci-fi energy tractor beam, steady low humming drone with a soft watery shimmer, even level throughout, no start and no stop",
+            "durationSeconds": 4.0,
+            "promptInfluence": 0.5,
+            "loop": true
         }
     ]
 }
