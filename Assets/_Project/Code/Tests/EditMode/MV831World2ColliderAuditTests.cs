@@ -97,7 +97,7 @@ namespace MaxWorlds.Tests.EditMode
                 // ---- change 2/AC2: every collider in World 2 ---------------------------------------
                 List<AuditRecord> allRecords = AuditRect(activeRenderers, rect: null);
                 List<AuditRecord> violations = allRecords
-                    .Where(r => r.CoverageRatio < CoverageThreshold && !KnownPreexistingMachineryRunGap(r))
+                    .Where(r => r.CoverageRatio < CoverageThreshold)
                     .ToList();
                 Assert.IsEmpty(violations, "every enabled non-trigger collider in World 2 must have visible " +
                     "art covering at least 80% of its XZ footprint (walls/floor/awake-visible robots exempt): " +
@@ -230,41 +230,6 @@ namespace MaxWorlds.Tests.EditMode
             Bounds = c.bounds,
             CoverageRatio = CoverageRatio(c.bounds, activeRenderers),
         };
-
-        /// <summary>MV-831 found this rule's own real limit, not a5's: every "machinery"-dressed 6-11 m
-        /// modular run (<see cref="StormdrainKit.BuildPumpHousing"/>, one per ~6 m of collider) hangs a
-        /// <see cref="MaxWorlds.Rendering.StormdrainLightKit.BuildLedPanel"/> whose 1.6 m-radius "Pool"
-        /// disc feeds <see cref="StormdrainDressing.FitFootprintAndHeight"/>'s own combined-bounds fit
-        /// scale, shrinking the whole module (Pool included) well under this rule's 80%. Excluding the
-        /// Pool from that shared, cross-cutting fit calculation (tried first) fixed these two but pushed
-        /// OTHER machinery runs (e.g. a3_cover4, 10 m) past MV818CoverFootprintTests' own "never overrun
-        /// by more than 0.15 m" guard instead — the two rules pull in opposite directions on the same
-        /// shared scale, and re-deriving that shared modular-run math to satisfy both is a kit-wide
-        /// change well outside this ticket's own a5 slice. a5_cover4 itself (this ticket's actual named
-        /// collider) already passes at 93% untouched; these two are a pre-existing, ~4-point, machinery-
-        /// only shortfall noted here rather than chased into shared geometry code.
-        ///
-        /// MV-852 (World 2 re-layout) crossed this SAME pre-existing kit limit for two more modular runs
-        /// — a12_cover4 (14 m) and a21_cover5 (6 m), in that ticket's own numbering. a21's own cover
-        /// position, dimensions and dressing are untouched by that ticket's move table — identical
-        /// before and after — so this reads as the same shared, cross-cutting fit-scale margin shifting
-        /// for reasons outside a21's own content (World 2 now authors fewer/different areas overall),
-        /// not a new regression in anything MV-852 actually changed. Fixing the shared scale is still
-        /// the same kit-wide change outside a single ticket's own slice.
-        ///
-        /// MV-865 (World 2 re-author) renumbered areas in play order: the true 14 m machinery run once
-        /// named a12_cover4 is now a14_cover2 (verified against the shipped config — a14's own cover4 is
-        /// a distinct, unrelated 4 m piece, so a naive a12-&gt;a14 prefix swap onto "cover4" would have
-        /// silently exempted the wrong collider), and a21_cover5 (6 m) carried over unchanged in content
-        /// to a19_cover5. a5_cover2 and a17_cover5 have NO verified equivalent in the new config — a4
-        /// (was a5) no longer authors any machinery-dressed cover piece at all, and a11 (was a17) tops
-        /// out at cover4 — their old physical cover pieces were redesigned away by the re-author, not
-        /// merely renumbered, so this exemption is left un-mapped for those two rather than guessed; a
-        /// fresh coverage audit against the new build is needed to learn whether any current machinery
-        /// run needs a new exemption in their place (see the fix comment).</summary>
-        private static bool KnownPreexistingMachineryRunGap(AuditRecord r) =>
-            (r.Name == "a5_cover2" || r.Name == "a17_cover5" || r.Name == "a14_cover2" || r.Name == "a19_cover5")
-            && r.TypeName == "BoxCollider";
 
         private static bool IsExempt(Collider c)
         {
