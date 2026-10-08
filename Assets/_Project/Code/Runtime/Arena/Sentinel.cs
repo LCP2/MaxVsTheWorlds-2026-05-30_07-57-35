@@ -141,91 +141,13 @@ namespace MaxWorlds.Arena
         /// avoids a string lookup per material per rebuild.</summary>
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
-        private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
-
-        /// <summary>MV-1004: World 2's own Warm slot (Lee, device, 2026-09-28: "Sentinels in World 2:
-        /// make them red / dark red") — read instead of <see cref="BodyColor"/> only when
-        /// <see cref="_worldIndex"/> resolves to World 2 (index 1); Worlds 1 and 3 keep
-        /// <see cref="BodyColor"/> unchanged. See <see cref="BuildBody"/>.
-        ///
-        /// MV-1024: brightened to #D8261C (Lee, TestFlight, 2026-09-29 — the original dark maroon sank
-        /// into the floor under Stormdrain's dim lighting). <see cref="BuildBody"/> also drives this
-        /// same colour into the Warm material's emission slot so it holds its red under that lighting.</summary>
-        private static readonly Color BodyColorWorld2 = new Color(0.847f, 0.149f, 0.110f);
-
-        /// <summary>MV-580: the second of the sentinel's own two body tones (the Warm slot in
-        /// <see cref="RobotPalette"/>) — a lighter, cooler tint of <see cref="BodyColor"/> rather than
-        /// the enemy roster's shared <see cref="CharacterSkin.RobotCool"/>, so the sentinel reads as
-        /// one machine built in Max's own colour family, not a robot wearing the enemy shed's grey.</summary>
-        private static readonly Color BodyAccent = new Color(0.62f, 0.78f, 0.90f);
-
-        /// <summary>MV-1004: World 2's own Accent slot — see <see cref="BodyColorWorld2"/>'s doc for the
-        /// gating rule. MV-1024: brightened to #FF5A43 alongside <see cref="BodyColorWorld2"/>.</summary>
-        private static readonly Color BodyAccentWorld2 = new Color(1.000f, 0.353f, 0.263f);
-
-        /// <summary>MV-580: the eye, nowhere near the enemy roster's tell colours — gold idle, warn
-        /// orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on this body never
-        /// reads as "about to hit you". MV-806: moved off the old cyan (which matched the water beam
-        /// that colour used to belong to) to match <see cref="SentinelBolt.BoltColor"/> instead, now
-        /// that the beam fires a red bolt — the eye still has to move with whatever the turret actually
-        /// fires, or the comment becomes a lie about live code.</summary>
-        private static readonly Color EyeColor = SentinelBolt.BoltColor;
-
-        /// <summary>MV-1004: World 2's own eye colour — a red eye disappears on World 2's own red body
-        /// (<see cref="BodyColorWorld2"/>/<see cref="BodyAccentWorld2"/>), so World 2 alone gets a pale
-        /// gold lens instead of matching <see cref="SentinelBolt.BoltColor"/>. The World 2 bolt itself
-        /// stays hazard red (ticket: "the bolt colour: stays hazard red") — only the eye moves.</summary>
-        private static readonly Color EyeColorWorld2 = new Color(1.0f, 0.86f, 0.62f);
-
-        /// <summary>MV-1069: World 3's own body/accent/bolt (Lee, 2026-10-03: "give World 3's
-        /// Sentinels a colour of their own — green — and make their lasers green as well... same
-        /// styling and width of laser, same impressiveness" as World 2). Hex #1FA84A/#6DFF8A/#4DFF6A.</summary>
-        private static readonly Color BodyColorWorld3 = new Color(0.1216f, 0.6588f, 0.2902f);
-        private static readonly Color BodyAccentWorld3 = new Color(0.4275f, 1.0f, 0.5412f);
-        private static readonly Color BoltColorWorld3 = new Color(0.3020f, 1.0f, 0.4157f);
-
-        /// <summary>MV-1069: World 3's eye, pale gold like World 2's for the same reason — a green eye
-        /// vanishes on World 3's own green body. Hex #FFDB9E.</summary>
-        private static readonly Color EyeColorWorld3 = new Color(1.0f, 0.8588f, 0.6196f);
-
-        /// <summary>MV-1069: one row per world's look, replacing the World-2-only equality checks that
-        /// used to be scattered across <see cref="BuildBody"/> and <see cref="SentinelBolt"/>. Index by
-        /// <see cref="_worldIndex"/> (0 = World 1, 1 = World 2, 2 = World 3); <see cref="ResolveStyle"/>
-        /// falls back to the World 1 row for the -1 "no BackyardPath" fixture case, matching every
-        /// world's pre-MV-1069 default look.</summary>
-        private readonly struct SentinelStyle
-        {
-            public readonly Color Body;
-            public readonly Color Accent;
-            public readonly Color Eye;
-            public readonly float EmissionFactor;
-            public readonly Color BoltColor;
-            public readonly float BoltThicknessScale;
-
-            public SentinelStyle(Color body, Color accent, Color eye, float emissionFactor,
-                Color boltColor, float boltThicknessScale)
-            {
-                Body = body;
-                Accent = accent;
-                Eye = eye;
-                EmissionFactor = emissionFactor;
-                BoltColor = boltColor;
-                BoltThicknessScale = boltThicknessScale;
-            }
-        }
-
-        private static readonly SentinelStyle[] Styles =
-        {
-            new SentinelStyle(BodyColor, BodyAccent, EyeColor, emissionFactor: 0f,
-                boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1f),
-            new SentinelStyle(BodyColorWorld2, BodyAccentWorld2, EyeColorWorld2, emissionFactor: 0.35f,
-                boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1.6f),
-            new SentinelStyle(BodyColorWorld3, BodyAccentWorld3, EyeColorWorld3, emissionFactor: 0.35f,
-                boltColor: BoltColorWorld3, boltThicknessScale: 1.6f),
-        };
-
-        private static SentinelStyle ResolveStyle(int worldIndex) =>
-            worldIndex >= 0 && worldIndex < Styles.Length ? Styles[worldIndex] : Styles[0];
+        /// <summary>MV-1069/MV-1141: one row per world's look, moved onto <see cref="WorldCatalog"/> —
+        /// the one table every other per-world system (palette, kit, music) already reads, replacing
+        /// the World-2-only equality checks that used to be scattered across <see cref="BuildBody"/> and
+        /// <see cref="SentinelBolt"/>. <see cref="WorldCatalog.Get"/> already clamps a negative index
+        /// (the -1 "no BackyardPath" fixture case) to the first row, matching every world's pre-MV-1069
+        /// default look.</summary>
+        private static SentinelStyle ResolveStyle(int worldIndex) => WorldCatalog.Get(worldIndex).Style;
 
         /// <summary>Resolved once in <see cref="BuildBody"/> from <see cref="_worldIndex"/> — what
         /// <see cref="ApplyEyeColor"/> actually paints. Never re-resolved per frame (MV-1004: "resolve
@@ -545,8 +467,8 @@ namespace MaxWorlds.Arena
         /// is one). Now built from the same shared, hand-authored body geometry every Backyard robot
         /// uses (<see cref="RobotBodies.Build"/>) — reusing the Gunner's tripod silhouette, the closest
         /// thing already in that builder to Lee's reference (a squat, domed, multi-legged walker) — in
-        /// a distinct palette (<see cref="BodyColor"/>/<see cref="BodyAccent"/>, <see cref="EyeColor"/>)
-        /// so it reads as Max's own machine, never as one more robot. Every part gets a real URP
+        /// a distinct palette (<see cref="ResolveStyle"/>'s own body/accent/eye tones) so it reads as
+        /// Max's own machine, never as one more robot. Every part gets a real URP
         /// material explicitly, because <see cref="RuntimeSurfaceDirector"/> never dresses an
         /// <see cref="IDamageable"/> and nothing else will.
         ///
@@ -1154,7 +1076,7 @@ namespace MaxWorlds.Arena
             Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
             Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
 
-            if (_worldIndex == 0) FireWaterBeam(muzzle, end);
+            if (WorldCatalog.FiresWaterBeamAt(_worldIndex)) FireWaterBeam(muzzle, end);
             else
             {
                 SentinelStyle style = ResolveStyle(_worldIndex);

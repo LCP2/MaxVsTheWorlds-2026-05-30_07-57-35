@@ -58,7 +58,7 @@ namespace MaxWorlds.Tests.EditMode
                 // the Reef-only pass (World 3 only -- the only one that re-touches a wall's material).
                 MapRuntime.Build(map, root.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(worldIndex));
+                wm.Apply(WorldCatalog.Get(worldIndex).Palette);
                 if (worldIndex >= 2) ReefKit.DressHull(root.transform);
 
                 List<StructuralWall> walls = AllWallComponents(root.transform);

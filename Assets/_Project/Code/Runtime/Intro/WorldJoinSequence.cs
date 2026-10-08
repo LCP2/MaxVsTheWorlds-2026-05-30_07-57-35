@@ -219,8 +219,8 @@ namespace MaxWorlds.Intro
             root.SetParent(transform, worldPositionStays: false);
 
             int toWorld = _fromWorldIndex + 1;
-            BiomePalette from = BiomePalette.ForWorld(_fromWorldIndex);
-            BiomePalette to = BiomePalette.ForWorld(toWorld);
+            BiomePalette from = WorldCatalog.Get(_fromWorldIndex).Palette;
+            BiomePalette to = WorldCatalog.Get(toWorld).Palette;
             string keyPrefix = $"join{_fromWorldIndex}";
 
             Material floorA = IntroBuild.Lit($"{keyPrefix}_A_floor", from.ColorFor(SurfaceKind.Ground));
@@ -306,7 +306,7 @@ namespace MaxWorlds.Intro
 
         private void BuildArrivalShell(float wallHeight, float wallThickness, int toWorld)
         {
-            BiomePalette palette = BiomePalette.ForWorld(toWorld);
+            BiomePalette palette = WorldCatalog.Get(toWorld).Palette;
             Material floorMat = IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground));
             _arrivalRoot = BuildSegment(transform, "Arrival", wallHeight, wallThickness, 0f, _entry.ArrivalShellLength,
                 floorMat, IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
@@ -333,8 +333,11 @@ namespace MaxWorlds.Intro
 
         private static void ApplyDestinationSkin(AreaGate gate, int toWorld)
         {
-            if (toWorld == 1) gate.ApplyStormdrainGateSkin();
-            else if (toWorld >= 2) gate.ApplyReefSkin();
+            switch (WorldCatalog.Get(toWorld).GateSkin)
+            {
+                case WorldGateSkin.Stormdrain: gate.ApplyStormdrainGateSkin(); break;
+                case WorldGateSkin.Reef: gate.ApplyReefSkin(); break;
+            }
         }
 
         /// <summary>The world-outward direction for a wall — N/E extend toward +Z/+X, S/W toward -Z/-X
@@ -743,7 +746,7 @@ namespace MaxWorlds.Intro
             if (_lighting == null) return;
             float along = AlongDistance(_playerT.position, _doorMouth, _wall);
             float t = Mathf.Clamp01(along / (LightingBlendFraction * _entry.CorridorLength));
-            _lighting.Apply(BackyardLook.Lerp(BackyardLook.ForWorld(_fromWorldIndex), BackyardLook.ForWorld(_fromWorldIndex + 1), t));
+            _lighting.Apply(BackyardLook.Lerp(WorldCatalog.Get(_fromWorldIndex).Look, WorldCatalog.Get(_fromWorldIndex + 1).Look, t));
         }
 
         private void EnterHoldAtEnd() { _phase = Phase.HoldAtEnd; _phaseElapsed = 0f; }

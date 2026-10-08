@@ -146,7 +146,7 @@ namespace MaxWorlds.Factories
             // (YT-71/YT-74's exact trap — see ParentScale's own doc comment). MakeMetreSpace cancels it.
             Transform metreSpace = ParentScale.MakeMetreSpace(new GameObject("ShedTurretVisual").transform, go.transform);
 
-            BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+            BackyardLook activeLook = WorldCatalog.ForActivePalette().Look;
             var palette = new ShedTurretPalette(
                 baseMaterial: TurretMaterial("ShedTurretBase", DarkMetalColor, activeLook),
                 dome: TurretMaterial("ShedTurretDome", DomeColor, activeLook),

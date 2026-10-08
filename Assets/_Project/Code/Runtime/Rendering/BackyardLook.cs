@@ -293,13 +293,6 @@ namespace MaxWorlds.Rendering
             ColorFilter = Color.white,
         };
 
-        /// <summary>The look for a loaded world, mirroring <see cref="BiomePalette.ForWorld"/>'s own
-        /// index rule. World 3 keeps <see cref="Default"/> for now — MV-745 gave the Reef its own
-        /// materials and killed its skybox, but never its lighting, and re-lighting it is that
-        /// world's own ticket, not this one's.</summary>
-        public static BackyardLook ForWorld(int worldIndex)
-            => worldIndex == 1 ? Stormdrain : Default;
-
         /// <summary>Blend every field of two looks (MV-849 — the World 1 -> World 2 joining
         /// corridor). Every <c>Color</c>/<c>float</c>/<c>Vector3</c> field gets a plain
         /// linear interpolation; nothing here is hand-picked, because a field this struct grows

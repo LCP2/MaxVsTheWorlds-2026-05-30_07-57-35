@@ -46,7 +46,7 @@ namespace MaxWorlds.Tests.EditMode
                 // then the Reef-only pass — the pass this ticket adds a step to.
                 MapRuntime.Build(map3, root3.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(2));
+                wm.Apply(WorldCatalog.Get(2).Palette);
                 ReefKit.DressHull(root3.transform);
 
                 // AC1: the floor's shared material is WorldMaterials.M_ShipFloor, wearing a real
@@ -108,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 MapRuntime.Build(map1, root1.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(0));
+                wm.Apply(WorldCatalog.Get(0).Palette);
                 // No ReefKit.DressHull call here — World 1 never runs the Reef-only pass.
 
                 Renderer floor = FindNamed(root1.transform, "Map Floor");

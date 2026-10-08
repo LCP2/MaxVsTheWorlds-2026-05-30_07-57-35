@@ -130,13 +130,21 @@ namespace MaxWorlds.Audio
             if (_backyardPath == null) _backyardPath = FindFirstObjectByType<BackyardPath>();
             if (_backyardPath == null) return;
 
-            var resolved = (MusicWorld)Mathf.Clamp(_backyardPath.ResolvedWorldIndex, 0, 2);
+            MusicWorld resolved = ResolveWorld(_backyardPath.ResolvedWorldIndex);
             if (resolved == _currentWorld || resolved == _renderingWorld) return;
 
             _renderingWorld = resolved;
             if (_renderRoutine != null) StopCoroutine(_renderRoutine);
             _renderRoutine = StartCoroutine(SwitchToWorld(resolved));
         }
+
+        /// <summary>The music a given resolved world index plays (MV-1141) — read off
+        /// <see cref="WorldCatalog"/>'s own row rather than a <c>Mathf.Clamp(..., 0, 2)</c> that would
+        /// silently hand a fourth world the Reef's track. Extracted as its own method (rather than
+        /// inlined in <see cref="TickWorldTracking"/>) so an EditMode test can assert this resolution
+        /// without going through <see cref="TickWorldTracking"/>'s own <c>StartCoroutine</c>, which
+        /// EditMode cannot run.</summary>
+        public static MusicWorld ResolveWorld(int worldIndex) => WorldCatalog.Get(worldIndex).Music;
 
         /// <summary>0.8 s fade to silence, then (once rendered — cached worlds are instant) the new
         /// world's loop, per the ticket. The fade and the render happen concurrently: nothing about

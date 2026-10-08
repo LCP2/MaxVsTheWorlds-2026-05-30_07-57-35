@@ -44,7 +44,7 @@ namespace MaxWorlds.Tests.EditMode
                 // geometry, the world's palette sweep, the Reef-only hull pass, then cover dressing.
                 MapBuild built3 = MapRuntime.Build(map3, root3.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(2));
+                wm.Apply(WorldCatalog.Get(2).Palette);
                 ReefKit.DressHull(root3.transform);
                 ReefDressing.DressCover(root3.transform, built3.Cover);
 

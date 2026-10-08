@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -800,7 +801,7 @@ namespace MaxWorlds.VFX
             // never a hard-coded per-world number. Zero in World 1, so his look there is unchanged.
             if (m.HasProperty(EmissionId))
             {
-                BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+                BackyardLook activeLook = WorldCatalog.ForActivePalette().Look;
                 m.SetColor(EmissionId, WorldCompensationEmission(color, activeLook));
             }
 

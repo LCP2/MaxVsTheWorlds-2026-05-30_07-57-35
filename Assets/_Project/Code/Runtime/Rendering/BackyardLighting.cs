@@ -38,25 +38,17 @@ namespace MaxWorlds.Rendering
         private VolumeProfile _profile;
         private Material _sky;
 
-        // The look is resolved from the biome MaterialLibrary is already carrying, using the same
-        // "this Rendering assembly must not reach into Arena" trick ApplySky's Reef check uses:
-        // BackyardPath.Awake sets the palette synchronously, and this component self-installs from
-        // AfterSceneLoad, which is later. A serialized `look` that a scene author actually changed
-        // still wins — that is what the inspector field is for.
-        private void Awake()
-            => Apply(look.Equals(BackyardLook.Default) ? BackyardLook.ForWorld(WorldIndexFromPalette()) : look);
+        /// <summary>The look Gameplay resolved for the active world (MV-1141) — set by
+        /// <c>BackyardPath.ApplyWorldMaterials</c> before this component's own AfterSceneLoad install
+        /// runs (the same ordering <see cref="MaterialLibrary.Palette"/> already relies on, since this
+        /// Rendering assembly must not reach into Arena to work that out for itself). Defaults to the
+        /// Backyard's own look, matching the pre-MV-1141 "no world resolved yet" case.</summary>
+        public static BackyardLook ActiveLook { get; set; } = BackyardLook.Default;
 
-        /// <summary>0 for the Backyard, 1 for the Stormdrain, 2 for the Reef — read off the palette
-        /// rather than the save, so a capture scene or a test that sets a palette directly is lit to
-        /// match it. Public: MV-857's <see cref="MaxWorlds.VFX.MaxRig"/> reads it too, so Max's own
-        /// world-compensation emission resolves the SAME world index this component lights with —
-        /// one rule, not two copies of it drifting apart.</summary>
-        public static int WorldIndexFromPalette()
-        {
-            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef)) return 2;
-            if (MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain)) return 1;
-            return 0;
-        }
+        // The look is resolved from whatever Gameplay last applied — a serialized `look` that a scene
+        // author actually changed still wins, which is what the inspector field is for.
+        private void Awake()
+            => Apply(look.Equals(BackyardLook.Default) ? ActiveLook : look);
 
         /// <summary>Build the whole look. Idempotent — safe to call again after a tweak.</summary>
         public void Apply(BackyardLook l)
@@ -147,15 +139,11 @@ namespace MaxWorlds.Rendering
         /// </summary>
         private void ApplySky(BackyardLook l)
         {
-            // MV-745: World 3 is a sealed hull interior — every area edge is now an enclosing hull
-            // wall, and past it is meant to read as more hull or dark water, never the Backyard's
-            // daylight dome. MaterialLibrary.Palette is already resolved to this world's biome by the
-            // time this runs — BackyardPath.Awake sets it synchronously, and this fires later, from
-            // BackyardLighting's own AfterSceneLoad self-install — so comparing against
-            // BiomePalette.Reef is a safe, self-contained "is this World 3" check that adds no
-            // dependency from this (Rendering) assembly onto Arena.
-            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef)
-                || MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain))
+            // MV-745/MV-1141: a sealed hull interior (World 2's drain, World 3's ship) has every area
+            // edge enclosed, and past it is meant to read as more hull or dark water, never the
+            // Backyard's daylight dome. Read straight off the active palette's own data field — this
+            // (Rendering) assembly never works out which world it is by comparing palettes.
+            if (MaterialLibrary.Palette.RemovesSkybox)
             {
                 // Unconditional, not "only if it's mine": a stale skybox another world's own
                 // BackyardLighting instance left behind (this component's _sky is null the first time

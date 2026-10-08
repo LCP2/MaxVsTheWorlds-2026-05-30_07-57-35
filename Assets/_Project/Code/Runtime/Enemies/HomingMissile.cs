@@ -146,7 +146,7 @@ namespace MaxWorlds.Enemies
             Material shaftBase = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
             Material tipBase = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
 
-            BackyardLook activeLook = BackyardLook.ForWorld(BackyardLighting.WorldIndexFromPalette());
+            BackyardLook activeLook = WorldCatalog.ForActivePalette().Look;
 
             // Shaft/fins: the same world-compensation emission MV-857 gives Max — zero in World 1 (his
             // look there is already correct), filled back in wherever the active world is dimmer.

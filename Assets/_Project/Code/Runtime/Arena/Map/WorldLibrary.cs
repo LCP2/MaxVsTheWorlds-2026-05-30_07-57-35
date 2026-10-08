@@ -27,16 +27,24 @@ namespace MaxWorlds.Arena
         public const string World3 = "world3_config";
 
         /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
-        /// <see cref="MaxWorlds.Save.SaveSlotData.WorldIndex"/> counts against.</summary>
-        public static readonly string[] Keys = { World1, World2, World3 };
+        /// <see cref="MaxWorlds.Save.SaveSlotData.WorldIndex"/> counts against. MV-1141: read off
+        /// <see cref="WorldCatalog"/> rather than its own literal array, so there is one list.</summary>
+        public static readonly string[] Keys = BuildKeys();
 
         /// <summary>How many worlds exist.</summary>
-        public static int Count => Keys.Length;
+        public static int Count => WorldCatalog.Count;
 
-        /// <summary>The world key for a 0-based world index, clamped to the last world once a save's
-        /// index would otherwise run off the end of <see cref="Keys"/> (there is no world after the
-        /// last one to advance into).</summary>
-        public static string KeyForIndex(int worldIndex) => Keys[Mathf.Clamp(worldIndex, 0, Keys.Length - 1)];
+        /// <summary>The world key for a 0-based world index — <see cref="WorldCatalog.Get"/> already
+        /// clamps to the last row once a save's index would otherwise run off the end (there is no
+        /// world after the last one to advance into).</summary>
+        public static string KeyForIndex(int worldIndex) => WorldCatalog.Get(worldIndex).ConfigKey;
+
+        private static string[] BuildKeys()
+        {
+            var keys = new string[WorldCatalog.Count];
+            for (int i = 0; i < keys.Length; i++) keys[i] = WorldCatalog.Get(i).ConfigKey;
+            return keys;
+        }
 
         /// <summary>Load a world config by key. Returns null and logs if it is missing, unparseable, or
         /// fails validation — the caller decides what a missing/broken world means; here it is never

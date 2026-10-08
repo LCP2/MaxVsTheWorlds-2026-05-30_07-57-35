@@ -49,7 +49,7 @@ namespace MaxWorlds.Arena
         public readonly float CorridorLength;
 
         /// <summary>Distance from the exit door, along the corridor, at which segment A gives way to B
-        /// (MV-964 §5) — <see cref="BiomePalette.ForWorld(int)"/> of <see cref="FromWorld"/> holds
+        /// (MV-964 §5) — <see cref="WorldCatalog.Get"/>'s palette for <see cref="FromWorld"/> holds
         /// through segment A, the 50/50 lerp holds through B, and the destination world's palette holds
         /// from here to the corridor's end (segment C).</summary>
         public readonly float SegmentAEnd;
