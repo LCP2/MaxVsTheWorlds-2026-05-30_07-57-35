@@ -971,7 +971,14 @@ namespace MaxWorlds.Arena
         /// axis-aligned fit this needs. Measuring bounds after rotation and pushing the scale onto a
         /// fresh, never-rotated WRAPPER instead scales the already-rotated world-space shape directly,
         /// so the result hits the target exactly regardless of what <paramref name="built"/>'s own
-        /// rotation is.</summary>
+        /// rotation is.
+        ///
+        /// MV-1150, change 1: the scale above fixes the fitted art's SIZE but not its POSITION — when the
+        /// pre-fit bounds aren't centred on <paramref name="at"/> (e.g. a Shed/Machinery module's LED pool
+        /// hangs further off one face than the body does), scaling about <paramref name="at"/> carries
+        /// that same off-centring through, scaled. So after scaling, re-measure the (now-scaled) bounds
+        /// and nudge the wrapper in XZ only by however far its centre still sits from <paramref name="at"/>
+        /// — this changes POSITION only, never the size the scale above already fixed.</summary>
         private static void FitFootprintAndHeight(GameObject built, Vector3 colliderSize, Transform parent, Vector3 at)
         {
             Renderer[] renderers = built.GetComponentsInChildren<Renderer>(true);
@@ -990,6 +997,13 @@ namespace MaxWorlds.Arena
             wrapper.position = at;
             built.transform.SetParent(wrapper, true);
             wrapper.localScale = new Vector3(scaleX, scaleY, scaleZ);
+
+            Bounds fitted = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) fitted.Encapsulate(renderers[i].bounds);
+            Vector3 recentre = wrapper.position;
+            recentre.x += at.x - fitted.center.x;
+            recentre.z += at.z - fitted.center.z;
+            wrapper.position = recentre;
         }
 
         /// <summary>Long/short aspect ratio of a cover collider's own XZ footprint (MV-818) — &gt;= 1 by
