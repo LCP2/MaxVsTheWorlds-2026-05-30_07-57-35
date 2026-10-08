@@ -161,5 +161,37 @@
             "promptInfluence": 0.5,
             "loop": true
         }
+    ],
+    "music": [
+        {
+            "id": "Backyard_explore",
+            "prompt": "Upbeat playful instrumental for a kid hero's backyard adventure on a sunny afternoon. 96 BPM, C major pentatonic. Bouncy plucked bass, marimba, a bright chiptune lead, light hand percussion and claps. Mischievous and adventurous family-friendly video game music. Steady energy throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "lengthMs": 90000
+        },
+        {
+            "id": "Backyard_boss",
+            "prompt": "Urgent energetic boss battle instrumental for a cartoon action game, a playful backyard turned dangerous. 132 BPM, C minor. Driving drums, heavy synth bass, brass stabs, a fast chiptune lead. Tense but fun family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "lengthMs": 60000
+        },
+        {
+            "id": "Stormdrain_explore",
+            "prompt": "Sneaky instrumental for exploring a dark dripping underground storm drain. 84 BPM, D minor. Deep pulsing synth bass, echoing metallic pipe percussion, water drips, an eerie mallet melody. Murky and a little gross but fun, family-friendly video game music. Steady throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "lengthMs": 90000
+        },
+        {
+            "id": "Stormdrain_boss",
+            "prompt": "Heavy grimy boss battle instrumental against a giant sludge machine in a sewer. 120 BPM, D minor. Pounding industrial drums, distorted bass, clanking metal, menacing low brass, an urgent synth arpeggio. Family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "lengthMs": 60000
+        },
+        {
+            "id": "Reef_explore",
+            "prompt": "Mysterious instrumental for exploring a strange glowing underwater reef. 70 BPM, A minor. Glassy bells, warm pads, slow bubbling arpeggios, soft sub bass. Wonder with an undercurrent of danger, family-friendly video game music. Steady throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "lengthMs": 90000
+        },
+        {
+            "id": "Reef_boss",
+            "prompt": "Epic underwater boss battle instrumental. 126 BPM, A minor. Pounding deep drums, surging synth bass, urgent arpeggios, big dark pads. Family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "lengthMs": 60000
+        }
     ]
 }

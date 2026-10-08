@@ -42,6 +42,15 @@ namespace MaxWorlds.Audio
         private readonly AudioClip[] _loopCache = new AudioClip[3];
         private readonly AudioClip[] _intensityCache = new AudioClip[3];
 
+        // MV-1137: generated tracks per world, checked once and cached (null = not generated for this
+        // world, fall back to the synthesised path — see EnsureGeneratedLoaded).
+        private readonly AudioClip[] _generatedExploreCache = new AudioClip[3];
+        private readonly AudioClip[] _generatedBossCache = new AudioClip[3];
+        private readonly bool[] _generatedChecked = new bool[3];
+        private bool _generatedModeActive;
+        private SeamLoopPlayer _exploreGenerated;
+        private SeamLoopPlayer _bossGenerated;
+
         private MusicWorld? _currentWorld;
         private MusicWorld? _renderingWorld;
         private Coroutine _renderRoutine;
@@ -56,6 +65,9 @@ namespace MaxWorlds.Audio
         {
             _mainSource = BuildSource("MusicMain");
             _intensitySource = BuildSource("MusicIntensity");
+
+            _exploreGenerated = new SeamLoopPlayer(BuildSource("MusicExploreGenA"), BuildSource("MusicExploreGenB"));
+            _bossGenerated = new SeamLoopPlayer(BuildSource("MusicBossGenA"), BuildSource("MusicBossGenB"));
         }
 
         private AudioSource BuildSource(string name)
@@ -70,6 +82,18 @@ namespace MaxWorlds.Audio
             return src;
         }
 
+        /// <summary>Resolves and caches whether world has a generated explore+boss pair, once per
+        /// world — <see cref="Resources.Load{T}"/> is cheap but there's no reason to repeat it on
+        /// every visit to the same world.</summary>
+        private void EnsureGeneratedLoaded(MusicWorld world)
+        {
+            int i = (int)world;
+            if (_generatedChecked[i]) return;
+            _generatedChecked[i] = true;
+            _generatedExploreCache[i] = Resources.Load<AudioClip>("Audio/Music/" + world + "_explore");
+            _generatedBossCache[i] = Resources.Load<AudioClip>("Audio/Music/" + world + "_boss");
+        }
+
         private void OnEnable()
         {
             HudSignals.BossEngaged += OnBossEngaged;
@@ -82,7 +106,17 @@ namespace MaxWorlds.Audio
             HudSignals.BossDefeated -= OnBossDefeated;
         }
 
-        private void OnBossEngaged(string name, int phases) => _bossEngaged = true;
+        private void OnBossEngaged(string name, int phases)
+        {
+            _bossEngaged = true;
+            // MV-1137: the generated boss track isn't layered under the explore track like the
+            // synthesised intensity layer is — it starts fresh on every engagement, per the ticket.
+            if (_generatedModeActive && _currentWorld.HasValue)
+            {
+                _bossGenerated.RestartWithClip(_generatedBossCache[(int)_currentWorld.Value]);
+            }
+        }
+
         private void OnBossDefeated() => _bossEngaged = false;
 
         private void Update()
@@ -119,25 +153,44 @@ namespace MaxWorlds.Audio
             }
             _sceneFade = 0f;
 
-            AudioClip loopClip = _loopCache[(int)world];
-            AudioClip intensityClip = _intensityCache[(int)world];
-            if (loopClip == null || intensityClip == null)
-            {
-                yield return ProcMusic.RenderIncremental(world, intensity: false,
-                    samples => loopClip = ProcMusic.BuildStereoClip($"Music_{world}", samples));
-                yield return ProcMusic.RenderIncremental(world, intensity: true,
-                    samples => intensityClip = ProcMusic.BuildStereoClip($"MusicIntensity_{world}", samples));
-                _loopCache[(int)world] = loopClip;
-                _intensityCache[(int)world] = intensityClip;
-            }
+            EnsureGeneratedLoaded(world);
+            AudioClip exploreClip = _generatedExploreCache[(int)world];
+            AudioClip bossClip = _generatedBossCache[(int)world];
 
-            _mainSource.clip = loopClip;
-            _intensitySource.clip = intensityClip;
-            _mainSource.Play();
-            _intensitySource.Play();
-            // Keep both loops phase-locked: same clip length (ProcMusic.LoopSampleCount) and started
-            // on the same frame, so AudioClip's own loop wrap keeps them in sync without re-syncing.
-            _intensitySource.timeSamples = _mainSource.timeSamples;
+            if (exploreClip != null && bossClip != null)
+            {
+                _generatedModeActive = true;
+                _mainSource.Stop();
+                _intensitySource.Stop();
+                _exploreGenerated.RestartWithClip(exploreClip);
+                _bossGenerated.RestartWithClip(bossClip);
+            }
+            else
+            {
+                _generatedModeActive = false;
+                _exploreGenerated.Stop();
+                _bossGenerated.Stop();
+
+                AudioClip loopClip = _loopCache[(int)world];
+                AudioClip intensityClip = _intensityCache[(int)world];
+                if (loopClip == null || intensityClip == null)
+                {
+                    yield return ProcMusic.RenderIncremental(world, intensity: false,
+                        samples => loopClip = ProcMusic.BuildStereoClip($"Music_{world}", samples));
+                    yield return ProcMusic.RenderIncremental(world, intensity: true,
+                        samples => intensityClip = ProcMusic.BuildStereoClip($"MusicIntensity_{world}", samples));
+                    _loopCache[(int)world] = loopClip;
+                    _intensityCache[(int)world] = intensityClip;
+                }
+
+                _mainSource.clip = loopClip;
+                _intensitySource.clip = intensityClip;
+                _mainSource.Play();
+                _intensitySource.Play();
+                // Keep both loops phase-locked: same clip length (ProcMusic.LoopSampleCount) and started
+                // on the same frame, so AudioClip's own loop wrap keeps them in sync without re-syncing.
+                _intensitySource.timeSamples = _mainSource.timeSamples;
+            }
 
             _currentWorld = world;
             _renderingWorld = null;
@@ -151,8 +204,113 @@ namespace MaxWorlds.Audio
 
             float master = Mathf.Clamp01(DevTuning.Or(DevTuning.MusicVolume, DefaultMusicVolume));
             if (!IsMusicOn) master = 0f;   // MV-1009: OFF stops the music source immediately, same frame
-            _mainSource.volume = master * _sceneFade;
-            _intensitySource.volume = master * _sceneFade * _intensityBlend;
+
+            if (_generatedModeActive)
+            {
+                var (mainVolume, bossVolume) = GeneratedVolumes(master, _sceneFade, _intensityBlend);
+                _exploreGenerated.Tick(mainVolume);
+                _bossGenerated.Tick(bossVolume);
+            }
+            else
+            {
+                _mainSource.volume = master * _sceneFade;
+                _intensitySource.volume = master * _sceneFade * _intensityBlend;
+            }
+        }
+
+        /// <summary>MV-1137: a generated explore/boss pair crossfades instead of layering (two
+        /// independently generated tracks can't be sample-aligned, so layering them would phase-beat
+        /// against each other) — a pure function so the EditMode test can assert it without a running
+        /// <see cref="MusicDirector"/> instance.</summary>
+        public static (float main, float boss) GeneratedVolumes(float master, float sceneFade, float intensityBlend) =>
+            (master * sceneFade * (1f - intensityBlend), master * sceneFade * intensityBlend);
+
+        /// <summary>MV-1137: a generated track doesn't loop cleanly on its own, so this plays it on one
+        /// of two <see cref="AudioSource"/>s (<c>loop = false</c> on both) and, <see cref="WrapLeadSeconds"/>
+        /// before the active one reaches its end, starts the other from sample 0 and equal-power
+        /// crossfades between them over that same window, then swaps which one is "active". Two
+        /// sources rather than one because starting the next play from 0 needs a clip already loaded
+        /// and playing before the first one's final sample — there's no gap to do that in on a single
+        /// source.</summary>
+        private sealed class SeamLoopPlayer
+        {
+            private const float WrapLeadSeconds = 3f;
+
+            private readonly AudioSource _a;
+            private readonly AudioSource _b;
+            private bool _activeIsA = true;
+            private bool _crossfading;
+            private float _crossfadeT;
+
+            public SeamLoopPlayer(AudioSource a, AudioSource b)
+            {
+                _a = a;
+                _b = b;
+                _a.loop = false;
+                _b.loop = false;
+                _a.volume = 0f;
+                _b.volume = 0f;
+            }
+
+            private AudioSource Active => _activeIsA ? _a : _b;
+            private AudioSource Inactive => _activeIsA ? _b : _a;
+
+            public void RestartWithClip(AudioClip clip)
+            {
+                _a.Stop();
+                _b.Stop();
+                _activeIsA = true;
+                _crossfading = false;
+                _a.clip = clip;
+                _a.time = 0f;
+                _a.Play();
+            }
+
+            public void Stop()
+            {
+                _a.Stop();
+                _b.Stop();
+                _a.volume = 0f;
+                _b.volume = 0f;
+                _crossfading = false;
+            }
+
+            public void Tick(float targetVolume)
+            {
+                AudioClip clip = Active.clip;
+                if (clip == null) return;
+
+                if (!_crossfading && Active.isPlaying && clip.length - Active.time <= WrapLeadSeconds)
+                {
+                    _crossfading = true;
+                    _crossfadeT = 0f;
+                    Inactive.clip = clip;
+                    Inactive.time = 0f;
+                    Inactive.Play();
+                }
+
+                if (_crossfading)
+                {
+                    _crossfadeT += Time.unscaledDeltaTime;
+                    float p = Mathf.Clamp01(_crossfadeT / WrapLeadSeconds);
+                    float outGain = Mathf.Cos(p * Mathf.PI * 0.5f);
+                    float inGain = Mathf.Sin(p * Mathf.PI * 0.5f);
+                    Active.volume = targetVolume * outGain;
+                    Inactive.volume = targetVolume * inGain;
+
+                    if (p >= 1f)
+                    {
+                        _crossfading = false;
+                        _activeIsA = !_activeIsA;
+                        Inactive.Stop();
+                        Inactive.volume = 0f;
+                    }
+                }
+                else
+                {
+                    Active.volume = targetVolume;
+                }
+            }
         }
 
         /// <summary>The Settings panel's SOUND-tab Music toggle state (MV-1009). Default ON.</summary>
