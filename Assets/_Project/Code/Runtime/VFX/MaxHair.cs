@@ -52,13 +52,13 @@ namespace MaxWorlds.VFX
     }
 
     /// <summary>
-    /// MV-854: Max's hair — 31 flowing locks, ported literally from <c>buildNew()</c>'s lock layout
+    /// MV-854/MV-1133: Max's hair — 25 flowing locks, ported literally from buildV3()'s lock layout
     /// and <c>hair()</c>'s motion in the approved prototype (<c>max-lookdev.html</c>, Lee's title-
     /// reveal reference). Everything here is pure — no <see cref="Transform"/>, no
     /// <see cref="GameObject"/> — so an EditMode test can drive the spring maths directly, the same
     /// "expose the resolved value" contract <see cref="MaxRig.AimPose"/> and <see cref="MaxRig.Stride"/>
     /// already make for this rig. The GameObject/Mesh side of this — one merged dynamic mesh, one draw
-    /// call for all 31 locks — is <see cref="MaxHairRig"/>.
+    /// call for all 25 locks — is <see cref="MaxHairRig"/>.
     ///
     /// Everything below is in HEAD-LOCAL space, the same convention <see cref="MaxBody"/>'s own hair
     /// cap already draws in (a bare local Vector3 like (0, 1.72, -0.06) IS a point in the Head pivot's
@@ -72,27 +72,48 @@ namespace MaxWorlds.VFX
         /// <summary>Springs per lock — one bridging each pair of adjacent nodes.</summary>
         public const int SegCount = NodeCount - 1;
 
-        /// <summary>26 scalp locks survive the layout loop below (three rows, face left clear) plus 5
-        /// fringe locks — the ticket's own "31 locks".</summary>
-        public const int LockCount = 31;
+        /// <summary>MV-1133: 20 scalp locks survive the layout loop below (three rings swept to one
+        /// side, face left clear) plus 5 fringe locks — buildV3()'s own "25 thick pointed locks (three
+        /// rings round the head and a fringe of five)", replacing MV-854's 31-lock long-hair layout.</summary>
+        public const int LockCount = 25;
 
         /// <summary>Nodes are never allowed closer to the head than this, in head-local metres — keeps
         /// a lock from ever passing through the skull.</summary>
         public const float HeadClearance = 0.235f;
 
-        /// <summary>Where a lock's root sits, out from the head centre, before the spring ever moves it
-        /// — <c>buildNew()</c>'s own 0.215.</summary>
-        private const float RootDistance = 0.215f;
+        /// <summary>Where a SCALP lock's root sits, out from the head centre, before the spring ever
+        /// moves it — buildV3()'s own 0.2.</summary>
+        private const float ScalpRootDistance = 0.2f;
+
+        /// <summary>Where a FRINGE lock's root sits — buildV3()'s own 0.215, unchanged from MV-854.</summary>
+        private const float FringeRootDistance = 0.215f;
 
         /// <summary>The head centre every lock roots and clears against — <c>buildNew()</c>'s own
-        /// <c>hairC</c>, in the Head pivot's local space.</summary>
+        /// <c>hairC</c>, in the Head pivot's local space. Unchanged by MV-1133.</summary>
         public static readonly Vector3 HeadCenterLocal = new Vector3(0f, 1.72f, -0.04f);
 
-        /// <summary>The shared flow direction a scalp lock bends toward — <c>buildNew()</c>'s own FLOW.</summary>
-        private static readonly Vector3 SharedFlow = new Vector3(0.55f, -0.85f, -0.35f).normalized;
+        /// <summary>MV-1133: how a SCALP lock hugs the head at rest, before being pulled toward its own
+        /// flow — buildV3()'s own (0, -1, -0.3), replacing MV-854's (0, -1, -0.35).</summary>
+        private static readonly Vector3 ScalpHug0 = new Vector3(0f, -1f, -0.3f);
 
-        /// <summary>Where a fringe lock sweeps instead — across the brow, to one side.</summary>
-        private static readonly Vector3 FringeFlow = new Vector3(1f, -0.45f, 0.3f).normalized;
+        /// <summary>MV-1133: how a FRINGE lock hugs the head at rest — buildV3()'s own (0, -1, 0.25),
+        /// now distinct from the scalp rings' own hug (it used to share <c>Hug0</c> with the scalp).</summary>
+        private static readonly Vector3 FringeHug0 = new Vector3(0f, -1f, 0.25f);
+
+        /// <summary>Where a fringe lock sweeps instead — across the brow, to one side. MV-1133:
+        /// buildV3()'s own (0.75, -0.6, 0.3), replacing MV-854's (1, -0.45, 0.3).</summary>
+        private static readonly Vector3 FringeFlow = new Vector3(0.75f, -0.6f, 0.3f).normalized;
+
+        /// <summary>MV-1133: the three scalp rings — (elevation, azimuth step, base length, flow lift),
+        /// ported literally from buildV3()'s own ring table. <c>Lift</c> feeds the per-lock flow
+        /// direction below; a positive lift sweeps the ring's hair up and back, a negative one sweeps it
+        /// down and back — this is what gives the "swept to one side" read instead of a flat cap.</summary>
+        private static readonly (float El, float Step, float Len0, float Lift)[] ScalpRings =
+        {
+            (64f, 60f, 0.21f, 0.25f),
+            (34f, 36f, 0.29f, -0.15f),
+            (6f, 34f, 0.30f, -0.55f),
+        };
 
         /// <summary>World-space wind direction, per the ticket's own constant. Grepping "Wind" turns up
         /// only per-material shader sway amplitudes with no direction of their own — <see cref="MaxWorlds.Rendering.BiomePalette.GroundWindLean"/>
@@ -117,59 +138,71 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// The 31-lock layout — deterministic, so the same head grows the same hair every time. Ported
-        /// literally from <c>buildNew()</c>'s own <c>L</c> array: three scalp rows at elevation
-        /// 68°/42°/18° (45° azimuth steps at 68°, 32° at the other two, skipping |az| &lt; 50° below
-        /// 60° elevation to leave the face clear) plus 5 fringe locks swept across the brow.
+        /// The 25-lock layout — deterministic, so the same head grows the same hair every time. Ported
+        /// literally from buildV3()'s own layout loop: three scalp rings (<see cref="ScalpRings"/>),
+        /// each lim-excluded near the front (az = 0, where his face is) so the face stays clear, plus 5
+        /// fringe locks swept across the brow at a fixed azimuth/length table.
         /// </summary>
         public static HairLockSpec[] BuildLayout()
         {
             var specs = new List<HairLockSpec>(LockCount);
             int i = 0;
 
-            foreach (float el in new[] { 68f, 42f, 18f })
+            foreach (var ring in ScalpRings)
             {
-                float step = el > 60f ? 45f : 32f;
-                for (double az = -180.0; az < 180.0; az += step)
+                // buildV3()'s own limit table: wide open at the crown (nothing to clear at the very
+                // top), progressively wider exclusion zones lower down the scalp where the face is.
+                float lim = ring.El > 60f ? 0f : (ring.El > 20f ? 58f : 72f);
+
+                for (double az = -180.0; az < 180.0; az += ring.Step)
                 {
                     i++;
-                    if (Mathf.Abs((float)az) < 50f && el < 60f) continue;
+                    if (Mathf.Abs((float)az) < lim) continue;
 
+                    float a = ((float)az + Rnd(i) * 10f) * Mathf.Deg2Rad;
+                    float e = ring.El * Mathf.Deg2Rad;
+                    var outDir = new Vector3(Mathf.Sin(a) * Mathf.Cos(e), Mathf.Sin(e), Mathf.Cos(a) * Mathf.Cos(e));
+                    Vector3 root = HeadCenterLocal + outDir * ScalpRootDistance;
+
+                    // Hug: down the scalp, with the component along "out" (straight away from the head)
+                    // removed — a lock has to start flat against the skull, not sticking out of it.
+                    Vector3 hug = (ScalpHug0 - outDir * Vector3.Dot(ScalpHug0, outDir)).normalized;
+
+                    // Flow: buildV3()'s own per-ring sweep, blended toward "out" then toward "hug" —
+                    // Lift is what makes the three rings sweep differently instead of all matching one
+                    // shared direction (MV-854's SharedFlow).
+                    Vector3 flow = new Vector3(0.8f, ring.Lift, -0.45f).normalized;
+                    flow = Vector3.Lerp(flow, outDir, 0.3f);
+                    flow = Vector3.Lerp(flow, hug, 0.25f).normalized;
+
+                    float len = ring.Len0 + Rnd(i + 7) * 0.07f;
+                    float width = 0.2f + Rnd(i + 3) * 0.05f;
                     bool back = Mathf.Cos((float)az * Mathf.Deg2Rad) < 0f;
-                    float len = (back ? 0.42f : 0.32f) + Rnd(i + 7) * 0.12f;
-                    float width = 0.15f + Rnd(i + 3) * 0.04f;
-                    float azFinal = (float)az + Rnd(i) * 14f;
-                    specs.Add(BuildLock(azFinal, el, len, width, fringe: false, back));
+                    float seed = Rnd((float)az + ring.El) * 10f;
+
+                    specs.Add(new HairLockSpec(root, hug, flow, len, width, fringe: false, back, seed));
                 }
             }
 
-            // Fringe: [azimuth, length] pairs, buildNew()'s own literal table — no jitter, unlike the
-            // scalp rows above.
-            (float az, float len)[] fringe =
+            // Fringe: [azimuth, length] pairs, buildV3()'s own literal table — no jitter, unlike the
+            // scalp rings above. Fixed elevation (70°) and a fixed flow (FringeFlow), not derived per
+            // lock the way the scalp rings are.
+            (float Az, float Len)[] fringe =
             {
-                (-36f, 0.2f), (-18f, 0.24f), (2f, 0.26f), (20f, 0.22f), (38f, 0.18f),
+                (-44f, 0.15f), (-22f, 0.19f), (0f, 0.21f), (22f, 0.2f), (44f, 0.16f),
             };
-            foreach (var (az, len) in fringe)
-                specs.Add(BuildLock(az, 74f, len, 0.11f, fringe: true, back: false));
+            foreach (var f in fringe)
+            {
+                float a = f.Az * Mathf.Deg2Rad, e = 70f * Mathf.Deg2Rad;
+                var outDir = new Vector3(Mathf.Sin(a) * Mathf.Cos(e), Mathf.Sin(e), Mathf.Cos(a) * Mathf.Cos(e));
+                Vector3 root = HeadCenterLocal + outDir * FringeRootDistance;
+                Vector3 hug = (FringeHug0 - outDir * Vector3.Dot(FringeHug0, outDir)).normalized;
+                float seed = Rnd(f.Az) * 10f;
+
+                specs.Add(new HairLockSpec(root, hug, FringeFlow, f.Len, 0.15f, fringe: true, back: false, seed));
+            }
 
             return specs.ToArray();
-        }
-
-        private static HairLockSpec BuildLock(float az, float el, float len, float width, bool fringe, bool back)
-        {
-            float a = az * Mathf.Deg2Rad, e = el * Mathf.Deg2Rad;
-            var outDir = new Vector3(Mathf.Sin(a) * Mathf.Cos(e), Mathf.Sin(e), Mathf.Cos(a) * Mathf.Cos(e));
-            Vector3 root = HeadCenterLocal + outDir * RootDistance;
-
-            // Hug: down the scalp, biased backward, with the component along "out" (straight away from
-            // the head) removed — a lock has to start flat against the skull, not sticking out of it.
-            var hug0 = new Vector3(0f, -1f, -0.35f);
-            Vector3 hug = (hug0 - outDir * Vector3.Dot(hug0, outDir)).normalized;
-
-            Vector3 flow = fringe ? FringeFlow : Vector3.Lerp(SharedFlow, hug, 0.25f).normalized;
-
-            float seed = Rnd(az + el) * 10f;
-            return new HairLockSpec(root, hug, flow, len, width, fringe, back, seed);
         }
 
         /// <summary>

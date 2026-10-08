@@ -45,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
         private const float HipY = 0.74f; // MaxRig.HipY (private) — the waist height the rig builds at.
 
         private static MaxPalette NullPalette() =>
-            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null);
+            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         /// <summary>
         /// Builds Max's body under a "Body" pivot scaled by <paramref name="bodyScale"/>, mirroring
@@ -194,12 +194,13 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>A3 (approved-geometry follow-up), superseded by MV-851: the title-reveal body
-        /// builds 37 renderers — legs (5 per leg: thigh, shorts hem, shin, sole, boot × 2 = 10), torso
-        /// (tunic, collar, belt, one pouch, neck = 5), head (skin + per-side eye/pupil/brow × 2 + hair
-        /// cap + back-of-head mass = 9), arms (one bare-skin beam each = 2) and the unchanged RCDA
-        /// gadget (7 solid parts + 2 glow lenses = 9) plus its two hand-grip knuckle balls (2). This is
-        /// exactly the "a ticket's own changes make an existing count stale" case the culling policy
+        /// <summary>A3 (approved-geometry follow-up), superseded by MV-1133: the buildV3() body builds
+        /// 47 renderers — legs (5 per leg: thigh, shorts hem, shin, sole, boot × 2 = 10), torso (tunic,
+        /// collar, belt, one pouch, neck, buckle, chest-strap band = 7), head (skin + per-side
+        /// eye/pupil/brow × 2 + hair cap + back-of-head mass = 9), arms (two shoulder caps + two sleeve
+        /// beams = 4), the active RCDA gadget's shared gun body (11 solid parts + 2 glow lenses = 13,
+        /// see <see cref="MaxBody.BuildGunBody"/>) and the hand grips (two gloves + two cuffs = 4). This
+        /// is exactly the "a ticket's own changes make an existing count stale" case the culling policy
         /// allows for; the count itself is still a resolved value read off real renderers, not an
         /// authored constant.</summary>
         [Test]
@@ -210,10 +211,10 @@ namespace MaxWorlds.Tests.EditMode
             {
                 MaxBody.Build(root, NullPalette(), HipY);
                 var renderers = root.GetComponentsInChildren<MeshRenderer>();
-                Assert.That(renderers.Length, Is.EqualTo(37),
-                    $"Built {renderers.Length} renderers, not the MV-851 title-reveal body's 37 (10 leg " +
-                    "parts + 5 torso parts + 9 head parts + 2 arm beams + 9 gadget parts + 2 hand-grip " +
-                    "knuckle balls).");
+                Assert.That(renderers.Length, Is.EqualTo(47),
+                    $"Built {renderers.Length} renderers, not the MV-1133 buildV3() body's 47 (10 leg " +
+                    "parts + 7 torso parts + 9 head parts + 4 arm parts + 13 gadget parts + 4 hand-grip " +
+                    "parts).");
             }
             finally
             {
@@ -221,11 +222,11 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>A4 (approved-geometry follow-up), superseded by MV-851: <c>MaxPalette</c> now
-        /// carries exactly the title-reveal body's twelve material slots — <c>Jacket</c>, <c>Hood</c>,
-        /// <c>Fabric</c>, <c>Goggle</c> and <c>Pouch</c> are gone (no hood, no goggles, and the one
-        /// pouch now shares the belt's own material); <c>Tunic</c>, <c>TunicDark</c>, <c>Glove</c> and
-        /// <c>Pupil</c> are new.</summary>
+        /// <summary>A4 (approved-geometry follow-up), superseded by MV-1133: <c>MaxPalette</c> now
+        /// carries exactly thirteen material slots — MV-851's twelve (<c>Jacket</c>, <c>Hood</c>,
+        /// <c>Fabric</c>, <c>Goggle</c> and <c>Pouch</c> gone; <c>Tunic</c>, <c>TunicDark</c>,
+        /// <c>Glove</c> and <c>Pupil</c> new) plus MV-1133's own new <c>Housing</c> — the gadget's
+        /// shared housing colour (see <see cref="MaxBody.BuildGunBody"/>).</summary>
         [Test]
         public void MaxPaletteCarriesExactlyTheTitleRevealBodysTwelveMaterialSlots()
         {
@@ -234,11 +235,11 @@ namespace MaxWorlds.Tests.EditMode
             var names = new System.Collections.Generic.HashSet<string>();
             foreach (var f in fields) names.Add(f.Name);
 
-            Assert.That(fields.Length, Is.EqualTo(12),
-                $"MaxPalette has {fields.Length} public fields, not the MV-851 title-reveal body's 12.");
+            Assert.That(fields.Length, Is.EqualTo(13),
+                $"MaxPalette has {fields.Length} public fields, not MV-1133's 13.");
 
             foreach (var expected in new[] { "Skin", "Hair", "Tunic", "TunicDark", "Belt", "Boot",
-                                             "Sole", "Glove", "Eye", "Pupil", "Dark", "Metal" })
+                                             "Sole", "Glove", "Eye", "Pupil", "Dark", "Metal", "Housing" })
             {
                 Assert.That(names, Does.Contain(expected), $"MaxPalette lost or renamed its '{expected}' field.");
             }

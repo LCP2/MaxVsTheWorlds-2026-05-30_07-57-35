@@ -117,9 +117,9 @@ namespace MaxWorlds.VFX
 
         private static readonly Color Skin = new Color(0.87f, 0.63f, 0.46f);
 
-        /// <summary>MV-851: dark brown, off the old hoodie-era hair — the single biggest thing a 72°
-        /// camera sees of him is now a low cap rather than two bunches (see <see cref="MaxBody"/>).</summary>
-        private static readonly Color Hair = new Color(0.19f, 0.11f, 0.06f);
+        /// <summary>MV-1133: short, swept blue-black — replaces the MV-851 dark-brown mane (Lee, on the
+        /// shipped look: "looks like a caveman"). buildV3()'s own number.</summary>
+        private static readonly Color Hair = new Color(0.05f, 0.065f, 0.125f);
 
         /// <summary>The boots. Near-black, distinct from <see cref="Dark"/> (the gadget/rack housing
         /// colour) so a design-fidelity pass can tell the two apart in a screenshot.</summary>
@@ -130,17 +130,23 @@ namespace MaxWorlds.VFX
         /// so there is no readability reason left to keep them bright.</summary>
         private static readonly Color Sole = new Color(0.20f, 0.17f, 0.16f);
 
-        /// <summary>The cuff and glove riding on each hand grip — distinct from both <see cref="Boot"/>
-        /// and the gadget's own <see cref="Dark"/> housing colour, per the approved prototype.</summary>
-        private static readonly Color Glove = new Color(0.16f, 0.13f, 0.12f);
+        /// <summary>MV-1133: the glove, buildV3()'s own dark neutral — distinct from both <see cref="Boot"/>
+        /// and the gadget's own <see cref="Dark"/>/<see cref="Housing"/> colours.</summary>
+        private static readonly Color Glove = new Color(0.14f, 0.14f, 0.16f);
 
-        /// <summary>The gadget/rack housing colour, unchanged by MV-851 — still the "a tool is not part
-        /// of a person" dark neutral the RCDA/LPPE and Shoulder Rack tubes have always used.</summary>
+        /// <summary>The Shoulder Rack's own near-black tubes — untouched by MV-1133. Distinct from the
+        /// gadget's own <see cref="Housing"/> colour below so the two don't drift together by accident.</summary>
         private static readonly Color Dark = new Color(0.13f, 0.13f, 0.15f);
 
-        /// <summary>The gadget. Cold, pale steel — the same family as the blades on the boss's reel and
-        /// deliberately NOT the family of anything else on Max. A tool is not part of a person.</summary>
-        private static readonly Color Steel = new Color(0.58f, 0.64f, 0.72f);
+        /// <summary>MV-1133: the gadget's own dark housing — buildV3()'s own "gun" colour, replacing the
+        /// RCDA/LPPE's separate housings (see <see cref="MaxBody.BuildGunBody"/>). "This housing and
+        /// barrel are the gadget's body in every world."</summary>
+        private static readonly Color Housing = new Color(0.23f, 0.25f, 0.30f);
+
+        /// <summary>The gadget's barrel and side plate. Cold, pale steel — the same family as the blades
+        /// on the boss's reel and deliberately NOT the family of anything else on Max. A tool is not
+        /// part of a person. MV-1133: buildV3()'s own number.</summary>
+        private static readonly Color Steel = new Color(0.66f, 0.71f, 0.78f);
 
         /// <summary>The tank. This is <see cref="WaterVfx"/>'s own <c>waterColor</c>, to the digit —
         /// the ammunition you can see through the side of the gadget is the ammunition that comes out
@@ -154,9 +160,9 @@ namespace MaxWorlds.VFX
         /// rather than carrying its own copy of the number that could drift.</summary>
         public static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
 
-        /// <summary>MV-851: the belt band and its one pouch, both this colour per the approved
-        /// prototype — a warm brown leather rather than the old MV-669 belt's dark neutral.</summary>
-        private static readonly Color Belt = new Color(0.47f, 0.31f, 0.18f);
+        /// <summary>MV-1133: the belt band, its one pouch and the gadget's own strap wraps, now dark
+        /// webbing — replaces MV-851's warm brown leather (Lee: "not brown leather").</summary>
+        private static readonly Color Belt = new Color(0.16f, 0.16f, 0.19f);
 
         /// <summary>The eye whites — visible for the first time under MV-851; the old body's goggle
         /// lenses stood in for "his eyes" instead. <see cref="Pupil"/> sits in front of this.</summary>
@@ -272,10 +278,11 @@ namespace MaxWorlds.VFX
         private const float ShoulderY = 0.62f;
         private const float ShoulderX = 0.25f;
 
-        /// <summary>MV-851: the bare arm's own beam is 0.048 m → 0.04 m radius (<c>Beam(1,.5,.4,6)</c>'s
-        /// unit profile scaled uniformly) — 0.5 * 0.096 = 0.048 at the shoulder end, 0.4 * 0.096 = 0.0384
-        /// at the hand end, matching the approved prototype to within half a centimetre.</summary>
-        private const float SleeveWidth = 0.096f;
+        /// <summary>MV-1133: the sleeve's own beam radius (<c>Beam(1,.5,.4,6)</c>'s unit profile scaled
+        /// uniformly) — 0.5 * 0.128 = 0.064 at the shoulder end, 0.4 * 0.128 = 0.0512 at the wrist end,
+        /// matching buildV3()'s own static sleeve segment (radii 0.064/0.052) to within a millimetre.
+        /// Up from MV-851's bare-arm 0.096 — "thicker than today's bare arm", per the ticket.</summary>
+        private const float SleeveWidth = 0.128f;
 
         /// <summary>MV-851: how far a relaxed arm hangs down from the shoulder while not aiming — the
         /// approved prototype's own 0.44 m bare-arm length. See <see cref="PoseArms"/> for why this has
@@ -572,7 +579,7 @@ namespace MaxWorlds.VFX
         private Quaternion _moveLean = Quaternion.identity;
 
         private Material _skinMat, _hairMat, _hairRibbonMat, _tunicMat, _tunicDarkMat, _beltMat, _bootMat,
-                         _soleMat, _gloveMat, _eyeMat, _pupilMat, _darkMat, _metalMat;
+                         _soleMat, _gloveMat, _eyeMat, _pupilMat, _darkMat, _metalMat, _housingMat;
         private MaterialPropertyBlock _lensMpb;
 
         /// <summary>MV-854: the 31 flowing locks — owns their own merged dynamic mesh; see that
@@ -691,18 +698,19 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Twelve materials, all OURS. MV-851 replaces the MV-669 hoodie/goggles set (thirteen
+        /// Thirteen materials, all OURS. MV-851 replaces the MV-669 hoodie/goggles set (thirteen
         /// materials: Jacket, Hood, Fabric, Goggle and Pouch are gone; Tunic, TunicDark, Glove and Pupil
         /// are new) — the goggles are removed outright (AC2), and the belt's one pouch now shares the
-        /// belt's own material rather than carrying a separate one.
+        /// belt's own material rather than carrying a separate one. MV-1133 adds a thirteenth:
+        /// <c>Housing</c>, the gadget's own shared housing colour (see <see cref="MaxBody.BuildGunBody"/>).
         ///
         /// Instances of <see cref="MaterialLibrary.Character()"/> — never that material itself, which
         /// is worn by every robot in the yard and by the boss, and tinting it to give Max brown hair
         /// would give the entire cast brown hair.
         ///
-        /// Instances rather than one material and twelve MaterialPropertyBlocks, for the same reason
+        /// Instances rather than one material and thirteen MaterialPropertyBlocks, for the same reason
         /// the boss's rig does it: a property block is what BREAKS SRP batching, and a shared material
-        /// instance is what keeps it. Twelve materials on one shader batch; twelve blocks do not.
+        /// instance is what keeps it. Thirteen materials on one shader batch; thirteen blocks do not.
         /// </summary>
         private void BuildMaterials()
         {
@@ -724,6 +732,7 @@ namespace MaxWorlds.VFX
             _pupilMat = CharacterMaterial("Max_Pupil", Pupil);
             _darkMat = CharacterMaterial("Max_Dark", Dark);
             _metalMat = CharacterMaterial("Max_Metal", Steel);
+            _housingMat = CharacterMaterial("Max_Housing", Housing);
         }
 
         /// <summary>
@@ -824,7 +833,7 @@ namespace MaxWorlds.VFX
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
             var palette = new MaxPalette(_skinMat, _hairMat, _tunicMat, _tunicDarkMat, _beltMat,
                                          _bootMat, _soleMat, _gloveMat, _eyeMat, _pupilMat,
-                                         _darkMat, _metalMat);
+                                         _darkMat, _metalMat, _housingMat);
             var body = MaxBody.Build(feet, palette, HipY);
             _gadgetGlow = body.GadgetGlow;
             _hips[0] = body.Hips[0];
@@ -1391,7 +1400,7 @@ namespace MaxWorlds.VFX
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
             Kill(_skinMat); Kill(_hairMat); Kill(_hairRibbonMat); Kill(_tunicMat); Kill(_tunicDarkMat);
             Kill(_beltMat); Kill(_bootMat); Kill(_soleMat); Kill(_gloveMat); Kill(_eyeMat);
-            Kill(_pupilMat); Kill(_darkMat); Kill(_metalMat);
+            Kill(_pupilMat); Kill(_darkMat); Kill(_metalMat); Kill(_housingMat);
 
             // MV-854: the merged hair mesh is a runtime instance too — nothing else destroys it when
             // the GameObject that renders it goes down with the rest of this rig.

@@ -4,7 +4,7 @@ using UnityEngine.Rendering;
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// MV-854: owns the one dynamic mesh all 31 locks render through — a single draw call, rebuilt
+    /// MV-854/MV-1133: owns the one dynamic mesh all the locks render through — a single draw call, rebuilt
     /// every <c>LateUpdate</c> from <see cref="MaxHair"/>'s pure spring maths (kept pure precisely so
     /// an EditMode test can drive it without this class, a <see cref="GameObject"/> or a scene — see
     /// that class's doc). Lives under Max's Head pivot, the same space the static hair cap

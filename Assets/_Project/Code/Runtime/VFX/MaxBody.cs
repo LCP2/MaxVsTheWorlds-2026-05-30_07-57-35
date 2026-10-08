@@ -15,13 +15,18 @@ namespace MaxWorlds.VFX
     {
         public readonly Material Skin, Hair, Tunic, TunicDark, Belt, Boot, Sole, Glove, Eye, Pupil, Dark, Metal;
 
+        /// <summary>MV-1133: the gadget's own housing/barrel-support colour (buildV3's "gun" material) —
+        /// distinct from <see cref="Dark"/> (the Shoulder Rack's own near-black tubes, untouched by this
+        /// ticket) so the two don't drift together by accident.</summary>
+        public readonly Material Housing;
+
         public MaxPalette(Material skin, Material hair, Material tunic, Material tunicDark, Material belt,
                           Material boot, Material sole, Material glove, Material eye, Material pupil,
-                          Material dark, Material metal)
+                          Material dark, Material metal, Material housing)
         {
             Skin = skin; Hair = hair; Tunic = tunic; TunicDark = tunicDark; Belt = belt;
             Boot = boot; Sole = sole; Glove = glove; Eye = eye; Pupil = pupil;
-            Dark = dark; Metal = metal;
+            Dark = dark; Metal = metal; Housing = housing;
         }
     }
 
@@ -166,6 +171,16 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Prism(4, 0.06f, 0.055f, 0.12f, 0.22f, 0f), p.Belt, new Vector3(0.15f, 0.84f, 0.13f), Quaternion.identity, new Vector3(1f, 1f, 0.7f));
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.44f), new Vector2(0.07f, 1.45f), new Vector2(0.075f, 1.5f), new Vector2(0f, 1.51f) }, 12), p.Skin, Vector3.zero, Quaternion.identity, Vector3.one);
 
+            // ---- MV-1133: the belt's one steel buckle, and a diagonal chest strap shoulder-to-hip (the
+            // belt itself is now dark webbing rather than brown leather — see MaxRig's Belt colour) —
+            // ported literally from buildV3()'s own belt section.
+            Add(root, CharacterMeshes.Prism(4, 0.05f, 0.05f, 0.07f, 0.2f, 0f), p.Metal, new Vector3(0f, 0.897f, 0.2f), Quaternion.Euler(90f, 0f, 0f), new Vector3(1f, 0.5f, 1f), "Buckle");
+            var chestStrap = new GameObject("ChestStrap");
+            chestStrap.transform.SetParent(root, worldPositionStays: false);
+            chestStrap.transform.localPosition = new Vector3(0f, 1.13f, 0f);
+            chestStrap.transform.localRotation = Quaternion.Euler(0f, 0f, 38f);
+            Add(chestStrap.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.2f, -0.03f), new Vector2(0.232f, -0.028f), new Vector2(0.232f, 0.028f), new Vector2(0.2f, 0.03f) }, 28), p.Belt, Vector3.zero, Quaternion.identity, new Vector3(1.06f, 1f, 1f), "ChestStrapBand");
+
             // ---- head, hair (buildNew(), literal) — wrapped in a "Head" pivot so MaxRig can yaw it
             // independently for the head-lag cue (MV-717). The pivot sits at root's own origin (identity
             // local transform), so every child keeps the exact authored offset below; a pure yaw of the
@@ -187,20 +202,22 @@ namespace MaxWorlds.VFX
                 Add(head, CharacterMeshes.Sphere(12), p.Pupil, new Vector3(sx * 0.08f, 1.655f, 0.196f), Quaternion.Euler(-32f, 0f, 0f), new Vector3(0.05f, 0.062f, 0.022f));
                 Add(head, CharacterMeshes.Prism(4, 0.022f, 0.022f, 0.11f, 0.2f, 0f), p.Hair, new Vector3(sx * 0.088f, 1.73f, 0.19f), Quaternion.Euler(-20f, 0f, 90f + sx * 16f), new Vector3(1f, 1f, 0.8f));
             }
-            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.735f), new Vector2(0.17f, 1.74f), new Vector2(0.222f, 1.775f), new Vector2(0.232f, 1.83f), new Vector2(0.21f, 1.89f), new Vector2(0.13f, 1.925f), new Vector2(0f, 1.93f) }, 22), p.Hair, new Vector3(0f, 0f, -0.035f), Quaternion.identity, Vector3.one);
-            Add(head, CharacterMeshes.Sphere(16), p.Hair, new Vector3(0f, 1.72f, -0.06f), Quaternion.identity, new Vector3(0.43f, 0.4f, 0.36f));
+            // MV-1133: the tight cap/back-of-head mass, re-matched to buildV3()'s own numbers (blue-black
+            // now, via MaxRig's Hair colour) — the shape itself barely moved from the MV-851 original.
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.74f), new Vector2(0.165f, 1.745f), new Vector2(0.214f, 1.778f), new Vector2(0.222f, 1.83f), new Vector2(0.2f, 1.885f), new Vector2(0.125f, 1.918f), new Vector2(0f, 1.924f) }, 22), p.Hair, new Vector3(0f, 0f, -0.04f), Quaternion.identity, Vector3.one);
+            Add(head, CharacterMeshes.Sphere(16), p.Hair, new Vector3(0f, 1.73f, -0.075f), Quaternion.identity, new Vector3(0.42f, 0.4f, 0.34f));
 
-            // ---- arms (buildNew(), literal) — bare skin, no sleeves. The dynamic stretch target
+            // ---- arms (MV-1133: full dark-blue sleeves, no skin shown). The dynamic stretch target
             // PoseArm needs (MV-717) is still a single tapered beam per arm — see that section's own
-            // doc below — coloured Skin now instead of the retired HoodieShade; the shoulder cap, cuff
-            // and glove buildNew() draws as static parts riding a fixed shoulder pivot don't fit that
-            // dynamic rig (there is no persistent shoulder transform to hang them on — see MaxRig.
-            // PoseArms), so the cuff/glove are built as static decoration on the gun's own hand grips
-            // instead (see the gadget section below), which already ride at the hand end for free. The
-            // shoulder cap is left out — a minor decorative loss the human staging check (AC5) can flag
-            // if it reads as a gap.
-            var armL = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Skin, new Vector3(-0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.096f, 0.44f, 0.096f));
-            var armR = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Skin, new Vector3(0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.096f, 0.44f, 0.096f));
+            // doc below — now coloured Tunic instead of Skin, and thicker (MaxRig.SleeveWidth). A static
+            // shoulder cap rides the fixed shoulder anchor (buildV3()'s own sphere) so the sleeve reads
+            // as continuous with the torso even though the stretch beam itself starts a little below it;
+            // the cuff and glove are still built as static decoration on the gun's own hand grips (see
+            // the gadget section below), which already ride at the hand end for free.
+            Add(root, CharacterMeshes.Sphere(12), p.Tunic, new Vector3(-0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.14f, 0.13f, 0.14f), "ShoulderCapL");
+            Add(root, CharacterMeshes.Sphere(12), p.Tunic, new Vector3(0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.14f, 0.13f, 0.14f), "ShoulderCapR");
+            var armL = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Tunic, new Vector3(-0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.096f, 0.44f, 0.096f));
+            var armR = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Tunic, new Vector3(0.25f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.096f, 0.44f, 0.096f));
 
             // ---- the RCDA gadget (not in the approved block — ported from the pre-MV-669 body) -----
             //
@@ -227,15 +244,7 @@ namespace MaxWorlds.VFX
             gunAssembly.transform.SetParent(root, worldPositionStays: false);
             var rcdaRoot = new GameObject("GadgetRcda");
             rcdaRoot.transform.SetParent(gunAssembly.transform, worldPositionStays: false);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2715f, 0.7515f, 0.3f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(rcdaRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.068f, 0f), new Vector2(0.082f, 0.035f), new Vector2(0.082f, 0.15f), new Vector2(0.064f, 0.19f) }, 16), new Vector3(0.2665f, 0.8415f, 0.05f), Quaternion.Euler(78f, -15f, 0f), Vector3.one));
-            Add(rcdaRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.046f, 0.015f), new Vector2(0.038f, 0.03f) }, 12), p.Dark, new Vector3(0.2665f, 0.8415f, 0.23f), Quaternion.Euler(78f, -15f, 0f), Vector3.one);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
-            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(rcdaRoot.transform, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
+            BuildGunBody(rcdaRoot.transform, p, gadgetGlow);
 
             // ---- the LPPE gadget (MV-702) — a laser-pointer-and-drill hybrid, welded to the same ----
             // glove position the RCDA occupies (a hidden gadget swap has to land in exactly the same
@@ -243,16 +252,10 @@ namespace MaxWorlds.VFX
             // the same toolbox rather than two unrelated props. Boxy Prism housing + a ridged Lathe
             // "coil" replace the RCDA's tank; a tapered hex Prism nose replaces its round barrel; one
             // cyan-white lens (the ticket's "cyan-white lens") stands in for the RCDA's two.
-            var lppeGlow = new List<MeshRenderer>(1);
+            var lppeGlow = new List<MeshRenderer>(2);
             var lppeRoot = new GameObject("GadgetLppe");
             lppeRoot.transform.SetParent(gunAssembly.transform, worldPositionStays: false);
-            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.06f, 0.05f, 0.32f, 0.1f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(lppeRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.036f, 0f), new Vector2(0.05f, 0.018f), new Vector2(0.036f, 0.036f), new Vector2(0.05f, 0.054f), new Vector2(0.036f, 0.072f), new Vector2(0.05f, 0.09f), new Vector2(0.036f, 0.108f), new Vector2(0f, 0.118f) }, 14), p.Dark, new Vector3(0.2715f, 0.75f, 0.24f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(lppeRoot.transform, CharacterMeshes.Prism(6, 0.032f, 0.012f, 0.09f, 0.3f, 10f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
-            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
-            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            lppeGlow.Add(Lens(lppeRoot.transform, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.05f, 0.05f, 0.036f)));
+            BuildGunBody(lppeRoot.transform, p, lppeGlow);
             lppeRoot.SetActive(false);   // RCDA is Max's run-start primary; MaxRig flips these on ActivePrimary
 
             // ---- MV-717: the two grip points, parented under the gun so the hands cannot come off it
@@ -270,14 +273,19 @@ namespace MaxWorlds.VFX
             // colour) — this knuckle ball is what stands in for buildNew()'s static cuff+glove now that
             // the arm itself is bare skin (see the arms section above for why the cuff/glove couldn't
             // just ride a static shoulder pivot instead).
+            // MV-1133: a darker cuff rides each hand grip alongside the glove — buildV3()'s sleeve ends
+            // "a darker cuff and a dark glove", and the hand grips are the only static anchor left at
+            // the wrist end once the sleeve itself is a dynamic stretch beam (see the arms section above).
             var handR = new GameObject("HandR").transform;
             handR.SetParent(gunAssembly.transform, worldPositionStays: false);
             handR.localPosition = new Vector3(0.27f, 0.75f, 0.30f);
+            Add(handR, CharacterMeshes.Prism(8, 0.095f, 0.09f, 0.045f, 0.2f, 0f), p.TunicDark, Vector3.zero, Quaternion.identity, Vector3.one, "CuffR");
             Add(handR, CharacterMeshes.Sphere(10), p.Glove, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
 
             var handL = new GameObject("HandL").transform;
             handL.SetParent(gunAssembly.transform, worldPositionStays: false);
             handL.localPosition = new Vector3(0.29f, 0.70f, 0.05f);
+            Add(handL, CharacterMeshes.Prism(8, 0.095f, 0.09f, 0.045f, 0.2f, 0f), p.TunicDark, Vector3.zero, Quaternion.identity, Vector3.one, "CuffL");
             Add(handL, CharacterMeshes.Sphere(10), p.Glove, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
 
             // ---- the Shoulder Rack mount (MV-702) — migrated from ShoulderRack's own placeholder ----
@@ -300,6 +308,53 @@ namespace MaxWorlds.VFX
                                      rackRoot, rackTubeGlow, gunAssembly.transform, armL, armR, handL, handR, head);
         }
 
+        /// <summary>
+        /// MV-1133: the gadget's shared body — a dark housing, a pale steel side plate and barrel, a
+        /// flared muzzle, a short stock, an energy cell on top and an emitter at the muzzle — ported
+        /// literally from buildV3()'s own <c>g</c> assembly. Built once per weapon submesh (RCDA and
+        /// LPPE each get their own copy, called from <see cref="Build"/>) so the housing/barrel read as
+        /// the same tool in every world; only the two glow parts' RUNTIME TINT differs by weapon
+        /// (<see cref="MaxRig"/> colours <see cref="MaxBodyResult.GadgetGlow"/> and
+        /// <see cref="MaxBodyResult.LppeGlow"/> separately). Appended to <paramref name="glow"/> in
+        /// build order: index 0 is the energy cell (near the housing), index 1 is the emitter (at the
+        /// muzzle) — mirrors the old RCDA tank/muzzle lens ordering <c>MV730MaxArmsGunWaddleTests</c>
+        /// already depends on.
+        ///
+        /// <paramref name="gunRoot"/> is <c>GadgetRcda</c> or <c>GadgetLppe</c> — both already sit at the
+        /// gun assembly's own origin (feet-space absolute coordinates). The "GunBody" pivot below shares
+        /// buildV3()'s own X/Z anchor (0.2715, _, 0.11), but its Y is re-measured rather than copied
+        /// straight from buildV3()'s 0.7565: that number sat the housing's own CENTRE, while the old
+        /// RCDA geometry it replaces was authored around where its EMITTER ended up (0.7465) — and
+        /// <see cref="MaxRig.BarrelHeight"/>/<c>TheGadgetIsHeldWhereTheWaterActuallyComesFrom</c> judge
+        /// the gadget by where its emitter sits at full aim, not by the housing's own centre. 0.701
+        /// is buildV3()'s 0.7565 corrected by the measured gap (built, not derived by hand) between the
+        /// two conventions, so the real emitter mesh lands within 0.05 m of <c>BarrelHeight(1)</c> the
+        /// same way the pre-MV-1133 geometry did.
+        /// </summary>
+        private static void BuildGunBody(Transform gunRoot, in MaxPalette p, List<MeshRenderer> glow)
+        {
+            var g = new GameObject("GunBody");
+            g.transform.SetParent(gunRoot, worldPositionStays: false);
+            g.transform.localPosition = new Vector3(0.2715f, 0.701f, 0.11f);
+            g.transform.localRotation = Quaternion.Euler(0f, -15f, 0f);
+            var gt = g.transform;
+
+            var z90 = Quaternion.Euler(90f, 0f, 0f);
+            Add(gt, CharacterMeshes.Prism(4, 0.082f, 0.076f, 0.27f, 0.12f, 0f), p.Housing, new Vector3(0f, 0f, 0f), z90, Vector3.one, "Housing");
+            Add(gt, CharacterMeshes.Prism(4, 0.05f, 0.05f, 0.2f, 0.1f, 0f), p.Metal, new Vector3(0f, 0f, 0f), z90, new Vector3(1.75f, 1f, 0.45f), "SidePlate");
+            glow.Add(Lens(gt, CharacterMeshes.Prism(10, 0.04f, 0.04f, 0.16f, 0.08f, 0f), new Vector3(0f, 0.082f, -0.01f), z90, Vector3.one));
+            Add(gt, CharacterMeshes.Prism(10, 0.05f, 0.05f, 0.03f, 0.2f, 0f), p.Housing, new Vector3(0f, 0.082f, 0.08f), z90, Vector3.one, "HousingRing1");
+            Add(gt, CharacterMeshes.Prism(10, 0.05f, 0.05f, 0.03f, 0.2f, 0f), p.Housing, new Vector3(0f, 0.082f, -0.10f), z90, Vector3.one, "HousingRing2");
+            Add(gt, CharacterMeshes.Prism(10, 0.044f, 0.038f, 0.2f, 0.05f, 0f), p.Metal, new Vector3(0f, 0.004f, 0.23f), z90, Vector3.one, "Barrel");
+            Add(gt, CharacterMeshes.Prism(10, 0.054f, 0.054f, 0.03f, 0.2f, 0f), p.Housing, new Vector3(0f, 0.004f, 0.18f), z90, Vector3.one, "BarrelRing1");
+            Add(gt, CharacterMeshes.Prism(10, 0.05f, 0.05f, 0.03f, 0.2f, 0f), p.Housing, new Vector3(0f, 0.004f, 0.26f), z90, Vector3.one, "BarrelRing2");
+            Add(gt, CharacterMeshes.Prism(10, 0.052f, 0.07f, 0.07f, 0.2f, 0f), p.Housing, new Vector3(0f, 0.004f, 0.36f), z90, Vector3.one, "Muzzle");
+            glow.Add(Lens(gt, CharacterMeshes.Sphere(14), new Vector3(0f, 0.004f, 0.395f), Quaternion.identity, new Vector3(0.085f, 0.085f, 0.05f)));
+            Add(gt, CharacterMeshes.Prism(4, 0.06f, 0.042f, 0.18f, 0.2f, 0f), p.Housing, new Vector3(0f, -0.012f, -0.21f), Quaternion.Euler(98f, 0f, 0f), Vector3.one, "Stock");
+            Add(gt, CharacterMeshes.Prism(4, 0.036f, 0.032f, 0.11f, 0.2f, 0f), p.Belt, new Vector3(0f, -0.095f, -0.07f), Quaternion.Euler(18f, 0f, 0f), Vector3.one, "StrapWrap1");
+            Add(gt, CharacterMeshes.Prism(4, 0.032f, 0.029f, 0.09f, 0.2f, 0f), p.Belt, new Vector3(0f, -0.085f, 0.12f), Quaternion.Euler(8f, 0f, 0f), Vector3.one, "StrapWrap2");
+        }
+
         /// <summary>An empty rotation handle — the hinge <see cref="MaxRig.TickRun"/> swings a foot
         /// from, since nothing in the generated mesh is itself a joint.</summary>
         private static Transform Hip(Transform root, string name, Vector3 at)
@@ -311,8 +366,8 @@ namespace MaxWorlds.VFX
         }
 
         private static Transform Add(Transform root, Mesh mesh, Material mat,
-                                     Vector3 at, Quaternion rot, Vector3 scale)
-            => CharacterPart.Add(root, mesh, mat, at, rot, scale);
+                                     Vector3 at, Quaternion rot, Vector3 scale, string name = "Part")
+            => CharacterPart.Add(root, mesh, mat, at, rot, scale, name);
 
         private static MeshRenderer Lens(Transform root, Mesh mesh,
                                          Vector3 at, Quaternion rot, Vector3 scale)
