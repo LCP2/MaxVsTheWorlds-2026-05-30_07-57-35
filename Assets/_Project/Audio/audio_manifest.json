@@ -6,6 +6,153 @@
             "durationSeconds": 0.5,
             "promptInfluence": 0.6,
             "loop": false
+        },
+        {
+            "id": "DamageDealt",
+            "prompt": "Short wet splash of a water jet hitting metal, small quick spatter, dry, no reverb",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "LppePulseFired",
+            "prompt": "Short sci-fi laser pulse zap, bright, falling pitch, clean and toy-like, no reverb",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "PlayerHit",
+            "prompt": "Low dull impact thud, cartoon punch landing on a padded jacket, short, no voice",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "Pickup",
+            "prompt": "Short bright rising two-note pickup blip, friendly arcade collect sound",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.6,
+            "loop": false
+        },
+        {
+            "id": "SupercellCollected",
+            "prompt": "Bright sparkling three-note chime, magical energy cell collected, short",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.6,
+            "loop": false
+        },
+        {
+            "id": "EnemyKilled",
+            "prompt": "Small robot breaking apart, short metallic crunch with a pop and a few bolts scattering, cartoon",
+            "durationSeconds": 0.7,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "FactoryDestroyed",
+            "prompt": "Large machine explosion, heavy metal debris, deep boom with a long rumbling tail",
+            "durationSeconds": 2.5,
+            "promptInfluence": 0.4,
+            "loop": false
+        },
+        {
+            "id": "FittingDestroyed",
+            "prompt": "Small metal turret bursting, compact explosion with a sharp metallic clank, short tail",
+            "durationSeconds": 1.0,
+            "promptInfluence": 0.4,
+            "loop": false
+        },
+        {
+            "id": "RocketMuzzle",
+            "prompt": "Small rocket launch whoosh, quick fizzing ignition and a rush of air",
+            "durationSeconds": 0.7,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "RocketImpact",
+            "prompt": "Small rocket impact, crunchy explosive pop with debris, short",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "MissileImpact",
+            "prompt": "Heavy missile impact, deep booming explosion with a low rumble",
+            "durationSeconds": 1.5,
+            "promptInfluence": 0.4,
+            "loop": false
+        },
+        {
+            "id": "ShockPulseLanded",
+            "prompt": "Electric shock burst, sharp crackling zap with a buzzing discharge",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "MaxTeleported",
+            "prompt": "Sci-fi teleport, upward rising warp sweep with a soft shimmer at the end",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "BlinkerTeleported",
+            "prompt": "Sci-fi teleport, downward falling warp sweep, slightly glitchy and robotic",
+            "durationSeconds": 0.6,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "BossEngaged",
+            "prompt": "Ominous low two-tone warning horn, big machine alarm, heavy and brassy",
+            "durationSeconds": 2.0,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "BossDefeated",
+            "prompt": "Huge machine destroyed, long explosion collapsing into debris, followed by a rising triumphant tone",
+            "durationSeconds": 3.5,
+            "promptInfluence": 0.4,
+            "loop": false
+        },
+        {
+            "id": "WeaponCoreCollected",
+            "prompt": "Triumphant five-note rising arpeggio fanfare, bright synth and bells, power-up acquired",
+            "durationSeconds": 2.0,
+            "promptInfluence": 0.6,
+            "loop": false
+        },
+        {
+            "id": "FinaleGateCrossed",
+            "prompt": "Big airy whoosh, passing through an energy gate, rising then falling",
+            "durationSeconds": 1.2,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "HoseLoop",
+            "prompt": "Continuous steady garden hose water jet spraying at high pressure, constant hiss and splash, even level throughout, no start and no stop",
+            "durationSeconds": 4.0,
+            "promptInfluence": 0.5,
+            "loop": true
+        },
+        {
+            "id": "ForceFieldUp",
+            "prompt": "Energy force field powering up, rising shimmering hum",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false
+        },
+        {
+            "id": "ForceFieldPop",
+            "prompt": "Energy shield shattering, glassy burst with sparkling fragments",
+            "durationSeconds": 0.7,
+            "promptInfluence": 0.5,
+            "loop": false
         }
     ]
 }
