@@ -36,6 +36,9 @@ namespace MaxWorlds.Audio
             ForceFieldUp,
             ForceFieldPop,
             UiClick,
+            UndertowLoop,    // MV-1136: Undertow.IsEmitting — polled, same as HoseLoop. Must stay LAST
+                              // (SfxDirector.IsCueMuted masks by 1 << (int)cue; inserting earlier would
+                              // shift every existing player's mute switches).
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -67,6 +70,7 @@ namespace MaxWorlds.Audio
             { Cue.ForceFieldUp, "Force Field up" },
             { Cue.ForceFieldPop, "Force Field pop" },
             { Cue.UiClick, "UI click" },
+            { Cue.UndertowLoop, "Beam loop" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -256,6 +260,13 @@ namespace MaxWorlds.Audio
             [Cue.UiClick] = new[]
             {
                 P(SfxWaveform.Square, freq: 1000f, attack: 0.001f, sustain: 0.005f, decay: 0.01f, duty: 0.3f, volume: 0.35f),
+            },
+
+            // MV-1136: HoseLoop's preset, lowpassed darker for the beam's hum — only the fallback for
+            // when the generated file is missing, same as HoseLoop's own comment.
+            [Cue.UndertowLoop] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.01f, sustain: 0.3f, decay: 0.01f, lowPass: 800f, volume: 0.35f, seed: 9),
             },
         };
 

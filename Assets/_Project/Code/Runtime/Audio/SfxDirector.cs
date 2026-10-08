@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,11 +16,13 @@ namespace MaxWorlds.Audio
     /// camera is fixed top-down — there is no listener position to pan against), a per-cue rate limit
     /// and ±8% random pitch so a burst of the same cue reads as texture rather than a machine gun.
     ///
-    /// Two cues aren't HudSignals events at all: the hose loop tracks <see cref="WaterBlaster.IsEmitting"/>
-    /// directly (fading in/out over 0.1s, per the ticket), and the UI click cue self-wires onto every
-    /// uGUI <see cref="Button"/> in the scene rather than requiring every screen file to call a shared
-    /// helper — screens build their buttons in their own <c>Start()</c>, at an order this director can't
-    /// predict, so it re-scans for newly-built buttons on a short interval instead.
+    /// Some cues aren't HudSignals events at all: the hose loop and (MV-1136) the beam loop each track a
+    /// weapon's own <see cref="WaterBlaster.IsEmitting"/>/<see cref="Undertow.IsEmitting"/> directly
+    /// (fading in/out over 0.1s, per the ticket, via the shared <see cref="LoopVoice"/> machinery), and
+    /// the UI click cue self-wires onto every uGUI <see cref="Button"/> in the scene rather than
+    /// requiring every screen file to call a shared helper — screens build their buttons in their own
+    /// <c>Start()</c>, at an order this director can't predict, so it re-scans for newly-built buttons
+    /// on a short interval instead.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("audio")]
@@ -44,9 +47,18 @@ namespace MaxWorlds.Audio
         private AudioSource[] _pool;
         private int _poolCursor;
 
-        private AudioSource _hoseLoopSource;
-        private WaterBlaster _waterBlaster;
-        private float _hoseLoopVolume;
+        /// <summary>MV-1136: one implementation serving every cue that tracks a weapon's own
+        /// <c>IsEmitting</c> directly instead of a HudSignals event — today the hose loop
+        /// (<see cref="WaterBlaster"/>) and the beam loop (<see cref="Undertow"/>).</summary>
+        private sealed class LoopVoice
+        {
+            public Cue Cue;
+            public AudioSource Source;
+            public Func<bool> IsEmitting;
+            public float Volume;
+        }
+
+        private LoopVoice[] _loops;
 
         private readonly HashSet<Button> _wiredButtons = new HashSet<Button>();
         private UnityEngine.Events.UnityAction _onButtonClicked;
@@ -73,14 +85,11 @@ namespace MaxWorlds.Audio
                 _pool[i] = src;
             }
 
-            var hoseGo = new GameObject("SfxHoseLoop");
-            hoseGo.transform.SetParent(transform, false);
-            _hoseLoopSource = hoseGo.AddComponent<AudioSource>();
-            _hoseLoopSource.spatialBlend = 0f;
-            _hoseLoopSource.playOnAwake = false;
-            _hoseLoopSource.loop = true;
-            _hoseLoopSource.clip = _clips[Cue.HoseLoop];
-            _hoseLoopSource.volume = 0f;
+            _loops = new[]
+            {
+                MakeLoop(Cue.HoseLoop, "SfxHoseLoop", FindIsEmitting<WaterBlaster>(wb => wb.IsEmitting)),
+                MakeLoop(Cue.UndertowLoop, "SfxUndertowLoop", FindIsEmitting<Undertow>(u => u.IsEmitting)),
+            };
 
             _onButtonClicked = OnAnyButtonClicked;
         }
@@ -137,7 +146,7 @@ namespace MaxWorlds.Audio
 
         private void Update()
         {
-            UpdateHoseLoop();
+            foreach (var loop in _loops) UpdateLoop(loop);
             ScanForNewButtons();
         }
 
@@ -236,36 +245,61 @@ namespace MaxWorlds.Audio
         /// real audio playback.</summary>
         public int VoiceStartsThisWindow(Cue cue) => _windowCount.TryGetValue(cue, out var c) ? c : 0;
 
-        // --- the hose loop (WaterBlaster.IsEmitting, not a HudSignals event) ---
+        // --- weapon-emitting loops (WaterBlaster/Undertow IsEmitting, not HudSignals events) ---
 
-        private void UpdateHoseLoop()
+        private LoopVoice MakeLoop(Cue cue, string goName, Func<bool> isEmitting)
         {
-            if (_waterBlaster == null)
-            {
-                _waterBlaster = FindFirstObjectByType<WaterBlaster>();
-                if (_waterBlaster == null) return;
-            }
+            var go = new GameObject(goName);
+            go.transform.SetParent(transform, false);
+            var source = go.AddComponent<AudioSource>();
+            source.spatialBlend = 0f;
+            source.playOnAwake = false;
+            source.loop = true;
+            source.clip = _clips[cue];
+            source.volume = 0f;
+            return new LoopVoice { Cue = cue, Source = source, IsEmitting = isEmitting, Volume = 0f };
+        }
 
-            if (IsCueMuted(Cue.HoseLoop))
+        /// <summary>Lazily finds (and caches) the one scene instance of <typeparamref name="T"/>,
+        /// retrying every call while it's still null — the same "retried while null" shape the old
+        /// hose-only field used, generalised so a second loop can share it.</summary>
+        private static Func<bool> FindIsEmitting<T>(Func<T, bool> isEmitting) where T : Component
+        {
+            T found = null;
+            return () =>
+            {
+                if (found == null) found = FindFirstObjectByType<T>();
+                return found != null && isEmitting(found);
+            };
+        }
+
+        /// <summary>The fade step, pulled out pure and static so it can be unit-tested without a
+        /// running loop: moves <paramref name="current"/> toward 1 (emitting) or 0 (not), at
+        /// <see cref="HoseFadeSeconds"/>'s rate.</summary>
+        public static float NextLoopVolume(float current, bool emitting, float deltaSeconds) =>
+            Mathf.MoveTowards(current, emitting ? 1f : 0f, deltaSeconds / HoseFadeSeconds);
+
+        private void UpdateLoop(LoopVoice loop)
+        {
+            if (IsCueMuted(loop.Cue))
             {
                 // MV-1009: muted must stop it immediately, not just gate future starts — an
                 // already-playing loop must not ring out its own fade after the toggle flips OFF.
-                _hoseLoopVolume = 0f;
-                if (_hoseLoopSource.isPlaying) _hoseLoopSource.Stop();
+                loop.Volume = 0f;
+                if (loop.Source.isPlaying) loop.Source.Stop();
                 return;
             }
 
-            float target = _waterBlaster.IsEmitting ? 1f : 0f;
-            _hoseLoopVolume = Mathf.MoveTowards(_hoseLoopVolume, target, Time.unscaledDeltaTime / HoseFadeSeconds);
+            loop.Volume = NextLoopVolume(loop.Volume, loop.IsEmitting(), Time.unscaledDeltaTime);
 
-            if (_hoseLoopVolume <= 0f)
+            if (loop.Volume <= 0f)
             {
-                if (_hoseLoopSource.isPlaying) _hoseLoopSource.Stop();
+                if (loop.Source.isPlaying) loop.Source.Stop();
             }
             else
             {
-                if (!_hoseLoopSource.isPlaying) _hoseLoopSource.Play();
-                _hoseLoopSource.volume = _hoseLoopVolume * MasterVolume();
+                if (!loop.Source.isPlaying) loop.Source.Play();
+                loop.Source.volume = loop.Volume * MasterVolume();
             }
         }
 
