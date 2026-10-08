@@ -62,6 +62,22 @@ namespace MaxWorlds.Combat
         /// in-range, in-sight targets, not a distance/falloff cutoff.</summary>
         public const int MaxPierceCount = 2;
 
+        /// <summary>MV-1128 ("SPLIT"): SPLIT's level is a plain beam count — never fewer than this, so a
+        /// save predating this ticket (or a <c>p_spr</c> level of 0 some other way) still draws the one
+        /// beam SPLIT 1 guarantees rather than none.</summary>
+        public const int MinBeamCount = 1;
+
+        /// <summary>MV-1128: the hard ceiling on simultaneous beams <see cref="_branches"/> actually
+        /// allocates — matches World 3's own board cap on <c>p_spr</c> (<c>rig_board.world3.json</c>'s
+        /// <c>maxLevel</c>), duplicated here so a stale level above the board's current cap can never ask
+        /// for more branches than this class holds.</summary>
+        public const int MaxBeamCount = 3;
+
+        /// <summary>MV-1128 spec #6: each beam beyond the first deals this fraction of a full tick's
+        /// damage — a named constant so the figure (Lee's to retune later, per the ticket) lives in one
+        /// place rather than a bare literal inside <see cref="FireLatchedTick"/>.</summary>
+        public const float SplitSecondaryDamageFraction = 0.6f;
+
         /// <summary>MV-1064, kept by MV-1070: once latched, the target stays latched out to slightly
         /// beyond the lance's own <see cref="Range"/> — a plain `&lt;= Range` would drop the latch the
         /// instant a damaged robot staggers back half a step, which reads as flickery rather than a
@@ -145,10 +161,20 @@ namespace MaxWorlds.Combat
         public float Range => WeaponCatalog.EffectiveRange(
             range, WeaponSystemState.TrackLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
 
-        /// <summary>MV-1070: now only the GATE acquire cone (<see cref="FireAimedGateOnlyTick"/>) — robot
-        /// targeting always uses <see cref="AcquireConeDegrees"/>/<see cref="LatchBreakAngleDegrees"/>.</summary>
-        public float ConeHalfAngle => WeaponCatalog.EffectiveConeHalfAngle(
-            coneHalfAngle, WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
+        /// <summary>MV-1070: only the GATE acquire cone (<see cref="FireAimedGateOnlyTick"/>) — robot
+        /// targeting always uses <see cref="AcquireConeDegrees"/>/<see cref="LatchBreakAngleDegrees"/>.
+        /// MV-1128: no longer reads SPLIT (<c>p_spr</c>) at all — a device playtest found the track
+        /// widened this cone and nothing else, which robots never notice, so SPLIT now drives
+        /// <see cref="BeamCount"/> instead and this is just the lance's own authored base angle.</summary>
+        public float ConeHalfAngle => coneHalfAngle;
+
+        /// <summary>MV-1128 ("SPLIT"): the number of simultaneous beams — 1, 2 or 3, directly SPLIT's own
+        /// resolved level (<c>p_spr</c> on World 3's board), clamped to <see cref="MinBeamCount"/>..
+        /// <see cref="MaxBeamCount"/> so a stale level (a pre-ticket save holding 0, or one holding a
+        /// level above the board's current cap) always resolves to a playable beam count rather than
+        /// needing a separate floor/ceiling fix-up at save/load time.</summary>
+        public int BeamCount => Mathf.Clamp(
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), MinBeamCount, MaxBeamCount);
 
         /// <summary>Damage one lance tick deals right now — the RCDA Damage track's own bonus layered on
         /// top, the same formula <see cref="WaterBlaster.EffectiveDamagePerTick"/> uses.</summary>
@@ -183,11 +209,35 @@ namespace MaxWorlds.Combat
         /// (and an EditMode test) reads to find the robot the coils must wrap.</summary>
         public Transform LatchedTransform => _branch.LatchedTarget != null ? _branch.SeekTransform : null;
 
+        /// <summary>MV-1128: beam <paramref name="index"/> (0-based)'s own latch state — index 0 is
+        /// <see cref="IsLatched"/> itself; indices 1/2 only matter once <see cref="BeamCount"/> is high
+        /// enough to have claimed them a target.</summary>
+        public bool IsBeamLatched(int index) =>
+            index < _branches.Count && _branches[index].LatchedTarget != null;
+
+        /// <summary>MV-1128: beam <paramref name="index"/>'s own latched target's transform, or null —
+        /// the per-beam twin of <see cref="LatchedTransform"/>.</summary>
+        public Transform LatchedTransformAt(int index) =>
+            index < _branches.Count && _branches[index].LatchedTarget != null ? _branches[index].SeekTransform : null;
+
+        /// <summary>MV-1128 spec #5: "A beam with no candidate is not drawn." Beam 0 always draws while
+        /// emitting (it sways at the rest point when nothing qualifies — unchanged SPLIT-1 behaviour); a
+        /// secondary beam (<paramref name="index"/> &gt;= 1) draws only once it has its own candidate.
+        /// What a test reads instead of inspecting <see cref="MaxWorlds.VFX.UndertowVfx"/>'s own
+        /// LineRenderers directly.</summary>
+        public bool IsBeamDrawn(int index)
+        {
+            if (!_lastEmitting) return false;
+            if (index >= BeamCount || index >= _branches.Count) return false;
+            return index == 0 || _branches[index].SeekTarget != null;
+        }
+
         private float _tickTimer;
         private bool _lastEmitting;
         private bool _depleted;
         private EnergyPool _tank;
         private UndertowVfx _vfx;
+        private AimReticle _reticle;
 
         /// <summary>MV-1070 spec #7: "hold the tip state ... in one small Branch object inside a list of
         /// length 1, so a future upgrade can run 2-3 branches. Do not build multiple branches now." Only
@@ -212,8 +262,17 @@ namespace MaxWorlds.Combat
             public IDamageable LatchedTarget;
         }
 
-        private readonly List<Branch> _branches = new List<Branch>(1) { new Branch() };
+        /// <summary>MV-1128: now MaxBeamCount branches, pre-allocated — the "future upgrade" the MV-1070
+        /// doc comment above anticipated. Only <c>_branches[0..BeamCount-1]</c> are ever actively ticked
+        /// at once; the rest sit dropped (see <see cref="Tick"/>).</summary>
+        private readonly List<Branch> _branches =
+            new List<Branch>(MaxBeamCount) { new Branch(), new Branch(), new Branch() };
         private Branch _branch => _branches[0];
+
+        /// <summary>MV-1128 spec #4: targets an earlier (lower-index) beam has already claimed this
+        /// frame — reused every tick like <see cref="s_buffer"/>; Undertow only ever ticks on the main
+        /// thread, so a single shared buffer is safe.</summary>
+        private static readonly List<IDamageable> s_claimedTargets = new List<IDamageable>(MaxBeamCount);
 
         private const int InitialHitBufferSize = 16;
         private Collider[] _hits = new Collider[InitialHitBufferSize];
@@ -230,6 +289,15 @@ namespace MaxWorlds.Combat
             if (_vfx == null) _vfx = gameObject.AddComponent<UndertowVfx>();
             _vfx.Init();
 
+            // MV-1128: the floor wedge (YT-84) is the SAME shared, [DisallowMultipleComponent]
+            // AimReticle component WaterBlaster also self-attaches to this same player GameObject —
+            // whichever weapon is actually ActivePrimary is the only one allowed to feed it its own
+            // numbers (see RefreshReticle/WaterBlaster.RefreshUpgrades' own matching gate), or the two
+            // fight over the one shared mesh every time WeaponSystemState.Changed fires.
+            _reticle = GetComponent<AimReticle>();
+            if (_reticle == null) _reticle = gameObject.AddComponent<AimReticle>();
+            RefreshReticle();
+
             // A safe resting endpoint before the first tick ever lands, so the very first emitting
             // frame doesn't draw a stream collapsed onto the origin.
             StreamEndPoint = transform.position + transform.forward * range;
@@ -237,6 +305,20 @@ namespace MaxWorlds.Combat
             // MV-1012: self-attached from PlayerController.Awake (code-driven scenes, no scene wiring),
             // same "resolve-or-fall-back" shape PulseLaser.Awake uses for its own aimSource.
             if (aimSource == null) aimSource = GetComponent<PlayerController>();
+        }
+
+        private void OnEnable() => WeaponSystemState.Changed += RefreshReticle;
+        private void OnDisable() => WeaponSystemState.Changed -= RefreshReticle;
+
+        /// <summary>MV-1128: re-fits the shared <see cref="AimReticle"/> to UNDERTOW's own real numbers —
+        /// only while UNDERTOW is actually the active primary (see <see cref="Awake"/>'s own doc for
+        /// why). Spec #10: length <see cref="Range"/>, half-angle <see cref="AcquireConeDegrees"/> (the
+        /// robot-acquire cone a device player actually feels — not the narrow gate cone,
+        /// <see cref="ConeHalfAngle"/>, which would draw an almost invisible sliver).</summary>
+        private void RefreshReticle()
+        {
+            if (_reticle != null && WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Undertow)
+                _reticle.Init(transform, Range, AcquireConeDegrees);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -275,18 +357,39 @@ namespace MaxWorlds.Combat
             if (!emitting)
             {
                 _tickTimer = 0f;
-                DropAll(_branch);
-                if (_vfx != null) _vfx.SetLatch(false, null, null, dt);
+                for (int i = 0; i < _branches.Count; i++) DropAll(_branches[i]);
+                if (_vfx != null)
+                {
+                    _vfx.SetLatch(false, null, null, dt);
+                    for (int i = 1; i < MaxBeamCount; i++)
+                    {
+                        _vfx.SetSecondaryStreaming(i - 1, false);
+                        _vfx.SetSecondaryLatch(i - 1, false, null, null, dt);
+                    }
+                }
                 return;
             }
 
             Vector3 origin = transform.position;
             Vector3 dir = transform.forward;
             float reach = Range;
+            int beamCount = BeamCount;
+
+            // MV-1128: branches beyond the currently-active beam count (SPLIT bought down mid-run via a
+            // stale resume, or simply beyond MaxBeamCount) are fully dropped every frame so none of them
+            // ever holds a stale target.
+            for (int i = beamCount; i < _branches.Count; i++) DropAll(_branches[i]);
 
             // MV-1070: the tip moves every frame the stream is up, whether it's seeking, latched or just
-            // swaying — the beam always draws to it (spec #1).
-            UpdateTip(_branch, dt, origin, dir, reach);
+            // swaying — the beam always draws to it (spec #1). MV-1128 spec #4: beam 0 chooses first with
+            // no exclusion; each later beam excludes whatever an earlier beam already holds/seeks THIS
+            // frame.
+            s_claimedTargets.Clear();
+            for (int i = 0; i < beamCount; i++)
+            {
+                UpdateTip(_branches[i], dt, origin, dir, reach, i == 0 ? null : s_claimedTargets);
+                if (_branches[i].SeekTarget != null) s_claimedTargets.Add(_branches[i].SeekTarget);
+            }
             StreamEndPoint = _branch.TipPosition;
 
             _tickTimer -= dt;
@@ -295,8 +398,19 @@ namespace MaxWorlds.Combat
                 _tickTimer = fireInterval;
                 if (_tank.TrySpend(cost))
                 {
-                    if (_branch.LatchedTarget != null) FireLatchedTick(_branch, origin, dir, reach);
-                    else FireAimedGateOnlyTick(origin, dir, reach);
+                    // MV-1128 spec #6: beam 0 full damage, the existing line-pierce rule beam 0 only;
+                    // beams 1/2 at SplitSecondaryDamageFraction each, no line-pierce of their own.
+                    bool anyFired = false;
+                    for (int i = 0; i < beamCount; i++)
+                    {
+                        if (_branches[i].LatchedTarget == null) continue;
+                        float fraction = i == 0 ? 1f : SplitSecondaryDamageFraction;
+                        FireLatchedTick(_branches[i], origin, dir, reach, fraction, allowLinePierce: i == 0);
+                        anyFired = true;
+                    }
+                    if (_branch.LatchedTarget == null && FireAimedGateOnlyTick(origin, dir, reach)) anyFired = true;
+
+                    if (anyFired && _vfx != null) _vfx.OnTick(origin, origin + dir * reach, dir);
                 }
             }
 
@@ -310,6 +424,23 @@ namespace MaxWorlds.Combat
                 // cadence — the fire tick above (if it ran this frame) already refreshed StreamEndPoint
                 // indirectly via the tip, but UpdateStream also needs to run every frame regardless.
                 _vfx.UpdateStream(transform.position, StreamEndPoint, dir, dt);
+
+                for (int i = 1; i < MaxBeamCount; i++)
+                {
+                    int slot = i - 1;
+                    bool drawn = IsBeamDrawn(i);
+                    _vfx.SetSecondaryStreaming(slot, drawn);
+                    if (drawn)
+                    {
+                        _vfx.SetSecondaryLatch(slot, _branches[i].LatchedTarget != null,
+                            _branches[i].SeekTransform, _branches[i].SeekCc, dt);
+                        _vfx.UpdateSecondaryStream(slot, transform.position, _branches[i].TipPosition, dir, dt);
+                    }
+                    else
+                    {
+                        _vfx.SetSecondaryLatch(slot, false, null, null, dt);
+                    }
+                }
             }
         }
 
@@ -333,18 +464,23 @@ namespace MaxWorlds.Combat
         /// figure-of-eight sway around the rest point when nothing qualifies (spec #3) — by integrating
         /// the under-damped spring (<see cref="IntegrateSpring"/>) toward that point, then promotes the
         /// seek to a latch the instant the tip closes within <see cref="LatchDistance"/> (spec #4).</summary>
-        private void UpdateTip(Branch b, float dt, Vector3 origin, Vector3 dir, float reach)
+        private void UpdateTip(Branch b, float dt, Vector3 origin, Vector3 dir, float reach, List<IDamageable> excluded)
         {
+            // MV-1128 spec #4: beam 0 always re-picks with no exclusion, so it can "steal" a target a
+            // later beam is currently holding — if that just happened, drop the stale latch immediately
+            // rather than waiting for LatchHolds' own unrelated break conditions to eventually catch it.
+            bool stolenByEarlierBeam = excluded != null && b.LatchedTarget != null && excluded.Contains(b.LatchedTarget);
+
             // --- Candidate resolution: keep an already-latched target as long as it still holds
             // (spec #5, "do not hop between robots while one is held"); otherwise look for a new one.
-            if (b.LatchedTarget != null && LatchHolds(b, origin, dir, reach))
+            if (!stolenByEarlierBeam && b.LatchedTarget != null && LatchHolds(b, origin, dir, reach))
             {
                 // Keep b.SeekTarget == b.LatchedTarget; nothing to resolve.
             }
             else
             {
                 if (b.LatchedTarget != null) b.LatchedTarget = null;
-                IDamageable candidate = FindSeekCandidate(origin, dir, reach);
+                IDamageable candidate = FindSeekCandidate(origin, dir, reach, excluded);
                 if (!ReferenceEquals(candidate, b.SeekTarget)) AcquireSeek(b, candidate);
             }
 
@@ -414,7 +550,7 @@ namespace MaxWorlds.Combat
         /// keep MV-1044's own separate hit test (<see cref="FireAimedGateOnlyTick"/>). Ties on angle (two
         /// or more robots dead-on in the same line) break toward the CLOSEST one — the spec's own "pierces
         /// up to two robots... in a line" framing only makes sense if the nearest is sought/latched first.</summary>
-        private IDamageable FindSeekCandidate(Vector3 origin, Vector3 dir, float reach)
+        private IDamageable FindSeekCandidate(Vector3 origin, Vector3 dir, float reach, List<IDamageable> excluded)
         {
             int count = OverlapSphereGrowing(origin, reach);
             IDamageable best = null;
@@ -428,6 +564,8 @@ namespace MaxWorlds.Combat
                 if (d is AreaGate) continue;
                 if (d is RobotEnemy robot && robot.IsTrapHeld) continue;
                 if (s_buffer.Contains(d)) continue; // same collider set can report a multi-collider body twice
+                // MV-1128 spec #4: "not already held by an earlier beam".
+                if (excluded != null && excluded.Contains(d)) continue;
 
                 Transform t = _hits[i].transform;
                 Vector3 centre = CentreOf(t);
@@ -533,17 +671,20 @@ namespace MaxWorlds.Combat
             return true;
         }
 
-        /// <summary>MV-1070: the latched target's own continuous tick — damages it every
-        /// <see cref="FireInterval"/> while the tip sits on it, then looks for a second ("pierce") target
-        /// along the line from Max through the latched robot rather than along Max's own aim axis, since
-        /// the beam itself has bent off that axis (MV-1064, unchanged).</summary>
-        private void FireLatchedTick(Branch b, Vector3 origin, Vector3 dir, float reach)
+        /// <summary>MV-1070's own per-tick latch damage, extended by MV-1128 spec #6: a secondary beam
+        /// (<paramref name="allowLinePierce"/> false) only ever damages its own latched target, at
+        /// <paramref name="damageFraction"/> of a full tick — the "second robot within 1m of the line"
+        /// pierce rule stays beam 0's own, since that rule's line is drawn from Max through beam 0's own
+        /// latched robot, which would be the wrong line for any other beam's own latch.</summary>
+        private void FireLatchedTick(Branch b, Vector3 origin, Vector3 dir, float reach, float damageFraction, bool allowLinePierce)
         {
-            float tickDamage = EffectiveDamagePerTick;
+            float tickDamage = EffectiveDamagePerTick * damageFraction;
             Vector3 latchedCentre = SeekCentre(b);
 
             b.LatchedTarget.TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                 source: DamageSource.PrimaryWeapon));
+
+            if (!allowLinePierce) return;
 
             Vector3 toLatched = latchedCentre - origin;
             float latchedDist = toLatched.magnitude;
@@ -573,15 +714,13 @@ namespace MaxWorlds.Combat
                 second.TakeDamage(new DamageInfo(tickDamage, origin, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
             }
-
-            if (_vfx != null) _vfx.OnTick(origin, latchedCentre, dir);
         }
 
         /// <summary>MV-1070 spec #6: "Gates keep MV-1044's handling: with no robot candidate, a gate on
         /// the aim line is hit as today." Robots can no longer be damaged here at all — only while
         /// latched (<see cref="FireLatchedTick"/>) — so this filters to <see cref="AreaGate"/> only,
         /// otherwise unchanged from the pre-MV-1070 aimed hit test.</summary>
-        private void FireAimedGateOnlyTick(Vector3 origin, Vector3 dir, float reach)
+        private bool FireAimedGateOnlyTick(Vector3 origin, Vector3 dir, float reach)
         {
             float cone = ConeHalfAngle;
             float tickDamage = EffectiveDamagePerTick;
@@ -627,7 +766,7 @@ namespace MaxWorlds.Combat
             }
 
             int pierced = Mathf.Min(MaxPierceCount, s_buffer.Count);
-            if (pierced == 0) return;
+            if (pierced == 0) return false;
 
             for (int i = 0; i < pierced; i++)
             {
@@ -635,7 +774,7 @@ namespace MaxWorlds.Combat
                     source: DamageSource.PrimaryWeapon));
             }
 
-            if (_vfx != null) _vfx.OnTick(origin, origin + dir * s_dist[pierced - 1], dir);
+            return true;
         }
 
         /// <summary>Shortest distance from <paramref name="point"/> to the infinite line through

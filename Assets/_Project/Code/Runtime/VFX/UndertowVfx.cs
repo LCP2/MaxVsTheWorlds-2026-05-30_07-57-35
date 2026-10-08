@@ -16,6 +16,17 @@ namespace MaxWorlds.VFX
     /// bounds (MV-1121, never <see cref="CharacterController.radius"/>) spiralling/encircling it, and a
     /// steady spray of sparks off its body.
     ///
+    /// MV-1128 ("SPLIT"): beams beyond the first (<see cref="MaxWorlds.Combat.Undertow.BeamCount"/>, 1-3)
+    /// get their own full copy of this same core/sheath/strand/coil/lock-ring set, built once in
+    /// <see cref="Init"/> alongside beam 0's own — every line's width scaled by
+    /// <see cref="SecondaryWidthScale"/> (spec #8) — and driven by <see cref="UpdateSecondaryStream"/>/
+    /// <see cref="SetSecondaryLatch"/>. Beam 0 keeps its ORIGINAL method names/GameObject names
+    /// (<c>UndertowCore</c>, <c>UndertowCoil0</c>, ...) byte-for-byte, so every pre-MV-1128 EditMode test
+    /// (MV-1046/1064/1070/1121) that finds them by name keeps working unchanged; beams 1/2 carry a
+    /// <c>"Beam1"</c>/<c>"Beam2"</c> suffix instead. The real per-beam math (<see cref="LayBeamGeometry"/>/
+    /// <see cref="DriveLatch"/>) is written once and shared by both beam 0's own calls and the secondary
+    /// ones, so there is exactly one copy of this logic to ever get wrong.
+    ///
     /// Owned entirely by the art stream, same split as <see cref="WaterVfx"/>/<see cref="LppeVfx"/>:
     /// <see cref="MaxWorlds.Combat.Undertow"/> drives it with cosmetic-only calls
     /// (<see cref="Init"/>, <see cref="SetStreaming"/>, <see cref="UpdateStream"/>, <see cref="OnTick"/>,
@@ -153,6 +164,14 @@ namespace MaxWorlds.VFX
         /// grows along the beam (muzzle 0, end 0.12 s)".</summary>
         private const float WhipLagAtEnd = 0.12f;
 
+        /// <summary>MV-1128 spec #8: "beams 1 and 2 are drawn with every line width at 0.72 of beam 0's."</summary>
+        public const float SecondaryWidthScale = 0.72f;
+
+        /// <summary>MV-1128: how many beams this VFX ever builds a full renderer set for — kept in sync
+        /// BY HAND with <see cref="MaxWorlds.Combat.Undertow.MaxBeamCount"/> (a direct reference would
+        /// need a cross-namespace dependency this VFX-layer class doesn't otherwise carry).</summary>
+        private const int MaxBeams = 3;
+
         // Pushed past 1.0 for bloom headroom — the same "over-1.0 authored colour" trick LppeVfx's own
         // muzzle/impact colours use against URP's bloom threshold.
         private static readonly Color CoreColor = new Color(1.7f, 1.75f, 1.8f, 1f);
@@ -181,53 +200,50 @@ namespace MaxWorlds.VFX
         private static readonly Color LockRingOuterColor = new Color(1f, 0.478f, 0.102f, 1f);
         private static readonly Color LockRingInnerColor = new Color(1.6f, 1.65f, 1.7f, 1f);
 
-        private LineRenderer _core;
-        private LineRenderer _sheath;
-        private LineRenderer[] _strands;
-        private LineRenderer[] _coils;
-        private LineRenderer _lockRingOuter;
-        private LineRenderer _lockRingInner;
+        /// <summary>MV-1128: one beam's full renderer set and animation/latch state — beam 0's own
+        /// instance keeps the exact field roles the old single-beam fields had, just addressed through
+        /// <c>_beams[0]</c> instead of bare fields, so its rendered geometry is bit-identical to before
+        /// this ticket.</summary>
+        private sealed class BeamVisual
+        {
+            public LineRenderer Core;
+            public LineRenderer Sheath;
+            public LineRenderer[] Strands;
+            public LineRenderer[] Coils;
+            public LineRenderer LockRingOuter;
+            public LineRenderer LockRingInner;
+
+            public Vector3[] Centerline;
+            public bool CenterlineValid;
+            public float BeamTime;
+            public float Phase;
+            public bool Streaming;
+
+            public Transform CoilTarget;
+            public CharacterController CoilCc;
+            public float CoilPhase;
+            public float LatchVisibility;
+            public float SparkAccumulator;
+            public float LockSnapElapsed;
+            public bool WasLatchedLastFrame;
+            public float LockRadius;
+        }
+
+        private BeamVisual[] _beams;
         private VfxBurst _muzzleFlare;
         private VfxBurst _latchSparks;
         private VfxBurst _latchFlare;
         private bool _initialized;
-        private float _phase;
 
-        // Centreline buffer shared by the core and sheath renderers (and the strands' wrap anchor) —
-        // allocated once in Init, overwritten in place every UpdateStream call, never reallocated.
-        private Vector3[] _centerline;
-        private bool _centerlineValid;
-        private float _beamTime;
-
-        // --- MV-1064 latch wrap-around state.
-        private Transform _coilTarget;
-        private CharacterController _coilCc;
-        private float _coilPhase;
-
-        /// <summary>0..1, eased toward 1 while latched (<see cref="CoilAppearSeconds"/>) and back to 0
-        /// once it drops (<see cref="CoilVanishSeconds"/>) — drives both the coils'/ring's own alpha and
-        /// the beam's end-of-line curl in <see cref="UpdateStream"/>, so the three never visibly desync.</summary>
-        private float _latchVisibility;
-        private float _sparkAccumulator;
-
-        /// <summary>MV-1121: the lock ring's own "snap shut" timer — seconds since the CURRENT latch
-        /// began (reset on a fresh latch's rising edge), driving the ring's ease from 1.6R down to R
-        /// over <see cref="LockRingSnapSeconds"/>.</summary>
-        private float _lockSnapElapsed;
-        private bool _wasLatchedLastFrame;
-
-        /// <summary>The latched target's own resolved lock radius (<see cref="ResolveLockGeometry"/>) —
-        /// cached each <see cref="SetLatch"/> call and read back by <see cref="UpdateStream"/>'s end-of-
-        /// line curl the same frame (SetLatch always runs first; see <see cref="MaxWorlds.Combat.Undertow.Tick"/>).</summary>
-        private float _lockRadius;
-
-        /// <summary>Whether the stream's renderers are currently enabled — what
+        /// <summary>Whether beam 0's own renderers are currently enabled — what
         /// <see cref="MaxWorlds.Combat.Undertow.IsStreamVisible"/> reads.</summary>
-        public bool IsStreaming { get; private set; }
+        public bool IsStreaming => _initialized && _beams[0].Streaming;
 
-        /// <summary>Builds every renderer once. Idempotent, and called explicitly by the owner (see
-        /// <see cref="WaterVfx.Init"/>'s equivalent shape) rather than from Awake — neither Awake nor
-        /// OnEnable reliably run for AddComponent outside Play mode.</summary>
+        /// <summary>Builds every renderer once, for every beam (<see cref="MaxBeams"/>) up front — a
+        /// secondary beam simply starts disabled, same as beam 0 always has, until
+        /// <see cref="SetSecondaryStreaming"/> turns it on. Idempotent, and called explicitly by the
+        /// owner (see <see cref="WaterVfx.Init"/>'s equivalent shape) rather than from Awake — neither
+        /// Awake nor OnEnable reliably run for AddComponent outside Play mode.</summary>
         public void Init()
         {
             if (_initialized) return;
@@ -241,23 +257,34 @@ namespace MaxWorlds.VFX
             Material lineGlow = VfxMaterials.Additive(VfxMaterials.LineGlow());
             Material burstGlow = VfxMaterials.Additive(VfxMaterials.Glow());
 
-            _sheath = BuildLine("UndertowSheath", SheathWidth, lineGlow, positionCount: Segments + 1);
-            _core = BuildLine("UndertowCore", CoreWidth, lineGlow, positionCount: Segments + 1);
-            _centerline = new Vector3[Segments + 1];
+            _beams = new BeamVisual[MaxBeams];
+            for (int bi = 0; bi < MaxBeams; bi++)
+            {
+                // MV-1128 spec #8: beams 1/2 draw every line at SecondaryWidthScale of beam 0's.
+                float scale = bi == 0 ? 1f : SecondaryWidthScale;
+                string suffix = bi == 0 ? string.Empty : $"Beam{bi}";
+                var beam = new BeamVisual();
 
-            _strands = new LineRenderer[StrandCount];
-            for (int i = 0; i < StrandCount; i++)
-                _strands[i] = BuildLine($"UndertowStrand{i}", StrandWidth, lineGlow, positionCount: Segments + 1);
+                beam.Sheath = BuildLine($"UndertowSheath{suffix}", SheathWidth * scale, lineGlow, positionCount: Segments + 1);
+                beam.Core = BuildLine($"UndertowCore{suffix}", CoreWidth * scale, lineGlow, positionCount: Segments + 1);
+                beam.Centerline = new Vector3[Segments + 1];
 
-            _coils = new LineRenderer[CoilCount];
-            for (int i = 0; i < CoilCount; i++)
-                _coils[i] = BuildLine($"UndertowCoil{i}", LockThicknessMin, lineGlow, positionCount: CoilSegments + 1);
+                beam.Strands = new LineRenderer[StrandCount];
+                for (int i = 0; i < StrandCount; i++)
+                    beam.Strands[i] = BuildLine($"UndertowStrand{suffix}{i}", StrandWidth * scale, lineGlow, positionCount: Segments + 1);
 
-            // MV-1121: the lock ring — a closed circle round the latched robot, sized from its own
-            // renderer bounds. Built as an outer/inner pair (orange with a white line inside it), the
-            // same core/sheath idiom the beam itself already uses.
-            _lockRingOuter = BuildLine("UndertowLockRing", LockThicknessMin * LockRingThicknessMultiplier, lineGlow, positionCount: LockRingSegments + 1);
-            _lockRingInner = BuildLine("UndertowLockRingCore", LockThicknessMin * 0.4f, lineGlow, positionCount: LockRingSegments + 1);
+                beam.Coils = new LineRenderer[CoilCount];
+                for (int i = 0; i < CoilCount; i++)
+                    beam.Coils[i] = BuildLine($"UndertowCoil{suffix}{i}", LockThicknessMin * scale, lineGlow, positionCount: CoilSegments + 1);
+
+                // MV-1121: the lock ring — a closed circle round the latched robot, sized from its own
+                // renderer bounds. Built as an outer/inner pair (orange with a white line inside it), the
+                // same core/sheath idiom the beam itself already uses.
+                beam.LockRingOuter = BuildLine($"UndertowLockRing{suffix}", LockThicknessMin * LockRingThicknessMultiplier * scale, lineGlow, positionCount: LockRingSegments + 1);
+                beam.LockRingInner = BuildLine($"UndertowLockRingCore{suffix}", LockThicknessMin * 0.4f * scale, lineGlow, positionCount: LockRingSegments + 1);
+
+                _beams[bi] = beam;
+            }
 
             _muzzleFlare = new VfxBurst("UndertowMuzzleFlare", burstGlow, 24, 0f, perFrameCap: 4);
             _latchSparks = new VfxBurst("UndertowLatchSparks", burstGlow, 64, 0f, perFrameCap: 6);
@@ -280,30 +307,49 @@ namespace MaxWorlds.VFX
             return line;
         }
 
-        /// <summary>Start/stop the stream. Only acts on change, so it is free to call every frame.</summary>
-        public void SetStreaming(bool on)
+        /// <summary>Start/stop beam 0's stream. Only acts on change, so it is free to call every frame.</summary>
+        public void SetStreaming(bool on) => SetBeamStreaming(0, on);
+
+        /// <summary>MV-1128: start/stop a secondary beam (<paramref name="slot"/> 0 -&gt; beam index 1, 1
+        /// -&gt; beam index 2) — same on-change-only shape as <see cref="SetStreaming"/>.</summary>
+        public void SetSecondaryStreaming(int slot, bool on) => SetBeamStreaming(slot + 1, on);
+
+        private void SetBeamStreaming(int beamIndex, bool on)
         {
-            if (!_initialized || IsStreaming == on) return;
-            IsStreaming = on;
+            if (!_initialized) return;
+            BeamVisual beam = _beams[beamIndex];
+            if (beam.Streaming == on) return;
+            beam.Streaming = on;
             // Force a hard snap (no whip lag) on the first frame back on, so the centreline doesn't
             // ease in from wherever it was left sitting the last time the stream was up.
-            if (on) _centerlineValid = false;
+            if (on) beam.CenterlineValid = false;
 
-            _sheath.enabled = on;
-            _core.enabled = on;
-            for (int i = 0; i < _strands.Length; i++) _strands[i].enabled = on;
+            beam.Sheath.enabled = on;
+            beam.Core.enabled = on;
+            for (int i = 0; i < beam.Strands.Length; i++) beam.Strands[i].enabled = on;
         }
 
-        /// <summary>Re-lay the core/sheath/strand geometry between <paramref name="muzzle"/> and
+        /// <summary>Re-lay beam 0's core/sheath/strand geometry between <paramref name="muzzle"/> and
         /// <paramref name="endPoint"/>, advancing the crackle strands' animation phase by
         /// <paramref name="dt"/>. Called every frame the stream is up — cheap, no allocation — so the
         /// beam tracks Max moving/aiming even between the fire-tick cadence that moves
         /// <paramref name="endPoint"/> itself.</summary>
-        public void UpdateStream(Vector3 muzzle, Vector3 endPoint, Vector3 aimDirection, float dt)
+        public void UpdateStream(Vector3 muzzle, Vector3 endPoint, Vector3 aimDirection, float dt) =>
+            LayBeamGeometry(0, muzzle, endPoint, aimDirection, dt);
+
+        /// <summary>MV-1128: re-lay a secondary beam's own geometry — identical algorithm to
+        /// <see cref="UpdateStream"/>, just addressed at <paramref name="slot"/>+1's own renderer/
+        /// animation state.</summary>
+        public void UpdateSecondaryStream(int slot, Vector3 muzzle, Vector3 endPoint, Vector3 aimDirection, float dt) =>
+            LayBeamGeometry(slot + 1, muzzle, endPoint, aimDirection, dt);
+
+        private void LayBeamGeometry(int beamIndex, Vector3 muzzle, Vector3 endPoint, Vector3 aimDirection, float dt)
         {
-            if (!_initialized || !IsStreaming) return;
-            _phase += dt * PhaseSpeed;
-            _beamTime += dt;
+            if (!_initialized) return;
+            BeamVisual beam = _beams[beamIndex];
+            if (!beam.Streaming) return;
+            beam.Phase += dt * PhaseSpeed;
+            beam.BeamTime += dt;
 
             Vector3 axis = endPoint - muzzle;
             float length = axis.magnitude;
@@ -340,8 +386,8 @@ namespace MaxWorlds.VFX
                 // and Mathf.Pow(negative, non-integer) is NaN, not a small negative number.
                 float taper = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(t * Mathf.PI)), TaperExponent);
 
-                float theta1 = 2f * Mathf.PI * LateralFreq1 * t - LateralK1 * _beamTime;
-                float theta2 = 2f * Mathf.PI * LateralFreq2 * t - LateralK2 * _beamTime + LateralPhase2;
+                float theta1 = 2f * Mathf.PI * LateralFreq1 * t - LateralK1 * beam.BeamTime;
+                float theta2 = 2f * Mathf.PI * LateralFreq2 * t - LateralK2 * beam.BeamTime + LateralPhase2;
                 float lateral = LateralAmplitude * taper * (Mathf.Sin(theta1) + LateralTermWeight2 * Mathf.Sin(theta2));
                 // Quadrature (+90°) with the primary lateral term traces a corkscrew rather than a
                 // second, uncorrelated wobble.
@@ -351,13 +397,13 @@ namespace MaxWorlds.VFX
 
                 // MV-1064 spec #9: "The last 1m of the beam curls into the coils rather than stopping
                 // dead." Only the tail of the centreline (within CurlLength of the end point) bulges
-                // outward toward the lock radius; eased by _latchVisibility so the curl appears/vanishes
+                // outward toward the lock radius; eased by LatchVisibility so the curl appears/vanishes
                 // in step with the coils themselves. The weight is a bump (0 at the curl's own start AND
                 // at t=1) rather than a ramp all the way to t=1, so the very last point stays pinned
                 // exactly on the end point — the invariant MV-1046's own test (and the hit-point math
                 // StreamEndPoint feeds) both depend on — while the segments just before it visibly flare
                 // into the wrap.
-                if (_latchVisibility > 0f && length > 1e-4f)
+                if (beam.LatchVisibility > 0f && length > 1e-4f)
                 {
                     float distFromMuzzle = t * length;
                     float curlStart = Mathf.Max(0f, length - CurlLength);
@@ -365,51 +411,51 @@ namespace MaxWorlds.VFX
                     {
                         float curlT = Mathf.InverseLerp(curlStart, length, distFromMuzzle);
                         float curlWeight = Mathf.Sin(curlT * Mathf.PI); // 0 at curlStart and at t=1, peak mid-way
-                        float curlRadius = _lockRadius * curlWeight * _latchVisibility;
-                        float curlAngle = _coilPhase + curlT * CoilTurns * 2f * Mathf.PI;
+                        float curlRadius = beam.LockRadius * curlWeight * beam.LatchVisibility;
+                        float curlAngle = beam.CoilPhase + curlT * CoilTurns * 2f * Mathf.PI;
                         Vector3 curlOffset = (right * Mathf.Cos(curlAngle) + wrapUp * Mathf.Sin(curlAngle)) * curlRadius;
                         target += curlOffset;
                     }
                 }
 
-                if (!_centerlineValid)
+                if (!beam.CenterlineValid)
                 {
-                    _centerline[i] = target;
+                    beam.Centerline[i] = target;
                 }
                 else
                 {
                     // Whip on aim changes: lag grows along the beam (muzzle 0, end WhipLagAtEnd).
                     float lag = WhipLagAtEnd * t;
                     float easeFactor = lag > 1e-5f ? 1f - Mathf.Exp(-dt / lag) : 1f;
-                    _centerline[i] = Vector3.Lerp(_centerline[i], target, easeFactor);
+                    beam.Centerline[i] = Vector3.Lerp(beam.Centerline[i], target, easeFactor);
                 }
             }
-            _centerlineValid = true;
+            beam.CenterlineValid = true;
 
-            _core.SetPositions(_centerline);
-            _core.startColor = CoreColor;
-            _core.endColor = CoreColor;
+            beam.Core.SetPositions(beam.Centerline);
+            beam.Core.startColor = CoreColor;
+            beam.Core.endColor = CoreColor;
 
-            _sheath.SetPositions(_centerline);
-            _sheath.startColor = SheathColor;
-            _sheath.endColor = SheathColor;
+            beam.Sheath.SetPositions(beam.Centerline);
+            beam.Sheath.startColor = SheathColor;
+            beam.Sheath.endColor = SheathColor;
 
             // --- The crackle strands wrap the snaking centreline (offset from it, not the straight line).
             // MV-1121: constant 0.24m wrap, ramped up from zero only over the first 6% of the beam —
             // replaces MV-1064's sin(t*pi) taper, which peaked at mid-beam and fell back to zero at the
             // tip (the beam must now end at a PLAIN CUT, full width).
-            for (int s = 0; s < _strands.Length; s++)
+            for (int s = 0; s < beam.Strands.Length; s++)
             {
-                LineRenderer strand = _strands[s];
-                float wrapAngle = (360f / _strands.Length) * s * Mathf.Deg2Rad;
+                LineRenderer strand = beam.Strands[s];
+                float wrapAngle = (360f / beam.Strands.Length) * s * Mathf.Deg2Rad;
                 Vector3 wrapDir = right * Mathf.Cos(wrapAngle) + wrapUp * Mathf.Sin(wrapAngle);
 
                 for (int i = 0; i <= Segments; i++)
                 {
                     float t = (float)i / Segments;
                     float strandTaper = t < StrandRampFraction ? (t / StrandRampFraction) : 1f;
-                    float wave = Mathf.Sin(t * WaveCyclesPerBeam * Mathf.PI * 2f + _phase + s * 2.1f);
-                    Vector3 point = _centerline[i] + wrapDir * (StrandAmplitude * strandTaper * wave);
+                    float wave = Mathf.Sin(t * WaveCyclesPerBeam * Mathf.PI * 2f + beam.Phase + s * 2.1f);
+                    Vector3 point = beam.Centerline[i] + wrapDir * (StrandAmplitude * strandTaper * wave);
                     strand.SetPosition(i, point);
                 }
 
@@ -447,57 +493,67 @@ namespace MaxWorlds.VFX
             topY = centre.y + height * 0.5f;
         }
 
-        /// <summary>MV-1064: drives the wrap-around coils/lock ring and the steady spark/impact-flare
+        /// <summary>MV-1064: drives beam 0's wrap-around coils/lock ring and the steady spark/impact-flare
         /// spray while latched. Called every frame <see cref="MaxWorlds.Combat.Undertow.Tick"/> runs (not
         /// just on the fire-tick cadence) so they track a moving target and the appear/vanish ease
         /// (<see cref="CoilAppearSeconds"/>/<see cref="CoilVanishSeconds"/>) is smooth. <paramref name="on"/>
         /// false with a null <paramref name="targetTransform"/>/<paramref name="targetCc"/> starts the
         /// vanish while still showing the coils/ring at their last known position/size.</summary>
-        public void SetLatch(bool on, Transform targetTransform, CharacterController targetCc, float dt)
+        public void SetLatch(bool on, Transform targetTransform, CharacterController targetCc, float dt) =>
+            DriveLatch(0, on, targetTransform, targetCc, dt);
+
+        /// <summary>MV-1128: the same latch-drive as <see cref="SetLatch"/>, for a secondary beam
+        /// (<paramref name="slot"/> 0 -&gt; beam index 1, 1 -&gt; beam index 2) — "the same lock ring and
+        /// coils as beam 0" (spec #8), just its own independent target/state.</summary>
+        public void SetSecondaryLatch(int slot, bool on, Transform targetTransform, CharacterController targetCc, float dt) =>
+            DriveLatch(slot + 1, on, targetTransform, targetCc, dt);
+
+        private void DriveLatch(int beamIndex, bool on, Transform targetTransform, CharacterController targetCc, float dt)
         {
             if (!_initialized) return;
+            BeamVisual beam = _beams[beamIndex];
 
-            bool freshLatch = on && !_wasLatchedLastFrame;
-            _wasLatchedLastFrame = on;
-            if (on) _lockSnapElapsed = freshLatch ? 0f : _lockSnapElapsed + Mathf.Max(dt, 0f);
+            bool freshLatch = on && !beam.WasLatchedLastFrame;
+            beam.WasLatchedLastFrame = on;
+            if (on) beam.LockSnapElapsed = freshLatch ? 0f : beam.LockSnapElapsed + Mathf.Max(dt, 0f);
 
             if (on)
             {
-                _coilTarget = targetTransform;
-                _coilCc = targetCc;
+                beam.CoilTarget = targetTransform;
+                beam.CoilCc = targetCc;
             }
 
             float rate = on ? 1f / CoilAppearSeconds : -1f / CoilVanishSeconds;
-            _latchVisibility = Mathf.Clamp01(_latchVisibility + rate * Mathf.Max(dt, 0f));
+            beam.LatchVisibility = Mathf.Clamp01(beam.LatchVisibility + rate * Mathf.Max(dt, 0f));
 
-            bool show = _latchVisibility > 0f && _coilTarget != null;
-            for (int i = 0; i < _coils.Length; i++) _coils[i].enabled = show;
-            _lockRingOuter.enabled = show;
-            _lockRingInner.enabled = show;
+            bool show = beam.LatchVisibility > 0f && beam.CoilTarget != null;
+            for (int i = 0; i < beam.Coils.Length; i++) beam.Coils[i].enabled = show;
+            beam.LockRingOuter.enabled = show;
+            beam.LockRingInner.enabled = show;
 
             if (!show)
             {
-                if (_latchVisibility <= 0f) { _coilTarget = null; _coilCc = null; _lockRadius = 0f; }
+                if (beam.LatchVisibility <= 0f) { beam.CoilTarget = null; beam.CoilCc = null; beam.LockRadius = 0f; }
                 return;
             }
 
-            ResolveLockGeometry(_coilTarget, _coilCc, out float radius, out Vector3 centre, out float floorY, out float topY);
-            _lockRadius = radius;
+            ResolveLockGeometry(beam.CoilTarget, beam.CoilCc, out float radius, out Vector3 centre, out float floorY, out float topY);
+            beam.LockRadius = radius;
 
             float thickness = Mathf.Clamp(LockThicknessBase * (radius / LockThicknessRefRadius), LockThicknessMin, LockThicknessMax);
             float ringThickness = thickness * LockRingThicknessMultiplier;
 
-            float snapT = Mathf.Clamp01(_lockSnapElapsed / LockRingSnapSeconds);
+            float snapT = Mathf.Clamp01(beam.LockSnapElapsed / LockRingSnapSeconds);
             float ringRadius = Mathf.Lerp(radius * LockRingOvershootMultiplier, radius, snapT);
             float ringY = floorY + LockRingHeightAboveFloor;
 
-            _lockRingOuter.widthMultiplier = ringThickness;
-            _lockRingInner.widthMultiplier = Mathf.Min(thickness * 0.4f, ringThickness * 0.4f);
+            beam.LockRingOuter.widthMultiplier = ringThickness;
+            beam.LockRingInner.widthMultiplier = Mathf.Min(thickness * 0.4f, ringThickness * 0.4f);
 
-            Color ringOuter = LockRingOuterColor; ringOuter.a *= _latchVisibility;
-            Color ringInner = LockRingInnerColor; ringInner.a *= _latchVisibility;
-            _lockRingOuter.startColor = _lockRingOuter.endColor = ringOuter;
-            _lockRingInner.startColor = _lockRingInner.endColor = ringInner;
+            Color ringOuter = LockRingOuterColor; ringOuter.a *= beam.LatchVisibility;
+            Color ringInner = LockRingInnerColor; ringInner.a *= beam.LatchVisibility;
+            beam.LockRingOuter.startColor = beam.LockRingOuter.endColor = ringOuter;
+            beam.LockRingInner.startColor = beam.LockRingInner.endColor = ringInner;
 
             for (int i = 0; i <= LockRingSegments; i++)
             {
@@ -506,30 +562,30 @@ namespace MaxWorlds.VFX
                     centre.x + Mathf.Cos(angle) * ringRadius,
                     ringY,
                     centre.z + Mathf.Sin(angle) * ringRadius);
-                _lockRingOuter.SetPosition(i, p);
-                _lockRingInner.SetPosition(i, p);
+                beam.LockRingOuter.SetPosition(i, p);
+                beam.LockRingInner.SetPosition(i, p);
             }
 
-            _coilPhase += dt * CoilRevsPerSecond * 2f * Mathf.PI;
+            beam.CoilPhase += dt * CoilRevsPerSecond * 2f * Mathf.PI;
             float coilBottom = floorY + CoilBottomHeight;
             float coilTop = Mathf.Max(coilBottom + 0.05f, topY);
 
-            for (int c = 0; c < _coils.Length; c++)
+            for (int c = 0; c < beam.Coils.Length; c++)
             {
-                LineRenderer coil = _coils[c];
+                LineRenderer coil = beam.Coils[c];
                 coil.widthMultiplier = thickness;
-                float coilPhaseOffset = (2f * Mathf.PI / _coils.Length) * c;
+                float coilPhaseOffset = (2f * Mathf.PI / beam.Coils.Length) * c;
                 for (int i = 0; i <= CoilSegments; i++)
                 {
                     float t = (float)i / CoilSegments;
-                    float angle = _coilPhase + coilPhaseOffset + t * CoilTurns * 2f * Mathf.PI;
+                    float angle = beam.CoilPhase + coilPhaseOffset + t * CoilTurns * 2f * Mathf.PI;
                     Vector3 radial = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
                     Vector3 basePos = new Vector3(centre.x, Mathf.Lerp(coilBottom, coilTop, t), centre.z);
                     coil.SetPosition(i, basePos + radial);
                 }
 
                 Color col = EmberColors[c % EmberColors.Length];
-                col.a *= _latchVisibility;
+                col.a *= beam.LatchVisibility;
                 coil.startColor = col;
                 coil.endColor = col;
             }
@@ -537,10 +593,10 @@ namespace MaxWorlds.VFX
             // Spec: "10-14 orange/red sparks per second fly 0.6-1.2m off the robot" — accumulated
             // fractionally so the rate holds true regardless of frame time, same idiom a cooldown
             // timer uses.
-            _sparkAccumulator += dt * SparksPerSecond;
-            while (_sparkAccumulator >= 1f)
+            beam.SparkAccumulator += dt * SparksPerSecond;
+            while (beam.SparkAccumulator >= 1f)
             {
-                _sparkAccumulator -= 1f;
+                beam.SparkAccumulator -= 1f;
                 Vector3 dir = Random.onUnitSphere;
                 float life = Random.Range(SparkLifeMin, SparkLifeMax);
                 float dist = Random.Range(SparkDistanceMin, SparkDistanceMax);
@@ -563,7 +619,7 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>The per-tick punctuation (spec): a bright muzzle flare at Max. Called once per fire
-        /// tick, not per frame.</summary>
+        /// tick (regardless of how many beams fired that tick), not per frame.</summary>
         public void OnTick(Vector3 muzzle, Vector3 endPoint, Vector3 forward)
         {
             if (!_initialized) return;
@@ -587,14 +643,21 @@ namespace MaxWorlds.VFX
 
         private void OnDestroy()
         {
-            DestroyLine(_core);
-            DestroyLine(_sheath);
-            if (_strands != null)
-                for (int i = 0; i < _strands.Length; i++) DestroyLine(_strands[i]);
-            if (_coils != null)
-                for (int i = 0; i < _coils.Length; i++) DestroyLine(_coils[i]);
-            DestroyLine(_lockRingOuter);
-            DestroyLine(_lockRingInner);
+            if (_beams != null)
+            {
+                foreach (BeamVisual beam in _beams)
+                {
+                    if (beam == null) continue;
+                    DestroyLine(beam.Core);
+                    DestroyLine(beam.Sheath);
+                    if (beam.Strands != null)
+                        for (int i = 0; i < beam.Strands.Length; i++) DestroyLine(beam.Strands[i]);
+                    if (beam.Coils != null)
+                        for (int i = 0; i < beam.Coils.Length; i++) DestroyLine(beam.Coils[i]);
+                    DestroyLine(beam.LockRingOuter);
+                    DestroyLine(beam.LockRingInner);
+                }
+            }
             Dispose(_muzzleFlare);
             Dispose(_latchSparks);
             Dispose(_latchFlare);

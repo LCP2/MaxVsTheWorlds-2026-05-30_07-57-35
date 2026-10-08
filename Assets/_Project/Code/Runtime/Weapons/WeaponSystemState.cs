@@ -372,6 +372,13 @@ namespace MaxWorlds.Weapons
             ApplyWorldLoadout(worldIndex);
 
             preservedLevels["p_dmg"] = 1;
+            // MV-1128: SPLIT (p_spr on World 3's board) is owned at level 1 (one beam) from the moment
+            // UNDERTOW is granted too -- the same "owned from run start" shape p_dmg already needs this
+            // same explicit seed for (RestoreSnapshot below never defaults a missing id to its own
+            // RigBoard.StartLevel -- see RigState.RestoreSnapshot's own doc). A no-op on the World 1 ->
+            // World 2 morph: RestoreSnapshot drops any id the target board doesn't define, and World 2's
+            // board carries no p_spr at all.
+            if (worldIndex >= 2) preservedLevels["p_spr"] = 1;
             preservedCategories.Add("PRIMARY");
             // MV-727: SECONDARY is deliberately NOT added here for the World 1 -> World 2 morph — it
             // stays locked until the World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not

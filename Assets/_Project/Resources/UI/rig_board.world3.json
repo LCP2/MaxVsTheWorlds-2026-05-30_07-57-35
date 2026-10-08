@@ -209,12 +209,12 @@
       "x": 345,
       "y": 580,
       "icon": "spr",
-      "label": "SPREAD",
-      "maxLevel": 6,
+      "label": "SPLIT",
+      "maxLevel": 3,
       "kind": "cap",
       "parent": "p_dmg",
-      "startLevel": 0,
-      "$comment": "MV-1017: World 3's own PRIMARY node, priced/levelled exactly like this board's own p_rng (6 levels) — replaces World 2's p_rof (RATE), which UNDERTOW has no fire-rate track for. UNDERTOW's ConeHalfAngle reads this track directly (WeaponTrackKind.Spread)."
+      "startLevel": 1,
+      "$comment": "MV-1128: SPLIT -- a plain beam count (1/2/3), owned at SPLIT 1 the instant UNDERTOW is granted (WeaponSystemState.ApplyWeaponCoreMorph seeds p_spr=1, the same shape it already seeds p_dmg=1 with). Undertow.BeamCount reads this track directly (WeaponTrackKind.Spread, clamped 1..3); the gate-hit cone no longer reads it at all (Undertow.ConeHalfAngle is now the authored base angle). Was MV-1017's SPREAD/ConeHalfAngle track (maxLevel 6, startLevel 0) -- recut by MV-1128 (Lee, 2026-10-07) after a device playtest found Spread did nothing to robots, only to a gate cone nobody notices."
     },
     {
       "id": "p_trp",

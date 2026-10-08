@@ -128,6 +128,17 @@ namespace MaxWorlds.Tests.EditMode
                 return;
             }
 
+            // MV-1128: p_spr (SPLIT) no longer feeds ConeHalfAngle at all -- it drives BeamCount instead.
+            if (id == "p_spr")
+            {
+                int before = undertow.BeamCount;
+                Assert.IsTrue(RaiseToMaxLevel(id), $"test precondition: {id} must be raisable to its own max level");
+                UndertowUpdate.Invoke(undertow, null);
+                Assert.AreNotEqual(before, undertow.BeamCount,
+                    "p_spr: raising it must change Undertow.BeamCount -- a dead PRIMARY node");
+                return;
+            }
+
             if (RigBoard.Category(id) == "PRIMARY")
             {
                 var before = (undertow.Range, undertow.EffectiveDamagePerTick, undertow.ConeHalfAngle);
