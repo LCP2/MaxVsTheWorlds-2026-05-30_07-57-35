@@ -24,8 +24,12 @@ namespace MaxWorlds.Arena
         /// <summary>The Replicators this map built (MV-706), in the order it authored them.</summary>
         public readonly List<Replicator> Replicators = new List<Replicator>(2);
 
-        /// <summary>The bosses this map built (MV-561), in the order it authored them.</summary>
-        public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
+        /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
+        /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
+        /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
+        /// base — same "key, never a concrete boss type" reasoning <see cref="BossCensus"/> already
+        /// uses.</summary>
+        public readonly List<MonoBehaviour> Bosses = new List<MonoBehaviour>(2);
 
         /// <summary>MV-997: this world's own finale exit gate, if <see cref="MapData.exitDoorway"/> was
         /// set before <see cref="MapRuntime.Build"/> ran — closed until <see cref="MaxWorlds.VFX.WorldFinaleGate"/>
@@ -2637,19 +2641,24 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>
-        /// Big Bermuda, from data (MV-561) — same recipe <see cref="Stage27BossScaffold"/> used to hand-
+        /// A boss, from data (MV-561) — same recipe <see cref="Stage27BossScaffold"/> used to hand-
         /// place once, now built per entity so an area can carry as many as it authors. The stray
         /// BoxCollider <c>CreatePrimitive</c> leaves behind is stripped before <c>AddComponent</c>,
-        /// exactly as the scaffold always did — <see cref="BigBermudaBoss"/>'s required
-        /// CharacterController is the sole physical shape a boss carries (MV-410), and Unity does not
-        /// support both on one GameObject.
+        /// exactly as the scaffold always did — a boss's required CharacterController is the sole
+        /// physical shape it carries (MV-410), and Unity does not support both on one GameObject.
         ///
         /// MV-572: also hands the boss its own wake area — the footprint of whichever zone it was
         /// authored inside. <see cref="MapValidation"/> already requires every non-gate entity
         /// (including a boss) to sit inside a zone, so <c>ZoneAt</c> is resolved here, not defended
         /// against being null.
+        ///
+        /// MV-1127: dispatch is now by KIND, not a single hard-wired type — a "sludgequeen" id builds a
+        /// <see cref="SludgequeenBoss"/> (her own rig, her own fight) rather than the <see cref="BigBermudaBoss"/>
+        /// every id used to resolve to regardless of what it actually named. "anchorhead" stays a
+        /// <see cref="BigBermudaBoss"/> underneath its own companion behaviour (MV-1018) — only
+        /// Sludgequeen needed a wholly different base component.
         /// </summary>
-        private static BigBermudaBoss BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built,
+        private static MonoBehaviour BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built,
             Dictionary<Renderer, List<string>> rendererZones)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
@@ -2658,25 +2667,41 @@ namespace MaxWorlds.Arena
             if (stray != null) Object.DestroyImmediate(stray);
 
             MarkDiscoverable(body);
-            var boss = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
-            boss.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
 
-            // MV-1018: Anchorhead (World 3's a30 boss) is selected by its own authored id, not by world
-            // index — BigBermudaBoss stays the base component underneath it either way (HP bar,
-            // BossCensus, victory, the finale orb/door all keep working through it, unchanged); only the
-            // companion behaviour and the generated body differ.
-            if (e.id == "anchorhead")
+            MonoBehaviour boss;
+            if (e.id == "sludgequeen")
             {
-                var anchor = body.AddComponent<AnchorheadBoss>();
-                AnchorheadRig.CreateFor(boss, anchor);
+                var sludgequeen = body.AddComponent<SludgequeenBoss>(); // RequireComponent adds the CharacterController
+                Rect footprint = map.ZoneAt(e.x, e.z).Footprint;
+                sludgequeen.SetWakeArea(footprint);
+                sludgequeen.SetArenaBounds(footprint);
+                SludgequeenRig.CreateFor(sludgequeen);
+                boss = sludgequeen;
             }
             else
             {
-                // MV-573: every boss gets its own rig, bound to it alone, right here — the old scene-load
-                // singleton (BigBermudaRig.Install) built exactly one rig per scene and bailed the moment
-                // any rig existed, so only the FIRST boss on a multi-boss map ever grew a body and every
-                // other one stood there as the bare greybox cube above.
-                BigBermudaRig.CreateFor(boss);
+                var bigBermuda = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
+                bigBermuda.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
+
+                // MV-1018: Anchorhead (World 3's a30 boss) is selected by its own authored id, not by
+                // world index — BigBermudaBoss stays the base component underneath it either way (HP
+                // bar, BossCensus, victory, the finale orb/door all keep working through it, unchanged);
+                // only the companion behaviour and the generated body differ.
+                if (e.id == "anchorhead")
+                {
+                    var anchor = body.AddComponent<AnchorheadBoss>();
+                    AnchorheadRig.CreateFor(bigBermuda, anchor);
+                }
+                else
+                {
+                    // MV-573: every boss gets its own rig, bound to it alone, right here — the old
+                    // scene-load singleton (BigBermudaRig.Install) built exactly one rig per scene and
+                    // bailed the moment any rig existed, so only the FIRST boss on a multi-boss map ever
+                    // grew a body and every other one stood there as the bare greybox cube above.
+                    BigBermudaRig.CreateFor(bigBermuda);
+                }
+
+                boss = bigBermuda;
             }
 
             // MV-972: tagged AFTER the rig exists, so this also picks up every renderer the rig just

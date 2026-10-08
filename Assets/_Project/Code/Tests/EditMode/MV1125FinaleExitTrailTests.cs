@@ -50,8 +50,8 @@ namespace MaxWorlds.Tests.EditMode
         private static void SetPrivateField(object target, string field, object value) =>
             target.GetType().GetField(field, NonPublicInstance).SetValue(target, value);
 
-        private static void InvokeOnDeath(BigBermudaBoss boss) =>
-            typeof(BigBermudaBoss).GetMethod("OnDeath", NonPublicInstance).Invoke(boss, null);
+        private static void InvokeOnDeath(Component boss) =>
+            boss.GetType().GetMethod("OnDeath", NonPublicInstance).Invoke(boss, null);
 
         private static void InvokeCollect(PickupDirector director, Pickup pickup)
         {
@@ -189,14 +189,14 @@ namespace MaxWorlds.Tests.EditMode
                 InvokeLifecycle(payoff, "OnEnable");
 
                 int finalAreaIndex = cfg.dials.areaCount;
-                List<BigBermudaBoss> finalBosses = built.Bosses
+                List<MonoBehaviour> finalBosses = built.Bosses
                     .Where(b => b != null && map.ZoneAt(b.transform.position.x, b.transform.position.z)?.AreaIndex == finalAreaIndex)
                     .ToList();
                 Assert.IsNotEmpty(finalBosses, "World 1 built no boss inside its own final area");
-                foreach (BigBermudaBoss b in finalBosses)
+                foreach (MonoBehaviour b in finalBosses)
                     BossCensus.Register(b, "TEST BOSS", phases: 1, current: 100f, max: 100f, areaIndex: finalAreaIndex);
 
-                foreach (BigBermudaBoss b in finalBosses) InvokeOnDeath(b);
+                foreach (MonoBehaviour b in finalBosses) InvokeOnDeath(b);
 
                 var pickupDirector = PickupDirector.EnsureInstalled();
                 Pickup core = Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None)

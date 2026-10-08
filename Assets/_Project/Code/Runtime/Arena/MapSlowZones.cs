@@ -1,5 +1,4 @@
 using UnityEngine;
-using MaxWorlds.Bosses;
 using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
@@ -31,11 +30,7 @@ namespace MaxWorlds.Arena
             // than a map-authored one — consulted here too so both movers slow inside it through this
             // one shared hook, same as every map-authored rect already does.
             float puddleMultiplier = SludgePuddle.SpeedMultiplierAt(worldPosition);
-            // MV-696: the Sludgequeen's flood is a THIRD runtime hazard shape (a boss-owned flood/dry
-            // rect rather than a fixed-radius puddle) — same shared-hook idiom, one more source in the
-            // Min chain.
-            float floodMultiplier = SludgequeenBoss.FloodSpeedMultiplierAt(worldPosition);
-            return Mathf.Min(mapMultiplier, Mathf.Min(puddleMultiplier, floodMultiplier));
+            return Mathf.Min(mapMultiplier, puddleMultiplier);
         }
     }
 }

@@ -44,14 +44,24 @@ namespace MaxWorlds.Enemies
         private IDamageable _playerDamageable;
         private Transform _churnPivot;
 
-        public static CorrosionPuddle Spawn(Vector3 position, float radius, float duration)
+        /// <summary>MV-1127: whether this puddle damages/CORRODES a robot standing in it — true (the
+        /// Pipe Turret's original MV-789 "Max (and robots)" behaviour) unless a caller says otherwise.
+        /// Max and a Sentinel are always affected regardless of this flag.</summary>
+        private bool _affectsRobots = true;
+
+        /// <summary>Resolved radius, world units — a test seam (MV-1127), not an authored constant read
+        /// back at itself: this is the SAME value every one of this puddle's own fan blobs was actually
+        /// built at.</summary>
+        public float Radius => _radius;
+
+        public static CorrosionPuddle Spawn(Vector3 position, float radius, float duration, bool affectsRobots = true)
         {
             var go = new GameObject("CorrosionPuddle (stand-in)");
             go.transform.position = position;
             var puddle = go.AddComponent<CorrosionPuddle>();
             int seed = SeedFromPosition(position);
             puddle._churnPivot = BuildVisual(go.transform, radius, seed);
-            puddle.Init(radius, duration);
+            puddle.Init(radius, duration, affectsRobots);
             // MV-978: registers with the MV-972 gate under whichever zone it landed in — this is a
             // free-flying, runtime-spawned hazard with no home zone id of its own to hand in the way a
             // map-authored piece has, so it resolves one off its own drop position instead.
@@ -263,10 +273,11 @@ namespace MaxWorlds.Enemies
             }
         }
 
-        private void Init(float radius, float duration)
+        private void Init(float radius, float duration, bool affectsRobots = true)
         {
             _radius = radius;
             _remaining = duration;
+            _affectsRobots = affectsRobots;
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -308,12 +319,15 @@ namespace MaxWorlds.Enemies
                 health?.ApplyCorroded();
             }
 
-            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
+            if (_affectsRobots)
             {
-                RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive) continue;
-                if (InRadius(transform.position, r.transform.position, _radius)) r.ApplyCorroded();
+                IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+                for (int i = 0; i < active.Count; i++)
+                {
+                    RobotEnemy r = active[i];
+                    if (r == null || !r.IsAlive) continue;
+                    if (InRadius(transform.position, r.transform.position, _radius)) r.ApplyCorroded();
+                }
             }
 
             if (_churnPivot != null) _churnPivot.Rotate(Vector3.up, ChurnDriftDegPerSecond * dt, Space.Self);
@@ -378,12 +392,25 @@ namespace MaxWorlds.Enemies
                 _playerDamageable.TakeDamage(info);
             }
 
-            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
+            // MV-1127: a deployed Sentinel is a player-side body too -- always affected, same as Max,
+            // regardless of _affectsRobots (that flag is about RobotEnemy only).
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
             {
-                RobotEnemy r = active[i];
-                if (r == null || !r.IsAlive) continue;
-                if (InRadius(transform.position, r.transform.position, _radius)) r.TakeDamage(info);
+                Sentinel s = sentinels[i];
+                if (s == null || !s.IsAlive) continue;
+                if (InRadius(transform.position, s.transform.position, _radius)) s.TakeDamage(info);
+            }
+
+            if (_affectsRobots)
+            {
+                IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+                for (int i = 0; i < active.Count; i++)
+                {
+                    RobotEnemy r = active[i];
+                    if (r == null || !r.IsAlive) continue;
+                    if (InRadius(transform.position, r.transform.position, _radius)) r.TakeDamage(info);
+                }
             }
         }
 

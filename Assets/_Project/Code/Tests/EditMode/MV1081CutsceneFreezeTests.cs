@@ -114,8 +114,8 @@ namespace MaxWorlds.Tests.EditMode
             c.GetType().GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(c, null);
 
-        private static void InvokeOnDeath(BigBermudaBoss boss) =>
-            typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
+        private static void InvokeOnDeath(Component boss) =>
+            boss.GetType().GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
         private static readonly FieldInfo RobotActiveListField =
@@ -286,15 +286,14 @@ namespace MaxWorlds.Tests.EditMode
             // ---- WorldFinaleGate: World 2's own final boss (a21, dials.areaCount == 21) dies, drops the
             // Weapon Core, and collecting it starts Beat A (WEAPON TAKEN) -- the same chain
             // MV1078FinaleWeaponAndCleanupTests drives, against World 2's real boss instead of a hand-
-            // rolled fixture. MapRuntime.BuildBoss always builds a BigBermudaBoss body regardless of the
-            // authored boss id ("sludgequeen" here) -- SludgequeenBoss is not yet wired into the loader
-            // (see its own class doc comment) -- so this is the real component the real loader built. ----
+            // rolled fixture. MapRuntime.BuildBoss builds World 2's "sludgequeen" id as a SludgequeenBoss
+            // (MV-1127) -- this is the real component the real loader built. ----
             var payoff = new GameObject("BossVictoryPayoff Test").AddComponent<BossVictoryPayoff>();
             var gate = new GameObject("WorldFinaleGate Test").AddComponent<WorldFinaleGate>();
             InvokeOnEnable(payoff);
             InvokeOnEnable(gate);
 
-            BigBermudaBoss boss = build.Bosses.Single();
+            MonoBehaviour boss = build.Bosses.Single();
             BossCensus.Register(boss, "SLUDGEQUEEN", 1, current: 100f, max: 100f, areaIndex: 21);
 
             var pickupDirector = PickupDirector.EnsureInstalled();

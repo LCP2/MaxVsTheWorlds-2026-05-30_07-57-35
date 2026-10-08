@@ -21,11 +21,11 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Built against the real World 1/2/3 maps (<see cref="MapRuntime.Build"/>), never a synthetic
     /// fixture — AC1 names "the real World 1 map" explicitly, and the World 2/3 sub-checks need the
-    /// real authored "sludgequeen"/"anchorhead" boss entities and gate positions, not a stand-in. Both
-    /// are built today as plain <see cref="BigBermudaBoss"/> instances (<c>MapRuntime.BuildBoss</c> only
-    /// special-cases the "anchorhead" id for its companion behaviour; "sludgequeen" is not yet wired to
-    /// <see cref="SludgequeenBoss"/> — see that class's own doc comment), so this test exercises the one
-    /// shared wake rule through the same component for all three.
+    /// real authored "sludgequeen"/"anchorhead" boss entities and gate positions, not a stand-in.
+    /// World 1/3 build as a <see cref="BigBermudaBoss"/>; World 2's "sludgequeen" builds as a
+    /// <see cref="SludgequeenBoss"/> (MV-1127) — both share the exact same private
+    /// <c>TickDormant</c>/public <c>Engaged</c> wake-rule shape, so this test drives either through
+    /// reflection rather than a concrete type.
     ///
     /// Fails on base commit d30d293 (the tip before this fix): area 30's "south gate, stand just inside"
     /// position wakes the boss immediately (it only had to enter the area), and the boss sits at its
@@ -61,9 +61,12 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeAwake(Component c) =>
             c.GetType().GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(c, null);
 
-        private static void InvokeTickDormant(BigBermudaBoss b) =>
-            typeof(BigBermudaBoss).GetMethod("TickDormant", BindingFlags.NonPublic | BindingFlags.Instance)
+        private static void InvokeTickDormant(Component b) =>
+            b.GetType().GetMethod("TickDormant", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(b, null);
+
+        private static bool IsEngaged(Component b) =>
+            (bool)b.GetType().GetProperty("Engaged").GetValue(b);
 
         private static MapData LoadMap(string worldKey)
         {
@@ -84,15 +87,15 @@ namespace MaxWorlds.Tests.EditMode
             return new Vector3(gate.x, 0f, gate.z);
         }
 
-        private BigBermudaBoss BuildBoss(MapData map, string bossEntityId)
+        private Component BuildBoss(MapData map, string bossEntityId)
         {
             var root = new GameObject($"MV1110 {bossEntityId} root");
             _roots.Add(root);
             MapBuild built = MapRuntime.Build(map, root.transform);
             Assert.IsTrue(built.Actors.TryGetValue(bossEntityId, out GameObject bossGo) && bossGo != null,
                 $"map must build boss entity '{bossEntityId}'");
-            var boss = bossGo.GetComponent<BigBermudaBoss>();
-            Assert.IsNotNull(boss, $"'{bossEntityId}' must build as a BigBermudaBoss");
+            Component boss = (Component)bossGo.GetComponent<BigBermudaBoss>() ?? bossGo.GetComponent<SludgequeenBoss>();
+            Assert.IsNotNull(boss, $"'{bossEntityId}' must build as a boss component");
             InvokeAwake(boss);
             return boss;
         }
@@ -102,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             // ================================================================= World 1, area 30
             MapData world1 = LoadMap(WorldLibrary.World1);
-            BigBermudaBoss boss1 = BuildBoss(world1, "a30_boss1");
+            Component boss1 = BuildBoss(world1, "a30_boss1");
 
             var post = new Vector3(329f, boss1.transform.position.y, 110f);
             Assert.That(Vector2.Distance(new Vector2(boss1.transform.position.x, boss1.transform.position.z),
@@ -116,7 +119,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < 1200; i++) // 20 s at 60 fps -- TickDormant is a plain per-frame check, no internal timer
                 InvokeTickDormant(boss1);
 
-            Assert.IsFalse(boss1.Engaged, "AC1: must still be Dormant after 20 s at the south gate, well beyond WakeRadius");
+            Assert.IsFalse(IsEngaged(boss1), "AC1: must still be Dormant after 20 s at the south gate, well beyond WakeRadius");
             Assert.That(Vector2.Distance(new Vector2(boss1.transform.position.x, boss1.transform.position.z),
                 new Vector2(post.x, post.z)), Is.LessThan(0.5f),
                 "AC1: a Dormant boss must not have moved from its post");
@@ -138,11 +141,11 @@ namespace MaxWorlds.Tests.EditMode
             // every frame off this boss's own Update -- a single tick already proves "within 1 s"). ---
             _playerGo.transform.position = boss1.transform.position + new Vector3(-15f, 0f, 0f);
             InvokeTickDormant(boss1);
-            Assert.IsTrue(boss1.Engaged, "AC1: must wake once Max is within WakeRadius (16 m) with clear sight");
+            Assert.IsTrue(IsEngaged(boss1), "AC1: must wake once Max is within WakeRadius (16 m) with clear sight");
 
             // ================================================================= World 2, Sludgequeen's area
             MapData world2 = LoadMap(WorldLibrary.World2);
-            BigBermudaBoss boss2 = BuildBoss(world2, "sludgequeen");
+            Component boss2 = BuildBoss(world2, "sludgequeen");
             Vector3 w2Entrance = GatePosition(world2, "g24");
             Assert.That(Vector3.Distance(w2Entrance, boss2.transform.position), Is.GreaterThan(BossTuning.WakeRadius),
                 "fixture: World 2's own area entrance must sit beyond WakeRadius from the boss for this sub-check to mean anything");
@@ -150,11 +153,11 @@ namespace MaxWorlds.Tests.EditMode
 
             for (int i = 0; i < 1200; i++)
                 InvokeTickDormant(boss2);
-            Assert.IsFalse(boss2.Engaged, "sub-check: World 2's Sludgequeen must stay Dormant after 20 s at the area entrance, beyond 16 m");
+            Assert.IsFalse(IsEngaged(boss2), "sub-check: World 2's Sludgequeen must stay Dormant after 20 s at the area entrance, beyond 16 m");
 
             // ================================================================= World 3, Anchorhead's area
             MapData world3 = LoadMap(WorldLibrary.World3);
-            BigBermudaBoss boss3 = BuildBoss(world3, "anchorhead");
+            Component boss3 = BuildBoss(world3, "anchorhead");
             Vector3 w3Entrance = GatePosition(world3, "g29");
             Assert.That(Vector3.Distance(w3Entrance, boss3.transform.position), Is.GreaterThan(BossTuning.WakeRadius),
                 "fixture: World 3's own area entrance must sit beyond WakeRadius from the boss for this sub-check to mean anything");
@@ -162,7 +165,7 @@ namespace MaxWorlds.Tests.EditMode
 
             for (int i = 0; i < 1200; i++)
                 InvokeTickDormant(boss3);
-            Assert.IsFalse(boss3.Engaged, "sub-check: World 3's Anchorhead must stay Dormant after 20 s at the area entrance, beyond 16 m");
+            Assert.IsFalse(IsEngaged(boss3), "sub-check: World 3's Anchorhead must stay Dormant after 20 s at the area entrance, beyond 16 m");
         }
     }
 }
