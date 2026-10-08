@@ -13,6 +13,7 @@ namespace MaxWorlds.Editor.Audio
     internal class AudioManifest
     {
         public SfxManifestEntry[] sfx;
+        public MusicManifestEntry[] music;
     }
 
     [Serializable]
@@ -23,6 +24,14 @@ namespace MaxWorlds.Editor.Audio
         public float durationSeconds;
         public float promptInfluence;
         public bool loop;
+    }
+
+    [Serializable]
+    internal class MusicManifestEntry
+    {
+        public string id;
+        public string prompt;
+        public int lengthMs;
     }
 
     /// <summary>
@@ -36,11 +45,14 @@ namespace MaxWorlds.Editor.Audio
     {
         private const string ManifestPath = "Assets/_Project/Audio/audio_manifest.json";
         private const string OutputDir = "Assets/_Project/Resources/Audio/Sfx";
+        private const string MusicOutputDir = "Assets/_Project/Resources/Audio/Music";
         private const string LogPath = "Logs/elevenlabs_generate.log";
         private const string ApiUrl = "https://api.elevenlabs.io/v1/sound-generation";
+        private const string MusicApiUrl = "https://api.elevenlabs.io/v1/music";
         private const string KeyFilePath = @"C:\Dev\MAx CCs\secrets\elevenlabs_api_key.txt";
         private const int SampleRate44100 = 44100;
         private const int SampleRate24000 = 24000;
+        private static readonly TimeSpan MusicRequestTimeout = TimeSpan.FromMinutes(5);
 
         [MenuItem("MAX/Audio/Generate missing sounds")]
         public static void GenerateMissingSoundsMenuItem() => Generate(null);
@@ -83,6 +95,19 @@ namespace MaxWorlds.Editor.Audio
                 var cue = (SfxCueLibrary.Cue)cueObj;
 
                 GenerateOne(entry, cue, outputPath, apiKey);
+            }
+
+            if (manifest.music != null)
+            {
+                Directory.CreateDirectory(MusicOutputDir);
+                foreach (var entry in manifest.music)
+                {
+                    string outputPath = $"{MusicOutputDir}/{entry.id}.mp3";
+                    bool forced = entry.id == regenId;
+                    if (File.Exists(outputPath) && !forced) continue;
+
+                    GenerateMusicOne(entry, outputPath, apiKey);
+                }
             }
 
             AssetDatabase.Refresh();
@@ -135,6 +160,30 @@ namespace MaxWorlds.Editor.Audio
             float seconds = samples.Length / (float)sampleRate;
             File.AppendAllText(LogPath,
                 $"ELEVENLABS {entry.id} OK format={format} seconds={seconds.ToString("0.###", CultureInfo.InvariantCulture)} credits={credits}\n");
+        }
+
+        private static void GenerateMusicOne(MusicManifestEntry entry, string outputPath, string apiKey)
+        {
+            using var client = new HttpClient { Timeout = MusicRequestTimeout };
+            client.DefaultRequestHeaders.Add("xi-api-key", apiKey);
+
+            string json = "{\"prompt\":" + JsonStringLiteral(entry.prompt) +
+                ",\"music_length_ms\":" + entry.lengthMs.ToString(CultureInfo.InvariantCulture) +
+                ",\"force_instrumental\":true}";
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var response = client.PostAsync($"{MusicApiUrl}?output_format=mp3_44100_128", content).GetAwaiter().GetResult();
+            byte[] bytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+            {
+                string snippet = Encoding.UTF8.GetString(bytes, 0, Mathf.Min(bytes.Length, 300));
+                throw new InvalidOperationException(
+                    $"ElevenLabs music failed for '{entry.id}': HTTP {(int)response.StatusCode} {snippet}");
+            }
+
+            File.WriteAllBytes(outputPath, bytes);
+
+            File.AppendAllText(LogPath, $"ELEVENLABS {entry.id} OK format=mp3_44100_128 bytes={bytes.Length}\n");
         }
 
         private static (bool ok, byte[] bytes, string credits) RequestSound(SfxManifestEntry entry, string apiKey, string outputFormat)
