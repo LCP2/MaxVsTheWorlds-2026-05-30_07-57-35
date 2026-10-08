@@ -88,8 +88,8 @@ namespace MaxWorlds.Tests.EditMode
             c.GetType().GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(c, null);
 
-        private static void InvokeOnDeath(BigBermudaBoss boss) =>
-            typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
+        private static void InvokeOnDeath(Component boss) =>
+            boss.GetType().GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
         private static Pickup[] LivePickups() =>
@@ -117,8 +117,8 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsTrue(built.Actors.TryGetValue("sludgequeen", out GameObject bossGo) && bossGo != null,
                 "world2_config.json's a21 boss ('sludgequeen') was not built");
-            var boss = bossGo.GetComponent<BigBermudaBoss>();
-            Assert.IsNotNull(boss, "a21's boss must build as a BigBermudaBoss (MapRuntime.BuildBoss)");
+            var boss = bossGo.GetComponent<SludgequeenBoss>();
+            Assert.IsNotNull(boss, "a21's boss must build as a SludgequeenBoss (MV-1127, MapRuntime.BuildBoss)");
 
             var areaDirector = _root.AddComponent<AreaAccumulationDirector>();
             areaDirector.ConfigureWorld(cfg, worldIndex: 1);                     // World 2 is index 1

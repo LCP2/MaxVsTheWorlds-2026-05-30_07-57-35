@@ -1,6 +1,4 @@
 using UnityEngine;
-using UnityEngine.Rendering;
-using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
@@ -18,9 +16,7 @@ namespace MaxWorlds.VFX
     ///
     /// Built from <see cref="CharacterMeshes"/>'s prism/beam/ring vocabulary plus
     /// <see cref="CharacterMeshes.Bevelled"/> for the flat-faced hatch/door/chute parts — no
-    /// <c>GameObject.CreatePrimitive</c> on the character itself (<see cref="BuildFlood"/>'s
-    /// environment overlay is the one exception, same split <see cref="BigBermudaRig"/> draws between
-    /// a character's own body and the ground it stands on).
+    /// <c>GameObject.CreatePrimitive</c> on the character itself.
     ///
     /// The pump housing's rust/teal split is built as two copies of the same cached taper mesh per
     /// section — one centred, one offset along the split plane's normal — rather than a true clipped
@@ -37,8 +33,13 @@ namespace MaxWorlds.VFX
     /// ticket pins their start angle but AC1b pins the eye's visibility.
     ///
     /// Unparented and FOLLOWS the boss each LateUpdate (yaw only), same reasoning as
-    /// <see cref="BigBermudaRig.Follow"/>. The flood plane, its own death-drain and the boss's collider
-    /// fit are all MV-699's unchanged — this ticket replaces the body only.
+    /// <see cref="BigBermudaRig.Follow"/>. The boss's collider fit is MV-699's unchanged — this ticket
+    /// replaces the body only.
+    ///
+    /// MV-1127 switched the fight itself on: the flood/dry-zone overlay this rig used to draw is gone
+    /// (Lee, 2026-09-30: no rising flood in any world) — her cannon mouths and chute feet, exposed here
+    /// as <see cref="NozzleMouth"/>/<see cref="ChuteFoot"/>, are what the real fight fires lobs and
+    /// releases sludgers from instead.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("rig")]
@@ -119,16 +120,6 @@ namespace MaxWorlds.VFX
         private static readonly Color AlarmDark = new Color(0.22f, 0.04f, 0.03f);
         private static readonly Color AlarmBright = new Color32(0xFF, 0x2A, 0x1A, 0xFF);
 
-        private static readonly Color FloodColor = new Color(0.30f, 0.42f, 0.16f);
-
-        /// <summary>Same number <c>MapRuntime.SludgeScrollSpeed</c> already authors for ground sludge —
-        /// one flow speed for "sludge" everywhere in the game, not a bespoke one for this boss alone.</summary>
-        private static readonly Vector2 FloodScrollSpeed = new Vector2(0f, 0.12f);
-
-        private const float FloodThickness = 0.06f;
-        private const float FoamHeight = 0.16f;
-        private const float FoamDepth = 0.4f;
-
         // ---------------------------------------------------------------- materials (static, shared —
         // nothing here needs a per-instance emissive tween)
 
@@ -185,17 +176,8 @@ namespace MaxWorlds.VFX
         private readonly MeshRenderer[] _cannonMouths = new MeshRenderer[2];
         private bool _alarmCritical;
 
-        // The flood plane covers the ARENA (world X/Z), not the boss, so it is never parented under
-        // this rig's own following transform — see RefreshFlood.
-        private Transform _floodPlane;
-        private Transform _foamEdge;
-
         private bool _dying;
         private float _dieTimer;
-
-        /// <summary>The flood's own scrolling ground plane — a resolved value a test can read, same
-        /// "public getter off private state" shape <see cref="BigBermudaRig.EyeColor"/> already uses.</summary>
-        public SludgeFlow Flood { get; private set; }
 
         /// <summary>The eye lens renderer — what MV-1124 AC1b's camera-ray test must hit first.</summary>
         public MeshRenderer EyeLens => _eyeLens;
@@ -242,9 +224,12 @@ namespace MaxWorlds.VFX
             transform.localScale = Vector3.one * (_boss.transform.localScale.x / AuthoredBodyWidth);
 
             Build();
-            BuildFlood();
             Follow();
-            RefreshFlood();
+
+            // MV-1127: hand the fight ticket the exact transforms it fires lobs/releases sludgers from
+            // -- same "rig hands the boss what it built" flow FitColliderTo already uses below.
+            _boss.SetCannonMouths(_nozzleMouths[0], _nozzleMouths[1]);
+            _boss.SetChuteFeet(_chuteFeet[0], _chuteFeet[1]);
 
             _boss.FitColliderTo(RenderedBoundsRelativeTo(_boss.transform, _colliderRoot));
         }
@@ -523,74 +508,6 @@ namespace MaxWorlds.VFX
             return new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
         }
 
-        /// <summary>The flood's own rising sludge plane and its foam leading edge — an ENVIRONMENT
-        /// overlay covering <see cref="SludgequeenBoss.FloodRect"/>'s world extent, built the same
-        /// primitive-cube-plus-<see cref="SludgeFlow"/> way <c>MapRuntime.BuildSludge</c> already
-        /// builds ground sludge. Deliberately unparented: FloodRect is a world-space rect, and this
-        /// rig's own transform follows the boss (see Follow) — parenting the flood under it would
-        /// drag the arena-sized plane around by the boss's own position. Unchanged from MV-699.
-        /// </summary>
-        private void BuildFlood()
-        {
-            var floodGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            floodGo.name = "SludgequeenFlood";
-            Strip(floodGo);
-            floodGo.transform.SetParent(null);
-            _floodPlane = floodGo.transform;
-
-            Material floodMat = MaterialLibrary.Tinted(SurfaceKind.Prop, FloodColor);
-            var floodRenderer = floodGo.GetComponent<MeshRenderer>();
-            if (floodMat != null) floodRenderer.sharedMaterial = floodMat;
-            floodRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            floodRenderer.receiveShadows = false;
-
-            Flood = floodGo.AddComponent<SludgeFlow>();
-            Flood.Configure(floodMat, FloodScrollSpeed);
-
-            var foamGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            foamGo.name = "SludgequeenFloodFoam";
-            Strip(foamGo);
-            foamGo.transform.SetParent(null);
-            _foamEdge = foamGo.transform;
-
-            var foamRenderer = foamGo.GetComponent<MeshRenderer>();
-            foamRenderer.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            foamRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            foamRenderer.receiveShadows = false;
-            ApplyLensColor(foamRenderer, Color.white * 0.8f);
-        }
-
-        /// <summary>Resizes the flood plane and its foam edge to <see cref="SludgequeenBoss.FloodRect"/>'s
-        /// current extent, and shows them only while the fight is actually on
-        /// (<see cref="SludgequeenBoss.Engaged"/>). Unchanged from MV-699.</summary>
-        private void RefreshFlood()
-        {
-            if (_boss == null || _floodPlane == null) return;
-
-            Rect r = _boss.FloodRect;
-            float w = Mathf.Max(0.01f, r.width);
-            float d = Mathf.Max(0.01f, r.height);
-
-            _floodPlane.position = new Vector3(r.center.x, FloodThickness * 0.5f, r.center.y);
-            _floodPlane.localScale = new Vector3(w, FloodThickness, d);
-
-            _foamEdge.position = new Vector3(r.center.x, FloodThickness + FoamHeight * 0.5f, r.yMax);
-            _foamEdge.localScale = new Vector3(w, FoamHeight, FoamDepth);
-
-            bool visible = _boss.Engaged && !_dying;
-            if (_floodPlane.gameObject.activeSelf != visible) _floodPlane.gameObject.SetActive(visible);
-            if (_foamEdge.gameObject.activeSelf != visible) _foamEdge.gameObject.SetActive(visible);
-        }
-
-        /// <summary>DestroyImmediate, not Destroy: this rig is built inside EditMode tests too, not
-        /// only at runtime, and Destroy() logs an error there — same reasoning as
-        /// <see cref="BigBermudaRig.Strip"/>.</summary>
-        private static void Strip(GameObject go)
-        {
-            var col = go.GetComponent<Collider>();
-            if (col != null) DestroyImmediate(col);
-        }
-
         /// <summary>Same axis-aligned-in-another-frame rebuild as <see cref="BigBermudaRig.RenderedBoundsRelativeTo"/>
         /// (MV-613), scoped to <paramref name="scopeRoot"/>'s own renderers only — what
         /// <see cref="SludgequeenBoss.FitColliderTo"/> needs, fitted to the housing and hatches, not the
@@ -615,9 +532,7 @@ namespace MaxWorlds.VFX
             if (_boss == null) return;
             Follow();
 
-            if (_dying) { TickDeath(); return; }
-
-            RefreshFlood();
+            if (_dying) TickDeath();
         }
 
         private void Follow()
@@ -652,9 +567,6 @@ namespace MaxWorlds.VFX
             _dieTimer += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(_dieTimer / duration);
 
-            float shrink = 1f - t;
-            SetFloodShrink(shrink, shrink > 0.01f);
-
             ApplyLensColor(_eyeLens, Color.Lerp(GoldColor, Color.black, t));
             ApplyLensColor(_sludgeSurface, Color.Lerp(SludgeGlow, Color.black, t));
             ApplyLensColor(_alarmLens, Color.Lerp(_alarmCritical ? AlarmBright : AlarmDark, Color.black, t));
@@ -667,17 +579,6 @@ namespace MaxWorlds.VFX
             transform.position += Vector3.down * (t * t * 1.2f);   // sinks into the drained floor
 
             if (t >= 1f) gameObject.SetActive(false);
-        }
-
-        private void SetFloodShrink(float shrink, bool visible)
-        {
-            if (_floodPlane == null) return;
-            Rect r = _boss != null ? _boss.FloodRect : new Rect();
-            float w = Mathf.Max(0.01f, r.width) * Mathf.Max(0f, shrink);
-            float d = Mathf.Max(0.01f, r.height) * Mathf.Max(0f, shrink);
-            _floodPlane.localScale = new Vector3(w, FloodThickness, d);
-            _floodPlane.gameObject.SetActive(visible);
-            if (_foamEdge != null) _foamEdge.gameObject.SetActive(false);
         }
 
         private void ApplyLensColor(MeshRenderer r, Color c)
@@ -700,13 +601,5 @@ namespace MaxWorlds.VFX
             _dieTimer = 0f;
         }
 
-        private void OnDestroy()
-        {
-            // The flood plane/foam are unparented (see BuildFlood), so destroying this rig does not
-            // take them with it automatically — clean them up explicitly, same DestroyImmediate
-            // reasoning as Strip (this runs inside EditMode tests too).
-            if (_floodPlane != null) DestroyImmediate(_floodPlane.gameObject);
-            if (_foamEdge != null) DestroyImmediate(_foamEdge.gameObject);
-        }
     }
 }

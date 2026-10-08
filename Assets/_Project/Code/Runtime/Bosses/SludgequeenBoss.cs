@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -11,34 +10,30 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Bosses
 {
     /// <summary>
-    /// Sludgequeen — the Wet Well boss (MV-696): a colossal sewage-pumping rig standing in a 44x44 arena
-    /// whose floor she floods. Modelled on <see cref="BigBermudaBoss"/> — slow walker, standoff, every
-    /// attack a volley, and (MV-1083) the same passive contact damage on top — but her signature is the
-    /// FLOOR, not an add swarm: at
-    /// 100-50% HP the south half of the well is ankle-deep in ooze (slow + damage); below 50%, after a
-    /// 3 s tell, the whole floor floods and only the map-authored deck islands (and the centre block)
-    /// stay dry. <see cref="FloodRect"/>/<see cref="IsDry"/> are resolved values — an EditMode test
-    /// drives the phase transition directly (no scene, no Update loop) and reads them straight off, the
-    /// same "public getters, private state machine" shape <see cref="BigBermudaBoss"/> already uses for
-    /// its own fight-reading surface.
-    ///
-    /// Out of this ticket's slice (BUILD MODE: INDICATIVE) and left for a follow-up once the arena
-    /// itself is authored (world2_config.json's a23 is still MV-700's stub, explicitly "not a design
-    /// pass" — see its own note): actually placing this boss in <c>bosses[]</c> (a <c>WorldBoss.kind</c>
-    /// dispatch in <see cref="MapRuntime"/>), and a <see cref="BossVictoryPayoff"/>-equivalent finale
-    /// beat (today's is hard-wired to <c>BackyardPath</c>'s own Backyard geometry). This class is
-    /// fully playable dropped into a scene by hand in the meantime, and shares the HUD boss bar and
-    /// <see cref="BossCensus"/> death bookkeeping with Big Bermuda today (MV-696 generalized
-    /// <see cref="BossCensus"/> off the concrete <c>BigBermudaBoss</c> type to make that possible).
+    /// Sludgequeen — World 2's final boss (MV-1127, switching her on in place of the Big Bermuda
+    /// <c>MapRuntime.BuildBoss</c> used to build for every authored id). Modelled on
+    /// <see cref="BigBermudaBoss"/> — slow walker, standoff, passive contact damage, a time-based spawn
+    /// escalation shared with Big Bermuda's own clock (<see cref="BigBermudaBrain"/>) — but her signature
+    /// attack is marked sludge LOBS, not a floor flood: MV-696's flood/dry-zone mechanic is gone
+    /// entirely (Lee, 2026-09-30: "no rising flood in any world"). Five lobs fly out of her two cannon
+    /// mouths every volley, one aimed at the nearest player-side body and the rest scattered 2-5 m
+    /// around it, each marked by a yellow <see cref="GroundRing"/> for its whole flight — reusing the
+    /// Pipe Turret's own <see cref="MaxWorlds.Enemies.CorrosiveGlob"/>/<see cref="MaxWorlds.Enemies.CorrosionPuddle"/>
+    /// (MV-691), fired at a fixed landing point rather than a tracked target so the splash lands on
+    /// whoever is actually standing there. Her chutes release sludgers in waves, capped at
+    /// <see cref="SludgequeenTuning.MaxConcurrentBrood"/> alive at once (MV-1127 §5, the same "counted
+    /// fresh, never decrement-only" rule MV-1085 gave Big Bermuda's own volley).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [MaxWorlds.Core.PerfSection("bosses")]
     public sealed class SludgequeenBoss : MonoBehaviour, IDamageable
     {
-        private enum Phase { Dormant, Fight, PhaseTwoTell, PhaseTwo, Dead }
+        private enum Phase { Dormant, Fight, EnrageTell, Enrage, Dead }
 
         private const string BossName = "SLUDGEQUEEN";
         private const float Gravity = 20f;
+
+        private static readonly Color LobRingColor = new Color(0.98f, 0.80f, 0.14f);
 
         private Phase _phase = Phase.Dormant;
         private DestructibleHealth _health;
@@ -72,109 +67,119 @@ namespace MaxWorlds.Bosses
         private readonly ZoneRouteBudget _routeBudget = new ZoneRouteBudget();
 
         // This boss's own authored area (MV-572), same convention as BigBermudaBoss's own _wakeArea.
-        // MV-1110 retired its old job of gating the wake itself (see TickDormant/IsWithinWakeRange above)
-        // in favour of a proximity + line-of-sight test against the boss's own post; kept set via
-        // SetWakeArea for whenever this boss is wired into MapRuntime.BuildBoss for real.
         private Rect _wakeArea;
+
+        /// <summary>The arena's own world-space X/Z extent (MV-696) — now consulted only to keep a lob's
+        /// landing spot (and the sludger cap's own spawn point) inside the arena, never for a flood.</summary>
         private Rect _arenaBounds;
-        private Rect[] _dryZones = Array.Empty<Rect>();
+
+        /// <summary>MV-1122-style: this boss's own 1-based area, resolved once in <see cref="Wake"/> and
+        /// stamped onto every sludger it releases — same reasoning as <see cref="BigBermudaBoss"/>'s own
+        /// <c>_areaIndex</c>.</summary>
+        private int _areaIndex;
 
         private float _verticalVel;
         private float _tellTimer;
 
+        // ---------------------------------------------------------------- sludge lobs (MV-1127)
+
+        private struct PendingLob
+        {
+            public float Delay;
+            public int Side;
+            public Vector3 LandingPoint;
+        }
+
+        private struct ActiveRing
+        {
+            public GroundRing Ring;
+            public float Remaining;
+        }
+
+        private readonly List<PendingLob> _pendingLobs = new List<PendingLob>(8);
+        private readonly List<ActiveRing> _activeRings = new List<ActiveRing>(8);
+        private readonly Stack<GroundRing> _ringPool = new Stack<GroundRing>(8);
+        private readonly List<ActiveRing> _dribbleFlashes = new List<ActiveRing>(4);
         private float _globTimer;
+        private float _dribbleTimer;
+        private const float DribbleFlashRadius = 0.25f;
+        private const float DribbleFlashLife = 0.15f;
+
+        /// <summary>The rig's own two cannon-mouth transforms (MV-1127) — set once by
+        /// <see cref="MaxWorlds.VFX.SludgequeenRig.Bind"/> right after it builds them, same "rig hands the
+        /// boss what it built" flow <see cref="FitColliderTo"/> already uses. A lob fires from the EXACT
+        /// transform (not a procedural approximation) so "first seen within 0.3 m of a cannon mouth" is
+        /// trivially true. Falls back to this boss's own transform when unset (a bare fixture with no
+        /// rig bound).</summary>
+        private readonly Transform[] _cannonMouths = new Transform[2];
+
+        /// <summary>The rig's own two chute-foot transforms (MV-1127) — where a sludger actually steps
+        /// off the chute onto the floor. Same fallback-to-procedural-point reasoning as
+        /// <see cref="_cannonMouths"/>.</summary>
+        private readonly Transform[] _chuteFeet = new Transform[2];
+
+        // ---------------------------------------------------------------- sludgers (MV-1127, brood)
+
         private float _broodTimer;
         private float _broodTellTimer;
         private bool _broodTelling;
         private Transform _broodRoot;
 
-        // Registered while actively flooding, so MapSlowZones can slow a mover standing in the flood
-        // without needing a live reference to this specific boss (same shape as SludgePuddle._active).
-        private static readonly List<SludgequeenBoss> _active = new List<SludgequeenBoss>(2);
+        /// <summary>Purely the shared time-based spawn-level clock (MV-1127 §6: "one level every 30 s,
+        /// four levels") — Big Bermuda's own <see cref="BigBermudaBrain"/>, reused rather than
+        /// duplicated. Its own <c>Enraged</c> output is not read here; this boss's half-health tell is
+        /// its own phase machine below (<see cref="Phase.EnrageTell"/>/<see cref="Phase.Enrage"/>), since
+        /// the ticket's 3 s tell has no equivalent in Big Bermuda's immediate enrage.</summary>
+        private readonly BigBermudaBrain _brain = new BigBermudaBrain(SludgequeenTuning.PhaseTwoThreshold);
 
         public bool IsAlive => _phase != Phase.Dead && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
 
         /// <summary>True from wake until death — same meaning as <see cref="BigBermudaBoss.Engaged"/>.</summary>
-        public bool Engaged => _phase == Phase.Fight || _phase == Phase.PhaseTwoTell || _phase == Phase.PhaseTwo;
+        public bool Engaged => _phase == Phase.Fight || _phase == Phase.EnrageTell || _phase == Phase.Enrage;
 
         public bool IsDead => _phase == Phase.Dead;
 
-        /// <summary>True once the full-floor flood has actually landed (post-tell).</summary>
-        public bool IsPhaseTwo => _phase == Phase.PhaseTwo;
+        /// <summary>True once the half-health tell has actually elapsed and the faster timings have
+        /// landed (MV-1127 §9).</summary>
+        public bool IsEnraged => _phase == Phase.Enrage;
 
         /// <summary>True during the brood's 1 s hatch-open tell — the ONE getter
-        /// <see cref="MaxWorlds.VFX.SludgequeenRig"/> reads to spin the valve wheel up for the attack
+        /// <see cref="MaxWorlds.VFX.SludgequeenRig"/> reads to spin the hatch strip up for the attack
         /// tell, same read-gameplay-write-nothing seam <see cref="BigBermudaBoss.SpawnWindup01"/> uses.</summary>
         public bool IsVenting => _broodTelling;
+
+        /// <summary>1..<see cref="BossTuning.MaxSpawnLevel"/> — how far her sludger composition has
+        /// escalated (MV-1127 §6). Drives the HUD's spawn-level bar via <see cref="BossCensus"/>.</summary>
+        public int SpawnLevel => _brain.SpawnLevel;
 
         /// <summary>Hands this boss its own authoring area's floor, same convention as
         /// <see cref="BigBermudaBoss.SetWakeArea"/>.</summary>
         public void SetWakeArea(Rect area) => _wakeArea = area;
 
-        /// <summary>The arena's own world-space X/Z extent — what <see cref="FloodRect"/> is computed
-        /// against. <c>bounds.y</c>/<c>bounds.height</c> map to world Z, same "Rect over the XZ plane"
-        /// convention <see cref="_wakeArea"/> already uses.</summary>
+        /// <summary>The arena's own world-space X/Z extent — what a lob's landing spot is clamped
+        /// inside (MV-1127; MV-696's original flood consumer of this is gone).</summary>
         public void SetArenaBounds(Rect bounds) => _arenaBounds = bounds;
 
-        /// <summary>The map-authored deck islands + centre block (MV-692) — ground that stays dry no
-        /// matter how much of the floor has flooded.</summary>
-        public void SetDryZones(Rect[] dryZones) => _dryZones = dryZones ?? Array.Empty<Rect>();
-
-        /// <summary>
-        /// The flood's current outer extent (MV-696 §3-4): the south half of <see cref="_arenaBounds"/>
-        /// while above the phase-2 threshold (or still ticking down the tell), the whole floor once
-        /// phase 2 has actually landed. This is the OUTER extent only — <see cref="IsDry"/> is what
-        /// decides whether a given point is actually wet, since the deck islands stay dry throughout.
-        /// </summary>
-        public Rect FloodRect => _phase == Phase.PhaseTwo || _phase == Phase.Dead
-            ? _arenaBounds
-            : SouthHalf(_arenaBounds);
-
-        private static Rect SouthHalf(Rect bounds)
+        /// <summary>MV-1127: the rig's own two cannon-mouth transforms, bound once right after the rig
+        /// builds them — see <see cref="_cannonMouths"/>'s own doc comment.</summary>
+        public void SetCannonMouths(Transform left, Transform right)
         {
-            float half = bounds.height * 0.5f;
-            return new Rect(bounds.xMin, bounds.yMin, bounds.width, half);
+            _cannonMouths[0] = left;
+            _cannonMouths[1] = right;
         }
 
-        /// <summary>True if <paramref name="point"/> (world X/Z) is dry ground: inside an authored dry
-        /// zone regardless of the flood, or simply outside <see cref="FloodRect"/> (the ticket's own
-        /// "dry ground: the north half + all islands" in phase 1).</summary>
-        public bool IsDry(Vector3 point)
+        /// <summary>MV-1127: the rig's own two chute-foot transforms — see <see cref="_chuteFeet"/>'s
+        /// own doc comment.</summary>
+        public void SetChuteFeet(Transform left, Transform right)
         {
-            var p = new Vector2(point.x, point.z);
-            for (int i = 0; i < _dryZones.Length; i++)
-                if (_dryZones[i].Contains(p)) return true;
-            return !FloodRect.Contains(p);
+            _chuteFeet[0] = left;
+            _chuteFeet[1] = right;
         }
 
-        /// <summary>Apply the flood's damage-over-time to <paramref name="receiver"/> standing at
-        /// <paramref name="position"/>, scaled by <paramref name="dt"/> so the total over any span sums
-        /// exactly to <see cref="SludgequeenTuning.FloodDamagePerSecond"/> × that span (MV-696 AC1: a 1 s
-        /// probe on the floor records exactly 4 damage). A no-op on dry ground. Never called against a
-        /// robot — the ticket's own "robots unaffected".</summary>
-        public void TickFloodDamage(float dt, Vector3 position, IDamageable receiver)
-        {
-            if (dt <= 0f || receiver == null || !receiver.IsAlive) return;
-            if (IsDry(position)) return;
-            receiver.TakeDamage(new DamageInfo(SludgequeenTuning.FloodDamagePerSecond * dt, position, Vector3.up, Team.Enemy));
-        }
-
-        /// <summary>The slowest flood multiplier among every living, flooding Sludgequeen at
-        /// <paramref name="worldPosition"/> (1 = unaffected) — consulted by
-        /// <see cref="MaxWorlds.Arena.MapSlowZones.SpeedMultiplierAt"/> alongside the map's own zones and
-        /// <see cref="MaxWorlds.Enemies.SludgePuddle"/>, the same shared-hook shape MV-705 already used.</summary>
-        public static float FloodSpeedMultiplierAt(Vector3 worldPosition)
-        {
-            float best = 1f;
-            for (int i = 0; i < _active.Count; i++)
-            {
-                SludgequeenBoss b = _active[i];
-                if (b == null || !b.IsAlive) continue;
-                if (!b.IsDry(worldPosition)) best = Mathf.Min(best, SludgequeenTuning.FloodSlowMultiplier);
-            }
-            return best;
-        }
+        // Registered while alive, same bookkeeping idiom as SludgePuddle._active -- nothing in this
+        // ticket reads this static list, but ResetRegistry is a hygiene reset several tests already call.
+        private static readonly List<SludgequeenBoss> _active = new List<SludgequeenBoss>(2);
 
         /// <summary>Test/level-reset hygiene, same idiom as <see cref="MaxWorlds.Enemies.SludgePuddle.ResetRegistry"/>.</summary>
         public static void ResetRegistry() => _active.Clear();
@@ -184,7 +189,7 @@ namespace MaxWorlds.Bosses
             _cc = GetComponent<CharacterController>();
             FitColliderToRenderedBody();
             _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
-            _health = new DestructibleHealth(SludgequeenTuning.Health);
+            _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, SludgequeenTuning.Health));
             _health.Destroyed += OnDeath;
             _contactCooldownTimer = SludgequeenTuning.ContactCooldown; // MV-1083: no free first hit
             AcquireTarget();
@@ -218,6 +223,7 @@ namespace MaxWorlds.Bosses
         private void Wake()
         {
             int areaIndex = ResolveAreaIndex();
+            _areaIndex = areaIndex;
 
             // MV-995: same reasoning as BigBermudaBoss.Wake -- a cold-boot RESUME rebuilds every
             // authored boss fresh and Dormant, so an area already beaten before the checkpoint was saved
@@ -233,7 +239,7 @@ namespace MaxWorlds.Bosses
 
             _phase = Phase.Fight;
             if (!_active.Contains(this)) _active.Add(this);
-            // 2 phases -> HUD bar shows the 50% segment, same as BigBermudaBoss.
+            // 2 phases -> HUD bar shows the half-health segment, same as BigBermudaBoss.
             BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, areaIndex);
         }
 
@@ -264,25 +270,30 @@ namespace MaxWorlds.Bosses
             return LineOfSight.Between(transform, _target);
         }
 
-        private void Update()
+        /// <summary>The full per-frame fight tick, dt-parameterized so an EditMode test can drive the
+        /// whole fight deterministically without a live Update loop — same "Tick(dt) the test can drive"
+        /// contract <see cref="MaxWorlds.Enemies.RobotEnemy.Tick"/>/<see cref="MaxWorlds.Enemies.CorrosiveGlob.Tick"/>
+        /// already give their own per-frame logic.</summary>
+        public void Tick(float dt)
         {
-            float dt = Time.deltaTime;
             switch (_phase)
             {
                 case Phase.Dormant: TickDormant(); break;
-                case Phase.PhaseTwoTell: TickPhaseTwoTell(dt); TickFight(dt); break;
+                case Phase.EnrageTell: TickEnrageTell(dt); TickFight(dt); break;
                 case Phase.Fight:
-                case Phase.PhaseTwo: TickFight(dt); break;
+                case Phase.Enrage: TickFight(dt); break;
             }
             ApplyGravity(dt);
         }
 
-        /// <summary>Counts down the crown-spin tell (MV-696 §4); once it elapses the flood is Phase 2's
-        /// full-floor extent from the very next <see cref="FloodRect"/> read.</summary>
-        private void TickPhaseTwoTell(float dt)
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>Counts down the half-health tell (MV-1127 §9); once it elapses the faster lob/brood
+        /// timings take over from the very next tick.</summary>
+        private void TickEnrageTell(float dt)
         {
             _tellTimer -= dt;
-            if (_tellTimer <= 0f) _phase = Phase.PhaseTwo;
+            if (_tellTimer <= 0f) _phase = Phase.Enrage;
         }
 
         private void TickFight(float dt)
@@ -292,9 +303,11 @@ namespace MaxWorlds.Bosses
             Approach(dt);
             FaceTarget();
             TickContactDamage(dt);
+            _brain.Tick(dt, _health.Normalized);
+            BossCensus.ReportSpawnLevel(this, _brain.SpawnLevel, _brain.SpawnLevelProgress01);
             TickGlobVolley(dt);
+            TickLobs(dt);
             TickBrood(dt);
-            TickFloodDamage(dt, _target.position, _targetDamageable);
         }
 
         private void Approach(float dt)
@@ -359,8 +372,7 @@ namespace MaxWorlds.Bosses
         /// <summary>MV-1083: Sludgequeen hurts on contact too — "Bosses must do damage to Max and
         /// Sentinels in every world" (Lee, 2026-09-30) is not a BigBermudaBoss-only rule. Same shape as
         /// <see cref="BigBermudaBoss.TickContactDamage"/>: rate-limited, distance-based against the
-        /// boss's own WORLD-space collider radius, independent of <see cref="TickFloodDamage"/> (a
-        /// separate, position-based floor hazard).</summary>
+        /// boss's own WORLD-space collider radius.</summary>
         private void TickContactDamage(float dt)
         {
             _contactCooldownTimer -= dt;
@@ -426,7 +438,7 @@ namespace MaxWorlds.Bosses
         /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s MV-362 rule). <see cref="TickContactDamage"/> is
         /// untouched by this — it always hits <see cref="_playerTarget"/> directly plus every Sentinel
         /// in <see cref="Sentinel.Active"/>, so this only changes who the boss WALKS at, FACES and
-        /// floods under, never who it can hurt.</summary>
+        /// AIMS her first lob at, never who it can hurt.</summary>
         private void RetargetIfNeeded()
         {
             if (_playerTarget == null) return;
@@ -461,43 +473,202 @@ namespace MaxWorlds.Bosses
             }
         }
 
-        /// <summary>Points <see cref="_target"/>/<see cref="_targetDamageable"/> at a new goal together
-        /// — <see cref="TickFloodDamage"/> reads both off the same tick, so letting them drift apart
-        /// (a stale <see cref="_targetDamageable"/> left over from before a retarget) would apply the
-        /// flood's damage to the WRONG body at the new target's position.</summary>
         private void SetTarget(Transform t)
         {
             _target = t;
             _targetDamageable = t != null ? t.GetComponent<IDamageable>() : null;
         }
 
-        // ---------------------------------------------------------------- glob volley (MV-696 §2)
+        // ---------------------------------------------------------------- sludge lob volley (MV-1127 §4)
 
         private void TickGlobVolley(float dt)
         {
             _globTimer += dt;
-            float interval = _phase == Phase.PhaseTwo ? SludgequeenTuning.Phase2GlobInterval : SludgequeenTuning.Phase1GlobInterval;
+            float interval = IsEnraged ? SludgequeenTuning.Phase2GlobInterval : SludgequeenTuning.Phase1GlobInterval;
             if (_globTimer < interval) return;
             _globTimer = 0f;
 
-            int count = _phase == Phase.PhaseTwo ? SludgequeenTuning.Phase2GlobCount : SludgequeenTuning.Phase1GlobCount;
-            FireGlobVolley(count);
+            int count = IsEnraged ? SludgequeenTuning.Phase2GlobCount : SludgequeenTuning.Phase1GlobCount;
+            FireLobVolley(count);
         }
 
-        /// <summary>Reuses the Pipe Turret's own corrosive glob (MV-691) — same projectile, same puddle,
-        /// just fired from the boss instead of a static emplacement.</summary>
-        private void FireGlobVolley(int count)
+        /// <summary>Schedules <paramref name="count"/> marked lobs: one aimed at the nearest player-side
+        /// body (<see cref="_target"/>), the rest scattered <see cref="SludgequeenTuning.LobScatterMin"/>-
+        /// <see cref="SludgequeenTuning.LobScatterMax"/> m around it on a fixed angular spread (so they
+        /// are pairwise at least that scatter's own chord apart by construction, never by retrying a
+        /// random pick), each clamped onto walkable ground inside the arena. Actual launch is staggered
+        /// <see cref="SludgequeenTuning.GlobLaunchStagger"/> s apart, alternating cannon mouths — see
+        /// <see cref="TickLobs"/>.</summary>
+        private void FireLobVolley(int count)
         {
-            if (_target == null) return;
-            Vector3 origin = transform.position + Vector3.up * 1.5f;
-            for (int i = 0; i < count; i++)
+            if (_target == null || count <= 0) return;
+
+            Vector3 anchor = _target.position;
+            Vector3[] landings = ComputeLandingSpots(anchor, count);
+
+            for (int i = 0; i < landings.Length; i++)
             {
-                CorrosiveGlob.Fire(origin, _target, SludgequeenTuning.GlobSpeed, SludgequeenTuning.GlobDamage,
-                    SludgequeenTuning.GlobSplashRadius, SludgequeenTuning.GlobPuddleRadius, SludgequeenTuning.GlobPuddleDuration);
+                _pendingLobs.Add(new PendingLob
+                {
+                    Delay = i * SludgequeenTuning.GlobLaunchStagger,
+                    Side = i % 2,
+                    LandingPoint = landings[i],
+                });
             }
         }
 
-        // ---------------------------------------------------------------- brood (MV-696 §2)
+        /// <summary><paramref name="anchor"/> itself, plus <paramref name="count"/>-1 more points evenly
+        /// spread in angle around it (a random overall rotation, so the pattern isn't always the same
+        /// four compass points) at a random distance in [<see cref="SludgequeenTuning.LobScatterMin"/>,
+        /// <see cref="SludgequeenTuning.LobScatterMax"/>] each. Fixed angular spacing guarantees every
+        /// pair of scattered points is at least <c>2 * LobScatterMin * sin(halfSpacing)</c> apart, which
+        /// for 4 points 90 degrees apart and a 2 m minimum radius is ~2.83 m — comfortably clear of the
+        /// ticket's own "at least 2 m apart" without ever needing a reject-and-retry loop (which an
+        /// EditMode test could not then assert on deterministically).</summary>
+        private Vector3[] ComputeLandingSpots(Vector3 anchor, int count)
+        {
+            var spots = new Vector3[count];
+            spots[0] = ClampToArena(anchor);
+
+            int scatterCount = count - 1;
+            if (scatterCount <= 0) return spots;
+
+            float baseAngle = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            float step = (360f / scatterCount) * Mathf.Deg2Rad;
+
+            for (int i = 0; i < scatterCount; i++)
+            {
+                float angle = baseAngle + i * step;
+                float dist = UnityEngine.Random.Range(SludgequeenTuning.LobScatterMin, SludgequeenTuning.LobScatterMax);
+                Vector3 candidate = anchor + new Vector3(Mathf.Cos(angle) * dist, 0f, Mathf.Sin(angle) * dist);
+                spots[i + 1] = ClampToArena(candidate);
+            }
+
+            return spots;
+        }
+
+        /// <summary>Pulls <paramref name="point"/>'s XZ back inside <see cref="_arenaBounds"/> by the
+        /// splash radius from every wall, and snaps Y onto the real walkable surface — same
+        /// pull-back-from-the-edge shape <see cref="BigBermudaBoss"/>'s own <c>ClampLandingToArea</c>
+        /// uses for its brood volley.</summary>
+        private Vector3 ClampToArena(Vector3 point)
+        {
+            float margin = SludgequeenTuning.GlobSplashRadius;
+            MapData map = EnemyNavigation.Map;
+            Vector3 resolved = map != null ? map.SnapToWalkableSurface(transform.position, point, margin) : point;
+
+            if (_arenaBounds.width <= 0f || _arenaBounds.height <= 0f) return resolved;
+
+            float minX = _arenaBounds.xMin + margin, maxX = _arenaBounds.xMax - margin;
+            float minZ = _arenaBounds.yMin + margin, maxZ = _arenaBounds.yMax - margin;
+            if (minX > maxX) minX = maxX = _arenaBounds.center.x;
+            if (minZ > maxZ) minZ = maxZ = _arenaBounds.center.y;
+
+            return new Vector3(Mathf.Clamp(resolved.x, minX, maxX), resolved.y, Mathf.Clamp(resolved.z, minZ, maxZ));
+        }
+
+        /// <summary>Advances every scheduled lob launch and every live landing ring, plus the between-
+        /// volleys cannon dribble (MV-1127 §4's own dressing beat).</summary>
+        private void TickLobs(float dt)
+        {
+            for (int i = _pendingLobs.Count - 1; i >= 0; i--)
+            {
+                PendingLob p = _pendingLobs[i];
+                p.Delay -= dt;
+                if (p.Delay <= 0f)
+                {
+                    LaunchLob(p.Side, p.LandingPoint);
+                    _pendingLobs.RemoveAt(i);
+                }
+                else
+                {
+                    _pendingLobs[i] = p;
+                }
+            }
+
+            for (int i = _activeRings.Count - 1; i >= 0; i--)
+            {
+                ActiveRing r = _activeRings[i];
+                r.Remaining -= dt;
+                if (r.Remaining <= 0f)
+                {
+                    r.Ring.Hide();
+                    _ringPool.Push(r.Ring);
+                    _activeRings.RemoveAt(i);
+                }
+                else
+                {
+                    _activeRings[i] = r;
+                }
+            }
+
+            // Dressing only, no damage: one droplet falling from each mouth between volleys (never
+            // while lobs are actively mid-flight -- see the ticket's own "between volleys").
+            if (_pendingLobs.Count == 0 && _activeRings.Count == 0)
+            {
+                _dribbleTimer += dt;
+                if (_dribbleTimer >= SludgequeenTuning.DribbleInterval)
+                {
+                    _dribbleTimer = 0f;
+                    DribbleCannons();
+                }
+            }
+
+            for (int i = _dribbleFlashes.Count - 1; i >= 0; i--)
+            {
+                ActiveRing r = _dribbleFlashes[i];
+                r.Remaining -= dt;
+                if (r.Remaining <= 0f)
+                {
+                    r.Ring.Hide();
+                    _ringPool.Push(r.Ring);
+                    _dribbleFlashes.RemoveAt(i);
+                }
+                else
+                {
+                    _dribbleFlashes[i] = r;
+                }
+            }
+        }
+
+        /// <summary>Fires one glob from cannon <paramref name="side"/>'s own mouth transform at
+        /// <paramref name="landingPoint"/>, and shows the yellow landing ring there for the lob's whole
+        /// flight (MV-1127 §4). Speed is derived from distance/<see cref="SludgequeenTuning.GlobFlightTime"/>
+        /// rather than a fixed speed, so every lob's own flight time is the ticket's authored minimum
+        /// regardless of how far it has to travel.</summary>
+        private void LaunchLob(int side, Vector3 landingPoint)
+        {
+            Transform mouth = _cannonMouths[side] != null ? _cannonMouths[side] : transform;
+            Vector3 origin = mouth.position;
+
+            GroundRing ring = _ringPool.Count > 0 ? _ringPool.Pop() : GroundRing.Create("Sludgequeen Lob Ring");
+            ring.Show(new Vector3(landingPoint.x, 0f, landingPoint.z), SludgequeenTuning.GlobSplashRadius, LobRingColor);
+            _activeRings.Add(new ActiveRing { Ring = ring, Remaining = SludgequeenTuning.GlobFlightTime });
+
+            float distance = Mathf.Max(0.01f, Vector3.Distance(origin, landingPoint));
+            float speed = distance / SludgequeenTuning.GlobFlightTime;
+
+            CorrosiveGlob.FireAt(origin, landingPoint, speed, SludgequeenTuning.GlobDamage,
+                SludgequeenTuning.GlobSplashRadius, SludgequeenTuning.GlobPuddleRadius, SludgequeenTuning.GlobPuddleDuration,
+                affectsRobots: false, blobDiameter: SludgequeenTuning.GlobVisualDiameter);
+        }
+
+        /// <summary>Dressing-only droplets falling from each cannon mouth between volleys (MV-1127 §4) —
+        /// a brief ring flash at the floor under each mouth, no damage, no puddle.</summary>
+        private void DribbleCannons()
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                Transform mouth = _cannonMouths[side];
+                if (mouth == null) continue;
+
+                GroundRing ring = _ringPool.Count > 0 ? _ringPool.Pop() : GroundRing.Create("Sludgequeen Dribble");
+                ring.Show(new Vector3(mouth.position.x, 0f, mouth.position.z), DribbleFlashRadius, LobRingColor);
+                _dribbleFlashes.Add(new ActiveRing { Ring = ring, Remaining = DribbleFlashLife });
+            }
+        }
+
+        // ---------------------------------------------------------------- sludgers (MV-1127 §5)
 
         private void TickBrood(float dt)
         {
@@ -509,7 +680,7 @@ namespace MaxWorlds.Bosses
             }
 
             _broodTimer += dt;
-            float interval = _phase == Phase.PhaseTwo ? SludgequeenTuning.Phase2BroodInterval : SludgequeenTuning.Phase1BroodInterval;
+            float interval = IsEnraged ? SludgequeenTuning.Phase2BroodInterval : SludgequeenTuning.Phase1BroodInterval;
             if (_broodTimer < interval) return;
 
             _broodTimer = 0f;
@@ -517,31 +688,42 @@ namespace MaxWorlds.Bosses
             _broodTellTimer = SludgequeenTuning.BroodTellTime;
         }
 
-        /// <summary>Fling <see cref="SludgequeenTuning.BroodCount"/> Sludge Drones off the hatches
-        /// (MV-696 §2) — landing maths reused straight from <see cref="BroodArc"/>, same as
-        /// <see cref="BigBermudaBoss.LaunchVolley"/>'s own hatch throw.</summary>
+        /// <summary>Releases up to <see cref="SludgequeenTuning.BroodCount"/> sludgers down the chutes,
+        /// alternating sides, never taking her own live count past
+        /// <see cref="SludgequeenTuning.MaxConcurrentBrood"/> (MV-1127 §5 — counted fresh every wave,
+        /// never a decrement-only field, same rule MV-1085 gave Big Bermuda's volley). Composition draws
+        /// from <see cref="SludgequeenBroodLevels"/> at her current <see cref="SpawnLevel"/>.</summary>
         private void SpawnBrood()
         {
+            int alive = CountLiveBroodInArea();
+            int want = Mathf.Min(SludgequeenTuning.BroodCount, Mathf.Max(0, SludgequeenTuning.MaxConcurrentBrood - alive));
+            if (want <= 0) return;
+
             Vector3 pos = transform.position;
             Quaternion facing = transform.rotation;
-            EnemyArchetype archetype = EnemyArchetype.Sludger;
+            EnemyKind[] kinds = SludgequeenBroodLevels.KindsFor(_brain.SpawnLevel);
+            // MV-1127 §6: "level 4 adds one brute per group" -- guaranteed, not a 1-in-N draw, so it is
+            // handled here rather than by adding Brute to SludgequeenBroodLevels' own pool.
+            bool guaranteeBrute = _brain.SpawnLevel >= BossTuning.MaxSpawnLevel;
 
-            for (int i = 0; i < SludgequeenTuning.BroodCount; i++)
+            for (int i = 0; i < want; i++)
             {
                 float side = (i % 2 == 0) ? -1f : 1f;
-                Vector3 landing = BroodArc.Landing(pos, facing, side,
-                    SludgequeenTuning.HatchSide, SludgequeenTuning.HatchLandingForward, archetype.SpawnHeight, 0f);
+                EnemyKind kind = (guaranteeBrute && i == 0) ? EnemyKind.Brute : kinds[UnityEngine.Random.Range(0, kinds.Length)];
+                EnemyArchetype archetype = EnemyArchetype.Of(kind);
+
+                Transform chuteFoot = _chuteFeet[i % 2];
+                Vector3 landing = chuteFoot != null
+                    ? chuteFoot.position
+                    : BroodArc.Landing(pos, facing, side, SludgequeenTuning.HatchSide,
+                        SludgequeenTuning.HatchLandingForward, archetype.SpawnHeight, 0f);
 
                 RobotEnemy add = CreateSludger(archetype);
                 add.transform.position = landing;
                 add.transform.rotation = facing;
                 add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
+                add.SetAreaIndex(_areaIndex);  // same MV-1122 reasoning as BigBermudaBoss.LaunchVolley
 
-                // MV-1021: SetActive(true) on this freshly-built, still-inactive add re-creates the
-                // native PhysX controller for its already-enabled CharacterController — same trap as
-                // BigBermudaBoss.LaunchVolley. Refused: there is no pool here (every brood Sludger is a
-                // fresh CreateSludger, never reused), so this one is destroyed rather than left an inert
-                // orphan, and the volley is one Sludger short.
                 var cc = add.GetComponent<CharacterController>();
                 if (!CharacterControllerSafety.CanCreate(add.transform, cc, out string spawnReason))
                 {
@@ -555,16 +737,31 @@ namespace MaxWorlds.Bosses
             }
         }
 
+        /// <summary>MV-1127 §5: this boss's own sludgers currently alive — counted fresh off
+        /// <see cref="_broodRoot"/> every wave, never carried in a decrement-only field, so one lost by
+        /// any route (killed, captured, whatever) frees its place the instant it stops being alive.</summary>
+        private int CountLiveBroodInArea()
+        {
+            if (_broodRoot == null) return 0;
+
+            int count = 0;
+            for (int i = 0; i < _broodRoot.childCount; i++)
+            {
+                Transform child = _broodRoot.GetChild(i);
+                if (child == null || !child.gameObject.activeInHierarchy) continue;
+                if (!child.TryGetComponent<RobotEnemy>(out RobotEnemy robot) || !robot.enabled || !robot.IsAlive) continue;
+                count++;
+            }
+            return count;
+        }
+
         private RobotEnemy CreateSludger(in EnemyArchetype a)
         {
             var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
-            go.name = "Brood Sludger";
+            go.name = $"Brood Sludger {a.Kind}";
             go.transform.SetParent(BroodRoot(), false);
             go.transform.localScale = a.BodyScale;
 
-            // MV-1021: go is active at this point (CreatePrimitive makes it so) — same trap as
-            // EnemySpawner.CreateInstance/BigBermudaBoss.CreateAdd. Deactivate first so this add can
-            // never be the one that hands PhysX a bad desc; SpawnBrood's own guard covers reactivation.
             go.SetActive(false);
             if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
             {
@@ -596,6 +793,9 @@ namespace MaxWorlds.Bosses
         private void OnDestroy()
         {
             if (_broodRoot != null) Destroy(_broodRoot.gameObject);
+            foreach (ActiveRing r in _activeRings) if (r.Ring != null) Destroy(r.Ring.gameObject);
+            foreach (ActiveRing r in _dribbleFlashes) if (r.Ring != null) Destroy(r.Ring.gameObject);
+            foreach (GroundRing r in _ringPool) if (r != null) Destroy(r.gameObject);
             _active.Remove(this);
             BossCensus.Forget(this);
         }
@@ -621,15 +821,11 @@ namespace MaxWorlds.Bosses
 
             if (_phase == Phase.Fight && _health.Normalized <= SludgequeenTuning.PhaseTwoThreshold)
             {
-                _phase = Phase.PhaseTwoTell;
+                _phase = Phase.EnrageTell;
                 _tellTimer = SludgequeenTuning.PhaseTwoTellTime;
             }
         }
 
-        /// <summary>The flood stops affecting Max the instant she dies — <see cref="_active"/> drops her
-        /// so <see cref="FloodSpeedMultiplierAt"/>/a live boss's own <see cref="TickFloodDamage"/> never
-        /// runs again for this instance (MV-696 §5's "the flood drains"). The 3 s drain-out itself is a
-        /// rig-only visual, left to the art pass — nothing in this ticket's ACs exercises it.</summary>
         private void OnDeath()
         {
             _phase = Phase.Dead;

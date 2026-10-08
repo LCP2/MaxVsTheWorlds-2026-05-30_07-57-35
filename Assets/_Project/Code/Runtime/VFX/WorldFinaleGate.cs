@@ -433,6 +433,10 @@ namespace MaxWorlds.VFX
             foreach (BigBermudaBoss boss in FindObjectsByType<BigBermudaBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (boss != null && IsInArea(boss.transform.position, areaIndex))
                     return boss.transform.position + Vector3.up * 1.4f;
+            // MV-1127: World 2's boss is a SludgequeenBoss, not a BigBermudaBoss.
+            foreach (SludgequeenBoss boss in FindObjectsByType<SludgequeenBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (boss != null && IsInArea(boss.transform.position, areaIndex))
+                    return boss.transform.position + Vector3.up * 1.4f;
             return ResolveDoorPosition();
         }
 

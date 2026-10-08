@@ -85,8 +85,8 @@ namespace MaxWorlds.Tests.EditMode
             component.GetType().GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(component, null);
 
-        private static void InvokeOnDeath(BigBermudaBoss boss) =>
-            typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
+        private static void InvokeOnDeath(Component boss) =>
+            boss.GetType().GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
         private static void SetPrivateField(object target, string field, object value) =>
@@ -199,10 +199,10 @@ namespace MaxWorlds.Tests.EditMode
                     // --- drive that world's real, map-built final boss(es) to death. ---
                     Assert.IsTrue(built.Actors.TryGetValue(row.BossId, out GameObject bossGo) && bossGo != null,
                         $"{row.WorldKey}'s a{cfg.dials.areaCount} boss ('{row.BossId}') was not built");
-                    var boss = bossGo.GetComponent<BigBermudaBoss>();
-                    Assert.IsNotNull(boss, $"world {row.WorldIndex}'s final boss must build as a BigBermudaBoss (MapRuntime.BuildBoss)");
+                    Component boss = (Component)bossGo.GetComponent<BigBermudaBoss>() ?? bossGo.GetComponent<SludgequeenBoss>();
+                    Assert.IsNotNull(boss, $"world {row.WorldIndex}'s final boss must build as a boss component (MapRuntime.BuildBoss)");
 
-                    List<BigBermudaBoss> finalBosses = built.Bosses
+                    List<MonoBehaviour> finalBosses = built.Bosses
                         .Where(b => b != null && map.ZoneAt(b.transform.position.x, b.transform.position.z)?.AreaIndex == cfg.dials.areaCount)
                         .ToList();
                     Assert.IsNotEmpty(finalBosses, $"world {row.WorldIndex} built no boss inside its own final area");
@@ -243,12 +243,12 @@ namespace MaxWorlds.Tests.EditMode
                     var payoff = payoffGo.AddComponent<BossVictoryPayoff>();
                     InvokeOnEnable(payoff);
 
-                    foreach (BigBermudaBoss b in finalBosses)
+                    foreach (MonoBehaviour b in finalBosses)
                         BossCensus.Register(b, "TEST BOSS", phases: 1, current: 100f, max: 100f, areaIndex: cfg.dials.areaCount);
 
                     Assert.IsFalse(gate.IsOpen, $"world {row.WorldIndex}'s gate must stay shut before its own boss dies");
 
-                    foreach (BigBermudaBoss b in finalBosses) InvokeOnDeath(b);
+                    foreach (MonoBehaviour b in finalBosses) InvokeOnDeath(b);
 
                     // MV-1078: the boss dying no longer opens the exit by itself -- the Core must be
                     // collected first (this director never calls Configure/EnterArea, so its own

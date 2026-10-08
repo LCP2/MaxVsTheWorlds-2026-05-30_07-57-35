@@ -37,7 +37,11 @@ namespace MaxWorlds.Bosses
         private static void Install()
         {
             if (FindFirstObjectByType<BossVictoryPayoff>() != null) return;
-            if (FindFirstObjectByType<BigBermudaBoss>() == null) return;   // no boss, no death beat
+            // MV-1127: World 2's boss is a SludgequeenBoss, not a BigBermudaBoss -- either one existing
+            // anywhere in the scene means a fight that can die and needs this beat.
+            bool anyBoss = FindFirstObjectByType<BigBermudaBoss>() != null
+                || FindFirstObjectByType<SludgequeenBoss>() != null;
+            if (!anyBoss) return;   // no boss, no death beat
             new GameObject("BossVictoryPayoff").AddComponent<BossVictoryPayoff>();
         }
 

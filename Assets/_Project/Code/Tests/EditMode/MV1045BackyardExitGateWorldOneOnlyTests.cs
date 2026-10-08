@@ -14,12 +14,13 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-1045 (the one new test, per CC_AUTONOMY's testing policy): <see cref="BackyardExitGate"/>'s
     /// YT-153 garden-gate decoration must only ever build in World 1. Every world shares the same
-    /// <see cref="BackyardPath"/> and <see cref="BigBermudaBoss"/> pair, since every boss uses
-    /// <see cref="BigBermudaBoss"/> underneath -- but since MV-956/964 the real exit is each world's
-    /// own finale door, so this decoration is obsolete everywhere except the Backyard's own look. Per
-    /// World 3's V6 layout (MV-1030), <c>MapLayoutBridge.ToLayout</c>'s <c>ArenaEndZ</c> (read off the
-    /// first Boss zone) runs through a1 near the entrance, so the old ungated gate read in play as a
-    /// brown wooden wall across the start area.
+    /// <see cref="BackyardPath"/>, and (before MV-1127 wired World 2's "sludgequeen" to its own
+    /// <see cref="SludgequeenBoss"/>) every world's boss built as a <see cref="BigBermudaBoss"/>
+    /// underneath -- but since MV-956/964 the real exit is each world's own finale door, so this
+    /// decoration is obsolete everywhere except the Backyard's own look. Per World 3's V6 layout
+    /// (MV-1030), <c>MapLayoutBridge.ToLayout</c>'s <c>ArenaEndZ</c> (read off the first Boss zone) runs
+    /// through a1 near the entrance, so the old ungated gate read in play as a brown wooden wall across
+    /// the start area.
     ///
     /// Fails on base commit a67d035: <c>BackyardExitGate.Install</c> gates only on "a BackyardPath and
     /// a BigBermudaBoss exist somewhere in the scene" -- true for every world -- so it builds the
@@ -108,8 +109,9 @@ namespace MaxWorlds.Tests.EditMode
 
                     Assert.IsTrue(built.Actors.TryGetValue(row.BossId, out GameObject bossGo) && bossGo != null,
                         $"{row.WorldKey}'s boss ('{row.BossId}') was not built");
-                    Assert.IsNotNull(bossGo.GetComponent<BigBermudaBoss>(),
-                        $"{row.WorldKey}'s boss must be a BigBermudaBoss -- the exit gate's own boss-exists gate");
+                    Component anyBoss = (Component)bossGo.GetComponent<BigBermudaBoss>() ?? bossGo.GetComponent<SludgequeenBoss>();
+                    Assert.IsNotNull(anyBoss,
+                        $"{row.WorldKey}'s boss must build as a boss component -- the exit gate's own boss-exists gate");
 
                     // BackyardPath.Awake is never invoked here (this project's EditMode runner does not
                     // reliably fire it for a plain AddComponent, and it would try to reload/rebuild the
