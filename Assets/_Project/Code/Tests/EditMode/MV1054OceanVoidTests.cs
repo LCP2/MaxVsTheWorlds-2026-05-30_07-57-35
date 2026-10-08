@@ -34,7 +34,7 @@ namespace MaxWorlds.Tests.EditMode
                 // Reef-only hull pass this ticket adds the void backdrop to.
                 MapRuntime.Build(map3, root3.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(2));
+                wm.Apply(WorldCatalog.Get(2).Palette);
                 ReefKit.DressHull(root3.transform);
 
                 Renderer floor = FindNamed(root3.transform, "Map Floor");

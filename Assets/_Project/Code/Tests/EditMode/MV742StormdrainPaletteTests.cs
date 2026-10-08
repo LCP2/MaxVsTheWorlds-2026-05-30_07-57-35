@@ -35,7 +35,7 @@ namespace MaxWorlds.Tests.EditMode
                 MapRuntime.Build(map, root.transform);
 
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(1));   // World 2 — a real palette change away from Backyard
+                wm.Apply(WorldCatalog.Get(1).Palette);   // World 2 — a real palette change away from Backyard
 
                 Assert.AreEqual(BiomePalette.Stormdrain, MaterialLibrary.Palette,
                     "World 2 must resolve the Stormdrain biome palette, not whatever was active before it.");

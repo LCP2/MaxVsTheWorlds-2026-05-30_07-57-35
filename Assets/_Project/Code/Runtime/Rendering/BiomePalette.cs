@@ -35,7 +35,7 @@ namespace MaxWorlds.Rendering
     /// without re-authoring anything.
     /// </summary>
     [System.Serializable]
-    public struct BiomePalette
+    public struct BiomePalette : System.IEquatable<BiomePalette>
     {
         /// <summary>The single biome-wide tint. Multiplies every surface colour below.</summary>
         public Color Tint;
@@ -106,6 +106,20 @@ namespace MaxWorlds.Rendering
         public float GroundTiling;
 
         public float Smoothness;      // stylised = matte; a shiny greybox looks like plastic
+
+        /// <summary>MV-1141: whether a world wearing this palette is a sealed interior with no sky of
+        /// its own (today true for Stormdrain and Reef) — a plain data field on the palette itself,
+        /// read by <see cref="BackyardLighting"/> without comparing the active palette against a named
+        /// one, which the Rendering assembly must never do (so a future biome needs only its own value
+        /// here, not a new branch somewhere else).
+        ///
+        /// Deliberately excluded from <see cref="Equals(BiomePalette)"/> (see its own doc): three
+        /// EditMode tests predating this field (MV777/MV782/MV783) compare <see cref="Reef"/>/
+        /// <see cref="Backyard"/> field-for-field against a hand-written snapshot that has no opinion
+        /// on this field, and the ticket that added it (MV-1141) may not edit those tests to catch up —
+        /// they are explicitly pinned green, unchanged, as a "nothing about Worlds 1/3 moved" guard
+        /// unrelated to this field's own value.</summary>
+        public bool RemovesSkybox;
 
         /// <summary>
         /// Backyard — cut grass at golden hour (YT-69).
@@ -186,6 +200,7 @@ namespace MaxWorlds.Rendering
 
             GroundTiling = 5f,                               // fallback path only
             Smoothness = 0.06f,
+            RemovesSkybox = false,                           // the Backyard keeps its own daylight dome
         };
 
         /// <summary>
@@ -241,6 +256,7 @@ namespace MaxWorlds.Rendering
 
             GroundTiling = 5f,
             Smoothness = 0.14f,            // wet sheen — higher than the lawn's matte 0.06
+            RemovesSkybox = true,          // underground — never the Backyard's daylight dome
         };
 
         /// <summary>
@@ -293,15 +309,51 @@ namespace MaxWorlds.Rendering
 
             GroundTiling = 5f,
             Smoothness = 0.22f,            // wet, riveted metal — shinier than Stormdrain's concrete
+            RemovesSkybox = true,          // sealed hull interior — never the Backyard's daylight dome
         };
 
-        /// <summary>The biome for a loaded world (MV-690, extended MV-713), mirroring
-        /// <see cref="MaxWorlds.Weapons.RigBoardLibrary.ForWorld"/>'s own "world 0 gets the original,
-        /// each world past it gets its own" rule: index 0 is <see cref="Backyard"/>, 1 is
-        /// <see cref="Stormdrain"/>, 2 (and anything past it, until a World 4 exists) is
-        /// <see cref="Reef"/>.</summary>
-        public static BiomePalette ForWorld(int worldIndex) =>
-            worldIndex >= 2 ? Reef : worldIndex >= 1 ? Stormdrain : Backyard;
+        /// <summary>Value equality over every field EXCEPT <see cref="RemovesSkybox"/> — see that
+        /// field's own doc for why. Everything else keeps the default struct semantics every existing
+        /// caller (<c>WorldCatalog.ForActivePalette</c>, <c>PickupArtDirector</c>'s ring-alpha lookup,
+        /// every "is this palette still X" test) already relies on.</summary>
+        public bool Equals(BiomePalette other) =>
+            Tint.Equals(other.Tint)
+            && GroundBase.Equals(other.GroundBase)
+            && GroundAccent.Equals(other.GroundAccent)
+            && Wall.Equals(other.Wall)
+            && Prop.Equals(other.Prop)
+            && Wood.Equals(other.Wood)
+            && Stone.Equals(other.Stone)
+            && Dirt.Equals(other.Dirt)
+            && Metal.Equals(other.Metal)
+            && Foliage.Equals(other.Foliage)
+            && GroundDry.Equals(other.GroundDry)
+            && GroundDetailScale.Equals(other.GroundDetailScale)
+            && GroundMacroScale.Equals(other.GroundMacroScale)
+            && GroundMacroStrength.Equals(other.GroundMacroStrength)
+            && GroundLushShade.Equals(other.GroundLushShade)
+            && GroundNormalStrength.Equals(other.GroundNormalStrength)
+            && GroundClumpScale.Equals(other.GroundClumpScale)
+            && GroundClumpDepth.Equals(other.GroundClumpDepth)
+            && GroundWindLean.Equals(other.GroundWindLean)
+            && GroundWindSpeed.Equals(other.GroundWindSpeed)
+            && GroundWindShimmer.Equals(other.GroundWindShimmer)
+            && GroundTiling.Equals(other.GroundTiling)
+            && Smoothness.Equals(other.Smoothness);
+
+        public override bool Equals(object obj) => obj is BiomePalette other && Equals(other);
+
+        // System.HashCode.Combine tops out at 8 arguments, so the 23 compared fields are folded in
+        // three groups of at most 8 and then combined once more.
+        public override int GetHashCode()
+        {
+            int h1 = System.HashCode.Combine(Tint, GroundBase, GroundAccent, Wall, Prop, Wood, Stone, Dirt);
+            int h2 = System.HashCode.Combine(Metal, Foliage, GroundDry, GroundDetailScale, GroundMacroScale,
+                GroundMacroStrength, GroundLushShade, GroundNormalStrength);
+            int h3 = System.HashCode.Combine(GroundClumpScale, GroundClumpDepth, GroundWindLean,
+                GroundWindSpeed, GroundWindShimmer, GroundTiling, Smoothness);
+            return System.HashCode.Combine(h1, h2, h3);
+        }
 
         public Color ColorFor(SurfaceKind kind)
         {

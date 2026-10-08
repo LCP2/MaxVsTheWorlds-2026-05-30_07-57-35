@@ -51,7 +51,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(sludgeRenderer, "expected at least one built sludge tile in World 2");
 
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(1));   // World 2 — a real palette change away from Backyard
+                wm.Apply(WorldCatalog.Get(1).Palette);   // World 2 — a real palette change away from Backyard
 
                 Material mat = sludgeRenderer.sharedMaterial;
                 Assert.IsTrue(mat != null,

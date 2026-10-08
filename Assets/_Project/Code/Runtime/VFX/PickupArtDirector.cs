@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
 
@@ -415,11 +416,13 @@ namespace MaxWorlds.VFX
             }
             ring.Lift = RingLift;
 
-            // MV-782: this ring is an additive filled disc (VfxMaterials.Ring/Glow) — on World 1's
-            // bright grass that reads as a soft glow, but additive blending against World 2's
+            // MV-782/MV-1141: this ring is an additive filled disc (VfxMaterials.Ring/Glow) — on World
+            // 1's bright grass that reads as a soft glow, but additive blending against World 2's
             // 0.062-luminance floor IS the ring's own colour at full strength, so it reads as a solid
-            // neon blob instead. Scaling alpha only for the Stormdrain palette keeps World 1/3 untouched.
-            float biomeAlpha = MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain) ? alpha * StormdrainRingAlphaScale : alpha;
+            // neon blob instead. The scale is read off whichever catalog row's palette matches the
+            // active one (1 = no scaling) rather than a single Stormdrain-only constant, so a future
+            // world with the same problem authors its own row value instead of a new comparison here.
+            float biomeAlpha = alpha * RingAlphaScaleForActivePalette();
 
             // MV-1026: used to pin every ring to a fixed y=0 floor plane, discarding the pickup's own
             // surface height. Since MV-1001 put a deck drop's PROP at the deck's own height
@@ -436,10 +439,18 @@ namespace MaxWorlds.VFX
             return ring;
         }
 
-        /// <summary>MV-782: how far a pickup's ground ring alpha is scaled back on the Stormdrain
-        /// palette, so an additive disc that reads as a soft glow on grass doesn't read as a solid
-        /// neon blob against the drain's dark floor.</summary>
-        private const float StormdrainRingAlphaScale = 0.45f;
+        /// <summary>MV-1141: the catalog row whose palette matches the active one's own
+        /// <c>RingAlphaScale</c> (moved here from this file's own Stormdrain-only constant), falling
+        /// back to 1 (no scaling) when nothing matches.</summary>
+        private static float RingAlphaScaleForActivePalette()
+        {
+            for (int i = 0; i < WorldCatalog.Count; i++)
+            {
+                WorldDefinition row = WorldCatalog.Get(i);
+                if (MaterialLibrary.Palette.Equals(row.Palette)) return row.RingAlphaScale;
+            }
+            return 1f;
+        }
 
         // MV-304: the cell's own gentle radiance — slower and lower-amplitude than the ground ring's
         // pulse, so it reads as a quiet inner charge rather than competing with the "grab me" tell.

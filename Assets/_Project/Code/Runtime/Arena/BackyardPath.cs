@@ -198,43 +198,65 @@ namespace MaxWorlds.Arena
             WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex);
 
         /// <summary>Dresses the arena in the loaded world's own biome (MV-690) — World 1's lawn-green or
-        /// World 2's wet concrete (<see cref="BiomePalette.ForWorld"/>). <see cref="WorldMaterials"/>
-        /// self-installs at <c>AfterSceneLoad</c> with the Backyard default, which runs AFTER this
-        /// Awake — so this call, not that one, is what actually decides the palette a World 2 run
-        /// renders with; finding-or-creating it here rather than waiting for its own install means the
-        /// floor/wall/prop sweep never runs twice with two different palettes.</summary>
+        /// World 2's wet concrete, read off <see cref="WorldCatalog"/>'s own row (MV-1141) rather than
+        /// comparing <paramref name="worldIndex"/> in place. <see cref="WorldMaterials"/> self-installs
+        /// at <c>AfterSceneLoad</c> with the Backyard default, which runs AFTER this Awake — so this
+        /// call, not that one, is what actually decides the palette a World 2 run renders with;
+        /// finding-or-creating it here rather than waiting for its own install means the floor/wall/prop
+        /// sweep never runs twice with two different palettes.</summary>
         private void ApplyWorldMaterials(int worldIndex, Transform host, IReadOnlyList<CoverPiece> cover)
         {
+            WorldDefinition world = WorldCatalog.Get(worldIndex);
+
             var wm = FindFirstObjectByType<WorldMaterials>();
             if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-            wm.Apply(BiomePalette.ForWorld(worldIndex));
+            wm.Apply(world.Palette);
+
+            // MV-1141: BackyardLighting (Rendering) must not work out the active look for itself — it
+            // cannot see this (Arena/Gameplay) assembly, so the row's own look is handed across here,
+            // the moment the world it belongs to is applied.
+            BackyardLighting.ActiveLook = world.Look;
 
             // MV-713: the hydroponic reactor and power hatch are IDamageable, so the shape-classified
             // sweep above explicitly leaves them alone (WorldMaterials.IsWorldSurface) — gameplay owns
-            // their tint the same way it owns every other damageable's. Reef is the one biome so far
-            // that wants a cosmetic override of its own, applied here rather than at MapRuntime build
-            // time so it can never race the sweep above or run before a hutch/gate's own Awake has set
-            // up the renderer it recolours.
-            if (worldIndex >= 2) ApplyReefKit(host, _map, _cfg, cover);
+            // their tint the same way it owns every other damageable's. Reef/Stormdrain are the two
+            // biomes so far that want a cosmetic override of their own, applied here rather than at
+            // MapRuntime build time so it can never race the sweep above or run before a hutch/gate's
+            // own Awake has set up the renderer it recolours.
+            if (world.Kit == WorldKit.Reef)
+            {
+                ApplyReefKit(host, _map, _cfg, cover);
+            }
             // MV-755: World 2 never got a kit (MV-690's documented scope cut) and then lost the
             // garden props it was borrowing (MV-750) — this is what replaces both.
-            else if (worldIndex == 1)
+            else if (world.Kit == WorldKit.Stormdrain)
             {
                 StormdrainDressing.Dress(host, _map, cover);
-                // MV-759: every World 2 gate gets a round portal ring and sliding double doors instead
-                // of its plain slab — same "re-skin what MapRuntime already built" idiom ApplyReefKit
-                // uses for World 3's gates just above, scoped to this world only.
-                foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
-                    gate.ApplyStormdrainGateSkin();
                 // MV-1112: the ground outside every World 2 wall used to be the camera's own clear
                 // colour (Lee: "the area to the left of start should be solid ground") — this fills it.
                 World2GroundFill.Build(_map, host);
             }
+
+            // MV-759: a gated world re-skins its own doors into a round portal/sliding set instead of
+            // the plain slab MapRuntime already built — now one switch over the row's own gate skin
+            // instead of two separate world checks (one here, one inside ApplyReefKit).
+            switch (world.GateSkin)
+            {
+                case WorldGateSkin.Stormdrain:
+                    foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                        gate.ApplyStormdrainGateSkin();
+                    break;
+                case WorldGateSkin.Reef:
+                    foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                        gate.ApplyReefSkin();
+                    break;
+            }
         }
 
         /// <summary>World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
-        /// (<see cref="MowerHutch"/>) and power hatch (<see cref="AreaGate"/>) already built in the
-        /// scene, re-skins the floor/walls with the ticket's own named materials, lays the circuit
+        /// (<see cref="MowerHutch"/>) already built in the scene (its own power hatch gates are
+        /// re-skinned by <see cref="ApplyWorldMaterials"/>'s own <c>GateSkin</c> switch, not here),
+        /// re-skins the floor/walls with the ticket's own named materials, lays the circuit
         /// spine along their base and turns every outer-edge wall into observation glass (MV-745/
         /// MV-1054: <see cref="ReefKit.DressHull"/> — the generic per-world sweep above only ever wore
         /// World 3 in a recoloured version of every other biome's ground/wall shader, never the
@@ -249,13 +271,14 @@ namespace MaxWorlds.Arena
         /// every cover piece, gate mouth, garrison point, factory and Replicator; the lamps are part
         /// of <see cref="ReefKit.DressHull"/> itself, mounted straight off the same wall list the
         /// circuit spine and observation glass already walk). Called once per load, only when the
-        /// active world is Reef (index 2+) — every other world leaves this untouched.</summary>
+        /// active world's own <c>Kit</c> is <see cref="WorldKit.Reef"/> — every other world leaves
+        /// this untouched.</summary>
         private static void ApplyReefKit(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
             foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
                 hutch.ApplyReefSkin();
-            foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
-                gate.ApplyReefSkin();
+            // MV-1141: the gate skin loop moved to ApplyWorldMaterials's own GateSkin switch, which now
+            // covers both this world and Stormdrain's from one place.
 
             ReefKit.DressHull(host);
             ReefKit.BuildOceanVoid(host);
@@ -339,13 +362,22 @@ namespace MaxWorlds.Arena
             return line;
         }
 
+        /// <summary>MV-1141: the probe's name for a palette, read off whichever catalog row claims it
+        /// instead of three named-palette comparisons — the same reason the row's own <c>Id</c> exists,
+        /// just capitalised to match this probe's pre-MV-1141 wording exactly (<c>MV766WorldProbeTests</c>
+        /// asserts the capitalised form and is not one of the tests rule 7 permits editing).</summary>
         private static string NameOfPalette(BiomePalette p)
         {
-            if (p.Equals(BiomePalette.Backyard)) return "Backyard";
-            if (p.Equals(BiomePalette.Stormdrain)) return "Stormdrain";
-            if (p.Equals(BiomePalette.Reef)) return "Reef";
+            for (int i = 0; i < WorldCatalog.Count; i++)
+            {
+                WorldDefinition row = WorldCatalog.Get(i);
+                if (p.Equals(row.Palette)) return CapitalizeFirst(row.Id);
+            }
             return "custom";
         }
+
+        private static string CapitalizeFirst(string s) =>
+            string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         private static string NameOfLook(BackyardLook l)
         {

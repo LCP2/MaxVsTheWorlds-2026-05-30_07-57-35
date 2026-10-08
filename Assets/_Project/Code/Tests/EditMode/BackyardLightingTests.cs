@@ -2,6 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using MaxWorlds.Arena;
 using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Tests.EditMode
@@ -177,7 +178,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MV_StormdrainHasItsOwnLook()
         {
-            BackyardLook stormdrain = BackyardLook.ForWorld(1);
+            BackyardLook stormdrain = WorldCatalog.Get(1).Look;
 
             Assert.AreNotEqual(BackyardLook.Default, stormdrain,
                 "World 2 must not still be lit by the Backyard's own look.");
@@ -215,7 +216,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MV_BackyardLookUnchanged()
         {
-            Assert.AreEqual(BackyardLook.Default, BackyardLook.ForWorld(0),
+            Assert.AreEqual(BackyardLook.Default, WorldCatalog.Get(0).Look,
                 "World 1 must not shift by a single value.");
         }
     }

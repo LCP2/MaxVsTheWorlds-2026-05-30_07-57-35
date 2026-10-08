@@ -91,8 +91,8 @@ namespace MaxWorlds.Tests.EditMode
             Renderer floorRenderer = floorGo.GetComponent<Renderer>();
 
             Color expectedB = Color.Lerp(
-                BiomePalette.ForWorld(0).ColorFor(SurfaceKind.Ground),
-                BiomePalette.ForWorld(1).ColorFor(SurfaceKind.Ground), 0.5f);
+                WorldCatalog.Get(0).Palette.ColorFor(SurfaceKind.Ground),
+                WorldCatalog.Get(1).Palette.ColorFor(SurfaceKind.Ground), 0.5f);
             Color resolvedB = floorRenderer.sharedMaterial.GetColor(BaseColorId);
 
             Assert.AreEqual(expectedB.r, resolvedB.r, 0.01f, "segment B's floor red channel is not the 50/50 lerp.");
@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
             _playerGo.transform.position = PointAlong(doorMouth, entry.ExitWall, midAlong);
             _sequence.Tick(0f);
 
-            Color expectedFog = Color.Lerp(BackyardLook.ForWorld(0).FogColor, BackyardLook.ForWorld(1).FogColor, 0.5f);
+            Color expectedFog = Color.Lerp(WorldCatalog.Get(0).Look.FogColor, WorldCatalog.Get(1).Look.FogColor, 0.5f);
             Assert.AreEqual(expectedFog.r, RenderSettings.fogColor.r, 0.01f, "fog red channel is not halfway blended.");
             Assert.AreEqual(expectedFog.g, RenderSettings.fogColor.g, 0.01f, "fog green channel is not halfway blended.");
             Assert.AreEqual(expectedFog.b, RenderSettings.fogColor.b, 0.01f, "fog blue channel is not halfway blended.");

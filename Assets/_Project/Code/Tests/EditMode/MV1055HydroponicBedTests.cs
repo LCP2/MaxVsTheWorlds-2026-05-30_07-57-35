@@ -34,7 +34,7 @@ namespace MaxWorlds.Tests.EditMode
                 // the Reef-only hull pass this ticket adds bed placement to.
                 MapBuild build = MapRuntime.Build(map3, root3.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
-                wm.Apply(BiomePalette.ForWorld(2));
+                wm.Apply(WorldCatalog.Get(2).Palette);
                 ReefKit.DressHull(root3.transform);
 
                 int placed = ReefHydroponics.PlaceBeds(root3.transform, map3, cfg3, build.Cover);
