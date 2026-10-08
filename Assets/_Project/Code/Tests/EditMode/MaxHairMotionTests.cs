@@ -18,11 +18,15 @@ namespace MaxWorlds.Tests.EditMode
     /// "Moves" is measured as the TOTAL PATH LENGTH the tip travels across the sampled second, not the
     /// straight-line distance between its endpoints — the per-lock flutter term runs at 6 rad/s
     /// (<see cref="MaxHair.Tick"/>), close enough to a 1-second sample spacing that an endpoint-only
-    /// delta can alias to near zero on a lock that is visibly swaying the whole time (verified against
-    /// the real spring maths: every back lock's tip travels 3.8–6.6 cm of path across a windy second,
-    /// while its raw endpoint delta can land under 1 cm purely from where the 6 rad/s wave happens to
-    /// sit at the two sample instants). Path length is what "moves" means for something that keeps
-    /// changing direction, and it is still a resolved value, not an authored one.
+    /// delta can alias to near zero on a lock that is visibly swaying the whole time. Path length is
+    /// what "moves" means for something that keeps changing direction, and it is still a resolved
+    /// value, not an authored one.
+    ///
+    /// MV-1133: the threshold below was re-measured against buildV3()'s own 25-lock layout — its
+    /// locks are deliberately much SHORTER than MV-854's 31-lock mane (the ticket's own "short, swept"
+    /// hair), so the same wind produces a smaller absolute path length at the tip. 1.2 cm is comfortably
+    /// below the first non-fringe back lock's own measured ~1.9 cm, with headroom to still catch a
+    /// genuine regression toward stillness.
     /// </summary>
     public sealed class MaxHairMotionTests
     {
@@ -88,7 +92,7 @@ namespace MaxWorlds.Tests.EditMode
             float moved = StepSecondsMeasuringPathLength(back, windState, 1f, MaxHair.WindStrengthDefault, 0f,
                                                           ref time, nodes);
 
-            Assert.That(moved, Is.GreaterThanOrEqualTo(0.03f),
+            Assert.That(moved, Is.GreaterThanOrEqualTo(0.012f),
                 $"a back lock's tip travelled only {moved * 100f:0.0} cm between t=1s and t=2s in a " +
                 $"{MaxHair.WindStrengthDefault:0.00}-strength wind. His hair is supposed to blow while " +
                 "he stands still (Lee: \"blow in the wind when he stands still\").");
