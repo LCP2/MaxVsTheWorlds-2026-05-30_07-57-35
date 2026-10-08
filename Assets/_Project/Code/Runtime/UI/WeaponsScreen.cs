@@ -105,6 +105,11 @@ namespace MaxWorlds.UI
         private const float FusionRotationDeg = 0f;
         private const float Sqrt3 = 1.7320508f;
 
+        // MV-1117: u_slt's own enlarged pill floors — "never smaller than 28 px"/"at least 22 px at
+        // the reference resolution" — see BuildAbilityNode's u_slt special-case.
+        private const float SentinelSlotsPillMinFontSize = 28f;
+        private const float SentinelPriceLineMinFontSize = 22f;
+
         // MV-731: the sub-label box under a FORGE fusion diamond used to be a flat 280px regardless of
         // how close the column-layout pass (RigBoardLayout.BuildColumnLayout) happened to place that
         // fusion's neighbours — measured as close as ~139px apart at standard aspect, so two 280px boxes
@@ -350,6 +355,15 @@ namespace MaxWorlds.UI
         /// <see cref="NodePillBg"/>, so a test can read the RESOLVED pill text (e.g. <c>u_slt</c>'s
         /// deployable-sentinels read) rather than re-deriving it from the refresh formulas independently.</summary>
         public Text NodePillText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText : null;
+
+        /// <summary>MV-1117: <c>u_slt</c>'s own deploy-price line, stacked beneath its (doubled-size)
+        /// slots pill text — test-only access, same idiom as <see cref="NodePillText"/>. Null for every
+        /// other node (see <see cref="RigNodeVisual.SentinelPriceText"/>'s own doc comment).</summary>
+        public Text NodeSentinelPriceText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.SentinelPriceText : null;
+
+        /// <summary>MV-1117: <c>u_slt</c>'s own deploy-price glyph — test-only access, same idiom as
+        /// <see cref="NodeSentinelPriceText"/>.</summary>
+        public Image NodeSentinelPriceIcon(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.SentinelPriceIcon : null;
 
         /// <summary>MV-729: a FORGE fusion node's own name label — test-only access, same idiom as
         /// <see cref="NodeLabel"/>, so a test can confirm the real fusion name is shown even while
@@ -1360,6 +1374,17 @@ namespace MaxWorlds.UI
                 v.CostText.gameObject.SetActive(false);
             }
 
+            // MV-1117: u_slt's own generic cost tag would read the NODE's unlock/upgrade price (and
+            // disappear once maxed, hasCostToShow's own rule) — a different number from what a Sentinel
+            // deploy itself costs, which never goes away. u_slt carries its OWN price line instead (see
+            // RefreshSentinelPriceLine, called from the owned/draftable branches below), so the generic
+            // tag is always off for this one node to avoid showing two different "price" numbers at once.
+            if (ab.Id == "u_slt")
+            {
+                v.CostIcon.gameObject.SetActive(false);
+                v.CostText.gameObject.SetActive(false);
+            }
+
             if (owned)
             {
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
@@ -1374,6 +1399,7 @@ namespace MaxWorlds.UI
                 v.PillText.text = ab.Id == "u_slt"
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
                     : $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
+                if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
                 // MV-516 item 4: a mid-saturation family hue on PillBackdrop's near-black read as
@@ -1422,6 +1448,7 @@ namespace MaxWorlds.UI
                 v.PillText.text = ab.Id == "u_slt"
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
                     : CellSpend.UnlockCostFor(ab.Id).ToString();
+                if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
                 v.PillText.color = DimIfUnlit(module, categoryUnlocked);
@@ -1468,6 +1495,26 @@ namespace MaxWorlds.UI
             v.OutlineBaseAlpha = v.HexOutline.color.a;
 
             v.Button.interactable = spendable;
+        }
+
+        /// <summary>MV-1117 (Lee, 6 Oct 2026 device playtest): u_slt is "the add circle" where Lee reads
+        /// how many sentinels he can field, so the deploy PRICE belongs right there too — a number that
+        /// never had anywhere clear to live before (the HUD button only ever showed "NO PARTS", never a
+        /// figure). Parts colour (<see cref="CellsColor"/>) when <see cref="PickupWallet.PowerCells"/>
+        /// covers <see cref="PlayerAbilities.SentinelCost"/> right now, destructive-red
+        /// (<see cref="QuitColor"/>) when it doesn't — called from both the owned and draftable branches
+        /// above (u_slt's price never goes away just because the node itself is maxed or not yet
+        /// bought).</summary>
+        private void RefreshSentinelPriceLine(RigNodeVisual v)
+        {
+            int price = PlayerAbilities.SentinelCost;
+            Color priceColor = PickupWallet.PowerCells >= price ? CellsColor : QuitColor;
+
+            v.SentinelPriceIcon.gameObject.SetActive(true);
+            v.SentinelPriceIcon.color = priceColor;
+            v.SentinelPriceText.gameObject.SetActive(true);
+            v.SentinelPriceText.text = price.ToString();
+            v.SentinelPriceText.color = priceColor;
         }
 
         /// <summary>A FORGE fusion diamond: faint, but always naming the real fusion and stating its
@@ -2423,6 +2470,70 @@ namespace MaxWorlds.UI
                 shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetYPhone(r));
             }
 
+            // MV-1117 (Lee, 6 Oct 2026 device playtest): "Make the x/y sentinels text in the add circle
+            // much bigger and indicate how many parts are needed to add a sentinel." u_slt is the one
+            // node whose own level pill the player reads as "how many sentinels can I field" — doubled
+            // here (never below SentinelSlotsPillMinFontSize at the reference resolution), with a
+            // second, permanently-visible line for the actual per-deploy Parts price stacked into the
+            // SAME pill rect, so neither resized line floats free of a container. RefreshSentinelPriceLine
+            // drives its live value/colour; the generic cost tag (CostIcon/CostText) is forced off for
+            // this node in RefreshAbilityNode — a DIFFERENT number (u_slt's own unlock/upgrade price,
+            // which disappears once the node is maxed) from the deploy price, which never does.
+            if (ab.Id == "u_slt")
+            {
+                float slotsFontSize = Mathf.Max(SentinelSlotsPillMinFontSize, LevelPillFontSize * 2f);
+                float priceFontSize = Mathf.Max(SentinelPriceLineMinFontSize, CostFontSize);
+                float priceIconSize = CostIconSize;
+
+                // 1.3x each font's own size is the same line-height headroom BuildAbilityNode's own
+                // generic cost-tag box already uses below (costFontSize * 1.2, rounded up a touch here
+                // since this pill has no best-fit shrink to fall back on if a glyph's ascender/descender
+                // runs long).
+                const float RowHeightFactor = 1.3f;
+                const float RowGap = 6f;
+                float topRowH = slotsFontSize * RowHeightFactor;
+                float bottomRowH = priceFontSize * RowHeightFactor;
+                float pillH = topRowH + bottomRowH + RowGap;
+                float pillW = Mathf.Max(LevelPillW, slotsFontSize * 2.3f, priceIconSize + priceFontSize * 2.6f + 8f);
+
+                // Grows upward only (its own Y shifted up by half the extra height) rather than
+                // symmetrically about LevelPillOffsetY's usual centre, so the pill's BOTTOM edge stays
+                // exactly where every other node's sits — the real vertical budget between the pill and
+                // the label below (MV1109RigBoardPanelHeightTests' own family-panel bound) is generic
+                // board geometry this one node must not disturb; growing toward the hex's own icon
+                // above costs nothing equivalent to guard.
+                float extraHeight = pillH - LevelPillH;
+                shell.PillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
+                shell.PillBg.rectTransform.anchoredPosition += new Vector2(0f, extraHeight * 0.5f);
+                shell.PillBorder.rectTransform.sizeDelta = new Vector2(pillW, pillH);
+                shell.PillBorder.rectTransform.anchoredPosition = shell.PillBg.rectTransform.anchoredPosition;
+
+                shell.PillText.fontSize = Mathf.RoundToInt(slotsFontSize);
+                Anchor(shell.PillText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                shell.PillText.rectTransform.sizeDelta = new Vector2(pillW, topRowH);
+                shell.PillText.rectTransform.anchoredPosition = new Vector2(0f, (pillH - topRowH) * 0.5f);
+
+                float priceRowY = -(pillH - bottomRowH) * 0.5f;
+
+                var priceIcon = AddImage(shell.PillBg.rectTransform, WeaponHudIcons.PowerCell(Mathf.RoundToInt(priceIconSize)), Color.clear, "Sentinel Price Icon");
+                Anchor(priceIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f));
+                priceIcon.rectTransform.sizeDelta = new Vector2(priceIconSize, priceIconSize);
+                priceIcon.rectTransform.anchoredPosition = new Vector2(-2f, priceRowY);
+                priceIcon.raycastTarget = false;
+                priceIcon.gameObject.SetActive(false);
+
+                var priceText = AddText(shell.PillBg.rectTransform, Mathf.RoundToInt(priceFontSize), TextColor, TextAnchor.MiddleLeft);
+                Anchor(priceText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0.5f));
+                priceText.rectTransform.sizeDelta = new Vector2(pillW * 0.5f - 6f, bottomRowH);
+                priceText.rectTransform.anchoredPosition = new Vector2(2f, priceRowY);
+                priceText.fontStyle = FontStyle.Bold;
+                priceText.raycastTarget = false;
+                priceText.gameObject.SetActive(false);
+
+                shell.SentinelPriceIcon = priceIcon;
+                shell.SentinelPriceText = priceText;
+            }
+
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
             int abIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleAbility);
             shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
@@ -2736,6 +2847,15 @@ namespace MaxWorlds.UI
             /// owned-and-below-max).</summary>
             public Image ProgressRing, ProgressTrack, CostIcon;
             public Text CostText;
+
+            /// <summary>MV-1117: <c>u_slt</c> only (null for every other node) — the deploy-price line
+            /// stacked inside the bottom half of its own (enlarged) level pill, directly beneath the
+            /// doubled-size slots readout. A different number from <see cref="CostText"/> (that one is
+            /// CellSpend's unlock/upgrade price for the u_slt NODE itself, which hasCostToShow turns off
+            /// once the node is maxed) — a Sentinel still costs Parts to deploy every time regardless of
+            /// u_slt's own level, so this stays visible whenever the slots pill itself does.</summary>
+            public Image SentinelPriceIcon;
+            public Text SentinelPriceText;
         }
 
         // ------------------------------------------------------------------ top bar

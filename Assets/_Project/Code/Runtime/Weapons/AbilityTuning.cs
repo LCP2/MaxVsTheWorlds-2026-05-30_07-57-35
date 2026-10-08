@@ -333,14 +333,15 @@ namespace MaxWorlds.Weapons
         // u_sen), then Move, Cost, Slots (children of Damage/Range/Health respectively). Every axis
         // below is keyed by its RIG id, not an enum — see RigState.
 
-        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) — 5
-        /// again (DECISION, Lee 29 Aug 2026, MV-623), re-raising MV-579's (26 Aug 2026 playtest) 0-cost
-        /// exception. MV-579's stated reason was that a wedged, unrecallable sentinel was a real
-        /// resource loss on top of a permanently-blocked exit; MV-604 has since removed that failure
-        /// mode entirely — <see cref="MaxWorlds.Weapons.PlayerAbilities.TryDeploySentinel(Vector3)"/>
-        /// now recalls the furthest sentinel at the slot cap instead of refusing, so a deploy can never
-        /// be an unrecoverable loss. MV-579's "do not re-raise" no longer applies.</summary>
-        public const int DefaultSentinelCost = 5;
+        /// <summary>Parts deploying the sentinel costs at u_cst Level 0 (not yet leveled) — 20
+        /// (DECISION, Lee 6 Oct 2026, MV-1117: "increase the budget for a sentinel to at least 20"),
+        /// superseding MV-623's 5. MV-1117 also moves the currency itself off Power Cells (the scarce
+        /// secondary bank Water Balloon/Force Field drain) onto Parts (<see cref="MaxWorlds.Pickups.PickupWallet.PowerCells"/>) —
+        /// Lee's own diagnosis: Magneto auto-pulls every Power Cell straight into the Shoulder
+        /// Rack/Balloon before a deploy ever gets a chance to spend one, so the ability was
+        /// permanently unaffordable with Magneto on. MV-579/MV-623's "do not re-raise [a 0 base cost]"
+        /// no longer applies at this base either.</summary>
+        public const int DefaultSentinelCost = 20;
 
         /// <summary>Fraction each Cost (u_cst) level CUTS the deploy cost — same inverse "spend a
         /// level, pay less" shape as <see cref="DefaultRcdaDepletionRatePerLevel"/>. Floored (see

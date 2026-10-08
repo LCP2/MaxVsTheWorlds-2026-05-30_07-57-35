@@ -83,8 +83,8 @@ namespace MaxWorlds.Tests.EditMode
                 BackyardPathMapField.SetValue(path, map);
 
                 WeaponSystemState.Acquire(AbilityKind.Sentinels);
-                PickupWallet.SetPowerCells(100);
-                PickupWallet.SetPowerCellSecondary(100); // MV-673: a Sentinel deploy spends this bank, not Parts
+                PickupWallet.SetPowerCells(100);   // MV-1117: a Sentinel deploy now spends Parts, not the secondary bank below
+                PickupWallet.SetPowerCellSecondary(100);
 
                 maxGo = new GameObject("Max");
                 maxGo.transform.position = Origin + new Vector3(0f, 2.5f, 0f); // standing on the 3m-wide deck's own centre

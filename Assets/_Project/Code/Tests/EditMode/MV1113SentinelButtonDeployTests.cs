@@ -71,7 +71,8 @@ namespace MaxWorlds.Tests.EditMode
             var go = Track(new GameObject("MV1113-Max"));
             go.transform.position = position;
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCellSecondary(100);
+            // MV-1117: a Sentinel deploy now spends Parts, not the Power Cells secondary bank.
+            PickupWallet.SetPowerCells(100);
             return go.AddComponent<PlayerAbilities>();
         }
 
@@ -156,12 +157,12 @@ namespace MaxWorlds.Tests.EditMode
             AssertArrivalPredicates(pointA, originA, "open floor");
 
             // AC1: a second tap within 10s deploys nothing.
-            int cellsBeforeSecondTap = PickupWallet.PowerCellsSecondary;
+            int cellsBeforeSecondTap = PickupWallet.PowerCells;
             var secondTap = abilitiesA.TryDeploySentinelNearMax();
             Assert.That(secondTap, Is.EqualTo(PlayerAbilities.SentinelDeployOutcome.NotReady),
                 "a second tap within 10s must deploy nothing");
             Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
-            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(cellsBeforeSecondTap));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsBeforeSecondTap));
 
             // AC1: from tap to 2.99s no damage taken and no shot fired; once live, it fires.
             Sentinel sentinelA = Sentinel.Active[0];
@@ -242,14 +243,14 @@ namespace MaxWorlds.Tests.EditMode
                 new MapZone { id = "d1", x = originD.x, z = originD.z, width = 1f, depth = 1f, level = 0 },
             }});
             PlayerAbilities abilitiesD = NewMax(originD);
-            int cellsBeforeNoRoom = PickupWallet.PowerCellsSecondary;
+            int cellsBeforeNoRoom = PickupWallet.PowerCells;
             float cooldownBeforeNoRoom = abilitiesD.SentinelCooldownRemaining;
 
             var outcomeD = abilitiesD.TryDeploySentinelNearMax();
             Assert.That(outcomeD, Is.EqualTo(PlayerAbilities.SentinelDeployOutcome.NoRoom),
                 "a wholly blocked layout must report NO ROOM");
             Assert.That(Sentinel.Active.Count, Is.EqualTo(0), "NO ROOM: nothing may be placed");
-            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(cellsBeforeNoRoom), "NO ROOM: nothing may be spent");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsBeforeNoRoom), "NO ROOM: nothing may be spent");
             Assert.That(abilitiesD.SentinelCooldownRemaining, Is.EqualTo(cooldownBeforeNoRoom), "NO ROOM: no cooldown may start");
         }
     }
