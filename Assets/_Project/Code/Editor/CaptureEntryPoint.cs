@@ -165,6 +165,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1113SentinelArrival() => RunFromMenu(CapturePresets.All["mv1113sentinelarrival"]);
         public static void CaptureMv1113SentinelArrival() => Run(CapturePresets.All["mv1113sentinelarrival"]);
 
+        [MenuItem("MaxWorlds/Capture/Sludgequeen (MV-699/MV-1124)")]
+        public static void MenuMv699Sludgequeen() => RunFromMenu(CapturePresets.All["mv699sludgequeen"]);
+        public static void CaptureMv699Sludgequeen() => Run(CapturePresets.All["mv699sludgequeen"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
