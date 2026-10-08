@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Audio;
+using MaxWorlds.Core;
+using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -94,6 +98,59 @@ namespace MaxWorlds.Arena
         /// <summary>How far a pickup's ground ring alpha is scaled back on this world's own floor — see
         /// <c>PickupArtDirector.ShowRing</c>. 1 = no scaling.</summary>
         public float RingAlphaScale;
+
+        // --- MV-1142: weapons, RIG board and economy ---
+
+        /// <summary>The <c>Resources</c> path for this world's own RIG board — see
+        /// <see cref="MaxWorlds.Weapons.RigBoardLibrary.ForWorld"/>.</summary>
+        public string RigBoardResourcePath;
+
+        /// <summary>Which PRIMARY weapon this world's Weapon Core morph grants — see
+        /// <see cref="MaxWorlds.Weapons.WeaponSystemState.ApplyWorldLoadout"/>.</summary>
+        public WeaponCatalog.PrimaryKind PrimaryWeapon;
+
+        /// <summary>Which SECONDARY weapon this world's Weapon Core morph grants.</summary>
+        public SecondaryKind SecondaryWeapon;
+
+        /// <summary>Whether SECONDARY's levels and unlock carry in from the world played before this
+        /// one, instead of resetting to a fresh locked tree — true only for a world that keeps the
+        /// previous world's SECONDARY ids on its own board (today, the Reef keeps World 2's Shoulder
+        /// Rack). See <see cref="MaxWorlds.Weapons.WeaponSystemState.ApplyWeaponCoreMorph"/>.</summary>
+        public bool CarrySecondaryAcrossMorph;
+
+        /// <summary>Whether SECONDARY arrives mystery-locked (<c>RigState.ActivateSecondaryMystery</c>)
+        /// the moment the Weapon Core morph lands in this world — false wherever
+        /// <see cref="CarrySecondaryAcrossMorph"/> is true, since there is nothing left to
+        /// mystery-lock.</summary>
+        public bool SecondaryMysteryLockedOnMorph;
+
+        /// <summary>Whether this world's PRIMARY arrives with its SPLIT node (<c>p_spr</c>) already
+        /// owned at level 1 the instant the Weapon Core morph grants it (MV-1128) — true only for a
+        /// world whose PRIMARY is already a multi-beam weapon (today, the Reef's UNDERTOW).</summary>
+        public bool PrimarySplitSeeded;
+
+        /// <summary>Whether FORGE fusions are playable in this world — see
+        /// <see cref="MaxWorlds.Weapons.RigFusionState.EnabledInWorld"/>.</summary>
+        public bool FusionsEnabled;
+
+        /// <summary>The cell-cost multiplier applied to this world's own PRIMARY/SECONDARY nodes — see
+        /// <see cref="MaxWorlds.Weapons.CellSpend"/>. ENERGY/MOVE/SUPPORT are never scaled by this.</summary>
+        public float PrimarySecondaryCostMultiplier;
+
+        /// <summary>This world's per-area Parts budget multiplier — see
+        /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.WorldPartsMultiplier"/>. A delegate rather
+        /// than a plain float because the Reef's row stays live-tunable via the Settings panel's "W3
+        /// parts x" knob (<see cref="MaxWorlds.Core.DevTuning.World3PartsMultiplier"/>) for the life of
+        /// the process, not just at <see cref="WorldCatalog.BuildShippedRows"/> time.</summary>
+        public Func<float> PartsMultiplier;
+
+        /// <summary>A Supercell is granted every this-many areas in this world — 1 means every area.
+        /// See <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Supercell rule.</summary>
+        public int SupercellCadenceAreas;
+
+        /// <summary>Whether the Rack Module pickup drops in this world — see
+        /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Rack Module rule.</summary>
+        public bool RackModuleDropsHere;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -134,6 +191,11 @@ namespace MaxWorlds.Arena
         /// <summary>MV-782: how far a pickup's ground ring alpha is scaled back on the Stormdrain's dark
         /// floor, moved here from <c>PickupArtDirector</c>'s own constant.</summary>
         private const float StormdrainRingAlphaScale = 0.45f;
+
+        /// <summary>MV-767: World 2+'s own PRIMARY/SECONDARY cell-cost multiplier, moved here from
+        /// <c>CellSpend</c>'s own private constant (MV-1142) — both the Stormdrain's and the Reef's row
+        /// price the same 2.5x.</summary>
+        private const float PrimarySecondaryCostMultiplierWorld2Plus = 2.5f;
 
         private static IReadOnlyList<WorldDefinition> s_rows = BuildShippedRows();
 
@@ -212,6 +274,15 @@ namespace MaxWorlds.Arena
                 if (row.Look.Equals(default(BackyardLook))) problems.Add($"row {i} ('{row.Id}'): Look not set");
                 if (row.Style.Equals(default(SentinelStyle))) problems.Add($"row {i} ('{row.Id}'): Style not set");
                 if (row.RingAlphaScale <= 0f) problems.Add($"row {i} ('{row.Id}'): RingAlphaScale not set");
+
+                // MV-1142
+                if (string.IsNullOrEmpty(row.RigBoardResourcePath))
+                    problems.Add($"row {i} ('{row.Id}'): RigBoardResourcePath empty");
+                else if (Resources.Load<TextAsset>(row.RigBoardResourcePath) == null)
+                    problems.Add($"row {i} ('{row.Id}'): RigBoardResourcePath '{row.RigBoardResourcePath}' did not load as a TextAsset");
+
+                if (row.SupercellCadenceAreas < 1)
+                    problems.Add($"row {i} ('{row.Id}'): SupercellCadenceAreas below 1");
             }
 
             return problems;
@@ -240,6 +311,17 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = true,
                 Music = MusicWorld.Backyard,
                 RingAlphaScale = 1f,
+                RigBoardResourcePath = RigBoardLibrary.World1ResourcePath,
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.Rcda,
+                SecondaryWeapon = SecondaryKind.WaterBalloon,
+                CarrySecondaryAcrossMorph = false,
+                SecondaryMysteryLockedOnMorph = true,
+                PrimarySplitSeeded = false,
+                FusionsEnabled = true,
+                PrimarySecondaryCostMultiplier = 1f,
+                PartsMultiplier = () => 1f,
+                SupercellCadenceAreas = 1,
+                RackModuleDropsHere = false,
             },
             new WorldDefinition
             {
@@ -254,6 +336,17 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = false,
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = StormdrainRingAlphaScale,
+                RigBoardResourcePath = RigBoardLibrary.World2ResourcePath,
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.Lppe,
+                SecondaryWeapon = SecondaryKind.ShoulderRack,
+                CarrySecondaryAcrossMorph = false,
+                SecondaryMysteryLockedOnMorph = true,
+                PrimarySplitSeeded = false,
+                FusionsEnabled = false,
+                PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                PartsMultiplier = () => 1f,
+                SupercellCadenceAreas = 2,
+                RackModuleDropsHere = true,
             },
             new WorldDefinition
             {
@@ -270,6 +363,19 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = false,
                 Music = MusicWorld.Reef,
                 RingAlphaScale = 1f,
+                RigBoardResourcePath = RigBoardLibrary.World3ResourcePath,
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.Undertow,
+                SecondaryWeapon = SecondaryKind.ShoulderRack,
+                CarrySecondaryAcrossMorph = true,
+                SecondaryMysteryLockedOnMorph = false,
+                PrimarySplitSeeded = true,
+                FusionsEnabled = false,
+                PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                // MV-1029/MV-1142: the Reef's row stays live-tunable via the Settings panel's "W3
+                // parts x" knob -- see PartsMultiplier's own doc comment.
+                PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
+                SupercellCadenceAreas = 2,
+                RackModuleDropsHere = false,
             },
         };
     }

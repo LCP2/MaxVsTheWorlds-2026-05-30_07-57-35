@@ -1,3 +1,5 @@
+using MaxWorlds.Arena;
+
 namespace MaxWorlds.Weapons
 {
     /// <summary>
@@ -17,16 +19,9 @@ namespace MaxWorlds.Weapons
         public const string World2ResourcePath = "UI/rig_board.world2";
         public const string World3ResourcePath = "UI/rig_board.world3";
 
-        /// <summary>The <c>Resources</c> path for <paramref name="worldIndex"/>'s own board — a
-        /// per-index lookup table, not a <c>&gt;=</c> catch-all (MV-1017: World 3 needs its own entry
-        /// now that it no longer shares World 2's file).</summary>
-        private static readonly string[] s_pathsByWorldIndex =
-        {
-            World1ResourcePath,
-            World2ResourcePath,
-            World3ResourcePath,
-        };
-
-        public static string ForWorld(int worldIndex) => s_pathsByWorldIndex[worldIndex];
+        /// <summary>The <c>Resources</c> path for <paramref name="worldIndex"/>'s own board (MV-1142:
+        /// read off <see cref="WorldCatalog"/>'s own row rather than a per-index lookup table, so a
+        /// world inserted between two existing ones brings its own board with it).</summary>
+        public static string ForWorld(int worldIndex) => WorldCatalog.Get(worldIndex).RigBoardResourcePath;
     }
 }

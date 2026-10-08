@@ -254,19 +254,20 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
         }
 
-        /// <summary>MV-767: World 1 grants the per-area Supercell every area, as before. World 2+
-        /// grants it on every SECOND area only — halving its contribution to that world's Parts supply
-        /// (828 -&gt; 718, against a 711-part weapon board at the new <see cref="CellSpend"/> multiplier).
-        /// Areas are 1-based (<see cref="ResolveCurrentArea"/>), so shifting to a 0-based index before
-        /// checking parity grants on areas 1, 3, 5... — the first area of a World 2+ run is never
-        /// shorted relative to World 1.
+        /// <summary>MV-767/MV-1142: grants a Supercell every <see cref="WorldDefinition.SupercellCadenceAreas"/>
+        /// areas on the played world's own row — World 1's row cadence is 1 (every area, as before);
+        /// World 2+'s row cadence is 2 (every SECOND area — halving its contribution to that world's
+        /// Parts supply, 828 -&gt; 718, against a 711-part weapon board at the new
+        /// <see cref="CellSpend"/> multiplier). Areas are 1-based (<see cref="ResolveCurrentArea"/>),
+        /// so shifting to a 0-based index before checking cadence grants a cadence-2 world's Supercell
+        /// on areas 1, 3, 5... — the first area of a World 2+ run is never shorted relative to World 1.
         ///
         /// MV-1078: reads <see cref="ResolvePlayedWorldIndex"/>, not <see cref="RigBoard.ActiveWorldIndex"/>
         /// — a world's finale clean-up morphs the board onto the NEXT world's the instant the Core is
         /// collected, well before the played world itself actually advances, so the old read would start
         /// treating a still-being-played World 1 area as if it were World 2+ the moment the Core landed.</summary>
         private bool GrantsSupercellForArea(int areaIndex) =>
-            ResolvePlayedWorldIndex() < 1 || (areaIndex - 1) % 2 == 0;
+            (areaIndex - 1) % WorldCatalog.Get(ResolvePlayedWorldIndex()).SupercellCadenceAreas == 0;
 
         /// <summary>MV-1078: the world actually being PLAYED right now (<see cref="AreaAccumulationDirector.ActiveWorldIndex"/>),
         /// as opposed to <see cref="RigBoard.ActiveWorldIndex"/> — which a finale's Weapon Core morph
@@ -451,15 +452,16 @@ namespace MaxWorlds.Pickups
             if (!anyLocked || !IsDeviceShedOrdinal()) SpawnCellCache(pos);
             else SpawnDrop(PickupKind.Device, pos);
 
-            // MV-727: the FIRST Replicator destroyed in a World 2 run ALSO drops a Rack Module — once
+            // MV-727/MV-1142: the FIRST Replicator destroyed in the Rack Module's own world (today,
+            // World 2 -- WorldCatalog.Get(...).RackModuleDropsHere) ALSO drops a Rack Module — once
             // per run, in ADDITION to the normal shed-equivalent drop above, never instead of it. Every
-            // later Replicator (and every MowerHutch, which never fires this signal from World 1) is
-            // untouched by this branch. Offset by ScatterRadius (the same spacing SpawnCellCache's own
-            // ring already uses) so the two drops never sit exactly co-located and read as one pickup.
+            // later Replicator (and every MowerHutch in a world that doesn't drop it) is untouched by
+            // this branch. Offset by ScatterRadius (the same spacing SpawnCellCache's own ring already
+            // uses) so the two drops never sit exactly co-located and read as one pickup.
             // MV-1078: ResolvePlayedWorldIndex(), not RigBoard.ActiveWorldIndex -- see that method's own
             // doc for why (a World 1 finale clean-up would otherwise read as "in World 2" the instant
             // the Core is collected, and wrongly drop a second Rack Module before World 1 even ends).
-            if (ResolvePlayedWorldIndex() == 1 && !_rackModuleDroppedThisRun)
+            if (WorldCatalog.Get(ResolvePlayedWorldIndex()).RackModuleDropsHere && !_rackModuleDroppedThisRun)
             {
                 _rackModuleDroppedThisRun = true;
                 SpawnDrop(PickupKind.RackModule, pos + Vector3.forward * ScatterRadius);
