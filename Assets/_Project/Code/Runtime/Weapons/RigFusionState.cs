@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MaxWorlds.Arena;
 
 namespace MaxWorlds.Weapons
 {
@@ -26,9 +27,10 @@ namespace MaxWorlds.Weapons
         /// <summary>Whether FORGE is playable in <paramref name="worldIndex"/>'s world (MV-850) — World 1
         /// only, until the four fusions are redesigned for World 2's LPPE/Shoulder Rack kit (today
         /// they're broken there: DELUGE only touches World 1 weapons, "SLOT B/U" has no caller,
-        /// OVERCHARGE never spends a cell, SKIRMISH lost half its effect to MV-579). The one switch the
-        /// eventual redesign ticket flips.</summary>
-        public static bool EnabledInWorld(int worldIndex) => worldIndex < 1;
+        /// OVERCHARGE never spends a cell, SKIRMISH lost half its effect to MV-579). Read off
+        /// <see cref="WorldCatalog"/>'s own row (MV-1142) — the one switch the eventual redesign
+        /// ticket flips.</summary>
+        public static bool EnabledInWorld(int worldIndex) => WorldCatalog.Get(worldIndex).FusionsEnabled;
 
         /// <summary>False for every fusion once <see cref="RigBoard.ActiveWorldIndex"/> leaves World 1
         /// (MV-850), regardless of what was forged back in World 1 — a fusion forged there has no effect

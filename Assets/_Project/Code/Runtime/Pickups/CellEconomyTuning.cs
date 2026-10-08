@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.Pickups
@@ -52,12 +53,12 @@ namespace MaxWorlds.Pickups
         /// (<see cref="MaxWorlds.Core.DevTuning.World3PartsMultiplier"/>).</summary>
         public const float DefaultWorld3PartsMultiplier = 2f;
 
-        /// <summary>The per-area cell budget's world-scale multiplier (MV-1029) — 1.0 for World 1 and
-        /// World 2 (untouched: "Worlds 1 and 2 must not change"), <see cref="DefaultWorld3PartsMultiplier"/>
-        /// (or its dev-tuning override) for World 3 and any world beyond it. <paramref name="worldIndex"/>
-        /// is 0-based, the same convention <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.ActiveWorldIndex"/>
+        /// <summary>The per-area cell budget's world-scale multiplier (MV-1029) — read off
+        /// <see cref="MaxWorlds.Arena.WorldCatalog"/>'s own row (MV-1142): 1.0 for World 1 and World 2
+        /// (untouched: "Worlds 1 and 2 must not change"), <see cref="DefaultWorld3PartsMultiplier"/> (or
+        /// its dev-tuning override) for the Reef's row. <paramref name="worldIndex"/> is 0-based, the
+        /// same convention <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.ActiveWorldIndex"/>
         /// reports (World 1 = 0, World 2 = 1, World 3 = 2).</summary>
-        public static float WorldPartsMultiplier(int worldIndex) =>
-            worldIndex >= 2 ? DevTuning.Or(DevTuning.World3PartsMultiplier, DefaultWorld3PartsMultiplier) : 1f;
+        public static float WorldPartsMultiplier(int worldIndex) => WorldCatalog.Get(worldIndex).PartsMultiplier();
     }
 }

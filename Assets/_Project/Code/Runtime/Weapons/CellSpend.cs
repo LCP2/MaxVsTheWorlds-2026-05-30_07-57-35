@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using UnityEngine;
 
@@ -48,20 +49,18 @@ namespace MaxWorlds.Weapons
         /// price and charging another).</summary>
         private static readonly Dictionary<string, int> s_flatNodeCost = new() { { "u_slt", SlotCostCells } };
 
-        /// <summary>MV-767: World 2's PRIMARY/SECONDARY nodes (the LPPE/Shoulder Rack boards) price
-        /// 2.5x World 1's curve (raised from MV-689's 1.25x once the Parts economy was found running
-        /// a 2.33x oversupply against this multiplier) — ENERGY/MOVE/SUPPORT are untouched (same
-        /// ids/costs in both boards), so this only ever applies while
-        /// <see cref="RigBoard.ActiveWorldIndex"/> is on a World 2+ board AND <paramref name="id"/>
-        /// resolves to one of those two families on THE CURRENTLY ACTIVE board (never World 1's own
-        /// PRIMARY/SECONDARY, even though some ids are textually reused between the two files).</summary>
-        private const float World2PrimarySecondaryCostMultiplier = 2.5f;
-
+        /// <summary>MV-767/MV-1142: this world's own PRIMARY/SECONDARY cost multiplier (<see
+        /// cref="WorldDefinition.PrimarySecondaryCostMultiplier"/>), raised from MV-689's
+        /// 1.25x once the Parts economy was found running a 2.33x oversupply against it —
+        /// ENERGY/MOVE/SUPPORT are never scaled, whatever the active world, and <paramref name="id"/>
+        /// only scales when it resolves to one of those two families on THE CURRENTLY ACTIVE board
+        /// (never World 1's own PRIMARY/SECONDARY, even though some ids are textually reused between
+        /// boards).</summary>
         private static float CostMultiplierFor(string id)
         {
-            if (RigBoard.ActiveWorldIndex < 1) return 1f;
             string category = RigBoard.Category(id);
-            return category == "PRIMARY" || category == "SECONDARY" ? World2PrimarySecondaryCostMultiplier : 1f;
+            if (category != "PRIMARY" && category != "SECONDARY") return 1f;
+            return WorldCatalog.Get(RigBoard.ActiveWorldIndex).PrimarySecondaryCostMultiplier;
         }
 
         /// <summary>Cost to unlock <paramref name="id"/> with cells — <see cref="s_flatNodeCost"/>'s

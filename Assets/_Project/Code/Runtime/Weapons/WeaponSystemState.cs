@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.Weapons
@@ -313,10 +314,9 @@ namespace MaxWorlds.Weapons
         public static void ApplyWorldLoadout(int worldIndex)
         {
             RigBoard.UseWorld(worldIndex);
-            s_activePrimary = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow
-                : worldIndex >= 1 ? WeaponCatalog.PrimaryKind.Lppe
-                : WeaponCatalog.PrimaryKind.Rcda;
-            s_secondaryKind = worldIndex >= 1 ? SecondaryKind.ShoulderRack : SecondaryKind.WaterBalloon;
+            WorldDefinition world = WorldCatalog.Get(worldIndex);
+            s_activePrimary = world.PrimaryWeapon;
+            s_secondaryKind = world.SecondaryWeapon;
             Changed?.Invoke();
         }
 
@@ -337,11 +337,14 @@ namespace MaxWorlds.Weapons
         /// tree to the Shoulder Rack (rebuilt from scratch, same as PRIMARY), but World 3's board keeps
         /// World 2's Shoulder Rack ids unchanged, so MV-1017 carries SECONDARY's levels/unlock across
         /// the World 2 -&gt; World 3 morph the same way ENERGY/MOVE already do — see the
-        /// <c>worldIndex &gt;= 2</c> branch below. Call directly to apply the morph immediately
-        /// (fixtures, a pre-existing save's silent catch-up); THE RIG's own open ceremony goes through
-        /// <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
+        /// <see cref="WorldDefinition.CarrySecondaryAcrossMorph"/> branch below (MV-1142: reads the
+        /// target world's own row rather than comparing <paramref name="worldIndex"/> directly). Call
+        /// directly to apply the morph immediately (fixtures, a pre-existing save's silent catch-up);
+        /// THE RIG's own open ceremony goes through <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
         public static void ApplyWeaponCoreMorph(int worldIndex)
         {
+            WorldDefinition world = WorldCatalog.Get(worldIndex);
+
             var preservedLevels = new Dictionary<string, int>();
             foreach (KeyValuePair<string, int> kv in RigState.SnapshotLevels())
             {
@@ -354,7 +357,7 @@ namespace MaxWorlds.Weapons
                     // SLOTS) so RigState.UnlockCategory can restore it for free once the player
                     // re-earns the family through this world's own unlock cadence.
                     RigState.RememberSupportLevelIfOwned(kv.Key, kv.Value);
-                else if (worldIndex >= 2 && category == "SECONDARY")
+                else if (world.CarrySecondaryAcrossMorph && category == "SECONDARY")
                     preservedLevels[kv.Key] = kv.Value;
             }
 
@@ -362,7 +365,7 @@ namespace MaxWorlds.Weapons
             foreach (string category in RigState.SnapshotUnlockedCategories())
                 if (category == "ENERGY" || category == "MOVE")
                     preservedCategories.Add(category);
-                else if (worldIndex >= 2 && category == "SECONDARY")
+                else if (world.CarrySecondaryAcrossMorph && category == "SECONDARY")
                     preservedCategories.Add(category);
             // MV-1095: SUPPORT deliberately omitted here too — RestoreSnapshot below replaces the
             // whole tree wholesale, so leaving it out of both lists is what actually locks it.
@@ -372,13 +375,13 @@ namespace MaxWorlds.Weapons
             ApplyWorldLoadout(worldIndex);
 
             preservedLevels["p_dmg"] = 1;
-            // MV-1128: SPLIT (p_spr on World 3's board) is owned at level 1 (one beam) from the moment
-            // UNDERTOW is granted too -- the same "owned from run start" shape p_dmg already needs this
-            // same explicit seed for (RestoreSnapshot below never defaults a missing id to its own
-            // RigBoard.StartLevel -- see RigState.RestoreSnapshot's own doc). A no-op on the World 1 ->
-            // World 2 morph: RestoreSnapshot drops any id the target board doesn't define, and World 2's
-            // board carries no p_spr at all.
-            if (worldIndex >= 2) preservedLevels["p_spr"] = 1;
+            // MV-1128/MV-1142: SPLIT (p_spr on World 3's board) is owned at level 1 (one beam) from the
+            // moment UNDERTOW is granted too -- the same "owned from run start" shape p_dmg already
+            // needs this same explicit seed for (RestoreSnapshot below never defaults a missing id to
+            // its own RigBoard.StartLevel -- see RigState.RestoreSnapshot's own doc). A no-op on the
+            // World 1 -> World 2 morph: RestoreSnapshot drops any id the target board doesn't define,
+            // and World 2's board carries no p_spr at all.
+            if (world.PrimarySplitSeeded) preservedLevels["p_spr"] = 1;
             preservedCategories.Add("PRIMARY");
             // MV-727: SECONDARY is deliberately NOT added here for the World 1 -> World 2 morph — it
             // stays locked until the World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not
@@ -388,7 +391,7 @@ namespace MaxWorlds.Weapons
             // whatever the player earned in World 2, so it must not be re-armed as a mystery below.
 
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
-            if (worldIndex < 2) RigState.ActivateSecondaryMystery();
+            if (world.SecondaryMysteryLockedOnMorph) RigState.ActivateSecondaryMystery();
 
             RebuildAcquiredFromRigState();   // fires Changed
         }
