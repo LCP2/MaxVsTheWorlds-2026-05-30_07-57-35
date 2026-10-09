@@ -200,6 +200,7 @@ namespace MaxWorlds.Intro
             if (_doorGate != null) _doorGate.ForceOpen();
 
             BuildExitCorridor(wallHeight, wallThickness);
+            ClearIntrudingGeometry(entry.CorridorLength, wallHeight);
 
             int toWorld = fromWorldIndex + 1;
             Vector2 farMouth = PointAtXZ(_doorMouth, _wall, entry.CorridorLength);
@@ -292,6 +293,7 @@ namespace MaxWorlds.Intro
             _doorGate.ForceOpen();
 
             BuildArrivalShell(wallHeight, wallThickness, toWorld);
+            ClearIntrudingGeometry(entry.ArrivalShellLength, wallHeight);
             BuildFade();
             ApplyFadeAlpha(1f);   // fully black -- the world has just booted, nothing to see yet
 
@@ -321,6 +323,83 @@ namespace MaxWorlds.Intro
             // MV-967: same idea for the World 3 arrival shell — segment C's hull dressing continued.
             else if (toWorld == 2)
                 WorldJoinDressing.DressArrivalReef(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+        }
+
+        // ------------------------------------------------------------------ intrusion clearance (MV-1116)
+
+        /// <summary>MV-1116 (Lee, device: "a wall going through the middle of the corridor"): a dark
+        /// slab cut straight across the World 1 -> World 2 exit corridor and ran on far past both its
+        /// sides. Root cause -- <see cref="MaxWorlds.Arena.BackyardBackdrop"/> wraps a fence line around
+        /// the WHOLE of World 1's map bounds at scene boot, long before this corridor exists (it's only
+        /// built later, when the final boss dies, 30 m out past a30's own E wall); nothing ever cut that
+        /// fence through for a corridor that didn't exist yet when it was built.
+        ///
+        /// General on purpose, not a special case for the backdrop: scans every enabled
+        /// <see cref="Renderer"/>/<see cref="Collider"/> in the scene and disables (never destroys --
+        /// some of what intrudes may be statically batched already, and disabling a renderer after
+        /// <c>StaticBatchingUtility.Combine</c> is safe, destroying the GameObject isn't always) whatever
+        /// isn't part of THIS sequence's own hierarchy (built under <c>transform</c>, see
+        /// <see cref="BuildExitCorridor"/>/<see cref="BuildArrivalShell"/>) or Max's own body, and reaches
+        /// more than <see cref="IntrusionEpsilon"/> into the walkable volume: <paramref name="length"/>
+        /// outward from <see cref="_doorMouth"/> along <see cref="_wall"/>'s own axis, the corridor's 3 m
+        /// interior width, floor to <paramref name="wallHeight"/>.</summary>
+        private const float IntrusionEpsilon = 0.05f;
+
+        private void ClearIntrudingGeometry(float length, float wallHeight)
+        {
+            Bounds volume = WalkableVolume(_doorMouth, _wall, length, WorldTransitionEntry.CorridorWidth, wallHeight);
+            Bounds strict = volume;
+            strict.Expand(-IntrusionEpsilon * 2f);
+
+            foreach (Renderer r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (r == null || !r.enabled || IsOwnOrPlayer(r.transform)) continue;
+                if (strict.Intersects(r.bounds)) r.enabled = false;
+            }
+
+            foreach (Collider c in FindObjectsByType<Collider>(FindObjectsSortMode.None))
+            {
+                if (c == null || !c.enabled || IsOwnOrPlayer(c.transform)) continue;
+                if (strict.Intersects(c.bounds)) c.enabled = false;
+            }
+        }
+
+        private bool IsOwnOrPlayer(Transform t)
+        {
+            Transform dressingRoot = _doorGate != null ? _doorGate.DressingRoot : null;
+            for (Transform p = t; p != null; p = p.parent)
+            {
+                if (p == transform || p == dressingRoot) return true;
+                if (_playerT != null && p == _playerT) return true;
+                // The exit side's door is real map geometry MapRuntime built (never a descendant of
+                // this sequence's own transform, unlike the arrival side's, which BuildDoor parents
+                // under transform directly) -- it IS the corridor's own mouth, not a foreign intruder.
+                if (_doorGate != null && p == _doorGate.transform) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Same outward-axis convention as <see cref="PointAtXZ"/>, expressed as a world-space
+        /// AABB rather than a point -- every exit/arrival wall is N, E, S or W, so this is always
+        /// axis-aligned, never a rotated OBB.</summary>
+        private static Bounds WalkableVolume(Vector2 doorMouth, Wall wall, float length, float width, float wallHeight)
+        {
+            bool travelAlongX = wall == Wall.E || wall == Wall.W;
+            bool positive = wall == Wall.N || wall == Wall.E;
+            Rect footprint;
+            if (travelAlongX)
+            {
+                float xMin = positive ? doorMouth.x : doorMouth.x - length;
+                footprint = new Rect(xMin, doorMouth.y - width * 0.5f, length, width);
+            }
+            else
+            {
+                float yMin = positive ? doorMouth.y : doorMouth.y - length;
+                footprint = new Rect(doorMouth.x - width * 0.5f, yMin, width, length);
+            }
+
+            return new Bounds(new Vector3(footprint.center.x, wallHeight * 0.5f, footprint.center.y),
+                new Vector3(footprint.width, wallHeight, footprint.height));
         }
 
         // ------------------------------------------------------------------ shared geometry
