@@ -56,12 +56,18 @@ namespace MaxWorlds.Tests.EditMode
     /// recomputed against the real post-ticket config same as every prior re-author above. Total rises
     /// 572 -&gt; 615 (+43); the World 2 kinds share moves 41.3% (236/572) -&gt; 42.0% (258/615), still inside
     /// the existing [40%, 64%] band with no floor/ceiling change needed.
+    ///
+    /// MV-1140 appends ten new areas (a22-a31, approved by Lee 7 Oct 2026), adding 1,167 - 615 = 552
+    /// garrison entries authored by the same design workbook as every other area. Total rises
+    /// 615 -&gt; 1,167; the World 2 kinds share moves to 41.56% (485/1,167) and turret share to 6.34%
+    /// (74/1,167) — both still comfortably inside the existing [40%, 64%] / 20% bands, so neither
+    /// band changes.
     /// </summary>
     public sealed class MV772WorldTwoRosterTests
     {
-        // Recomputed against the real config after MV-1050's a21 re-author — still a guard against an
+        // Recomputed against the real config after MV-1140's ten-area append — still a guard against an
         // UNRELATED drift, not an authored constant: derived from the real config, not hand-picked.
-        private const uint ExpectedCoordinateHash = 101841298u;
+        private const uint ExpectedCoordinateHash = 1580584786u;
 
         [Test]
         public void WorldTwoRoster_MatchesTheMV772Conversion()
@@ -85,7 +91,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(615, total, "World 2's total garrison placement count (post-MV-1050 a21 re-author)");
+            Assert.AreEqual(1167, total, "World 2's total garrison placement count (post-MV-1140 ten-area append)");
 
             int Count(string kind) => counts.TryGetValue(kind, out int n) ? n : 0;
             int worldTwoKinds = Count("sludger") + Count("charger") + Count("turret") + Count("lurker");

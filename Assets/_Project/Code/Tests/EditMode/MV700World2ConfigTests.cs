@@ -28,6 +28,11 @@ namespace MaxWorlds.Tests.EditMode
     /// with a 2-wide x 3-deep IN area to resolve MV-928 by data — dropping the world total 47 -> 41 (a
     /// plain sum over the shipped config, not a guess; MV-900's own ticket text: "572 robots, 41
     /// Replicators").
+    ///
+    /// MV-1140 appends ten more areas (a22-a31) after a21 and moves the finale and the Sludgequeen
+    /// from a21 to the new a31: areas.Length rises 22 -> 32, dials.areaCount 21 -> 31, and the
+    /// Replicator total 41 -> 53 (plain sums off the shipped config). a21 keeps its layout and
+    /// garrison but loses the boss role and the boss itself.
     /// </summary>
     public sealed class MV700World2ConfigTests
     {
@@ -41,13 +46,14 @@ namespace MaxWorlds.Tests.EditMode
             // with them — 24 areas/25 Replicators (MV-700) drop to 22/23. MV-865 (World 2 re-author) then
             // realigns dials.areaCount to the real 21 authored areas and re-authors the level's content,
             // raising the Replicator total to 47; MV-900 (V10) then re-authors a13 again, dropping it to
-            // 41 (see the class doc comment for all three numbers).
-            Assert.AreEqual(22, cfg.areas.Length, "World 2 authors 21 areas plus the entry stub");
-            Assert.AreEqual(21, cfg.dials.areaCount);
+            // 41. MV-1140 then appends ten more areas (a22-a31), raising both totals again (see the
+            // class doc comment for all the numbers).
+            Assert.AreEqual(32, cfg.areas.Length, "World 2 authors 31 areas plus the entry stub");
+            Assert.AreEqual(31, cfg.dials.areaCount);
 
             int totalReplicators = 0;
             foreach (WorldArea a in cfg.areas) totalReplicators += a.replicators?.Length ?? 0;
-            Assert.AreEqual(41, totalReplicators, "World 2 authors 41 Replicators across its areas");
+            Assert.AreEqual(53, totalReplicators, "World 2 authors 53 Replicators across its areas");
 
             WorldGate g31 = Array.Find(cfg.gates, g => g.id == "g31");
             WorldGate g24 = Array.Find(cfg.gates, g => g.id == "g24");
@@ -83,12 +89,17 @@ namespace MaxWorlds.Tests.EditMode
                     $"'{overlayId}' must share its resolved footprint with '{targetId}'");
             }
 
-            // a23 before MV-865 renumbered World 2's areas in play order.
+            // a23 before MV-865 renumbered World 2's areas in play order. MV-1140 then moved the
+            // finale and the boss from a21 to the new a31.
             WorldArea a21 = cfg.Area("a21");
             Assert.IsNotNull(a21, "area 'a21' not found");
-            WorldBoss[] bosses = a21.Bosses();
-            Assert.AreEqual(1, bosses.Length, "a21 must author exactly one boss");
-            Assert.AreEqual("sludgequeen", bosses[0].id, "a21's boss must be the Sludgequeen");
+            Assert.AreEqual(0, a21.Bosses().Length, "a21 lost its boss to a31 (MV-1140)");
+
+            WorldArea a31 = cfg.Area("a31");
+            Assert.IsNotNull(a31, "area 'a31' not found");
+            WorldBoss[] bosses = a31.Bosses();
+            Assert.AreEqual(1, bosses.Length, "a31 must author exactly one boss");
+            Assert.AreEqual("sludgequeen", bosses[0].id, "a31's boss must be the Sludgequeen");
         }
     }
 }

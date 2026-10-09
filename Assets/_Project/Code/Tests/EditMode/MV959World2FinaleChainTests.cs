@@ -21,12 +21,13 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="BossVictoryPayoff"/> to open/drop on the final boss area's own <see cref="HudSignals.BossDefeated"/>
     /// for ANY world with a next world, rather than <see cref="HudSignals.RunComplete"/> (which needs
     /// every robot in the world dead) -- but that fix was only proven against World 1's a30. This test
-    /// proves the same chain end-to-end on World 2's REAL config (<c>world2_config.json</c>, a21, the
-    /// "sludgequeen" boss) through the actual map build: boss dies -> Weapon Core lands at its own death
-    /// spot -> the gate opens -> collecting the core and crossing the gate seals Victory -> the save's
-    /// WorldIndex advances to World 3 (index 2) -- all while World 2's area 1 ambient population and
-    /// area 2's pre-placed dormant garrison are left alive and untouched throughout, proving neither the
-    /// orb, the gate, nor Victory require clearing a21 or World 2.
+    /// proves the same chain end-to-end on World 2's REAL config (<c>world2_config.json</c>, a31 since
+    /// MV-1140 moved the finale there, the "sludgequeen" boss) through the actual map build: boss dies
+    /// -> Weapon Core lands at its own death spot -> the gate opens -> collecting the core and crossing
+    /// the gate seals Victory -> the save's WorldIndex advances to World 3 (index 2) -- all while World
+    /// 2's area 1 ambient population and area 2's pre-placed dormant garrison are left alive and
+    /// untouched throughout, proving neither the orb, the gate, nor Victory require clearing a31 or
+    /// World 2.
     /// </summary>
     public sealed class MV959World2FinaleChainTests
     {
@@ -106,29 +107,29 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void A21FinaleOrb_DropsAndGateOpens_WithoutClearingWorld2_AndAdvancesToWorldThree()
+        public void A31FinaleOrb_DropsAndGateOpens_WithoutClearingWorld2_AndAdvancesToWorldThree()
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
-            Assert.AreEqual(21, cfg.dials.areaCount, "a21 must be World 2's authored final area");
+            Assert.AreEqual(31, cfg.dials.areaCount, "a31 must be World 2's authored final area (MV-1140)");
 
             // --- the actual map build, not the JSON. ---
             MapBuild built = MapRuntime.Build(map, _root.transform);
 
             Assert.IsTrue(built.Actors.TryGetValue("sludgequeen", out GameObject bossGo) && bossGo != null,
-                "world2_config.json's a21 boss ('sludgequeen') was not built");
+                "world2_config.json's a31 boss ('sludgequeen') was not built");
             var boss = bossGo.GetComponent<SludgequeenBoss>();
-            Assert.IsNotNull(boss, "a21's boss must build as a SludgequeenBoss (MV-1127, MapRuntime.BuildBoss)");
+            Assert.IsNotNull(boss, "a31's boss must build as a SludgequeenBoss (MV-1127, MapRuntime.BuildBoss)");
 
             var areaDirector = _root.AddComponent<AreaAccumulationDirector>();
             areaDirector.ConfigureWorld(cfg, worldIndex: 1);                     // World 2 is index 1
             areaDirector.Configure(map, System.Array.Empty<CoverPiece>());       // fills area 1, pre-places area 2 dormant
-            areaDirector.EnterArea(21);                                         // fills a21 directly
+            areaDirector.EnterArea(31);                                         // fills a31 directly
 
             RobotEnemy[] otherAreaRobots = Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None)
-                .Where(r => r.AreaIndex != 21).ToArray();
+                .Where(r => r.AreaIndex != 31).ToArray();
             Assert.IsTrue(otherAreaRobots.Any(r => r.AreaIndex == 1),
-                "AC: World 2's area 1 ambient population must still be alive going into a21's boss fight");
+                "AC: World 2's area 1 ambient population must still be alive going into a31's boss fight");
             Assert.IsTrue(otherAreaRobots.Any(r => r.AreaIndex == 2 && r.IsDormant),
                 "AC: area 2's pre-placed garrison must still be alive (dormant) -- not required dead");
 
@@ -140,20 +141,20 @@ namespace MaxWorlds.Tests.EditMode
             InvokeOnEnable(payoff);
             InvokeOnEnable(gate);
 
-            BossCensus.Register(boss, "SLUDGEQUEEN", phases: 1, current: 100f, max: 100f, areaIndex: 21);
+            BossCensus.Register(boss, "SLUDGEQUEEN", phases: 1, current: 100f, max: 100f, areaIndex: 31);
 
-            Assert.IsFalse(gate.IsOpen, "the wall must be shut before a21's boss dies");
+            Assert.IsFalse(gate.IsOpen, "the wall must be shut before a31's boss dies");
             Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.WeaponCore),
-                "no orb may exist before a21's boss dies");
+                "no orb may exist before a31's boss dies");
 
             Vector3 bossDeathPos = bossGo.transform.position;
             InvokeOnDeath(boss);
 
-            // MV-1078: the boss dying no longer opens the exit by itself -- a21's own ambient robots
+            // MV-1078: the boss dying no longer opens the exit by itself -- a31's own ambient robots
             // (built by the real map above, same as its boss) are what the gate now waits on, on top of
             // the Core being collected.
-            Assert.Greater(areaDirector.ActiveCountForArea(21), 0,
-                "MV-1078: a21's own ambient robots must still be alive right after its boss dies");
+            Assert.Greater(areaDirector.ActiveCountForArea(31), 0,
+                "MV-1078: a31's own ambient robots must still be alive right after its boss dies");
             Assert.IsFalse(gate.IsOpen,
                 "MV-1078: boss death alone must no longer open the exit");
 
@@ -162,12 +163,12 @@ namespace MaxWorlds.Tests.EditMode
                 new Vector2(core.transform.position.x, core.transform.position.z),
                 new Vector2(bossDeathPos.x, bossDeathPos.z));
             Assert.LessOrEqual(dist, 1f,
-                "MV-959: the orb must land within 1m (XZ) of a21's boss's own death spot");
+                "MV-959: the orb must land within 1m (XZ) of a31's boss's own death spot");
 
             Assert.Greater(areaDirector.ActiveCount, 0,
                 "MV-959: World 2's other robots (area 1 ambient, area 2 dormant garrison) must still be " +
                 "alive at this point -- proof the orb-drop and Victory below don't depend on World 2 at " +
-                "large being cleared (MV-1078: a21 ITSELF now gates the exit, via WorldFinaleGate's own " +
+                "large being cleared (MV-1078: a31 ITSELF now gates the exit, via WorldFinaleGate's own " +
                 "clean-up beat, but RunTracker's seal below is driven directly and never reads " +
                 "WorldFinaleGate.IsOpen)");
 

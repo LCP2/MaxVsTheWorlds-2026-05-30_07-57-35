@@ -156,13 +156,11 @@ namespace MaxWorlds.Arena
                 segmentAEnd: 9f, segmentBEnd: 13f,
                 arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
 
-            // World 2 (Stormdrain) -> World 3 (Reef): a21's own E wall (its N wall abuts a5) into
-            // World 3's entry stub, W wall. MV-1050 grew a21 to 76x76 (origin z -12..64) by extending
-            // south, leaving its N wall (z=64) fixed — the E wall's span moved with it, so 0.5 no longer
-            // lands at the same world-Z the door sat at before the resize. 0.710526315789 (54/76) keeps
-            // the door mouth at the exact same absolute Z (42) it held pre-resize, so the corridor/arrival
-            // geometry this row drives is otherwise untouched by the resize.
-            new WorldTransitionEntry(fromWorld: 1, exitWall: Wall.E, exitDoorPos: 0.710526315789f, corridorLength: 30f,
+            // World 2 (Stormdrain) -> World 3 (Reef): a31's own E wall into World 3's entry stub, W
+            // wall. MV-1140 moved the finale and exit from a21 to a31 (ten new areas, a22-a31): a31's
+            // E wall spans x=352, z 22..74, and 0.509615384615 (26.5/52) lands the door mouth at
+            // world (352, 48.5).
+            new WorldTransitionEntry(fromWorld: 1, exitWall: Wall.E, exitDoorPos: 0.509615384615f, corridorLength: 30f,
                 segmentAEnd: 10f, segmentBEnd: 16f,
                 arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
         };

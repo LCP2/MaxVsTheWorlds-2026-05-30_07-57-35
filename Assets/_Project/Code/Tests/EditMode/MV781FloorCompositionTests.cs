@@ -18,8 +18,9 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// One consolidated test (testing policy MV-465, Rule 1), asserting RESOLVED values only (Rule 2,
     /// Tier 2): the map actually built from World 2's own shipped config carries every authored Grate
-    /// entity (25 -> 23, MV-865 re-authored areas 1-14 from Lee's sheet, see below) at
-    /// the exact authored coordinates; each built grate actually has 7 grille-bar children and no
+    /// entity (25 -> 23, MV-865 re-authored areas 1-14 from Lee's sheet; 23 -> 39, MV-1140 appended
+    /// a22-a31; see below) at the exact authored coordinates; each built grate actually has 7
+    /// grille-bar children and no
     /// Collider anywhere in its hierarchy; the grille and standing-water MATERIALS actually resolve
     /// darker/lighter than the actual World 2 floor material by the ticket's own margins; and the pure
     /// joint/patch layout functions are actually deterministic (same call, same output) and actually
@@ -59,15 +60,16 @@ namespace MaxWorlds.Tests.EditMode
                     authored.Add((g.x, g.z));
 
             // MV-865 re-authored areas 1-14 from Lee's sheet, changing which cells carry a grate —
-            // 25 -> 23, a plain count read directly off the shipped config.
-            Assert.AreEqual(23, authored.Count,
+            // 25 -> 23, a plain count read directly off the shipped config. MV-1140 then appended ten
+            // new areas (a22-a31) authoring 16 more grates (one under each Grate Lurker) — 23 -> 39.
+            Assert.AreEqual(39, authored.Count,
                 "world2_config.json's own authored grate count changed underneath this test");
 
             var built = map.entities.Where(e => e != null && e.Kind == EntityKind.Grate)
                 .Select(e => (e.x, e.z)).OrderBy(p => p.x).ThenBy(p => p.z).ToList();
             var expected = authored.OrderBy(p => p.x).ThenBy(p => p.z).ToList();
 
-            Assert.AreEqual(23, built.Count, "the built map must contain exactly 23 Grate entities");
+            Assert.AreEqual(39, built.Count, "the built map must contain exactly 39 Grate entities");
             for (int i = 0; i < expected.Count; i++)
             {
                 Assert.AreEqual(expected[i].x, built[i].x, 0.001f, $"grate {i} X does not match world2_config.json");
