@@ -17,12 +17,14 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Reproduces against the real World 2 config and the real gameplay camera's own resting pose
     /// (<see cref="FixedAngleCameraRig.RestingPose"/> — never a hand-picked eye point, same idiom
-    /// <see cref="MV819PipeVisibilityTests"/> already uses), at the three moments the ticket names:
-    /// the first frame the fade lifts, midway through the scripted arrival walk, and the moment
-    /// control returns to the player. At each moment, nothing but Max's own body may sit between the
-    /// camera and his head/chest — checked as a ray/AABB test against every OTHER enabled renderer the
-    /// real World 2 boot + arrival shell builds, both device-class camera defaults (phone and desktop)
-    /// since the live bug reported on phone.
+    /// <see cref="MV819PipeVisibilityTests"/> already uses), at the three positions along the arrival
+    /// shell the original ticket named: its own start (where control also returns now, MV-1123 §8 — no
+    /// scripted walk-in any more), its own midpoint, and 1.5 m inside the stub. MV-1123 removed the
+    /// scripted walk that used to carry Max between these points on its own, so this test now drives his
+    /// position directly at each one instead. At each position, nothing but Max's own body may sit
+    /// between the camera and his head/chest — checked as a ray/AABB test against every OTHER enabled
+    /// renderer the real World 2 boot + arrival shell builds, both device-class camera defaults (phone
+    /// and desktop) since the live bug reported on phone.
     /// </summary>
     public sealed class MV1077ArrivalVisibilityTests
     {
@@ -91,6 +93,19 @@ namespace MaxWorlds.Tests.EditMode
             _ => 0f,
         };
 
+        /// <summary>The inverse of <see cref="AlongDistance"/>: the world position <paramref name="along"/>
+        /// metres outward from <paramref name="doorMouth"/>, keeping <paramref name="currentPos"/>'s own Y
+        /// and across-axis coordinate (MV-1123: this test now drives the player's own position directly at
+        /// each checkpoint instead of relying on a scripted walk to carry it there).</summary>
+        private static Vector3 PositionAtAlong(Vector3 currentPos, Vector2 doorMouth, Wall wall, float along) => wall switch
+        {
+            Wall.N => new Vector3(doorMouth.x, currentPos.y, doorMouth.y + along),
+            Wall.S => new Vector3(doorMouth.x, currentPos.y, doorMouth.y - along),
+            Wall.E => new Vector3(doorMouth.x + along, currentPos.y, doorMouth.y),
+            Wall.W => new Vector3(doorMouth.x - along, currentPos.y, doorMouth.y),
+            _ => currentPos,
+        };
+
         [Test]
         public void MaxStaysVisibleFromTheGameplayCamera_ThroughTheWholeWorld2ArrivalWalk()
         {
@@ -152,32 +167,30 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             // ---- checkpoint (a): the first frame the fade lifts — flush FadeIn's own 0.4 s duration in
-            // one call. The player hasn't moved yet (TickFadeIn never touches his position). ----
+            // one call. MV-1123: control (and with it, the HUD/robots) comes back the instant the fade
+            // lifts, with no scripted walk-in any more — Max is free to walk himself from here, so this
+            // test now drives his position at each checkpoint directly rather than relying on a scripted
+            // walk to carry it there. ----
             _sequence.Tick(0.5f);
-            CheckVisibility("first frame the fade lifts", player.transform.position);
+            CheckVisibility("first frame the fade lifts / control returns", player.transform.position);
 
             float startAlong = AlongDistance(player.transform.position, doorMouth, entry.ArrivalWall);
             float targetAlong = -ArrivalInsideOffsetDup;
             float halfAlong = (startAlong + targetAlong) * 0.5f;
 
-            bool midwayCaptured = false;
-            for (int i = 0; i < 3000 && !finished; i++)
-            {
-                _sequence.Tick(0.02f);
-                if (!midwayCaptured && AlongDistance(player.transform.position, doorMouth, entry.ArrivalWall) <= halfAlong)
-                {
-                    midwayCaptured = true;
-                    CheckVisibility("midway through the arrival walk", player.transform.position);
-                }
-            }
+            // ---- checkpoint (b): midway between the shell's own start and 1.5 m inside the stub. ----
+            player.transform.position = PositionAtAlong(player.transform.position, doorMouth, entry.ArrivalWall, halfAlong);
+            _sequence.Tick(0.02f);
+            CheckVisibility("midway through the arrival shell", player.transform.position);
 
-            Assert.IsTrue(finished, "the arrival sequence must reach its own end within 60 s of simulated walking.");
-            Assert.IsTrue(midwayCaptured, "the walk never crossed its own halfway point — the test's own maths is wrong.");
-
-            // ---- checkpoint (c): the arrival shell (and its dressing, and the arrival door) is already
-            // gone by now — Finish() destroyed the whole WorldJoinSequence GameObject the instant the
-            // walk completed. Only the persistent World 2 map geometry remains to occlude Max. ----
-            CheckVisibility("the moment control returns", player.transform.position);
+            // ---- checkpoint (c): 1.5 m inside the stub — MV-1123 §8's own close/hand-off threshold.
+            // The arrival shell (and its dressing, and the arrival door) is gone immediately after this
+            // tick — Finish() destroys the whole WorldJoinSequence GameObject the moment Max reaches it.
+            // Only the persistent World 2 map geometry remains to occlude Max from here on. ----
+            player.transform.position = PositionAtAlong(player.transform.position, doorMouth, entry.ArrivalWall, targetAlong);
+            _sequence.Tick(0.02f);
+            Assert.IsTrue(finished, "reaching 1.5 m inside the stub must finish the arrival sequence.");
+            CheckVisibility("well inside the entry area", player.transform.position);
 
             Assert.IsEmpty(failures, "MV-1077 arrival visibility violations:\n" + string.Join("\n", failures));
         }

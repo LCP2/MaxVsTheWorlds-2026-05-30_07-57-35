@@ -143,6 +143,19 @@ namespace MaxWorlds.Tests.EditMode
         private static Pickup[] LivePickups() =>
             Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None);
 
+        /// <summary>The world position <paramref name="along"/> metres outward from
+        /// <paramref name="doorMouth"/>, keeping <paramref name="currentPos"/>'s own Y — same wall-outward
+        /// math <see cref="WorldJoinSequence"/> itself uses internally (MV1077ArrivalVisibilityTests' own
+        /// duplicated copy), kept deliberately separate here rather than exposed from production code.</summary>
+        private static Vector3 PositionAtAlong(Vector3 currentPos, Vector2 doorMouth, Wall wall, float along) => wall switch
+        {
+            Wall.N => new Vector3(doorMouth.x, currentPos.y, doorMouth.y + along),
+            Wall.S => new Vector3(doorMouth.x, currentPos.y, doorMouth.y - along),
+            Wall.E => new Vector3(doorMouth.x + along, currentPos.y, doorMouth.y),
+            Wall.W => new Vector3(doorMouth.x - along, currentPos.y, doorMouth.y),
+            _ => currentPos,
+        };
+
         private static void InvokeCollect(PickupDirector director, Pickup pickup)
         {
             var liveField = typeof(PickupDirector).GetField("_live", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -277,8 +290,17 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(robot.enabled,
                     $"MV-1081 {label}: a cutscene must never disable the RobotEnemy component to pause it (SetCutsceneFrozen, not enabled = false)");
 
-            for (int i = 0; i < 3000 && !arrivalFinished; i++) sequence.Tick(0.02f);
-            Assert.IsTrue(arrivalFinished, "the arrival sequence must reach its own end within 60s of simulated walking.");
+            // MV-1123: no scripted walk-in any more -- control (and robots) come back the instant the
+            // fade lifts, and Max is free to walk himself from there. Flush the 0.4s fade in one call,
+            // then drive him directly to 1.5 m inside the stub (WorldJoinSequence.ArrivalInsideOffset,
+            // private -- same duplicated-constant idiom MV1077ArrivalVisibilityTests already uses) to
+            // reach the sequence's own hand-off point.
+            sequence.Tick(0.5f);
+            Vector2 arrivalDoorMouth = entry.ArrivalDoorMouth(cfg);
+            const float arrivalInsideOffsetDup = 1.5f;
+            _playerGo.transform.position = PositionAtAlong(_playerGo.transform.position, arrivalDoorMouth, entry.ArrivalWall, -arrivalInsideOffsetDup);
+            sequence.Tick(0.02f);
+            Assert.IsTrue(arrivalFinished, "reaching 1.5 m inside the stub must finish the arrival sequence.");
 
             foreach (var (label, robot, before) in beforeArrival)
                 AssertUnchanged($"after the arrival walk ({label})", robot, before);

@@ -23,13 +23,15 @@ namespace MaxWorlds.Intro
     ///    already built closed at boot, so this just forces THAT gate open and builds the corridor
     ///    behind it immediately, but leaves Max in full control -- <see cref="Tick"/>'s own
     ///    <c>AwaitingCrossing</c> phase just watches for him to actually walk through, at which point
-    ///    control is taken away for the scripted walk to the corridor's end and the fade that follows.
+    ///    (MV-1123) robots freeze but Max keeps walking the corridor himself; the far door opens on its
+    ///    own proximity and the fade starts once he's walked past it.
     ///  * <see cref="TryPlayArrival"/> — installed on the destination world's own boot when
     ///    <see cref="WorldTransitions.PendingArrivalFrom"/> is set. Builds the arrival shell outside the
-    ///    destination stub's wall and walks Max in through it.
+    ///    destination stub's wall, fades the world in, and (MV-1123) hands Max control the instant the
+    ///    fade lifts -- no scripted walk-in.
     ///
     /// <see cref="Initialize"/> is the third, test-facing entry point (MV-845's own idiom): builds the
-    /// exit geometry and skips straight to the suspended walk, as if Max had already crossed -- a test
+    /// exit geometry and skips straight to the corridor walk, as if Max had already crossed -- a test
     /// drives it with <see cref="Tick"/> exactly as before this ticket, it just no longer has to walk him
     /// to the door first (that leg is ordinary, un-scripted gameplay now, not this class's job).
     /// </summary>
@@ -38,25 +40,55 @@ namespace MaxWorlds.Intro
     public sealed class WorldJoinSequence : MonoBehaviour
     {
         private const float FadeDuration = 0.4f;
-        private const float HoldAtEndSeconds = 0.3f;
-        private const float WalkTimeoutSeconds = 8f;
-        private const float ArrivalEpsilon = 0.2f;
-        private const float RotationSpeedDegPerSec = 720f;
 
         /// <summary>MV-849: the corridor's lighting/fog reach the destination world's look this fraction
         /// of the way along it — arriving a little early reads better than the blend still finishing
         /// right as the fade-to-black starts.</summary>
         private const float LightingBlendFraction = 0.73f;
 
-        /// <summary>AC4 (MV-845): the scripted walk stops this far short of the corridor's own far end —
-        /// the far end itself is the closed, re-skinned gate into the next world, never reached in this
-        /// session.</summary>
-        private const float WalkEndClearance = 3f;
+        // --- MV-1123: Max keeps full control the whole corridor — no scripted walk, no teleport, no
+        // HUD drop. The far door opens on proximity and the fade starts once he's walked past it on his
+        // own, so the old WalkTimeoutSeconds/StepToward/FaceDirection machinery (and the exit side's own
+        // scripted stop point, WalkEndClearance) has nothing left to drive.
+
+        /// <summary>How close Max must get to the far door before it slides open (MV-1123 §5).</summary>
+        private const float FarDoorOpenDistance = 6f;
+
+        /// <summary>How far past the far door Max must walk before the screen starts fading (MV-1123 §6).</summary>
+        private const float FarDoorCrossClearance = 2f;
+
+        /// <summary>How far inside the arrival area's own wall Max must walk before the arrival door
+        /// re-closes behind him, and before this sequence hands control back for good (MV-1123 §8).</summary>
+        private const float ArrivalInsideOffset = 1.5f;
+
+        // --- MV-1123 §3: unlit guide-light floor strips, every world's corridor and arrival shell.
+
+        private const float GuideLightLength = 1.2f;
+        private const float GuideLightWidth = 0.15f;
+        private const float GuideLightPitch = 4f;
+        private const float GuideLightInset = 0.9f;
+        private const float GuideLightY = 0.011f;   // just proud of the floor's own top (y = 0)
+
+        // --- MV-1123 §2: solid banks replacing the old floor-level ground apron.
+
+        private const float BankSideWidth = 15f;
+        private const float BankEndExtension = 6f;
+        private const float BankTint = 0.7f;
+
+        // --- MV-1123 §5: the far/arrival door's own jamb lamps — red while closed, green while open.
+
+        private const float JambLampDiameter = 0.25f;
+        private static readonly Color DoorLampRed = new Color(0.85f, 0.12f, 0.10f);
+        private static readonly Color DoorLampGreen = new Color(0.208f, 0.878f, 0.420f);   // #35E06B
+
+        // --- MV-1123 §7: the title card holds this long after the destination world's own fade-in.
+
+        private const float TitleCardHoldAfterFadeIn = 1.5f;
 
         // ------------------------------------------------------------------ static installation
 
         private enum Mode { Exit, Arrival }
-        private enum Phase { AwaitingCrossing, WalkToEnd, HoldAtEnd, FadeOut, FadeIn, ArrivalWalk, Done }
+        private enum Phase { AwaitingCrossing, CorridorWalk, FadeOut, FadeIn, PlayerControl, Done }
 
         /// <summary>MV-964: the world's finale door just opened -- cut the real gap, build the corridor
         /// behind it, and leave Max in full control until he actually walks through (see
@@ -130,6 +162,19 @@ namespace MaxWorlds.Intro
         private Transform _segmentCRoot;
         private Transform _arrivalRoot;
 
+        // --- MV-1123: the far gate (exit side only — the arrival side's own door is _doorGate, above)
+        // plus whichever gate's jamb lamps this instance is driving.
+        private AreaGate _farGate;
+        private Vector2 _farDoorMouth;
+        private bool _farDoorOpened;
+        private Renderer _doorLampLRend;
+        private Renderer _doorLampRRend;
+
+        private string _titleWorldLine;
+        private string _titleNameLine;
+        private WorldJoinTitleCard _titleCard;
+        private float _titleCardHoldRemaining = -1f;
+
         private Transform _fade;
         private MaterialPropertyBlock _fadeMpb;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -154,21 +199,34 @@ namespace MaxWorlds.Intro
         /// <summary>Running until it hands off. A test reads this to prove it reaches the end.</summary>
         public bool IsPlaying => _phase != Phase.Done;
 
+        /// <summary>MV-1123 §7: the title card's own "WORLD n" line, resolved from the destination
+        /// config's <c>world</c> field — exposed so a test can assert it without reading UI text.</summary>
+        public string TitleWorldLine => _titleWorldLine;
+
+        /// <summary>The title card's own world-name line (e.g. "STORMDRAIN").</summary>
+        public string TitleNameLine => _titleNameLine;
+
+        /// <summary>The far gate, Exit mode only — null for an Arrival-mode instance, and null until
+        /// <see cref="BuildExit"/> has run.</summary>
+        public AreaGate FarGate => _farGate;
+
         // ------------------------------------------------------------------ build (exit)
 
         /// <summary>The test-facing entry point (MV-845's own idiom: a MonoBehaviour without
         /// <c>[ExecuteAlways]</c> only ever receives <c>Awake</c> once Unity is actually in Play Mode,
         /// which this EditMode-only suite never enters, MV-299/311/330). Builds the door and corridor and
-        /// skips straight to the suspended walk, as if Max had already crossed the threshold — the real
+        /// skips straight to the corridor walk, as if Max had already crossed the threshold — the real
         /// game's own "walk up to the door under full control" leg is ordinary, un-scripted gameplay now,
-        /// not something a test needs to simulate.</summary>
+        /// not something a test needs to simulate. MV-1123: the corridor walk itself is ALSO just
+        /// ordinary gameplay from here on (Max keeps control throughout), so this now only has to prime
+        /// the robot freeze and let <see cref="Tick"/> watch his real position from there.</summary>
         public void Initialize(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
             PlayerController player, System.Action onFinished = null, AreaGate exitGate = null)
         {
             _mode = Mode.Exit;
             _onFinished = onFinished;
             BuildExit(fromCfg, fromMap, entry, fromWorldIndex, player, exitGate);
-            BeginSuspendedWalk();
+            BeginCorridorWalk();
         }
 
         private void BuildExit(WorldConfig fromCfg, MapData fromMap, WorldTransitionEntry entry, int fromWorldIndex,
@@ -203,11 +261,37 @@ namespace MaxWorlds.Intro
             ClearIntrudingGeometry(entry.CorridorLength, wallHeight);
 
             int toWorld = fromWorldIndex + 1;
-            Vector2 farMouth = PointAtXZ(_doorMouth, _wall, entry.CorridorLength);
-            AreaGate farGate = BuildDoor(farMouth, _wall, wallHeight, wallThickness, null, transform, "World Join Far Gate");
-            ApplyDestinationSkin(farGate, toWorld);
+            _farDoorMouth = PointAtXZ(_doorMouth, _wall, entry.CorridorLength);
+            _farGate = BuildDoor(_farDoorMouth, _wall, wallHeight, wallThickness, null, transform, "World Join Far Gate");
+            ApplyDestinationSkin(_farGate, toWorld);
+            (_doorLampLRend, _doorLampRRend) = BuildJambLamps(transform, _farDoorMouth, _wall, wallHeight, "Far Door");
+            SetDoorLamps(DoorLampRed);
+
+            ResolveTitleCard(toWorld);
 
             BuildFade();
+        }
+
+        /// <summary>MV-1123 §7: the title card's two lines, resolved from the destination world's own
+        /// <c>world</c> config field (e.g. "World 2 — Stormdrain" gives "WORLD 2" / "STORMDRAIN"). Reads
+        /// the real, shipped <see cref="WorldConfig"/> through <see cref="WorldLibrary"/> rather than
+        /// <see cref="WorldCatalog"/>, since the ticket's own source of truth is the config's own field,
+        /// not the catalog row.</summary>
+        private void ResolveTitleCard(int toWorld)
+        {
+            WorldConfig toCfg = WorldLibrary.Load(WorldLibrary.KeyForIndex(toWorld));
+            (_titleWorldLine, _titleNameLine) = ParseTitle(toCfg?.world);
+        }
+
+        private static (string worldLine, string nameLine) ParseTitle(string worldField)
+        {
+            if (string.IsNullOrEmpty(worldField)) return (string.Empty, string.Empty);
+            int dash = worldField.IndexOf('—');   // em dash, the config's own separator
+            if (dash < 0) return (worldField.Trim().ToUpperInvariant(), string.Empty);
+
+            string worldLine = worldField.Substring(0, dash).Trim().ToUpperInvariant();
+            string nameLine = worldField.Substring(dash + 1).Trim().ToUpperInvariant();
+            return (worldLine, nameLine);
         }
 
         /// <summary>Floor + both side walls, built as three fixed-distance segments so the corridor reads
@@ -224,9 +308,13 @@ namespace MaxWorlds.Intro
             BiomePalette to = WorldCatalog.Get(toWorld).Palette;
             string keyPrefix = $"join{_fromWorldIndex}";
 
-            Material floorA = IntroBuild.Lit($"{keyPrefix}_A_floor", from.ColorFor(SurfaceKind.Ground));
-            Material floorB = IntroBuild.Lit($"{keyPrefix}_B_floor", Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f));
-            Material floorC = IntroBuild.Lit($"{keyPrefix}_C_floor", to.ColorFor(SurfaceKind.Ground));
+            Color groundA = from.ColorFor(SurfaceKind.Ground);
+            Color groundB = Color.Lerp(from.ColorFor(SurfaceKind.Ground), to.ColorFor(SurfaceKind.Ground), 0.5f);
+            Color groundC = to.ColorFor(SurfaceKind.Ground);
+
+            Material floorA = IntroBuild.Lit($"{keyPrefix}_A_floor", groundA);
+            Material floorB = IntroBuild.Lit($"{keyPrefix}_B_floor", groundB);
+            Material floorC = IntroBuild.Lit($"{keyPrefix}_C_floor", groundC);
 
             _segmentARoot = BuildSegment(root, "A", wallHeight, wallThickness, 0f, _entry.SegmentAEnd,
                 floorA, IntroBuild.Lit($"{keyPrefix}_A_wall", from.ColorFor(SurfaceKind.Wall)));
@@ -237,14 +325,17 @@ namespace MaxWorlds.Intro
             _segmentCRoot = BuildSegment(root, "C", wallHeight, wallThickness, _entry.SegmentBEnd, _entry.CorridorLength,
                 floorC, IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
 
-            // MV-1076: ground to stand beside the corridor and past its far end -- without this, the
-            // camera's own clear colour shows the instant Max is far enough along that the walls no
-            // longer fill his view (void here; a flat destination-world colour on the arrival side,
-            // below).
-            BuildGroundApron(root, wallThickness,
-                (0f, _entry.SegmentAEnd, floorA),
-                (_entry.SegmentAEnd, _entry.SegmentBEnd, floorB),
-                (_entry.SegmentBEnd, _entry.CorridorLength, floorC));
+            // MV-1123 §2: solid banks, top level with the wall tops, replacing the old floor-level
+            // ground apron (MV-1076) — the camera no longer looks over the walls into a void OR a flat
+            // slab filling the whole view (Lee device observation).
+            BuildBanks(root, wallThickness, wallHeight,
+                (0f, _entry.SegmentAEnd, groundA),
+                (_entry.SegmentAEnd, _entry.SegmentBEnd, groundB),
+                (_entry.SegmentBEnd, _entry.CorridorLength, groundC));
+
+            // MV-1123 §3: guide-light floor strips the whole corridor length, in the accent of the
+            // world ahead (the destination this corridor leads to).
+            BuildGuideLights(root, _doorMouth, _wall, 0f, _entry.CorridorLength, GuideLightAccent(toWorld));
 
             // MV-965: garden/kerb+grate/culvert set-dressing on top of the three flat-coloured shells
             // above — a separate pass, same reason StormdrainDressing/BackyardDressing are separate from
@@ -256,11 +347,25 @@ namespace MaxWorlds.Intro
                 WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
         }
 
+        /// <summary>MV-1123 §3: the accent colour guide lights point toward — the world AHEAD, i.e. the
+        /// destination this corridor/arrival shell leads into. The two shipped rows' own named tones
+        /// (ticket's own numbers); falls back to <see cref="StormdrainKit.Status"/> for any future row
+        /// not yet given its own accent.</summary>
+        private static Color GuideLightAccent(int toWorld) => toWorld switch
+        {
+            1 => StormdrainKit.Status,
+            2 => WorldMaterials.ReefLampViolet,
+            _ => StormdrainKit.Status,
+        };
+
         // ------------------------------------------------------------------ build (arrival)
 
         /// <summary>Builds the arrival shell outside the destination stub's own wall, cuts the real gap
-        /// into the stub, and walks Max in through it (MV-964 §4.7). Suspends gameplay for the whole
-        /// beat -- there is nothing for Max to control yet, the world has only just booted.</summary>
+        /// into the stub, and fades the destination world in around Max (MV-964 §4.7). Suspends gameplay
+        /// only for the fade-in itself -- there is nothing to see yet, the world has only just booted --
+        /// then hands control straight back (MV-1123 §8: no scripted walk-in any more; Max is free to
+        /// walk himself from the moment the fade lifts, and <see cref="TickPlayerControl"/> watches for
+        /// him to walk far enough inside to close the arrival door behind him).</summary>
         public void InitializeArrival(WorldConfig toCfg, MapData toMap, WorldTransitionEntry entry, int fromWorldIndex,
             PlayerController player, System.Action onFinished)
         {
@@ -286,16 +391,22 @@ namespace MaxWorlds.Intro
 
             SuspendGameplay();
 
-            CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth, out Material wallMaterial);
-            ClearOverheadDressingNearDoor(_doorMouth, _wall, wallHeight, WorldTransitionEntry.DoorWidth);
+            CutWallGap(_doorMouth, _wall, wallHeight, WorldTransitionEntry.CorridorWidth, out Material wallMaterial);
+            ClearOverheadDressingNearDoor(_doorMouth, _wall, wallHeight, WorldTransitionEntry.CorridorWidth);
             _doorGate = BuildDoor(_doorMouth, _wall, wallHeight, wallThickness, wallMaterial, transform, "World Arrival Door");
             ApplyDestinationSkin(_doorGate, toWorld);
             _doorGate.ForceOpen();
+            (_doorLampLRend, _doorLampRRend) = BuildJambLamps(transform, _doorMouth, _wall, wallHeight, "Arrival Door");
+            SetDoorLamps(DoorLampGreen);   // MV-1123 §8: the arrival door is already open on arrival
 
             BuildArrivalShell(wallHeight, wallThickness, toWorld);
             ClearIntrudingGeometry(entry.ArrivalShellLength, wallHeight);
             BuildFade();
             ApplyFadeAlpha(1f);   // fully black -- the world has just booted, nothing to see yet
+
+            (_titleWorldLine, _titleNameLine) = ParseTitle(toCfg?.world);
+            _titleCard = WorldJoinTitleCard.Create();
+            _titleCard.Show(_titleWorldLine, _titleNameLine, 1f);
 
             float startAlong = entry.ArrivalShellLength - 1f;   // AC (MV-964 §4.7): "1 m from its far end"
             Vector3 start = PointAt(_doorMouth, _wall, startAlong, _playerT.position.y);
@@ -309,13 +420,19 @@ namespace MaxWorlds.Intro
         private void BuildArrivalShell(float wallHeight, float wallThickness, int toWorld)
         {
             BiomePalette palette = WorldCatalog.Get(toWorld).Palette;
-            Material floorMat = IntroBuild.Lit($"arrival{toWorld}_floor", palette.ColorFor(SurfaceKind.Ground));
+            Color ground = palette.ColorFor(SurfaceKind.Ground);
+            Material floorMat = IntroBuild.Lit($"arrival{toWorld}_floor", ground);
             _arrivalRoot = BuildSegment(transform, "Arrival", wallHeight, wallThickness, 0f, _entry.ArrivalShellLength,
                 floorMat, IntroBuild.Lit($"arrival{toWorld}_wall", palette.ColorFor(SurfaceKind.Wall)));
 
-            // MV-1076: same reasoning as the exit corridor's own apron -- the shell's far end (the end
-            // away from the destination stub, where Max first appears) has nothing beyond it either.
-            BuildGroundApron(_arrivalRoot, wallThickness, (0f, _entry.ArrivalShellLength, floorMat));
+            // MV-1123 §2: same solid banks the exit corridor carries, replacing the old floor-level
+            // ground apron (MV-1076) -- the shell's far end (where Max first appears) has nothing
+            // beyond it either.
+            BuildBanks(_arrivalRoot, wallThickness, wallHeight, (0f, _entry.ArrivalShellLength, ground));
+
+            // MV-1123 §3: guide lights, same as the exit corridor -- the world ahead, here, is simply
+            // the world Max has already arrived in.
+            BuildGuideLights(_arrivalRoot, _doorMouth, _wall, 0f, _entry.ArrivalShellLength, GuideLightAccent(toWorld));
 
             // MV-965: same dressing pass as the exit side's segment C, continued into the arrival shell.
             if (toWorld == 1)
@@ -580,7 +697,9 @@ namespace MaxWorlds.Intro
             body.name = name;
             body.transform.SetParent(parent, worldPositionStays: false);
 
-            float sealWidth = WorldTransitionEntry.DoorWidth + wallThickness * 2f;
+            // MV-1123: the far/arrival door matches the walkway's own width now (5 m), not the narrower
+            // 3 m exit doorway cut into the FROM world's wall.
+            float sealWidth = WorldTransitionEntry.CorridorWidth + wallThickness * 2f;
             body.transform.position = new Vector3(doorMouth.x, wallHeight * 0.5f, doorMouth.y);
             // A door on an E/W wall runs along Z -- spin 90 deg the same way MapRuntime.BuildAreaGate
             // does for one, so AreaGate.StartHingeSwing (which reads localScale.x as "the width") finds
@@ -642,46 +761,41 @@ namespace MaxWorlds.Intro
             return go;
         }
 
-        /// <summary>MV-1076: at least this wide either side of the corridor/shell's own playable width,
-        /// and this far past the last span's own far end (ticket's own numbers).</summary>
-        private const float ApronSideWidth = 12f;
-        private const float ApronFarExtension = 6f;
-        private const float ApronHeight = 0.1f;
-        private const float ApronCenterY = -0.05f;   // matches BuildSegment's own floor box -- tops stay coplanar
-
-        /// <summary>Flat ground beside each <paramref name="spans"/> entry's own along-range (its own
-        /// floor colour, so the apron reads as a continuation of the segment it runs beside, not one
-        /// flat colour the whole way), plus a cap <see cref="ApronFarExtension"/> m past the last span's
-        /// own far end. Without this, the camera's own clear colour shows the moment the corridor or
-        /// arrival shell runs out of either world's ground (MV-1076: void beside the World 1 -> World 2
-        /// corridor, a flat blue beside its arrival shell). KeepsOwnMaterial + no collider: decoration
-        /// only, never reachable by Max or a robot, and never re-tinted by the world's own dressing
-        /// sweep.</summary>
-        private void BuildGroundApron(Transform root, float wallThickness,
-            params (float AlongMin, float AlongMax, Material FloorMat)[] spans)
+        /// <summary>MV-1123 §2: solid banks outside both walls, replacing the old floor-level ground
+        /// apron (MV-1076) -- the camera used to look either over the low apron into a void (MV-1076's
+        /// own fix) or, once that shipped, into a flat slab that read as filling the whole view (Lee
+        /// device observation, this ticket). A bank's TOP sits level with the wall top instead, so the
+        /// view is always bounded by solid ground, never void or an oversized slab.
+        ///
+        /// One bank per <paramref name="spans"/> entry's own along-range (its own ground colour
+        /// times <see cref="BankTint"/>, so each bank reads as a darker continuation of the segment it
+        /// runs beside), extended <see cref="BankEndExtension"/> m past BOTH the first span's near end and
+        /// the last span's far end. No collider (Max/robots can never reach it) and never re-tinted by
+        /// the world's own dressing sweep.</summary>
+        private void BuildBanks(Transform root, float wallThickness, float wallHeight,
+            params (float AlongMin, float AlongMax, Color GroundColor)[] spans)
         {
             if (spans.Length == 0) return;
 
             float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
-            float sideCenter = halfWidth + wallThickness + ApronSideWidth * 0.5f;
+            float sideCenter = halfWidth + wallThickness + BankSideWidth * 0.5f;
+            float centerY = wallHeight * 0.5f;   // top-aligned: spans y [0, wallHeight], same as a wall box
 
-            foreach (var span in spans)
+            for (int i = 0; i < spans.Length; i++)
             {
-                MarkApron(BuildBox(root, "Ground Apron E", span.AlongMin, span.AlongMax, sideCenter,
-                    ApronSideWidth, ApronHeight, ApronCenterY, span.FloorMat));
-                MarkApron(BuildBox(root, "Ground Apron W", span.AlongMin, span.AlongMax, -sideCenter,
-                    ApronSideWidth, ApronHeight, ApronCenterY, span.FloorMat));
-            }
+                var span = spans[i];
+                float alongMin = i == 0 ? span.AlongMin - BankEndExtension : span.AlongMin;
+                float alongMax = i == spans.Length - 1 ? span.AlongMax + BankEndExtension : span.AlongMax;
 
-            var last = spans[spans.Length - 1];
-            float capWidth = (halfWidth + wallThickness + ApronSideWidth) * 2f;
-            MarkApron(BuildBox(root, "Ground Apron Far Cap", last.AlongMax, last.AlongMax + ApronFarExtension,
-                0f, capWidth, ApronHeight, ApronCenterY, last.FloorMat));
+                Material bankMat = IntroBuild.Lit($"bank_{GetInstanceID()}_{i}", span.GroundColor * BankTint);
+                MarkApron(BuildBox(root, "Bank E", alongMin, alongMax, sideCenter, BankSideWidth, wallHeight, centerY, bankMat));
+                MarkApron(BuildBox(root, "Bank W", alongMin, alongMax, -sideCenter, BankSideWidth, wallHeight, centerY, bankMat));
+            }
         }
 
         /// <summary>Decoration only: strips the primitive cube's default collider (ticket AC: "no
-        /// collider that Max or robots can reach") and marks it <see cref="KeepsOwnMaterial"/> so neither
-        /// world's own runtime dressing sweep repaints it.</summary>
+        /// collider") and marks it <see cref="KeepsOwnMaterial"/> so neither world's own runtime dressing
+        /// sweep repaints it.</summary>
         private static void MarkApron(GameObject go)
         {
             var collider = go.GetComponent<Collider>();
@@ -691,6 +805,84 @@ namespace MaxWorlds.Intro
                 else DestroyImmediate(collider);
             }
             go.AddComponent<KeepsOwnMaterial>();
+        }
+
+        /// <summary>MV-1123 §3: unlit emissive floor strips every <see cref="GuideLightPitch"/> m along
+        /// both sides of the walkway, <see cref="GuideLightInset"/> m in from each wall, in the accent
+        /// colour of the world ahead.</summary>
+        private static void BuildGuideLights(Transform root, Vector2 doorMouth, Wall wall, float alongMin, float alongMax, Color accent)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float acrossOffset = halfWidth - GuideLightInset;
+            Material mat = StormdrainKit.Unlit(accent, "WorldJoinGuideLight");
+
+            Vector3 dir = OutwardDir(wall);
+            Vector3 across = AcrossDir(wall);
+
+            for (float d = alongMin + GuideLightPitch * 0.5f; d < alongMax; d += GuideLightPitch)
+            {
+                float dMin = d - GuideLightLength * 0.5f;
+                float dMax = d + GuideLightLength * 0.5f;
+                foreach (float side in new[] { 1f, -1f })
+                {
+                    float mid = (dMin + dMax) * 0.5f;
+                    float length = dMax - dMin;
+                    Vector3 center = new Vector3(doorMouth.x, GuideLightY, doorMouth.y) + dir * mid + across * (side * acrossOffset);
+                    Vector3 size = new Vector3(
+                        Mathf.Abs(dir.x) * length + Mathf.Abs(across.x) * GuideLightWidth,
+                        0.02f,
+                        Mathf.Abs(dir.z) * length + Mathf.Abs(across.z) * GuideLightWidth);
+
+                    GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    go.name = "Guide Light";
+                    go.transform.SetParent(root, worldPositionStays: true);
+                    go.transform.position = center;
+                    go.transform.localScale = size;
+                    go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+                    MarkApron(go);
+                }
+            }
+        }
+
+        /// <summary>MV-1123 §5: a lamp on each jamb of a far/arrival door — red while closed, green
+        /// while open (<see cref="SetDoorLamps"/>). Built directly here rather than through
+        /// <see cref="AreaGate.ApplyStormdrainGateSkin"/>'s own single centred lamp: this ticket's colours
+        /// and two-lamp layout apply to every corridor's far door regardless of which world's gate skin
+        /// (if any) it also wears.</summary>
+        private (Renderer l, Renderer r) BuildJambLamps(Transform parent, Vector2 doorMouth, Wall wall, float wallHeight, string label)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f + 0.15f;
+            float y = wallHeight * 0.5f;
+            Renderer l = BuildJambLamp(parent, $"{label} Lamp L", doorMouth, wall, -halfWidth, y);
+            Renderer r = BuildJambLamp(parent, $"{label} Lamp R", doorMouth, wall, halfWidth, y);
+            return (l, r);
+        }
+
+        private static Renderer BuildJambLamp(Transform parent, string name, Vector2 doorMouth, Wall wall, float acrossOffset, float y)
+        {
+            Vector3 pos = new Vector3(doorMouth.x, y, doorMouth.y) + AcrossDir(wall) * acrossOffset;
+
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = name;
+            go.transform.SetParent(parent, worldPositionStays: true);
+            go.transform.position = pos;
+            go.transform.localScale = Vector3.one * JambLampDiameter;
+            var col = go.GetComponent<Collider>();
+            if (col != null)
+            {
+                if (Application.isPlaying) Destroy(col);
+                else DestroyImmediate(col);
+            }
+            var rend = go.GetComponent<MeshRenderer>();
+            rend.sharedMaterial = StormdrainKit.Unlit(DoorLampRed, name);
+            return rend;
+        }
+
+        private void SetDoorLamps(Color color)
+        {
+            Material mat = StormdrainKit.Unlit(color, "WorldJoinDoorLamp");
+            if (_doorLampLRend != null) _doorLampLRend.sharedMaterial = mat;
+            if (_doorLampRRend != null) _doorLampRRend.sharedMaterial = mat;
         }
 
         private void BuildFade()
@@ -771,11 +963,10 @@ namespace MaxWorlds.Intro
             switch (_phase)
             {
                 case Phase.AwaitingCrossing: TickAwaitingCrossing(); break;
-                case Phase.WalkToEnd: TickWalkToEnd(dt); break;
-                case Phase.HoldAtEnd: TickHoldAtEnd(dt); break;
+                case Phase.CorridorWalk: TickCorridorWalk(dt); break;
                 case Phase.FadeOut: TickFadeOut(dt); break;
                 case Phase.FadeIn: TickFadeIn(dt); break;
-                case Phase.ArrivalWalk: TickArrivalWalk(dt); break;
+                case Phase.PlayerControl: TickPlayerControl(dt); break;
                 case Phase.Done: break;
             }
         }
@@ -785,37 +976,51 @@ namespace MaxWorlds.Intro
         private void TickAwaitingCrossing()
         {
             if (_playerT == null) return;
-            if (AlongDistance(_playerT.position, _doorMouth, _wall) >= 1f) BeginSuspendedWalk();
+            if (AlongDistance(_playerT.position, _doorMouth, _wall) >= 1f) BeginCorridorWalk();
         }
 
-        /// <summary>MV-964 §4.2: the moment Max crosses, gameplay suspends, any Weapon Core still on the
-        /// ground is banked as if he'd walked over it, and the door swings shut behind him.</summary>
-        private void BeginSuspendedWalk()
+        /// <summary>MV-1123 §4: the moment Max crosses, any Weapon Core still on the ground is banked as
+        /// if he'd walked over it and the door swings shut behind him -- but UNLIKE the old scripted
+        /// walk, his own control, the HUD and robot behaviour are left exactly as they were (only the
+        /// robots freeze, via MV-1081's own pause flag, since nothing hostile exists past this door).</summary>
+        private void BeginCorridorWalk()
         {
-            SuspendGameplay();
             PickupDirector.EnsureInstalled().CollectGroundedWeaponCore();
             if (_doorGate != null) _doorGate.Reclose();
             TeleportPlayer(PointAt(_doorMouth, _wall, 1f, _playerT.position.y));
 
-            _phase = Phase.WalkToEnd;
+            _frozenRobots.Clear();
+            _frozenRobots.AddRange(RobotEnemy.Active);
+            foreach (RobotEnemy r in _frozenRobots)
+                if (r != null) r.SetCutsceneFrozen(true);
+
+            _phase = Phase.CorridorWalk;
             _phaseElapsed = 0f;
         }
 
-        private void TickWalkToEnd(float dt)
+        /// <summary>MV-1123 §4-6: Max walks the whole corridor himself. This just watches his real
+        /// position: lighting/fog follow him (unchanged from MV-964 §4.4), the far door slides open once
+        /// he's within <see cref="FarDoorOpenDistance"/> of it (§5), and the fade starts once he's walked
+        /// <see cref="FarDoorCrossClearance"/> m past it (§6).</summary>
+        private void TickCorridorWalk(float dt)
         {
             ApplyCorridorLighting();
 
-            Vector3 target = PointAt(_doorMouth, _wall, _entry.CorridorLength - WalkEndClearance, _playerT.position.y);
-            _phaseElapsed += dt;
+            float alongFromExit = AlongDistance(_playerT.position, _doorMouth, _wall);
+            float distanceToFarDoor = _entry.CorridorLength - alongFromExit;
 
-            if (_phaseElapsed >= WalkTimeoutSeconds)
+            if (!_farDoorOpened && distanceToFarDoor <= FarDoorOpenDistance)
             {
-                TeleportPlayer(target);
-                EnterHoldAtEnd();
-                return;
+                _farDoorOpened = true;
+                if (_farGate != null) _farGate.ForceOpen();
+                SetDoorLamps(DoorLampGreen);
             }
 
-            if (StepToward(target, dt)) EnterHoldAtEnd();
+            if (alongFromExit >= _entry.CorridorLength + FarDoorCrossClearance)
+            {
+                _phase = Phase.FadeOut;
+                _phaseElapsed = 0f;
+            }
         }
 
         /// <summary>Fog and lighting follow Max down the corridor (MV-964 §4.4), reaching the destination
@@ -828,14 +1033,6 @@ namespace MaxWorlds.Intro
             _lighting.Apply(BackyardLook.Lerp(WorldCatalog.Get(_fromWorldIndex).Look, WorldCatalog.Get(_fromWorldIndex + 1).Look, t));
         }
 
-        private void EnterHoldAtEnd() { _phase = Phase.HoldAtEnd; _phaseElapsed = 0f; }
-
-        private void TickHoldAtEnd(float dt)
-        {
-            _phaseElapsed += dt;
-            if (_phaseElapsed >= HoldAtEndSeconds) { _phase = Phase.FadeOut; _phaseElapsed = 0f; }
-        }
-
         private void TickFadeOut(float dt)
         {
             _phaseElapsed += dt;
@@ -843,6 +1040,10 @@ namespace MaxWorlds.Intro
             ApplyFadeAlpha(alpha);
             if (alpha >= 1f)
             {
+                // MV-1123 §7: the title card shows the instant the screen reads fully black.
+                if (_titleCard == null) _titleCard = WorldJoinTitleCard.Create();
+                _titleCard.Show(_titleWorldLine, _titleNameLine, 1f);
+
                 // MV-964 §4.5: the signal fires only once the screen is fully black -- RunTracker seals
                 // on it and the Result card shows over that same black, not over the live corridor.
                 HudSignals.EmitFinaleGateCrossed();
@@ -855,61 +1056,39 @@ namespace MaxWorlds.Intro
             _phaseElapsed += dt;
             float alpha = FadeDuration > 0f ? 1f - Mathf.Clamp01(_phaseElapsed / FadeDuration) : 0f;
             ApplyFadeAlpha(alpha);
-            if (alpha <= 0f) { _phase = Phase.ArrivalWalk; _phaseElapsed = 0f; }
+            if (alpha <= 0f)
+            {
+                // MV-1123 §8: Max is under his own control again the instant the destination world is
+                // actually visible -- no scripted walk left to run.
+                RestoreGameplay();
+                _titleCardHoldRemaining = TitleCardHoldAfterFadeIn;
+                _phase = Phase.PlayerControl;
+                _phaseElapsed = 0f;
+            }
         }
 
-        private const float ArrivalInsideOffset = 1.5f;
-
-        private void TickArrivalWalk(float dt)
+        /// <summary>MV-1123 §8: Max is free to walk the arrival shell himself from here. This just
+        /// watches for the title card's own hold to expire and for him to actually walk far enough
+        /// inside the destination area's own wall to close the arrival door and hand this sequence off
+        /// for good -- never on a timer, since destroying the shell (<see cref="Finish"/>, Arrival mode)
+        /// while he's still standing in it would drop him through the floor.</summary>
+        private void TickPlayerControl(float dt)
         {
-            Vector3 target = PointAt(_doorMouth, _wall, -ArrivalInsideOffset, _playerT.position.y);
-            _phaseElapsed += dt;
-
-            if (_phaseElapsed >= WalkTimeoutSeconds)
+            if (_titleCardHoldRemaining >= 0f)
             {
-                TeleportPlayer(target);
-                FinishArrival();
-                return;
+                _titleCardHoldRemaining -= dt;
+                if (_titleCardHoldRemaining <= 0f)
+                {
+                    _titleCardHoldRemaining = -1f;
+                    if (_titleCard != null) _titleCard.Hide();
+                }
             }
 
-            if (StepToward(target, dt)) FinishArrival();
-        }
+            float along = AlongDistance(_playerT.position, _doorMouth, _wall);
+            if (along > -ArrivalInsideOffset) return;
 
-        private void FinishArrival()
-        {
-            if (_doorGate != null) _doorGate.Reclose();
+            if (_doorGate != null && _doorGate.IsOpen) _doorGate.Reclose();
             Finish();
-        }
-
-        /// <summary>Steps Max toward <paramref name="target"/> at his normal walk speed via his own
-        /// <see cref="CharacterController"/> (so he collides with whatever's actually there) and turns
-        /// him to face the travel direction. Returns true once he's within <see cref="ArrivalEpsilon"/>
-        /// of the target, measured AFTER the move, so a collision-shortened step is never mistaken for
-        /// arrival.</summary>
-        private bool StepToward(Vector3 target, float dt)
-        {
-            Vector3 pos = _playerT.position;
-            Vector3 toTarget = target - pos; toTarget.y = 0f;
-            float dist = toTarget.magnitude;
-
-            if (dist > ArrivalEpsilon)
-            {
-                Vector3 dir = toTarget / dist;
-                float step = Mathf.Min(_player.WalkSpeed * dt, dist);
-                if (_cc != null) CharacterControllerMotion.SafeMove(_cc, dir * step);
-                else _playerT.position = pos + dir * step;
-                FaceDirection(dir, dt);
-            }
-
-            Vector3 remaining = target - _playerT.position; remaining.y = 0f;
-            return remaining.magnitude <= ArrivalEpsilon;
-        }
-
-        private void FaceDirection(Vector3 dir, float dt)
-        {
-            if (dir.sqrMagnitude < 0.0001f) return;
-            Quaternion target = Quaternion.LookRotation(dir, Vector3.up);
-            _playerT.rotation = Quaternion.RotateTowards(_playerT.rotation, target, RotationSpeedDegPerSec * dt);
         }
 
         /// <summary>Same disable-move-restore idiom as <c>MapRuntime.Adopt</c> -- a CharacterController
