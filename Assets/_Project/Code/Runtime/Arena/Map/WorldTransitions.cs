@@ -39,9 +39,15 @@ namespace MaxWorlds.Arena
     /// </summary>
     public sealed class WorldTransitionEntry
     {
-        /// <summary>The door opening's width, and the corridor's own interior width (MV-964's table).</summary>
+        /// <summary>The exit doorway's own width — cut into the FROM world's own wall (MV-964's table).
+        /// Stays 3 m (MV-1123): only the walkway and the far/arrival doors widened.</summary>
         public const float DoorWidth = 3f;
-        public const float CorridorWidth = 3f;
+
+        /// <summary>The corridor's own interior width, and (MV-1123) the far/arrival doors' width too —
+        /// a door narrower than the walkway it caps would read as a bottleneck. Widened from 3 m to 5 m
+        /// (MV-1123, Lee device observation: "a narrow lane between thin walls standing in empty
+        /// space").</summary>
+        public const float CorridorWidth = 5f;
 
         public readonly int FromWorld;
         public readonly Wall ExitWall;
