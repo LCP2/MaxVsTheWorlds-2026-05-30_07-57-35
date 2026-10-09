@@ -109,6 +109,14 @@ namespace MaxWorlds.Arena
         /// <summary>The way is open — Max can walk (and shoot) through. True the instant HP hits zero.</summary>
         public bool IsOpen { get; private set; }
 
+        /// <summary>MV-1116: <see cref="ApplyStormdrainGateSkin"/>'s own art root, if it's been applied —
+        /// a SIBLING of this gate, not a child (see that method's own comment), so a caller clearing
+        /// geometry that's foreign to a doorway needs this to recognise the gate's own portal
+        /// ring/doors/hazard kit as part of the door, not an intrusion. Null for a plain gate, or one
+        /// skinned with <see cref="ApplyReefSkin"/> (a property-block tint on this gate's own renderer,
+        /// no separate root at all).</summary>
+        public Transform DressingRoot => _dressingRoot != null ? _dressingRoot.transform : null;
+
         /// <summary>MV-713: re-skins this gate for World 3's Reef biome ("power hatch") — a
         /// MaterialPropertyBlock tint on the leaf's own renderer, the same non-destructive idiom
         /// <see cref="MaxWorlds.Factories.MowerHutch.ApplyReefSkin"/> uses. Touches no health, no
