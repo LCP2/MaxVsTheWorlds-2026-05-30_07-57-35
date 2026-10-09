@@ -283,8 +283,8 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var (label, robot, before) in beforeArrival)
                 AssertUnchanged($"after the arrival walk ({label})", robot, before);
 
-            // ---- WorldFinaleGate: World 2's own final boss (a21, dials.areaCount == 21) dies, drops the
-            // Weapon Core, and collecting it starts Beat A (WEAPON TAKEN) -- the same chain
+            // ---- WorldFinaleGate: World 2's own final boss (a31, dials.areaCount == 31, MV-1140) dies,
+            // drops the Weapon Core, and collecting it starts Beat A (WEAPON TAKEN) -- the same chain
             // MV1078FinaleWeaponAndCleanupTests drives, against World 2's real boss instead of a hand-
             // rolled fixture. MapRuntime.BuildBoss builds World 2's "sludgequeen" id as a SludgequeenBoss
             // (MV-1127) -- this is the real component the real loader built. ----
@@ -294,7 +294,7 @@ namespace MaxWorlds.Tests.EditMode
             InvokeOnEnable(gate);
 
             MonoBehaviour boss = build.Bosses.Single();
-            BossCensus.Register(boss, "SLUDGEQUEEN", 1, current: 100f, max: 100f, areaIndex: 21);
+            BossCensus.Register(boss, "SLUDGEQUEEN", 1, current: 100f, max: 100f, areaIndex: 31);
 
             var pickupDirector = PickupDirector.EnsureInstalled();
             InvokeOnDeath(boss);

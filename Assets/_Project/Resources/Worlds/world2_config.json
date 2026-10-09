@@ -1,14 +1,14 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 2 \u2014 Stormdrain",
-  "revision": "WORLD 2 V10 2026-09-24: Lee's MVW_World2_Level_Design_V10_Lee_Edit.xlsx applied (a3 Up = a17, a13 Up = a15; a19 upper level removed; a16 deepened to 14 m; a13 and a19 re-authored by Lee to clear the Replicator lanes). Built on 'WORLD 2 v3 2026-09-20'.",
+  "revision": "WORLD 2 V11 2026-10-07: ten new areas a22-a31 appended after a21 (approved by Lee 7 Oct 2026); final area and Sludgequeen move from a21 to a31; g24 now lists the replicator areas before it. Built on 'WORLD 2 V10 2026-09-24'.",
   "note": "DESIGN v1 2026-09-07 \u2014 authored by the build chat from the World 2 brief; not yet approved",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
   "pressureNoun": "",
   "pressureCaption": "",
   "dials": {
-    "areaCount": 21,
+    "areaCount": 31,
     "baseThreat": 20,
     "threatGrowth": 0.1,
     "band": {
@@ -35,6 +35,16 @@
       1.3,
       1.4,
       1,
+      1.5,
+      1,
+      1.1,
+      1.2,
+      1.2,
+      0.9,
+      1.25,
+      1.5,
+      1.4,
+      1.45,
       1.5,
       1
     ],
@@ -276,7 +286,7 @@
         "pos": 0.723684210526
       },
       "width": 11,
-      "opensWith": "replicators-destroyed:all"
+      "opensWith": "replicators-destroyed:a2,a3,a4,a6,a7,a8,a9,a10,a11,a12,a13,a14,a18,a19"
     },
     {
       "id": "g25",
@@ -472,6 +482,156 @@
       },
       "width": 3,
       "opensWith": "primary[DECK]"
+    },
+{
+      "id": "g38",
+      "from": {
+        "area": "a21",
+        "wall": "E",
+        "pos": 0.717105263158
+      },
+      "to": {
+        "area": "a22",
+        "wall": "W",
+        "pos": 0.515625
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g39",
+      "from": {
+        "area": "a22",
+        "wall": "S",
+        "pos": 0.890625
+      },
+      "to": {
+        "area": "a23",
+        "wall": "N",
+        "pos": 0.75
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g40",
+      "from": {
+        "area": "a23",
+        "wall": "E",
+        "pos": 0.171052631579
+      },
+      "to": {
+        "area": "a24",
+        "wall": "W",
+        "pos": 0.140625
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g41",
+      "from": {
+        "area": "a24",
+        "wall": "N",
+        "pos": 0.8875
+      },
+      "to": {
+        "area": "a25",
+        "wall": "S",
+        "pos": 0.926470588235
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g42",
+      "from": {
+        "area": "a25",
+        "wall": "N",
+        "pos": 0.044117647059
+      },
+      "to": {
+        "area": "a26",
+        "wall": "S",
+        "pos": 0.125
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g43",
+      "from": {
+        "area": "a26",
+        "wall": "E",
+        "pos": 0.525
+      },
+      "to": {
+        "area": "a27",
+        "wall": "W",
+        "pos": 0.458333333333
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g44",
+      "from": {
+        "area": "a27",
+        "wall": "S",
+        "pos": 0.9125
+      },
+      "to": {
+        "area": "a28",
+        "wall": "N",
+        "pos": 0.902777777778
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g45",
+      "from": {
+        "area": "a28",
+        "wall": "S",
+        "pos": 0.125
+      },
+      "to": {
+        "area": "a29",
+        "wall": "N",
+        "pos": 0.184782608696
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g46",
+      "from": {
+        "area": "a29",
+        "wall": "E",
+        "pos": 0.520833333333
+      },
+      "to": {
+        "area": "a30",
+        "wall": "W",
+        "pos": 0.367647058824
+      },
+      "width": 3,
+      "opensWith": "primary"
+    },
+    {
+      "id": "g47",
+      "from": {
+        "area": "a30",
+        "wall": "N",
+        "pos": 0.516666666667
+      },
+      "to": {
+        "area": "a31",
+        "wall": "S",
+        "pos": 0.276785714286
+      },
+      "width": 11,
+      "opensWith": "replicators-destroyed:all"
     }
   ],
   "areas": [
@@ -6671,7 +6831,7 @@
       "id": "a21",
       "index": 21,
       "name": "The Wet Well",
-      "role": "boss",
+      "role": "setpiece",
       "origin": {
         "x": 92,
         "z": -12
@@ -7171,11 +7331,6147 @@
           "z": 15,
           "level": 0
         }
+      ]
+    },
+{
+      "id": "a22",
+      "index": 22,
+      "name": "Screen Chamber",
+      "role": "normal",
+      "origin": {
+        "x": 168,
+        "z": 26
+      },
+      "size": {
+        "w": 32,
+        "d": 32
+      },
+      "hasShed": false,
+      "garrisonDensity": "normal",
+      "targetThreatBudget": 80.56,
+      "composition": {
+        "rusher": 7,
+        "heavy": 2,
+        "gunner": 7,
+        "bolter": 4,
+        "turret": 2,
+        "sludger": 7,
+        "charger": 6
+      },
+      "cover": [
+        {
+          "id": "a22_cover1",
+          "x": 176.5,
+          "z": 32.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover2",
+          "x": 176.5,
+          "z": 45.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover3",
+          "x": 176.5,
+          "z": 57.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover4",
+          "x": 184.5,
+          "z": 27.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover5",
+          "x": 184.5,
+          "z": 38.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover6",
+          "x": 184.5,
+          "z": 51.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover7",
+          "x": 192.5,
+          "z": 32.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover8",
+          "x": 192.5,
+          "z": 45.5,
+          "width": 1,
+          "height": 1,
+          "depth": 13,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover9",
+          "x": 192.5,
+          "z": 57.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a22_cover10",
+          "x": 172.0,
+          "z": 33.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a22_cover11",
+          "x": 180.0,
+          "z": 49.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a22_cover12",
+          "x": 189.0,
+          "z": 37.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a22_cover13",
+          "x": 197.0,
+          "z": 47.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        }
+      ],
+      "sludge": [],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [],
+      "replicators": [],
+      "garrison": [
+        {
+          "kind": "sludger",
+          "x": 169.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 171.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 173.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 180.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 182.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 188.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 196.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 198.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 169.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 171.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 173.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 196.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 180.5,
+          "z": 52.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 188.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 196.5,
+          "z": 50.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 180.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 188.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 178.5,
+          "z": 44.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 182.5,
+          "z": 44.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 180.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 188.5,
+          "z": 41.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 194.5,
+          "z": 40.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 180.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 194.5,
+          "z": 36.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 198.5,
+          "z": 36.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 186.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 188.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 190.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 186.5,
+          "z": 32.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 169.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 171.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 173.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 188.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 190.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 169.5,
+          "z": 28.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a23",
+      "index": 23,
+      "name": "Grit Channels",
+      "role": "replicator",
+      "origin": {
+        "x": 168,
+        "z": -12
+      },
+      "size": {
+        "w": 38,
+        "d": 38
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 126.15,
+      "composition": {
+        "rusher": 9,
+        "heavy": 4,
+        "brute": 1,
+        "gunner": 5,
+        "bolter": 4,
+        "lurker": 2,
+        "turret": 3,
+        "sludger": 15,
+        "charger": 7
+      },
+      "cover": [
+        {
+          "id": "a23_cover1",
+          "x": 177.0,
+          "z": -7.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a23_cover2",
+          "x": 179.0,
+          "z": 3.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a23_cover3",
+          "x": 181.0,
+          "z": 23.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a23_cover4",
+          "x": 195.0,
+          "z": 3.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a23_cover5",
+          "x": 195.0,
+          "z": 13.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a23_cover6",
+          "x": 197.0,
+          "z": -9.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a23_sludge1",
+          "x": 0,
+          "z": 8,
+          "w": 2,
+          "d": 4
+        },
+        {
+          "id": "a23_sludge2",
+          "x": 5,
+          "z": 8,
+          "w": 33,
+          "d": 4
+        },
+        {
+          "id": "a23_sludge3",
+          "x": 0,
+          "z": 18,
+          "w": 33,
+          "d": 4
+        },
+        {
+          "id": "a23_sludge4",
+          "x": 36,
+          "z": 18,
+          "w": 2,
+          "d": 4
+        },
+        {
+          "id": "a23_sludge5",
+          "x": 0,
+          "z": 28,
+          "w": 2,
+          "d": 4
+        },
+        {
+          "id": "a23_sludge6",
+          "x": 5,
+          "z": 28,
+          "w": 33,
+          "d": 4
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [
+        {
+          "id": "a23_grate1",
+          "x": 199,
+          "z": 2
+        },
+        {
+          "id": "a23_grate2",
+          "x": 203,
+          "z": 2
+        }
+      ],
+      "replicators": [
+        {
+          "id": "a23_rep1",
+          "x": 187,
+          "z": 13,
+          "capacity": 6,
+          "facing": "E"
+        },
+        {
+          "id": "a23_rep2",
+          "x": 187,
+          "z": -8,
+          "capacity": 6,
+          "facing": "W"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "rusher",
+          "x": 170.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 172.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 174.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 176.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 178.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 184.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 172.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 176.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 180.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 184.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 176.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 178.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 181.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 183.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 191.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 177.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 197.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 199.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 202.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 176.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 182.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 188.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 194.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 174.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 186.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 192.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 198.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 184.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 188.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 199.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 203.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 182.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 185.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 188.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 191.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 178.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 184.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 190.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 196.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 172.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 174.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 180.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 182.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 184.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 192.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 172.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 174.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 180.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 200.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 181.5,
+          "z": -10.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a24",
+      "index": 24,
+      "name": "Aeration Basin",
+      "role": "replicator",
+      "origin": {
+        "x": 206,
+        "z": -10
+      },
+      "size": {
+        "w": 40,
+        "d": 32
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 136.58,
+      "composition": {
+        "rusher": 5,
+        "heavy": 4,
+        "brute": 2,
+        "gunner": 4,
+        "launcher": 2,
+        "blinker": 4,
+        "bolter": 4,
+        "lurker": 2,
+        "turret": 2,
+        "sludger": 9,
+        "charger": 10
+      },
+      "cover": [
+        {
+          "id": "a24_cover1",
+          "x": 216.0,
+          "z": -2.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover2",
+          "x": 220.0,
+          "z": -2.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover3",
+          "x": 223.0,
+          "z": -2.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a24_cover4",
+          "x": 215.0,
+          "z": 0.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a24_cover5",
+          "x": 215.0,
+          "z": 3.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a24_cover6",
+          "x": 215.0,
+          "z": 10.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover7",
+          "x": 215.0,
+          "z": 13.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a24_cover8",
+          "x": 218.0,
+          "z": 14.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover9",
+          "x": 222.0,
+          "z": 14.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover10",
+          "x": 230.0,
+          "z": -2.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover11",
+          "x": 234.0,
+          "z": -2.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover12",
+          "x": 237.0,
+          "z": -2.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a24_cover13",
+          "x": 230.0,
+          "z": 14.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover14",
+          "x": 234.0,
+          "z": 14.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover15",
+          "x": 237.0,
+          "z": 0.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a24_cover16",
+          "x": 237.0,
+          "z": 3.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a24_cover17",
+          "x": 237.0,
+          "z": 10.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a24_cover18",
+          "x": 237.0,
+          "z": 13.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a24_sludge1",
+          "x": 10,
+          "z": 9,
+          "w": 5,
+          "d": 3
+        },
+        {
+          "id": "a24_sludge2",
+          "x": 25,
+          "z": 9,
+          "w": 5,
+          "d": 3
+        },
+        {
+          "id": "a24_sludge3",
+          "x": 10,
+          "z": 20,
+          "w": 5,
+          "d": 3
+        },
+        {
+          "id": "a24_sludge4",
+          "x": 25,
+          "z": 20,
+          "w": 5,
+          "d": 3
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [
+        {
+          "id": "a24_grate1",
+          "x": 214,
+          "z": 5
+        },
+        {
+          "id": "a24_grate2",
+          "x": 225,
+          "z": -2
+        }
+      ],
+      "replicators": [
+        {
+          "id": "a24_rep1",
+          "x": 226,
+          "z": 6,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a24_rep2",
+          "x": 243,
+          "z": 3,
+          "capacity": 6,
+          "facing": "N"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "gunner",
+          "x": 207.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 208.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 210.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 212.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 236.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 218.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 225.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 232.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 208.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 210.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 212.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 228.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 234.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 208.5,
+          "z": 16.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 210.5,
+          "z": 16.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 239.5,
+          "z": 12.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 242.5,
+          "z": 12.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 223.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 228.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 239.5,
+          "z": 9.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 242.5,
+          "z": 9.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 218.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 221.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 229.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 232.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 214.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 218.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 221.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 229.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 232.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 239.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 222.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 224.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 226.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 228.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 230.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 222.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 239.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 225.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 239.5,
+          "z": -3.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 242.5,
+          "z": -3.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 218.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 225.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 232.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 239.5,
+          "z": -6.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 242.5,
+          "z": -6.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 216.5,
+          "z": -8.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 244.5,
+          "z": -8.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a25",
+      "index": 25,
+      "name": "Blower Room",
+      "role": "normal",
+      "origin": {
+        "x": 210,
+        "z": 22
+      },
+      "size": {
+        "w": 34,
+        "d": 28
+      },
+      "hasShed": false,
+      "garrisonDensity": "normal",
+      "targetThreatBudget": 65.0,
+      "composition": {
+        "rusher": 10,
+        "blinker": 6,
+        "lurker": 6,
+        "turret": 6,
+        "sludger": 4
+      },
+      "cover": [
+        {
+          "id": "a25_cover1",
+          "x": 214.0,
+          "z": 27.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover2",
+          "x": 214.0,
+          "z": 30.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover3",
+          "x": 214.0,
+          "z": 37.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover4",
+          "x": 214.0,
+          "z": 41.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover5",
+          "x": 214.0,
+          "z": 45.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover6",
+          "x": 216.5,
+          "z": 31.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover7",
+          "x": 219.0,
+          "z": 31.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover8",
+          "x": 217.0,
+          "z": 41.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover9",
+          "x": 221.0,
+          "z": 41.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover10",
+          "x": 216.5,
+          "z": 46.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover11",
+          "x": 219.0,
+          "z": 46.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover12",
+          "x": 219.0,
+          "z": 23.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover13",
+          "x": 219.0,
+          "z": 26.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover14",
+          "x": 219.0,
+          "z": 33.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover15",
+          "x": 219.0,
+          "z": 36.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover16",
+          "x": 224.0,
+          "z": 24.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover17",
+          "x": 224.0,
+          "z": 28.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover18",
+          "x": 224.0,
+          "z": 31.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover19",
+          "x": 224.5,
+          "z": 36.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover20",
+          "x": 227.0,
+          "z": 36.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover21",
+          "x": 224.0,
+          "z": 38.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover22",
+          "x": 224.0,
+          "z": 41.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover23",
+          "x": 224.0,
+          "z": 46.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover24",
+          "x": 224.0,
+          "z": 49.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover25",
+          "x": 227.0,
+          "z": 41.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover26",
+          "x": 231.0,
+          "z": 41.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover27",
+          "x": 235.0,
+          "z": 41.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover28",
+          "x": 238.5,
+          "z": 41.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover29",
+          "x": 229.0,
+          "z": 27.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover30",
+          "x": 229.0,
+          "z": 31.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover31",
+          "x": 229.0,
+          "z": 35.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover32",
+          "x": 229.0,
+          "z": 43.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover33",
+          "x": 229.0,
+          "z": 46.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover34",
+          "x": 232.0,
+          "z": 36.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover35",
+          "x": 236.0,
+          "z": 36.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover36",
+          "x": 234.0,
+          "z": 24.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover37",
+          "x": 234.0,
+          "z": 28.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover38",
+          "x": 234.0,
+          "z": 31.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover39",
+          "x": 234.0,
+          "z": 46.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a25_cover40",
+          "x": 234.0,
+          "z": 49.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover41",
+          "x": 240.0,
+          "z": 26.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover42",
+          "x": 243.0,
+          "z": 26.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover43",
+          "x": 239.0,
+          "z": 29.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover44",
+          "x": 239.0,
+          "z": 33.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a25_cover45",
+          "x": 239.0,
+          "z": 36.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a25_cover46",
+          "x": 239.0,
+          "z": 46.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        }
+      ],
+      "sludge": [],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [
+        {
+          "id": "a25_grate1",
+          "x": 216,
+          "z": 48
+        },
+        {
+          "id": "a25_grate2",
+          "x": 221,
+          "z": 43
+        },
+        {
+          "id": "a25_grate3",
+          "x": 231,
+          "z": 43
+        },
+        {
+          "id": "a25_grate4",
+          "x": 236,
+          "z": 38
+        },
+        {
+          "id": "a25_grate5",
+          "x": 216,
+          "z": 33
+        },
+        {
+          "id": "a25_grate6",
+          "x": 231,
+          "z": 28
+        }
+      ],
+      "replicators": [],
+      "garrison": [
+        {
+          "kind": "blinker",
+          "x": 211.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 216.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 221.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 226.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 231.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 236.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 241.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 216.5,
+          "z": 43.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 221.5,
+          "z": 43.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 226.5,
+          "z": 43.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 231.5,
+          "z": 43.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 241.5,
+          "z": 43.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 211.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 216.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 226.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 236.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 241.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 216.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 221.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 226.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 231.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 236.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 241.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 216.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 226.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 231.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 236.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 241.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 211.5,
+          "z": 23.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 216.5,
+          "z": 23.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 226.5,
+          "z": 23.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 231.5,
+          "z": 23.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a26",
+      "index": 26,
+      "name": "Overflow Gallery",
+      "role": "replicator",
+      "origin": {
+        "x": 206,
+        "z": 50
+      },
+      "size": {
+        "w": 44,
+        "d": 20
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 143.41,
+      "composition": {
+        "rusher": 7,
+        "heavy": 6,
+        "brute": 1,
+        "gunner": 8,
+        "launcher": 4,
+        "blinker": 4,
+        "bolter": 3,
+        "turret": 2,
+        "sludger": 11,
+        "charger": 8
+      },
+      "cover": [
+        {
+          "id": "a26_cover1",
+          "x": 244.5,
+          "z": 56.5,
+          "width": 1,
+          "height": 1,
+          "depth": 7,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a26_cover2",
+          "x": 244.5,
+          "z": 63.5,
+          "width": 1,
+          "height": 1,
+          "depth": 7,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a26_cover3",
+          "x": 224.0,
+          "z": 54.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a26_cover4",
+          "x": 234.0,
+          "z": 66.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a26_cover5",
+          "x": 242.0,
+          "z": 56.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a26_sludge1",
+          "x": 20,
+          "z": 0,
+          "w": 6,
+          "d": 12
+        },
+        {
+          "id": "a26_sludge2",
+          "x": 10,
+          "z": 8,
+          "w": 6,
+          "d": 12
+        },
+        {
+          "id": "a26_sludge3",
+          "x": 30,
+          "z": 8,
+          "w": 6,
+          "d": 12
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [],
+      "replicators": [
+        {
+          "id": "a26_rep1",
+          "x": 247,
+          "z": 65,
+          "capacity": 6,
+          "facing": "N"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "heavy",
+          "x": 208.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 211.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 214.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 217.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 220.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 223.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 224.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 226.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 229.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 232.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 242.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 246.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 249.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 217.5,
+          "z": 65.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 220.5,
+          "z": 65.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 242.5,
+          "z": 65.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 233.5,
+          "z": 63.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 207.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 209.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 211.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 213.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 222.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 224.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 242.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 249.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 233.5,
+          "z": 61.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 222.5,
+          "z": 60.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 224.5,
+          "z": 60.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 227.5,
+          "z": 60.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 230.5,
+          "z": 60.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 233.5,
+          "z": 59.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 227.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 230.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 237.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 239.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 246.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 248.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 218.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 220.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 222.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 224.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 234.5,
+          "z": 56.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 246.5,
+          "z": 55.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 248.5,
+          "z": 55.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 218.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 234.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 236.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 246.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 248.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 234.5,
+          "z": 52.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 236.5,
+          "z": 52.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 233.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 245.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 248.5,
+          "z": 51.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a27",
+      "index": 27,
+      "name": "Digester Hall",
+      "role": "setpiece",
+      "origin": {
+        "x": 250,
+        "z": 44
+      },
+      "size": {
+        "w": 40,
+        "d": 36
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 217.37,
+      "composition": {
+        "rusher": 15,
+        "heavy": 6,
+        "brute": 3,
+        "gunner": 5,
+        "launcher": 3,
+        "blinker": 6,
+        "bolter": 4,
+        "lurker": 4,
+        "turret": 4,
+        "sludger": 24,
+        "charger": 10
+      },
+      "cover": [
+        {
+          "id": "a27_cover1",
+          "x": 257.0,
+          "z": 70.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover2",
+          "x": 257.0,
+          "z": 73.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover3",
+          "x": 260.0,
+          "z": 68.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover4",
+          "x": 263.0,
+          "z": 68.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover5",
+          "x": 260.0,
+          "z": 72.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover6",
+          "x": 263.0,
+          "z": 72.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover7",
+          "x": 260.0,
+          "z": 75.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover8",
+          "x": 263.0,
+          "z": 75.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover9",
+          "x": 265.0,
+          "z": 70.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover10",
+          "x": 265.0,
+          "z": 73.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover11",
+          "x": 267.0,
+          "z": 52.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover12",
+          "x": 267.0,
+          "z": 55.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover13",
+          "x": 270.0,
+          "z": 50.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover14",
+          "x": 273.0,
+          "z": 50.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover15",
+          "x": 270.0,
+          "z": 54.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover16",
+          "x": 273.0,
+          "z": 54.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover17",
+          "x": 270.0,
+          "z": 57.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover18",
+          "x": 273.0,
+          "z": 57.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover19",
+          "x": 275.0,
+          "z": 52.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover20",
+          "x": 275.0,
+          "z": 55.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover21",
+          "x": 276.0,
+          "z": 70.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover22",
+          "x": 276.0,
+          "z": 73.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover23",
+          "x": 279.0,
+          "z": 68.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover24",
+          "x": 282.0,
+          "z": 68.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover25",
+          "x": 279.0,
+          "z": 72.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a27_cover26",
+          "x": 282.0,
+          "z": 72.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover27",
+          "x": 279.0,
+          "z": 75.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover28",
+          "x": 282.0,
+          "z": 75.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover29",
+          "x": 284.0,
+          "z": 70.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a27_cover30",
+          "x": 284.0,
+          "z": 73.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a27_sludge1",
+          "x": 1,
+          "z": 1,
+          "w": 6,
+          "d": 3
+        },
+        {
+          "id": "a27_sludge2",
+          "x": 27,
+          "z": 1,
+          "w": 6,
+          "d": 3
+        },
+        {
+          "id": "a27_sludge3",
+          "x": 17,
+          "z": 16,
+          "w": 7,
+          "d": 2
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [
+        {
+          "id": "a27_grate1",
+          "x": 274,
+          "z": 66
+        },
+        {
+          "id": "a27_grate2",
+          "x": 266,
+          "z": 64
+        },
+        {
+          "id": "a27_grate3",
+          "x": 277,
+          "z": 58
+        },
+        {
+          "id": "a27_grate4",
+          "x": 263,
+          "z": 57
+        }
+      ],
+      "replicators": [
+        {
+          "id": "a27_rep1",
+          "x": 270,
+          "z": 66,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a27_rep2",
+          "x": 271,
+          "z": 77,
+          "capacity": 6,
+          "facing": "E"
+        },
+        {
+          "id": "a27_rep3",
+          "x": 256,
+          "z": 54,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a27_rep4",
+          "x": 283,
+          "z": 57,
+          "capacity": 6,
+          "facing": "N"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "turret",
+          "x": 274.5,
+          "z": 79.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 251.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 253.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 255.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 257.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 263.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 282.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 284.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 286.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 288.5,
+          "z": 78.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 276.5,
+          "z": 77.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 284.5,
+          "z": 76.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 286.5,
+          "z": 76.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 288.5,
+          "z": 76.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": 75.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 253.5,
+          "z": 75.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 268.5,
+          "z": 74.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": 73.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 268.5,
+          "z": 73.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 287.5,
+          "z": 73.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 253.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 272.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": 71.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": 69.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 253.5,
+          "z": 69.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 267.5,
+          "z": 69.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 269.5,
+          "z": 69.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 273.5,
+          "z": 69.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 286.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 288.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 267.5,
+          "z": 67.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 255.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 274.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 286.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 288.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 274.5,
+          "z": 65.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 284.5,
+          "z": 65.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 262.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 266.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 274.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 278.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 282.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 286.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 288.5,
+          "z": 64.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 259.5,
+          "z": 63.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 261.5,
+          "z": 63.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 263.5,
+          "z": 63.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 280.5,
+          "z": 63.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 276.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 278.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 284.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 259.5,
+          "z": 61.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 261.5,
+          "z": 61.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 263.5,
+          "z": 61.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 273.5,
+          "z": 60.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 259.5,
+          "z": 59.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 266.5,
+          "z": 59.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 277.5,
+          "z": 58.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 263.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 286.5,
+          "z": 57.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 277.5,
+          "z": 55.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 262.5,
+          "z": 54.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 251.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 253.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 259.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 277.5,
+          "z": 53.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 284.5,
+          "z": 52.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 251.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 253.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 286.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 288.5,
+          "z": 51.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 284.5,
+          "z": 50.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 251.5,
+          "z": 49.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 253.5,
+          "z": 49.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 276.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 284.5,
+          "z": 48.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 264.5,
+          "z": 47.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 258.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 260.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 262.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 266.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 268.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 274.5,
+          "z": 46.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 271.5,
+          "z": 45.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a28",
+      "index": 28,
+      "name": "Sludge Press",
+      "role": "replicator",
+      "origin": {
+        "x": 254,
+        "z": 12
+      },
+      "size": {
+        "w": 36,
+        "d": 32
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 223.0,
+      "composition": {
+        "rusher": 9,
+        "heavy": 9,
+        "brute": 6,
+        "gunner": 8,
+        "launcher": 3,
+        "blinker": 4,
+        "bolter": 6,
+        "turret": 3,
+        "sludger": 7,
+        "charger": 14
+      },
+      "cover": [
+        {
+          "id": "a28_cover1",
+          "x": 260.5,
+          "z": 22.5,
+          "width": 13,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover2",
+          "x": 276.0,
+          "z": 22.5,
+          "width": 18,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover3",
+          "x": 254.5,
+          "z": 33.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover4",
+          "x": 265.5,
+          "z": 33.5,
+          "width": 13,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover5",
+          "x": 281.0,
+          "z": 33.5,
+          "width": 18,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover6",
+          "x": 289.5,
+          "z": 22.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a28_cover7",
+          "x": 264.5,
+          "z": 28.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover8",
+          "x": 265.5,
+          "z": 39.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover9",
+          "x": 267.5,
+          "z": 17.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover10",
+          "x": 272.5,
+          "z": 28.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover11",
+          "x": 277.5,
+          "z": 39.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover12",
+          "x": 279.5,
+          "z": 17.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a28_cover13",
+          "x": 280.5,
+          "z": 28.0,
+          "width": 3,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a28_sludge1",
+          "x": 7,
+          "z": 15,
+          "w": 22,
+          "d": 2
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [],
+      "replicators": [
+        {
+          "id": "a28_rep1",
+          "x": 257,
+          "z": 28,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a28_rep2",
+          "x": 286,
+          "z": 16,
+          "capacity": 6,
+          "facing": "N"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "sludger",
+          "x": 255.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 257.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 260.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 266.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 272.5,
+          "z": 42.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 255.5,
+          "z": 40.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 257.5,
+          "z": 40.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 259.5,
+          "z": 40.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 270.5,
+          "z": 40.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 255.5,
+          "z": 38.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 262.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 268.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 270.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 272.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 274.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 282.5,
+          "z": 37.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 260.5,
+          "z": 36.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 258.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 264.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 270.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 276.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 282.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 288.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 262.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 268.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 274.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 286.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 288.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 276.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 278.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 282.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 284.5,
+          "z": 30.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 286.5,
+          "z": 29.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 288.5,
+          "z": 29.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 261.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 267.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 269.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 275.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 286.5,
+          "z": 27.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 288.5,
+          "z": 27.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 262.5,
+          "z": 25.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 264.5,
+          "z": 25.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 274.5,
+          "z": 25.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 280.5,
+          "z": 25.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 255.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 268.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 280.5,
+          "z": 24.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 270.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 272.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 274.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 276.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 278.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 282.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 288.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 256.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 258.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 260.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 262.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 268.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 256.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 258.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 260.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 262.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 272.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 255.5,
+          "z": 13.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 260.5,
+          "z": 13.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 262.5,
+          "z": 13.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 266.5,
+          "z": 13.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 278.5,
+          "z": 13.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a29",
+      "index": 29,
+      "name": "Chlorine Contact",
+      "role": "normal",
+      "origin": {
+        "x": 250,
+        "z": -12
+      },
+      "size": {
+        "w": 46,
+        "d": 24
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 217.14,
+      "composition": {
+        "rusher": 11,
+        "heavy": 9,
+        "brute": 4,
+        "gunner": 8,
+        "launcher": 4,
+        "blinker": 8,
+        "bolter": 6,
+        "lurker": 2,
+        "turret": 4,
+        "sludger": 7,
+        "charger": 11
+      },
+      "cover": [
+        {
+          "id": "a29_cover1",
+          "x": 265.0,
+          "z": 2.0,
+          "width": 2,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a29_cover2",
+          "x": 275.0,
+          "z": -2.0,
+          "width": 2,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a29_cover3",
+          "x": 285.0,
+          "z": 2.0,
+          "width": 2,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a29_cover4",
+          "x": 257.0,
+          "z": -3.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a29_cover5",
+          "x": 265.0,
+          "z": -5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover6",
+          "x": 265.0,
+          "z": -1.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a29_cover7",
+          "x": 265.0,
+          "z": 6.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover8",
+          "x": 265.0,
+          "z": 10.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover9",
+          "x": 270.0,
+          "z": 5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a29_cover10",
+          "x": 275.0,
+          "z": -10.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover11",
+          "x": 275.0,
+          "z": -6.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover12",
+          "x": 275.0,
+          "z": 2.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover13",
+          "x": 275.0,
+          "z": 5.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a29_cover14",
+          "x": 280.0,
+          "z": -5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a29_cover15",
+          "x": 285.0,
+          "z": -5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover16",
+          "x": 285.0,
+          "z": -1.5,
+          "width": 2,
+          "height": 1.6,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a29_cover17",
+          "x": 285.0,
+          "z": 6.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover18",
+          "x": 285.0,
+          "z": 10.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a29_cover19",
+          "x": 291.0,
+          "z": 7.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        }
+      ],
+      "sludge": [],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [
+        {
+          "id": "a29_grate1",
+          "x": 272,
+          "z": 6
+        },
+        {
+          "id": "a29_grate2",
+          "x": 270,
+          "z": 0
+        }
+      ],
+      "replicators": [],
+      "garrison": [
+        {
+          "kind": "blinker",
+          "x": 270.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 272.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 288.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 290.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 292.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 294.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 268.5,
+          "z": 9.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 277.5,
+          "z": 9.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 281.5,
+          "z": 9.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 270.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 272.5,
+          "z": 8.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 268.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 252.5,
+          "z": 6.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 272.5,
+          "z": 6.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 279.5,
+          "z": 6.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 254.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 256.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 287.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 294.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 277.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 279.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 281.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 292.5,
+          "z": 3.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 251.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 253.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 259.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 262.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 271.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 268.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 277.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 279.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 281.5,
+          "z": 1.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 251.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 253.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "lurker",
+          "x": 270.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 259.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 262.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 271.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 277.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 279.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 281.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 268.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 277.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 279.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 281.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 287.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 289.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 291.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 293.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 271.5,
+          "z": -3.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 259.5,
+          "z": -4.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 262.5,
+          "z": -4.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 271.5,
+          "z": -5.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 269.5,
+          "z": -6.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 289.5,
+          "z": -6.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 253.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 255.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 257.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 259.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 261.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 277.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 279.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 281.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 251.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 253.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 267.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 271.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 277.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 279.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 281.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 287.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 291.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 294.5,
+          "z": -10.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a30",
+      "index": 30,
+      "name": "The Penstock",
+      "role": "replicator",
+      "origin": {
+        "x": 296,
+        "z": -12
+      },
+      "size": {
+        "w": 30,
+        "d": 34
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 235.94,
+      "composition": {
+        "rusher": 13,
+        "heavy": 12,
+        "brute": 6,
+        "gunner": 10,
+        "launcher": 4,
+        "blinker": 4,
+        "bolter": 6,
+        "turret": 4,
+        "sludger": 7,
+        "charger": 9
+      },
+      "cover": [
+        {
+          "id": "a30_cover1",
+          "x": 306.5,
+          "z": 11.5,
+          "width": 1,
+          "height": 1,
+          "depth": 9,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a30_cover2",
+          "x": 311.5,
+          "z": 15.5,
+          "width": 9,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a30_cover3",
+          "x": 316.5,
+          "z": 11.5,
+          "width": 1,
+          "height": 1,
+          "depth": 9,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a30_cover4",
+          "x": 304.0,
+          "z": -5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        },
+        {
+          "id": "a30_cover5",
+          "x": 311.0,
+          "z": -8.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a30_cover6",
+          "x": 311.0,
+          "z": 1.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a30_cover7",
+          "x": 318.0,
+          "z": -5.0,
+          "width": 2,
+          "height": 1.6,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "none"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a30_sludge1",
+          "x": 1,
+          "z": 20,
+          "w": 6,
+          "d": 8
+        },
+        {
+          "id": "a30_sludge2",
+          "x": 23,
+          "z": 20,
+          "w": 6,
+          "d": 8
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [],
+      "replicators": [
+        {
+          "id": "a30_rep1",
+          "x": 311,
+          "z": 11,
+          "capacity": 6,
+          "facing": "S"
+        }
+      ],
+      "garrison": [
+        {
+          "kind": "heavy",
+          "x": 318.5,
+          "z": 21.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 297.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 300.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 306.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 311.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "launcher",
+          "x": 321.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 324.5,
+          "z": 20.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 304.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 308.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 314.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 318.5,
+          "z": 19.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 321.5,
+          "z": 18.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 298.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 303.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 308.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 313.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 318.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 323.5,
+          "z": 17.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 298.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 301.5,
+          "z": 14.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 298.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 301.5,
+          "z": 11.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 308.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 314.5,
+          "z": 10.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 308.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 310.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 312.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 314.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 318.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 321.5,
+          "z": 7.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 301.5,
+          "z": 6.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 303.5,
+          "z": 6.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 310.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 312.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 318.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 321.5,
+          "z": 5.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 303.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 305.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 308.5,
+          "z": 4.5,
+          "level": 0
+        },
+        {
+          "kind": "blinker",
+          "x": 303.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 305.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 318.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 321.5,
+          "z": 2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 303.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 305.5,
+          "z": 0.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 318.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 320.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 322.5,
+          "z": -0.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 303.5,
+          "z": -1.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 306.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 309.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 312.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 315.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "heavy",
+          "x": 318.5,
+          "z": -2.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 298.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 300.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 302.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 304.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 306.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 308.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 314.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 316.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 318.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 320.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 322.5,
+          "z": -7.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 299.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 302.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 305.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 308.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 314.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 316.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 318.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 320.5,
+          "z": -9.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 312.5,
+          "z": -10.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 322.5,
+          "z": -10.5,
+          "level": 0
+        }
+      ]
+    },
+    {
+      "id": "a31",
+      "index": 31,
+      "name": "The Queen's Basin",
+      "role": "boss",
+      "origin": {
+        "x": 296,
+        "z": 22
+      },
+      "size": {
+        "w": 56,
+        "d": 52
+      },
+      "hasShed": false,
+      "garrisonDensity": "heavy",
+      "targetThreatBudget": 83.86,
+      "composition": {
+        "rusher": 6,
+        "brute": 2,
+        "gunner": 4,
+        "bolter": 4,
+        "turret": 2,
+        "sludger": 4,
+        "charger": 9
+      },
+      "cover": [
+        {
+          "id": "a31_cover1",
+          "x": 305.5,
+          "z": 42.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover2",
+          "x": 305.5,
+          "z": 53.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover3",
+          "x": 306.5,
+          "z": 41.0,
+          "width": 1,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover4",
+          "x": 306.5,
+          "z": 55.0,
+          "width": 1,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover5",
+          "x": 307.5,
+          "z": 39.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover6",
+          "x": 307.5,
+          "z": 56.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover7",
+          "x": 309.5,
+          "z": 36.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover8",
+          "x": 309.0,
+          "z": 37.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover9",
+          "x": 308.5,
+          "z": 38.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover10",
+          "x": 308.5,
+          "z": 58.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover11",
+          "x": 310.5,
+          "z": 35.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover12",
+          "x": 309.5,
+          "z": 59.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover13",
+          "x": 311.5,
+          "z": 34.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover14",
+          "x": 310.5,
+          "z": 60.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover15",
+          "x": 312.0,
+          "z": 61.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover16",
+          "x": 313.5,
+          "z": 33.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover17",
+          "x": 313.5,
+          "z": 62.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover18",
+          "x": 315.0,
+          "z": 32.5,
+          "width": 4,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover19",
+          "x": 315.0,
+          "z": 63.5,
+          "width": 4,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover20",
+          "x": 316.5,
+          "z": 31.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover21",
+          "x": 316.5,
+          "z": 64.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover22",
+          "x": 327.5,
+          "z": 31.5,
+          "width": 3,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover23",
+          "x": 326.5,
+          "z": 64.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover24",
+          "x": 329.0,
+          "z": 32.5,
+          "width": 4,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover25",
+          "x": 328.0,
+          "z": 63.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover26",
+          "x": 328.0,
+          "z": 64.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover27",
+          "x": 330.0,
+          "z": 62.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover28",
+          "x": 330.0,
+          "z": 63.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover29",
+          "x": 331.5,
+          "z": 62.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover30",
+          "x": 332.5,
+          "z": 61.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover31",
+          "x": 333.5,
+          "z": 35.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover32",
+          "x": 334.0,
+          "z": 59.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover33",
+          "x": 334.0,
+          "z": 60.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover34",
+          "x": 333.5,
+          "z": 61.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover35",
+          "x": 334.5,
+          "z": 36.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover36",
+          "x": 335.5,
+          "z": 37.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover37",
+          "x": 335.5,
+          "z": 58.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover38",
+          "x": 336.5,
+          "z": 39.5,
+          "width": 1,
+          "height": 1,
+          "depth": 3,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover39",
+          "x": 337.0,
+          "z": 55.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover40",
+          "x": 337.0,
+          "z": 56.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover41",
+          "x": 336.5,
+          "z": 57.5,
+          "width": 1,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover42",
+          "x": 337.5,
+          "z": 41.0,
+          "width": 1,
+          "height": 1,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover43",
+          "x": 338.0,
+          "z": 53.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover44",
+          "x": 338.0,
+          "z": 54.5,
+          "width": 2,
+          "height": 1,
+          "depth": 1,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover45",
+          "x": 338.5,
+          "z": 42.0,
+          "width": 1,
+          "height": 1,
+          "depth": 2,
+          "shape": "box",
+          "dressing": "pipe"
+        },
+        {
+          "id": "a31_cover46",
+          "x": 302.0,
+          "z": 30.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a31_cover47",
+          "x": 302.0,
+          "z": 66.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a31_cover48",
+          "x": 311.0,
+          "z": 43.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a31_cover49",
+          "x": 313.0,
+          "z": 59.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a31_cover50",
+          "x": 331.0,
+          "z": 35.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        },
+        {
+          "id": "a31_cover51",
+          "x": 333.0,
+          "z": 57.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "tree"
+        },
+        {
+          "id": "a31_cover52",
+          "x": 344.0,
+          "z": 30.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "planter"
+        },
+        {
+          "id": "a31_cover53",
+          "x": 344.0,
+          "z": 68.0,
+          "width": 4,
+          "height": 1.6,
+          "depth": 4,
+          "shape": "box",
+          "dressing": "machinery"
+        }
+      ],
+      "sludge": [
+        {
+          "id": "a31_sludge1",
+          "x": 18,
+          "z": 13,
+          "w": 6,
+          "d": 11
+        },
+        {
+          "id": "a31_sludge2",
+          "x": 28,
+          "z": 16,
+          "w": 11,
+          "d": 6
+        },
+        {
+          "id": "a31_sludge3",
+          "x": 28,
+          "z": 28,
+          "w": 6,
+          "d": 11
+        },
+        {
+          "id": "a31_sludge4",
+          "x": 13,
+          "z": 30,
+          "w": 11,
+          "d": 6
+        }
+      ],
+      "decks": [],
+      "ramps": [],
+      "hatches": [],
+      "grates": [],
+      "replicators": [],
+      "garrison": [
+        {
+          "kind": "sludger",
+          "x": 338.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 341.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 344.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "sludger",
+          "x": 347.5,
+          "z": 72.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 305.5,
+          "z": 71.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 308.5,
+          "z": 71.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 305.5,
+          "z": 68.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 340.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "turret",
+          "x": 348.5,
+          "z": 66.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 298.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 300.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 302.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 304.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 306.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "charger",
+          "x": 308.5,
+          "z": 62.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 298.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 300.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 302.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 304.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 306.5,
+          "z": 35.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 338.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 341.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 344.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "gunner",
+          "x": 347.5,
+          "z": 34.5,
+          "level": 0
+        },
+        {
+          "kind": "rusher",
+          "x": 298.5,
+          "z": 33.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 305.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 308.5,
+          "z": 31.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 305.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "bolter",
+          "x": 308.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 348.5,
+          "z": 28.5,
+          "level": 0
+        },
+        {
+          "kind": "brute",
+          "x": 340.5,
+          "z": 26.5,
+          "level": 0
+        }
       ],
       "boss": {
         "id": "sludgequeen",
-        "x": 114,
-        "z": 59,
+        "x": 340,
+        "z": 48,
         "size": {
           "w": 6,
           "d": 6

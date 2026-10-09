@@ -31,6 +31,8 @@ namespace MaxWorlds.Tests.EditMode
     /// re-author): areas 1-14 were rebuilt from Lee's sheet, each now authoring several small sludge
     /// rects rather than one apiece, raising the total from 18 to 69 — a plain sum read directly off
     /// the shipped config (see MV700World2ConfigTests' own note on reading counts this way).
+    ///
+    /// MV-1140 appends ten new areas (a22-a31) authoring 23 more sludge rects, raising the total 69 -> 92.
     /// </summary>
     public sealed class MV792SludgeFlowAxisTests
     {
@@ -75,7 +77,7 @@ namespace MaxWorlds.Tests.EditMode
                     $"sludge rect '{e.id}' ({e.width}x{e.depth}) must resolve a flow axis parallel to its own " +
                     $"long axis ({(expectAxisX ? "X" : "Z")}), resolved {flow}");
             }
-            Assert.AreEqual(69, sludgeCount, "World 2 must author all 69 sludge rects (MV-865 re-authored areas 1-14 from Lee's sheet)");
+            Assert.AreEqual(92, sludgeCount, "World 2 must author all 92 sludge rects (MV-1140 appended a22-a31)");
 
             // ---- AC3: a built tile's two lip children run along its own long side ----
             var lipHost = new GameObject("MV792 lip host").transform;

@@ -143,9 +143,9 @@ namespace MaxWorlds.Tests.EditMode
                     $"sludge {sludgeTagged}/{sludgeTotal}, mapGeometry {mapGeomTagged}/{mapGeomTotal}, " +
                     $"gameplay {gameplayTotal} (excluded by design), groundSlab {groundSlabTotal} (excluded by design).");
 
-                // ---- AC3: the MV-890 guard, generalised to every one of World 2's 22 areas — gating to
-                // a dressed cover piece's OWN zone must never re-enable its box (the "pipes encased in
-                // grey blocks" regression MV-890 fixed), no matter which area is current. ----
+                // ---- AC3: the MV-890 guard, generalised to every one of World 2's 32 areas (MV-1140) —
+                // gating to a dressed cover piece's OWN zone must never re-enable its box (the "pipes
+                // encased in grey blocks" regression MV-890 fixed), no matter which area is current. ----
                 int areasChecked = 0;
                 foreach (MapZone z in map.zones)
                 {
@@ -167,10 +167,10 @@ namespace MaxWorlds.Tests.EditMode
                             "re-enable it (the 'pipes encased in grey blocks' regression), for every area in the world");
                     }
                 }
-                Assert.AreEqual(22, areasChecked,
-                    "setup failure: World 2 must carry exactly 22 zones for the MV-890 guard to run over 'every area in the world' (AC3)");
+                Assert.AreEqual(32, areasChecked,
+                    "setup failure: World 2 must carry exactly 32 zones for the MV-890 guard to run over 'every area in the world' (AC3)");
 
-                // ---- AC4: per-area enabled-renderer range across all 22 areas, so a future regression
+                // ---- AC4: per-area enabled-renderer range across all 32 areas, so a future regression
                 // is visible as a number rather than as a frame-rate complaint. ----
                 int narrowest = int.MaxValue, widest = int.MinValue;
                 string narrowestId = null, widestId = null;

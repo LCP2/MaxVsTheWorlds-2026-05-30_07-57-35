@@ -65,7 +65,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [TestCase(0, 30, "a30", null)]
-        [TestCase(1, 21, "a21", "g24")]
+        [TestCase(1, 31, "a31", "g47")]
         [TestCase(2, 30, "a30", null)]
         public void JumpToFinaleArea_LandsAtTheEntry_ClearsEarlierReplicators_AndOpensTheFinaleGate(
             int worldIndex, int expectedFinaleIndex, string expectedFinaleId, string conditionGateId)

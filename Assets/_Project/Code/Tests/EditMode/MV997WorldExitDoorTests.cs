@@ -126,10 +126,10 @@ namespace MaxWorlds.Tests.EditMode
             var rows = new[]
             {
                 new Row(WorldLibrary.World1, worldIndex: 0, bossId: "a30_boss1", doorMouth: new Vector2(338f, 106f)),
-                // MV-1050: a21 grew to 76x76 (origin z -12..64); its E wall moved from x=136 to
-                // x=168, and WorldTransitions' own exitDoorPos was retuned (54/76) to hold the door
-                // mouth's absolute Z at the same 42 it sat at before the resize.
-                new Row(WorldLibrary.World2, worldIndex: 1, bossId: "sludgequeen", doorMouth: new Vector2(168f, 42f)),
+                // MV-1140: the finale and the exit moved from a21 to the new a31 (ten new areas,
+                // a22-a31). a31's E wall sits at x=352, z 22..74; WorldTransitions' own exitDoorPos
+                // (0.509615384615, 26.5/52) lands the door mouth at world (352, 48.5).
+                new Row(WorldLibrary.World2, worldIndex: 1, bossId: "sludgequeen", doorMouth: new Vector2(352f, 48.5f)),
             };
 
             foreach (Row row in rows)

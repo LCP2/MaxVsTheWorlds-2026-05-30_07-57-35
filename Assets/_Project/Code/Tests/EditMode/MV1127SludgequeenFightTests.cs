@@ -191,11 +191,11 @@ namespace MaxWorlds.Tests.EditMode
             MapBuild built = MapRuntime.Build(map, root.transform);
 
             Assert.IsTrue(built.Actors.TryGetValue("sludgequeen", out GameObject bossGo) && bossGo != null,
-                "world2_config.json's a21 boss ('sludgequeen') was not built");
+                "world2_config.json's a31 boss ('sludgequeen') was not built");
             Assert.IsNotNull(bossGo.GetComponent<SludgequeenBoss>(),
-                "AC1a: a21's boss must build as a SludgequeenBoss");
+                "AC1a: a31's boss must build as a SludgequeenBoss");
             Assert.IsNull(bossGo.GetComponent<BigBermudaBoss>(),
-                "AC1a: a21's boss must NOT build as a BigBermudaBoss");
+                "AC1a: a31's boss must NOT build as a BigBermudaBoss");
 
             NewMax(bossGo.transform.position + new Vector3(5f, 0f, 0f));
             var boss = bossGo.GetComponent<SludgequeenBoss>();
@@ -514,7 +514,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
-            Assert.AreEqual(21, cfg.dials.areaCount, "fixture: a21 must be World 2's authored final area");
+            Assert.AreEqual(31, cfg.dials.areaCount, "fixture: a31 must be World 2's authored final area (MV-1140)");
 
             var root = Track(new GameObject("MV1127 Finale Root"));
             MapBuild built = MapRuntime.Build(map, root.transform);
@@ -529,11 +529,11 @@ namespace MaxWorlds.Tests.EditMode
             var areaDirectorGo = Track(new GameObject("MV1127 AreaDirector"));
             var areaDirector = areaDirectorGo.AddComponent<AreaAccumulationDirector>();
             areaDirector.ConfigureWorld(cfg, worldIndex: 1); // World 2 is index 1 -- never Configure/EnterArea,
-                                                              // so _finalAreaIndex resolves to 21 but no
+                                                              // so _finalAreaIndex resolves to 31 but no
                                                               // robot is ever stamped with it (same idiom
                                                               // MV997WorldExitDoorTests already uses).
 
-            BossCensus.Register(boss, "SLUDGEQUEEN", 1, current: 100f, max: 100f, areaIndex: 21);
+            BossCensus.Register(boss, "SLUDGEQUEEN", 1, current: 100f, max: 100f, areaIndex: 31);
 
             Assert.IsFalse(gate.IsOpen, "fixture: the gate must stay shut before her death");
             Assert.AreEqual(0, Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None).Count(p => p.Kind == PickupKind.WeaponCore),

@@ -43,13 +43,14 @@ namespace MaxWorlds.Tests.EditMode
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(cfg, "World 2's own shipped config must load for this test to mean anything");
-            Assert.IsNotNull(cfg.Area("a14"), "setup failure: a14 not found");
+            Assert.IsNotNull(cfg.Area("a23"), "setup failure: a23 not found");
 
             // Register a live Replicator for every area the a14 door names — the same "register by area
-            // id" WorldRunner.Configure does. a14's own Replicator is deliberately left unregistered: this
-            // isolates the a14 door's own condition from g24 (World 2's boss door, "replicators-destroyed:
-            // all"), which this fixture's census never reaches regardless (nothing here is ever "every
-            // Replicator this run has").
+            // id" WorldRunner.Configure does. a23's own Replicator is deliberately left unregistered: this
+            // isolates the a14 door's own condition from both g24 (MV-1140: now an explicit list naming
+            // a14 too, not "replicators-destroyed:all") and g47 (the new boss door, "replicators-destroyed:
+            // all") — a23 is named by neither, so this fixture's census never reaches it regardless
+            // (nothing here is ever "every Replicator this run has").
             foreach (string areaId in DoorAreas)
             {
                 var go = new GameObject($"{areaId}_replicator");
@@ -61,12 +62,12 @@ namespace MaxWorlds.Tests.EditMode
 
             HashSet<string> required = ReplicatorMapModel.RequiredAreaIds(cfg);
             Assert.IsTrue(required.Contains("a2"), "a2 is named in the still-closed a14 door's condition — must be required");
-            Assert.IsFalse(required.Contains("a14"), "a14 is not named in its own door's condition — must not be required while the door is closed");
+            Assert.IsFalse(required.Contains("a23"), "a23 is not named in any unsatisfied door's condition — must not be required while the door is closed");
 
             Assert.AreEqual(ReplicatorMarkerState.Blinking, ReplicatorMapModel.Resolve("a2", alive: true, required),
                 "a2's Replicator is required and alive — must resolve Blinking");
-            Assert.AreEqual(ReplicatorMarkerState.Steady, ReplicatorMapModel.Resolve("a14", alive: true, required),
-                "a Replicator in a14 is not named in the door condition — must resolve Steady");
+            Assert.AreEqual(ReplicatorMarkerState.Steady, ReplicatorMapModel.Resolve("a23", alive: true, required),
+                "a Replicator in a23 is not named in any door condition — must resolve Steady");
 
             // Destroy every Replicator the door names — the gate is now satisfied.
             foreach (Replicator r in _doorReplicators) FactoryCensus.ReportReplicatorDestroyed(r);
