@@ -1102,7 +1102,8 @@ namespace MaxWorlds.Arena
                     HideMapRuntimeSlabRenderer(mapHost, e.id);
                 }
 
-                StormdrainKit.DressSludgeTile(sludgeHost, center, e.width, e.depth, flow, seed, isChannel);
+                StormdrainKit.DressSludgeTile(sludgeHost, center, e.width, e.depth, flow, seed, isChannel,
+                    e.crossingAt, e.crossingLength);
                 tiles++;
             }
 

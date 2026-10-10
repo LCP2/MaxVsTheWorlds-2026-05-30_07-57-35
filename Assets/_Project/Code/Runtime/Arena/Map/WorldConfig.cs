@@ -215,6 +215,22 @@ namespace MaxWorlds.Arena
         public float z;
         public float w;
         public float d;
+
+        /// <summary>MV-1164: an authored override for ONE long crossing plank, replacing the normal
+        /// MV-801 auto-spaced crossings along this rect's own run axis (its wider dimension — same
+        /// "wider dimension is the run" rule <see cref="MaxWorlds.Rendering.StormdrainKit"/>'s own flow
+        /// direction already uses) — for a channel whose automatic placement can't be relied on to land
+        /// where a specific piece of level geometry needs it (World 2 a8's cover column blocking the
+        /// only route past it). WORLD-space (not area-local like <see cref="x"/>/<see cref="z"/> —
+        /// there is no rect corner to be relative to for a single coordinate along an axis), the
+        /// crossing's own centre along the run axis. Ignored unless <see cref="crossingLength"/> is
+        /// positive.</summary>
+        public float crossingAt;
+
+        /// <summary>MV-1164: the override crossing's own length along the run axis, in metres. &lt;= 0
+        /// (every sludge rect authored before this field existed) keeps the normal auto-spaced
+        /// crossings — see <see cref="crossingAt"/>.</summary>
+        public float crossingLength;
     }
 
     /// <summary>A walkable deck rect (MV-692) — same area-local MIN-corner convention as
