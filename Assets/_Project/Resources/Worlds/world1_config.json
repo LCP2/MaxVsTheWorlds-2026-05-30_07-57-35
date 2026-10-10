@@ -2410,8 +2410,8 @@
      "mobile": false
     }
    ],
-   "shedFittings": "spiker",
-   "shedFittingCount": 2,
+   "shedFittings": "none",
+   "shedFittingCount": 0,
    "garrisonDensity": "normal",
    "targetThreatBudget": 10.76,
    "composition": {
