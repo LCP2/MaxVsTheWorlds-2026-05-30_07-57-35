@@ -211,11 +211,14 @@ namespace MaxWorlds.UI
         // The SENTINEL button (MV-1113, retiring the MV-362/MV-399/MV-422 aimed-placement joystick):
         // hidden until AbilityKind.Sentinels is acquired, same round action-button/radial-cooldown
         // shape as Force Field/TRAP above — a tap deploys at a point the game itself picks (no aim),
-        // on a fixed 10s cooldown, unavailable ("FULL"/"NO PARTS") when every slot is in use or the
-        // cost can't be paid, and shaking with "NO ROOM" on a failed placement search.
+        // on a fixed 10s cooldown, unavailable ("MAX") when every slot is in use, showing a red stop
+        // sign and a live have/cost count (MV-1158) when the slot's free but Parts fall short of the
+        // cost, and shaking with "NO ROOM" on a failed placement search.
         private RectTransform _sentinelButtonRoot;
         private Image _sentinelGlow, _sentinelRadial;
         private Text _sentinelLabel;
+        private RectTransform _sentinelStopSignRoot;
+        private Text _sentinelCountLabel;
         private float _sentinelNoRoomFlash;
 
         private RectTransform _focusToggleRoot;
@@ -1137,10 +1140,11 @@ namespace MaxWorlds.UI
 
         /// <summary>Drives the SENTINEL button (MV-1113) — no-op while hidden (not yet acquired). Shows
         /// a radial cooldown sweep with the whole seconds remaining as the button's own label text,
-        /// dims to "FULL"/"NO PARTS" when every slot is in use or the cost can't be paid, and shakes
-        /// with a "NO ROOM" flash for a moment after a tap whose placement search found nowhere to land
-        /// — same ready-glow-pulse shape <see cref="UpdateForceFieldButton"/>/<see cref="UpdateTrapButton"/>
-        /// already use.</summary>
+        /// reads "MAX" when every slot is in use, shows a red stop sign plus a live "have/cost" Parts
+        /// count (MV-1158, replacing "NO PARTS") when a slot is free but Parts fall short of the cost,
+        /// and shakes with a "NO ROOM" flash for a moment after a tap whose placement search found
+        /// nowhere to land — same ready-glow-pulse shape <see cref="UpdateForceFieldButton"/>/
+        /// <see cref="UpdateTrapButton"/> already use.</summary>
         private void UpdateSentinelButton(float dt)
         {
             if (_sentinelButtonRoot == null || !_sentinelButtonRoot.gameObject.activeSelf) return;
@@ -1152,6 +1156,7 @@ namespace MaxWorlds.UI
             bool slotAvailable = _abilities.SentinelSlotAvailable;
             bool ready = _abilities.SentinelReady;
             bool canDeployNow = _abilities.SentinelCanDeployNow;
+            bool cantAfford = _sentinelNoRoomFlash <= 0f && cooldown <= 0f && slotAvailable && !ready;
 
             if (_sentinelNoRoomFlash > 0f)
             {
@@ -1164,10 +1169,16 @@ namespace MaxWorlds.UI
                 _sentinelButtonRoot.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise);
 
                 if (cooldown > 0f) _sentinelLabel.text = Mathf.CeilToInt(cooldown) + "s";
-                else if (!slotAvailable) _sentinelLabel.text = "FULL";
-                else if (!ready) _sentinelLabel.text = "NO PARTS";
+                else if (!slotAvailable) _sentinelLabel.text = "MAX";
+                else if (cantAfford) _sentinelLabel.text = "";
                 else _sentinelLabel.text = "SENTINEL";
             }
+
+            _sentinelStopSignRoot.gameObject.SetActive(cantAfford);
+            if (cantAfford)
+                _sentinelCountLabel.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{PlayerAbilities.SentinelCost}";
+            else
+                _sentinelCountLabel.text = "";
 
             // Same "empty bank reads as covered" idiom UpdateAbilityControls already uses for Water
             // Balloon's own cell gate — a full radial cover while unavailable for ANY reason, not just
@@ -1590,6 +1601,29 @@ namespace MaxWorlds.UI
         private const float SentinelButtonRise = 720f;
         private const float SentinelButtonX = 360f;
 
+        // MV-1158: the can't-afford state's stop sign + have/cost count — sized in the SAME already-
+        // scaled coordinate space as HydroButtonSize (143) itself, not multiplied by ControlSizeScale
+        // again (the 44/3 the ticket names are already the final on-screen units).
+        private const float SentinelStopSignSize = 44f;
+        private const float SentinelStopSignRimWidth = 3f;
+        private const float SentinelStopSignOffsetY = 26f;
+        private static readonly Color SentinelStopSignRed = new Color32(0xD7, 0x26, 0x3D, 0xFF);
+
+        private const float SentinelCountLabelOffsetY = -24f;
+        private const float SentinelCountLabelWidth = 96f;
+        private const float SentinelCountLabelHeight = 54f;
+        private const int SentinelCountLabelMinSize = 20;
+        private const int SentinelCountLabelMaxSize = 48;
+
+        // A regular octagon, circumradius 22 (HudTextures' 44x44 vector-icon box convention —
+        // VectorIcon scales this to whatever size/rect it's actually drawn at), vertex 0 at 22.5°
+        // so edges land flat top/bottom/left/right — the familiar stop-sign silhouette. Drawn twice
+        // (BuildSentinelButton): once white at the full rect size for the rim, once red at
+        // rect-size-minus-2*rim for the fill — VectorIcon tints a whole sprite one colour via
+        // Image.color, so two colours need two sprites, not one two-tone path.
+        private const string SentinelStopSignOctagonSvg =
+            "<path d=\"M20.33,8.42 L8.42,20.33 -8.42,20.33 -20.33,8.42 -20.33,-8.42 -8.42,-20.33 8.42,-20.33 20.33,-8.42 Z\" fill=\"#ICON#\"/>";
+
         /// <summary>
         /// The SENTINEL button (MV-1113) — same round action-button shape as Force Field/TRAP, at the
         /// SAME HUD position the retired aimed-placement joystick occupied. A tap deploys at a point
@@ -1625,10 +1659,55 @@ namespace MaxWorlds.UI
             _sentinelLabel.raycastTarget = false;
             _sentinelLabel.resizeTextForBestFit = true;
             _sentinelLabel.resizeTextMinSize = Mathf.RoundToInt(10f * AbilityControlArt.ControlSizeScale);
+            // MV-1158: AddText defaults to Overflow on both axes, which lets resizeTextForBestFit's own
+            // search ignore the rect's WIDTH entirely (it only shrinks to fit height) — the exact reason
+            // "NO PARTS" used to draw wider than the button at the resolved 41.6pt max size. Wrap/Clip
+            // makes the search (and the real render) respect the rect on both axes, same as every other
+            // state this label ever shows.
+            _sentinelLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _sentinelLabel.verticalOverflow = VerticalWrapMode.Truncate;
             var sentinelLabelOutline = _sentinelLabel.gameObject.AddComponent<Outline>();
             sentinelLabelOutline.effectColor = BoneWhite;
             sentinelLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
             _sentinelLabel.resizeTextMaxSize = Mathf.RoundToInt(32f * AbilityControlArt.ControlSizeScale);
+
+            // MV-1158: the can't-afford state — a red stop sign over the upper half, a live have/cost
+            // Parts count over the lower half, both strictly inside the 143-unit button so nothing can
+            // ever spill onto the Balloon joystick beside it (Lee, 10 Oct, on "NO PARTS" doing exactly
+            // that). Hidden by default; UpdateSentinelButton toggles it on only for that one state.
+            var stopSignRoot = NewRect("Stop Sign", root);
+            Anchor(stopSignRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            stopSignRoot.anchoredPosition = new Vector2(0f, SentinelStopSignOffsetY);
+            stopSignRoot.sizeDelta = new Vector2(SentinelStopSignSize, SentinelStopSignSize);
+            _sentinelStopSignRoot = stopSignRoot;
+
+            var stopSignRim = AddImage(stopSignRoot, HudTextures.VectorIcon(SentinelStopSignOctagonSvg, 64), Color.white, "Rim");
+            Center(stopSignRim.rectTransform, SentinelStopSignSize);
+            stopSignRim.raycastTarget = false;
+
+            var stopSignFill = AddImage(stopSignRoot, HudTextures.VectorIcon(SentinelStopSignOctagonSvg, 64), SentinelStopSignRed, "Fill");
+            Center(stopSignFill.rectTransform, SentinelStopSignSize - 2f * SentinelStopSignRimWidth);
+            stopSignFill.raycastTarget = false;
+
+            stopSignRoot.gameObject.SetActive(false);
+
+            // MV-1158: "Bold, the same ink and white outline as today's label" — the exact ink/outline
+            // pair _sentinelLabel already carries above, not a new treatment.
+            _sentinelCountLabel = AddText(root, 32f * AbilityControlArt.ControlSizeScale, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            Anchor(_sentinelCountLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _sentinelCountLabel.rectTransform.sizeDelta = new Vector2(SentinelCountLabelWidth, SentinelCountLabelHeight);
+            _sentinelCountLabel.rectTransform.anchoredPosition = new Vector2(0f, SentinelCountLabelOffsetY);
+            _sentinelCountLabel.fontStyle = FontStyle.Bold;
+            _sentinelCountLabel.raycastTarget = false;
+            _sentinelCountLabel.resizeTextForBestFit = true;
+            _sentinelCountLabel.resizeTextMinSize = SentinelCountLabelMinSize;
+            _sentinelCountLabel.resizeTextMaxSize = SentinelCountLabelMaxSize;
+            _sentinelCountLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _sentinelCountLabel.verticalOverflow = VerticalWrapMode.Truncate;
+            var countOutline = _sentinelCountLabel.gameObject.AddComponent<Outline>();
+            countOutline.effectColor = BoneWhite;
+            countOutline.effectDistance = new Vector2(1.2f, -1.2f);
+            _sentinelCountLabel.text = "";
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
