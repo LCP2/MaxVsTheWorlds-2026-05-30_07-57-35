@@ -18,7 +18,7 @@ namespace MaxWorlds.Tests.EditMode
     /// them. Energy needs similar." Before this ticket, a robot-dropped Part (<c>PickupKind.PowerCell</c>)
     /// sat on the ground for 30s with no warning (MV-626), and a dropped Energy Cell
     /// (<c>PickupKind.PowerCellSecondary</c>) never expired at all. This fails on base commit d30d293:
-    /// the 30s/never-expire pair is still live, so the 10.1s retirement assertions below never happen and
+    /// the 30s/never-expire pair is still live, so the 15.1s retirement assertions below never happen and
     /// the blink assertions see a pickup whose renderers were never touched (<c>Pickup.IsBlinkHidden</c>
     /// does not exist on that commit either).
     ///
@@ -108,27 +108,27 @@ namespace MaxWorlds.Tests.EditMode
             Pickup part = LiveList(_director).Single(p => p.Kind == PickupKind.PowerCell);
             Pickup energyCell = LiveList(_director).Single(p => p.Kind == PickupKind.PowerCellSecondary);
 
-            _director.Tick(6.9f);   // age 6.9s -- inside the 7.0s warning threshold
+            _director.Tick(9.9f);   // age 9.9s -- inside the 10.0s warning threshold
             Assert.That(LiveList(_director), Has.Member(part).And.Member(energyCell),
-                "at 6.9s both the Part and the Energy Cell must still be alive");
-            Assert.That(part.IsBlinkHidden, Is.False, "steadily visible before the 3s warning window opens");
-            Assert.That(energyCell.IsBlinkHidden, Is.False, "steadily visible before the 3s warning window opens");
+                "at 9.9s both the Part and the Energy Cell must still be alive");
+            Assert.That(part.IsBlinkHidden, Is.False, "steadily visible before the 5s warning window opens");
+            Assert.That(energyCell.IsBlinkHidden, Is.False, "steadily visible before the 5s warning window opens");
 
-            _director.Tick(0.1f);   // age 7.0s -- warning window opens, blink phase 0 (visible)
-            Assert.That(part.IsBlinkHidden, Is.False, "blink phase 0 (from 7.0s) is visible");
+            _director.Tick(0.1f);   // age 10.0s -- warning window opens, blink phase 0 (visible)
+            Assert.That(part.IsBlinkHidden, Is.False, "blink phase 0 (from 10.0s) is visible");
 
-            _director.Tick(0.1f);   // age 7.1s -- still phase 0
-            _director.Tick(0.1f);   // age 7.2s -- crosses into blink phase 1 (hidden)
+            _director.Tick(0.1f);   // age 10.1s -- still phase 0
+            _director.Tick(0.1f);   // age 10.2s -- crosses into blink phase 1 (hidden)
             Assert.That(part.IsBlinkHidden, Is.True, "the blink must alternate at 6Hz once inside the warning window");
             Assert.That(energyCell.IsBlinkHidden, Is.True, "an Energy Cell blinks on the same 6Hz warning as a Part");
 
-            _director.Tick(0.2f);   // age 7.4s -- phase 2 (visible again)
+            _director.Tick(0.2f);   // age 10.4s -- phase 2 (visible again)
             Assert.That(part.IsBlinkHidden, Is.False, "the blink keeps alternating, not just toggling once");
             Assert.That(energyCell.IsBlinkHidden, Is.False, "an Energy Cell's blink keeps alternating too, not just toggling once");
 
-            _director.Tick(2.7f);   // age 10.1s -- past the 10s lifetime
-            Assert.That(LiveList(_director), Has.No.Member(part), "a Part past its 10s lifetime must be retired");
-            Assert.That(LiveList(_director), Has.No.Member(energyCell), "an Energy Cell past its 10s lifetime must be retired");
+            _director.Tick(4.7f);   // age 15.1s -- past the 15s lifetime
+            Assert.That(LiveList(_director), Has.No.Member(part), "a Part past its 15s lifetime must be retired");
+            Assert.That(LiveList(_director), Has.No.Member(energyCell), "an Energy Cell past its 15s lifetime must be retired");
             Assert.That(part.gameObject.activeInHierarchy, Is.False, "an expired drop must be pooled (SetActive(false)), not destroyed");
             Assert.That(energyCell.gameObject.activeInHierarchy, Is.False, "an expired drop must be pooled (SetActive(false)), not destroyed");
 
@@ -148,7 +148,7 @@ namespace MaxWorlds.Tests.EditMode
             InvokeOnFactoryDestroyed(_director, new Vector3(60f, 0f, 0f));
             Pickup device = LiveList(_director).Skip(beforeFactoryDrop).Single(p => p.Kind == PickupKind.Device);
 
-            _director.Tick(60f);   // 6x this ticket's own lifetime -- would retire anything actually tracked
+            _director.Tick(60f);   // 4x this ticket's own lifetime -- would retire anything actually tracked
             Assert.That(LiveList(_director), Has.Member(cacheCell), "a shed's cell cache must never expire");
             Assert.That(LiveList(_director), Has.Member(device), "a Morphing Module (Device) must never expire");
             Assert.That(cacheCell.IsBlinkHidden, Is.False, "a never-expiring drop must never enter the warning blink either");
@@ -164,7 +164,7 @@ namespace MaxWorlds.Tests.EditMode
             pulledPart.transform.position = new Vector3(2.5f, 0f, 0f);   // inside the 3m pull radius, outside 1.4m CollectRadius
             _maxGo.transform.position = Vector3.zero;
 
-            _director.Tick(10.1f);   // one tick carrying 10.1s of elapsed time while the pull is active throughout
+            _director.Tick(15.1f);   // one tick carrying 15.1s of elapsed time while the pull is active throughout
 
             Assert.That(LiveList(_director), Has.Member(pulledPart),
                 "a pickup under an active Magneto pull must not expire mid-flight even once its ground lifetime has nominally elapsed");

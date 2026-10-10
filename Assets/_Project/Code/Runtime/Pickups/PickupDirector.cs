@@ -86,12 +86,14 @@ namespace MaxWorlds.Pickups
         /// ground before expiring back to the pool — tightened from the old flat 30s (MV-626) to force a
         /// risk/reward choice instead of letting a drop sit forever. Only a drop <see
         /// cref="MarkAgesOnGround"/> actually marks ages at all — a shed's cell cache, a boss drop, the
-        /// Weapon Core, a Morphing Module and a Rack Module are never marked and so never expire.</summary>
-        private const float RobotDropLifetimeSeconds = 10f;
+        /// Weapon Core, a Morphing Module and a Rack Module are never marked and so never expire.
+        /// MV-1152: 15s (was 10s / 3s before MV-1152).</summary>
+        private const float RobotDropLifetimeSeconds = 15f;
 
         /// <summary>MV-1101: for its last this-many seconds before expiring, a robot-dropped pickup
-        /// blinks (see <see cref="BlinkHz"/>) instead of vanishing with no warning.</summary>
-        private const float RobotDropBlinkWarningSeconds = 3f;
+        /// blinks (see <see cref="BlinkHz"/>) instead of vanishing with no warning.
+        /// MV-1152: 5s (was 10s / 3s before MV-1152).</summary>
+        private const float RobotDropBlinkWarningSeconds = 5f;
 
         /// <summary>MV-1101: the warning blink's toggle rate — the visible/hidden state flips this many
         /// times per second once a drop enters its last <see cref="RobotDropBlinkWarningSeconds"/>.</summary>
