@@ -1375,7 +1375,8 @@ namespace MaxWorlds.Rendering
         /// chevrons and bands are for, and why this is dressing and not decoration.
         /// </summary>
         public static GameObject DressSludgeTile(Transform parent, Vector3 center, float width, float depth,
-                                                  Vector3 flowDirection, int seed, bool isChannel = false)
+                                                  Vector3 flowDirection, int seed, bool isChannel = false,
+                                                  float crossingAt = 0f, float crossingLength = 0f)
         {
             var root = new GameObject("Sludge Dressing");
             root.transform.SetParent(parent, false);
@@ -1440,7 +1441,7 @@ namespace MaxWorlds.Rendering
             // where it would have been had `root` never moved.
             if (isChannel)
             {
-                BuildChannelTrough(root.transform, width, depth, flow, seed);
+                BuildChannelTrough(root.transform, width, depth, flow, seed, crossingAt, crossingLength);
                 root.transform.position += Vector3.down * ChannelOozeDrop;
             }
 
@@ -1568,9 +1569,16 @@ namespace MaxWorlds.Rendering
         /// caller drops <paramref name="root"/> by that same amount immediately after this call returns,
         /// so this structure's resolved WORLD position lands back on the tile's pre-ticket floor datum,
         /// never offset by the ooze surface built above it in <see cref="DressSludgeTile"/>.</summary>
-        private static void BuildChannelTrough(Transform root, float width, float depth, Vector3 flow, int seed)
+        private static void BuildChannelTrough(Transform root, float width, float depth, Vector3 flow, int seed,
+                                                float crossingAt = 0f, float crossingLength = 0f)
         {
             bool alongZ = Mathf.Abs(Vector3.Dot(flow, Vector3.forward)) > 0.5f;
+
+            // MV-1164: crossingAt arrives in WORLD metres (WorldSludge.crossingAt's own doc — there is
+            // no rect corner for a single axis coordinate to be relative to); resolved to a LOCAL offset
+            // here, against this tile's own world position, before BuildChannelCrossings ever sees it.
+            Vector3 worldCenter = root.position;
+            float crossingAtLocal = alongZ ? crossingAt - worldCenter.z : crossingAt - worldCenter.x;
 
             // MV-906: the hazard band's own run is the channel's LONG axis (width when not alongZ, depth
             // when alongZ) — the same "run" BuildChannelCrossings already derives below.
@@ -1655,7 +1663,7 @@ namespace MaxWorlds.Rendering
                     kerbSizeX, KerbConcrete), kerbSizeX);
             }
 
-            BuildChannelCrossings(root, width, depth, alongZ, seed);
+            BuildChannelCrossings(root, width, depth, alongZ, seed, crossingAtLocal, crossingLength);
         }
 
         /// <summary>Grate-plank crossings (MV-801, change 5) — every
@@ -1668,11 +1676,22 @@ namespace MaxWorlds.Rendering
         /// corners. MV-1087: the slats themselves stay dressing-only (gapped, not a single walkable
         /// face), but the crossing's own root gets one invisible walkable deck (<see cref="MakeWalkable"/>)
         /// spanning the slats' own envelope, so a mover's capsule never snags a gap between them.</summary>
-        private static void BuildChannelCrossings(Transform root, float width, float depth, bool alongZ, int seed)
+        private static void BuildChannelCrossings(Transform root, float width, float depth, bool alongZ, int seed,
+                                                   float crossingAtLocal = 0f, float crossingLengthOverride = 0f)
         {
             float run = alongZ ? depth : width;
             float span = alongZ ? width : depth;
             float crossSpan = span + ChannelCrossingOverhang * 2f;
+
+            // MV-1164: an authored override replaces the normal auto-spaced crossings with ONE plank at
+            // an exact author-chosen position/length — for a channel whose automatic placement can't be
+            // relied on to land where a specific piece of level geometry needs it (World 2 a8's cover
+            // column, the only route past which the automatic spacing never guaranteed a plank over).
+            if (crossingLengthOverride > 0f)
+            {
+                BuildCrossingPlank(root, "Crossing0", crossingAtLocal, crossingLengthOverride, crossSpan, alongZ);
+                return;
+            }
 
             // MV-906: same long-channel widening BuildChannelTrough applies to its own hazard banding —
             // a16's own 106 m channel otherwise gets a crossing (8 renderers each) every 8-12 m end to end.
@@ -1684,41 +1703,50 @@ namespace MaxWorlds.Rendering
             {
                 float t = (i + 0.5f) / count;
                 float along = (t - 0.5f) * run;
+                BuildCrossingPlank(root, $"Crossing{i}", along, ChannelCrossingWidth, crossSpan, alongZ);
+            }
+        }
 
-                var plank = new GameObject($"Crossing{i}").transform;
-                plank.SetParent(root, false);
-                plank.localPosition = alongZ ? new Vector3(0f, 0f, along) : new Vector3(along, 0f, 0f);
+        /// <summary>One grate-plank crossing (factored out by MV-1164 so the authored long-override
+        /// case above and the normal auto-spaced loop build the identical plank shape): slats, one
+        /// continuous <see cref="MakeWalkable"/> deck spanning their own envelope (MV-1087 — real floor
+        /// a mover steps onto, not the gapped slats themselves), and a handrail post at each of its four
+        /// corners. <paramref name="along"/> is this plank's own centre along the run axis, LOCAL to the
+        /// tile; <paramref name="plankLength"/> is its own length along that same axis.</summary>
+        private static void BuildCrossingPlank(Transform root, string name, float along, float plankLength,
+                                                float crossSpan, bool alongZ)
+        {
+            var plank = new GameObject(name).transform;
+            plank.SetParent(root, false);
+            plank.localPosition = alongZ ? new Vector3(0f, 0f, along) : new Vector3(along, 0f, 0f);
 
-                int slats = Mathf.Max(1, Mathf.RoundToInt(ChannelCrossingWidth / ChannelCrossingSlatPitch));
-                for (int s = 0; s < slats; s++)
-                {
-                    float slatOffset = ((s + 0.5f) / slats - 0.5f) * ChannelCrossingWidth;
-                    Vector3 slatLocal = alongZ ? new Vector3(0f, 0f, slatOffset) : new Vector3(slatOffset, 0f, 0f);
-                    Vector3 slatSize = alongZ
-                        ? new Vector3(crossSpan, ChannelCrossingSlatHeight, ChannelCrossingSlatPitch * 0.8f)
-                        : new Vector3(ChannelCrossingSlatPitch * 0.8f, ChannelCrossingSlatHeight, crossSpan);
-                    Box(plank, $"Slat{s}", slatLocal, slatSize, RustDark, SurfaceKind.Metal);
-                }
+            int slats = Mathf.Max(1, Mathf.RoundToInt(plankLength / ChannelCrossingSlatPitch));
+            for (int s = 0; s < slats; s++)
+            {
+                float slatOffset = ((s + 0.5f) / slats - 0.5f) * plankLength;
+                Vector3 slatLocal = alongZ ? new Vector3(0f, 0f, slatOffset) : new Vector3(slatOffset, 0f, 0f);
+                Vector3 slatSize = alongZ
+                    ? new Vector3(crossSpan, ChannelCrossingSlatHeight, ChannelCrossingSlatPitch * 0.8f)
+                    : new Vector3(ChannelCrossingSlatPitch * 0.8f, ChannelCrossingSlatHeight, crossSpan);
+                Box(plank, $"Slat{s}", slatLocal, slatSize, RustDark, SurfaceKind.Metal);
+            }
 
-                // MV-1087: one continuous walkable deck spanning the slats' own envelope, at the same
-                // local Y they share — real floor a mover steps onto, not the gapped slats themselves.
-                Vector3 deckSize = alongZ
-                    ? new Vector3(crossSpan, ChannelCrossingSlatHeight, ChannelCrossingWidth)
-                    : new Vector3(ChannelCrossingWidth, ChannelCrossingSlatHeight, crossSpan);
-                MakeWalkable(plank.gameObject, deckSize);
+            Vector3 deckSize = alongZ
+                ? new Vector3(crossSpan, ChannelCrossingSlatHeight, plankLength)
+                : new Vector3(plankLength, ChannelCrossingSlatHeight, crossSpan);
+            MakeWalkable(plank.gameObject, deckSize);
 
-                for (int corner = 0; corner < 4; corner++)
-                {
-                    float alongSign = corner < 2 ? -1f : 1f;
-                    float crossSign = corner % 2 == 0 ? -1f : 1f;
-                    float postAlong = alongSign * ChannelCrossingWidth * 0.5f;
-                    float postCross = crossSign * crossSpan * 0.5f;
-                    Vector3 postLocal = alongZ
-                        ? new Vector3(postCross, ChannelCrossingPostHeight * 0.5f, postAlong)
-                        : new Vector3(postAlong, ChannelCrossingPostHeight * 0.5f, postCross);
-                    Box(plank, $"Post{corner}", postLocal,
-                        new Vector3(0.08f, ChannelCrossingPostHeight, 0.08f), Rust, SurfaceKind.Metal);
-                }
+            for (int corner = 0; corner < 4; corner++)
+            {
+                float alongSign = corner < 2 ? -1f : 1f;
+                float crossSign = corner % 2 == 0 ? -1f : 1f;
+                float postAlong = alongSign * plankLength * 0.5f;
+                float postCross = crossSign * crossSpan * 0.5f;
+                Vector3 postLocal = alongZ
+                    ? new Vector3(postCross, ChannelCrossingPostHeight * 0.5f, postAlong)
+                    : new Vector3(postAlong, ChannelCrossingPostHeight * 0.5f, postCross);
+                Box(plank, $"Post{corner}", postLocal,
+                    new Vector3(0.08f, ChannelCrossingPostHeight, 0.08f), Rust, SurfaceKind.Metal);
             }
         }
 

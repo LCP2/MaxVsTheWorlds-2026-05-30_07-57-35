@@ -352,6 +352,9 @@ namespace MaxWorlds.Arena
                         depth = rect.height,
                         // SludgeSpeedMultiplier reads this back off the otherwise-unused height field.
                         height = sludgeSpeedMultiplier,
+                        // MV-1164: already world-space (WorldSludge.crossingAt's own doc) — nothing to resolve.
+                        crossingAt = s.crossingAt,
+                        crossingLength = s.crossingLength,
                     });
                 }
 
