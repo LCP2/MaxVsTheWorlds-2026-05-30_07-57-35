@@ -59,7 +59,13 @@ namespace MaxWorlds.Tests.EditMode
             IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
 
             Assert.AreEqual(8, RigState.Level("e_ff"), "MV-989: e_ff must cap at World 1's own maxLevel (8), not World 2's (10)");
-            Assert.AreEqual(0, RigState.Level("e_cmg"), "e_cmg does not exist on World 1's board and must stay unowned");
+            // MV-1157: e_cmg now lives on World 1's own board too (under e_mag), so a World 2 start
+            // maxes it there like any other owned ENERGY node — this is no longer the "doesn't exist
+            // on World 1" case the original MV-856 assertion guarded; the generic ENERGY/MOVE loop
+            // below already proves it lands at World 1's own authored cap (5), read live, not owned
+            // outright at World 2's.
+            Assert.AreEqual(world1MaxLevels["e_cmg"], RigState.Level("e_cmg"),
+                "MV-1157: e_cmg must cap at World 1's own authored maxLevel, same as every other owned ENERGY node");
             Assert.AreEqual(0, RigState.Level("p_cap"), "p_cap (PRIMARY) must stay untouched by the World 2 additions");
             Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg is the owned-but-unupgraded floor the morph itself grants");
 

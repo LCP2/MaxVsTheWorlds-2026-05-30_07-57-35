@@ -301,9 +301,12 @@ namespace MaxWorlds.UI
             else
             {
                 // MV-856: cap at World 1's own levels, not whichever board ApplyWeaponCoreMorph just
-                // switched RigBoard onto (World 2's, which is higher from MV-840 and adds nodes World 1
-                // never had, e.g. e_cmg) — a WORLD 2 start must arrive exactly as a player who cleared
-                // World 1 would, with World 2's own additions left for the player to buy in World 2.
+                // switched RigBoard onto (World 2's, which raises existing caps, e.g. e_ff's maxLevel
+                // 8 -> 10) — a WORLD 2 start must arrive exactly as a player who cleared World 1 would,
+                // with World 2's own higher ceilings left for the player to buy into in World 2.
+                // MV-1157: e_cmg (Cell Magneto) is no longer a World-2-only addition here — it now
+                // lives on World 1's own board too, so this cap sweep maxes it like any other owned
+                // ENERGY node, same as a player who actually earned it in World 1 would have.
                 IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
                 UnlockAndMaxCategory("ENERGY", world1MaxLevels);
                 UnlockAndMaxCategory("MOVE", world1MaxLevels);
@@ -367,9 +370,10 @@ namespace MaxWorlds.UI
         /// doesn't exist on World 1's board, so it stays for the player to unlock in World 2 itself.
         /// The underlying <see cref="RigBoard.Exists"/>/<see cref="RigBoard.MaxLevel"/> checks
         /// <see cref="WeaponSystemState.AcquireById"/>/<see cref="RaiseLevelById"/> make themselves still
-        /// read World 2's board (needed for them to succeed at all on a World-2-only id like
-        /// <c>e_cmg</c>'s own eventual player purchase) — this method's own <c>cap</c> check is what
-        /// stops the sweep short of that higher ceiling.</summary>
+        /// read World 2's board (needed for them to succeed at all on a genuinely world-2-only id, were
+        /// one ever added — MV-1157 moved the one id that used to be the example here, <c>e_cmg</c>,
+        /// onto World 1's own board too) — this method's own <c>cap</c> check is what stops the sweep
+        /// short of whatever higher ceiling the active board allows.</summary>
         private static void UnlockAndMaxCategory(string category, IReadOnlyDictionary<string, int> capById)
         {
             RigState.UnlockCategory(category);
