@@ -90,6 +90,7 @@ namespace MaxWorlds.Tests.EditMode
                 PrimarySplitSeeded = false,
                 FusionsEnabled = true,
                 PrimarySecondaryCostMultiplier = 3f,
+                UpgradeCostScale = 1f,
                 PartsMultiplier = () => 1.5f,
                 SupercellCadenceAreas = 3,
                 RackModuleDropsHere = false,

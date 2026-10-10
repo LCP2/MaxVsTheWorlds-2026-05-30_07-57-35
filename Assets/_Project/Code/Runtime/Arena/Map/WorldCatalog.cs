@@ -137,6 +137,13 @@ namespace MaxWorlds.Arena
         /// <see cref="MaxWorlds.Weapons.CellSpend"/>. ENERGY/MOVE/SUPPORT are never scaled by this.</summary>
         public float PrimarySecondaryCostMultiplier;
 
+        /// <summary>MV-1165: this world's own across-the-board cell-cost scale, applied on top of
+        /// <see cref="PrimarySecondaryCostMultiplier"/> to every node in every family (including
+        /// <c>u_slt</c>'s flat price) — see <see cref="MaxWorlds.Weapons.CellSpend"/>. 1 = no change
+        /// from the global ladder; the Stormdrain's row is the only one below 1 (Lee, 11 Oct: World 2's
+        /// upgrades read too expensive).</summary>
+        public float UpgradeCostScale;
+
         /// <summary>This world's per-area Parts budget multiplier — see
         /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.WorldPartsMultiplier"/>. A delegate rather
         /// than a plain float because the Reef's row stays live-tunable via the Settings panel's "W3
@@ -196,6 +203,11 @@ namespace MaxWorlds.Arena
         /// <c>CellSpend</c>'s own private constant (MV-1142) — both the Stormdrain's and the Reef's row
         /// price the same 2.5x.</summary>
         private const float PrimarySecondaryCostMultiplierWorld2Plus = 2.5f;
+
+        /// <summary>MV-1165 (Lee, 11 Oct 2026, "the cost of all upgrades is too high. Just notch it down
+        /// by 10 or 15%"): 13%, the middle of his range, applied as a 0.87x scale on every Stormdrain
+        /// RIG price.</summary>
+        private const float UpgradeCostScaleWorld2 = 0.87f;
 
         private static IReadOnlyList<WorldDefinition> s_rows = BuildShippedRows();
 
@@ -319,6 +331,7 @@ namespace MaxWorlds.Arena
                 PrimarySplitSeeded = false,
                 FusionsEnabled = true,
                 PrimarySecondaryCostMultiplier = 1f,
+                UpgradeCostScale = 1f,
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 1,
                 RackModuleDropsHere = false,
@@ -344,6 +357,7 @@ namespace MaxWorlds.Arena
                 PrimarySplitSeeded = false,
                 FusionsEnabled = false,
                 PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                UpgradeCostScale = UpgradeCostScaleWorld2,
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = true,
@@ -371,6 +385,7 @@ namespace MaxWorlds.Arena
                 PrimarySplitSeeded = true,
                 FusionsEnabled = false,
                 PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                UpgradeCostScale = 1f,
                 // MV-1029/MV-1142: the Reef's row stays live-tunable via the Settings panel's "W3
                 // parts x" knob -- see PartsMultiplier's own doc comment.
                 PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),

@@ -40,7 +40,12 @@ namespace MaxWorlds.Tests.EditMode
     /// level 4, read off <c>level + 1</c>) — every node's own total rises by 5 cells per escalating
     /// upgrade level (levels 1-3 of its own climb), scaled by whatever multiplier already applied to
     /// it: World 1's total rises 425 -&gt; 515 unscaled, World 2's rises 1061 -&gt; 1329 through the same
-    /// 2.5x PRIMARY/SECONDARY multiplier this file's own table already charges.</summary>
+    /// 2.5x PRIMARY/SECONDARY multiplier this file's own table already charges.
+    ///
+    /// MV-1165 (Lee: World 2's upgrades read too expensive, cut 13%) added World 2's own
+    /// <see cref="WorldDefinition.UpgradeCostScale"/> (0.87x), stacked on top of the 2.5x
+    /// PRIMARY/SECONDARY multiplier — World 2's total drops 1329 -&gt; 1166 (every per-node, per-level
+    /// price independently rounded, then summed); World 1 is untouched (its own scale is 1).</summary>
     public sealed class MV767WorldTwoEconomyTests
     {
         [TearDown]
@@ -50,10 +55,11 @@ namespace MaxWorlds.Tests.EditMode
         public void World2Economy_MatchesTheMV767Rebalance()
         {
             int world2Total = TotalPrimarySecondaryCost(worldIndex: 1);
-            Assert.That(world2Total, Is.InRange(1309, 1349),
+            Assert.That(world2Total, Is.InRange(1146, 1186),
                 $"World 2's PRIMARY+SECONDARY total must land near parity with its (reduced) Parts " +
                 $"supply after MV-767's 2.5x multiplier, MV-844's own +200, MV-846's own new p_cap node " +
-                $"(~150 more) and MV-949's own ladder shift (+268 through the 2.5x multiplier), got {world2Total}");
+                $"(~150 more), MV-949's own ladder shift (+268 through the 2.5x multiplier) and MV-1165's " +
+                $"own 13% World 2 price cut (1329 -> ~1166), got {world2Total}");
 
             int world1Total = TotalPrimarySecondaryCost(worldIndex: 0);
             Assert.That(world1Total, Is.EqualTo(515),
