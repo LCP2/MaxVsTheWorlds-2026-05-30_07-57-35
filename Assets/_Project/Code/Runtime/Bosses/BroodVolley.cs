@@ -1,5 +1,7 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Bosses
 {
@@ -120,12 +122,19 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>Seconds between volleys, shortened when enraged (faster adds as it reddens). Live
-        /// through <see cref="DevTuning"/>.</summary>
+        /// through <see cref="DevTuning"/>, over the active world's own authored pace (MV-1155) — see
+        /// <see cref="MaxWorlds.Arena.WorldDefinition.BossVolleyIntervalSeconds"/>.</summary>
         private static float Interval(bool enraged)
         {
-            float baseInterval = DevTuning.Or(DevTuning.BossVolleyInterval, BossTuning.VolleyInterval);
+            float authored = WorldCatalog.Get(RigBoard.ActiveWorldIndex).BossVolleyIntervalSeconds;
+            float baseInterval = DevTuning.Or(DevTuning.BossVolleyInterval, authored);
             return enraged ? baseInterval * BossTuning.VolleyEnrageScale : baseInterval;
         }
+
+        /// <summary>Test/debug seam exposing the resolved interval <see cref="Tick"/> already reads
+        /// internally every frame (MV-1155) — lets an EditMode test assert the resolved value per
+        /// world rather than re-deriving it from the cadence's observed timing.</summary>
+        public static float ResolvedIntervalSeconds(bool enraged) => Interval(enraged);
 
         private static float Windup => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup);
         private static float OpenHold => BossTuning.VolleyOpenHold;

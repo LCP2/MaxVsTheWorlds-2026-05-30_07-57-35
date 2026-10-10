@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Audio;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
@@ -151,6 +152,12 @@ namespace MaxWorlds.Arena
         /// <summary>Whether the Rack Module pickup drops in this world — see
         /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Rack Module rule.</summary>
         public bool RackModuleDropsHere;
+
+        /// <summary>Seconds between Big Bermuda's brood volleys in this world (MV-1155), read by
+        /// <see cref="MaxWorlds.Bosses.BroodVolley"/> ahead of <see cref="MaxWorlds.Bosses.BossTuning.VolleyInterval"/>,
+        /// which stays as the default every other row uses. World 1 only slows to 4.5s (Lee, 10 Oct:
+        /// "producing robots too quickly") — World 2/World 3's Big Bermuda fights are untouched.</summary>
+        public float BossVolleyIntervalSeconds;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -322,6 +329,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 1,
                 RackModuleDropsHere = false,
+                // MV-1155: World 1 only — 3.5 -> 4.5s, Lee's "producing robots too quickly" report.
+                BossVolleyIntervalSeconds = 4.5f,
             },
             new WorldDefinition
             {
@@ -347,6 +356,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = true,
+                // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
             },
             new WorldDefinition
             {
@@ -376,6 +387,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
+                // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
             },
         };
     }
