@@ -1971,7 +1971,9 @@
           "x": 8,
           "z": 0,
           "w": 16,
-          "d": 3
+          "d": 3,
+          "crossingAt": 190,
+          "crossingLength": 8
         }
       ],
       "decks": [],
