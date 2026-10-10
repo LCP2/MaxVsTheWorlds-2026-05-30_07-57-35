@@ -266,6 +266,10 @@ namespace MaxWorlds.UI
 
         // The MAP button (MV-563), replacing the always-on minimap this ticket removes outright — see
         // BuildMapButton.
+        /// <summary>MV-1153: kept so <see cref="RebuildWaterBalloonJoystick"/> can re-insert itself just
+        /// before MAP's sibling index on every rebuild, keeping MAP the topmost (tap-winning) of the
+        /// two.</summary>
+        private RectTransform _mapButtonRoot;
 
         // The Invasion Dial (YT-197): a fill meter across the three escalation bands, so the whole
         // DifficultyDirector curve reads as a shape at a glance instead of a clock the player has
@@ -1742,12 +1746,28 @@ namespace MaxWorlds.UI
         // MV-676: was 530 (a 30px gap above Force Field's own top edge) — raised to a 42px gap, part
         // of the same column-wide crowding fix as ForceFieldRise above.
         // MV-1104: raised 554 -> 678 — both FIELD below (now Rise 450, ring half 71.5, top edge 521.5)
-        // and this joystick's own ring half (now 130, up from 100) grew, so 554 no longer cleared
-        // FIELD's new top edge. 678 keeps a >12px ring-to-ring gap on both sides: FIELD's top edge
-        // (521.5) to this ring's bottom (548), and this ring's top (808) to MAP's bottom edge (834,
-        // unchanged — MAP isn't an ability control and doesn't scale).
-        private const float WaterBalloonJoystickRise = 678f;
-        private const float WaterBalloonJoystickMaxHalfSize = 100f * AbilityControlArt.ControlSizeScale;   // half of BuildJoystick's 200 px cap
+        // and this joystick's own ring half (then 130, up from 100) grew, so 554 no longer cleared
+        // FIELD's new top edge. 678 kept a >12px ring-to-ring gap on both sides against the 1920x1080
+        // reference canvas — but MAP is vertical-MID anchored (unlike this bottom-anchored joystick and
+        // FIELD), so its absolute position drops on any canvas shorter than the reference, and nobody
+        // had checked the gap on anything but 1920x1080.
+        // MV-1153 (Lee, iPhone, World 1): on the iPhone's CanvasScaler-blended effective canvas (~978
+        // reference units tall, not 1080), MAP's bottom edge drops to ~783 and the old ring top (808)
+        // overlapped it by ~25 units. Lowered 678 -> 652 and shrunk the ring itself (see
+        // WaterBalloonJoystickMaxHalfSize below) rather than moving MAP (which must stay put for every
+        // other aspect/ticket). On the phone canvas this now reads: ring top 652+100=752 (31 clear of
+        // MAP's 783), ring bottom 652-100=552 (30.5 clear of FIELD's still-521.5 top edge). Any gap
+        // check against this joystick (or MAP) must therefore use the phone-effective canvas height,
+        // not 1920x1080 — see MV1153WaterBalloonMapClearanceTests.
+        private const float WaterBalloonJoystickRise = 652f;
+        // MV-1153: was 100*ControlSizeScale (130, i.e. a 260-wide ring) — shrunk to a literal 100 (a
+        // 200-wide ring) at this joystick's top level, so its ring clears MAP on a phone canvas (see
+        // WaterBalloonJoystickRise above). Deliberately NOT scaled by ControlSizeScale like the shared
+        // AbilityControlArt.BuildJoystick default — this is the one joystick MV-1153 shrinks back down;
+        // Teleport, the only other BuildJoystick caller (MV-1113 retired Sentinel's own joystick for a
+        // button), still calls BuildJoystick's five-arg overload and keeps its full 100*ControlSizeScale
+        // half-size.
+        private const float WaterBalloonJoystickMaxHalfSize = 100f;
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
@@ -1781,8 +1801,10 @@ namespace MaxWorlds.UI
 
             int level = WaterBalloonJoystickLevel();
             int maxLevel = WeaponCatalog.MaxLevel(WaterBalloonTrackKind.Range);
+            // MV-1153: the balloon-only shrink — see WaterBalloonJoystickMaxHalfSize's doc comment.
             _waterBalloonVisual = AbilityControlArt.BuildJoystick(
-                Root, "Water Balloon Joystick", Vector2.zero, WaterBalloonColor, "Balloon", level, maxLevel);
+                Root, "Water Balloon Joystick", Vector2.zero, WaterBalloonColor, "Balloon", level, maxLevel,
+                WaterBalloonJoystickMaxHalfSize * 2f);
             _waterBalloonRoot = _waterBalloonVisual.Root;
             // MV-645: re-anchored to the left edge, same idiom MV-606 already used to move Teleport's
             // BuildJoystick (always bottom-CENTRE by default) onto the right edge above the aim
@@ -1813,7 +1835,10 @@ namespace MaxWorlds.UI
             var padRect = (RectTransform)pad.transform;
             padRect.SetParent(_waterBalloonRoot, false);
             padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            float padMargin = 30f * AbilityControlArt.ControlSizeScale;
+            // MV-1153: was 30*ControlSizeScale (39) — shrunk to a literal 20, balloon only, so the pad
+            // (which is what actually swallows a tap) clears MAP on the phone canvas too, not just the
+            // visible ring. See WaterBalloonJoystickRise's doc comment for the resulting numbers.
+            const float padMargin = 20f;
             padRect.offsetMin = new Vector2(-padMargin, -padMargin); padRect.offsetMax = new Vector2(padMargin, padMargin);
             var padImg = pad.GetComponent<Image>();
             padImg.color = new Color(0f, 0f, 0f, 0f);
@@ -1825,6 +1850,15 @@ namespace MaxWorlds.UI
 
             _waterBalloonBuiltLevel = level;
             _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
+
+            // MV-1153 AC4: MAP must always win a tap where the two are close. BuildMapButton runs once
+            // in Awake, after this joystick's own first build, so MAP starts out the later (topmost)
+            // sibling already — but OnAbilitiesChanged rebuilds this joystick on every level change,
+            // which re-parents a brand-new root as Root's newest LAST child, putting it ABOVE the
+            // already-built MAP button and letting its touch pad steal MAP's taps. Re-insert this
+            // joystick just before MAP's own sibling index every rebuild so MAP stays on top no matter
+            // how many times the balloon is rebuilt.
+            if (_mapButtonRoot != null) _waterBalloonRoot.SetSiblingIndex(_mapButtonRoot.GetSiblingIndex());
         }
 
         private void RebuildWaterBalloonJoystickIfNeeded()
@@ -2652,6 +2686,7 @@ namespace MaxWorlds.UI
         private void BuildMapButton()
         {
             var root = NewRect("Map Button", Root);
+            _mapButtonRoot = root; // MV-1153: see this field's own doc comment
             Anchor(root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             root.sizeDelta = new Vector2(MapButtonSize, MapButtonSize);
             root.anchoredPosition = new Vector2(MapButtonLeftInset, MapButtonRise); // topmost of the left play-area column (MV-645)
