@@ -49,25 +49,29 @@ namespace MaxWorlds.Weapons
         /// price and charging another).</summary>
         private static readonly Dictionary<string, int> s_flatNodeCost = new() { { "u_slt", SlotCostCells } };
 
-        /// <summary>MV-767/MV-1142: this world's own PRIMARY/SECONDARY cost multiplier (<see
-        /// cref="WorldDefinition.PrimarySecondaryCostMultiplier"/>), raised from MV-689's
-        /// 1.25x once the Parts economy was found running a 2.33x oversupply against it —
-        /// ENERGY/MOVE/SUPPORT are never scaled, whatever the active world, and <paramref name="id"/>
-        /// only scales when it resolves to one of those two families on THE CURRENTLY ACTIVE board
-        /// (never World 1's own PRIMARY/SECONDARY, even though some ids are textually reused between
-        /// boards).</summary>
+        /// <summary>MV-767/MV-1142/MV-1165: this world's own cost multiplier — the PRIMARY/SECONDARY
+        /// family multiplier (<see cref="WorldDefinition.PrimarySecondaryCostMultiplier"/>, raised from
+        /// MV-689's 1.25x once the Parts economy was found running a 2.33x oversupply against it, and
+        /// applying only when <paramref name="id"/> resolves to one of those two families on THE
+        /// CURRENTLY ACTIVE board — never World 1's own PRIMARY/SECONDARY, even though some ids are
+        /// textually reused between boards) multiplied by the world's own across-the-board
+        /// <see cref="WorldDefinition.UpgradeCostScale"/>, which applies to every family alike
+        /// (MV-1165: Lee's 13% World 2 price cut).</summary>
         private static float CostMultiplierFor(string id)
         {
+            WorldDefinition world = WorldCatalog.Get(RigBoard.ActiveWorldIndex);
             string category = RigBoard.Category(id);
-            if (category != "PRIMARY" && category != "SECONDARY") return 1f;
-            return WorldCatalog.Get(RigBoard.ActiveWorldIndex).PrimarySecondaryCostMultiplier;
+            float familyMultiplier = (category == "PRIMARY" || category == "SECONDARY")
+                ? world.PrimarySecondaryCostMultiplier
+                : 1f;
+            return familyMultiplier * world.UpgradeCostScale;
         }
 
         /// <summary>Cost to unlock <paramref name="id"/> with cells — <see cref="s_flatNodeCost"/>'s
         /// price if it has one, else the global <see cref="UnlockCostCells"/>, scaled by
-        /// <see cref="CostMultiplierFor"/>.</summary>
+        /// <see cref="CostMultiplierFor"/> and never rounded below 1 cell (MV-1165).</summary>
         public static int UnlockCostFor(string id) =>
-            Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UnlockCostCells) * CostMultiplierFor(id));
+            Mathf.Max(1, Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UnlockCostCells) * CostMultiplierFor(id)));
 
         /// <summary>Cost to raise a node currently at <paramref name="level"/> by one level with cells —
         /// 10, 15, 20, 20, 20... for levels 1..5 and beyond, escalating by the node's OWN level (a
@@ -87,9 +91,9 @@ namespace MaxWorlds.Weapons
         /// <summary>Cost to raise <paramref name="id"/>, currently at <paramref name="level"/>, by one
         /// level with cells — <see cref="s_flatNodeCost"/>'s flat price if it has one, else the same
         /// level-escalating <see cref="UpgradeCostFor(int)"/> every other node uses, scaled by
-        /// <see cref="CostMultiplierFor"/>.</summary>
+        /// <see cref="CostMultiplierFor"/> and never rounded below 1 cell (MV-1165).</summary>
         public static int UpgradeCostFor(string id, int level) =>
-            Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UpgradeCostFor(level)) * CostMultiplierFor(id));
+            Mathf.Max(1, Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UpgradeCostFor(level)) * CostMultiplierFor(id)));
 
         /// <summary>Unlock <paramref name="id"/> for <see cref="UnlockCostCells"/> cells. Requires
         /// <see cref="RigState.IsCellUnlockable"/> (its category unlocked and, for a non-root node, its
