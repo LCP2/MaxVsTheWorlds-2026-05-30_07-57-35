@@ -108,6 +108,7 @@ namespace MaxWorlds.Audio
             HudSignals.MissileImpact += OnMissileImpact;
             HudSignals.ShockPulseLanded += OnShockPulseLanded;
             HudSignals.MaxTeleported += OnMaxTeleported;
+            HudSignals.SentinelArrived += OnSentinelArrived;
             HudSignals.BlinkerTeleported += OnBlinkerTeleported;
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossDefeated += OnBossDefeated;
@@ -134,6 +135,7 @@ namespace MaxWorlds.Audio
             HudSignals.MissileImpact -= OnMissileImpact;
             HudSignals.ShockPulseLanded -= OnShockPulseLanded;
             HudSignals.MaxTeleported -= OnMaxTeleported;
+            HudSignals.SentinelArrived -= OnSentinelArrived;
             HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossDefeated -= OnBossDefeated;
@@ -164,6 +166,7 @@ namespace MaxWorlds.Audio
         private void OnMissileImpact(Vector3 pos, float damage) => PlayCue(Cue.MissileImpact, pos);
         private void OnShockPulseLanded(Vector3 pos) => PlayCue(Cue.ShockPulseLanded, pos);
         private void OnMaxTeleported(Vector3 from, Vector3 to) => PlayCue(Cue.MaxTeleported, to);
+        private void OnSentinelArrived(Vector3 pos) => PlayCue(Cue.SentinelArrived, pos);
         private void OnBlinkerTeleported(Vector3 from, Vector3 to) => PlayCue(Cue.BlinkerTeleported, to);
         private void OnBossEngaged(string name, int phases) => PlayCue(Cue.BossEngaged, transform.position);
         private void OnBossDefeated() => PlayCue(Cue.BossDefeated, transform.position);

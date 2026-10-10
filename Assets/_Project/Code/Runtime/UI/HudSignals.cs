@@ -119,6 +119,12 @@ namespace MaxWorlds.UI
         /// should fire off an enemy's teleport.</summary>
         public static event Action<Vector3, Vector3> MaxTeleported;
 
+        /// <summary>A Sentinel's teleport-in arrival just started (MV-1159) — the frame the light
+        /// column/ring appears. Fired from <c>Sentinel.BeginArrival</c> itself, not from either deploy
+        /// caller, so every source that spawns a Sentinel through that same arrival (the SENTINEL
+        /// button, and the dev capture path) gets the one big "vroom" cue. (worldPos)</summary>
+        public static event Action<Vector3> SentinelArrived;
+
         /// <summary>A homing missile detonated — a direct hit OR an out-of-fuel ground impact
         /// (MV-349). (worldPos, damage) — damage is 0 when the blast landed on empty ground, so
         /// listeners can tell a real hit from a miss without a second event.</summary>
@@ -312,6 +318,9 @@ namespace MaxWorlds.UI
 
         public static void EmitMaxTeleported(Vector3 from, Vector3 to)
             => MaxTeleported?.Invoke(from, to);
+
+        public static void EmitSentinelArrived(Vector3 worldPos)
+            => SentinelArrived?.Invoke(worldPos);
 
         public static void EmitMissileImpact(Vector3 worldPos, float damage)
             => MissileImpact?.Invoke(worldPos, damage);
