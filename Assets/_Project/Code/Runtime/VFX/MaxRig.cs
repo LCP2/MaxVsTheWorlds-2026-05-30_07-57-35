@@ -888,8 +888,10 @@ namespace MaxWorlds.VFX
             _head.SetParent(_torso, worldPositionStays: true);
 
             // MV-854: the 31 flowing locks, built once here (like everything else in this method) and
-            // driven every LateUpdate from TickHair below.
-            _hairLocks = new MaxHairRig(_head, _hairRibbonMat);
+            // driven every LateUpdate from TickHair below. MV-1161: rooted under FaceTilt rather than
+            // _head directly, so the locks tilt chin-up along with the face they grow out of instead of
+            // staying level while it pitches.
+            _hairLocks = new MaxHairRig(body.FaceTilt, _hairRibbonMat);
 
             // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
             // (see the class doc). Coloured once here, the same way the old goggle lenses were.
