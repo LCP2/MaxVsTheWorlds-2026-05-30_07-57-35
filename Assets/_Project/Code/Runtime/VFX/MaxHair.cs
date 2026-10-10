@@ -96,13 +96,14 @@ namespace MaxWorlds.VFX
         /// flow — buildV3()'s own (0, -1, -0.3), replacing MV-854's (0, -1, -0.35).</summary>
         private static readonly Vector3 ScalpHug0 = new Vector3(0f, -1f, -0.3f);
 
-        /// <summary>MV-1133: how a FRINGE lock hugs the head at rest — buildV3()'s own (0, -1, 0.25),
-        /// now distinct from the scalp rings' own hug (it used to share <c>Hug0</c> with the scalp).</summary>
-        private static readonly Vector3 FringeHug0 = new Vector3(0f, -1f, 0.25f);
+        /// <summary>MV-1161 (Lee, 10 Oct: too much of the brow was covered): how a FRINGE lock hugs the
+        /// head at rest — up and to the side now, replacing MV-1133's own (0, -1, 0.25), which hung
+        /// straight down across the brow.</summary>
+        private static readonly Vector3 FringeHug0 = new Vector3(0f, -0.2f, 0.25f);
 
-        /// <summary>Where a fringe lock sweeps instead — across the brow, to one side. MV-1133:
-        /// buildV3()'s own (0.75, -0.6, 0.3), replacing MV-854's (1, -0.45, 0.3).</summary>
-        private static readonly Vector3 FringeFlow = new Vector3(0.75f, -0.6f, 0.3f).normalized;
+        /// <summary>MV-1161: where a fringe lock sweeps instead — up and to one side, clear of the eyes,
+        /// replacing MV-1133's own (0.75, -0.6, 0.3), which swept the lock down across the brow.</summary>
+        private static readonly Vector3 FringeFlow = new Vector3(0.8f, 0.15f, 0.25f).normalized;
 
         /// <summary>MV-1133: the three scalp rings — (elevation, azimuth step, base length, flow lift),
         /// ported literally from buildV3()'s own ring table. <c>Lift</c> feeds the per-lock flow

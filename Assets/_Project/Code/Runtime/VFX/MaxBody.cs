@@ -85,10 +85,17 @@ namespace MaxWorlds.VFX
         /// independently for the head-lag cue.</summary>
         public readonly Transform Gun, ArmL, ArmR, HandL, HandR, Head;
 
+        /// <summary>MV-1161: an otherwise-empty child of <see cref="Head"/>, carrying the fixed
+        /// chin-up pitch (see <c>MaxBody.ChinUpRotation</c>) the whole face/hair-cap geometry above is
+        /// authored against. <c>MaxRig</c> parents the flowing hair locks under this instead of
+        /// <see cref="Head"/> directly, so they tilt along with the face they grow out of while
+        /// <see cref="Head"/> itself keeps carrying only the head-lag yaw.</summary>
+        public readonly Transform FaceTilt;
+
         public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips, Transform[] knees, GameObject rcdaGadget,
                              GameObject lppeGadget, MeshRenderer[] lppeGlow, GameObject rackMount,
                              MeshRenderer[] rackTubeGlow, Transform gun, Transform armL, Transform armR,
-                             Transform handL, Transform handR, Transform head)
+                             Transform handL, Transform handR, Transform head, Transform faceTilt)
         {
             GadgetGlow = gadgetGlow;
             Hips = hips;
@@ -104,6 +111,7 @@ namespace MaxWorlds.VFX
             HandL = handL;
             HandR = handR;
             Head = head;
+            FaceTilt = faceTilt;
         }
     }
 
@@ -195,17 +203,38 @@ namespace MaxWorlds.VFX
             var headGroup = new GameObject("Head");
             headGroup.transform.SetParent(root, worldPositionStays: false);
             var head = headGroup.transform;
-            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.474f), new Vector2(0.145f, 1.504f), new Vector2(0.195f, 1.584f), new Vector2(0.205f, 1.704f), new Vector2(0.185f, 1.794f), new Vector2(0f, 1.824f) }, 20), p.Skin, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // MV-1161 (Lee, 10 Oct: "a lot of his face is covered" from the play camera's elevated,
+            // down-looking angle): every piece below is pitched a fixed 15 degrees chin-up about the
+            // neck point (0, 1.474, 0) — ChinUp()/ChinUpRot() apply that rotation to each piece's own
+            // authored position/rotation, so the geometry itself is untouched, just re-aimed. This sits
+            // BENEATH MaxRig's own head-lag yaw (TickHeadLag only ever rotates the outer "Head" pivot
+            // these pieces are children of, about the vertical) rather than replacing it.
+            //
+            // FaceTilt is an otherwise-empty pivot, at the same fixed tilt, that MaxRig parents the
+            // flowing hair locks (MaxHairRig, built separately once this body exists) under instead of
+            // the bare Head pivot — so the hair tilts along with the face it grows out of.
+            var faceTiltGroup = new GameObject("FaceTilt");
+            faceTiltGroup.transform.SetParent(head, worldPositionStays: false);
+            faceTiltGroup.transform.localPosition = ChinUp(Vector3.zero);
+            faceTiltGroup.transform.localRotation = ChinUpRotation;
+            var faceTilt = faceTiltGroup.transform;
+
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.474f), new Vector2(0.145f, 1.504f), new Vector2(0.195f, 1.584f), new Vector2(0.205f, 1.704f), new Vector2(0.185f, 1.794f), new Vector2(0f, 1.824f) }, 20), p.Skin, ChinUp(Vector3.zero), ChinUpRotation, Vector3.one);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Add(head, CharacterMeshes.Sphere(14), p.Eye, new Vector3(sx * 0.083f, 1.66f, 0.17f), Quaternion.Euler(-32f, 0f, 0f), new Vector3(0.092f, 0.104f, 0.055f));
-                Add(head, CharacterMeshes.Sphere(12), p.Pupil, new Vector3(sx * 0.08f, 1.655f, 0.196f), Quaternion.Euler(-32f, 0f, 0f), new Vector3(0.05f, 0.062f, 0.022f));
-                Add(head, CharacterMeshes.Prism(4, 0.022f, 0.022f, 0.11f, 0.2f, 0f), p.Hair, new Vector3(sx * 0.088f, 1.73f, 0.19f), Quaternion.Euler(-20f, 0f, 90f + sx * 16f), new Vector3(1f, 1f, 0.8f));
+                // MV-1161 AC4: eyes 15% larger, same position/cant (now carried through ChinUp/ChinUpRot).
+                Add(head, CharacterMeshes.Sphere(14), p.Eye, ChinUp(new Vector3(sx * 0.083f, 1.66f, 0.17f)), ChinUpRot(Quaternion.Euler(-32f, 0f, 0f)), new Vector3(0.092f, 0.104f, 0.055f) * 1.15f);
+                Add(head, CharacterMeshes.Sphere(12), p.Pupil, ChinUp(new Vector3(sx * 0.08f, 1.655f, 0.196f)), ChinUpRot(Quaternion.Euler(-32f, 0f, 0f)), new Vector3(0.05f, 0.062f, 0.022f) * 1.15f);
+                Add(head, CharacterMeshes.Prism(4, 0.022f, 0.022f, 0.11f, 0.2f, 0f), p.Hair, ChinUp(new Vector3(sx * 0.088f, 1.73f, 0.19f)), ChinUpRot(Quaternion.Euler(-20f, 0f, 90f + sx * 16f)), new Vector3(1f, 1f, 0.8f));
             }
             // MV-1133: the tight cap/back-of-head mass, re-matched to buildV3()'s own numbers (blue-black
             // now, via MaxRig's Hair colour) — the shape itself barely moved from the MV-851 original.
-            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.74f), new Vector2(0.165f, 1.745f), new Vector2(0.214f, 1.778f), new Vector2(0.222f, 1.83f), new Vector2(0.2f, 1.885f), new Vector2(0.125f, 1.918f), new Vector2(0f, 1.924f) }, 22), p.Hair, new Vector3(0f, 0f, -0.04f), Quaternion.identity, Vector3.one);
-            Add(head, CharacterMeshes.Sphere(16), p.Hair, new Vector3(0f, 1.73f, -0.075f), Quaternion.identity, new Vector3(0.42f, 0.4f, 0.34f));
+            // MV-1161 AC3: the three lowest profile points raised from 1.74/1.745/1.778 to a 1.78 floor
+            // (a trimmed brim, not a redrawn cap) so the cap's own front overhang clears the brow once
+            // the whole head is tilted chin-up.
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.78f), new Vector2(0.165f, 1.785f), new Vector2(0.214f, 1.80f), new Vector2(0.222f, 1.83f), new Vector2(0.2f, 1.885f), new Vector2(0.125f, 1.918f), new Vector2(0f, 1.924f) }, 22), p.Hair, ChinUp(new Vector3(0f, 0f, -0.04f)), ChinUpRotation, Vector3.one);
+            Add(head, CharacterMeshes.Sphere(16), p.Hair, ChinUp(new Vector3(0f, 1.73f, -0.075f)), ChinUpRotation, new Vector3(0.42f, 0.4f, 0.34f));
 
             // ---- arms (MV-1133: full dark-blue sleeves, no skin shown). The dynamic stretch target
             // PoseArm needs (MV-717) is still a single tapered beam per arm — see that section's own
@@ -305,8 +334,33 @@ namespace MaxWorlds.VFX
             rackRoot.SetActive(false);   // shown only once ShoulderRack.IsBought (AC2, carried over from MV-694)
 
             return new MaxBodyResult(gadgetGlow.ToArray(), hips, knees, rcdaRoot, lppeRoot, lppeGlow.ToArray(),
-                                     rackRoot, rackTubeGlow, gunAssembly.transform, armL, armR, handL, handR, head);
+                                     rackRoot, rackTubeGlow, gunAssembly.transform, armL, armR, handL, handR, head,
+                                     faceTilt);
         }
+
+        /// <summary>MV-1161: the neck point everything above pitches about, in Head-local space.</summary>
+        private static readonly Vector3 ChinUpPivot = new Vector3(0f, 1.474f, 0f);
+
+        /// <summary>MV-1161 AC1: the fixed chin-up pitch, negative like the eyes' own existing -32 degree
+        /// cant (see the eye <c>Add</c> call below) — in this rig's convention a negative X rotation
+        /// tilts a forward-facing surface UP toward the elevated, down-looking play camera, matching
+        /// <c>FixedAngleCameraRig</c>'s own <c>Quaternion.Euler(pitchDegrees, 0, 0)</c> (positive pitch
+        /// there tilts the CAMERA down to look at a target below it — the mirror case).</summary>
+        private const float ChinUpPitchDegrees = -15f;
+
+        private static readonly Quaternion ChinUpRotation = Quaternion.Euler(ChinUpPitchDegrees, 0f, 0f);
+
+        /// <summary>Rotates an authored Head-local point by <see cref="ChinUpRotation"/> about
+        /// <see cref="ChinUpPivot"/> — the point stays exactly where it was when the pitch is ever
+        /// changed back to zero.</summary>
+        private static Vector3 ChinUp(Vector3 headLocalPoint)
+            => ChinUpPivot + ChinUpRotation * (headLocalPoint - ChinUpPivot);
+
+        /// <summary>Composes an authored Head-local rotation with <see cref="ChinUpRotation"/>, so a
+        /// part's own tilt (the eyes' -32 degree cant, a brow's facet angle, ...) rotates rigidly along
+        /// with the rest of the face instead of staying level while everything around it pitches.</summary>
+        private static Quaternion ChinUpRot(Quaternion headLocalRotation)
+            => ChinUpRotation * headLocalRotation;
 
         /// <summary>
         /// MV-1133: the gadget's shared body — a dark housing, a pale steel side plate and barrel, a
