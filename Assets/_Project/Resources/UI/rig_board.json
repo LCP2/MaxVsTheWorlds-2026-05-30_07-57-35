@@ -322,11 +322,24 @@
       "x": 1050,
       "y": 580,
       "icon": "mag",
-      "label": "MAGNETO",
+      "label": "PART MAGNETO",
       "maxLevel": 5,
       "kind": "cap",
       "parent": "e_cel",
       "startLevel": 0
+    },
+    {
+      "id": "e_cmg",
+      "category": "ENERGY",
+      "x": 1050,
+      "y": 740,
+      "icon": "mag",
+      "label": "CELL MAGNETO",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "e_mag",
+      "startLevel": 0,
+      "$comment": "MV-1157: World 2's e_cmg (MV-848) applied to World 1 so it can be bought here too - only reachable once e_mag (PART MAGNETO) is owned. Pulls PickupKind.PowerCellSecondary, same radius curve as Part Magneto (AbilityTuning.MagnetoPullRadius) - see PickupDirector.CellMagnetoShouldPull."
     },
     {
       "id": "m_spd",
