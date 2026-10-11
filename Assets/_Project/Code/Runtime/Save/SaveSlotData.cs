@@ -14,6 +14,13 @@ namespace MaxWorlds.Save
     [Serializable]
     public sealed class SaveSlotData
     {
+        /// <summary>The schema this slot's data was last migrated to (MV-1144) — 0 for every save
+        /// written before this field existed, since <c>JsonUtility</c> leaves a missing int field at
+        /// its default. <see cref="SaveSystem.Load"/> runs it forward through <see cref="SaveMigrations"/>
+        /// on every load that needs it; <see cref="SaveSystem.Save"/> stamps it to the current version
+        /// on every write, never backward.</summary>
+        public int SaveVersion;
+
         /// <summary>False for an untouched slot — the Home screen shows "Empty" and offers New Game.</summary>
         public bool HasData;
 
