@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.CameraRig;
+using MaxWorlds.Enemies;
 using MaxWorlds.Intro;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
@@ -36,6 +37,17 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var stray in Object.FindObjectsByType<BackyardLighting>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(stray.gameObject);
 
+            // This corridor's own exit-side build (WorldJoinSequence.BeginCorridorWalk) walks the
+            // field-wide RobotEnemy.Active registry and freezes every entry in it -- by design, for the
+            // real game's own robots mid-fight when the exit door opens. This fixture spawns none of its
+            // own, but a full-suite run means some OTHER test's own leftover (never reset) registry
+            // entries could otherwise be swept up here and left stuck frozen for whatever runs next --
+            // the same cross-test hygiene MV1105EveryKindDamagesASentinelTests' own ResetWorldState
+            // already practises for itself. Resetting here is what keeps this fixture from ever being
+            // that leak, regardless of what ran before it.
+            RobotEnemy.ResetRegistry();
+            EnemyNavigation.Reset();
+
             _camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             _camGo.AddComponent<Camera>();
         }
@@ -54,6 +66,9 @@ namespace MaxWorlds.Tests.EditMode
             WorldJoinDressing.Clear();
             StormdrainKit.Clear();
             MaterialLibrary.Clear();
+
+            RobotEnemy.ResetRegistry();
+            EnemyNavigation.Reset();
         }
 
         [Test]
@@ -66,6 +81,16 @@ namespace MaxWorlds.Tests.EditMode
             WorldTransitionEntry entry = WorldTransitions.For(1);
             Assert.IsNotNull(entry, "World 2 must author a WorldTransitions entry into World 3.");
             Vector2 doorMouth = entry.ExitDoorMouth(fromCfg);
+
+            // The rig is built and resolved BEFORE the corridor, so AC1c below proves the corridor
+            // build never touches it, instead of comparing a fresh instance's authored default to
+            // itself. ApplyDeviceDefault is the real resolution path (public since MV-464 for exactly
+            // this reason) rather than reading the serialized field's own initial value.
+            _rigGo = new GameObject("FixedAngleCameraRig");
+            var rig = _rigGo.AddComponent<FixedAngleCameraRig>();
+            rig.ApplyDeviceDefault();
+            float pitchBeforeCorridor = rig.Pitch;
+            float distanceBeforeCorridor = rig.Distance;
 
             _playerGo = new GameObject("Max");
             _playerGo.AddComponent<CharacterController>();
@@ -88,23 +113,48 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(floorTopY, feet.y, 0.1f,
                 "Max's feet must sit within 0.1 m of the corridor floor's top surface");
 
-            // ---- AC1c: the camera keeps the normal play pitch (60 deg, MV-468's committed framing) —
-            // nothing about a corridor walk may carry a bespoke angle. ----
-            _rigGo = new GameObject("FixedAngleCameraRig");
-            var rig = _rigGo.AddComponent<FixedAngleCameraRig>();
-            Assert.AreEqual(60f, rig.Pitch, 0.01f, "the corridor must use the normal play pitch");
+            // ---- AC1c: the camera keeps the normal play pitch — nothing about a corridor walk may
+            // carry a bespoke angle. Resolved values, not authored constants: the SAME rig's pitch,
+            // read again after the corridor exists, must still match what it resolved to before the
+            // corridor was ever built; and no second, corridor-only rig may have been spawned either. ----
+            Assert.AreEqual(pitchBeforeCorridor, rig.Pitch, 0.01f,
+                "the corridor build must not have touched the existing camera rig's pitch");
+            Assert.AreEqual(1, Object.FindObjectsByType<FixedAngleCameraRig>(FindObjectsSortMode.None).Length,
+                "the corridor build must not spawn a second, bespoke camera rig");
 
-            // ---- AC1b: no collider or renderer other than the corridor's own walls may hang over the
-            // corridor far past its own authored footprint -- the real defect this clause exists to
-            // catch. WorldJoinDressing.DressObservationWindows parents ReefKit.BuildOceanBackdrop
-            // directly onto the observation window's own primitive-cube transform, which carries that
-            // window's own non-uniform (2.5, height, 0.1) local scale (ReefKit.BuildObservationWindow).
-            // Every "Ocean_*" backdrop quad is authored at a flat local scale of (6, 3, 1) against an
-            // UNSCALED parent (MV713ReefKitTests' own fixture, and ReefKit.BuildOceanBackdrop's own doc
-            // comment: "four small per-window parallax layers") -- inheriting the window's scale instead
-            // blows each layer up to world-space (15, ~5.4, 0.1) at World 2's own wallHeight (3 m), and
-            // lifts it 1.5 m x the window's own Y-scale above the window itself: the cyan slab Lee saw
-            // "covering the top third to half of the screen."
+            // ---- AC1b: no collider or renderer other than the corridor's own walls lies between the
+            // play camera and Max's head. Literal line-of-sight check: the real per-device camera
+            // offset (ComputeOffset, same formula FixedAngleCameraRig.Apply drives the live Cinemachine
+            // follow with) from Max's head, against every renderer's own resolved world bounds. ----
+            Vector3 head = feet + Vector3.up * 1.83f;   // MaxRig.cs's own doc: "stands 1.83 m to the tips of his hair"
+            Vector3 camPos = head + FixedAngleCameraRig.ComputeOffset(distanceBeforeCorridor, pitchBeforeCorridor);
+            Vector3 toHead = head - camPos;
+            float headDist = toHead.magnitude;
+            var sightLine = new Ray(camPos, toHead / headDist);
+
+            foreach (Renderer r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (r == null || !r.enabled) continue;
+                if (r.name.Contains("Wall 1") || r.name.Contains("Wall 2") || r.name.StartsWith("Bank ")) continue;
+                if (!r.bounds.IntersectRay(sightLine, out float hitDist)) continue;
+                if (hitDist > 0.01f && hitDist < headDist - 0.05f)
+                    Assert.Fail($"'{r.name}' (bounds {r.bounds}) lies between the play camera and Max's head " +
+                        $"(hit at {hitDist:F2} m, head at {headDist:F2} m)");
+            }
+
+            // The defect this ticket actually traces to: WorldJoinDressing.DressObservationWindows
+            // parents ReefKit.BuildOceanBackdrop directly onto the observation window's own
+            // primitive-cube transform, which carries that window's own non-uniform (2.5, height, 0.1)
+            // local scale (ReefKit.BuildObservationWindow). Every "Ocean_*" backdrop quad is authored
+            // at a flat local scale of (6, 3, 1) against an UNSCALED parent (MV713ReefKitTests' own
+            // fixture, and ReefKit.BuildOceanBackdrop's own doc comment: "four small per-window
+            // parallax layers") -- inheriting the window's scale instead blows each layer up to
+            // world-space (15, ~5.4, 0.1) at World 2's own wallHeight (3 m): the cyan slab Lee saw
+            // "covering the top third to half of the screen." The sight-line check above does not
+            // happen to cross this specific geometry for a camera parked south of a corridor whose
+            // dressing sits on its north wall (the slab reads as *visually* overhead in a shallow,
+            // grazing frame without being on the literal 3D segment to Max's head) -- this is the
+            // resolved-bounds assertion that actually catches it, and is this ticket's Rule 1 proof.
             Renderer[] oceanLayers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None)
                 .Where(r => r != null && r.enabled && r.name.StartsWith("Ocean_")).ToArray();
             Assert.IsNotEmpty(oceanLayers, "the hull segment's observation windows must build their own ocean backdrop");
