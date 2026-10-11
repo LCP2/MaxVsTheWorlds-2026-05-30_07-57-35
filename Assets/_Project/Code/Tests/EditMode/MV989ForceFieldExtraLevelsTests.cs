@@ -12,8 +12,8 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="AbilityTuning.DefaultForceFieldAbsorbCapPerLevel"/> (57.5). Asserts the RESOLVED
     /// absorb cap at each board's own new ceiling, read live through <see cref="WeaponCatalog.MaxLevel"/>
     /// rather than a hardcoded level literal, so a future retune of either board's maxLevel is caught
-    /// here too. Fails on base commit 8c86feb, where World 1 tops out at 270 (maxLevel 5) and World 2
-    /// at 385 (maxLevel 7).
+    /// here too. MV-1156 raised <see cref="AbilityTuning.DefaultForceFieldAbsorbCap"/> from 40 to 100,
+    /// which shifts these ceilings by the same +60 (502.5 / 617.5) — updated in that same ticket.
     /// </summary>
     public sealed class MV989ForceFieldExtraLevelsTests
     {
@@ -27,15 +27,15 @@ namespace MaxWorlds.Tests.EditMode
             int world1Max = WeaponCatalog.MaxLevel(AbilityKind.ForceField);
             float world1Cap = AbilityTuning.ForceFieldAbsorbCap(world1Max,
                 AbilityTuning.DefaultForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
-            Assert.That(world1Cap, Is.EqualTo(442.5f).Within(1e-3f),
-                "World 1's Force Field must cap at 442.5 (40 + 57.5*7) once maxLevel is 8");
+            Assert.That(world1Cap, Is.EqualTo(502.5f).Within(1e-3f),
+                "World 1's Force Field must cap at 502.5 (100 + 57.5*7) once maxLevel is 8");
 
             RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json
             int world2Max = WeaponCatalog.MaxLevel(AbilityKind.ForceField);
             float world2Cap = AbilityTuning.ForceFieldAbsorbCap(world2Max,
                 AbilityTuning.DefaultForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
-            Assert.That(world2Cap, Is.EqualTo(557.5f).Within(1e-3f),
-                "World 2's Force Field must cap at 557.5 (40 + 57.5*9) once maxLevel is 10");
+            Assert.That(world2Cap, Is.EqualTo(617.5f).Within(1e-3f),
+                "World 2's Force Field must cap at 617.5 (100 + 57.5*9) once maxLevel is 10");
         }
     }
 }

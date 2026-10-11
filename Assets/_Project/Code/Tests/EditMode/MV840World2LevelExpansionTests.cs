@@ -61,8 +61,8 @@ namespace MaxWorlds.Tests.EditMode
                 LogAssert.Expect(LogType.Error, new Regex("Destroy may not be called from edit mode"));
                 float leaked = abilities.AbsorbForceFieldDamage(9999f); // exceeds the cap, popping the bubble
                 float resolvedAbsorbCap = 9999f - leaked;
-                Assert.That(resolvedAbsorbCap, Is.EqualTo(557.5f).Within(1e-3f),
-                    "MV-989: Force Field L10's resolved absorb cap must be 40 + 57.5*9 = 557.5");
+                Assert.That(resolvedAbsorbCap, Is.EqualTo(617.5f).Within(1e-3f),
+                    "MV-1156: Force Field L10's resolved absorb cap must be 100 + 57.5*9 = 617.5");
             }
             finally
             {

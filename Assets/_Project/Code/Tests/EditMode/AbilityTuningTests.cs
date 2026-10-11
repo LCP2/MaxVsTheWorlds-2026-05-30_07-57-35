@@ -150,16 +150,16 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ForceFieldAbsorbCapDefaultsMatchTheMV677Retune()
+        public void ForceFieldAbsorbCapDefaultsMatchTheMV1156Retune()
         {
-            // MV-677 (Lee): "20% strong to begin with" (20% of Max's 200 HP = 40 at L1) and "at full
-            // power needs to be about 50% stronger than current full power" (1.5x the prior L5 value
-            // of 180 = 270 at L5, max level). Fails against the pre-MV-677 defaults (60/30 -> L1=60,
-            // L5=180).
+            // MV-1156 (Lee, playing World 1): "Just make it start at 100" (20% of Max's 500 HP = 100
+            // at L1, up from MV-677's stale 40 = 8% of Max's post-MV-658 HP) — "57 per level addition
+            // is fine" leaves the per-level step at MV-677's 57.5. L5 = 100 + 57.5*4 = 330. Fails
+            // against the pre-MV-1156 defaults (40/57.5 -> L1=40, L5=270).
             Assert.That(AbilityTuning.ForceFieldAbsorbCap(1, AbilityTuning.DefaultForceFieldAbsorbCap,
-                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(40f).Within(1e-5f));
+                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(100f).Within(1e-5f));
             Assert.That(AbilityTuning.ForceFieldAbsorbCap(5, AbilityTuning.DefaultForceFieldAbsorbCap,
-                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(270f).Within(1e-5f));
+                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(330f).Within(1e-5f));
         }
 
         [Test]
