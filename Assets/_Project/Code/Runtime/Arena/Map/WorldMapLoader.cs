@@ -547,6 +547,7 @@ namespace MaxWorlds.Arena
                     {
                         id = a.BossId(b, i, bosses.Length),
                         kind = "boss",
+                        bossKind = b.kind ?? "",
                         x = b.x,
                         z = b.z,
                         width = b.size?.w ?? 3.5f,

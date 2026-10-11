@@ -116,6 +116,12 @@ namespace MaxWorlds.Arena
         public float x;
         public float z;
         public WorldAreaSize size;
+
+        /// <summary>Which row of <see cref="MaxWorlds.Bosses.BossKinds"/> builds this boss (MV-1145).
+        /// Empty/unauthored on every shipped config today — <see cref="MaxWorlds.Bosses.BossKinds.Resolve"/>
+        /// falls back to this boss's own <see cref="id"/>, then to Big Bermuda, so "anchorhead" and
+        /// "sludgequeen" keep working with no config edit.</summary>
+        public string kind;
     }
 
     /// <summary>An area's authored, exact enemy composition (MV-365) — when present on a
