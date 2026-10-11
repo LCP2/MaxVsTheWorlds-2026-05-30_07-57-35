@@ -82,9 +82,9 @@ namespace MaxWorlds.Tests.EditMode
 
                 Assert.That(forceField.gameObject.activeInHierarchy, Is.True,
                     "fixture: Force Field must be visible once acquired");
-                Assert.That(balloon.sizeDelta.x, Is.EqualTo(260f).Within(0.01f),
-                    "fixture: Water Balloon must be at its maxed (200px * MV-1104's 1.3 ControlSizeScale " +
-                    "= 260px) size for the overlap check");
+                Assert.That(balloon.sizeDelta.x, Is.EqualTo(200f).Within(0.01f),
+                    "fixture: Water Balloon must be at its maxed (MV-1153 shrunk this joystick's own " +
+                    "top-level size to 200px, no longer scaled by ControlSizeScale) size for the overlap check");
 
                 // ---------------------------------------------------------------- AC1: resolved centres.
                 Rect mapRect, ffRect, balloonRect, homeRect, utilityRect, dialRect, arenaRect, spawnRect;
@@ -116,8 +116,11 @@ namespace MaxWorlds.Tests.EditMode
                 // 1.3x ControlSizeScale and the old centres no longer left a 12px ring-to-ring gap
                 // between FIELD and this joystick, or between this joystick and MAP (which doesn't
                 // scale). MAP itself is unchanged.
+                // MV-1153: Balloon lowered again (678->652) and shrunk off ControlSizeScale, to clear
+                // MAP on a phone canvas where MAP's own vertical-mid anchor drops it — see
+                // HudController.WaterBalloonJoystickRise's doc comment.
                 AssertCentre(ffRect, 150f, 450f, "Force Field");
-                AssertCentre(balloonRect, 150f, 678f, "Water Balloon");
+                AssertCentre(balloonRect, 150f, 652f, "Water Balloon");
                 AssertCentre(mapRect, 150f, 894f, "MAP");
 
                 // ---------------------------------------------------------------- AC2: no overlap, stack fits.

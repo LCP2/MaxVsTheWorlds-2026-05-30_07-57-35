@@ -130,12 +130,28 @@ namespace MaxWorlds.UI
         /// one. The knob itself is left centred; WV-240 drives it from the drag input. Unlike the
         /// unlabelled move/aim sticks, this one names itself (MV-337) — a caption below the rings, clear
         /// of the knob's own travel, so it never gets covered while the player is aiming a throw.
+        /// Teleport (the only other caller — MV-1113 retired Sentinel's own joystick for a button) calls
+        /// this five-arg overload, unaffected by MV-1153 below.
         /// </summary>
         public static JoystickVisual BuildJoystick(RectTransform parent, string name, Vector2 anchoredPos,
-            Color color, string label, int level, int maxLevel)
+            Color color, string label, int level, int maxLevel) =>
+            BuildJoystick(parent, name, anchoredPos, color, label, level, maxLevel, 200f * ControlSizeScale);
+
+        /// <summary>
+        /// MV-1153: the Water Balloon joystick alone calls this overload with a smaller
+        /// <paramref name="sizeAtFullProminence"/> (200, not 200*<see cref="ControlSizeScale"/> = 260) so
+        /// it — and only it — shrinks enough to clear the MAP button on a phone canvas. The knob and
+        /// label scale down by the same ratio as the overall size change (<paramref name="sizeAtFullProminence"/>
+        /// against the five-arg overload's own 200*<see cref="ControlSizeScale"/> default) so they shrink
+        /// together rather than reading oversized against a smaller ring; the detail pips already scale
+        /// with <c>baseSize</c> below, so they need no separate adjustment.
+        /// </summary>
+        public static JoystickVisual BuildJoystick(RectTransform parent, string name, Vector2 anchoredPos,
+            Color color, string label, int level, int maxLevel, float sizeAtFullProminence)
         {
             float prominence = Prominence(level, maxLevel);
-            float baseSize = 200f * ControlSizeScale * Mathf.Lerp(0.8f, 1f, prominence);
+            float sizeScale = sizeAtFullProminence / (200f * ControlSizeScale);
+            float baseSize = sizeAtFullProminence * Mathf.Lerp(0.8f, 1f, prominence);
 
             var root = NewRect(name, parent);
             Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f));
@@ -148,7 +164,7 @@ namespace MaxWorlds.UI
             rings.raycastTarget = false;
 
             var knob = AddImage(root, HudTextures.Disc(96), Fade(color, 0.9f), "Knob").rectTransform;
-            float knobSize = 64f * ControlSizeScale * Mathf.Lerp(0.85f, 1.15f, prominence);
+            float knobSize = 64f * ControlSizeScale * sizeScale * Mathf.Lerp(0.85f, 1.15f, prominence);
             knob.anchorMin = knob.anchorMax = new Vector2(0.5f, 0.5f);
             knob.pivot = new Vector2(0.5f, 0.5f);
             knob.sizeDelta = new Vector2(knobSize, knobSize);
@@ -156,11 +172,11 @@ namespace MaxWorlds.UI
 
             AddDetailPips(root, baseSize, color, level, maxLevel);
 
-            var lbl = AddText(root, Mathf.Lerp(14f, 18f, prominence) * ControlSizeScale,
+            var lbl = AddText(root, Mathf.Lerp(14f, 18f, prominence) * ControlSizeScale * sizeScale,
                 Fade(color, Mathf.Lerp(0.75f, 1f, prominence)));
             Anchor(lbl.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
-            lbl.rectTransform.sizeDelta = new Vector2(baseSize, 22f * ControlSizeScale);
-            lbl.rectTransform.anchoredPosition = new Vector2(0f, -6f * ControlSizeScale);
+            lbl.rectTransform.sizeDelta = new Vector2(baseSize, 22f * ControlSizeScale * sizeScale);
+            lbl.rectTransform.anchoredPosition = new Vector2(0f, -6f * ControlSizeScale * sizeScale);
             lbl.text = label;
             lbl.fontStyle = FontStyle.Bold;
 
