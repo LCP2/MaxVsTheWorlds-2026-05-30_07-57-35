@@ -125,6 +125,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv965Corridor() => RunFromMenu(CapturePresets.All["mv965corridor"]);
         public static void CaptureMv965Corridor() => Run(CapturePresets.All["mv965corridor"]);
 
+        [MenuItem("MaxWorlds/Capture/Storm Drain Corridor Ramp (MV-1126)")]
+        public static void MenuMv1126Ramp() => RunFromMenu(CapturePresets.All["mv1126ramp"]);
+        public static void CaptureMv1126Ramp() => Run(CapturePresets.All["mv1126ramp"]);
+
         [MenuItem("MaxWorlds/Capture/World 2 -> World 3 Corridor (MV-967)")]
         public static void MenuMv967Corridor() => RunFromMenu(CapturePresets.All["mv967corridor"]);
         public static void CaptureMv967Corridor() => Run(CapturePresets.All["mv967corridor"]);

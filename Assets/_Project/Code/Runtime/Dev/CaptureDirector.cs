@@ -418,6 +418,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv913MissileLauncherCheck());
             Add(BuildMv939W2ColorCheck());
             Add(BuildMv965Corridor());
+            Add(BuildMv1126Ramp());
             Add(BuildMv967Corridor());
             Add(BuildMv993Crossing());
             Add(BuildMv1018Anchorhead());
@@ -4050,6 +4051,103 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-965-corridor-d22", cam => FrameAt(cam, shotD[2])),
                 },
                 Cleanup = Composite,
+            };
+        }
+
+        // ---- Mv1126Ramp (MV-1126 AC2) -----------------------------------------------------------
+
+        /// <summary>One shot, "Max on the ramp" (MV-1126's own AC2 -- "do not iterate on it"): same
+        /// real-entry-point idiom <see cref="BuildMv965Corridor"/> already establishes for this exact
+        /// corridor (<see cref="WorldJoinSequence.OpenExitDoor"/>, not a scripted play-through), just
+        /// also placing the already-booted Max at d=15 (the ramp's own midpoint) before framing him.</summary>
+        private static CapturePreset BuildMv1126Ramp()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float shotD = 15f;
+
+            Vector2 doorMouth = default;
+            Wall wall = Wall.N;
+
+            Vector3 OutwardDir(Wall w) => w switch
+            {
+                Wall.N => Vector3.forward,
+                Wall.S => Vector3.back,
+                Wall.E => Vector3.right,
+                Wall.W => Vector3.left,
+                _ => Vector3.forward,
+            };
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Cfg == null || path.Map == null)
+                    throw new CaptureAbortException("World 1 built no BackyardPath to open the corridor from");
+
+                WorldTransitionEntry entry = WorldTransitions.For(0);
+                if (entry == null) throw new CaptureAbortException("World 1 has no WorldTransitions entry into World 2");
+
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 0, path.ExitGate);
+                for (int i = 0; i < 4; i++) yield return null;
+
+                if (FindFirstObjectByType<WorldJoinSequence>() == null)
+                    throw new CaptureAbortException("WorldJoinSequence failed to build the exit corridor");
+
+                doorMouth = entry.ExitDoorMouth(path.Cfg);
+                wall = entry.ExitWall;
+
+                var player = FindFirstObjectByType<MaxWorlds.Player.PlayerController>();
+                if (player == null) throw new CaptureAbortException("no Max in the scene to place on the ramp");
+                var cc = player.GetComponent<CharacterController>();
+
+                // WorldJoinSequence's own AwaitingCrossing -> CorridorWalk transition (MV-1123
+                // BeginCorridorWalk) re-teleports Max to d=1 itself the instant he's a metre past the
+                // door -- so cross that threshold FIRST and let it fire once, rather than fighting it;
+                // only once genuinely inside CorridorWalk does placing him further down the ramp stick.
+                if (cc != null) cc.enabled = false;
+                player.transform.position = new Vector3(doorMouth.x, player.transform.position.y, doorMouth.y) + OutwardDir(wall) * 2f;
+                if (cc != null) cc.enabled = true;
+                yield return null;   // WorldJoinSequence.Update() -> TickAwaitingCrossing -> BeginCorridorWalk
+
+                Vector3 onRamp = new Vector3(doorMouth.x, player.transform.position.y, doorMouth.y) + OutwardDir(wall) * shotD;
+                if (cc != null) cc.enabled = false;
+                player.transform.position = onRamp;
+                player.transform.rotation = Quaternion.LookRotation(OutwardDir(wall), Vector3.up);
+                if (cc != null) cc.enabled = true;
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance * 0.7f : 14f;
+                Vector3 focus = new Vector3(doorMouth.x, 1f, doorMouth.y) + OutwardDir(wall) * shotD;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            IEnumerator NoSetup(Camera cam) { yield break; }
+
+            return new CapturePreset
+            {
+                Key = "mv1126ramp",
+                LogTag = "[MV1126Capture]",
+                Flag = "-mv1126ramp",
+                ArmFile = "Temp/mv1126ramp.arm",
+                HeadlessMarker = "Temp/mv1126ramp.headless",
+                DoneFileName = "_mv1126ramp_done.txt",
+                Width = 1200,
+                Height = 800,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 0;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1126-ramp", NoSetup) },
             };
         }
 
