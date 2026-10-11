@@ -27,7 +27,7 @@ namespace MaxWorlds.Tests.EditMode
         public void World2PricesAreCutThirteenPercentWhileWorld1AndWorld3AreUnchanged()
         {
             // ------------------------------------------------------------ World 2 (Stormdrain): 13% off.
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             Assert.AreEqual(9, CellSpend.UnlockCostFor("e_cel"), "World 2 ENERGY unlock must be 9 (10 * 0.87)");
             Assert.AreEqual(4, CellSpend.UpgradeCostFor("e_cel", 0), "World 2 ENERGY upgrade level 0 must be 4 (5 * 0.87)");
@@ -55,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(40, CellSpend.UpgradeCostFor("u_slt", 0), "World 1 Slots upgrade must stay 40");
 
             // ------------------------------------------------------------ World 3 (Reef): unchanged.
-            RigBoard.UseWorld(2);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Reef));
 
             Assert.AreEqual(10, CellSpend.UnlockCostFor("e_cel"), "World 3 ENERGY unlock must stay 10");
             Assert.AreEqual(5, CellSpend.UpgradeCostFor("e_cel", 0), "World 3 ENERGY upgrade level 0 must stay 5");

@@ -87,8 +87,8 @@ namespace MaxWorlds.Tests.EditMode
             var rows = new[]
             {
                 new Row(WorldLibrary.World1, worldIndex: 0, bossId: "a30_boss1"),
-                new Row(WorldLibrary.World2, worldIndex: 1, bossId: "sludgequeen"),
-                new Row(WorldLibrary.World3, worldIndex: 2, bossId: "anchorhead"),
+                new Row(WorldLibrary.World2, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), bossId: "sludgequeen"),
+                new Row(WorldLibrary.World3, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), bossId: "anchorhead"),
             };
 
             foreach (Row row in rows)
@@ -150,7 +150,7 @@ namespace MaxWorlds.Tests.EditMode
                                 $"{row.WorldKey}: a stray '{name}' from the World 1 exit gate must not exist");
                     }
 
-                    if (row.WorldIndex == 2)
+                    if (row.WorldIndex == WorldCatalog.IndexOf(WorldIds.Reef))
                     {
                         // The hypothesis this ticket confirms: World 3's a1 (near the entrance) must
                         // carry no Wood-surfaced renderer at all -- not just none named PostL/PostR/Lintel.

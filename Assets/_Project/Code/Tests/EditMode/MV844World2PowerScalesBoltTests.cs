@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -38,7 +39,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World2PowerCapsAt8AndTheBoltsSheathScalesWithItsResolvedLevel()
         {
-            WeaponSystemState.ApplyWeaponCoreMorph(1); // World 2 board, ActivePrimary -> Lppe, p_dmg re-granted at L1
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2 board, ActivePrimary -> Lppe, p_dmg re-granted at L1
             Assert.That(RigBoard.MaxLevel("p_dmg"), Is.EqualTo(8), "World 2's POWER track must cap at 8 levels");
 
             var laserGo = new GameObject("MV-844 test PulseLaser");

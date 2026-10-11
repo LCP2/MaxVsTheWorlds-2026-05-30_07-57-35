@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -63,12 +64,12 @@ namespace MaxWorlds.Tests.EditMode
             PendingMorphingModule.SetWeaponCore();
             Assert.IsTrue(PendingMorphingModule.WeaponCorePending, "the collected core must bank, not resolve immediately");
 
-            bool morphed = WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 1);
+            bool morphed = WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             // Assert: the morph ran exactly once and resolved to World 2's board.
             Assert.IsTrue(morphed);
             Assert.IsFalse(PendingMorphingModule.WeaponCorePending, "the banked core must be consumed by the open");
-            Assert.AreEqual(1, RigBoard.ActiveWorldIndex);
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), RigBoard.ActiveWorldIndex);
 
             // PRIMARY: p_dmg re-granted at L1 only — nothing else carried, nothing else owned.
             Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg must reset to L1, not carry the RCDA's L3");

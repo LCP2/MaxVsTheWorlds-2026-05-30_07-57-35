@@ -2,6 +2,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -97,7 +98,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(abilities, "test precondition: PlayerController.Awake must self-attach PlayerAbilities");
 
             // --- AC1: no dead PRIMARY/SECONDARY node on World 3's own board.
-            RigBoard.UseWorld(2); // rig_board.world3.json
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Reef)); // rig_board.world3.json
             string[] ids = RigBoard.AllIds
                 .Where(id => RigBoard.Category(id) == "PRIMARY" || RigBoard.Category(id) == "SECONDARY")
                 .ToArray();
@@ -263,10 +264,10 @@ namespace MaxWorlds.Tests.EditMode
         private static void SeedWorld3WithSecondaryCarriedOver(bool exceptSRkt)
         {
             WeaponSystemState.Reset();
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             RigState.UnlockCategory("SECONDARY");
             if (!exceptSRkt) RigState.AcquireCap("s_rkt");
-            WeaponSystemState.ApplyWeaponCoreMorph(2);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Reef));
         }
 
         // ------------------------------------------------------------ AC2

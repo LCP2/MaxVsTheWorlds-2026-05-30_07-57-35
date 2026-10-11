@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -54,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void StartSlotWorld_World2_CapsEnergyMoveSupportAtWorldOnesOwnLevels()
         {
-            HomeScreen.StartSlotWorld(0, worldIndex: 1, maxRig: false);
+            HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), maxRig: false);
 
             IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
 

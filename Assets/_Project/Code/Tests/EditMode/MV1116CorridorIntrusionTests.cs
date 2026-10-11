@@ -85,7 +85,7 @@ namespace MaxWorlds.Tests.EditMode
             var rows = new[]
             {
                 new Row(WorldLibrary.World1, fromWorldIndex: 0, toKey: WorldLibrary.World2),
-                new Row(WorldLibrary.World2, fromWorldIndex: 1, toKey: WorldLibrary.World3),
+                new Row(WorldLibrary.World2, fromWorldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), toKey: WorldLibrary.World3),
             };
 
             var failures = new List<string>();

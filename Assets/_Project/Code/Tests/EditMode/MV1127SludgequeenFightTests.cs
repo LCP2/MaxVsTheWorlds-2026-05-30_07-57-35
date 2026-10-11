@@ -528,7 +528,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var areaDirectorGo = Track(new GameObject("MV1127 AreaDirector"));
             var areaDirector = areaDirectorGo.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(cfg, worldIndex: 1); // World 2 is index 1 -- never Configure/EnterArea,
+            areaDirector.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2 is index 1 -- never Configure/EnterArea,
                                                               // so _finalAreaIndex resolves to 31 but no
                                                               // robot is ever stamped with it (same idiom
                                                               // MV997WorldExitDoorTests already uses).

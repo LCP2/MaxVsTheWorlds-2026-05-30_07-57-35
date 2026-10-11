@@ -86,7 +86,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(PendingMorphingModule.WeaponCorePending, "the Core must still be banked for the next world's run start");
 
             // Act 2: the run seals and the NEXT world's BackyardPath.Awake applies the banked morph.
-            BackyardPath.ApplyPendingMorphAtRunStart(worldIndex: 1);
+            BackyardPath.ApplyPendingMorphAtRunStart(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             // Assert 2: the next world starts on its own new weapon, and the Core is finally consumed.
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -28,7 +29,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(SecondaryIds(), Is.EquivalentTo(new[] { "s_bal", "s_spl", "s_lob", "s_aut", "s_rte" }),
                 "World 1's SECONDARY family must be exactly the Water Balloon tree — no s_rkt/s_sal/s_rld");
 
-            RigBoard.UseWorld(1); // World 2
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2
 
             Assert.That(SecondaryIds(), Does.Contain("s_rkt"),
                 "World 2's SECONDARY family must still carry the Shoulder Rack's root, s_rkt");

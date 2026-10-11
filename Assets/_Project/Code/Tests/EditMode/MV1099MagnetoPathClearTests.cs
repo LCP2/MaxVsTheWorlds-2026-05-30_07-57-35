@@ -73,7 +73,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             EnemyNavigation.Reset();
             PickupWallet.Reset();   // also resets RigState
-            RigBoard.UseWorld(1);   // World 2 -- e_mag's board
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));   // World 2 -- e_mag's board
 
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(cfg, "World 2's own shipped config must load for this test to mean anything");

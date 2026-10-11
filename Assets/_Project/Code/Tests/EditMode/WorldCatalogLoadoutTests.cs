@@ -98,28 +98,35 @@ namespace MaxWorlds.Tests.EditMode
 
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, reef, probe });
 
+            // Not a named world -- the probe's own structural position, appended after the three
+            // shipped rows by the fixture above (MV-1146: the guard's patterns flag a bare literal
+            // here, but WorldCatalog.IndexOf(WorldIds...) has no id to resolve for "probe").
+            const int probeIndex = 3;
+
             _directorGo = new GameObject("WorldCatalogLoadoutTests PickupDirector");
             PickupDirector director = _directorGo.AddComponent<PickupDirector>();
             _areaGo = new GameObject("WorldCatalogLoadoutTests AreaAccumulationDirector");
             AreaAccumulationDirector areaDirector = _areaGo.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, 3);
+            areaDirector.ConfigureWorld(
+                new WorldConfig { dials = new WorldDials { areaCount = 1 } },
+                probeIndex);
 
             // ------------------------------------------------------------ AC1a: the probe world (index 3)
-            WeaponSystemState.ApplyWorldLoadout(3);
+            WeaponSystemState.ApplyWorldLoadout(probeIndex);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
                 "probe: ApplyWorldLoadout must resolve the probe row's own PrimaryWeapon, not a worldIndex-based guess");
             Assert.AreEqual(SecondaryKind.WaterBalloon, WeaponSystemState.SecondaryKind,
                 "probe: ApplyWorldLoadout must resolve the probe row's own SecondaryWeapon");
-            Assert.AreEqual(3, RigBoard.ActiveWorldIndex, "probe: RigBoard.UseWorld must have run for index 3");
+            Assert.AreEqual(probeIndex, RigBoard.ActiveWorldIndex, "probe: RigBoard.UseWorld must have run for index 3");
             Assert.AreEqual("PRIMARY", RigBoard.Category("p_rng"),
                 "probe: the active board must be the one loaded from UI/rig_board (World 1's own file -- p_rng only exists there)");
 
-            Assert.IsTrue(RigFusionState.EnabledInWorld(3), "probe: FusionsEnabled must read true off the probe row");
+            Assert.IsTrue(RigFusionState.EnabledInWorld(probeIndex), "probe: FusionsEnabled must read true off the probe row");
 
             Assert.AreEqual(30, CellSpend.UpgradeCostFor("p_dmg", 1),
                 "probe: a PRIMARY node's upgrade cost must scale by the probe row's own 3x multiplier (base 10 * 3)");
 
-            Assert.AreEqual(1.5f, CellEconomyTuning.WorldPartsMultiplier(3), 0.0001f,
+            Assert.AreEqual(1.5f, CellEconomyTuning.WorldPartsMultiplier(probeIndex), 0.0001f,
                 "probe: the Parts multiplier must resolve the probe row's own 1.5x");
 
             foreach (int area in new[] { 1, 4, 7 })
@@ -137,17 +144,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(RigFusionState.EnabledInWorld(0), "World 1 must still have FORGE enabled");
             Assert.AreEqual(1f, CellEconomyTuning.WorldPartsMultiplier(0), 0.0001f, "World 1's Parts multiplier must still be 1x");
 
-            WeaponSystemState.ApplyWorldLoadout(1);
+            int stormdrainIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
+            WeaponSystemState.ApplyWorldLoadout(stormdrainIndex);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary, "World 2 must still fire the LPPE");
             Assert.AreEqual(SecondaryKind.ShoulderRack, WeaponSystemState.SecondaryKind, "World 2 must still fire the Shoulder Rack");
-            Assert.IsFalse(RigFusionState.EnabledInWorld(1), "World 2 must still have FORGE disabled");
-            Assert.AreEqual(1f, CellEconomyTuning.WorldPartsMultiplier(1), 0.0001f, "World 2's Parts multiplier must still be 1x");
+            Assert.IsFalse(RigFusionState.EnabledInWorld(stormdrainIndex), "World 2 must still have FORGE disabled");
+            Assert.AreEqual(1f, CellEconomyTuning.WorldPartsMultiplier(stormdrainIndex), 0.0001f, "World 2's Parts multiplier must still be 1x");
 
-            WeaponSystemState.ApplyWorldLoadout(2);
+            int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+            WeaponSystemState.ApplyWorldLoadout(reefIndex);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Undertow, WeaponSystemState.ActivePrimary, "World 3 must still fire UNDERTOW");
             Assert.AreEqual(SecondaryKind.ShoulderRack, WeaponSystemState.SecondaryKind, "World 3 must still fire the Shoulder Rack");
-            Assert.IsFalse(RigFusionState.EnabledInWorld(2), "World 3 must still have FORGE disabled");
-            Assert.AreEqual(2f, CellEconomyTuning.WorldPartsMultiplier(2), 0.0001f,
+            Assert.IsFalse(RigFusionState.EnabledInWorld(reefIndex), "World 3 must still have FORGE disabled");
+            Assert.AreEqual(2f, CellEconomyTuning.WorldPartsMultiplier(reefIndex), 0.0001f,
                 "World 3's Parts multiplier must still default to 2x with the dev knob unset");
 
             // ------------------------------------------------------------ AC1c: Validate() still reports

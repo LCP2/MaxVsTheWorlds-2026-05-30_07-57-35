@@ -45,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
             SaveSystem.DirectoryOverride = _dir;
             SaveSystem.ActiveSlot = 0;
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 2 });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef) });
 
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
@@ -135,7 +135,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World3FinalBossDeath_DropsCoreAndOpensDoor_WithoutRequiringA30sOtherRobotsDead()
         {
-            const int worldIndex = 2; // World 3 -- the last entry in WorldLibrary
+            int worldIndex = WorldCatalog.Count - 1; // World 3 -- the last entry in WorldLibrary
             GameObject root = null, pathGo = null, playerGo = null, payoffGo = null, trackerGo = null, gateGo = null;
             RobotEnemy[] otherRobots = null;
 

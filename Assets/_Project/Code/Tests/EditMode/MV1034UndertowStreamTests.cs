@@ -103,7 +103,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(undertow, "PlayerController.Awake must self-attach a live Undertow");
             UndertowAwake.Invoke(undertow, null); // Awake doesn't run for AddComponent outside Play mode
 
-            WeaponSystemState.ApplyWeaponCoreMorph(2); // World 3 -> UNDERTOW is the active primary
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Reef)); // World 3 -> UNDERTOW is the active primary
             DevMode.Enabled = true;
             DevMode.InfiniteEnergy = true; // isolate the 2s hold from tank depletion
             DevMode.AutoFire = true; // "request fire" without the real Input System (PlayMode is banned)

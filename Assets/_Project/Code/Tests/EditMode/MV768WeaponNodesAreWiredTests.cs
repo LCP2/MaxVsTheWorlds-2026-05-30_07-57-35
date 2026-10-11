@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.TestTools;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -107,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
         private static void AssertRate()
         {
             WeaponSystemState.Reset();
-            WeaponSystemState.ApplyWeaponCoreMorph(1); // World 2 board, ActivePrimary -> Lppe
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2 board, ActivePrimary -> Lppe
 
             var go = new GameObject("PulseLaser_RateTest");
             PulseLaser laser = go.AddComponent<PulseLaser>();
@@ -141,7 +142,7 @@ namespace MaxWorlds.Tests.EditMode
         private static void AssertFork()
         {
             WeaponSystemState.Reset();
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             var go = new GameObject("PulseLaser_ArcTest");
             go.transform.position = Vector3.zero;
@@ -228,7 +229,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
 
             var maxGo = new GameObject("Max_ClusterTest");
@@ -319,7 +320,7 @@ namespace MaxWorlds.Tests.EditMode
         /// hardcode one) from counting as a "consumer".</summary>
         private static void AssertEveryWorld2NodeHasARuntimeConsumer()
         {
-            RigBoard.UseWorld(1); // rig_board.world2.json
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json
 
             Assert.IsTrue(Directory.Exists(RuntimeConsumerRoot), $"Runtime source root not found: {RuntimeConsumerRoot}");
             string combinedSource = string.Join("\n", Directory

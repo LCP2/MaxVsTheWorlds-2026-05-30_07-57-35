@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
@@ -82,7 +83,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TrapCatchesHoldsFreezesAndConvertsToPermanentAlly_AndGatesByRadius_MV1035()
         {
-            RigBoard.UseWorld(2); // World 3 — the only board carrying p_trp/p_tcap/p_trad
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Reef)); // World 3 — the only board carrying p_trp/p_tcap/p_trad
             RigState.Reset();
 
             GameObject maxGo = null, hudGo = null, max2Go = null, floorGo = null;

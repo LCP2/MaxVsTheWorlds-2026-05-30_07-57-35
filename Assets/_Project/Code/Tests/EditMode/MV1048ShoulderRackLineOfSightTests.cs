@@ -45,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
             RobotEnemy.ResetRegistry();
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
         }
 
         [TearDown]

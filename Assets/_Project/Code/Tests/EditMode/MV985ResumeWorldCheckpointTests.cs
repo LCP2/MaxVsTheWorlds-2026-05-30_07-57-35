@@ -41,7 +41,7 @@ namespace MaxWorlds.Tests.EditMode
             // the checkpoint below is captured in (World 2, index 1) — a replayed earlier world, same
             // shape MV-921 already distinguishes, so a regression that reads WorldIndex instead of the
             // checkpoint's own world fails loudly rather than by a coincidental match.
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 2 });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef) });
         }
 
         [TearDown]
@@ -59,12 +59,12 @@ namespace MaxWorlds.Tests.EditMode
         {
             _directorGo = new GameObject("Area Accumulation");
             var director = _directorGo.AddComponent<AreaAccumulationDirector>();
-            director.ConfigureWorld(null, worldIndex: 1);   // World 2 — the world actually being played
+            director.ConfigureWorld(null, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));   // World 2 — the world actually being played
 
             SaveSystem.CaptureCheckpoint(0, areaIndex: 16, worldIndex: director.ActiveWorldIndex);
 
             SaveSlotData saved = SaveSystem.Load(0);
-            Assert.AreEqual(1, saved.CheckpointWorldIndex,
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), saved.CheckpointWorldIndex,
                 "the checkpoint must record the world actually PLAYED, not the profile's own WorldIndex");
             Assert.AreEqual(16, saved.CheckpointAreaIndex);
 
@@ -72,13 +72,13 @@ namespace MaxWorlds.Tests.EditMode
             // resolved behind the Home screen — must resolve a reload into World 2, area 16.
             SaveSystem.ResumePlan plan = SaveSystem.ResolveResumePlan(0, builtWorldIndex: 0);
             Assert.IsTrue(plan.NeedsReload, "a checkpoint in a different world than what's built must reload");
-            Assert.AreEqual(1, plan.WorldIndex, "the resume plan must target the checkpoint's own world");
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), plan.WorldIndex, "the resume plan must target the checkpoint's own world");
             Assert.AreEqual(16, plan.AreaIndex);
 
             // What HomeScreen.OnResume sets right before triggering that reload — BackyardPath's world
             // resolution on the reloaded scene's Awake must honour it ahead of SaveSlotData.WorldIndex.
             SaveSystem.PendingResume = new SaveSystem.PendingResumePlan(0, plan.WorldIndex);
-            Assert.AreEqual(1, BackyardPath.ActiveWorldIndex(),
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), BackyardPath.ActiveWorldIndex(),
                 "BackyardPath must resolve the pending resume's world, not the profile's own WorldIndex (2)");
         }
     }

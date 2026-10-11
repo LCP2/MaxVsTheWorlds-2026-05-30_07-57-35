@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
 
@@ -26,7 +27,7 @@ namespace MaxWorlds.Tests.EditMode
         [SetUp]
         public void SetUp()
         {
-            RigBoard.UseWorld(1);   // World 2 — e_cmg only exists on this board
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));   // World 2 — e_cmg only exists on this board
             RigState.Reset();
             PickupWallet.Reset();
             foreach (var d in Object.FindObjectsByType<PickupDirector>(FindObjectsSortMode.None))

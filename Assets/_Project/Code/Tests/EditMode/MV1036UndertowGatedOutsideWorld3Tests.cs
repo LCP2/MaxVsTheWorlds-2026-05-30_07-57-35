@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -132,7 +133,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // ================= World 1 (LPPE) =================
             {
-                WeaponSystemState.ApplyWorldLoadout(1);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
                 var playerGo = new GameObject("MV1036 Player W1", typeof(CharacterController), typeof(PlayerController));
                 var player = playerGo.GetComponent<PlayerController>();
@@ -172,7 +173,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // ================= World 2 (UNDERTOW) =================
             {
-                WeaponSystemState.ApplyWorldLoadout(2);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));
 
                 var playerGo = new GameObject("MV1036 Player W2", typeof(CharacterController), typeof(PlayerController));
                 var player = playerGo.GetComponent<PlayerController>();

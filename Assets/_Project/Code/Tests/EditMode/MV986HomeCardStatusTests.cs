@@ -55,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
                 HasData = true,
                 DisplayName = "TEST",
                 HasRunInProgress = true,
-                CheckpointWorldIndex = 1,      // World 2 (0-based)
+                CheckpointWorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain),      // World 2 (0-based)
                 CheckpointAreaIndex = 16,
                 CheckpointElapsedSeconds = 1415f,   // 23 min 35s -> "23 min"
                 CheckpointDeathsTaken = 4,
@@ -82,7 +82,7 @@ namespace MaxWorlds.Tests.EditMode
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(statusRt);
 
-            WorldConfig world2 = WorldLibrary.Load(WorldLibrary.KeyForIndex(1));
+            WorldConfig world2 = WorldLibrary.Load(WorldLibrary.KeyForIndex(WorldCatalog.IndexOf(WorldIds.Stormdrain)));
             Assert.That(world2, Is.Not.Null, "fixture: World 2's config must load");
             string worldName = world2.world.Substring(world2.world.IndexOf('—') + 1).Trim();
             int areaCount = world2.dials.areaCount;

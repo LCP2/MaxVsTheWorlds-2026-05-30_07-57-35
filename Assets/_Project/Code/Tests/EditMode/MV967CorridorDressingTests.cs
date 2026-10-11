@@ -74,13 +74,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(fromCfg, "world2_config failed to load — see the error log above.");
             Assert.IsTrue(WorldMapLoader.TryLoad(fromCfg, out MapData fromMap, out string fromReason), fromReason);
 
-            WorldTransitionEntry entry = WorldTransitions.For(1);
+            WorldTransitionEntry entry = WorldTransitions.For(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.IsNotNull(entry, "World 2 must author a WorldTransitions entry into World 3.");
             Vector2 doorMouth = entry.ExitDoorMouth(fromCfg);
 
             PlayerController exitPlayer = SpawnPlayer(out _exitPlayerGo);
             _exitSequence = new GameObject("WorldJoinSequence").AddComponent<WorldJoinSequence>();
-            _exitSequence.Initialize(fromCfg, fromMap, entry, fromWorldIndex: 1, exitPlayer, () => { });
+            _exitSequence.Initialize(fromCfg, fromMap, entry, fromWorldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), exitPlayer, () => { });
 
             Transform segA = _exitSequence.CorridorSegmentRoot('A');
             Transform segB = _exitSequence.CorridorSegmentRoot('B');
@@ -96,7 +96,7 @@ namespace MaxWorlds.Tests.EditMode
 
             PlayerController arrivalPlayer = SpawnPlayer(out _arrivalPlayerGo);
             _arrivalSequence = new GameObject("WorldJoinSequence (Arrival)").AddComponent<WorldJoinSequence>();
-            _arrivalSequence.InitializeArrival(toCfg, toMap, entry, fromWorldIndex: 1, arrivalPlayer, () => { });
+            _arrivalSequence.InitializeArrival(toCfg, toMap, entry, fromWorldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), arrivalPlayer, () => { });
 
             Transform arrivalRoot = _arrivalSequence.ArrivalRoot;
             Assert.IsNotNull(arrivalRoot, "the arrival shell must have been built");

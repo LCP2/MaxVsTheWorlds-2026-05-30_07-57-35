@@ -65,7 +65,9 @@ namespace MaxWorlds.Tests.EditMode
 
             _areaGo = new GameObject("AreaAccumulationDirector");
             _areaDirector = _areaGo.AddComponent<AreaAccumulationDirector>();
-            _areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, 1);
+            _areaDirector.ConfigureWorld(
+                new WorldConfig { dials = new WorldDials { areaCount = 1 } },
+                WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             _directorGo = new GameObject("PickupDirector");
             _director = _directorGo.AddComponent<PickupDirector>();
@@ -193,7 +195,8 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 // ---------------------------------------------------------------- Act 1: enter World 2 for real
-                WeaponSystemState.ApplyWeaponCoreMorph(1);
+                int stormdrainIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
+                WeaponSystemState.ApplyWeaponCoreMorph(stormdrainIndex);
 
                 Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "AC1: SUPPORT must read LOCKED on a new-world arrival");
                 foreach (string id in new[] { "u_sen", "u_dmg", "u_rng", "u_hp", "u_mov", "u_cst", "u_slt" })
@@ -206,12 +209,12 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---------------------------------------------------------------- Sub-check (rule 5): a cold-boot resume between the LOCK and the re-earn must not lose what's owed back
                 SaveSystem.ActiveSlot = 0;
-                SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 1 });
-                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: 1);
+                SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = stormdrainIndex });
+                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: stormdrainIndex);
 
                 WeaponSystemState.Reset();
                 PendingMorphingModule.Reset();
-                WeaponSystemState.ApplyWorldLoadout(1);
+                WeaponSystemState.ApplyWorldLoadout(stormdrainIndex);
                 Assert.IsTrue(SaveSystem.RestoreCheckpoint(0), "fixture: the checkpoint captured above must restore");
 
                 Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "sub-check: still LOCKED after a cold-boot resume between the lock and the re-earn");
@@ -279,8 +282,8 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---------------------------------------------------------------- Act 4: save, then a cold-boot resume
                 SaveSystem.ActiveSlot = 0;
-                SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 1 });
-                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: 1);
+                SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = stormdrainIndex });
+                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: stormdrainIndex);
 
                 int dmgBefore = RigState.Level("u_dmg");
                 int rngBefore = RigState.Level("u_rng");
@@ -290,7 +293,7 @@ namespace MaxWorlds.Tests.EditMode
                 WeaponSystemState.Reset();
                 PendingMorphingModule.Reset();
 
-                WeaponSystemState.ApplyWorldLoadout(1);   // the real RESUME's own board-repositioning step, before RestoreCheckpoint
+                WeaponSystemState.ApplyWorldLoadout(stormdrainIndex);   // the real RESUME's own board-repositioning step, before RestoreCheckpoint
                 bool restored = SaveSystem.RestoreCheckpoint(0);
                 Assert.IsTrue(restored, "fixture: the checkpoint captured above must restore");
 
@@ -302,9 +305,12 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---------------------------------------------------------------- Act 5: repeat entering World 3
                 Sentinel.DestroyAllActive();   // a real world transition reloads the scene -- any standing sentinel goes with it
-                _areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, 2);
+                int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                _areaDirector.ConfigureWorld(
+                    new WorldConfig { dials = new WorldDials { areaCount = 1 } },
+                    reefIndex);
 
-                WeaponSystemState.ApplyWeaponCoreMorph(2);
+                WeaponSystemState.ApplyWeaponCoreMorph(reefIndex);
 
                 Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "AC5: SUPPORT must read LOCKED again on the World 3 arrival");
                 Assert.IsTrue(RigState.IsCategoryUnlocked("SECONDARY"), "AC5: SECONDARY carries across World 2 -> World 3 (MV-1017), unlike SUPPORT");

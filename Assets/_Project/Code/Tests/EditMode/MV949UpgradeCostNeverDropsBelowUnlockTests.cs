@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -27,7 +28,7 @@ namespace MaxWorlds.Tests.EditMode
         public void EveryNodesOwnCostSequenceIsNonDecreasing_AndWorld1sFirstFourValuesAreExact()
         {
             AssertNonDecreasingAcrossBoard(worldIndex: 0);
-            AssertNonDecreasingAcrossBoard(worldIndex: 1);
+            AssertNonDecreasingAcrossBoard(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             // AC1's pinned check: a World 1 node's own [unlock, upgrade(1), upgrade(2), upgrade(3)]
             // must read exactly 10, 10, 15, 20. p_rng is a plain (non-flat-priced, unmultiplied) node.

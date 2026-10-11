@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -201,7 +202,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private static void AssertSalvoStagger()
         {
-            RigBoard.UseWorld(1); // rig_board.world2.json — s_rkt/s_sal live only here
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json — s_rkt/s_sal live only here
             WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
             RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 3 } },
                 new[] { "SECONDARY" });

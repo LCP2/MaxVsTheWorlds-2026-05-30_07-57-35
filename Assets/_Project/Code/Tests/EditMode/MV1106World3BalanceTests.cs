@@ -95,11 +95,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             // AC1(a)/(b): UNDERTOW is twice the RCDA's tick damage, in World 3 only.
             AssertPrimaryTickDamage(worldIndex: 0, expectedDamage: WaterBlaster.DefaultDamagePerTick, useUndertow: false);
-            AssertPrimaryTickDamage(worldIndex: 2, expectedDamage: Undertow.DefaultDamagePerTick, useUndertow: true);
+            AssertPrimaryTickDamage(worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), expectedDamage: Undertow.DefaultDamagePerTick, useUndertow: true);
 
             // AC1(a)/(b): the Shoulder Rack's rocket is weaker in World 3 only — World 2 untouched.
-            AssertRocketDamage(worldIndex: 1, expectedDamage: AbilityTuning.DefaultShoulderRackBaseDamage);
-            AssertRocketDamage(worldIndex: 2, expectedDamage: AbilityTuning.DefaultShoulderRackBaseDamageWorld3);
+            AssertRocketDamage(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), expectedDamage: AbilityTuning.DefaultShoulderRackBaseDamage);
+            AssertRocketDamage(worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), expectedDamage: AbilityTuning.DefaultShoulderRackBaseDamageWorld3);
 
             // AC3/AC4: a Dredge Hulk spawned through the real World 3 garrison path.
             AssertDredgeHulkHealthAndGuaranteedDrops();
@@ -223,7 +223,7 @@ namespace MaxWorlds.Tests.EditMode
             var director = directorGo.AddComponent<AreaAccumulationDirector>();
             try
             {
-                director.ConfigureWorld(cfg, worldIndex: 2); // World 3, 0-based
+                director.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef)); // World 3, 0-based
                 director.Configure(map, System.Array.Empty<CoverPiece>()); // FillArea(1) pre-places area 2's garrison
                 director.EnterArea(2); // activates/retoughens area 2's garrison (still Dormant — MV-656)
 

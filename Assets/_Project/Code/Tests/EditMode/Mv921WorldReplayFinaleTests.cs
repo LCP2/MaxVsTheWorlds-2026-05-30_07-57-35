@@ -47,7 +47,7 @@ namespace MaxWorlds.Tests.EditMode
             // The save already reached World 3 (index 2) in an earlier session — this run is a REPLAY
             // of World 1, which the AreaAccumulationDirector below configures directly (the same "no
             // scene/BackyardPath needed" idiom MV698/MV915's own tests already use).
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 2 });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef) });
 
             BossCensus.Reset();
             Pickup.ResetRegistry();
@@ -184,10 +184,10 @@ namespace MaxWorlds.Tests.EditMode
 
                 // AC2: the save's furthest-progress marker must not be reduced by this replay.
                 SaveSlotData saved = SaveSystem.Load(0);
-                Assert.AreEqual(2, saved.FurthestWorldIndex,
+                Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Reef), saved.FurthestWorldIndex,
                     "AC2: the furthest-progress marker must stay at World 3 (index 2) -- replaying and " +
                     "completing World 1 must not reduce it");
-                Assert.AreEqual(1, saved.WorldIndex,
+                Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), saved.WorldIndex,
                     "finishing the World 1 replay must offer World 2 (index 1) next, the world right " +
                     "after the one actually played -- not stay parked on World 3");
 

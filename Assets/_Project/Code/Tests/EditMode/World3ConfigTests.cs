@@ -110,7 +110,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var director = directorGo.AddComponent<AreaAccumulationDirector>();
-                director.ConfigureWorld(cfg, worldIndex: 2); // World3 is index 2 in WorldLibrary.Keys
+                director.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef)); // World3 is index 2 in WorldLibrary.Keys
                 director.Configure(map, System.Array.Empty<CoverPiece>()); // fills area 1
 
                 // The normal area-entry path: EnterArea is what a gate break calls at runtime, in order,

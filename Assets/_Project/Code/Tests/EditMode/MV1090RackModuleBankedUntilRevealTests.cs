@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.Save;
@@ -78,7 +79,7 @@ namespace MaxWorlds.Tests.EditMode
             // ---------------------------------------------------------------- Arrange: a real World 2 entry
             // The exact transition a real Weapon Core morph performs -- World 2's LPPE/Shoulder Rack
             // loadout, SECONDARY left locked (MV-727's own reversal), nothing owned yet.
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.IsFalse(RigState.IsCategoryUnlocked("SECONDARY"), "fixture: a fresh World 2 run starts with SECONDARY locked");
             Assert.AreEqual(0, RigState.Level("s_rkt"), "fixture: s_rkt starts unowned");
             Assert.AreEqual(SecondaryKind.ShoulderRack, WeaponSystemState.SecondaryKind, "fixture: World 2 fires the Shoulder Rack");
@@ -114,7 +115,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---------------------------------------------------------------- Sub-check: cold-boot resume between pickup and RIG open
                 SaveSystem.ActiveSlot = 0;
-                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: 1);
+                SaveSystem.CaptureCheckpoint(0, areaIndex: 1, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
                 // Simulate the process restart losing every in-memory static a real cold boot would.
                 PendingMorphingModule.Reset();

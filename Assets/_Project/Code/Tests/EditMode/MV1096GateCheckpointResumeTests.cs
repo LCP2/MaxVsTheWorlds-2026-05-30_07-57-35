@@ -103,7 +103,7 @@ namespace MaxWorlds.Tests.EditMode
             var areaGo = new GameObject("Area Accumulation");
             areaGo.transform.SetParent(host.transform);
             var areaDirector = areaGo.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(cfg, worldIndex: 1);
+            areaDirector.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
             areaDirector.Configure(map, built.Cover);
 
             var runnerGo = new GameObject("WorldRunner Test Root");

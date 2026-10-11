@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.Weapons
@@ -115,12 +116,12 @@ namespace MaxWorlds.Weapons
         /// <see cref="MaxWorlds.Pickups.CellEconomyTuning.WorldPartsMultiplier"/>) — World 3 alone reads
         /// its own lower number (MV-1106); every earlier world keeps <see cref="DefaultShoulderRackBaseDamage"/>.</summary>
         public static float ShoulderRackBaseDamageForWorld(int worldIndex) =>
-            worldIndex >= 2 ? DefaultShoulderRackBaseDamageWorld3 : DefaultShoulderRackBaseDamage;
+            worldIndex >= WorldCatalog.IndexOf(WorldIds.Reef) ? DefaultShoulderRackBaseDamageWorld3 : DefaultShoulderRackBaseDamage;
 
         /// <summary>The Shoulder Rack's per-level rocket damage step for <paramref name="worldIndex"/> —
         /// see <see cref="ShoulderRackBaseDamageForWorld"/>.</summary>
         public static float ShoulderRackDamagePerLevelForWorld(int worldIndex) =>
-            worldIndex >= 2 ? DefaultShoulderRackDamagePerLevelWorld3 : DefaultShoulderRackDamagePerLevel;
+            worldIndex >= WorldCatalog.IndexOf(WorldIds.Reef) ? DefaultShoulderRackDamagePerLevelWorld3 : DefaultShoulderRackDamagePerLevel;
 
         /// <summary>Rockets fired per salvo at a maxed Salvo (<c>s_sal</c>) track — the AC's own
         /// "SalvoCount (1, s_sal -&gt; 3)".</summary>

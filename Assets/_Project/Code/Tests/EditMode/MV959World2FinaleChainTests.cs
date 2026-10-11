@@ -42,7 +42,7 @@ namespace MaxWorlds.Tests.EditMode
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
             SaveSystem.DirectoryOverride = _dir;
             SaveSystem.ActiveSlot = 0;
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 1 });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain) });
 
             DevTuning.Reset();
             RobotEnemy.ResetRegistry();
@@ -122,7 +122,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(boss, "a31's boss must build as a SludgequeenBoss (MV-1127, MapRuntime.BuildBoss)");
 
             var areaDirector = _root.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(cfg, worldIndex: 1);                     // World 2 is index 1
+            areaDirector.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));                     // World 2 is index 1
             areaDirector.Configure(map, System.Array.Empty<CoverPiece>());       // fills area 1, pre-places area 2 dormant
             areaDirector.EnterArea(31);                                         // fills a31 directly
 

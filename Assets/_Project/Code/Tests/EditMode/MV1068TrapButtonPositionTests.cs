@@ -3,6 +3,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
@@ -71,7 +72,7 @@ namespace MaxWorlds.Tests.EditMode
             // World 3, every node (including p_trp) maxed — HomeScreen's own DEV WORLD 3 entry point
             // (MV-736), the real path the ticket's own "DEV WORLD 3" context note refers to.
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = 0 });
-            HomeScreen.StartSlotWorld(0, worldIndex: 2, maxRig: true);
+            HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
 
             GameObject maxGo = null, hudGo = null;
             Object droppedTrapGo = null;

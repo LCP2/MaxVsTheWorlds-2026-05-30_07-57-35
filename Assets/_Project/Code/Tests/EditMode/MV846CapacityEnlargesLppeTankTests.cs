@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Weapons;
@@ -41,7 +42,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void CapacityAtL5RaisesTheLppeTankTo315AndSustainsFireAtLeast25Seconds()
         {
-            WeaponSystemState.ApplyWeaponCoreMorph(1); // World 2 board, ActivePrimary -> Lppe, p_dmg at L1
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2 board, ActivePrimary -> Lppe, p_dmg at L1
 
             RigState.AcquireCap("p_cap");
             for (int i = 1; i < 5; i++) RigState.RaiseLevel("p_cap");

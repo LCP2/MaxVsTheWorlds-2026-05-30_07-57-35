@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
@@ -44,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
             RobotEnemy.ResetRegistry();
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
         }
 
         [TearDown]

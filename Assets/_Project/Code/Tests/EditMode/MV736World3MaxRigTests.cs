@@ -1,5 +1,6 @@
 using System.IO;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -67,10 +68,10 @@ namespace MaxWorlds.Tests.EditMode
                 WorldIndex = 0,
             });
 
-            HomeScreen.StartSlotWorld(0, worldIndex: 2, maxRig: true);
+            HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
 
             SaveSlotData after = SaveSystem.Load(0);
-            Assert.AreEqual(2, after.WorldIndex, "WORLD 3 must seed WorldIndex = 2");
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Reef), after.WorldIndex, "WORLD 3 must seed WorldIndex to the Reef's row");
 
             // AC2: every node on the board sits at its own authored maxLevel — assert the sum against
             // a total read live from RigBoard.AllIds/MaxLevel (MV-1017: never hard-coded, so this stays
