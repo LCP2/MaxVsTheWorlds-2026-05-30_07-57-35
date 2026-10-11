@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
@@ -131,7 +132,7 @@ namespace MaxWorlds.Tests.EditMode
             GameObject playerGoW1 = null;
             try
             {
-                WeaponSystemState.ApplyWorldLoadout(1);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Stormdrain));
                 playerGoW1 = new GameObject("MV1088 Player W1", typeof(CharacterController), typeof(PlayerController));
                 PlayerControllerAwake.Invoke(playerGoW1.GetComponent<PlayerController>(), null);
 
@@ -167,7 +168,7 @@ namespace MaxWorlds.Tests.EditMode
             GameObject playerGoW2 = null;
             try
             {
-                WeaponSystemState.ApplyWorldLoadout(2);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));
                 playerGoW2 = new GameObject("MV1088 Player W2", typeof(CharacterController), typeof(PlayerController));
                 PlayerControllerAwake.Invoke(playerGoW2.GetComponent<PlayerController>(), null);
 

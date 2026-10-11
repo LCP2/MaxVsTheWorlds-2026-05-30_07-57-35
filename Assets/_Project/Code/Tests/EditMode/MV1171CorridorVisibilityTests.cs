@@ -78,7 +78,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(fromCfg, "world2_config failed to load — see the error log above.");
             Assert.IsTrue(WorldMapLoader.TryLoad(fromCfg, out MapData map, out string reason), reason);
 
-            WorldTransitionEntry entry = WorldTransitions.For(1);
+            WorldTransitionEntry entry = WorldTransitions.For(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.IsNotNull(entry, "World 2 must author a WorldTransitions entry into World 3.");
             Vector2 doorMouth = entry.ExitDoorMouth(fromCfg);
 
@@ -97,7 +97,7 @@ namespace MaxWorlds.Tests.EditMode
             PlayerController player = _playerGo.AddComponent<PlayerController>();
 
             _sequence = new GameObject("WorldJoinSequence").AddComponent<WorldJoinSequence>();
-            _sequence.Initialize(fromCfg, map, entry, fromWorldIndex: 1, player, () => { });
+            _sequence.Initialize(fromCfg, map, entry, fromWorldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), player, () => { });
 
             // World 2's own exit wall is E (WorldCatalog), so the corridor travels +X.
             float mid = entry.CorridorLength * 0.5f;

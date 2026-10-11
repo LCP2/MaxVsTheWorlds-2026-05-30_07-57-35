@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
@@ -80,7 +81,7 @@ namespace MaxWorlds.Tests.EditMode
             // World 3, every node (including p_trp) maxed — same real entry point MV1068's own fixture
             // uses (HomeScreen's DEV WORLD 3 path, MV-736).
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = 0 });
-            HomeScreen.StartSlotWorld(0, worldIndex: 2, maxRig: true);
+            HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
 
             GameObject maxGo = null, hudGo = null;
             try

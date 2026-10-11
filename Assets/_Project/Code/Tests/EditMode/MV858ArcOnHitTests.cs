@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
 using MaxWorlds.Weapons;
@@ -83,7 +84,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ArcOnHitDamagesTheNearestOtherRobotWithin8mForHalfDamage_AndNotBeyondIt()
         {
-            WeaponSystemState.ApplyWeaponCoreMorph(1); // World 2 board, ActivePrimary -> Lppe
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // World 2 board, ActivePrimary -> Lppe
             WeaponSystemState.AcquireById("p_rng");    // p_frk's own parent
             WeaponSystemState.AcquireById("p_frk");    // ARC at level 1
             Assert.AreEqual(1, RigState.Level("p_frk"), "test precondition: p_frk (ARC) must reach level 1");

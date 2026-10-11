@@ -54,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World2Economy_MatchesTheMV767Rebalance()
         {
-            int world2Total = TotalPrimarySecondaryCost(worldIndex: 1);
+            int world2Total = TotalPrimarySecondaryCost(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.That(world2Total, Is.InRange(1146, 1186),
                 $"World 2's PRIMARY+SECONDARY total must land near parity with its (reduced) Parts " +
                 $"supply after MV-767's 2.5x multiplier, MV-844's own +200, MV-846's own new p_cap node " +
@@ -79,7 +79,7 @@ namespace MaxWorlds.Tests.EditMode
             // next world the instant it's collected, well before the played world itself advances, so
             // the old RigBoard-only read would misfire mid-clean-up. Drive the played-world index
             // directly via a probe AreaAccumulationDirector instead of RigBoard.UseWorld alone.
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.That(GrantsSupercellForArea(1, playedWorld: 1), Is.True, "World 2 area 1 must still grant a Supercell");
             Assert.That(GrantsSupercellForArea(2, playedWorld: 1), Is.False, "World 2 area 2 must NOT grant a Supercell");
             Assert.That(GrantsSupercellForArea(3, playedWorld: 1), Is.True, "World 2 area 3 must grant a Supercell");
@@ -120,7 +120,9 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var areaDirector = go.AddComponent<AreaAccumulationDirector>();
-                areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, playedWorld);
+                areaDirector.ConfigureWorld(
+                    new WorldConfig { dials = new WorldDials { areaCount = 1 } },
+                    playedWorld);
                 var director = go.AddComponent<PickupDirector>();
                 return (bool)typeof(PickupDirector)
                     .GetMethod("GrantsSupercellForArea", BindingFlags.NonPublic | BindingFlags.Instance)

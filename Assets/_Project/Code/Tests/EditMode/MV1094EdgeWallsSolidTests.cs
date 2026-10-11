@@ -39,8 +39,8 @@ namespace MaxWorlds.Tests.EditMode
         public void OuterEdgeWalls_AreSolidLikeInteriorWalls_AndEveryEdgeIsCovered()
         {
             AssertWorld(WorldLibrary.World1, worldIndex: 0);
-            AssertWorld(WorldLibrary.World2, worldIndex: 1);
-            AssertWorld(WorldLibrary.World3, worldIndex: 2);
+            AssertWorld(WorldLibrary.World2, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
+            AssertWorld(WorldLibrary.World3, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef));
         }
 
         private static void AssertWorld(string worldKey, int worldIndex)
@@ -59,7 +59,7 @@ namespace MaxWorlds.Tests.EditMode
                 MapRuntime.Build(map, root.transform);
                 var wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
                 wm.Apply(WorldCatalog.Get(worldIndex).Palette);
-                if (worldIndex >= 2) ReefKit.DressHull(root.transform);
+                if (worldIndex >= WorldCatalog.IndexOf(WorldIds.Reef)) ReefKit.DressHull(root.transform);
 
                 List<StructuralWall> walls = AllWallComponents(root.transform);
                 Assert.IsNotEmpty(walls, $"World {worldNumber}'s own map must solve to some walls");

@@ -51,10 +51,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(PendingMorphingModule.WeaponCorePending);
 
             // Act 1 (Cause 2's fix): RUN START applies the morph — BEFORE THE RIG is ever opened.
-            BackyardPath.ApplyPendingMorphAtRunStart(worldIndex: 1);
+            int stormdrainIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
+            BackyardPath.ApplyPendingMorphAtRunStart(worldIndex: stormdrainIndex);
 
             Assert.IsFalse(PendingMorphingModule.WeaponCorePending, "run start must consume the banked core");
-            Assert.AreEqual(1, RigBoard.ActiveWorldIndex,
+            Assert.AreEqual(stormdrainIndex, RigBoard.ActiveWorldIndex,
                 "run start must already be on World 2's board -- the bug left this on World 1 until THE RIG's first open");
 
             // Assert 1 (Cause 2): the first Replicator destroyed, with THE RIG still never opened, must
@@ -66,7 +67,9 @@ namespace MaxWorlds.Tests.EditMode
             // up a probe director saying so (the real BackyardPath.Awake this run start belongs to does
             // the same, via its own AreaAccumulationDirector.ConfigureWorld call).
             var areaDirector = directorGo.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(new WorldConfig { dials = new WorldDials { areaCount = 1 } }, worldIndex: 1);
+            areaDirector.ConfigureWorld(
+                new WorldConfig { dials = new WorldDials { areaCount = 1 } },
+                worldIndex: stormdrainIndex);
             try
             {
                 InvokeOnFactoryDestroyed(director, Vector3.zero);

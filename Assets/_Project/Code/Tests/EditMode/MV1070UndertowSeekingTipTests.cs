@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -91,7 +92,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TipSeeksOvershootsAndLatches_IgnoresOutOfConeRobot_SwaysWithNoTarget_WhipsToNextOnDeath_FinishIsProngsNotBall_MV1070()
         {
-            WeaponSystemState.ApplyWorldLoadout(2); // World 3 -> UNDERTOW is the active primary
+            WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef)); // World 3 -> UNDERTOW is the active primary
             DevMode.Enabled = true;
             DevMode.InfiniteEnergy = true; // isolate seek/latch timing from tank depletion
 

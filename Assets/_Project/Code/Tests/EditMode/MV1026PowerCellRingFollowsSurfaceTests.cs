@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
             var path = _pathGo.AddComponent<BackyardPath>();
             BackyardPathMapField.SetValue(path, map);
 
-            RigBoard.UseWorld(1);   // World 2 board — both e_mag and e_cmg live here (case vi needs each)
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));   // World 2 board — both e_mag and e_cmg live here (case vi needs each)
 
             foreach (PickupKind kind in new[] { PickupKind.PowerCellSecondary, PickupKind.PowerCell })
             {

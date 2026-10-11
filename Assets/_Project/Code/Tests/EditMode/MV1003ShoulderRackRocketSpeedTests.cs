@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
@@ -52,7 +53,7 @@ namespace MaxWorlds.Tests.EditMode
             PlayerRocket.DestroyAllActive();
             RobotEnemy.ResetRegistry();
             // Same World 2 selection MV694ShoulderRackTests uses — s_rkt only lives on World 2's board.
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
         }
 
         [TearDown]

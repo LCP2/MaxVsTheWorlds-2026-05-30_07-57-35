@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
@@ -36,7 +37,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World2RaisesForceFieldAndSentinelDamageCapsAndTheirResolvedValuesFollow()
         {
-            RigBoard.UseWorld(1); // rig_board.world2.json
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json
             foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
 
             Assert.That(RigBoard.MaxLevel("e_ff"), Is.EqualTo(10), "MV-989: World 2's Force Field track must cap at 10 levels");

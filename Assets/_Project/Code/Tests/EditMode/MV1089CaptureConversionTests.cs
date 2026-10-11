@@ -2,6 +2,7 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -184,7 +185,7 @@ namespace MaxWorlds.Tests.EditMode
                 // === World 3 loadout for the weapon-targeting checks below (Undertow primary, Shoulder
                 // Rack secondary, World 3's own RIG board) — ApplyWorldLoadout is the one real entry
                 // point that sets all three together (WeaponSystemState.ApplyWorldLoadout's own doc).
-                WeaponSystemState.ApplyWorldLoadout(2);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));
                 RigState.RestoreSnapshot(
                     new System.Collections.Generic.Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 1 } },
                     new[] { "SECONDARY" });

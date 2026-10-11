@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -103,8 +104,8 @@ namespace MaxWorlds.Tests.EditMode
         public void SplitDrivesBeamCountDamageAndTheRealAimReticle_MV1128()
         {
             // --- The real World 3 loadout: World 1 -> 2 -> 3, the same morph sequence the game plays.
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
-            WeaponSystemState.ApplyWeaponCoreMorph(2);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Reef));
             DevMode.Enabled = true;
             DevMode.InfiniteEnergy = true; // isolate beam/damage timing from tank depletion
 
@@ -118,7 +119,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, undertow.BeamCount, "SPLIT 1 must resolve to exactly one beam");
             Assert.AreEqual(3, RigBoard.MaxLevel("p_spr"), "SPLIT's resolved maximum must be 3");
 
-            RigBoardLayout.UseWorld(2);
+            RigBoardLayout.UseWorld(WorldCatalog.IndexOf(WorldIds.Reef));
             var splitLayout = FindAbility(RigBoardLayout.Abilities, "p_spr");
             Assert.IsNotNull(splitLayout, "World 3's board must still carry a p_spr node");
             Assert.AreEqual("SPLIT", splitLayout.Label, "World 3's p_spr must resolve its label as SPLIT, not SPREAD");

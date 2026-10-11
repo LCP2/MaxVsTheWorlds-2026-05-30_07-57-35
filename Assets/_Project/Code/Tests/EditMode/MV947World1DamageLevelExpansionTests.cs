@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
@@ -87,7 +88,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // --- AC3: World 2's own board (rig_board.world2.json) must be untouched by this ticket's
             // World 1-only change — snapshotted without disturbing the World 1 board this test otherwise runs against.
-            RigBoard.UseWorld(1); // rig_board.world2.json
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json
             Assert.That(RigBoard.MaxLevel("p_dmg"), Is.EqualTo(8), "World 2's POWER/p_dmg cap (MV-844) must stay 8");
             Assert.That(RigBoard.MaxLevel("u_dmg"), Is.EqualTo(10), "World 2's Sentinel Damage cap (MV-840) must stay 10");
         }

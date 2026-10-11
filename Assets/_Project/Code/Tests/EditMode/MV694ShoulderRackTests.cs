@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
@@ -42,7 +43,7 @@ namespace MaxWorlds.Tests.EditMode
             // MV-732 removed s_rkt/s_sal/s_rld from World 1's rig_board.json — the rack lives only on
             // rig_board.world2.json now, so RigState.RestoreSnapshot (which drops any id RigBoard.Exists
             // says isn't in the ACTIVE board) needs World 2's board selected to accept those ids at all.
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
         }
 
         [TearDown]

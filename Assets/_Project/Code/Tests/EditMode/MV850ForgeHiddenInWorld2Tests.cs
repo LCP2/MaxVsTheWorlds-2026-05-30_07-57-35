@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -71,7 +72,7 @@ namespace MaxWorlds.Tests.EditMode
             // ---------------------------------------------------------------- AC: World 2 hides the row and masks the forge
             // RebuildBoard syncs RigBoardLayout to RigBoard.ActiveWorldIndex itself (MV-753) — no
             // separate RigBoardLayout.UseWorld call needed here.
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             _screen.RebuildBoard();
 
             Assert.That(RigFusionState.IsForged("f_bgd"), Is.False,

@@ -114,7 +114,7 @@ namespace MaxWorlds.Tests.EditMode
                 Quaternion aim = Quaternion.LookRotation((aimPoint - origin).normalized, Vector3.up);
 
                 // --- AC1: UNDERTOW (World 3's own loadout) must open g1 within HP/DPS + 20%. ---
-                WeaponSystemState.ApplyWorldLoadout(2);
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));
                 var undertowGo = new GameObject("MV1044 Undertow");
                 try
                 {

@@ -67,7 +67,7 @@ namespace MaxWorlds.Tests.EditMode
         public void CheckpointRestoresReplicatorsRigAndWallet_AndWinClearsIt_AndALegacySaveIsUnaffected()
         {
             // AC5 (no-regression guard): a slot with no checkpoint restores exactly as today.
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = 1 });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain) });
             Assert.IsFalse(SaveSystem.RestoreCheckpoint(0), "a slot with no checkpoint must report nothing to restore");
 
             // Arrange a run: one Replicator destroyed BEFORE the gate, rig/wallet state — then pass the
@@ -118,7 +118,7 @@ namespace MaxWorlds.Tests.EditMode
             // ticket's own named bug ("a stale checkpoint into a world already finished").
             SaveSystem.RecordResult(0, deathsTaken: 3);
             SaveSlotData afterVictory = SaveSystem.Load(0);
-            Assert.AreEqual(2, afterVictory.WorldIndex, "Victory must still advance WorldIndex");
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Reef), afterVictory.WorldIndex, "Victory must still advance WorldIndex");
             Assert.IsFalse(afterVictory.HasRunInProgress,
                 "winning the world must clear the checkpoint outright, not just its area index");
             Assert.IsFalse(SaveSystem.RestoreCheckpoint(0),

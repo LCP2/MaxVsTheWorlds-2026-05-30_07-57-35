@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Intro;
@@ -316,7 +317,7 @@ namespace MaxWorlds.UI
         /// <summary>WORLD 2 dev entry point (MV-726) — the original single-world shape, kept as a
         /// one-line call onto <see cref="StartSlotWorld"/> so it can never drift from it (MV-726
         /// AC4). Unchanged by MV-736: still world 1, maxRig: false.</summary>
-        public static void StartSlotWorld2(int slot) => StartSlotWorld(slot, worldIndex: 1, maxRig: false);
+        public static void StartSlotWorld2(int slot) => StartSlotWorld(slot, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), maxRig: false);
 
         /// <summary>MV-736: fully maxes THE RIG for whichever board is currently active (already
         /// switched onto <paramref name="worldIndex"/>'s board by the caller's own
@@ -850,8 +851,8 @@ namespace MaxWorlds.UI
             {
                 int capturedSlot = slot;
                 bool occupied = SaveSystem.Load(slot).HasData;
-                BuildButton("DEV - WORLD 2", cardX[slot], true, () => OnWorldDevStart(capturedSlot, 1, maxRig: false));
-                BuildButton("DEV - WORLD 3", cardX[slot] + w + gap, true, () => OnWorldDevStart(capturedSlot, 2, maxRig: true));
+                BuildButton("DEV - WORLD 2", cardX[slot], true, () => OnWorldDevStart(capturedSlot, WorldCatalog.IndexOf(WorldIds.Stormdrain), maxRig: false));
+                BuildButton("DEV - WORLD 3", cardX[slot] + w + gap, true, () => OnWorldDevStart(capturedSlot, WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true));
                 BuildButton("DEV: FINAL AREA", cardX[slot] + 2f * (w + gap), occupied, () => OnDevFinalAreaTapped(capturedSlot));
             }
         }

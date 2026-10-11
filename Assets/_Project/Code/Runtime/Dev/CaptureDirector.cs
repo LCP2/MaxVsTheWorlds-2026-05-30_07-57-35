@@ -1217,7 +1217,7 @@ namespace MaxWorlds.Dev
                     WeaponSystemState.Reset();
                     PendingMorphingModule.Reset();
                     PendingMorphingModule.SetWeaponCore();
-                    WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 1);
+                    WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
                     RigState.AcquireCap("s_rkt");   // clears SECONDARY's mystery lock, buys the rack to L1
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1458,7 +1458,7 @@ namespace MaxWorlds.Dev
                     // The same WorldIndex HomeScreen's WORLD 2 dev button seeds via StartSlotWorld —
                     // just seeded before the first scene load rather than triggering a second one.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1568,7 +1568,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1631,7 +1631,7 @@ namespace MaxWorlds.Dev
                     // The same WorldIndex HomeScreen's WORLD 2 dev button seeds via StartSlotWorld —
                     // just seeded before the first scene load rather than triggering a second one.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1703,7 +1703,7 @@ namespace MaxWorlds.Dev
                 {
                     // World 2 is index 1 -- same WorldIndex seeding idiom as BuildMv742StormdrainCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1820,7 +1820,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding idiom as BuildMv742StormdrainCheck, one world further in.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 2;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -1899,7 +1899,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding idiom as BuildMv1019ReefFloorCheck -- World 3 is index 2.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 2;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -2135,7 +2135,7 @@ namespace MaxWorlds.Dev
             {
                 for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
 
-                WeaponSystemState.ApplyWorldLoadout(2);   // World 3 -> UNDERTOW is the active primary
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));   // World 3 -> UNDERTOW is the active primary
                 DevMode.Enabled = true;
                 DevMode.InfiniteEnergy = true;
 
@@ -2277,7 +2277,7 @@ namespace MaxWorlds.Dev
                 foreach (var stray in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
                     if (stray != null) Destroy(stray.gameObject);
 
-                WeaponSystemState.ApplyWorldLoadout(2);   // World 3 -> UNDERTOW is the active primary
+                WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef));   // World 3 -> UNDERTOW is the active primary
                 DevMode.Enabled = true;
                 DevMode.InfiniteEnergy = true;
 
@@ -2376,7 +2376,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding idiom as BuildMv1019ReefFloorCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 2;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                     // Set from frame 0 (before the scene even loads) so World 3's own live roster never
@@ -2559,7 +2559,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -2611,7 +2611,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -2674,7 +2674,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -2909,7 +2909,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv755StormdrainDressingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3015,7 +3015,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same HomeScreen-modal-freezes-time dodge BuildMv616SentinelBeam uses.
                     SaveSystem.ActiveSlot = 0;
-                    RigBoard.UseWorld(1);   // s_rkt/s_sal live only on rig_board.world2.json
+                    RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));   // s_rkt/s_sal live only on rig_board.world2.json
                     WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
                     RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 3 } },
                         new[] { "SECONDARY" });
@@ -3184,7 +3184,7 @@ namespace MaxWorlds.Dev
                 BeforeSceneLoad = () =>
                 {
                     SaveSystem.ActiveSlot = 0;
-                    RigBoard.UseWorld(1);   // s_rkt/s_sal live only on rig_board.world2.json
+                    RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));   // s_rkt/s_sal live only on rig_board.world2.json
                     WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
                     RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 3 } },
                         new[] { "SECONDARY" });
@@ -3390,7 +3390,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3444,7 +3444,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3495,7 +3495,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3546,7 +3546,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3597,7 +3597,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck/BuildMv822HazardBandingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3697,7 +3697,7 @@ namespace MaxWorlds.Dev
                     // Same WorldIndex seeding as BuildMv819PipeCheck/BuildMv821DeckWalkwayCheck --
                     // the LPPE is World 2's primary (MV-708).
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3765,7 +3765,7 @@ namespace MaxWorlds.Dev
                     // Same WorldIndex seeding as BuildMv738SludgeCheck -- lands Max in World 2 on
                     // the one boot a capture preset gets, rather than a second scene load.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -3842,7 +3842,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv750DressingCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -4184,10 +4184,10 @@ namespace MaxWorlds.Dev
                 if (path == null || path.Cfg == null || path.Map == null)
                     throw new CaptureAbortException("World 2 built no BackyardPath to open the corridor from");
 
-                WorldTransitionEntry entry = WorldTransitions.For(1);
+                WorldTransitionEntry entry = WorldTransitions.For(WorldCatalog.IndexOf(WorldIds.Stormdrain));
                 if (entry == null) throw new CaptureAbortException("World 2 has no WorldTransitions entry into World 3");
 
-                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: 1, path.ExitGate);
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), path.ExitGate);
                 for (int i = 0; i < 4; i++) yield return null;
 
                 if (FindFirstObjectByType<WorldJoinSequence>() == null)
@@ -4253,7 +4253,7 @@ namespace MaxWorlds.Dev
                 BeforeSceneLoad = () =>
                 {
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },
@@ -4533,7 +4533,7 @@ namespace MaxWorlds.Dev
                 {
                     // Same World 2 seeding as BuildMv857MaxWorld2Colors/BuildMv939W2ColorCheck.
                     SaveSlotData data = SaveSystem.Load(0);
-                    data.WorldIndex = 1;
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain);
                     SaveSystem.Save(0, data);
                     SaveSystem.ActiveSlot = 0;
                 },

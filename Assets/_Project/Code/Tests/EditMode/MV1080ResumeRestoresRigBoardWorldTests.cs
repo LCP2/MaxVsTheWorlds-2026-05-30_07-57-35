@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -51,7 +52,7 @@ namespace MaxWorlds.Tests.EditMode
             // The finale CLEAN-UP window (MV-1078 WorldFinaleGate.BeginCleanup): the Core already morphed
             // THE RIG onto World 2's board (LPPE), while Max is still standing in World 1's final area —
             // the world actually PLAYED — with the exit not yet open.
-            WeaponSystemState.ApplyWorldLoadout(1);
+            WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             RigState.RestoreSnapshot(new Dictionary<string, int> { ["p_dmg"] = 3 }, new[] { "PRIMARY" });
 
             SaveSystem.ActiveSlot = slot;

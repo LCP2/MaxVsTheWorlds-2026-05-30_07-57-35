@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
@@ -82,7 +83,7 @@ namespace MaxWorlds.Tests.EditMode
             UndertowAwake.Invoke(undertow, null);
 
             // --- AC1: World 3's primary is UNDERTOW -- Undertow emits when firing is requested, RCDA doesn't.
-            WeaponSystemState.ApplyWeaponCoreMorph(2);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Reef));
 
             // DevMode.AutoFire forces IsFiring true the same way PressKitDirector's filming rig does,
             // sidestepping the real Input System (this project bans PlayMode) while still exercising the
@@ -103,7 +104,7 @@ namespace MaxWorlds.Tests.EditMode
                 "carve-out gated WaterBlaster on \"not Lppe\" only, so it kept streaming under Undertow too");
 
             // --- AC1 continued: World 2's primary is the LPPE -- Undertow must emit nothing.
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             UndertowUpdate.Invoke(undertow, null);
             Assert.IsFalse(undertow.IsEmitting,
                 "Undertow must emit nothing once World 2's LPPE is the active primary instead");

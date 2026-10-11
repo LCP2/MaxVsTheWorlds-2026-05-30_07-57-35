@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 using MaxWorlds.Pickups;
@@ -262,7 +263,7 @@ namespace MaxWorlds.Dev
             RigState.UnlockCategory("SUPPORT");
             RigState.AcquireCap("u_sen");
 
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             PickupWallet.SetPowerCells(15);
         }
 

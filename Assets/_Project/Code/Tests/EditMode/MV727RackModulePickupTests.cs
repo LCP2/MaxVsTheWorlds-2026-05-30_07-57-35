@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
 
@@ -45,7 +46,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.Reset();
             PendingMorphingModule.Reset();
             // World 2's board is where s_rkt actually lives (MV-732 removed it from World 1's file).
-            RigBoard.UseWorld(1);
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain));
         }
 
         [Test]

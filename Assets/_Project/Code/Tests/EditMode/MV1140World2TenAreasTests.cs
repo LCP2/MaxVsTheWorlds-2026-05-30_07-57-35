@@ -63,7 +63,7 @@ namespace MaxWorlds.Tests.EditMode
                 CameraTestUtil.RestoreAmbientMainCameras(suppressedCameras);
             }
 
-            WorldTransitionEntry entry = WorldTransitions.For(1);
+            WorldTransitionEntry entry = WorldTransitions.For(WorldCatalog.IndexOf(WorldIds.Stormdrain));
             Assert.IsNotNull(entry, "World 2 must author a WorldTransitions row");
             Vector2 doorMouth = entry.ExitDoorMouth(cfg);
             Assert.AreEqual(352f, doorMouth.x, 0.01f, "World 2's exit door mouth X");

@@ -209,7 +209,7 @@ namespace MaxWorlds.Tests.EditMode
             MapBuild build = MapRuntime.Build(map, _hostGo.transform);
 
             var areaDirector = _hostGo.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(cfg, worldIndex: 1);
+            areaDirector.ConfigureWorld(cfg, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain));
             areaDirector.Configure(map, build.Cover);
             areaDirector.EnterArea(2);   // a2 "Grate Hall" -- rushers, lurkers and sludgers, all garrison-seeded
 

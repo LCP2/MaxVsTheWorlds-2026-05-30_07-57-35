@@ -218,8 +218,8 @@ namespace MaxWorlds.Tests.EditMode
             var rows = new[]
             {
                 new Row(WorldLibrary.World1, worldIndex: 0, bossId: "a30_boss1"),
-                new Row(WorldLibrary.World2, worldIndex: 1, bossId: "sludgequeen"),
-                new Row(WorldLibrary.World3, worldIndex: 2, bossId: "anchorhead"),
+                new Row(WorldLibrary.World2, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), bossId: "sludgequeen"),
+                new Row(WorldLibrary.World3, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), bossId: "anchorhead"),
             };
 
             foreach (Row row in rows)

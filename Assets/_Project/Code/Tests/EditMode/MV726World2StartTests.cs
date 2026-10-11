@@ -1,5 +1,6 @@
 using System.IO;
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -55,7 +56,7 @@ namespace MaxWorlds.Tests.EditMode
             HomeScreen.StartSlotWorld2(0);
 
             SaveSlotData after = SaveSystem.Load(0);
-            Assert.AreEqual(1, after.WorldIndex, "WORLD 2 must seed WorldIndex = 1 (Stormdrain)");
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Stormdrain), after.WorldIndex, "WORLD 2 must seed WorldIndex to the Stormdrain's row");
             // MV-1023: SaveSlotData.PrimaryKind was deleted (a dead write nothing ever read) — the
             // live WeaponSystemState.ActivePrimary assertion below is the one source of truth now.
             Assert.IsFalse(after.WeaponCorePending, "no Weapon Core morph is pending on a dev-shortcut start");

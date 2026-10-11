@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using MaxWorlds.Arena;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -29,7 +30,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(world1Cap, Is.EqualTo(442.5f).Within(1e-3f),
                 "World 1's Force Field must cap at 442.5 (40 + 57.5*7) once maxLevel is 8");
 
-            RigBoard.UseWorld(1); // rig_board.world2.json
+            RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Stormdrain)); // rig_board.world2.json
             int world2Max = WeaponCatalog.MaxLevel(AbilityKind.ForceField);
             float world2Cap = AbilityTuning.ForceFieldAbsorbCap(world2Max,
                 AbilityTuning.DefaultForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
