@@ -7029,7 +7029,36 @@
       ],
       "hatches": [],
       "grates": [],
-      "replicators": [],
+      "replicators": [
+        {
+          "id": "a21_rep1",
+          "x": 97,
+          "z": -7,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a21_rep2",
+          "x": 163,
+          "z": -7,
+          "capacity": 6,
+          "facing": "N"
+        },
+        {
+          "id": "a21_rep3",
+          "x": 163,
+          "z": 59,
+          "capacity": 6,
+          "facing": "S"
+        },
+        {
+          "id": "a21_rep4",
+          "x": 99,
+          "z": 57,
+          "capacity": 6,
+          "facing": "S"
+        }
+      ],
       "garrison": [
         {
           "kind": "rusher",
