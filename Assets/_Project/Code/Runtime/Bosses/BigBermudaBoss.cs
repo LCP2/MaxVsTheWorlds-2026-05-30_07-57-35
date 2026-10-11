@@ -38,6 +38,12 @@ namespace MaxWorlds.Bosses
         private const string BossName = "BIG BERMUDA";
         private const float Gravity = 20f;
 
+        /// <summary>The name this boss's HUD bar shows (MV-1145) — <see cref="BossName"/> unless
+        /// <see cref="SetDisplayName"/> overrides it. <see cref="MaxWorlds.Bosses.BossKinds"/>'s
+        /// "anchorhead" row calls that setter, so an Anchorhead fight shows "ANCHORHEAD" on the same
+        /// underlying boss component that still drives the HP bar, BossCensus and the finale.</summary>
+        private string _displayName = BossName;
+
 
         [Header("Intro")]
         [SerializeField] private float introTime = 1.6f;
@@ -200,6 +206,13 @@ namespace MaxWorlds.Bosses
         /// Called once, right after <c>AddComponent</c>, before this boss ever ticks Dormant.</summary>
         public void SetWakeArea(Rect area) => _wakeArea = area;
 
+        /// <summary>Overrides the name this boss registers with <see cref="BossCensus"/> (MV-1145).
+        /// Called once, right after <c>AddComponent</c>, same timing as <see cref="SetWakeArea"/>.</summary>
+        public void SetDisplayName(string name)
+        {
+            if (!string.IsNullOrEmpty(name)) _displayName = name;
+        }
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -291,7 +304,7 @@ namespace MaxWorlds.Bosses
             _introTimer = introTime;
             // 2 phases -> HUD bar shows the 50% segment. MV-542: routed through BossCensus so a 2+
             // boss fight engages the bar once and shows the COMBINED health, not a per-boss re-engage.
-            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, areaIndex);
+            BossCensus.Register(this, _displayName, 2, _health.Current, _health.Max, areaIndex);
         }
 
         /// <summary>Which area this boss stands in (MV-591). Resolved from its own world position, so

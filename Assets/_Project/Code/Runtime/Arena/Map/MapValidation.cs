@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Bosses;
 using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
@@ -512,6 +513,7 @@ namespace MaxWorlds.Arena
             WorldAreas(cfg, violations);
             WorldSheds(cfg, violations);
             WorldBosses(cfg, violations);
+            WorldBossKinds(cfg, violations);
             WorldGarrison(cfg, violations);
             WorldLurkerGrates(cfg, violations);
             WorldGates(cfg, violations);
@@ -855,6 +857,30 @@ namespace MaxWorlds.Arena
                         violations.Add($"area '{a.id}' has two bosses {dist:0.#} m apart — under the " +
                                  $"{MinBossSeparation} m minimum boss separation");
                     }
+                }
+            }
+        }
+
+        /// <summary>An authored <see cref="WorldBoss.kind"/> (MV-1145) must name a real row of
+        /// <see cref="BossKinds"/> — a typo here must fail the load, not silently fall back to Big
+        /// Bermuda the way an unrecognised <see cref="EntityKind"/> string elsewhere in this engine is
+        /// allowed to. Unauthored (empty) is fine: <see cref="BossKinds.Resolve"/> has its own fallback
+        /// for that.</summary>
+        private static void WorldBossKinds(WorldConfig cfg, List<string> violations)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldBoss[] bosses = a.Bosses();
+                for (int i = 0; i < bosses.Length; i++)
+                {
+                    WorldBoss b = bosses[i];
+                    if (string.IsNullOrEmpty(b.kind)) continue;
+                    if (BossKinds.TryGet(b.kind, out _)) continue;
+
+                    string bossId = a.BossId(b, i, bosses.Length);
+                    string known = string.Join(", ", BossKinds.KnownKinds);
+                    violations.Add($"area '{a.id}': boss '{bossId}' authors unknown kind '{b.kind}' — " +
+                             $"known kinds: {known}");
                 }
             }
         }

@@ -2652,11 +2652,10 @@ namespace MaxWorlds.Arena
         /// (including a boss) to sit inside a zone, so <c>ZoneAt</c> is resolved here, not defended
         /// against being null.
         ///
-        /// MV-1127: dispatch is now by KIND, not a single hard-wired type — a "sludgequeen" id builds a
-        /// <see cref="SludgequeenBoss"/> (her own rig, her own fight) rather than the <see cref="BigBermudaBoss"/>
-        /// every id used to resolve to regardless of what it actually named. "anchorhead" stays a
-        /// <see cref="BigBermudaBoss"/> underneath its own companion behaviour (MV-1018) — only
-        /// Sludgequeen needed a wholly different base component.
+        /// MV-1145: dispatch is now by one table, <see cref="BossKinds"/> — resolved from this entity's
+        /// authored <see cref="MapEntity.bossKind"/>, falling back to its own id, then to Big Bermuda
+        /// (<see cref="BossKinds.Resolve"/>). <see cref="MapValidation"/> already refuses an unknown kind
+        /// before a map ever reaches this method, so every row here is guaranteed to exist.
         /// </summary>
         private static MonoBehaviour BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built,
             Dictionary<Renderer, List<string>> rendererZones)
@@ -2668,41 +2667,12 @@ namespace MaxWorlds.Arena
 
             MarkDiscoverable(body);
 
-            MonoBehaviour boss;
-            if (e.id == "sludgequeen")
-            {
-                var sludgequeen = body.AddComponent<SludgequeenBoss>(); // RequireComponent adds the CharacterController
-                Rect footprint = map.ZoneAt(e.x, e.z).Footprint;
-                sludgequeen.SetWakeArea(footprint);
-                sludgequeen.SetArenaBounds(footprint);
-                SludgequeenRig.CreateFor(sludgequeen);
-                boss = sludgequeen;
-            }
-            else
-            {
-                var bigBermuda = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
-                bigBermuda.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
+            string resolvedKind = BossKinds.Resolve(e.bossKind, e.id);
+            if (!BossKinds.TryGet(resolvedKind, out BossKinds.Row row))
+                throw new System.InvalidOperationException(
+                    $"boss '{e.id}' resolved to unknown kind '{resolvedKind}' — MapValidation should have refused this map");
 
-                // MV-1018: Anchorhead (World 3's a30 boss) is selected by its own authored id, not by
-                // world index — BigBermudaBoss stays the base component underneath it either way (HP
-                // bar, BossCensus, victory, the finale orb/door all keep working through it, unchanged);
-                // only the companion behaviour and the generated body differ.
-                if (e.id == "anchorhead")
-                {
-                    var anchor = body.AddComponent<AnchorheadBoss>();
-                    AnchorheadRig.CreateFor(bigBermuda, anchor);
-                }
-                else
-                {
-                    // MV-573: every boss gets its own rig, bound to it alone, right here — the old
-                    // scene-load singleton (BigBermudaRig.Install) built exactly one rig per scene and
-                    // bailed the moment any rig existed, so only the FIRST boss on a multi-boss map ever
-                    // grew a body and every other one stood there as the bare greybox cube above.
-                    BigBermudaRig.CreateFor(bigBermuda);
-                }
-
-                boss = bigBermuda;
-            }
+            MonoBehaviour boss = row.Build(body, e, map);
 
             // MV-972: tagged AFTER the rig exists, so this also picks up every renderer the rig just
             // built, not just the placeholder body cube — a boss's own wake area keeps it inside one

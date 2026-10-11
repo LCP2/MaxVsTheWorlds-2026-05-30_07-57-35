@@ -160,6 +160,14 @@ namespace MaxWorlds.Arena
         public float x;
         public float z;
 
+        /// <summary>Boss only (MV-1145) — the authored <see cref="WorldBoss.kind"/>, resolved by
+        /// <see cref="WorldMapLoader"/>. Named separately from <see cref="kind"/> above, which already
+        /// means the ENTITY kind ("boss", "cover", ...), not which row of
+        /// <see cref="MaxWorlds.Bosses.BossKinds"/> builds this particular boss. Empty for every other
+        /// entity, and empty here too unless a boss actually authors one — see
+        /// <see cref="MaxWorlds.Bosses.BossKinds.Resolve"/> for what an empty value falls back to.</summary>
+        public string bossKind = "";
+
         // Size. Used by cover/prop (the body) and by gate (its thickness/height; the WIDTH of a gate
         // is not authored here — it is the doorway of the link it fills, so the two can never disagree).
         public float width = 1f;
