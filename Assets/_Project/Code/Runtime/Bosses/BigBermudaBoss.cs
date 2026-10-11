@@ -126,6 +126,7 @@ namespace MaxWorlds.Bosses
         // its composition escalates with time alive (BroodSpawnLevels), so it is pooled per-kind
         // rather than assuming every add is the same archetype. ---
         private BroodVolley _volley;
+        private AreaAccumulationDirector _areaDirector;  // MV-1155: lazy, for ResolvePlayedWorldIndex only
         private Transform _addsRoot;                    // world-space, unit scale — NOT under the moving boss
         private readonly List<AddInFlight> _inFlight = new List<AddInFlight>(8);
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _addPools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
@@ -603,6 +604,18 @@ namespace MaxWorlds.Bosses
         /// jam should not recur — but counting it fresh, excluding anything outside the area, means even
         /// a stray one from an old save or an edge case can never again wedge the cap shut.
         /// </summary>
+        /// <summary>MV-1155: the world actually being PLAYED right now
+        /// (<see cref="AreaAccumulationDirector.ActiveWorldIndex"/>), not <c>RigBoard.ActiveWorldIndex</c>
+        /// — a finale's Weapon Core morph already switches that onto the NEXT world the instant it's
+        /// collected, before the played world itself advances (MV-1078, see
+        /// <see cref="MaxWorlds.Pickups.PickupDirector.GrantsSupercellForArea"/>'s own doc comment for the
+        /// full reasoning). Same lazy-resolve idiom as that method's own <c>_areaDirector</c> cache.</summary>
+        private int ResolvePlayedWorldIndex()
+        {
+            if (_areaDirector == null) _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            return _areaDirector != null ? _areaDirector.ActiveWorldIndex : 0;
+        }
+
         private void TickVolley(float dt)
         {
             bool enraged = _brain.Enraged;
@@ -612,7 +625,7 @@ namespace MaxWorlds.Bosses
             int onField = CountLandedAddsInArea() + _inFlight.Count;
 
             bool canVent = phaseAllows && onField < maxAdds;
-            _volley.Tick(dt, enraged, canVent);
+            _volley.Tick(dt, enraged, canVent, ResolvePlayedWorldIndex());
 
             if (_volley.JustFired)
             {

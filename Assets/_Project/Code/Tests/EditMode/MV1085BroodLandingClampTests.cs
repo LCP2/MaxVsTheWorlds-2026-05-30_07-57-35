@@ -198,7 +198,13 @@ namespace MaxWorlds.Tests.EditMode
                     "the brain never reached spawn level 4 (the full yellow bar)");
 
                 // --- AC1 part 1: drive five volleys through the real volley tick. ---
-                float fiveVolleysBudget = 5f * BossTuning.VolleyInterval + BossTuning.VolleyWindup
+                // MV-1155: budgeted off the RESOLVED interval (World 1's own row, read via the same
+                // playedWorldIndex=0 fallback TickVolley uses when no AreaAccumulationDirector exists in
+                // this fixture's scene — index 0 is World 1 in WorldCatalog's own row order, the world
+                // this fixture's own a30_boss1 fixture actually is), not the authored BossTuning constant
+                // — World 1 alone now runs slower than that default.
+                float resolvedInterval = BroodVolley.ResolvedIntervalSeconds(enraged: false, playedWorldIndex: 0);
+                float fiveVolleysBudget = 5f * resolvedInterval + BossTuning.VolleyWindup
                     + BossTuning.VolleyArcTime + 1f;
                 RunTicks(boss, fiveVolleysBudget);
 
@@ -239,7 +245,8 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(0, LandedLiveAdds(addsRoot).Count, "every add must read as dead immediately after TakeDamage");
                 ClearAddPools(boss);
 
-                float maxWait = BossTuning.VolleyInterval + BossTuning.VolleyWindup + 2f;
+                // MV-1155: rebased on the resolved (World 1) interval — see the comment above.
+                float maxWait = resolvedInterval + BossTuning.VolleyWindup + 2f;
                 int launchedAfterKill = CountNextVolleyLaunch(boss, addsRoot, maxWait);
                 Assert.AreEqual(BossTuning.RobotsPerVolley, launchedAfterKill,
                     "killing every live add must free a full volley's worth of slots — the next volley " +

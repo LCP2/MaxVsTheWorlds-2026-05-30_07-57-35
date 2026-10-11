@@ -94,6 +94,7 @@ namespace MaxWorlds.Tests.EditMode
                 PartsMultiplier = () => 1.5f,
                 SupercellCadenceAreas = 3,
                 RackModuleDropsHere = false,
+                BossVolleyIntervalSeconds = backyard.BossVolleyIntervalSeconds, // MV-1155: Validate() requires it set
             };
 
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, reef, probe });
