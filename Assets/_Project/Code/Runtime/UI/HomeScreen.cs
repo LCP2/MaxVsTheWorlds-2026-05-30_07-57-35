@@ -438,6 +438,39 @@ namespace MaxWorlds.UI
             SceneManager.LoadScene(scene.buildIndex);
         }
 
+        /// <summary>MV-1151: the same fresh-run wipe PLAY/<see cref="StartSlot"/> always runs, but
+        /// (dev-only) also forces the slot onto <paramref name="worldIndex"/> regardless of how far the
+        /// profile has already progressed — shared by the W1 dev button (<see cref="OnWorldDevStartFreshWorld"/>,
+        /// row 0) and LAST AREA's own empty-slot fallback (<see cref="OnDevFinalAreaTapped"/>), which has
+        /// nothing to jump to until this seeds one. No <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>
+        /// call here: <see cref="WipeForFreshRun"/>'s own <see cref="WeaponSystemState.Reset"/> already
+        /// lands RigBoard on World 1's own baseline board via the same
+        /// <see cref="WeaponSystemState.ApplyWorldLoadout"/>(0) call every other fresh-profile path uses —
+        /// a literal 0 passed in by both callers below is that same baseline, not a hand-rolled second
+        /// one.</summary>
+        private static void WipeFreshWorld(int slot, int worldIndex)
+        {
+            WipeForFreshRun(slot);
+
+            SaveSlotData data = SaveSystem.Load(slot);
+            data.WorldIndex = worldIndex;
+            data.WeaponCorePending = false;
+            SaveSystem.Save(slot, data);
+        }
+
+        /// <summary>W1 dev entry point (MV-1151, DEV row index 0): <see cref="WipeFreshWorld"/>, then the
+        /// same post-wipe scene reload <see cref="OnWorldDevStart"/> runs. Unlike PLAY (which never
+        /// reloads the scene, and so plays through whatever world the Home screen scene already happened
+        /// to be built as), this always rebuilds at <paramref name="worldIndex"/> so the button genuinely
+        /// means that world regardless of what the slot's profile had progressed to.</summary>
+        private void OnWorldDevStartFreshWorld(int slot, int worldIndex)
+        {
+            WipeFreshWorld(slot, worldIndex);
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
+        }
+
         /// <summary>RESUME tapped on a slot carrying a checkpoint (MV-524 part 3) — restores it and
         /// drops the player back at that area's entry, rather than the fresh run <see cref="OnPlay"/>
         /// always starts. Never runs <see cref="IntroCinematic"/> (an in-progress profile is by
@@ -551,20 +584,29 @@ namespace MaxWorlds.UI
             WeaponSystemState.RebuildAcquiredFromRigState();
         }
 
-        /// <summary>DEV: FINAL AREA tapped (MV-1057) — Lee's own dev shortcut to reach a world's finale
-        /// area (whichever area carries the "boss" role at the end of <see cref="MaxWorlds.Arena.WorldConfig.dials"/>'s
-        /// <c>areaCount</c>) without replaying the whole world, so a world-to-world transition can be
-        /// tested without a full playthrough. Starts the slot's own saved world — its checkpoint's world
-        /// if a run is in progress, else <see cref="SaveSlotData.WorldIndex"/> (world 1 for a never-played
-        /// slot), via the exact same <see cref="SaveSystem.ResolveResumePlan"/> RESUME itself uses — and
-        /// keeps the slot's own RIG/loadout exactly as RESUME would (<see cref="ApplyResumeState"/>);
-        /// nothing here maxes or otherwise inflates it, and nothing here is written back to the save.
-        /// Same cross-world reload shape as <see cref="OnResume"/> (MV-985): reloads only when the target
-        /// world differs from what's already built, via <see cref="SaveSystem.PendingResume"/>, with
+        /// <summary>LAST AREA tapped (MV-1057, relabelled and generalised MV-1151) — Lee's own dev
+        /// shortcut to reach a world's finale area (whichever area carries the "boss" role at the end of
+        /// <see cref="MaxWorlds.Arena.WorldConfig.dials"/>'s <c>areaCount</c> — see
+        /// <see cref="MaxWorlds.Arena.WorldRunner.ResolveFinaleArea"/>) without replaying the whole world,
+        /// so a world-to-world transition can be tested without a full playthrough. Starts the slot's own
+        /// saved world — its checkpoint's world if a run is in progress, else
+        /// <see cref="SaveSlotData.WorldIndex"/> (world 1 for a never-played slot), via the exact same
+        /// <see cref="SaveSystem.ResolveResumePlan"/> RESUME itself uses — and keeps the slot's own
+        /// RIG/loadout exactly as RESUME would (<see cref="ApplyResumeState"/>); nothing here maxes or
+        /// otherwise inflates it, and nothing here is written back to the save. Same cross-world reload
+        /// shape as <see cref="OnResume"/> (MV-985): reloads only when the target world differs from
+        /// what's already built, via <see cref="SaveSystem.PendingResume"/>, with
         /// <see cref="SaveSystem.PendingDevFinaleJump"/> marking that the reload's own <see cref="Start"/>
-        /// should finish as this jump rather than an ordinary RESUME.</summary>
+        /// should finish as this jump rather than an ordinary RESUME.
+        ///
+        /// MV-1151: interactable on every slot now, including an empty one — there is nothing to jump to
+        /// on an empty slot yet, so this runs row 0's own fresh-World-1 wipe first
+        /// (<see cref="WipeFreshWorld"/>, the exact one <see cref="OnWorldDevStartFreshWorld"/> runs)
+        /// before resolving the jump below exactly as on an occupied slot.</summary>
         private void OnDevFinalAreaTapped(int slot)
         {
+            if (!SaveSystem.Load(slot).HasData) WipeFreshWorld(slot, 0);
+
             var path = FindFirstObjectByType<MaxWorlds.Arena.BackyardPath>();
             int builtWorldIndex = path != null ? path.ResolvedWorldIndex : 0;
             int worldIndex = SaveSystem.ResolveResumePlan(slot, builtWorldIndex).WorldIndex;
@@ -802,24 +844,41 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>WORLD 2/3 dev entry points (MV-726; MV-736; relocated off the cards by MV-960), plus
-        /// DEV: FINAL AREA (MV-1057) — NOT part of the design, built to be deleted later: every button
-        /// this builds lives in this one method, called from the single guarded line in
-        /// <see cref="Build"/>, so removing them is exactly delete-this-method + delete-the-const +
-        /// delete-the-one-call. MV-1057 shrank WORLD 2/3's own width from 285 to a three-across split of
-        /// the same card footprint (580 wide) to make room for the third button — DEV: FINAL AREA is
-        /// visible on every slot (same "always there, only tappable when it means something" idiom as
-        /// RESET on an occupied/empty card) but only interactable on an occupied one, since there is
-        /// nothing to jump to on an empty slot.</summary>
+        /// <summary>The DEV row (MV-726; MV-736; MV-1057; relocated off the cards by MV-960; generalised
+        /// onto <see cref="WorldCatalog"/> by MV-1151) — NOT part of the design, built to be deleted
+        /// later: every button this builds lives in this one method, called from the single guarded line
+        /// in <see cref="Build"/>, so removing them is exactly delete-this-method + delete-the-const +
+        /// delete-the-one-call.
+        ///
+        /// MV-1151: one button per <see cref="WorldCatalog"/> row (index 0 to <see cref="WorldCatalog.Count"/>
+        /// - 1, label "W" + (index + 1)), in index order, then one LAST AREA button — nothing here names a
+        /// world by number, so a row added to the catalog gets a button with no edit here. Row 0 is a
+        /// fresh World 1 run (today's PLAY shape, no intro — <see cref="OnWorldDevStartFreshWorld"/>); row
+        /// 1 keeps the old WORLD 2 button's own shape (World 1's own exit rig, maxRig false); every row
+        /// from 2 up keeps the old WORLD 3 button's own shape (a fully maxed rig) — the City's own dev
+        /// loadout, once it lands at row 2, is a later ticket's job, not this one's. Every world button is
+        /// interactable on every slot, empty or not. LAST AREA is now interactable on every slot too
+        /// (MV-1151, superseding MV-1057's occupied-only gate) via <see cref="OnDevFinalAreaTapped"/>'s
+        /// own empty-slot fallback.
+        ///
+        /// Layout: N world buttons take one share each and LAST AREA takes two, share width =
+        /// (<c>cardW</c> - N*<c>gap</c>) / (N + 2) — at today's N = 3 that's 110px per world button. The
+        /// ticket's own prose separately claims 230px for LAST AREA, but 2 * 110 = 220 is what actually
+        /// keeps the row inside the card's 580px footprint end to end (3 * 110 + 220 + 3 * 10 = 580) —
+        /// flagged in the fix comment, the same "formula wins over prose" call MV-960's own RESET footnote
+        /// already made. Labels best-fit down to a 16pt floor so a 4th world button (once the City lands)
+        /// still fits its own share.</summary>
         private void BuildDevWorldShortcuts(RectTransform stage)
         {
             var yellow = new Color(242f / 255f, 196f / 255f, 58f / 255f);
             var fill = Color.Lerp(PanelColor, yellow, 0.08f);
             float[] cardX = { 40f, 650f, 1260f };
             const float y = 846f, h = 66f, cardW = 580f, gap = 10f;
-            const float w = (cardW - 2f * gap) / 3f;
+            int worldCount = WorldCatalog.Count;
+            float shareWidth = (cardW - worldCount * gap) / (worldCount + 2);
+            float lastAreaWidth = shareWidth * 2f;
 
-            void BuildButton(string label, float x, bool interactable, UnityEngine.Events.UnityAction onClick)
+            void BuildButton(string label, float x, float w, bool interactable, UnityEngine.Events.UnityAction onClick)
             {
                 var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
                 go.transform.SetParent(stage, false);
@@ -838,6 +897,9 @@ namespace MaxWorlds.UI
 
                 Color textColor = interactable ? yellow : new Color(yellow.r, yellow.g, yellow.b, 0.35f);
                 var text = AddText(rt, 22f, textColor, TextAnchor.MiddleCenter, FontStyle.Bold);
+                text.resizeTextForBestFit = true;
+                text.resizeTextMinSize = 16;
+                text.resizeTextMaxSize = 22;
                 Stretch(text.rectTransform);
                 text.text = label;
 
@@ -850,10 +912,29 @@ namespace MaxWorlds.UI
             for (int slot = 0; slot < SaveSystem.SlotCount && slot < cardX.Length; slot++)
             {
                 int capturedSlot = slot;
-                bool occupied = SaveSystem.Load(slot).HasData;
-                BuildButton("DEV - WORLD 2", cardX[slot], true, () => OnWorldDevStart(capturedSlot, WorldCatalog.IndexOf(WorldIds.Stormdrain), maxRig: false));
-                BuildButton("DEV - WORLD 3", cardX[slot] + w + gap, true, () => OnWorldDevStart(capturedSlot, WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true));
-                BuildButton("DEV: FINAL AREA", cardX[slot] + 2f * (w + gap), occupied, () => OnDevFinalAreaTapped(capturedSlot));
+                float x = cardX[slot];
+
+                for (int i = 0; i < worldCount; i++)
+                {
+                    int capturedIndex = i;
+                    string label = "W" + (i + 1);
+
+                    UnityEngine.Events.UnityAction onClick;
+                    if (capturedIndex == 0)
+                    {
+                        onClick = () => OnWorldDevStartFreshWorld(capturedSlot, capturedIndex);
+                    }
+                    else
+                    {
+                        bool maxRig = capturedIndex >= 2;
+                        onClick = () => OnWorldDevStart(capturedSlot, capturedIndex, maxRig);
+                    }
+
+                    BuildButton(label, x, shareWidth, true, onClick);
+                    x += shareWidth + gap;
+                }
+
+                BuildButton("LAST AREA", x, lastAreaWidth, true, () => OnDevFinalAreaTapped(capturedSlot));
             }
         }
 

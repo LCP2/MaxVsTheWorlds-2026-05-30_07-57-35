@@ -484,27 +484,42 @@ namespace MaxWorlds.Arena
             _areaDirector.SetCurrentArea(areaIndex);
         }
 
-        /// <summary>MV-1057: the Home screen's DEV "FINAL AREA" entry point — jumps straight to this
-        /// world's finale (its own final, boss-role area: <see cref="WorldConfig.AreaByIndex"/> of
-        /// <see cref="WorldDials.areaCount"/>) with every prerequisite on the route already satisfied:
-        /// every shed and Replicator strictly before it destroyed (<see cref="DestroyFactoriesBefore"/>,
-        /// silently — no loot/VFX replay for a kill the player never made — then
-        /// <see cref="FactoryCensus.RaiseCheckpointRestored"/> to catch the REPLICATORS/FACTORIES banner
-        /// up to it, the same recompute a checkpoint RESUME already triggers for the same reason) and
-        /// every condition-gated gate re-resolved open (<see cref="RefreshConditionGates"/>) before
-        /// landing. The landing itself is <see cref="ResumeCheckpoint"/> verbatim, so Max arrives exactly
-        /// as a RESUME into that area would — standing at its gate, in the area before it — with none of
-        /// this written back to the slot's own save. A no-op (returns false) before <see cref="Configure"/>
-        /// has wired this runner up, or if the config's own final area isn't boss-role (shouldn't happen
-        /// for an authored world).</summary>
+        /// <summary>MV-1151: the pure area-selection half of <see cref="JumpToFinaleArea"/>, split out so
+        /// an EditMode test can assert every <see cref="WorldCatalog"/> row's own finale resolves
+        /// correctly straight off its real <see cref="WorldConfig"/>, with no scene/runner involved. Rule
+        /// unchanged from MV-1057: the area whose index equals <paramref name="cfg"/>'s own
+        /// <see cref="WorldDials.areaCount"/>, which must be boss-role (<see cref="WorldArea.IsBossRole"/>
+        /// — "boss+exit" counts, since that role string still contains "boss"). Null for a config with no
+        /// dials, no area at that index, or an area there that isn't boss-role (shouldn't happen for an
+        /// authored world).</summary>
+        public static WorldArea ResolveFinaleArea(WorldConfig cfg)
+        {
+            if (cfg?.dials == null) return null;
+            WorldArea finale = cfg.AreaByIndex(cfg.dials.areaCount);
+            return finale != null && finale.IsBossRole ? finale : null;
+        }
+
+        /// <summary>MV-1057: the Home screen's DEV "FINAL AREA" entry point (MV-1151: relabelled LAST
+        /// AREA, now reachable from every world row, not just World 2/3) — jumps straight to this world's
+        /// finale (<see cref="ResolveFinaleArea"/>) with every prerequisite on the route already
+        /// satisfied: every shed and Replicator strictly before it destroyed
+        /// (<see cref="DestroyFactoriesBefore"/>, silently — no loot/VFX replay for a kill the player
+        /// never made — then <see cref="FactoryCensus.RaiseCheckpointRestored"/> to catch the
+        /// REPLICATORS/FACTORIES banner up to it, the same recompute a checkpoint RESUME already triggers
+        /// for the same reason) and every condition-gated gate re-resolved open
+        /// (<see cref="RefreshConditionGates"/>) before landing. The landing itself is
+        /// <see cref="ResumeCheckpoint"/> verbatim, so Max arrives exactly as a RESUME into that area
+        /// would — standing at its gate, in the area before it — with none of this written back to the
+        /// slot's own save. A no-op (returns false) before <see cref="Configure"/> has wired this runner
+        /// up, or if <see cref="ResolveFinaleArea"/> returns null.</summary>
         public bool JumpToFinaleArea()
         {
             if (_areaDirector == null || _cfg?.dials == null) return false;
 
-            int finaleIndex = _cfg.dials.areaCount;
-            WorldArea finale = _cfg.AreaByIndex(finaleIndex);
-            if (finale == null || !finale.IsBossRole) return false;
+            WorldArea finale = ResolveFinaleArea(_cfg);
+            if (finale == null) return false;
 
+            int finaleIndex = _cfg.dials.areaCount;
             DestroyFactoriesBefore(finaleIndex);
             FactoryCensus.RaiseCheckpointRestored();
             RefreshConditionGates();
