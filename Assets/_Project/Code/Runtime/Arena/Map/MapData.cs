@@ -205,6 +205,15 @@ namespace MaxWorlds.Arena
         /// meaning" idiom as <see cref="mobile"/>/<see cref="opensOn"/> above.</summary>
         public float SludgeSpeedMultiplier => height;
 
+        /// <summary>Sludge only (MV-1164) — resolved from <see cref="WorldSludge.crossingAt"/>, WORLD
+        /// metres along this rect's own run axis. 0 for every other kind.</summary>
+        public float crossingAt;
+
+        /// <summary>Sludge only (MV-1164) — resolved from <see cref="WorldSludge.crossingLength"/>.
+        /// &lt;= 0 (default) means "no authored override, keep the normal auto-spaced crossings". 0 for
+        /// every other kind.</summary>
+        public float crossingLength;
+
         /// <summary>Hatch only (MV-697) — the deck's own resolved height it sits at, carried on the
         /// otherwise-unused <see cref="height"/> field, same "reuse the shape, not the meaning" idiom as
         /// <see cref="SludgeSpeedMultiplier"/>. Gate only (MV-697) — 1 when this <c>AreaGate</c>'s
