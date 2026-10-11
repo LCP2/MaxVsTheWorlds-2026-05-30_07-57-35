@@ -10,8 +10,9 @@ namespace MaxWorlds.Tests.EditMode
     /// THE RIG's unified node model, schema 3 (MV-436 — retires MV-422's cap/stat split): one gate,
     /// not two. A Morphing Module draft (<see cref="RigState.AcquireCap"/>) is the only way any node
     /// reaches level 1; <see cref="RigState.RaiseLevel"/> can raise an already-owned node further
-    /// but can never perform that 0-&gt;1 unlock, for any of the tree's 21 abilities (MV-597 deleted
-    /// the never-wired-up PIERCE, 23 -&gt; 22; MV-734 deleted the never-consumed COOLDOWN, e_cd, 22 -&gt; 21) — plus the
+    /// but can never perform that 0-&gt;1 unlock, for any of the tree's 22 abilities (MV-597 deleted
+    /// the never-wired-up PIERCE, 23 -&gt; 22; MV-734 deleted the never-consumed COOLDOWN, e_cd, 22 -&gt; 21;
+    /// MV-1157 added e_cmg to World 1's own board, 21 -&gt; 22) — plus the
     /// run-start baseline and the draft-candidate eligibility pool both derive from.
     /// </summary>
     public sealed class RigStateTests
@@ -58,7 +59,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var wire = JsonUtility.FromJson<RigBoardSchemaWire>(asset.text);
             Assert.That(wire.schema, Is.EqualTo(3), "rig_board.json must be schema 3 (MV-436 — cap/stat split retired)");
-            Assert.That(wire.abilities.Length, Is.EqualTo(21), "MV-597 deleted the never-wired-up PIERCE (p_prc), 23 -> 22; MV-694 added the Shoulder Rack's s_rkt/s_sal/s_rld, 22 -> 25; MV-732 removed them again from World 1's board (they belong only to rig_board.world2.json), 25 -> 22; MV-734 deleted the never-consumed COOLDOWN (e_cd), 22 -> 21");
+            Assert.That(wire.abilities.Length, Is.EqualTo(22), "MV-597 deleted the never-wired-up PIERCE (p_prc), 23 -> 22; MV-694 added the Shoulder Rack's s_rkt/s_sal/s_rld, 22 -> 25; MV-732 removed them again from World 1's board (they belong only to rig_board.world2.json), 25 -> 22; MV-734 deleted the never-consumed COOLDOWN (e_cd), 22 -> 21; MV-1157 added e_cmg (Cell Magneto) to World 1's own board, 21 -> 22");
             foreach (var a in wire.abilities)
                 Assert.That(a.kind, Is.EqualTo("cap"), "every ability must be kind 'cap' under schema 3 — the 'stat' kind no longer exists");
         }
@@ -68,7 +69,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void APartCanNeverRaiseAnAbilityFromZeroToOne_ForAllTwentyTwoAbilities()
         {
-            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(21), "MV-597: 23 -> 22 when PIERCE was cut; MV-694 added s_rkt/s_sal/s_rld, 22 -> 25; MV-732 removed them again, 25 -> 22; MV-734 deleted the never-consumed COOLDOWN (e_cd), 22 -> 21");
+            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(22), "MV-597: 23 -> 22 when PIERCE was cut; MV-694 added s_rkt/s_sal/s_rld, 22 -> 25; MV-732 removed them again, 25 -> 22; MV-734 deleted the never-consumed COOLDOWN (e_cd), 22 -> 21; MV-1157 added e_cmg, 21 -> 22");
 
             foreach (string id in RigBoard.AllIds)
             {

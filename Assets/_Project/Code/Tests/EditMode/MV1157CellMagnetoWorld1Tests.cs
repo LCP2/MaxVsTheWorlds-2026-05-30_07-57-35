@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using MaxWorlds.Weapons;
+using MaxWorlds.Arena;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -13,9 +14,9 @@ namespace MaxWorlds.Tests.EditMode
     /// level bought on World 1 survives the World 1 -&gt; World 2 Weapon Core morph (ENERGY carries
     /// across unchanged, <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>).
     ///
-    /// Fails on base commit d2edb53 (pre-fix): <c>RigBoard.Exists("e_cmg")</c> is false on World 1's
-    /// board — <c>e_cmg</c> is authored only on <c>rig_board.world2.json</c> there, so the first
-    /// assertion below fails with "False" where "True" is expected.
+    /// Fails on base (pre-fix, this test added alone on <c>main</c>): <c>RigBoard.Exists("e_cmg")</c>
+    /// is false on World 1's board — <c>e_cmg</c> is authored only on <c>rig_board.world2.json</c>
+    /// there, so the first assertion below fails with "False" where "True" is expected.
     /// </summary>
     public sealed class MV1157CellMagnetoWorld1Tests
     {
@@ -44,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.RaiseLevel("e_cmg"), Is.True);
             Assert.That(RigState.Level("e_cmg"), Is.EqualTo(2), "sanity: e_cmg bought to level 2 on World 1");
 
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.Stormdrain));
 
             Assert.That(RigState.Level("e_cmg"), Is.EqualTo(2),
                 "a Cell Magneto level bought in World 1 must carry across the Weapon Core morph into World 2 (ENERGY is preserved wholesale)");
