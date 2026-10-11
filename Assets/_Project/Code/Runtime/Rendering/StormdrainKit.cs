@@ -1577,6 +1577,10 @@ namespace MaxWorlds.Rendering
             // MV-1164: crossingAt arrives in WORLD metres (WorldSludge.crossingAt's own doc — there is
             // no rect corner for a single axis coordinate to be relative to); resolved to a LOCAL offset
             // here, against this tile's own world position, before BuildChannelCrossings ever sees it.
+            // MUST read root.position before the `root = trough` reassignment below: trough's
+            // localPosition only moves Y (ChannelOozeDrop), but reading world-space X/Z through the
+            // reassigned root would still be correct today for that reason alone — do not rely on that
+            // surviving a future edit; this line's position in the method is load-bearing.
             Vector3 worldCenter = root.position;
             float crossingAtLocal = alongZ ? crossingAt - worldCenter.z : crossingAt - worldCenter.x;
 

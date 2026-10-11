@@ -127,6 +127,22 @@ namespace MaxWorlds.Tests.EditMode
                     "g10's own opening never reaches a8_rep1's own position -- the replicator side is unreachable");
                 Assert.IsTrue(visited.Contains(g11Cell.Value),
                     "g10's own opening never reaches g11's own opening -- the replicator side is unreachable");
+
+                // AC1: "never crosses the x 190 barrier line above the channel" -- proves the route found
+                // is the bottom one, not a route that happens to slip through the sealed cover4/cover5
+                // barrier (x 189-191, z 71-94) some other way.
+                (int gx, int gz) barrierHit = default;
+                bool crossedBarrier = visited.Any(c =>
+                {
+                    float cx = (c.Item1 + 0.5f) * Cell;
+                    float cz = (c.Item2 + 0.5f) * Cell;
+                    bool hit = cx >= 189f && cx <= 191f && cz > 71f;
+                    if (hit) barrierHit = c;
+                    return hit;
+                });
+                Assert.IsFalse(crossedBarrier,
+                    $"the found route crosses the x190 barrier line above the channel at cell {barrierHit} -- " +
+                    "this must be the bottom-channel route, not a path through the sealed barrier");
             }
             finally
             {
@@ -158,7 +174,10 @@ namespace MaxWorlds.Tests.EditMode
 
             // MV-1164: unlike MV900, a cell no one would call "walkable" also includes raw floor
             // sludge -- the thing this ticket's own fix removes from the bottom channel's route.
-            return MapSludgeDamage.IsInFloorSludge(map, new Vector3(x, standY, z));
+            // Sampled a hair above standY (a mover's feet rest ON the deck, not inside its surface) so
+            // the plank-deck case isn't decided by standY == ChannelCrossingSlatHeight * 0.5f at exact
+            // float equality -- both evaluate to 0.025f and a tie must not be the thing this test rests on.
+            return MapSludgeDamage.IsInFloorSludge(map, new Vector3(x, standY + 1e-3f, z));
         }
 
         private static (int gx, int gz)? FindNearestOpen(Vector2 point, HashSet<(int, int)> open)
