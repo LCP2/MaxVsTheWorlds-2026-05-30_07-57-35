@@ -79,6 +79,33 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsNull(WorldTransitions.For(WorldLibrary.Count - 1),
                 "the last world must have no exit transition — there is nowhere left to advance into");
+
+            // MV-1143: the last world's own door carries no corridor (DoorOnly mode), but it is still
+            // real map geometry cut into a live wall — it must clear the same obstacles a Corridor row's
+            // exit door does. Goes through the same public ApplyExitDoorway entry point production code
+            // uses (WorldTransitionEntry.DoorMouth is internal, not reachable from this assembly).
+            int lastIndex = WorldLibrary.Count - 1;
+            WorldConfig lastCfg = WorldLibrary.Load(WorldLibrary.KeyForIndex(lastIndex));
+            Assert.IsNotNull(lastCfg, $"world {lastIndex} failed to load — see the error log above.");
+
+            WorldDefinition lastRow = WorldCatalog.Get(lastIndex);
+            Assert.AreEqual(WorldExitMode.DoorOnly, lastRow.ExitMode,
+                $"world {lastIndex} (the last world) must use DoorOnly exit mode");
+
+            Assert.IsTrue(WorldMapLoader.TryLoad(lastCfg, out MapData lastMap, out string lastReason), lastReason);
+            WorldTransitions.ApplyExitDoorway(lastMap, lastCfg, lastIndex);
+            Assert.IsTrue(lastMap.exitDoorway.HasValue, $"world {lastIndex}'s DoorOnly row must still resolve a doorway");
+            ExitDoorway lastDoorway = lastMap.exitDoorway.Value;
+
+            WorldArea lastExitArea = lastCfg.AreaByIndex(lastCfg.dials.areaCount);
+            Assert.IsNotNull(lastExitArea, $"world {lastIndex}'s DoorOnly row resolves no exit area");
+            float lastAlong = lastDoorway.Hole.Mid;
+            Vector2 lastDoorMouth = lastExitArea.WallRunsAlongX(lastDoorway.Wall)
+                ? new Vector2(lastAlong, lastDoorway.Coord)
+                : new Vector2(lastDoorway.Coord, lastAlong);
+
+            AssertClearsWallEnds(lastDoorMouth, lastExitArea, lastDoorway.Wall, wallThickness, lastIndex);
+            AssertClearOfCover(lastDoorMouth, lastExitArea, lastIndex);
         }
 
         private static void AssertClearsWallEnds(Vector2 doorMouth, WorldArea area, Wall wall, float wallThickness, int worldIndex)

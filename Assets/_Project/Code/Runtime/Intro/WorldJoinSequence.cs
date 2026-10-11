@@ -337,14 +337,19 @@ namespace MaxWorlds.Intro
             // world ahead (the destination this corridor leads to).
             BuildGuideLights(root, _doorMouth, _wall, 0f, _entry.CorridorLength, GuideLightAccent(toWorld));
 
-            // MV-965: garden/kerb+grate/culvert set-dressing on top of the three flat-coloured shells
-            // above — a separate pass, same reason StormdrainDressing/BackyardDressing are separate from
-            // MapRuntime.Build, only ever relevant to the World 1 -> World 2 row this ticket covers.
-            if (_fromWorldIndex == 0)
-                WorldJoinDressing.DressExit(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
-            // MV-967: outfall/breach/hull set-dressing for the World 2 -> World 3 row.
-            else if (_fromWorldIndex == 1)
-                WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+            // MV-965/MV-967: garden/kerb+grate/culvert (or outfall/breach/hull) set-dressing on top of
+            // the three flat-coloured shells above — a separate pass, same reason
+            // StormdrainDressing/BackyardDressing are separate from MapRuntime.Build. MV-1143: which pass
+            // runs comes from the world being LEFT's own row, not a comparison against its index.
+            switch (WorldCatalog.Get(_fromWorldIndex).ExitDressing)
+            {
+                case ExitCorridorDressingKind.Exit:
+                    WorldJoinDressing.DressExit(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+                    break;
+                case ExitCorridorDressingKind.ExitReef:
+                    WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+                    break;
+            }
         }
 
         /// <summary>MV-1123 §3: the accent colour guide lights point toward — the world AHEAD, i.e. the
@@ -434,12 +439,18 @@ namespace MaxWorlds.Intro
             // the world Max has already arrived in.
             BuildGuideLights(_arrivalRoot, _doorMouth, _wall, 0f, _entry.ArrivalShellLength, GuideLightAccent(toWorld));
 
-            // MV-965: same dressing pass as the exit side's segment C, continued into the arrival shell.
-            if (toWorld == 1)
-                WorldJoinDressing.DressArrival(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
-            // MV-967: same idea for the World 3 arrival shell — segment C's hull dressing continued.
-            else if (toWorld == 2)
-                WorldJoinDressing.DressArrivalReef(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+            // MV-965/MV-967: same dressing pass as the exit side's segment C, continued into the arrival
+            // shell. MV-1143: which pass runs comes from the world being ARRIVED IN's own row, not a
+            // comparison against its index.
+            switch (WorldCatalog.Get(toWorld).ArrivalDressing)
+            {
+                case ArrivalDressingKind.Arrival:
+                    WorldJoinDressing.DressArrival(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+                    break;
+                case ArrivalDressingKind.ArrivalReef:
+                    WorldJoinDressing.DressArrivalReef(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+                    break;
+            }
         }
 
         // ------------------------------------------------------------------ intrusion clearance (MV-1116)
