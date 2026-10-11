@@ -36,9 +36,10 @@ namespace MaxWorlds.Audio
             ForceFieldUp,
             ForceFieldPop,
             UiClick,
-            UndertowLoop,    // MV-1136: Undertow.IsEmitting — polled, same as HoseLoop. Must stay LAST
-                              // (SfxDirector.IsCueMuted masks by 1 << (int)cue; inserting earlier would
-                              // shift every existing player's mute switches).
+            UndertowLoop,    // MV-1136: Undertow.IsEmitting — polled, same as HoseLoop.
+            SentinelArrived, // MV-1159: must stay LAST (SfxDirector.IsCueMuted masks by 1 << (int)cue;
+                              // inserting a cue anywhere but the end would shift every existing
+                              // player's mute switches).
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -71,6 +72,7 @@ namespace MaxWorlds.Audio
             { Cue.ForceFieldPop, "Force Field pop" },
             { Cue.UiClick, "UI click" },
             { Cue.UndertowLoop, "Beam loop" },
+            { Cue.SentinelArrived, "Sentinel arrival" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -99,6 +101,7 @@ namespace MaxWorlds.Audio
             { Cue.ForceFieldUp, 16 },
             { Cue.ForceFieldPop, 16 },
             { Cue.UiClick, 15 },
+            { Cue.SentinelArrived, 4 }, // MV-1159: lets two Sentinels arriving close together both be heard
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -267,6 +270,18 @@ namespace MaxWorlds.Audio
             [Cue.UndertowLoop] = new[]
             {
                 P(SfxWaveform.Noise, attack: 0.01f, sustain: 0.3f, decay: 0.01f, lowPass: 800f, volume: 0.35f, seed: 9),
+            },
+
+            // MV-1159: "rising whoosh swelling into a bright vroom burst and a deep bass thump" — the
+            // fallback for when the generated file is missing, same as every other cue's. Element [0]'s
+            // Volume is also what ElevenLabsAudioGenerator.GenerateOne scales the GENERATED clip's peak
+            // to (see its ScaleToPeak call) - set to 0.95 so the real asset lands at or above
+            // FactoryDestroyed's 0.9, matching the ticket's AC4 ("one of the loudest one-shots").
+            [Cue.SentinelArrived] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 150f, slide: 2200f, attack: 0.05f, sustain: 0.4f, decay: 0.3f, volume: 0.95f),
+                P(SfxWaveform.Noise, attack: 0.01f, sustain: 0.1f, decay: 0.4f, lowPass: 2000f, volume: 0.95f, seed: 11),
+                P(SfxWaveform.Sine, freq: 60f, slide: -15f, attack: 0.01f, sustain: 0.05f, decay: 0.5f, volume: 0.95f),
             },
         };
 

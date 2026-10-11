@@ -667,6 +667,9 @@ namespace MaxWorlds.Arena
             _arrivalElapsed = 0f;
             if (_model != null) _model.localScale = Vector3.zero;
             BuildArrivalVfx();
+            // MV-1159: raised here, not by either caller, so every arrival source (the SENTINEL button
+            // and the dev capture path) gets the one big "vroom" cue without having to remember to.
+            HudSignals.EmitSentinelArrived(transform.position);
         }
 
         /// <summary>MV-1113: Max left the Sentinel's own deploy area before its 3.0s arrival finished —
