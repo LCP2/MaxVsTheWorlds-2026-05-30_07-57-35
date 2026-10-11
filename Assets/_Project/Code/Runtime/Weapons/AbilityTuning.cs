@@ -206,15 +206,18 @@ namespace MaxWorlds.Weapons
 
         // --- Force Field (MV-361) ---
 
-        /// <summary>Damage the bubble absorbs before popping at Level 1 (MV-677, Lee: "20% strong to
-        /// begin with") — 20% of Max's 200 HP, down from DECISION #5's original 60 (30%); retuned so
-        /// the shield reads weaker at L1 and its L5 ceiling reads stronger (see
-        /// <see cref="DefaultForceFieldAbsorbCapPerLevel"/>).</summary>
-        public const float DefaultForceFieldAbsorbCap = 40f;
+        /// <summary>Damage the bubble absorbs before popping at Level 1 (MV-1156, Lee playing World 1:
+        /// "the Force Field fails too quickly. Just make it start at 100") — 20% of Max's 500 HP
+        /// (MV-658). Was 40 (MV-677's "20% strong to begin with"), which was 20% of Max's then-200 HP;
+        /// MV-658 later raised Max's HP to 500 without this being retuned, so 40 had quietly drifted
+        /// down to 8%.</summary>
+        public const float DefaultForceFieldAbsorbCap = 100f;
 
         /// <summary>Extra absorb cap each Force Field level beyond L1 adds (MV-677, Lee: "at full
-        /// power needs to be about 50% stronger than current full power") — retuned so the L5 (max
-        /// level) cap lands at 270, 1.5x the prior L5 value of 180: 40 + 57.5*4 = 270.</summary>
+        /// power needs to be about 50% stronger than current full power") — unchanged by MV-1156
+        /// ("57 per level addition is fine"). Real top levels: World 1 L8 = 100 + 57.5*7 = 502.5;
+        /// Worlds 2 and 3 L10 = 100 + 57.5*9 = 617.5 (<c>e_ff</c>'s maxLevel is 8 in
+        /// <c>rig_board.json</c>, 10 in <c>rig_board.world2.json</c> and <c>rig_board.world3.json</c>).</summary>
         public const float DefaultForceFieldAbsorbCapPerLevel = 57.5f;
 
         /// <summary>Radius of the bubble at Level 1, metres (DECISION #3, MV-361) — originally pinned
