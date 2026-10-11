@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Audio;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
@@ -190,6 +191,12 @@ namespace MaxWorlds.Arena
         /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Rack Module rule.</summary>
         public bool RackModuleDropsHere;
 
+        /// <summary>Seconds between Big Bermuda's brood volleys in this world (MV-1155), read by
+        /// <see cref="MaxWorlds.Bosses.BroodVolley"/> ahead of <see cref="MaxWorlds.Bosses.BossTuning.VolleyInterval"/>,
+        /// which stays as the default every other row uses. World 1 only slows to 4.5s (Lee, 10 Oct:
+        /// "producing robots too quickly") — World 2/World 3's Big Bermuda fights are untouched.</summary>
+        public float BossVolleyIntervalSeconds;
+
         // --- MV-1143: exit, corridor and arrival ---
 
         /// <summary>How this world's own finale exit works — see <see cref="WorldExitMode"/>.</summary>
@@ -354,6 +361,10 @@ namespace MaxWorlds.Arena
                 if (row.Style.Equals(default(SentinelStyle))) problems.Add($"row {i} ('{row.Id}'): Style not set");
                 if (row.RingAlphaScale <= 0f) problems.Add($"row {i} ('{row.Id}'): RingAlphaScale not set");
 
+                // MV-1155
+                if (row.BossVolleyIntervalSeconds <= 0f)
+                    problems.Add($"row {i} ('{row.Id}'): BossVolleyIntervalSeconds not set");
+
                 // MV-1142
                 if (string.IsNullOrEmpty(row.RigBoardResourcePath))
                     problems.Add($"row {i} ('{row.Id}'): RigBoardResourcePath empty");
@@ -424,6 +435,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 1,
                 RackModuleDropsHere = false,
+                // MV-1155: World 1 only — 3.5 -> 4.5s, Lee's "producing robots too quickly" report.
+                BossVolleyIntervalSeconds = 4.5f,
                 // MV-964: a30's own E wall into World 2's entry stub, W wall (MV-997: was N -- every
                 // arrival enters heading east, so every exit must too, or the corridor's own direction
                 // change breaks the continuity it exists for).
@@ -462,6 +475,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = true,
+                // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
                 // MV-1140: a31's own E wall into World 3's entry stub, W wall. World 2 grew to a22-a31
                 // (ten new areas), moving the finale and exit from a21 to a31: a31's E wall spans
                 // x=352, z 22..74, and 0.509615384615 (26.5/52) lands the door mouth at world (352, 48.5).
@@ -504,6 +519,8 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
+                // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
                 // MV-1013: the last world's own finale exit door -- real map geometry cut at boot exactly
                 // like a Corridor row's, but with no corridor behind it: there is no next world to walk
                 // into, so WorldFinaleGate opens this gate directly and watches for Max crossing it

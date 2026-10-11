@@ -79,6 +79,7 @@ namespace MaxWorlds.Tests.EditMode
                 FiresWaterBeam = false,
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = 1f,
+                BossVolleyIntervalSeconds = 1f, // MV-1155: Validate() requires it set
             };
 
             BiomePalette previousPalette = MaterialLibrary.Palette;

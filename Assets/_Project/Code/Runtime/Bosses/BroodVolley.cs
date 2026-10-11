@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.Bosses
@@ -69,7 +70,7 @@ namespace MaxWorlds.Bosses
         /// adds it is allowed (keep it kiteable). When vetoed mid-wind-up the hatches snap shut and the
         /// volley re-arms so it fires the moment the window reopens, rather than burning a whole interval.
         /// </summary>
-        public void Tick(float dt, bool enraged, bool canVent)
+        public void Tick(float dt, bool enraged, bool canVent, int playedWorldIndex = 0)
         {
             JustFired = false;
             dt = Mathf.Max(0f, dt);
@@ -82,7 +83,7 @@ namespace MaxWorlds.Bosses
                     // the player is ALREADY in, not only the next one — the waves speed up the moment it
                     // reddens.
                     _timer += dt;
-                    if (_timer >= Interval(enraged) && canVent)
+                    if (_timer >= Interval(enraged, playedWorldIndex) && canVent)
                     {
                         _state = State.Windup;
                         _timer = 0f;
@@ -120,12 +121,22 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>Seconds between volleys, shortened when enraged (faster adds as it reddens). Live
-        /// through <see cref="DevTuning"/>.</summary>
-        private static float Interval(bool enraged)
+        /// through <see cref="DevTuning"/>, over <paramref name="playedWorldIndex"/>'s own authored pace
+        /// (MV-1155) — see <see cref="WorldDefinition.BossVolleyIntervalSeconds"/>. The caller passes the
+        /// world actually being PLAYED, not any RigBoard-morph-sensitive index — <see cref="BroodVolley"/>
+        /// stays scene-free and unit-testable with a bare int, same as every other pure sequencer here.</summary>
+        private static float Interval(bool enraged, int playedWorldIndex)
         {
-            float baseInterval = DevTuning.Or(DevTuning.BossVolleyInterval, BossTuning.VolleyInterval);
+            float authored = WorldCatalog.Get(playedWorldIndex).BossVolleyIntervalSeconds;
+            float baseInterval = DevTuning.Or(DevTuning.BossVolleyInterval, authored);
             return enraged ? baseInterval * BossTuning.VolleyEnrageScale : baseInterval;
         }
+
+        /// <summary>Test/debug seam exposing the resolved interval <see cref="Tick"/> already reads
+        /// internally every frame (MV-1155) — lets an EditMode test assert the resolved value per world
+        /// rather than re-deriving it from the cadence's observed timing.</summary>
+        public static float ResolvedIntervalSeconds(bool enraged, int playedWorldIndex = 0) =>
+            Interval(enraged, playedWorldIndex);
 
         private static float Windup => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup);
         private static float OpenHold => BossTuning.VolleyOpenHold;
