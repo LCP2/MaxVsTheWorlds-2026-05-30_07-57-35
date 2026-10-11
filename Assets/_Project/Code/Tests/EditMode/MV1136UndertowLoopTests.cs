@@ -15,10 +15,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void UndertowLoopIsLastCue_HasItsLabelAndClip_AndTheFadeStepIsCorrect()
         {
-            var allCues = SfxCueLibrary.AllCues;
-            Assert.AreEqual(Cue.UndertowLoop, allCues[allCues.Length - 1],
-                "UndertowLoop must be the LAST member of the enum - inserting earlier would shift every existing player's mute switches");
             Assert.AreEqual(21, (int)Cue.UiClick, "UiClick's integer value must not have shifted");
+            Assert.AreEqual(22, (int)Cue.UndertowLoop,
+                "UndertowLoop's integer value must not have shifted - later cues (MV-1159's SentinelArrived) must append after it, not before");
 
             Assert.AreEqual("Beam loop", SfxCueLibrary.DisplayNames[Cue.UndertowLoop]);
             Assert.AreEqual("UndertowLoop", SfxCueLibrary.ResolveClip(Cue.UndertowLoop).name);

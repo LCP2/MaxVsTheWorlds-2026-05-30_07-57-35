@@ -160,6 +160,13 @@
             "durationSeconds": 4.0,
             "promptInfluence": 0.5,
             "loop": true
+        },
+        {
+            "id": "SentinelArrived",
+            "prompt": "Big sci-fi teleport arrival: a fast rising energy whoosh that swells for two seconds into a powerful bright vroom burst and a deep bass thump as a robot ally materialises, cinematic, exciting, no voice, no music",
+            "durationSeconds": 3.0,
+            "promptInfluence": 0.5,
+            "loop": false
         }
     ],
     "music": [
