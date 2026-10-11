@@ -495,10 +495,19 @@ namespace MaxWorlds.Intro
         private bool IsOwnOrPlayer(Transform t)
         {
             Transform dressingRoot = _doorGate != null ? _doorGate.DressingRoot : null;
+            // MV-1171: Max's actual visible body is MaxRig, not a child of _playerT at all -- it is
+            // deliberately a scene-ROOT object that FOLLOWS Max's position every LateUpdate (see MaxRig's
+            // own class doc: parenting it to the player would let CharacterSkinDirector repaint every
+            // part of him flat orange). Without this, a corridor that opens right as Max stands near its
+            // own footprint (routine when a boss dies close to its world's exit) scans MaxRig's body
+            // renderers as foreign intruding geometry and disables them for good -- "only the MAX name
+            // label shows" is that one-shot disable, not a camera or scale problem.
+            Transform maxRig = MaxRig.Instance != null ? MaxRig.Instance.transform : null;
             for (Transform p = t; p != null; p = p.parent)
             {
                 if (p == transform || p == dressingRoot) return true;
                 if (_playerT != null && p == _playerT) return true;
+                if (maxRig != null && p == maxRig) return true;
                 // The exit side's door is real map geometry MapRuntime built (never a descendant of
                 // this sequence's own transform, unlike the arrival side's, which BuildDoor parents
                 // under transform directly) -- it IS the corridor's own mouth, not a foreign intruder.

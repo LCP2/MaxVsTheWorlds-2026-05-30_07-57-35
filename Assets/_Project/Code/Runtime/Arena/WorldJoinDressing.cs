@@ -661,7 +661,18 @@ namespace MaxWorlds.Arena
             {
                 Vector3 pos = At(doorMouth, wall, d, north * (halfWidth + 0.02f), yMid);
                 GameObject window = ReefKit.BuildObservationWindow(host, pos, new Vector3(2.5f, height, 0.1f));
-                ReefKit.BuildOceanBackdrop(window.transform);
+
+                // MV-1171: BuildOceanBackdrop's own four layers are authored at a flat local scale (6x3)
+                // against an UNSCALED parent (MV713ReefKitTests' own fixture) -- parenting straight onto
+                // the window above would hand them the window's own non-uniform (2.5, height, 0.1) local
+                // scale instead, ballooning each layer to world-space (15, ~5.4, 0.1) and lifting it well
+                // above the window itself: the cyan slab Lee saw hanging over the whole corridor. A plain
+                // anchor at the window's own world position, with no scale of its own, is what the
+                // backdrop actually expects.
+                var backdropAnchor = new GameObject("Ocean Backdrop Anchor");
+                backdropAnchor.transform.SetParent(host, false);
+                backdropAnchor.transform.position = window.transform.position;
+                ReefKit.BuildOceanBackdrop(backdropAnchor.transform);
             }
         }
 
