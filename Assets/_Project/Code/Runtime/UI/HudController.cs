@@ -106,8 +106,15 @@ namespace MaxWorlds.UI
         /// floor), so at 24 this tap root's own bottom edge (707) sat inside Teleport's own top edge
         /// (709) at the iPhone 16 Pro / 12 mini landscape aspects — short by the ticket's 12px minimum
         /// gap even before accounting for the overlap. Narrowing this (RIG moves up, not down, since
-        /// it's anchored from the top) opens that gap without resizing or moving Teleport.</summary>
-        private const float RigCornerInset = 6f;
+        /// it's anchored from the top) opens that gap without resizing or moving Teleport.
+        /// MV-1167: widened 6 -> 14 on both axes — on the 16 Pro Max's real SafeArea
+        /// (MV1167FocusToggleSafeAreaTests), the mark's right edge sat ~6 units short of the required
+        /// 12-unit margin, and its top edge (the real landscape SafeArea's top inset is 0 on every
+        /// device this ticket names, so this is the plain top-of-canvas margin) sat ~6 units short too.
+        /// Widening Y back toward Teleport's gap floor is paid for by shrinking <see cref="CellReadoutGap"/>
+        /// 14 -&gt; 8 (purely cosmetic breathing room, not a touch-clearance gap) to keep that 12px
+        /// minimum gap to Teleport intact — see that constant's own comment.</summary>
+        private const float RigCornerInset = 14f;
 
         /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): bottom of the left
         /// play-area column (MV-645) — MAP, the Settings/Controls gear, Water Balloon and Force Field
@@ -1736,7 +1743,7 @@ namespace MaxWorlds.UI
                 _sentinelNoRoomFlash = 1f;
         }
 
-        /// <summary>MV-636: a small pill sitting above the Sentinel joystick, reading "FOCUS ON"/
+        /// <summary>MV-636: a small pill sitting under the Sentinel button, reading "FOCUS ON"/
         /// "FOCUS OFF" (MV-862 renamed the toggle and its own two states from the old "Attack Mode"
         /// wording) — the player's own switch for whether deployed sentinels share Max's own current
         /// target (see
@@ -1747,28 +1754,24 @@ namespace MaxWorlds.UI
         /// inactive; <see cref="RefreshFocusToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>,
         /// which already fires on a RIG level-up — see <see cref="OnAbilitiesChanged"/>) shows/hides and
         /// relabels it live.</summary>
-        // MV-676: was SentinelJoystickRise + 120 (centre 940), only checked against the full 1080
-        // reference — top edge 962 leaves almost no room once an iPhone-standard landscape aspect
-        // (~852x393pt) compresses the CanvasScaler's matchWidthOrHeight=0.5 blend down to an effective
-        // ~978-unit-tall canvas, and it clipped on real devices. +60 lands the top edge at ~902, the
-        // same ~72-76-unit safety margin the MAP button (the column's own topmost element) already
-        // carries — see MV676HudPhoneAspectMarginTests.
-        // MV-1104: widened 60 -> 210 — the old Sentinel joystick (retired MV-1113) grew to a
-        // (100+30)*ControlSizeScale = 169 half-extent (ring + touch pad), so the old 60px gap now sat
-        // the FOCUS pill entirely inside that touch pad. This pill's own center sits at
-        // SentinelButtonRise + FocusToggleRise, and (with SentinelButtonRise at 720) needs this Rise
-        // >= 169 + 12px gap + this pill's own 22-unit half-height = 203 to clear the button beneath it
-        // (now smaller than the joystick was, so this margin is generous, not tight), and <= 936 - 720
-        // = 216 to keep this pill's own top edge under the iPhone 16 Pro landscape's effective ceiling
-        // (MV676HudPhoneAspectMarginTests). 210 sits in that range with margin either side.
-        private const float FocusToggleRise = 210f;
+        // MV-1167: was ABOVE the Sentinel button (SentinelButtonRise + 210 = centre 930), which ran off
+        // the top of the screen on an iPhone Pro Max once the real SafeArea inset (not just the
+        // phone-aspect-blended canvas MV676HudPhoneAspectMarginTests checked) is applied — Lee, 11 Oct.
+        // Moved BELOW it instead. The ticket's own math (SENTINEL's bottom edge at 648.5, a 16-unit
+        // gap) measured only the VISIBLE button; MV1104ControlSizeTests' own 12px-gap collision check
+        // pads Sentinel with the same scaledTouchPad (39 units) every joystick-style control there
+        // carries, which alone exceeds that 16-unit gap. Cleared against that padded box instead:
+        // 720 - HydroButtonSize/2 (71.5) - scaledTouchPad (39) - MinGapPx/2 (6) - this pill's own
+        // half-height (22) - MinGapPx/2 (6) = 575.5, so this pill's centre must sit at or below that —
+        // 150 (centre 570) clears it with ~5 units to spare.
+        private const float FocusToggleDropBelowSentinel = 150f;
 
         private void BuildFocusToggle()
         {
             var root = NewRect("Sentinel Focus Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             root.sizeDelta = new Vector2(140f, 44f);
-            root.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise + FocusToggleRise);
+            root.anchoredPosition = new Vector2(SentinelButtonX, SentinelButtonRise - FocusToggleDropBelowSentinel);
             _focusToggleRoot = root;
 
             var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), SentinelColor, "BG");
@@ -2508,8 +2511,12 @@ namespace MaxWorlds.UI
 
         /// <summary>Gap between THE WEAPONS button's hex mark and the cell readout below it (MV-510 —
         /// roomier than the old parts chip's gap so it doesn't crowd the doubled mark; MV-519 removed
-        /// that parts chip outright, leaving this readout the mark's only counter).</summary>
-        private const float CellReadoutGap = 14f;
+        /// that parts chip outright, leaving this readout the mark's only counter).
+        /// MV-1167: narrowed 14 -&gt; 8 — purely cosmetic breathing room between the mark and its own
+        /// counter pill (not a touch-clearance gap between separate controls), traded for the room
+        /// <see cref="RigCornerInset"/> needed to widen to clear the real SafeArea margin without
+        /// eating into the RIG tap root's own 12px gap to Teleport (MV-1104).</summary>
+        private const float CellReadoutGap = 8f;
 
         /// <summary>MV-510 review round 1 (Lee): the pill must never read louder than the hex mark it
         /// sits under, and must not exceed the mark's own width (<see cref="WeaponsButtonSize"/>).
