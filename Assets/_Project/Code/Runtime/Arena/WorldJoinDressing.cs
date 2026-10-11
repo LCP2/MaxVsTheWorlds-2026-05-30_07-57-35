@@ -10,6 +10,10 @@ namespace MaxWorlds.Arena
     /// (the exit corridor's segments A/B/C and the World 2 arrival shell) — called right after that class
     /// builds each one, parenting every piece onto the segment root it exposes
     /// (<c>CorridorSegmentRoot</c>/<c>ArrivalRoot</c>) rather than reaching into its private geometry.
+    /// MV-1126 re-authored the World 1 exit row's own garden/kerb/ramp/pipe-mouth story (segment A's
+    /// garden now runs d 0-12, segment B carries the kerb/ramp/pipe-mouth ring at d 12-19) without
+    /// touching the shell's own segment-root boundaries (still d 9/13) — dressing d-ranges don't have to
+    /// line up with which segment root a piece is parented under.
     ///
     /// `d` is metres outward from the door mouth along the wall's own travel axis (the design image's own
     /// convention). Every position below is one of the ticket's own authored d-values, not a procedural
@@ -71,7 +75,6 @@ namespace MaxWorlds.Arena
         // two follow StormdrainKit's own HazardStripeMaterial idiom instead.
 
         private static Material _statusLampMaterial;
-        private static Material _portalSpillMaterial;
 
         private static Material EmissiveMaterial(ref Material cache, string name, Color tone, float emissiveScale)
         {
@@ -98,60 +101,6 @@ namespace MaxWorlds.Arena
         private static Material StatusLampMaterial() =>
             EmissiveMaterial(ref _statusLampMaterial, "StatusLamp", StormdrainKit.Status, 1.6f);
 
-        private static readonly Color PortalViolet = new Color(0.55f, 0.25f, 0.85f);
-
-        /// <summary>MV-1076: a dedicated cached material on the same URP/Lit shader
-        /// <see cref="StatusLampMaterial"/> already uses, rather than reaching for
-        /// <see cref="MaxWorlds.VFX.VfxMaterials"/>'s particle-shader cache — MV-965's own AC1c (every
-        /// 4 m window in segment C holds a renderer with <c>_EMISSION</c> enabled) reads that keyword on
-        /// THIS shader, so keeping the portal spill on it is what keeps this one renderer compatible
-        /// with that check instead of carving out a second, unrelated definition of "emissive".
-        /// <see cref="VfxMaterials.Glow"/>'s own radial-falloff texture gives it a soft, round edge — no
-        /// opaque geometry, no hard rectangular edge — and the transparent/additive blend plus
-        /// <see cref="SpillMaxAlpha"/> keep it reading as light spilling from the portal, not a solid
-        /// slab.</summary>
-        private const float SpillMaxAlpha = 0.35f;
-
-        private static Material PortalSpillMaterial()
-        {
-            if (_portalSpillMaterial != null) return _portalSpillMaterial;
-            Shader shader = MaterialLibrary.SurfaceShader;
-            if (shader == null) return null;
-
-            var m = new Material(shader)
-            {
-                name = "WorldJoin_PortalSpill",
-                hideFlags = HideFlags.HideAndDontSave,
-                enableInstancing = true,
-                renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent,
-            };
-
-            Texture2D glow = VfxMaterials.Glow();
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", glow);
-            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", glow);
-
-            Color tinted = new Color(PortalViolet.r, PortalViolet.g, PortalViolet.b, SpillMaxAlpha);
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tinted);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", tinted);
-            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", PortalViolet * 0.9f);
-            m.EnableKeyword("_EMISSION");
-            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-
-            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);     // 0 opaque, 1 transparent
-            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 2f);        // additive -- a light, not a decal
-            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
-            if (m.HasProperty("_SrcBlend"))
-                m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            if (m.HasProperty("_DstBlend"))
-                m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            m.SetOverrideTag("RenderType", "Transparent");
-
-            _portalSpillMaterial = m;
-            return m;
-        }
-
         /// <summary>Drops the cached materials this class owns — mirrors <see cref="StormdrainKit.Clear"/>
         /// so an EditMode run that builds the corridor repeatedly across tests never leaks one Material
         /// per run into the editor's asset-less object count.</summary>
@@ -162,12 +111,6 @@ namespace MaxWorlds.Arena
                 if (Application.isPlaying) Object.Destroy(_statusLampMaterial);
                 else Object.DestroyImmediate(_statusLampMaterial);
                 _statusLampMaterial = null;
-            }
-            if (_portalSpillMaterial != null)
-            {
-                if (Application.isPlaying) Object.Destroy(_portalSpillMaterial);
-                else Object.DestroyImmediate(_portalSpillMaterial);
-                _portalSpillMaterial = null;
             }
         }
 
@@ -193,7 +136,7 @@ namespace MaxWorlds.Arena
             Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry)
         {
             if (segA != null) DressGarden(segA, doorMouth, wall);
-            if (segB != null) DressKerbAndGrate(segB, doorMouth, wall, entry.SegmentAEnd);
+            if (segB != null) DressKerbRampAndPipeMouth(segB, doorMouth, wall);
             if (segC != null) DressCulvertExit(segC, doorMouth, wall, wallHeight, entry.SegmentBEnd, entry.CorridorLength);
         }
 
@@ -206,15 +149,20 @@ namespace MaxWorlds.Arena
 
         // ------------------------------------------------------------------ segment A: garden (d 0-9)
 
-        private static readonly float[] PaverD = { 1.0f, 2.5f, 4.0f, 5.5f, 7.0f, 8.5f };
+        private static readonly float[] PaverD = { 1.0f, 2.5f, 4.0f, 5.5f, 7.0f, 8.5f, 10.0f, 11.3f };
         private const float BedInner = 1.0f;   // the 2.0 m centre lane's own edge
         private const float BedWidth = 0.5f;
         private const float BedAcross = BedInner + BedWidth * 0.5f;
 
+        /// <summary>MV-1126 item 1: the garden now runs d 0-12 (was d 0-9) -- re-spaced for the 5 m
+        /// width, same pavers/beds/foliage/hose-reel/pot, just carried further out to where the kerb
+        /// now sits (<see cref="KerbD"/>).</summary>
+        private const float GardenEndD = 12f;
+
         private static void DressGarden(Transform segA, Vector2 doorMouth, Wall wall)
         {
             BiomePalette yard = BiomePalette.Backyard;
-            float dEnd = 9f;
+            float dEnd = GardenEndD;
 
             foreach (float d in PaverD)
             {
@@ -234,10 +182,20 @@ namespace MaxWorlds.Arena
                 }
             }
 
-            // Hose reel (W side, d 3), tipped terracotta pot (E side, d 6.5) — both inside their own bed,
+            // Hose reel (W side, d 3), tipped terracotta pot (E side, d 9) — both inside their own bed,
             // both under 0.6 m footprint, both scenery only.
             BuildHoseReel(segA, At(doorMouth, wall, 3f, -BedAcross, 0f), yard);
-            BuildTippedPot(segA, At(doorMouth, wall, 6.5f, BedAcross, 0f));
+            BuildTippedPot(segA, At(doorMouth, wall, 9f, BedAcross, 0f));
+
+            // MV-1126 item 1: "Timber fence walls" -- retint this segment's own two wall boxes (MV-964's
+            // shell) onto the yard's Wood tone, the same re-skin idiom DressDeckAndWalls already uses for
+            // the Reef row's "Wall 1"/"Wall 2" renderers.
+            foreach (MeshRenderer r in segA.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (r.transform.parent != segA) continue;
+                if (r.name.Contains("Wall 1") || r.name.Contains("Wall 2"))
+                    r.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Wood, yard.ColorFor(SurfaceKind.Wood));
+            }
         }
 
         private static void BuildFoliageClump(Transform parent, string name, Vector3 worldPos, float diameter,
@@ -275,57 +233,85 @@ namespace MaxWorlds.Arena
             pot.transform.localRotation = Quaternion.Euler(0f, 20f, 32f);
         }
 
-        // ------------------------------------------------------------------ segment B: kerb + grate (d 9-13)
+        // ------------------------------------------------------------------ segment B: kerb, ramp, pipe mouth (d 12-19)
 
-        private const float GrateD = 11f;
-        private const float GrateSize = 1.2f;
+        private const float KerbD = 12f;               // MV-1126: "the lawn stops at a concrete kerb" -- the one event.
+        private const float RampStartD = 12f;
+        private const float RampEndD = 18f;
 
-        private static void DressKerbAndGrate(Transform segB, Vector2 doorMouth, Wall wall, float segStart)
+        /// <summary>MV-1126 fallback (see the ticket's own escape hatch and the PR comment): the floor
+        /// is NOT actually lowered 1.5 m this ticket -- lowering segment C's real floor collider would
+        /// mean reworking <see cref="MaxWorlds.Intro.WorldJoinSequence"/>'s own shell-building code
+        /// (bank heights, wall heights, every other row/segment that shares it), far outside this
+        /// ticket's tight slice. Instead this draws a shallow visual wedge, "no higher than a step," on
+        /// the existing flat floor -- AC1a's "equal" branch applies, not its "1.5 m lower" branch.</summary>
+        private const float RampDropFallback = 0.3f;
+        private const float RampThickness = 0.15f;
+
+        private const float PipeMouthStartD = 18f;
+        private const float PipeMouthEndD = 19f;
+        private const float PipeMouthOuterDiameter = 5f;
+        private const float PipeMouthRingWidth = 0.4f;    // radial thickness -- "a thick concrete ring"
+        private const float PipeMouthRingDepth = 0.45f;   // extrusion depth along the ring's own normal
+        private const float PipeMouthLeanDeg = 35f;       // ticket item 4: "leaning back about 35 degrees"
+
+        private static void DressKerbRampAndPipeMouth(Transform segB, Vector2 doorMouth, Wall wall)
         {
-            Bar(segB, "Kerb Band", doorMouth, wall, segStart, segStart + 0.25f, 0f, 3.0f,
+            Bar(segB, "Kerb Band", doorMouth, wall, KerbD, KerbD + 0.25f, 0f, 3.0f,
                 0.12f, 0.06f, StormdrainKit.KerbConcrete);
 
-            BuildLawnGrate(segB, doorMouth, wall, GrateD);
-
-            foreach (float side in new[] { 1f, -1f })
-            {
-                for (float d = segStart + 0.3f; d <= segStart + 1.5f; d += 0.9f)
-                {
-                    Vector3 at = At(doorMouth, wall, d, side * 1.5f, 1.5f);
-                    BuildFoliageClump(segB, $"Grass Tuft {(side > 0 ? "E" : "W")} d{d:0.0}", at, 0.3f, BiomePalette.Backyard);
-                }
-            }
+            BuildRamp(segB, doorMouth, wall);
+            BuildPipeMouthRing(segB, doorMouth, wall);
         }
 
-        /// <summary>The storm-water grate Max drops through in the World 2 story — seven bars over a dark
-        /// void, sized to the ticket's own 1.2 x 1.2 m (StormdrainKit.BuildGrate is fixed at the drain's
-        /// own 1 m tile, so this is a small local build rather than a reuse).</summary>
-        private static void BuildLawnGrate(Transform parent, Vector2 doorMouth, Wall wall, float d)
+        /// <summary>MV-1126 item 3: a shallow visual ramp down into the drain -- a thin tilted slab,
+        /// dressing only (no collider: the real floor underneath stays flat per the fallback above, so
+        /// this never risks the AC1c sweep or the fall safety net's margin), with a sludge-green trickle
+        /// down its centre.</summary>
+        private static void BuildRamp(Transform parent, Vector2 doorMouth, Wall wall)
         {
-            var root = new GameObject("Lawn Grate");
-            root.transform.SetParent(parent, false);
-            root.transform.localPosition = At(doorMouth, wall, d, 0f, 0f);
+            float run = RampEndD - RampStartD;
+            float thetaRad = Mathf.Atan2(RampDropFallback, run);
+            float thetaDeg = thetaRad * Mathf.Rad2Deg;
+            float slopeLen = Mathf.Sqrt(run * run + RampDropFallback * RampDropFallback);
 
-            const float outer = GrateSize;
-            const float inner = GrateSize - 0.14f;
-            float thickness = (outer - inner) * 0.5f;
-            float ringOffset = inner * 0.5f + thickness * 0.5f;
+            float midD = (RampStartD + RampEndD) * 0.5f;
+            float dropMid = RampDropFallback * 0.5f;
+            float halfT = RampThickness * 0.5f;
 
-            StormdrainKit.Box(root.transform, "Frame A", new Vector3(0f, -0.05f, ringOffset), new Vector3(outer, 0.1f, thickness), StormdrainKit.Rust, SurfaceKind.Metal);
-            StormdrainKit.Box(root.transform, "Frame B", new Vector3(0f, -0.05f, -ringOffset), new Vector3(outer, 0.1f, thickness), StormdrainKit.Rust, SurfaceKind.Metal);
-            StormdrainKit.Box(root.transform, "Frame C", new Vector3(ringOffset, -0.05f, 0f), new Vector3(thickness, 0.1f, inner), StormdrainKit.Rust, SurfaceKind.Metal);
-            StormdrainKit.Box(root.transform, "Frame D", new Vector3(-ringOffset, -0.05f, 0f), new Vector3(thickness, 0.1f, inner), StormdrainKit.Rust, SurfaceKind.Metal);
+            Vector3 center = At(doorMouth, wall, midD - halfT * Mathf.Sin(thetaRad), 0f,
+                -(dropMid + halfT * Mathf.Cos(thetaRad)));
 
-            const int bars = 7;
-            for (int i = 0; i < bars; i++)
-            {
-                float t = (i + 0.5f) / bars - 0.5f;
-                StormdrainKit.Box(root.transform, $"Grille Bar{i}", new Vector3(t * inner, -0.06f, 0f),
-                    new Vector3(0.06f, 0.06f, inner), StormdrainKit.Soffit, SurfaceKind.Metal);
-            }
+            Vector3 size = new Vector3(4.6f, RampThickness, slopeLen);
+            GameObject ramp = StormdrainKit.Box(parent, "Ramp", center, size, StormdrainKit.KerbConcrete);
+            ramp.transform.localRotation = Quaternion.LookRotation(OutwardDir(wall), Vector3.up) * Quaternion.Euler(thetaDeg, 0f, 0f);
 
-            StormdrainKit.Glow(root.transform, "Void", new Vector3(0f, -0.1f, 0f), new Vector3(inner, inner, 1f),
-                Quaternion.Euler(90f, 0f, 0f), StormdrainKit.Soffit);
+            Bar(parent, "Ramp Sludge Trickle", doorMouth, wall, RampStartD, RampEndD, 0f, 0.5f, 0.03f,
+                -(dropMid + 0.02f), StormdrainKit.Sludge, SurfaceKind.Foliage);
+        }
+
+        /// <summary>MV-1126 item 4: the pipe-mouth headwall, reduced to the ring itself (BUILD MODE:
+        /// INDICATIVE -- the image is reference, not spec; a separate solid headwall slab was dropped so
+        /// the opening stays genuinely open, matching the ticket's own "nothing may hide him for more
+        /// than 2 m of travel"). A real <see cref="CharacterMeshes.Ring"/> mesh, standing to face
+        /// outward along the corridor and leaning back <see cref="PipeMouthLeanDeg"/>, no collider
+        /// (dressing only -- Max simply walks through the opening).</summary>
+        private static void BuildPipeMouthRing(Transform parent, Vector2 doorMouth, Wall wall)
+        {
+            float midD = (PipeMouthStartD + PipeMouthEndD) * 0.5f;
+            float outerRadius = PipeMouthOuterDiameter * 0.5f;
+            float innerRadius = outerRadius - PipeMouthRingWidth;
+
+            Vector3 pos = At(doorMouth, wall, midD, 0f, outerRadius);
+
+            var go = new GameObject("Pipe Mouth Ring");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = Quaternion.LookRotation(OutwardDir(wall), Vector3.up)
+                * Quaternion.Euler(90f + PipeMouthLeanDeg, 0f, 0f);
+            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Ring(innerRadius, outerRadius, PipeMouthRingDepth, 28);
+            var rend = go.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Stone, StormdrainKit.Rust * 0.6f + StormdrainKit.KerbConcrete * 0.4f);
         }
 
         // ------------------------------------------------------------------ segment C: culvert (d 13-30)
@@ -336,8 +322,12 @@ namespace MaxWorlds.Arena
             DressBaysAndJoints(segC, doorMouth, wall, dStart, dEnd);
             DressSludgeTrickle(segC, doorMouth, wall, 15f, dEnd);
             DressRustPipe(segC, doorMouth, wall, wallHeight, 14f, dEnd);
-            DressStatusLamps(segC, doorMouth, wall, new[] { 16f, 20f, 24f, 28f });
-            DressPortalSpill(segC, doorMouth, wall, dEnd - 3f, dEnd);
+            // MV-1126: one more lamp near the far door (d 29.5) than MV-965 originally authored --
+            // removing the portal spill below leaves MV965's own last 4 m window [29, 30) with nothing
+            // emissive in it otherwise.
+            DressStatusLamps(segC, doorMouth, wall, new[] { 16f, 20f, 24f, 28f, 29.5f });
+            // MV-1126 (AC1e): the portal spill is removed -- a "leaving World 2" violet glow doesn't
+            // belong on a storm-drain pipe mouth. DressPortalSpill/PortalSpillMaterial are deleted.
         }
 
         /// <summary>The arrival shell (MV-964 4.7): shorter, but the same culvert language — bays/joints
@@ -422,33 +412,6 @@ namespace MaxWorlds.Arena
                 Vector3 at = At(doorMouth, wall, d, 1.35f, 0.9f);
                 StatusLamp(parent, $"Status Lamp d{d:0.0}", at, 0.2f);
             }
-        }
-
-        /// <summary>MV-1076: Lee, v0.11.5 on his phone — this read as a flat, solid bright-purple square
-        /// covering the whole floor width, not light spilling from the portal. Replaced the opaque box
-        /// with a flat quad carrying <see cref="PortalSpillMaterial"/>'s soft radial glow, centred on
-        /// <paramref name="dEnd"/> (the far gate, where it reads strongest) and sized so it fades to
-        /// nothing <paramref name="dEnd"/> - <paramref name="dStart"/> m back — no opaque geometry, no
-        /// hard rectangular edge.</summary>
-        private static void DressPortalSpill(Transform parent, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
-        {
-            float alongDiameter = (dEnd - dStart) * 2f;
-            const float acrossDiameter = 3f;   // the corridor's own interior width -- same footprint the old slab had
-
-            bool travelAlongZ = OutwardDir(wall).x == 0f;
-
-            GameObject spill = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            spill.name = "Portal Spill";
-            spill.transform.SetParent(parent, false);
-            spill.transform.localPosition = At(doorMouth, wall, dEnd, 0f, 0.02f);
-            spill.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            spill.transform.localScale = travelAlongZ
-                ? new Vector3(acrossDiameter, alongDiameter, 1f)
-                : new Vector3(alongDiameter, acrossDiameter, 1f);
-            StormdrainKit.Strip(spill);
-
-            var rend = spill.GetComponent<Renderer>();
-            rend.sharedMaterial = PortalSpillMaterial();
         }
 
         // ================================================================== World 2 -> World 3 (MV-967)
