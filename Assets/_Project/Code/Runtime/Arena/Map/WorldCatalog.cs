@@ -39,6 +39,37 @@ namespace MaxWorlds.Arena
         Reef,
     }
 
+    /// <summary>How a world's own finale exit works (MV-1143) — <c>Corridor</c>: a door, then a
+    /// corridor into the next world (<see cref="WorldDefinition.Entry"/> carries the geometry).
+    /// <c>DoorOnly</c>: a door that opens with nothing behind it — the last world's own finale exit,
+    /// watched directly by <see cref="MaxWorlds.VFX.WorldFinaleGate"/> instead of handed off to
+    /// <see cref="MaxWorlds.Intro.WorldJoinSequence"/>.</summary>
+    public enum WorldExitMode
+    {
+        Corridor,
+        DoorOnly,
+    }
+
+    /// <summary>Which <c>WorldJoinDressing</c> pass dresses the EXIT side of this world's own corridor
+    /// (MV-1143), named for the method it calls — <c>None</c> for a <see cref="WorldExitMode.DoorOnly"/>
+    /// row, which has no corridor to dress.</summary>
+    public enum ExitCorridorDressingKind
+    {
+        None,
+        Exit,
+        ExitReef,
+    }
+
+    /// <summary>Which <c>WorldJoinDressing</c> pass dresses the arrival shell built when Max arrives IN
+    /// this world (MV-1143), named for the method it calls — <c>None</c> for the first world, which
+    /// nothing ever arrives into by corridor.</summary>
+    public enum ArrivalDressingKind
+    {
+        None,
+        Arrival,
+        ArrivalReef,
+    }
+
     /// <summary>A world's Sentinel look (MV-1141) — moved here from <c>Sentinel</c>'s own private
     /// <c>Styles</c> table, which used to be the one other per-world row living outside this catalog.</summary>
     public readonly struct SentinelStyle
@@ -158,6 +189,36 @@ namespace MaxWorlds.Arena
         /// <summary>Whether the Rack Module pickup drops in this world — see
         /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Rack Module rule.</summary>
         public bool RackModuleDropsHere;
+
+        // --- MV-1143: exit, corridor and arrival ---
+
+        /// <summary>How this world's own finale exit works — see <see cref="WorldExitMode"/>.</summary>
+        public WorldExitMode ExitMode;
+
+        /// <summary>Which wall this world's own finale door cuts — read by
+        /// <see cref="WorldTransitions.ApplyExitDoorway"/> for either <see cref="ExitMode"/>.</summary>
+        public Wall ExitWall;
+
+        /// <summary>Where along <see cref="ExitWall"/> the door sits (0..1) — read by
+        /// <see cref="WorldTransitions.ApplyExitDoorway"/> for either <see cref="ExitMode"/>.</summary>
+        public float ExitDoorPos;
+
+        /// <summary>The corridor and arrival geometry this world's exit carries — set only for
+        /// <see cref="WorldExitMode.Corridor"/>; null for <see cref="WorldExitMode.DoorOnly"/>, which has
+        /// no corridor to walk.</summary>
+        public WorldTransitionEntry Entry;
+
+        /// <summary>Which corridor dressing pass runs on the EXIT side when Max leaves this world — see
+        /// <see cref="ExitCorridorDressingKind"/>.</summary>
+        public ExitCorridorDressingKind ExitDressing;
+
+        /// <summary>Which arrival dressing pass runs when Max ARRIVES in this world — see
+        /// <see cref="ArrivalDressingKind"/>.</summary>
+        public ArrivalDressingKind ArrivalDressing;
+
+        /// <summary>Whether the legacy <c>BackyardExitGate</c> decoration runs in this world — true only
+        /// for the Backyard; every other world's own finale door (MV-956/964) is the real exit.</summary>
+        public bool RunsLegacyExitGate;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -235,6 +296,12 @@ namespace MaxWorlds.Arena
         /// <c>worldIndex &gt;= 0</c>/<c>== 0</c> comparison left in <c>Sentinel.cs</c>) still holds.</summary>
         public static bool FiresWaterBeamAt(int worldIndex) => worldIndex >= 0 && Get(worldIndex).FiresWaterBeam;
 
+        /// <summary>Whether a resolved world index's own row runs the legacy <c>BackyardExitGate</c>
+        /// decoration (MV-1143/MV-1045) — false for a negative index ("no <c>BackyardPath</c> resolved"),
+        /// the same "no world resolved never defaults to World 1" rule <see cref="FiresWaterBeamAt"/>
+        /// already follows.</summary>
+        public static bool RunsLegacyExitGateAt(int worldIndex) => worldIndex >= 0 && Get(worldIndex).RunsLegacyExitGate;
+
         /// <summary>The row index for a stable <see cref="WorldIds"/> name, or -1 if there is no such
         /// world.</summary>
         public static int IndexOf(string id)
@@ -295,6 +362,28 @@ namespace MaxWorlds.Arena
 
                 if (row.SupercellCadenceAreas < 1)
                     problems.Add($"row {i} ('{row.Id}'): SupercellCadenceAreas below 1");
+
+                // MV-1143
+                bool isLastRow = i == s_rows.Count - 1;
+
+                if (row.ExitMode == WorldExitMode.Corridor)
+                {
+                    if (isLastRow)
+                        problems.Add($"row {i} ('{row.Id}'): Corridor exit mode but it is the last row — nowhere to go");
+
+                    if (row.Entry == null)
+                        problems.Add($"row {i} ('{row.Id}'): Corridor exit mode but no Entry authored");
+                    else
+                    {
+                        if (row.Entry.CorridorLength <= 0f)
+                            problems.Add($"row {i} ('{row.Id}'): CorridorLength not above 0");
+                        if (row.Entry.ArrivalShellLength <= 0f)
+                            problems.Add($"row {i} ('{row.Id}'): ArrivalShellLength not above 0");
+                    }
+                }
+
+                if (isLastRow && row.ExitMode != WorldExitMode.DoorOnly)
+                    problems.Add($"row {i} ('{row.Id}'): last row's exit mode must be DoorOnly");
             }
 
             return problems;
@@ -335,6 +424,18 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 1,
                 RackModuleDropsHere = false,
+                // MV-964: a30's own E wall into World 2's entry stub, W wall (MV-997: was N -- every
+                // arrival enters heading east, so every exit must too, or the corridor's own direction
+                // change breaks the continuity it exists for).
+                ExitMode = WorldExitMode.Corridor,
+                ExitWall = Wall.E,
+                ExitDoorPos = 0.5f,
+                Entry = new WorldTransitionEntry(fromWorld: 0, exitWall: Wall.E, exitDoorPos: 0.5f, corridorLength: 30f,
+                    segmentAEnd: 9f, segmentBEnd: 13f,
+                    arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
+                ExitDressing = ExitCorridorDressingKind.Exit,
+                ArrivalDressing = ArrivalDressingKind.None,
+                RunsLegacyExitGate = true,
             },
             new WorldDefinition
             {
@@ -361,6 +462,18 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => 1f,
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = true,
+                // MV-1140: a31's own E wall into World 3's entry stub, W wall. World 2 grew to a22-a31
+                // (ten new areas), moving the finale and exit from a21 to a31: a31's E wall spans
+                // x=352, z 22..74, and 0.509615384615 (26.5/52) lands the door mouth at world (352, 48.5).
+                ExitMode = WorldExitMode.Corridor,
+                ExitWall = Wall.E,
+                ExitDoorPos = 0.509615384615f,
+                Entry = new WorldTransitionEntry(fromWorld: 1, exitWall: Wall.E, exitDoorPos: 0.509615384615f, corridorLength: 30f,
+                    segmentAEnd: 10f, segmentBEnd: 16f,
+                    arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
+                ExitDressing = ExitCorridorDressingKind.ExitReef,
+                ArrivalDressing = ArrivalDressingKind.Arrival,
+                RunsLegacyExitGate = false,
             },
             new WorldDefinition
             {
@@ -391,6 +504,23 @@ namespace MaxWorlds.Arena
                 PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
+                // MV-1013: the last world's own finale exit door -- real map geometry cut at boot exactly
+                // like a Corridor row's, but with no corridor behind it: there is no next world to walk
+                // into, so WorldFinaleGate opens this gate directly and watches for Max crossing it
+                // itself. a30's E wall (34x34, origin 586,0) -- same "exit runs east" convention every
+                // other row already follows. NOT the wall's exact centre (0.5, z 17): Anchorhead sits
+                // there too (603, 17, dead centre of the room) with a flanking cover pair on every wall at
+                // its own centreline (a30_c17..c20 in world3_config.json) -- a door cut through the centre
+                // would open right behind a solid cover box. 0.3 (z 10.2) clears that piece, the south
+                // corner cluster (c5-c8, z up to 5.8) and both wall ends, with margin to spare against
+                // WorldTransitionCoverageTests' own clearances (2m from cover, 1.9m from a wall end).
+                ExitMode = WorldExitMode.DoorOnly,
+                ExitWall = Wall.E,
+                ExitDoorPos = 0.3f,
+                Entry = null,
+                ExitDressing = ExitCorridorDressingKind.None,
+                ArrivalDressing = ArrivalDressingKind.ArrivalReef,
+                RunsLegacyExitGate = false,
             },
         };
     }

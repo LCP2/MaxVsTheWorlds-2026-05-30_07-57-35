@@ -38,8 +38,9 @@ namespace MaxWorlds.VFX
             if (FindFirstObjectByType<BackyardExitGate>() != null) return;
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null) return;                                     // not the Backyard
-            if (path.ResolvedWorldIndex != 0) return;                      // MV-1045: World 1 only --
-                                                                            // every world shares this
+            if (!WorldCatalog.RunsLegacyExitGateAt(path.ResolvedWorldIndex)) return; // MV-1045/MV-1143:
+                                                                            // World 1 only -- every world
+                                                                            // shares this
                                                                             // BackyardPath/BigBermudaBoss
                                                                             // pair, but the real exit is
                                                                             // each world's own finale
