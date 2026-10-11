@@ -20,12 +20,25 @@ namespace MaxWorlds.Tests.EditMode
     /// CanvasScaler's own log-blend formula to compute that effective height directly, rather than
     /// assuming the full 1080 is visible, and asserts every element this ticket repositioned clears it
     /// with a 20-unit margin. Sole guard on this fix; do not cull (MV-465).
+    ///
+    /// MV-1167 AC2: updated (not replaced — <see cref="MV1167FocusToggleSafeAreaTests"/> covers the
+    /// same ground plus the FOCUS/Sentinel/Teleport/RIG controls it doesn't, at four real device
+    /// screens, but keeping this one too avoided an unrelated pre-existing test-order fragility
+    /// filed separately as MV-1172) to apply the real iPhone 16/15 landscape <see cref="SafeArea"/>
+    /// inset (47pt sides, 21pt bottom, 0pt top — this device's own top inset is 0, so the ceiling this
+    /// test checks is unchanged by the inset, but the left/right assertions below are new and exercise
+    /// the same real <see cref="SafeArea.ComputeAnchors"/> path the HUD renders through) rather than
+    /// the full, un-inset canvas this test used to assume.
     /// </summary>
     public sealed class MV676HudPhoneAspectMarginTests
     {
         private const float RefW = 1920f, RefH = 1080f;
         private const float PhoneW = 852f, PhoneH = 393f;
         private const float MinMargin = 20f;
+
+        // iPhone 16/15 landscape SafeArea, in the same points this test already uses for PhoneW/PhoneH
+        // (Apple's published inset for this device: 47pt sides, 21pt bottom, 0pt top).
+        private static readonly Rect SafeAreaPt = new Rect(47f, 21f, PhoneW - 2f * 47f, PhoneH - 21f);
 
         [Test]
         public void RepositionedElementsClearThePhoneAspectEffectiveCeiling()
@@ -60,6 +73,7 @@ namespace MaxWorlds.Tests.EditMode
                 var forceField = FindRect(hudGo, "Force Field Button");
                 var balloon = FindRect(hudGo, "Water Balloon Joystick");
                 var map = FindRect(hudGo, "Map Button");
+                var safeRoot = FindRect(hudGo, "Safe Area");
 
                 Assert.That(focusToggle, Is.Not.Null, "fixture: the focus toggle must exist");
                 Assert.That(focusToggle.gameObject.activeInHierarchy, Is.True,
@@ -69,6 +83,16 @@ namespace MaxWorlds.Tests.EditMode
                     "fixture: Force Field must be visible once acquired");
                 Assert.That(balloon, Is.Not.Null, "fixture: the water balloon joystick must exist");
                 Assert.That(map, Is.Not.Null, "fixture: the map button must exist");
+                Assert.That(safeRoot, Is.Not.Null, "fixture: the Safe Area root must exist");
+
+                // MV-1167 AC2: apply the real per-device SafeArea (same production path HudController's
+                // own "Safe Area" root resolves through) instead of leaving the HUD at its default,
+                // un-inset anchors.
+                SafeArea.ComputeAnchors(SafeAreaPt, PhoneW, PhoneH, out Vector2 anchorMin, out Vector2 anchorMax);
+                safeRoot.anchorMin = anchorMin;
+                safeRoot.anchorMax = anchorMax;
+                safeRoot.offsetMin = Vector2.zero;
+                safeRoot.offsetMax = Vector2.zero;
 
                 // Replicates CanvasScaler.ScaleWithScreenSize's own log-blend (matchWidthOrHeight=0.5):
                 // the effective canvas is the physical screen size divided back out by that factor.
@@ -77,6 +101,14 @@ namespace MaxWorlds.Tests.EditMode
                 float scaleFactor = Mathf.Pow(2f, Mathf.Lerp(logWidth, logHeight, 0.5f));
                 float effectiveWidth = PhoneW / scaleFactor;
                 float effectiveHeight = PhoneH / scaleFactor;
+
+                // The safe area's own left/right/top bounds in this same effective-unit space — the
+                // ceiling this test has always checked, now explicitly the safe area's top (this
+                // device's top inset is 0, so the number is unchanged, but it is now actually read off
+                // the real inset rather than assumed).
+                float safeLeft = anchorMin.x * effectiveWidth;
+                float safeRight = anchorMax.x * effectiveWidth;
+                float safeTop = anchorMax.y * effectiveHeight;
 
                 Rect toggleRect, ffRect, balloonRect, mapRect;
                 var hudCam = ConfigureCanvasForCapture(hudGo.GetComponentInChildren<Canvas>(),
@@ -104,9 +136,15 @@ namespace MaxWorlds.Tests.EditMode
                 };
 
                 foreach (var (id, rect) in elements)
-                    Assert.That(rect.yMax, Is.LessThanOrEqualTo(effectiveHeight - MinMargin),
-                        $"'{id}' top edge {rect.yMax:F1} must clear the iPhone-standard effective " +
-                        $"ceiling ({effectiveHeight:F1}) with a {MinMargin}-unit margin");
+                {
+                    Assert.That(rect.yMax, Is.LessThanOrEqualTo(safeTop - MinMargin),
+                        $"'{id}' top edge {rect.yMax:F1} must clear the safe area's top ({safeTop:F1}) " +
+                        $"with a {MinMargin}-unit margin");
+                    Assert.That(rect.xMin, Is.GreaterThanOrEqualTo(safeLeft),
+                        $"'{id}' left edge {rect.xMin:F1} must not sit left of the safe area's left ({safeLeft:F1})");
+                    Assert.That(rect.xMax, Is.LessThanOrEqualTo(safeRight),
+                        $"'{id}' right edge {rect.xMax:F1} must not sit right of the safe area's right ({safeRight:F1})");
+                }
             }
             finally
             {
