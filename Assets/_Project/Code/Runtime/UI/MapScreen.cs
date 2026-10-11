@@ -500,9 +500,9 @@ namespace MaxWorlds.UI
             var marker = AddImage(_content, HudTextures.RoundedBox(12, 0.2f), MapScreenDesign.Cover, "Cover");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
-            // Rotated the same way a room's own footprint is: world depth (Z) becomes on-screen width,
-            // world width (X) becomes on-screen height.
-            marker.rectTransform.sizeDelta = new Vector2(Mathf.Max(1.2f, entity.depth), Mathf.Max(1.2f, entity.width));
+            // Same axes as every other marker and the room rectangles themselves (ContentPoint,
+            // MinimapModel.NormalizedZoneRect): world X along screen X, world Z along screen Y.
+            marker.rectTransform.sizeDelta = new Vector2(Mathf.Max(1.2f, entity.width), Mathf.Max(1.2f, entity.depth));
             marker.type = Image.Type.Sliced;
             marker.raycastTarget = false;
         }
