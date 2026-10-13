@@ -60,12 +60,13 @@ namespace MaxWorlds.Tests.EditMode
         private static RobotEnemy NewRobot(string name, Vector3 position)
         {
             var go = new GameObject(name);
+            go.transform.position = position; // MV-1060: before Apply/OnEnable, so ResetState's
+                                                // _fallRecovery seed is this robot's real spawn point
             var cc = go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
             CcField.SetValue(e, cc);
             e.Apply(EnemyArchetype.Bruiser); // no lunge/telegraph — contact damage lands on a plain Chase tick
             RobotOnEnableMethod.Invoke(e, null); // seeds RobotEnemy.Active
-            go.transform.position = position;
             return e;
         }
 
