@@ -47,6 +47,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             WeaponSystemState.Reset();
             EnemyNavigation.Reset();
+            DevTuning.Reset(); // MV-1060: EffectiveContactCooldown/EffectiveMoveSpeed read live off DevTuning
         }
 
         /// <summary>Same construction idiom as <c>MV1015...Tests.NewRobot</c>: AddComponent doesn't
@@ -57,12 +58,13 @@ namespace MaxWorlds.Tests.EditMode
         private static RobotEnemy NewRobot(string name, Vector3 position, in EnemyArchetype archetype)
         {
             var go = new GameObject(name);
+            go.transform.position = position; // MV-1060: before Apply/OnEnable, so ResetState's
+                                                // _fallRecovery seed is this robot's real spawn point
             var cc = go.AddComponent<CharacterController>();
             var e = go.AddComponent<RobotEnemy>();
             CcField.SetValue(e, cc);
             e.Apply(archetype);
             RobotOnEnableMethod.Invoke(e, null);
-            go.transform.position = position;
 
             go.AddComponent<MeshFilter>().sharedMesh = new Mesh();
             go.AddComponent<MeshRenderer>();
@@ -91,16 +93,15 @@ namespace MaxWorlds.Tests.EditMode
                 fillRobot1 = null, fillRobot2 = null;
             try
             {
-                // MV-1061: a real physical floor under the ally's walk, same idiom as
-                // MV952RobotFallRecoveryTests — without it, robotA's post-conversion CharacterController
-                // (ungrounded in the full-suite's shared EditMode scene, whose ground residue depends on
-                // whichever fixture ran immediately before this one) falls instead of walking over to
-                // contact-damage enemyTarget, and the "must damage an enemy robot" assertion below goes
-                // flaky depending on run order. Covers robotA (2,0,0) through enemyTarget (3,0,0) with
-                // margin for the 1.5s walk.
+                // MV-1061/MV-1060: a real physical floor under every position this fixture uses, same
+                // idiom as MV952RobotFallRecoveryTests — without it, a robot ticked while ungrounded
+                // free-falls under RobotEnemy.ApplyGravity until FallSafetyNet's fall-recovery teleports
+                // it back to wherever _fallRecovery was seeded, which is a knife edge (MV-1060) in the
+                // ally-damage leg below. One floor spans all three zones the test uses: the AC1 pair near
+                // (0,0,0)-(2,0,0), AC2's pair around (0,0,200), and the fill case around (0,0,400).
                 floorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                floorGo.transform.position = new Vector3(2.5f, -0.05f, 0f);
-                floorGo.transform.localScale = new Vector3(10f, 0.1f, 10f);
+                floorGo.transform.position = new Vector3(0f, -0.05f, 200f);
+                floorGo.transform.localScale = new Vector3(20f, 0.1f, 420f);
                 Physics.SyncTransforms();
 
                 maxGo = new GameObject("MV-1035 test Max", typeof(CharacterController)) { tag = "Player" };
@@ -173,6 +174,13 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(TrapAllyColor.r, renderedColor.r, 0.02f, "converted body colour red channel must match #5BE35A within 2%");
                 Assert.AreEqual(TrapAllyColor.g, renderedColor.g, 0.02f, "converted body colour green channel must match #5BE35A within 2%");
                 Assert.AreEqual(TrapAllyColor.b, renderedColor.b, 0.02f, "converted body colour blue channel must match #5BE35A within 2%");
+
+                // MV-1060: the trap (and so Max's own gating need for AC1) is done — move Max well clear
+                // before enemyTarget is created and robotA is ticked, so ClampBodySeparation's 1.20m
+                // keep-off-Max clamp (EnemyBodySeparation.MinDistance) can't pin or shove robotA on its
+                // way to contact-damage enemyTarget. Same idiom MV1015 uses to avoid its own geometry.
+                maxGo.transform.position = new Vector3(0f, 0f, 50f);
+                Physics.SyncTransforms();
 
                 enemyTarget = NewRobot("Enemy Target", robotA.transform.position + new Vector3(1f, 0f, 0f), EnemyArchetype.Bruiser);
                 Physics.SyncTransforms();
