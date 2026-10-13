@@ -97,6 +97,30 @@ namespace MaxWorlds.Arena
         /// support column, not a wide obstacle.</summary>
         public const float BridgePierSize = 1f;
 
+        /// <summary>Shortest ordinary cover may stand and still break a chase (MV-1181 — named here for
+        /// the first time; it used to be a bare inline <c>1f</c> literal, unlike every other threshold
+        /// in this file). Written with tactical cover (hedges, crates, barriers) in mind — a player
+        /// is meant to be able to crouch-break line of sight behind it.</summary>
+        public const float MinCoverHeight = 1f;
+
+        /// <summary>Shortest the decorative street-furniture dressings in <see cref="LowProfileCoverDressings"/>
+        /// may stand (MV-1181). A real café table (~0.8 m), planter box (~0.6 m) or bollard (~0.95 m)
+        /// is genuinely under <see cref="MinCoverHeight"/> — that is what makes Market Street read as a
+        /// believable street rather than a corridor of waist-high blocks. This floor still catches an
+        /// authoring mistake (a dressing placed at near-zero height), it just doesn't hold decorative
+        /// props to a bar meant for cover nobody is expected to hide behind.</summary>
+        public const float MinLowProfileCoverHeight = 0.3f;
+
+        /// <summary>Cover dressings exempt from <see cref="MinCoverHeight"/> in favour of the lower
+        /// <see cref="MinLowProfileCoverHeight"/> (MV-1181) — additive alongside the existing
+        /// <see cref="CoverKind.SeeThrough"/>/Hedge/Pipe move-only exemption in
+        /// <see cref="MapRuntime.BuildCover"/>, same "narrows one check for named dressings, replaces
+        /// nothing" pattern, just for the height floor instead of sight/shot blocking.</summary>
+        public static readonly HashSet<CoverDressing> LowProfileCoverDressings = new HashSet<CoverDressing>
+        {
+            CoverDressing.CafeTable, CoverDressing.PlanterBox, CoverDressing.Bollard,
+        };
+
         public static bool Validate(MapData map, out string reason)
         {
             if (map == null) { reason = "the map is null"; return false; }
@@ -320,8 +344,14 @@ namespace MaxWorlds.Arena
                 MapEntity c = cover[i];
                 ArenaCover body = c.ToCover();
 
-                if (c.height < 1f)
-                    violations.Add($"'{c.id}' is {c.height} m tall — too short to break a chase (min 1 m)");
+                bool lowProfile = LowProfileCoverDressings.Contains(c.Dressing);
+                float minHeight = lowProfile ? MinLowProfileCoverHeight : MinCoverHeight;
+                if (c.height < minHeight)
+                {
+                    violations.Add(lowProfile
+                        ? $"'{c.id}' is {c.height} m tall — under the {minHeight:0.#} m floor for low-profile street furniture"
+                        : $"'{c.id}' is {c.height} m tall — too short to break a chase (min {minHeight:0.#} m)");
+                }
 
                 MapZone zone = map.ZoneAt(c.x, c.z);
                 if (zone != null && zone.Kind == ZoneKind.Boss)
