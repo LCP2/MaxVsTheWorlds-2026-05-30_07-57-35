@@ -293,6 +293,69 @@ namespace MaxWorlds.Rendering
             ColorFilter = Color.white,
         };
 
+        /// <summary>
+        /// City — World 3's Market Street night look (MV-1175, Phase 1 Slice A). A steep, dim, cool key
+        /// (daylight from directly above or not at all, same reasoning <see cref="Stormdrain"/>'s own
+        /// doc gives for its key angle) and a warm rim are the whole read: the street itself stays dark
+        /// and cool so every window pool, lamp pool and neon sign — none of which this struct touches,
+        /// they come from <see cref="CityKit"/>'s own unlit/additive materials — is the only saturated,
+        /// bright thing in frame.
+        /// </summary>
+        public static BackyardLook City => new BackyardLook
+        {
+            KeyColor = new Color(0.70f, 0.76f, 0.95f),
+            KeyIntensity = 0.70f,
+            KeyEuler = new Vector3(62f, -30f, 0f),
+            ShadowStrength = 0.6f,
+
+            FillColor = new Color(0.36f, 0.38f, 0.58f),
+            FillIntensity = 0.45f,
+            FillEuler = new Vector3(20f, 140f, 0f),
+
+            RimColor = new Color(1.0f, 0.80f, 0.58f),
+            RimIntensity = 0.9f,
+            RimEuler = new Vector3(12f, 200f, 0f),
+
+            AmbientSky = new Color(0.20f, 0.22f, 0.32f),
+            AmbientEquator = new Color(0.17f, 0.17f, 0.21f),
+            AmbientGround = new Color(0.12f, 0.12f, 0.15f),
+
+            FogColor = new Color(0.05f, 0.055f, 0.08f),
+            FogDensity = 0.010f,
+
+            // Sky fields copied from Stormdrain — unused, ApplySky nulls the skybox for this biome
+            // (BiomePalette.City.RemovesSkybox = true), but filled so the struct is honest (same
+            // reasoning Stormdrain's own doc gives for its own sky fields).
+            SkyZenith = new Color(0.05f, 0.07f, 0.08f),
+            SkyHorizon = new Color(0.09f, 0.12f, 0.11f),
+            SkyGroundHaze = new Color(0.07f, 0.09f, 0.08f),
+            SkySun = new Color(0.4f, 0.45f, 0.5f),
+            SkyCloud = new Color(0.1f, 0.12f, 0.12f),
+            SkySunGlow = 120f,
+            SkySunIntensity = 0.2f,
+            SkyCloudAmount = 0f,
+            SkyCloudScale = 1f,
+
+            AoIntensity = 0.8f,
+            AoRadius = 0.3f,
+
+            PostExposure = 0.2f,
+            Contrast = 8f,
+            Saturation = 6f,
+            ColorFilter = Color.white,
+            ShadowTint = new Color(0.40f, 0.45f, 0.70f),
+            HighlightTint = new Color(1.0f, 0.92f, 0.80f),
+
+            BloomThreshold = 1.0f,
+            BloomIntensity = 0.6f,
+            BloomScatter = 0.6f,
+            BloomTint = Color.white,
+
+            VignetteIntensity = 0.18f,
+            VignetteSmoothness = 0.5f,
+            FilmGrain = 0.08f,
+        };
+
         /// <summary>Blend every field of two looks (MV-849 — the World 1 -> World 2 joining
         /// corridor). Every <c>Color</c>/<c>float</c>/<c>Vector3</c> field gets a plain
         /// linear interpolation; nothing here is hand-picked, because a field this struct grows

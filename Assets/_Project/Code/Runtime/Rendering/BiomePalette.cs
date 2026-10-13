@@ -312,6 +312,47 @@ namespace MaxWorlds.Rendering
             RemovesSkybox = true,          // sealed hull interior — never the Backyard's daylight dome
         };
 
+        /// <summary>
+        /// City — World 3's Market Street kit (MV-1175, Phase 1 Slice A). A cool, dim blue-grey night
+        /// base so the kit's own warm practicals (window pools, lamp pools, shop neon) carry every bit
+        /// of saturation in the frame — the same "one hero colour against a desaturated base" discipline
+        /// <see cref="Stormdrain"/>'s own header documents, just moved from acid-green sludge to warm
+        /// tungsten light. <see cref="Wall"/> and <see cref="Stone"/> sit well above <see cref="GroundBase"/>
+        /// in value (the ticket's own AC1 value-tier check) so a building face reads lit against a dark
+        /// street even before any window pool lands on it.
+        /// </summary>
+        public static BiomePalette City => new BiomePalette
+        {
+            Tint = Color.white,
+            GroundBase = new Color(0.204f, 0.220f, 0.282f),
+            GroundAccent = new Color(0.235f, 0.250f, 0.310f),
+            GroundDry = new Color(0.180f, 0.190f, 0.240f),
+            Wall = new Color(0.50f, 0.44f, 0.46f),
+            Prop = new Color(0.36f, 0.39f, 0.48f),
+
+            Wood = new Color(0.627f, 0.471f, 0.314f),
+            Stone = new Color(0.439f, 0.463f, 0.525f),
+            Dirt = new Color(0.20f, 0.20f, 0.24f),
+            Metal = new Color(0.275f, 0.298f, 0.361f),
+            Foliage = new Color(0.44f, 0.49f, 0.24f),
+
+            GroundDetailScale = 0.45f,
+            GroundMacroScale = 0.05f,
+            GroundMacroStrength = 0.30f,
+            GroundLushShade = 0.70f,
+            GroundNormalStrength = 0.9f,
+            GroundClumpScale = 0.5f,
+            GroundClumpDepth = 0.07f,
+
+            GroundWindLean = 0f,
+            GroundWindSpeed = 0f,
+            GroundWindShimmer = 0f,
+
+            GroundTiling = 5f,
+            Smoothness = 0.14f,
+            RemovesSkybox = true,          // a night street has no daylight dome either
+        };
+
         /// <summary>Value equality over every field EXCEPT <see cref="RemovesSkybox"/> — see that
         /// field's own doc for why. Everything else keeps the default struct semantics every existing
         /// caller (<c>WorldCatalog.ForActivePalette</c>, <c>PickupArtDirector</c>'s ring-alpha lookup,
