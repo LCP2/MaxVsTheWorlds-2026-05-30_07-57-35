@@ -47,6 +47,7 @@ namespace MaxWorlds.Tests.EditMode
             PartsMultiplier = source.PartsMultiplier,
             SupercellCadenceAreas = source.SupercellCadenceAreas,
             RackModuleDropsHere = source.RackModuleDropsHere,
+            BossVolleyIntervalSeconds = source.BossVolleyIntervalSeconds,
             ExitMode = source.ExitMode,
             ExitWall = source.ExitWall,
             ExitDoorPos = source.ExitDoorPos,
@@ -150,6 +151,50 @@ namespace MaxWorlds.Tests.EditMode
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, badLastRow });
             List<string> problems = WorldCatalog.Validate();
             Assert.IsNotEmpty(problems, "a three-row list whose last row is Corridor must report a problem");
+        }
+
+        /// <summary>
+        /// MV-1168: <see cref="WorldCatalog.Validate"/> caught an unset <c>RingAlphaScale</c> or
+        /// <c>SupercellCadenceAreas</c> but had no check for <c>UpgradeCostScale</c> or
+        /// <c>PrimarySecondaryCostMultiplier</c> — a row that omits either validates clean and then
+        /// prices every RIG node in that world at 1 cell (<c>CellSpend.cs:74</c>/<c>:96</c>:
+        /// <c>Mathf.Max(1, Mathf.RoundToInt(base * 0))</c>).
+        ///
+        /// Fails on the commit this ticket starts from: <see cref="WorldCatalog.Validate"/> reports no
+        /// problem for either row below, so both <c>Assert.IsTrue(...Exists...)</c> calls fail.
+        /// </summary>
+        [Test]
+        public void Validate_UpgradeCostScaleOrPrimarySecondaryCostMultiplierAtDefault_ReportsAProblemNamingTheRowAndField()
+        {
+            WorldDefinition backyard = WorldCatalog.Get(0);
+            WorldDefinition stormdrain = WorldCatalog.Get(1);
+            WorldDefinition reef = WorldCatalog.Get(2);
+
+            WorldDefinition zeroCostScale = CloneRowWithId(reef, "probe-cost-scale");
+            zeroCostScale.UpgradeCostScale = 0f;
+            WorldCatalog.UseForTests(new[] { backyard, stormdrain, zeroCostScale });
+            List<string> costScaleProblems = WorldCatalog.Validate();
+            Assert.IsTrue(costScaleProblems.Exists(p => p.Contains("probe-cost-scale") && p.Contains("UpgradeCostScale")),
+                "a row with UpgradeCostScale left at its default (0f) must report a problem naming the row and field: "
+                + string.Join("; ", costScaleProblems));
+
+            WorldDefinition fixedCostScale = CloneRowWithId(zeroCostScale, "probe-cost-scale");
+            fixedCostScale.UpgradeCostScale = 1f;
+            WorldCatalog.UseForTests(new[] { backyard, stormdrain, fixedCostScale });
+            Assert.IsEmpty(WorldCatalog.Validate(), "setting UpgradeCostScale back to 1f must validate clean");
+
+            WorldDefinition zeroMultiplier = CloneRowWithId(reef, "probe-psc-multiplier");
+            zeroMultiplier.PrimarySecondaryCostMultiplier = 0f;
+            WorldCatalog.UseForTests(new[] { backyard, stormdrain, zeroMultiplier });
+            List<string> multiplierProblems = WorldCatalog.Validate();
+            Assert.IsTrue(multiplierProblems.Exists(p => p.Contains("probe-psc-multiplier") && p.Contains("PrimarySecondaryCostMultiplier")),
+                "a row with PrimarySecondaryCostMultiplier left at its default (0f) must report a problem naming the row and field: "
+                + string.Join("; ", multiplierProblems));
+
+            WorldDefinition fixedMultiplier = CloneRowWithId(zeroMultiplier, "probe-psc-multiplier");
+            fixedMultiplier.PrimarySecondaryCostMultiplier = 1f;
+            WorldCatalog.UseForTests(new[] { backyard, stormdrain, fixedMultiplier });
+            Assert.IsEmpty(WorldCatalog.Validate(), "setting PrimarySecondaryCostMultiplier back to 1f must validate clean");
         }
     }
 }

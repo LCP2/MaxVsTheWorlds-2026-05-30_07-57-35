@@ -361,6 +361,10 @@ namespace MaxWorlds.Arena
                 if (row.Style.Equals(default(SentinelStyle))) problems.Add($"row {i} ('{row.Id}'): Style not set");
                 if (row.RingAlphaScale <= 0f) problems.Add($"row {i} ('{row.Id}'): RingAlphaScale not set");
 
+                // MV-1168
+                if (row.UpgradeCostScale <= 0f) problems.Add($"row {i} ('{row.Id}'): UpgradeCostScale not set");
+                if (row.PrimarySecondaryCostMultiplier <= 0f) problems.Add($"row {i} ('{row.Id}'): PrimarySecondaryCostMultiplier not set");
+
                 // MV-1155
                 if (row.BossVolleyIntervalSeconds <= 0f)
                     problems.Add($"row {i} ('{row.Id}'): BossVolleyIntervalSeconds not set");
