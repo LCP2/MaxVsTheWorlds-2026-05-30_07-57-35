@@ -54,6 +54,21 @@ namespace MaxWorlds.Arena
         DoorOnly,
     }
 
+    /// <summary>Which populated rig state this world's own DEV row button hands the tester (MV-1180)
+    /// — read by <see cref="MaxWorlds.UI.HomeScreen.StartDevWorld"/>. <c>FreshRun</c>: a brand-new
+    /// profile, nothing owned. <c>PreviousWorldExitRig</c>: the rig a player who just finished the
+    /// previous world would carry in — ENERGY/MOVE (and SECONDARY, where
+    /// <see cref="WorldDefinition.CarrySecondaryAcrossMorph"/> is true) unlocked and maxed to the
+    /// previous world's own caps, SUPPORT left locked. <c>MaxedRig</c>: every category unlocked and
+    /// every node on this world's own board raised to its own max — a world exists to test its own
+    /// content, not to make the tester grind a rig first.</summary>
+    public enum DevStartLoadout
+    {
+        FreshRun,
+        PreviousWorldExitRig,
+        MaxedRig,
+    }
+
     /// <summary>Which <c>WorldJoinDressing</c> pass dresses the EXIT side of this world's own corridor
     /// (MV-1143), named for the method it calls — <c>None</c> for a <see cref="WorldExitMode.DoorOnly"/>
     /// row, which has no corridor to dress.</summary>
@@ -237,6 +252,10 @@ namespace MaxWorlds.Arena
         /// <summary>Whether the legacy <c>BackyardExitGate</c> decoration runs in this world — true only
         /// for the Backyard; every other world's own finale door (MV-956/964) is the real exit.</summary>
         public bool RunsLegacyExitGate;
+
+        /// <summary>Which populated rig state this world's own DEV row button hands the tester — see
+        /// <see cref="DevStartLoadout"/>.</summary>
+        public DevStartLoadout DevStart;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -465,6 +484,7 @@ namespace MaxWorlds.Arena
                 ExitDressing = ExitCorridorDressingKind.Exit,
                 ArrivalDressing = ArrivalDressingKind.None,
                 RunsLegacyExitGate = true,
+                DevStart = DevStartLoadout.FreshRun,
             },
             new WorldDefinition
             {
@@ -509,6 +529,7 @@ namespace MaxWorlds.Arena
                 ExitDressing = ExitCorridorDressingKind.ExitCity,
                 ArrivalDressing = ArrivalDressingKind.Arrival,
                 RunsLegacyExitGate = false,
+                DevStart = DevStartLoadout.PreviousWorldExitRig,
             },
             new WorldDefinition
             {
@@ -556,6 +577,7 @@ namespace MaxWorlds.Arena
                 ExitDressing = ExitCorridorDressingKind.None,
                 ArrivalDressing = ArrivalDressingKind.ArrivalCity,
                 RunsLegacyExitGate = false,
+                DevStart = DevStartLoadout.PreviousWorldExitRig,
             },
             new WorldDefinition
             {
@@ -606,6 +628,7 @@ namespace MaxWorlds.Arena
                 ExitDressing = ExitCorridorDressingKind.None,
                 ArrivalDressing = ArrivalDressingKind.ArrivalReef,
                 RunsLegacyExitGate = false,
+                DevStart = DevStartLoadout.MaxedRig,
             },
         };
     }
