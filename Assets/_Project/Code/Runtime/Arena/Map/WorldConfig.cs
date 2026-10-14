@@ -342,6 +342,26 @@ namespace MaxWorlds.Arena
         public string coverKind = "solid";
     }
 
+    /// <summary>One authored floor-paint/street-furniture decal (MV-1177) — a rect given by its CENTRE
+    /// and full size, in ABSOLUTE world metres (unlike <see cref="WorldSludge"/>/<see cref="WorldDeck"/>,
+    /// which are area-local MIN-corner rects: a surface has no gameplay collider to resolve against an
+    /// area's own origin, so there is no reason to make an author do that arithmetic by hand). Purely
+    /// cosmetic — read by <see cref="Arena.CityDressing"/>, never by <see cref="MapValidation"/> or
+    /// <see cref="WorldMapLoader"/>'s own entity conversion. <see cref="kind"/> is one of
+    /// <c>pavement, kerb, edgeline, centreline, zebra, hatch, bay, pad, manhole, drain, puddle, arrowE,
+    /// arrowW, deck</c> — an unrecognised kind logs one warning and is skipped, the same "forward
+    /// compatible, never throws" idiom <see cref="EntityKind.Unknown"/> already keeps for entities.</summary>
+    [Serializable]
+    public sealed class WorldSurface
+    {
+        public string id;
+        public string kind;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -399,6 +419,11 @@ namespace MaxWorlds.Arena
         /// invariants in <see cref="MapValidation"/> enforce that, same as they always have). Optional
         /// — most areas carry none until authored.</summary>
         public WorldCover[] cover = Array.Empty<WorldCover>();
+
+        /// <summary>Floor-paint/street-furniture decals authored into this area (MV-1177), absolute
+        /// world-space rects — see <see cref="WorldSurface"/>. Optional; most areas (every one but
+        /// Market Street, today) carry none.</summary>
+        public WorldSurface[] surfaces = Array.Empty<WorldSurface>();
 
         /// <summary>This area's authored enemy composition (MV-365) — null means "not authored yet,
         /// fall back to the dial-derived budget solve" (<see cref="WorldConfig.SolveComposition"/>).
