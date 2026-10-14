@@ -2723,11 +2723,25 @@ namespace MaxWorlds.Enemies
             // a half seconds into a thirty-second walk, every time, and stood there spinning in the
             // shed. That is the pile-up the playtest found. A robot that is still closing has not lost
             // anything and does not stop; one grinding on a fence gets nowhere and does.
+            // MV-1115: a touch kind standing IN CONTACT needs no line of sight to keep hitting — the
+            // sight-driven give-up below is a decision about CHASING, and there is nothing left to
+            // chase once it has already arrived. Measured against the real target position (same
+            // calc TickContactTouch itself uses), not `dist`, which is to the sight-memory GOAL and
+            // can read "arrived" or "stalled" for reasons that have nothing to do with touching Max —
+            // a bush between the two eye points, or the other Brute's own body, fails the sight test
+            // every frame while both stand pressed against him. Without this, PursuitStall.TickHunting
+            // (searchTime past minHuntTime, neither of which cares about range) flips the robot to
+            // State.Search, which never calls TickContactTouch again — so a robot that never stopped
+            // touching Max stands there landing nothing until sight clears.
+            Vector3 toTargetNow = target.position - transform.position; toTargetNow.y = 0f;
+            bool touchKind = !LungesAsKind(Kind);
+            bool inContactNow = touchKind && toTargetNow.magnitude <= contactRadius;
+
             if (_sight.HasSight)
             {
                 _pursuitStall.NoteSightHeld();
             }
-            else if (_pursuitStall.TickHunting(dist, dt, arriveRadius, searchTime, minHuntTime))
+            else if (!inContactNow && _pursuitStall.TickHunting(dist, dt, arriveRadius, searchTime, minHuntTime))
             {
                 Current = State.Search;
                 _stateTimer = 0f;
@@ -2739,7 +2753,7 @@ namespace MaxWorlds.Enemies
             // not leap". They just keep walking and hit on a cooldown the instant they're in touch
             // range, checked every Chase tick rather than through a Telegraph/Lunge/Recover cycle
             // that no longer has a tell worth keeping for this kind.
-            if (!LungesAsKind(Kind))
+            if (touchKind)
             {
                 TickContactTouch(dt);
                 return;
@@ -2837,6 +2851,16 @@ namespace MaxWorlds.Enemies
                 Current = State.Chase;     // there he is
                 _stateTimer = 0f;
                 return;
+            }
+
+            // MV-1115: contact needs no line of sight in Search either — same rule as TickChase's own
+            // comment. The Chase-side fix keeps a touch kind from ever being routed into Search while
+            // already in contact, but this covers it belt-and-suspenders if Search is ever reached by
+            // some other path while still touching him.
+            if (!LungesAsKind(Kind))
+            {
+                Vector3 to = target.position - transform.position; to.y = 0f;
+                if (to.magnitude <= contactRadius) TickContactTouch(dt);
             }
 
             // Scan: turn on the spot so it reads as looking rather than as a statue someone left.
