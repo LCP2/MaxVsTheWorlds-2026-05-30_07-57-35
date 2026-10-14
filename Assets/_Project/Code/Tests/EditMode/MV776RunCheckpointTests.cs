@@ -118,7 +118,9 @@ namespace MaxWorlds.Tests.EditMode
             // ticket's own named bug ("a stale checkpoint into a world already finished").
             SaveSystem.RecordResult(0, deathsTaken: 3);
             SaveSlotData afterVictory = SaveSystem.Load(0);
-            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Reef), afterVictory.WorldIndex, "Victory must still advance WorldIndex");
+            // MV-1176: the City now sits immediately after the Stormdrain, so a win there advances into
+            // the City, not the Reef (one world further on than before the City's insertion).
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.City), afterVictory.WorldIndex, "Victory must still advance WorldIndex");
             Assert.IsFalse(afterVictory.HasRunInProgress,
                 "winning the world must clear the checkpoint outright, not just its area index");
             Assert.IsFalse(SaveSystem.RestoreCheckpoint(0),

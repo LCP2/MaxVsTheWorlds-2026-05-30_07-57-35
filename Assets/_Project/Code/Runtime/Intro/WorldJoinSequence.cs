@@ -335,7 +335,7 @@ namespace MaxWorlds.Intro
 
             // MV-1123 §3: guide-light floor strips the whole corridor length, in the accent of the
             // world ahead (the destination this corridor leads to).
-            BuildGuideLights(root, _doorMouth, _wall, 0f, _entry.CorridorLength, GuideLightAccent(toWorld));
+            BuildGuideLights(root, _doorMouth, _wall, 0f, _entry.CorridorLength, WorldCatalog.Get(toWorld).GuideLightAccent);
 
             // MV-965/MV-967: garden/kerb+grate/culvert (or outfall/breach/hull) set-dressing on top of
             // the three flat-coloured shells above — a separate pass, same reason
@@ -352,16 +352,6 @@ namespace MaxWorlds.Intro
             }
         }
 
-        /// <summary>MV-1123 §3: the accent colour guide lights point toward — the world AHEAD, i.e. the
-        /// destination this corridor/arrival shell leads into. The two shipped rows' own named tones
-        /// (ticket's own numbers); falls back to <see cref="StormdrainKit.Status"/> for any future row
-        /// not yet given its own accent.</summary>
-        private static Color GuideLightAccent(int toWorld) => toWorld switch
-        {
-            1 => StormdrainKit.Status,
-            2 => WorldMaterials.ReefLampViolet,
-            _ => StormdrainKit.Status,
-        };
 
         // ------------------------------------------------------------------ build (arrival)
 
@@ -437,7 +427,7 @@ namespace MaxWorlds.Intro
 
             // MV-1123 §3: guide lights, same as the exit corridor -- the world ahead, here, is simply
             // the world Max has already arrived in.
-            BuildGuideLights(_arrivalRoot, _doorMouth, _wall, 0f, _entry.ArrivalShellLength, GuideLightAccent(toWorld));
+            BuildGuideLights(_arrivalRoot, _doorMouth, _wall, 0f, _entry.ArrivalShellLength, WorldCatalog.Get(toWorld).GuideLightAccent);
 
             // MV-965/MV-967: same dressing pass as the exit side's segment C, continued into the arrival
             // shell. MV-1143: which pass runs comes from the world being ARRIVED IN's own row, not a

@@ -68,9 +68,10 @@ namespace MaxWorlds.Tests.EditMode
 
                 WorldArea finale = WorldRunner.ResolveFinaleArea(cfg);
                 Assert.IsNotNull(finale,
-                    $"MV-1151: row {i} ('{WorldCatalog.Get(i).Id}')'s finale resolver must return a boss-role area");
-                Assert.IsTrue(finale.IsBossRole,
-                    $"MV-1151: row {i}'s resolved finale area '{finale.id}' must be boss-role");
+                    $"MV-1151: row {i} ('{WorldCatalog.Get(i).Id}')'s finale resolver must return a boss-role or exit-role area");
+                // MV-1176: the City's own finale (Market Street) is bossless — exit-role, not boss-role.
+                Assert.IsTrue(finale.IsBossRole || finale.IsExitRole,
+                    $"MV-1151: row {i}'s resolved finale area '{finale.id}' must be boss-role or exit-role");
                 Assert.AreEqual(cfg.dials.areaCount, finale.index,
                     $"MV-1151: row {i}'s resolved finale area must sit at dials.areaCount");
 

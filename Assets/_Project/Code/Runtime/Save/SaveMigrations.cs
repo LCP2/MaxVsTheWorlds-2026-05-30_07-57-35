@@ -27,11 +27,20 @@ namespace MaxWorlds.Save
             }
         }
 
+        /// <summary>MV-1176: the index the City took in <see cref="WorldCatalog"/> the moment save v2
+        /// shipped — a frozen historical fact, not a live lookup. Must never be re-derived from
+        /// <see cref="WorldCatalog.IndexOf"/>: a later world inserted ahead of the City would move that
+        /// index forward, which would silently break this already-shipped step's own meaning.</summary>
+        private const int CityInsertedAtSaveV2 = 2;
+
         private static readonly Step[] ShippedSteps =
         {
             // 0 -> 1 (MV-1144): adds SaveVersion itself. Changes no data - a save with no SaveVersion
             // key reads as 0 and is simply stamped forward to 1.
             new Step(0, data => { }),
+            // 1 -> 2 (MV-1176): the City lands between the Stormdrain and the Reef - every save whose
+            // world-number fields pointed at the Reef (or anything after it) must point one world later.
+            new Step(1, data => ShiftWorldIndices(data, CityInsertedAtSaveV2)),
         };
 
         private static IReadOnlyList<Step> s_steps = ShippedSteps;

@@ -68,7 +68,8 @@ namespace MaxWorlds.Tests.EditMode
             // rows, live off the catalog itself -- never re-typed literals.
             WorldDefinition backyard = WorldCatalog.Get(0);
             WorldDefinition stormdrain = WorldCatalog.Get(1);
-            WorldDefinition reef = WorldCatalog.Get(2);
+            // MV-1176: fetched by Id, not a bare index 2 — the City now sits there, ahead of the Reef.
+            WorldDefinition reef = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef));
 
             var probe = new WorldDefinition
             {

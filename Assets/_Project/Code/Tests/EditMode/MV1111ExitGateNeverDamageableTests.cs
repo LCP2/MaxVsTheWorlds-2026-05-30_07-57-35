@@ -259,12 +259,14 @@ namespace MaxWorlds.Tests.EditMode
                     Vector3 origin = gateCentre - approach * 5f;
                     Quaternion aim = Quaternion.LookRotation(approach, Vector3.up);
 
-                    switch (row.WorldIndex)
+                    // MV-1176: keyed off the row's own WorldKey, not its (now-shifted) WorldIndex — the
+                    // City's insertion moved the Reef from index 2 to index 3.
+                    switch (row.WorldKey)
                     {
-                        case 0: FireWaterBlasterAt(origin, aim); break;
-                        case 1: FireLppePulseAt(origin, approach); break;
-                        case 2: FireUndertowAt(origin, aim); break;
-                        default: Assert.Fail($"no primary-weapon fixture wired for world index {row.WorldIndex}"); break;
+                        case WorldLibrary.World1: FireWaterBlasterAt(origin, aim); break;
+                        case WorldLibrary.World2: FireLppePulseAt(origin, approach); break;
+                        case WorldLibrary.World3: FireUndertowAt(origin, aim); break;
+                        default: Assert.Fail($"no primary-weapon fixture wired for world '{row.WorldKey}'"); break;
                     }
 
                     Assert.IsTrue(gate.IsAlive,

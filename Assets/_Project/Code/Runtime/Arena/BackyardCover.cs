@@ -27,11 +27,16 @@ namespace MaxWorlds.Arena
     /// <see cref="BikeRack"/>/<see cref="Bench"/>/<see cref="Bin"/> (MV-1192) are Market Street's
     /// low-profile street furniture, genuinely under the engine's ordinary
     /// <see cref="Map.MapValidation.MinCoverHeight"/> chase-cover floor — see
-    /// <see cref="Map.MapValidation.LowProfileCoverDressings"/> for the exemption this adds.</summary>
+    /// <see cref="Map.MapValidation.LowProfileCoverDressings"/> for the exemption this adds.
+    ///
+    /// The remaining Market Street dressings (MV-1176) — <see cref="Truck"/> through
+    /// <see cref="Tub"/> — are ordinary, full-height cover and need no such exemption.</summary>
     public enum CoverDressing
     {
         None, Tree, Hedge, Planter, Shed, Machinery, Pipe, CafeTable, PlanterBox, Bollard,
         BikeRack, Bench, Bin,
+        Truck, Bus, Car, Barrier, Fence, LampPost, RoadSign, Pallet, FlowerStall, FruitStall,
+        ClockPost, BookCart, Lockers, ABoard, PostBox, Tub,
     }
 
     /// <summary>MV-917: a cover piece's behaviour, as an explicit, data-driven property rather than an

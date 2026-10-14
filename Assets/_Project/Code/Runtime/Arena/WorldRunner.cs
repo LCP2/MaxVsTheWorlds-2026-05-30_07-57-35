@@ -487,16 +487,17 @@ namespace MaxWorlds.Arena
         /// <summary>MV-1151: the pure area-selection half of <see cref="JumpToFinaleArea"/>, split out so
         /// an EditMode test can assert every <see cref="WorldCatalog"/> row's own finale resolves
         /// correctly straight off its real <see cref="WorldConfig"/>, with no scene/runner involved. Rule
-        /// unchanged from MV-1057: the area whose index equals <paramref name="cfg"/>'s own
+        /// from MV-1057, widened by MV-1176: the area whose index equals <paramref name="cfg"/>'s own
         /// <see cref="WorldDials.areaCount"/>, which must be boss-role (<see cref="WorldArea.IsBossRole"/>
-        /// — "boss+exit" counts, since that role string still contains "boss"). Null for a config with no
-        /// dials, no area at that index, or an area there that isn't boss-role (shouldn't happen for an
-        /// authored world).</summary>
+        /// — "boss+exit" counts, since that role string still contains "boss") OR exit-role
+        /// (<see cref="WorldArea.IsExitRole"/>, the City's Market Street: a bossless finale that simply
+        /// opens its own exit). Null for a config with no dials, no area at that index, or an area there
+        /// that is neither (shouldn't happen for an authored world).</summary>
         public static WorldArea ResolveFinaleArea(WorldConfig cfg)
         {
             if (cfg?.dials == null) return null;
             WorldArea finale = cfg.AreaByIndex(cfg.dials.areaCount);
-            return finale != null && finale.IsBossRole ? finale : null;
+            return finale != null && (finale.IsBossRole || finale.IsExitRole) ? finale : null;
         }
 
         /// <summary>MV-1057: the Home screen's DEV "FINAL AREA" entry point (MV-1151: relabelled LAST

@@ -60,6 +60,12 @@ namespace MaxWorlds.Tests.EditMode
              "searches) is still being constructed by this very array literal; FromWorld is also never read " +
              "anywhere outside this constructor (grep confirms no '.FromWorld' consumer exists)."),
 
+            ("WorldCatalog.cs",
+             "Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.854166667f, corridorLength: 30f,",
+             "MV-1176: the City row's own FromWorld field, same reason as the Stormdrain row's entry above — " +
+             "authored inside this same array literal, before s_rows exists for IndexOf to search, and never " +
+             "read outside this constructor."),
+
             ("WorldFinaleGate.cs",
              "WeaponSystemState.ApplyWeaponCoreMorph(_weaponBeatPlayedWorld + 1);",
              "item 1's own allowed form for \"the world after the one just played\" (index + 1) — the pattern's " +

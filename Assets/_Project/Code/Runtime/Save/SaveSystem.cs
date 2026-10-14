@@ -33,11 +33,11 @@ namespace MaxWorlds.Save
     {
         public const int SlotCount = 3;
 
-        /// <summary>The save schema this build writes (MV-1144) — <see cref="Load"/> migrates an older
-        /// slot up to this via <see cref="SaveMigrations"/>; <see cref="Save"/> stamps it onto every
-        /// slot it writes, except one already carrying a higher version (a newer build's save), which
-        /// is left alone rather than lowered.</summary>
-        public const int CurrentSaveVersion = 1;
+        /// <summary>The save schema this build writes (MV-1144, bumped by MV-1176) — <see cref="Load"/>
+        /// migrates an older slot up to this via <see cref="SaveMigrations"/>; <see cref="Save"/> stamps
+        /// it onto every slot it writes, except one already carrying a higher version (a newer build's
+        /// save), which is left alone rather than lowered.</summary>
+        public const int CurrentSaveVersion = 2;
 
         /// <summary>Slot the player picked this process; -1 until the Home screen hands off.</summary>
         public static int ActiveSlot { get; set; } = -1;
