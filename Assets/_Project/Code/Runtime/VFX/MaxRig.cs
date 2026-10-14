@@ -290,6 +290,56 @@ namespace MaxWorlds.VFX
         /// to be nonzero.</summary>
         private const float ArmHangDrop = 0.44f;
 
+        // ------------------------------------------------------------ MV-1162: the idle wave
+        //
+        // Lee, 10 Oct: "on an interval of about 20 seconds ... if he's left idle, then he will turn to
+        // face the camera, look up and wave." TickIdleWave (below) owns the clock and the AnimSequence;
+        // these are just the pose this rig's existing transforms are driven to.
+
+        /// <summary>The world yaw whose forward is -Z — the direction <c>FixedAngleCameraRig</c> sits
+        /// off toward (its own offset backs the camera off along -Z with no yaw of its own; see that
+        /// class's <c>ComputeOffset</c>). "Face the camera" means turning <see cref="_torso"/> until
+        /// its net world yaw lands here, by the shortest way round (<c>Mathf.DeltaAngle</c>).</summary>
+        private const float WaveFacingYawDegrees = 180f;
+
+        /// <summary>Step 2's "head pitches 20 degrees further chin-up" — negative like <see
+        /// cref="MaxBody"/>'s own <c>ChinUpPitchDegrees</c>, whose doc explains why negative is up.
+        /// Applied to <see cref="_head"/>'s own local pitch, on top of (not replacing) the fixed tilt
+        /// already baked into the face geometry under it.</summary>
+        private const float WaveHeadPitchDegrees = -20f;
+
+        /// <summary>Step 3: "about 150 degrees (hand above head height)". <see cref="WaveRaiseOffset"/>
+        /// is the shoulder-relative point this resolves to — not a literal 150 degree rotation, since
+        /// <see cref="PoseArm"/> only ever takes a shoulder/target pair and stretches a beam between
+        /// them. 0.95 m above the shoulder (world y 0.62 + 0.74 + 0.95 = 2.31) clears the hair cap's own
+        /// 1.83 m crown (see this class's own skeleton doc above) with room to spare; 0.12 m forward
+        /// keeps the hand in front of his face rather than directly overhead.</summary>
+        private static readonly Vector3 WaveRaiseOffset = new Vector3(0f, 0.95f, 0.12f);
+
+        /// <summary>Step 4: "rock side to side plus or minus 25 degrees, 3 full waves" — a literal
+        /// rotation of <see cref="WaveRaiseOffset"/> about the torso's own forward (local Z) axis, so
+        /// the hand swings left-right the way a raised forearm actually pivots from the shoulder.</summary>
+        private const float WaveRockAmplitudeDegrees = 25f;
+        private const float WaveRockCycles = 3f;
+
+        /// <summary>"Any input instantly cancels the wave: the arm and head blend back to their normal
+        /// pose over 0.15 s" — <see cref="_waveCancelT"/>'s own ceiling.</summary>
+        private const float WaveCancelSeconds = 0.15f;
+
+        /// <summary>One AnimSequence, bound once here as data (per the ticket's own instruction) rather
+        /// than re-authored per trigger. Index order matches the ticket's six numbered steps exactly —
+        /// <see cref="KickThenReturn"/> and the Wave* pose methods below read specific indices by that
+        /// order, so re-ordering this array would silently re-wire which step drives which part.</summary>
+        private static readonly AnimStep[] IdleWaveSteps =
+        {
+            new AnimStep(0.00f, 0.40f, AnimEase.OutQuad),   // 0: body yaws to face the camera
+            new AnimStep(0.20f, 0.40f, AnimEase.InOutQuad), // 1: head pitches further chin-up
+            new AnimStep(0.40f, 0.40f, AnimEase.OutQuad),   // 2: off-hand arm raises
+            new AnimStep(0.80f, 1.20f, AnimEase.Linear),    // 3: wave rock, 3 full cycles
+            new AnimStep(2.00f, 0.40f, AnimEase.InQuad),    // 4: arm lowers to rest
+            new AnimStep(2.20f, 0.40f, AnimEase.InOutQuad), // 5: head returns to neutral
+        };
+
         /// <summary>
         /// MV-669 (Lee: "10% bigger"), then reverted: applied uniformly at <see cref="_body"/> — the
         /// rig's model root, which sits at ground level (<c>Pivot("Body", transform, Vector3.zero)</c>)
@@ -518,6 +568,29 @@ namespace MaxWorlds.VFX
         private PlayerController _max;
         private CharacterController _maxCc;
         private WaterBlaster _blaster;
+        private PlayerHealth _playerHealth;
+
+        /// <summary>MV-1162: the idle-wave's own clock — see <see cref="IdleWaveTracker"/> for why it
+        /// is a separate, pure class rather than fields on this MonoBehaviour.</summary>
+        private readonly IdleWaveTracker _idleWave = new IdleWaveTracker();
+
+        /// <summary>Non-null from the tick a wave is triggered until it is torn down: first while the
+        /// gesture itself plays (<see cref="IdleWaveTracker.IsWaving"/> true), then still non-null
+        /// through the hold afterwards (<see cref="IdleWaveTracker.EndWave"/> already called, but every
+        /// step's <see cref="AnimSequence.Progress"/> has settled at its own final value — body yaw at
+        /// 1, arm/head back at 0 — which IS "holds facing the camera") until a fresh trigger replaces
+        /// it or input starts <see cref="_waveCancelling"/>.</summary>
+        private AnimSequence _waveSeq;
+
+        private bool _waveCancelling;
+        private float _waveCancelT;
+
+        /// <summary>MV-1162: health/alive read back every frame rather than through a new PlayerHealth
+        /// event — a drop in <see cref="PlayerHealth.Current"/> or a flip in <see
+        /// cref="PlayerHealth.IsAlive"/> is "input" for the idle clock's own purposes (see
+        /// <see cref="TickIdleWave"/>), and polling here keeps PlayerHealth untouched.</summary>
+        private float _lastHealth;
+        private bool _wasAlive;
 
         private Transform _body;       // lean pivot, at the ground
         private Transform _torso;      // bob + counter-rotation, at the waist
@@ -655,6 +728,15 @@ namespace MaxWorlds.VFX
             _maxCc = _max.GetComponent<CharacterController>();
             _blaster = _max.GetComponent<WaterBlaster>();
             _shoulderRack = _max.GetComponent<ShoulderRack>();
+
+            // MV-1162: seeded before the first TickIdleWave, same reason _lastPos is seeded below —
+            // otherwise frame one reads a 0 -> real-health "drop" as damage taken.
+            _playerHealth = _max.GetComponent<PlayerHealth>();
+            if (_playerHealth != null)
+            {
+                _lastHealth = _playerHealth.Current;
+                _wasAlive = _playerHealth.IsAlive;
+            }
 
             // RuntimeSurfaceDirector honours this, and it covers everything parented below us. Without
             // it, the director classifies each part BY SHAPE and repaints the backpack as a paving
@@ -975,6 +1057,7 @@ namespace MaxWorlds.VFX
             _velocity = (pos - _lastPos) / dt;
             _lastPos = pos;
 
+            TickIdleWave(dt);   // before TickRun/TickHeadLag/PoseArms, which all read its pose this frame
             TickRun(dt);
             TickGadget(dt);
             TickShoulderRackMount();
@@ -1082,7 +1165,10 @@ namespace MaxWorlds.VFX
             float torsoYaw = Mathf.Sin(_stride) * torsoYawAngle * speed01;
             _headStrideYaw = -Mathf.Sin(_stride) * headStrideYawAngle * speed01;
             _torso.localPosition = new Vector3(0f, HipY + bounce + idleBounce, 0f);
-            _torso.localRotation = Quaternion.Euler(0f, torsoYaw, weightShift);
+            // MV-1162: step 1 of the idle wave — turning to face the camera — rides the same torso
+            // yaw the stride counter-rotation already drives, additively (it reads 0 whenever no wave
+            // is playing, so this is a no-op the rest of the time).
+            _torso.localRotation = Quaternion.Euler(0f, torsoYaw + WaveBodyYaw(), weightShift);
 
             _moveLean = Quaternion.Slerp(
                 _moveLean,
@@ -1136,7 +1222,10 @@ namespace MaxWorlds.VFX
             _laggedFacingYaw = Mathf.LerpAngle(_laggedFacingYaw, facingYaw, 1f - Mathf.Exp(-headCatchUp * dt));
 
             if (_head != null)
-                _head.localRotation = Quaternion.Euler(0f, Mathf.DeltaAngle(facingYaw, _laggedFacingYaw) + _headStrideYaw, 0f);
+                // MV-1162: step 2/6 of the idle wave — the further chin-up and its own return — as an
+                // additive local pitch on top of the existing yaw-only head-lag (0 outside a wave).
+                _head.localRotation = Quaternion.Euler(WaveHeadPitch(),
+                    Mathf.DeltaAngle(facingYaw, _laggedFacingYaw) + _headStrideYaw, 0f);
         }
 
         /// <summary>
@@ -1159,6 +1248,148 @@ namespace MaxWorlds.VFX
                 : MaxHair.WindDirWorld;
 
             _hairLocks.Tick(dt, facing, speed01, _stride, Time.time, hairWindStrength, windDir);
+        }
+
+        /// <summary>
+        /// MV-1162 — drives <see cref="_idleWave"/>'s clock and <see cref="_waveSeq"/>'s lifetime.
+        /// Resolves the ticket's whole reset list into one bool, exactly as the pure tracker's
+        /// contract asks for, then starts/advances/ends the gesture's own AnimSequence.
+        ///
+        /// Also the single place that gates the whole feature off: dead, or a menu/THE RIG open
+        /// (<see cref="ModalFrameRateGate.OpenCount"/>) — neither accrues idle time nor lets a wave
+        /// keep playing, per the ticket's "Do not: trigger it in menus, cutscenes, THE RIG or while
+        /// dead." <see cref="LateUpdate"/>'s own <c>dt &lt;= 0f</c> guard already covers a hard pause.
+        /// </summary>
+        private void TickIdleWave(float dt)
+        {
+            bool alive = _playerHealth == null || _playerHealth.IsAlive;
+            bool diedOrRevived = alive != _wasAlive;
+            _wasAlive = alive;
+
+            float health = _playerHealth != null ? _playerHealth.Current : 0f;
+            bool tookDamage = health < _lastHealth - 0.01f;
+            _lastHealth = health;
+
+            // Both of these reset the clock immediately even on the very frame they also freeze or
+            // cancel everything below — "resets to 0 on ... any damage Max takes, and Max dying or
+            // respawning" reads as a real reset, not merely "nothing happens while dead".
+            bool resetNow = diedOrRevived || tookDamage;
+
+            if (!alive || ModalFrameRateGate.OpenCount > 0)
+            {
+                if (resetNow) _idleWave.Tick(0f, hasInput: true);
+                if (_waveSeq != null && !_waveCancelling) BeginWaveCancel();
+                TickWaveCancel(dt);
+                return;
+            }
+
+            // "Any move-stick or aim-stick input, any button tap, any shot fired (manual or
+            // automatic)": every primary's own IsFiring already reads straight off IsAiming (see
+            // WaterBlaster/PulseLaser/Undertow), so aiming alone covers "a shot fired" for this slice
+            // bar DevMode's auto-fire override — _blaster.IsFiring catches that too. There is no
+            // button-tap input in this slice yet (no ability is bound to a direct button) to wire up.
+            bool hasInput = resetNow
+                           || _max.MoveInput.sqrMagnitude > 0.0001f
+                           || _max.IsAiming
+                           || (_blaster != null && _blaster.IsFiring);
+
+            if (hasInput && _waveSeq != null && !_waveCancelling) BeginWaveCancel();
+
+            bool triggered = _idleWave.Tick(dt, hasInput);
+
+            if (triggered)
+            {
+                _waveSeq = new AnimSequence(IdleWaveSteps);
+                _waveCancelling = false;
+                _waveCancelT = 0f;
+                return;
+            }
+
+            if (_waveCancelling)
+            {
+                TickWaveCancel(dt);
+                return;
+            }
+
+            if (_waveSeq != null)
+            {
+                _waveSeq.Tick(dt);
+                // The gesture's own motion is done (2.6 s); let the idle clock start counting a fresh
+                // 20 s while _waveSeq itself stays alive — every step's Progress is already settled at
+                // its own final value (body yaw at 1, arm/head back at 0), which IS "holds facing the
+                // camera" with no further code needed.
+                if (_waveSeq.IsComplete) _idleWave.EndWave();
+            }
+        }
+
+        private void BeginWaveCancel()
+        {
+            _waveCancelling = true;
+            _waveCancelT = 0f;
+        }
+
+        /// <summary>Advances the 0.15 s cancel-out and tears <see cref="_waveSeq"/> down once it's
+        /// spent — <see cref="_waveSeq"/> is never ticked further once cancelling starts, so every
+        /// Wave* pose method below keeps reading the exact pose it was cancelled from, fading only via
+        /// <see cref="WaveCancelFade"/>.</summary>
+        private void TickWaveCancel(float dt)
+        {
+            if (!_waveCancelling) return;
+            _waveCancelT += dt;
+            if (_waveCancelT >= WaveCancelSeconds)
+            {
+                _waveSeq = null;
+                _waveCancelling = false;
+            }
+        }
+
+        private float WaveCancelFade => _waveCancelling
+            ? Mathf.Clamp01(1f - _waveCancelT / WaveCancelSeconds)
+            : 1f;
+
+        /// <summary>The shared "kick then return" read two adjacent AnimSequence steps make: 0 before
+        /// <paramref name="riseStep"/> starts, 1 once it completes and held there until
+        /// <paramref name="fallStep"/> starts, then back to 0 as that one completes. Same shape as this
+        /// class's own <see cref="RecoilAmount"/>, generalised to <see cref="IdleWaveSteps"/>' two
+        /// non-adjacent rise/fall pairs (head: 1/5, arm: 2/4) rather than RecoilAmount's hard-coded
+        /// 0/1.</summary>
+        private static float KickThenReturn(AnimSequence seq, int riseStep, int fallStep)
+        {
+            float rise = seq.Progress(riseStep);
+            return rise < 1f ? rise : 1f - seq.Progress(fallStep);
+        }
+
+        /// <summary>Step 1: the extra torso yaw, in degrees, to turn and then hold facing the camera —
+        /// 0 whenever <see cref="_waveSeq"/> is null (the rest of the time).</summary>
+        private float WaveBodyYaw()
+        {
+            if (_waveSeq == null) return 0f;
+            float toCamera = Mathf.DeltaAngle(transform.eulerAngles.y, WaveFacingYawDegrees);
+            return toCamera * _waveSeq.Progress(0) * WaveCancelFade;
+        }
+
+        /// <summary>Steps 2/6: the extra head pitch, in degrees (negative = further chin-up).</summary>
+        private float WaveHeadPitch()
+        {
+            if (_waveSeq == null) return 0f;
+            return WaveHeadPitchDegrees * KickThenReturn(_waveSeq, 1, 5) * WaveCancelFade;
+        }
+
+        /// <summary>Steps 3/5: 0..1, how raised the off-hand arm is right now.</summary>
+        private float WaveArmFactor()
+        {
+            if (_waveSeq == null) return 0f;
+            return KickThenReturn(_waveSeq, 2, 4) * WaveCancelFade;
+        }
+
+        /// <summary>Step 4: the raised hand's side-to-side rock, in degrees, about the torso's forward
+        /// axis — 3 full cycles over the step's own 1.2 s, zero at both ends (an integer number of
+        /// cycles), so it hands off cleanly to/from the raise and lower steps either side of it.</summary>
+        private float WaveRockDegrees()
+        {
+            if (_waveSeq == null) return 0f;
+            float u = _waveSeq.Progress(3);
+            return Mathf.Sin(u * WaveRockCycles * Mathf.PI * 2f) * WaveRockAmplitudeDegrees * WaveCancelFade;
         }
 
         /// <summary>
@@ -1359,6 +1590,18 @@ namespace MaxWorlds.VFX
             Vector3 targetR = _handR != null
                 ? Vector3.Lerp(freeR, _torso.InverseTransformPoint(_handR.position), _aim)
                 : freeR;
+
+            // MV-1162: step 3/4/5 of the idle wave, on the LEFT arm — MV-730's own split has the RIGHT
+            // hand as the one that operates the gadget (rises to drive it) and the LEFT merely bracing,
+            // so the left is "the arm NOT holding the gun" the ticket means. 0 outside a wave, so this
+            // is a no-op the rest of the time; _aim is already 0 whenever a wave can be playing (aiming
+            // is itself input, which cancels the wave the same tick), so it never fights the gun grip.
+            float waveArm = WaveArmFactor();
+            if (waveArm > 0f)
+            {
+                Vector3 raised = shoulderL + Quaternion.Euler(0f, 0f, WaveRockDegrees()) * WaveRaiseOffset;
+                targetL = Vector3.Lerp(targetL, raised, waveArm);
+            }
 
             PoseArm(_armL, shoulderL, targetL);
             PoseArm(_armR, shoulderR, targetR);
