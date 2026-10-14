@@ -30,7 +30,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("replicator")]
-    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor, IExitZoneSource, IFactoryDoorFacing
+    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody, IZoneGatedActor, IExitZoneSource, IFactoryDoorFacing, IHealthReadout
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
@@ -157,6 +157,18 @@ namespace MaxWorlds.Factories
         /// colour (1.0x) up to 2.2x.</summary>
         public const float StatusRingPulseMin = 1.0f;
         public const float StatusRingPulseMax = 2.2f;
+
+        /// <summary>MV-1120: metres above this box's own centre the health bar floats — clear of the
+        /// roof beacon's own top (half-height 0.75 + the beacon's centre offset 0.24 + its own 0.6 m
+        /// radius = 1.59 m above centre, see <see cref="FactoryBodies.BuildReplicator"/>'s
+        /// <c>replicationBeacon</c>), same "above its roof clear of the hatch and beacon" ask this
+        /// ticket's own Change makes.</summary>
+        private const float ReplicatorBarHeightAboveCentre = 2.0f;
+
+        /// <summary>MV-1120: bar width in metres — the same ~60% of body-width ratio
+        /// <see cref="MowerHutch"/>'s own hand-built bar (1.8 m / 3 m body) uses, scaled to this box's
+        /// 2 m footprint.</summary>
+        private const float ReplicatorBarWorldWidth = 1.2f;
 
         [SerializeField] private int capacity;
 
@@ -289,6 +301,12 @@ namespace MaxWorlds.Factories
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
+
+        // --- MV-1120: IHealthReadout — the same world health bar every gate/sentinel/robot/Max
+        // already carries (WorldHealthBar.Attach), which this box never did until now. ---
+        public float HealthNormalized => Normalized;
+        public float HealthCurrent => _health?.Current ?? 0f;
+        public string ReadoutName => "REPLICATOR";
 
         /// <summary>Doublings this box has left. 0 means spent — it lures nothing but remains a
         /// destructible target.</summary>
@@ -454,6 +472,7 @@ namespace MaxWorlds.Factories
             // still hits it.
 
             BuildBody();
+            BuildHealthBar();
         }
 
         /// <summary>MV-693: replaces MV-706's primitive-cube visual with a generated mesh (see
@@ -511,6 +530,23 @@ namespace MaxWorlds.Factories
             _hatchClosedLocalRotation = _hatch != null ? _hatch.localRotation : Quaternion.identity;
             _fan = parts.Fan;
             _outputLip = parts.OutputLip;
+        }
+
+        /// <summary>MV-1120: the health bar Lee's World 2 device playthrough found missing —
+        /// "Replicators have no health bar" — while a Mower Hutch carries one. Reuses
+        /// <see cref="WorldHealthBar.Attach"/> exactly as gates/sentinels/robots/Max already do rather
+        /// than hand-rolling a second bar implementation the way <see cref="MowerHutch"/> did: hidden
+        /// at full health until this box is first damaged (the default, non-<c>alwaysShow</c> trigger
+        /// rule), then visible while alive, and off the instant <see cref="IsAlive"/> goes false
+        /// (<see cref="WorldHealthBar"/>'s own <c>Refresh</c> gates display on the source's own
+        /// IsAlive — no separate hide-on-death wiring needed here, same as every other
+        /// <see cref="IHealthReadout"/> in this codebase). No raw HP number
+        /// (<c>showNumber: false</c>), matching the Mower Hutch's own hand-built plate, which never
+        /// printed one either.</summary>
+        private void BuildHealthBar()
+        {
+            WorldHealthBar.Attach(gameObject, this, ReplicatorBarHeightAboveCentre, ReplicatorBarWorldWidth,
+                showNumber: false);
         }
 
         /// <summary>The hatch's own world position (MV-775) — where <see cref="TickLure"/> steers a
