@@ -80,7 +80,7 @@ namespace MaxWorlds.Tests.EditMode
             // Real production wiring for every Replicator this map built (health, spawner stop) —
             // AddComponent's own Awake never runs outside Play mode (Replicator.Build's own doc comment).
             foreach (Replicator r in build.Replicators) r.Build();
-            Assert.AreEqual(53, build.Replicators.Count, "setup failure: World 2's shipped config must author 53 Replicators");
+            Assert.AreEqual(57, build.Replicators.Count, "setup failure: World 2's shipped config must author 57 Replicators");
 
             _pathGo = new GameObject("MV830 backyard path");
             var path = _pathGo.AddComponent<BackyardPath>();
@@ -93,9 +93,9 @@ namespace MaxWorlds.Tests.EditMode
             var screen = _screenGo.AddComponent<MapScreen>();
             screen.Open();
 
-            // === AC1: exactly 41 Replicator markers, each showing the alive fill colour ===
+            // === AC1: exactly 57 Replicator markers, each showing the alive fill colour ===
             Image[] markers = ReplicatorMarkers(_screenGo);
-            Assert.AreEqual(53, markers.Length, "MV-830 AC1: World 2 authors 53 Replicators — one map marker apiece");
+            Assert.AreEqual(57, markers.Length, "MV-830 AC1: World 2 authors 57 Replicators — one map marker apiece");
             foreach (Image marker in markers)
                 Assert.AreEqual(MapScreenDesign.Replicator, marker.color,
                     $"MV-830 AC1: '{marker.transform.parent.name}' must show the alive fill colour before anything dies");
@@ -109,7 +109,7 @@ namespace MaxWorlds.Tests.EditMode
             screen.Open();
 
             markers = ReplicatorMarkers(_screenGo);
-            Assert.AreEqual(53, markers.Length, "MV-830 AC2: killing one must not remove or duplicate any marker");
+            Assert.AreEqual(57, markers.Length, "MV-830 AC2: killing one must not remove or duplicate any marker");
 
             int deadCount = 0, aliveCount = 0;
             foreach (Image marker in markers)
@@ -131,7 +131,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
             Assert.AreEqual(1, deadCount, "MV-830 AC2: exactly the killed Replicator's marker must have flipped to destroyed");
-            Assert.AreEqual(52, aliveCount, "MV-830 AC2: the other 52 markers must be unchanged");
+            Assert.AreEqual(56, aliveCount, "MV-830 AC2: the other 56 markers must be unchanged");
 
             // === AC3: the legend carries both rows, by label text. MV-1119 folded the Replicator-only
             // "Replicator"/"Replicator (destroyed)" rows this AC originally named into the single shared
