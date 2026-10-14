@@ -256,6 +256,10 @@ namespace MaxWorlds.Arena
                     foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
                         gate.ApplyReefSkin();
                     break;
+                case WorldGateSkin.City:
+                    foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                        gate.ApplyCitySkin();
+                    break;
             }
         }
 

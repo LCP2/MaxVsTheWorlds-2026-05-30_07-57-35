@@ -40,6 +40,7 @@ namespace MaxWorlds.Arena
         None,
         Stormdrain,
         Reef,
+        City,
     }
 
     /// <summary>How a world's own finale exit works (MV-1143) — <c>Corridor</c>: a door, then a
@@ -61,6 +62,7 @@ namespace MaxWorlds.Arena
         None,
         Exit,
         ExitReef,
+        ExitCity,
     }
 
     /// <summary>Which <c>WorldJoinDressing</c> pass dresses the arrival shell built when Max arrives IN
@@ -71,6 +73,7 @@ namespace MaxWorlds.Arena
         None,
         Arrival,
         ArrivalReef,
+        ArrivalCity,
     }
 
     /// <summary>A world's Sentinel look (MV-1141) — moved here from <c>Sentinel</c>'s own private
@@ -500,7 +503,10 @@ namespace MaxWorlds.Arena
                 Entry = new WorldTransitionEntry(fromWorld: 1, exitWall: Wall.E, exitDoorPos: 0.509615384615f, corridorLength: 30f,
                     segmentAEnd: 10f, segmentBEnd: 16f,
                     arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
-                ExitDressing = ExitCorridorDressingKind.ExitReef,
+                // MV-1178: World 2 now climbs out into the City, not the Reef — "the climb out of the
+                // sewer". ArrivalDressing stays Arrival (World 2's own row is never arrived INTO by this
+                // corridor; that field describes arriving IN this row's own world, which is unrelated).
+                ExitDressing = ExitCorridorDressingKind.ExitCity,
                 ArrivalDressing = ArrivalDressingKind.Arrival,
                 RunsLegacyExitGate = false,
             },
@@ -513,7 +519,7 @@ namespace MaxWorlds.Arena
                 Palette = BiomePalette.City,
                 Look = BackyardLook.City,
                 Kit = WorldKit.City,
-                GateSkin = WorldGateSkin.None,
+                GateSkin = WorldGateSkin.City,
                 Style = new SentinelStyle(BodyColor, BodyAccent, EyeColor, emissionFactor: 0.35f,
                     boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1.6f),
                 FiresWaterBeam = false,
@@ -546,9 +552,9 @@ namespace MaxWorlds.Arena
                     segmentAEnd: 10f, segmentBEnd: 16f,
                     arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
                 // MV-1176 "Do not": plain shells into the Reef for now; the Market Street dressing ticket
-                // sets ExitDressing and the climb corridor ticket sets ArrivalDressing.
+                // sets ExitDressing. MV-1178 sets ArrivalDressing below -- the climb corridor ticket.
                 ExitDressing = ExitCorridorDressingKind.None,
-                ArrivalDressing = ArrivalDressingKind.None,
+                ArrivalDressing = ArrivalDressingKind.ArrivalCity,
                 RunsLegacyExitGate = false,
             },
             new WorldDefinition

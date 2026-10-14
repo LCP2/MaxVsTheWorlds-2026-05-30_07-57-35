@@ -132,6 +132,77 @@ namespace MaxWorlds.Arena
             rend.SetPropertyBlock(_reefMpb);
         }
 
+        // --- MV-1178: the City's own gate art — a roller shutter, built as REAL geometry (unlike
+        // ApplyReefSkin's property-block tint) because a shutter's horizontal slats are its whole
+        // identity. Unlike ApplyStormdrainGateSkin's art, this is parented directly under THIS gate's
+        // own transform rather than a sibling: there is no independent sliding-door animation here (the
+        // ticket's own instruction — "the existing open animation stays" — means the ordinary hinge
+        // swing every plain gate already has), so riding this transform is exactly what makes the
+        // shutter swing open WITH the gate instead of needing its own animation wiring.
+
+        private GameObject _cityDressingRoot;
+
+        /// <summary>Builds the City's roller-shutter leaf art around this gate's own closed-pose geometry
+        /// and hides the plain slab CreatePrimitive gave it — called once, from either
+        /// <see cref="BackyardPath"/>'s per-world dressing pass or
+        /// <see cref="MaxWorlds.Intro.WorldJoinSequence.ApplyDestinationSkin"/>, for a City destination
+        /// only (mirrors <see cref="ApplyReefSkin"/>/<see cref="ApplyStormdrainGateSkin"/>). Idempotent,
+        /// same contract as both of those.</summary>
+        public void ApplyCitySkin()
+        {
+            if (_cityDressingRoot != null) return;
+
+            var rend = GetComponent<Renderer>();
+            if (rend != null) rend.enabled = false;
+
+            float width = transform.localScale.x;
+            float height = transform.localScale.y;
+            float depth = transform.localScale.z;
+
+            _cityDressingRoot = new GameObject(gameObject.name + " (City Shutter)");
+            _cityDressingRoot.transform.SetParent(transform, worldPositionStays: false);
+            _cityDressingRoot.AddComponent<KeepsOwnMaterial>();
+
+            BuildCityShutter(_cityDressingRoot.transform, width, height, depth);
+        }
+
+        /// <summary>Row 0 is a Pale bottom bar; rows 1.. are Slate slats on (approximately) a 0.12 m
+        /// pitch — <paramref name="height"/> can be as short as a World 2 doorway's own 1.5 m (AreaGate's
+        /// own BuildStormdrainPortalRing doc), so the row count is floored at 11 (10 slats once the
+        /// bottom bar claims row 0) rather than trusting a fixed pitch to clear the ticket's own "at
+        /// least 10 slat renderers" AC on every authored doorway size.</summary>
+        private static void BuildCityShutter(Transform root, float width, float height, float depth)
+        {
+            const float pitch = 0.12f;
+            int rows = Mathf.Max(11, Mathf.FloorToInt(height / pitch));
+            float rowHeight = height / rows;
+            float halfHeight = height * 0.5f;
+
+            StormdrainKit.Box(root, "Bottom Bar", new Vector3(0f, -halfHeight + rowHeight * 0.5f, 0f),
+                new Vector3(width, rowHeight * 0.98f, depth * 1.02f), CityKit.Pale, SurfaceKind.Metal);
+
+            float slatHeight = rowHeight * 0.82f;
+            for (int i = 1; i < rows; i++)
+            {
+                float centerY = -halfHeight + rowHeight * (i + 0.5f);
+                StormdrainKit.Box(root, $"Slat{i}", new Vector3(0f, centerY, 0f),
+                    new Vector3(width * 0.98f, slatHeight, depth * 0.9f), CityKit.Slate, SurfaceKind.Metal);
+            }
+
+            float postWidth = Mathf.Min(0.18f, width * 0.08f);
+            foreach (float side in new[] { -1f, 1f })
+                StormdrainKit.Box(root, side < 0f ? "Post L" : "Post R",
+                    new Vector3(side * (width * 0.5f + postWidth * 0.5f), 0f, 0f),
+                    new Vector3(postWidth, height, depth * 1.1f), CityKit.Pale, SurfaceKind.Metal);
+
+            // A white UNLIT bar over the opening (ticket, change item 3) -- genuinely unlit, not merely
+            // a pale lit tone, so a scene whose key light goes dark still reads the lintel as lit trim.
+            GameObject bar = StormdrainKit.Box(root, "Lintel Bar", new Vector3(0f, halfHeight + 0.15f, 0f),
+                new Vector3(width + postWidth * 2f, 0.12f, depth * 1.1f), CityKit.NeonWhite, SurfaceKind.Metal);
+            var barRend = bar.GetComponent<Renderer>();
+            if (barRend != null) barRend.sharedMaterial = StormdrainKit.Unlit(CityKit.NeonWhite, "CityGateLintel");
+        }
+
         // --- MV-759: World 2's gate art — a round portal ring with two doors that slide apart,
         // built entirely from this gate's own closed-pose geometry, exactly the way ApplyReefSkin
         // re-skins the leaf above. The mechanic (health, threshold drop timing, the hinge-swing

@@ -47,6 +47,29 @@ namespace MaxWorlds.Arena
         private static Vector3 At(Vector2 doorMouth, Wall wall, float along, float across, float y) =>
             new Vector3(doorMouth.x, y, doorMouth.y) + OutwardDir(wall) * along + AcrossDir(wall) * across;
 
+        /// <summary>The ground-plane (X, Z) half of <see cref="At"/> — the world XZ point a
+        /// <see cref="CityKit"/> builder taking a flat <c>Vector2</c>/<c>Rect</c> footprint wants (that
+        /// kit's own header: "a Rect is a flat footprint in the ground plane"), for any <see cref="Wall"/>
+        /// — <see cref="OutwardDir"/>/<see cref="AcrossDir"/> are always axis-aligned (never diagonal),
+        /// so the result is always a true axis-aligned footprint regardless of which wall the corridor
+        /// cuts.</summary>
+        private static Vector2 Pt(Vector2 doorMouth, Wall wall, float along, float across)
+        {
+            Vector3 p = At(doorMouth, wall, along, across, 0f);
+            return new Vector2(p.x, p.z);
+        }
+
+        /// <summary>The axis-aligned <see cref="Rect"/> footprint spanning two <see cref="Pt"/> corners —
+        /// min/max rather than assuming an order, since a caller may hand either corner first.</summary>
+        private static Rect FootprintRect(Vector2 doorMouth, Wall wall, float dMin, float dMax, float acrossMin, float acrossMax)
+        {
+            Vector2 a = Pt(doorMouth, wall, dMin, acrossMin);
+            Vector2 b = Pt(doorMouth, wall, dMax, acrossMax);
+            float xMin = Mathf.Min(a.x, b.x), xMax = Mathf.Max(a.x, b.x);
+            float zMin = Mathf.Min(a.y, b.y), zMax = Mathf.Max(a.y, b.y);
+            return new Rect(xMin, zMin, xMax - xMin, zMax - zMin);
+        }
+
         /// <summary>A world-axis-aligned box spanning [<paramref name="dMin"/>, <paramref name="dMax"/>]
         /// outward from <paramref name="doorMouth"/>, offset <paramref name="acrossOffset"/> across it —
         /// same size formula <c>WorldJoinSequence.BuildBox</c> uses, so a piece built here always lines
@@ -710,6 +733,175 @@ namespace MaxWorlds.Arena
                 Vector3 pos = At(doorMouth, wall, ds[i], side * (halfWidth - 0.15f), 0.1f);
                 BuildBioGlow(host, $"Hull Bio Glow d{ds[i]:0.0}", pos, 0.24f);
             }
+        }
+
+        // ================================================================== World 2 -> City (MV-1178)
+        //
+        // "The climb out of the sewer": segment A (outfall, d 0-10, the Stormdrain's own walkway, reused
+        // unchanged), segment B (roadworks hole, d 10-16, a rubble ramp climbing through a dug hole) and
+        // segment C (street, d 16-30, a lit City street with a roller-shutter housing over the far door).
+        // The City's own arrival stub continues the street language, scaled to its own shorter length.
+        //
+        // AC1b's own centre-lane height cap (d 10-16, max y 0.35) is why the climb is a shallow flight of
+        // flat steps rather than one continuous tilted slab (MV-1126 precedent: "the climb is drawn, not
+        // built as a slope") — a single 6 m slab tilted to a 0.3 m rise measures its OWN vertical bounds
+        // from both its thickness and its length's own sine component, which overshoots 0.35 m; a stack
+        // of flat, unrotated steps never grows a diagonal term at all, so the last (highest) step is the
+        // whole budget (0.3 m) with margin to spare.
+
+        private const float RoadworksRise = 0.3f;
+        private const int RoadworksStepCount = 6;
+        private const float RoadworksRampWidth = 4.6f;   // ticket's own figure
+        private const float StreetLaneHalf = 1.0f;        // the AC's own 2.0 m centre lane, half-width
+        private const float StreetPavementWidth = 0.6f;
+        private const float StreetLampD = 22f;
+        private const float StreetLampHeight = 4f;
+        private const float StreetLampArmLength = 2.2f;
+        private const float ShopfrontRunD0 = 18f;
+        private const float ShopfrontRunD1 = 28f;
+
+        /// <summary>Segment A (outfall, reused), B (roadworks hole) and C (street) — MV-964's own three
+        /// fixed-distance stretches for the Stormdrain's own exit row, dressed per this ticket's own
+        /// d-ranges.</summary>
+        public static void DressExitCity(Transform segA, Transform segB, Transform segC,
+            Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry)
+        {
+            if (segA != null) DressOutfall(segA, doorMouth, wall, wallHeight, entry.SegmentAEnd);
+            if (segB != null) DressRoadworksHole(segB, doorMouth, wall, entry.SegmentAEnd, entry.SegmentBEnd);
+            if (segC != null) DressStreetSegment(segC, doorMouth, wall, wallHeight, entry.SegmentBEnd, entry.CorridorLength);
+        }
+
+        /// <summary>The City arrival shell — the same street language continued (MV-1178's own
+        /// instruction), scaled to the shell's shorter length: pavement strips, kerb, one lamp at d 5,
+        /// and a shutter frame at the City stub's own door.</summary>
+        public static void DressArrivalCity(Transform arrivalRoot, Vector2 doorMouth, Wall wall, float wallHeight, float shellLength)
+        {
+            if (arrivalRoot == null) return;
+
+            DressCityStreetStrip(arrivalRoot, doorMouth, wall, 0f, shellLength);
+
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            Vector3 lampFoot = At(doorMouth, wall, 5f, -(halfWidth - 0.2f), 0f);
+            Vector3 lampArm = AcrossDir(wall);   // from the south bank, in toward the centre lane
+            CityKit.BuildStreetLamp(arrivalRoot, lampFoot, lampArm, StreetLampHeight, StreetLampArmLength);
+
+            DressShutterHousing(arrivalRoot, doorMouth, wall, wallHeight, shellLength);
+        }
+
+        // ------------------------------------------------------------------ segment B: roadworks hole (d 10-16)
+
+        private static void DressRoadworksHole(Transform segB, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
+        {
+            int steps = RoadworksStepCount;
+            float stepLen = (dEnd - dStart) / steps;
+            float stepRise = RoadworksRise / steps;
+            const float stepThickness = 0.06f;
+
+            for (int i = 0; i < steps; i++)
+            {
+                float d0 = dStart + i * stepLen;
+                float d1 = d0 + stepLen;
+                float topY = (i + 1) * stepRise;
+                Bar(segB, $"Climb Step{i}", doorMouth, wall, d0, d1, 0f, RoadworksRampWidth,
+                    stepThickness, topY - stepThickness * 0.5f, CityKit.Concrete);
+            }
+
+            // Concrete/Slate rubble chunks, 0.3-0.8 m, along both banks -- outside the 2.0 m centre lane
+            // (AC1b), so their own height carries no cap the way the steps above do.
+            float bankAcross = (StreetLaneHalf + RoadworksRampWidth * 0.5f) * 0.5f;
+            int chunkIndex = 0;
+            foreach (float side in new[] { 1f, -1f })
+            {
+                for (float d = dStart + 0.5f; d < dEnd; d += 0.8f, chunkIndex++)
+                {
+                    float jitter = 0.15f * ((chunkIndex % 2 == 0) ? 1f : -1f);
+                    float size = 0.3f + 0.25f * (chunkIndex % 3);
+                    Vector3 at = At(doorMouth, wall, d, side * (bankAcross + jitter), size * 0.5f);
+                    Color tone = (chunkIndex % 2 == 0) ? CityKit.Concrete : CityKit.Slate;
+                    GameObject chunk = StormdrainKit.Box(segB, $"Rubble Chunk{chunkIndex}", at, Vector3.one * size, tone, SurfaceKind.Stone);
+                    chunk.transform.localRotation = Quaternion.Euler(0f, (chunkIndex * 37) % 360, 0f);
+                }
+            }
+
+            // Two CityKit.BuildConcreteBarrier + two BuildWireFence panels on the bank tops (roadworks).
+            Vector3 barrierSize = new Vector3(1.4f, 0.9f, 0.3f);
+            Vector3 fenceSize = new Vector3(1.6f, 1.1f, 0.15f);
+            float barrierAcross = StreetLaneHalf + 0.5f;
+            float fenceAcross = StreetLaneHalf + 0.9f;
+            float midD = (dStart + dEnd) * 0.5f;
+
+            CityKit.BuildConcreteBarrier(segB, At(doorMouth, wall, dStart + 0.5f, barrierAcross, 0f), barrierSize);
+            CityKit.BuildConcreteBarrier(segB, At(doorMouth, wall, dEnd - 0.5f, -barrierAcross, 0f), barrierSize);
+            CityKit.BuildWireFence(segB, At(doorMouth, wall, midD, fenceAcross, 0f), fenceSize);
+            CityKit.BuildWireFence(segB, At(doorMouth, wall, midD, -fenceAcross, 0f), fenceSize);
+        }
+
+        // ------------------------------------------------------------------ segment C: street (d 16-30)
+
+        private static void DressStreetSegment(Transform segC, Vector2 doorMouth, Wall wall, float wallHeight, float dStart, float dEnd)
+        {
+            DressCityStreetStrip(segC, doorMouth, wall, dStart, dEnd);
+
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+
+            // The street lamp, on the south bank, arm reaching in over the centre lane.
+            Vector3 lampFoot = At(doorMouth, wall, StreetLampD, -(halfWidth - 0.2f), 0f);
+            Vector3 lampArm = AcrossDir(wall);
+            CityKit.BuildStreetLamp(segC, lampFoot, lampArm, StreetLampHeight, StreetLampArmLength);
+
+            // A short shopfront run on the far (north) bank top -- neon pink and white (CityKit never
+            // emits cyan for a shop sign, so the ticket's "the cyan shop sign is white" exception already
+            // holds without any extra work here).
+            Vector2 shopA = Pt(doorMouth, wall, Mathf.Max(ShopfrontRunD0, dStart), halfWidth - 0.08f);
+            Vector2 shopB = Pt(doorMouth, wall, Mathf.Min(ShopfrontRunD1, dEnd), halfWidth - 0.08f);
+            CityKit.BuildShopfrontRun(segC, shopA, shopB, -AcrossDir(wall), wallHeight, seed: 0);
+
+            DressShutterHousing(segC, doorMouth, wall, wallHeight, dEnd);
+        }
+
+        /// <summary>Pavement strips plus a kerb line along both banks -- shared between the exit street
+        /// segment and the City's own arrival shell, which carry the same street language at different
+        /// lengths.</summary>
+        private static void DressCityStreetStrip(Transform host, Vector2 doorMouth, Wall wall, float dStart, float dEnd)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float outer = Mathf.Min(StreetLaneHalf + StreetPavementWidth, halfWidth - 0.02f);
+
+            foreach (float side in new[] { 1f, -1f })
+            {
+                Rect pavementArea = FootprintRect(doorMouth, wall, dStart, dEnd, side * StreetLaneHalf, side * outer);
+                CityKit.BuildPavement(host, pavementArea);
+
+                Vector2 kerbA = Pt(doorMouth, wall, dStart, side * StreetLaneHalf);
+                Vector2 kerbB = Pt(doorMouth, wall, dEnd, side * StreetLaneHalf);
+                CityKit.BuildKerbLine(host, kerbA, kerbB);
+            }
+        }
+
+        /// <summary>The roller-shutter housing over a door: a Slate lintel, two Pale posts and a pink
+        /// neon frame bar -- shared between segment C's own far door and the arrival shell's City stub
+        /// door, both of which end in a City-skinned <see cref="AreaGate"/> (see
+        /// <see cref="MaxWorlds.Arena.AreaGate.ApplyCitySkin"/> for the gate leaf's own slats).</summary>
+        private static void DressShutterHousing(Transform host, Vector2 doorMouth, Wall wall, float wallHeight, float dEnd)
+        {
+            float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
+            float housingWidth = WorldTransitionEntry.CorridorWidth + 0.6f;
+            float d0 = Mathf.Max(0f, dEnd - 0.6f);
+            float d1 = Mathf.Max(d0 + 0.1f, dEnd - 0.2f);
+            float lintelY = wallHeight * 0.88f;
+
+            Bar(host, "Shutter Housing Lintel", doorMouth, wall, d0, d1, 0f, housingWidth,
+                wallHeight * 0.22f, lintelY, CityKit.Slate, SurfaceKind.Stone);
+
+            foreach (float side in new[] { 1f, -1f })
+                Bar(host, side > 0f ? "Shutter Housing Post N" : "Shutter Housing Post S", doorMouth, wall,
+                    d0, dEnd, side * (halfWidth + 0.08f), 0.3f, wallHeight * 0.92f, wallHeight * 0.46f,
+                    CityKit.Pale, SurfaceKind.Stone);
+
+            GameObject frame = Bar(host, "Shutter Neon Frame", doorMouth, wall, d0, d1, 0f, housingWidth,
+                0.06f, lintelY + wallHeight * 0.13f, CityKit.NeonPink, SurfaceKind.Metal);
+            var frameRend = frame.GetComponent<Renderer>();
+            if (frameRend != null) frameRend.sharedMaterial = StormdrainKit.Unlit(CityKit.NeonPink, "CityShutterFrame");
         }
     }
 }
