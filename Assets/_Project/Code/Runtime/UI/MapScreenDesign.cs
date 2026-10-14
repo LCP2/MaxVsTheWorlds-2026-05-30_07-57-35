@@ -41,31 +41,26 @@ namespace MaxWorlds.UI
 
         // ---- contents ---------------------------------------------------------------------------
         public static readonly Color Cover        = new Color32(0x4F, 0x8A, 0x4F, 0xFF);
-        public static readonly Color ShedStatic   = new Color32(0xA8, 0x6B, 0x34, 0xFF);
-        public static readonly Color ShedMobile   = new Color32(0xD9, 0x9A, 0x3A, 0xFF);
-        public static readonly Color ShedOutline  = new Color32(0xF0, 0xC8, 0x90, 0xFF);
-        public static readonly Color Boss         = new Color32(0xD0, 0x3A, 0x3A, 0xFF);
-        public static readonly Color BossOutline  = new Color32(0xFF, 0xBC, 0xBC, 0xFF);
         public static readonly Color Gate         = new Color32(0xFF, 0xD2, 0x4A, 0xFF);
         public static readonly Color BossGate     = new Color32(0xFF, 0x80, 0x80, 0xFF);
         public static readonly Color Player       = new Color32(0x4A, 0xA3, 0xFF, 0xFF);
 
-        /// <summary>MV-830: alive-Replicator fill and its light outline.</summary>
+        /// <summary>MV-830, broadened by MV-1119: the alive fill and light outline for every "still
+        /// needs destroying" objective marker — shed/hutch/reactor, Replicator and boss alike, drawn
+        /// identically (same colour, blink rate and size class) rather than each kind keeping its own
+        /// look.</summary>
         public static readonly Color Replicator          = new Color32(0xC0, 0x00, 0x00, 0xFF);
         public static readonly Color ReplicatorOutline    = new Color32(0xFF, 0x9C, 0x9C, 0xFF);
-        /// <summary>MV-830: a destroyed Replicator's outline — its fill drops to nothing (alpha 0),
-        /// this is the only colour left on the marker.</summary>
+        /// <summary>MV-830, broadened by MV-1119: a destroyed objective's outline — its fill drops to
+        /// nothing (alpha 0), this is the only colour left on the marker, for every kind.</summary>
         public static readonly Color ReplicatorDestroyed = new Color32(0x8C, 0x8C, 0x8C, 0xFF);
 
-        /// <summary>World metres. A shed's footprint on the map — matches the 3 x 3 m factory body.</summary>
-        public const float ShedSize = 3f;
-        /// <summary>World metres. A Replicator's footprint on the map — matches its 2 x 2 m body.</summary>
+        /// <summary>World metres. An objective marker's footprint on the map (MV-830, broadened by
+        /// MV-1119 to every still-alive shed/hutch/reactor/Replicator/boss) — matches a Replicator's
+        /// 2 x 2 m body.</summary>
         public const float ReplicatorSize = 2f;
-        /// <summary>World metres. Stroke width for the Replicator marker's outline.</summary>
+        /// <summary>World metres. Stroke width for an objective marker's outline.</summary>
         public const float ReplicatorOutlineWidth = 0.3f;
-        /// <summary>World metres, radius. A boss dominates its arena; this is deliberately larger than
-        /// the 6 x 6 m boss body so three bosses in a30 read as three at full zoom-out.</summary>
-        public const float BossRadius = 3.2f;
         /// <summary>World metres. A gate is drawn as a bar ALONG the wall it sits in, its length the
         /// doorway's own width, its thickness this.</summary>
         public const float GateThickness = 1.1f;
@@ -105,7 +100,7 @@ namespace MaxWorlds.UI
         //   3. area borders            (current area's border last, so it wins)
         //   4. cover
         //   5. gates                   (on the wall line, so they sit over the border)
-        //   6. sheds
+        //   6. sheds                   (objective markers, MV-1119: same look as 6b/7)
         //   6b. Replicators             (MV-830: same pass order as sheds)
         //   7. bosses
         //   8. area index + name labels

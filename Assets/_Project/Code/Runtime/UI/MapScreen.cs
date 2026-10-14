@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -77,13 +78,11 @@ namespace MaxWorlds.UI
         private readonly List<bool> _areaIsShed = new List<bool>();
         private readonly List<Image> _areaBorderImages = new List<Image>();
 
-        // Replicator blink (MV-855): which fill Images are currently "required and alive", and the set
-        // of area ids that state was resolved against — recomputed once per RebuildContent, since the
-        // game is paused (Time.timeScale = 0) for the whole time the map is open, so nothing that would
-        // change either can happen while it's up.
-        private readonly List<Image> _replicatorFillImages = new List<Image>();
-        private readonly List<bool> _replicatorBlinking = new List<bool>();
-        private HashSet<string> _requiredReplicatorAreaIds = new HashSet<string>();
+        // Objective blink (MV-855, broadened by MV-1119): every still-alive shed/hutch/reactor,
+        // Replicator and boss marker's fill Image — recomputed once per RebuildContent, since the game
+        // is paused (Time.timeScale = 0) for the whole time the map is open, so nothing that would
+        // change it can happen while it's up.
+        private readonly List<Image> _blinkFillImages = new List<Image>();
 
         private readonly Dictionary<int, Vector2> _lastPointers = new Dictionary<int, Vector2>();
 
@@ -154,7 +153,7 @@ namespace MaxWorlds.UI
             HandleGesture();
             UpdateCurrentArea();
             UpdatePlayerMarker();
-            UpdateReplicatorBlink();
+            UpdateObjectiveBlink();
         }
 
         // ------------------------------------------------------------------ build
@@ -247,13 +246,10 @@ namespace MaxWorlds.UI
                 ("Shed area", HudTextures.RoundedBox(16, 0.18f), MapScreenDesign.ShedAreaFill, HudTextures.RoundedBoxOutline(16, 0.18f, MapScreenDesign.AreaBorderWidth), MapScreenDesign.ShedAreaBorder),
                 ("Boss arena", HudTextures.RoundedBox(16, 0.18f), MapScreenDesign.BossAreaFill, HudTextures.RoundedBoxOutline(16, 0.18f, MapScreenDesign.AreaBorderWidth), MapScreenDesign.BossAreaBorder),
                 ("Cover", HudTextures.RoundedBox(12, 0.2f), MapScreenDesign.Cover, null, default),
-                ("Static shed", HudTextures.Disc(24), MapScreenDesign.ShedStatic, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
-                ("Mobile shed", HudTextures.Disc(24), MapScreenDesign.ShedMobile, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
-                ("Replicator", HudTextures.RoundedBox(16, 0.15f), MapScreenDesign.Replicator, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorOutline),
-                ("Replicator (destroyed)", HudTextures.RoundedBox(16, 0.15f), Color.clear, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorDestroyed),
+                ("To destroy (blinking red)", HudTextures.RoundedBox(16, 0.15f), MapScreenDesign.Replicator, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorOutline),
+                ("Destroyed", HudTextures.RoundedBox(16, 0.15f), Color.clear, HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), MapScreenDesign.ReplicatorDestroyed),
                 ("Gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.Gate, null, default),
                 ("Boss gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.BossGate, null, default),
-                ("Boss", HudTextures.Disc(24), MapScreenDesign.Boss, HudTextures.Ring(24, 2f), MapScreenDesign.BossOutline),
                 ("You", HudTextures.Disc(24), MapScreenDesign.Player, null, default),
             };
 
@@ -319,8 +315,7 @@ namespace MaxWorlds.UI
             _areaIsBoss.Clear();
             _areaIsShed.Clear();
             _areaBorderImages.Clear();
-            _replicatorFillImages.Clear();
-            _replicatorBlinking.Clear();
+            _blinkFillImages.Clear();
             _playerMarker = null;
             _shownCurrentArea = -1;
 
@@ -408,17 +403,18 @@ namespace MaxWorlds.UI
             // Sheds (item 6), Replicators (item 6b, MV-830 — same pass order as sheds: above cover and
             // gates, below labels), then bosses (item 7) — three passes over the same flat list rather
             // than one switch, so none of them can end up drawn out of order just because they happened
-            // to be authored in a different sequence in the map file.
+            // to be authored in a different sequence in the map file. All three draw through the same
+            // AddObjectiveMarker (MV-1119): a shed, a Replicator and a boss that are all still alive
+            // read identically on the map.
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Factory && entity.Dressing == CoverDressing.Shed)
-                    AddShedMarker(entity);
-            // MV-855: which areas are still required to open a locked replicators-destroyed gate,
-            // resolved once here (not per-marker) off the world config this level actually loaded.
-            _requiredReplicatorAreaIds = ReplicatorMapModel.RequiredAreaIds(_backyardPath != null ? _backyardPath.Cfg : null);
+                    AddObjectiveMarker(entity, ShedIsAlive(entity), "Shed");
             foreach (MapEntity entity in _map.entities)
-                if (entity != null && entity.Kind == EntityKind.Replicator) AddReplicatorMarker(entity);
+                if (entity != null && entity.Kind == EntityKind.Replicator)
+                    AddObjectiveMarker(entity, ReplicatorIsAlive(entity), "Replicator");
             foreach (MapEntity entity in _map.entities)
-                if (entity != null && entity.Kind == EntityKind.Boss) AddBossMarker(entity);
+                if (entity != null && entity.Kind == EntityKind.Boss)
+                    AddObjectiveMarker(entity, BossIsAlive(entity), "Boss");
 
             // Area index + name labels (item 8) — anchored to each room's own bottom-left corner (item
             // 3): the top-left is where cover clusters, and drawn last so a label is never buried under
@@ -507,54 +503,47 @@ namespace MaxWorlds.UI
             marker.raycastTarget = false;
         }
 
-        /// <summary>A mobile shed (MV-548/MV-562) reads distinctly from a static one (MV-567 item 4) —
-        /// same size and outline, different fill, resolved straight off <see cref="MapEntity.mobile"/>
-        /// rather than re-reading the world config the map already has this flat off of.</summary>
-        private void AddShedMarker(MapEntity entity)
+        /// <summary>A still-needs-destroying objective — shed/hutch/reactor, Replicator or boss alike
+        /// (MV-1119, Lee 2026-10-06: "Sheds / replicators / things that need to be destroyed on all
+        /// levels need to be shown on the maps as blinking red lights as per World 2") — drawn
+        /// identically regardless of kind: the same red fill, blink rate and size class World 2's
+        /// Replicator marker already used (MV-855), reused here rather than duplicated per kind.
+        /// Destroyed reads as a grey outline with no fill; alive reads red and blinks (added to
+        /// <see cref="_blinkFillImages"/>). <paramref name="markerName"/> only names the marker's own
+        /// GameObject (kept per-kind so draw order / introspection by kind still works) — it carries no
+        /// visual meaning.</summary>
+        private void AddObjectiveMarker(MapEntity entity, bool alive, string markerName)
         {
-            Color fill = entity.mobile ? MapScreenDesign.ShedMobile : MapScreenDesign.ShedStatic;
-            var marker = AddImage(_content, HudTextures.Disc(24), fill, "Shed");
-            Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
-            marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
-            marker.rectTransform.sizeDelta = new Vector2(MapScreenDesign.ShedSize, MapScreenDesign.ShedSize);
-            marker.raycastTarget = false;
-
-            var outline = AddImage(marker.rectTransform, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline, "Outline");
-            Stretch(outline.rectTransform);
-            outline.raycastTarget = false;
-        }
-
-        /// <summary>A Replicator (MV-830) — every one in the map, from the first frame, ignoring
-        /// <see cref="Discoverable.Found"/> (Lee's decision: the point is locating the ones not yet
-        /// destroyed). Destroyed reads as a grey outline with no fill; alive reads red, either steady or
-        /// blinking (MV-855) depending on whether <see cref="ReplicatorMapModel"/> says this area is still
-        /// required to open a locked gate — resolved off the actual built <see cref="Replicator"/> every
-        /// time this rebuilds, so a box killed since the map was last open flips the instant it reopens
-        /// (item 2 of the ticket).</summary>
-        private void AddReplicatorMarker(MapEntity entity)
-        {
-            bool alive = ReplicatorIsAlive(entity);
-            string areaId = ReplicatorAreaId(entity);
-            ReplicatorMarkerState state = ReplicatorMapModel.Resolve(areaId, alive, _requiredReplicatorAreaIds);
-
-            bool destroyed = state == ReplicatorMarkerState.DestroyedOutline;
+            bool destroyed = ObjectiveMapModel.Resolve(alive) == ObjectiveMarkerState.Destroyed;
             Color fill = destroyed ? Color.clear : MapScreenDesign.Replicator;
             Color outlineColor = destroyed ? MapScreenDesign.ReplicatorDestroyed : MapScreenDesign.ReplicatorOutline;
 
-            var marker = AddImage(_content, HudTextures.RoundedBox(16, 0.15f), fill, "Replicator");
+            var marker = AddImage(_content, HudTextures.RoundedBox(16, 0.15f), fill, markerName);
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
             marker.rectTransform.sizeDelta = new Vector2(MapScreenDesign.ReplicatorSize, MapScreenDesign.ReplicatorSize);
             marker.type = Image.Type.Sliced;
             marker.raycastTarget = false;
-            _replicatorFillImages.Add(marker);
-            _replicatorBlinking.Add(state == ReplicatorMarkerState.Blinking);
+            if (!destroyed) _blinkFillImages.Add(marker);
 
             var outline = AddImage(marker.rectTransform,
                 HudTextures.RoundedBoxOutline(16, 0.15f, MapScreenDesign.ReplicatorOutlineWidth), outlineColor, "Outline");
             Stretch(outline.rectTransform);
             outline.type = Image.Type.Sliced;
             outline.raycastTarget = false;
+        }
+
+        /// <summary>Resolves a shed/hutch/reactor entity's live/destroyed state off the actual built
+        /// <see cref="MowerHutch"/> component for its id, via <see cref="BackyardPath.Actors"/> — never
+        /// a static map fact, since the whole point is showing one that died since the map last opened.
+        /// Defaults alive when nothing is built for this id (no <see cref="_backyardPath"/>, or a
+        /// fixture map), so a missing lookup never misrenders as a false "destroyed".</summary>
+        private bool ShedIsAlive(MapEntity entity)
+        {
+            if (_backyardPath == null) return true;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
+            var hutch = go.GetComponent<MowerHutch>();
+            return hutch == null || hutch.IsAlive;
         }
 
         /// <summary>Resolves a Replicator entity's live/destroyed state off the actual built
@@ -570,61 +559,39 @@ namespace MaxWorlds.UI
             return replicator == null || replicator.IsAlive;
         }
 
-        /// <summary>The area id a Replicator entity was authored into (MV-855), via the live built
-        /// <see cref="Replicator"/> and <see cref="FactoryCensus.AreaIdOf"/> — the exact id
-        /// <see cref="WorldRunner"/> registered it under, never re-derived from the entity's own id
-        /// string. Null when nothing is built for this id (no <see cref="_backyardPath"/>, or a fixture
-        /// map), which <see cref="ReplicatorMapModel.Resolve"/> reads as "not required" rather than a
-        /// false Blinking.</summary>
-        private string ReplicatorAreaId(MapEntity entity)
+        /// <summary>Resolves a boss entity's live/destroyed state off <see cref="BossCensus.IsAreaDefeated"/>
+        /// (MV-1119) — never the live component's own <c>IDamageable.IsAlive</c>: a boss like
+        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss"/> reads that narrower than "not yet destroyed"
+        /// (true only while actively engaged in its Fight phase), so a Dormant boss the player simply
+        /// hasn't reached yet would otherwise misrender as already destroyed from the first frame.
+        /// <see cref="BossCensus.IsAreaDefeated"/> is permanent once set (by a real kill or a checkpoint
+        /// restore) and false for anything else, which is exactly "still needs destroying".</summary>
+        private bool BossIsAlive(MapEntity entity) => !BossCensus.IsAreaDefeated(ResolveAreaIndex(entity.x, entity.z));
+
+        /// <summary>The combat-area index a world point falls in, the same
+        /// <see cref="MapData.ZoneAt"/> + <see cref="AreaAccumulationDirector.AreaIndexOf"/> resolution
+        /// every boss's own <c>ResolveAreaIndex</c> uses — 0 (never defeatable) when the point falls
+        /// outside any zone, or the map hasn't built yet.</summary>
+        private int ResolveAreaIndex(float worldX, float worldZ)
         {
-            if (_backyardPath == null) return null;
-            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return null;
-            var replicator = go.GetComponent<Replicator>();
-            return replicator != null ? FactoryCensus.AreaIdOf(replicator) : null;
+            MapZone zone = _map != null ? _map.ZoneAt(worldX, worldZ) : null;
+            return zone != null ? AreaAccumulationDirector.AreaIndexOf(zone.id) : 0;
         }
 
-        /// <summary>MV-855: a required-and-alive Replicator's fill blinks 1 Hz in realtime while the map
-        /// is open — full alpha for the first half of every second, 25% for the second half. Driven by
-        /// <see cref="Time.unscaledTime"/>, not <see cref="Time.time"/>: the game itself is paused
-        /// (<c>Time.timeScale = 0</c>) for as long as the map is up, so the scaled clock never advances.</summary>
-        private void UpdateReplicatorBlink()
+        /// <summary>MV-855, broadened by MV-1119: every still-alive objective marker's fill blinks 1 Hz
+        /// in realtime while the map is open — full alpha for the first half of every second, 25% for
+        /// the second half. Driven by <see cref="Time.unscaledTime"/>, not <see cref="Time.time"/>: the
+        /// game itself is paused (<c>Time.timeScale = 0</c>) for as long as the map is up, so the scaled
+        /// clock never advances.</summary>
+        private void UpdateObjectiveBlink()
         {
-            if (_replicatorFillImages.Count == 0) return;
+            if (_blinkFillImages.Count == 0) return;
             float phase = Time.unscaledTime % 1f;
             float alpha = phase < 0.5f ? 1f : 0.25f;
             Color baseColor = MapScreenDesign.Replicator;
-            for (int i = 0; i < _replicatorFillImages.Count; i++)
-            {
-                if (!_replicatorBlinking[i]) continue;
-                _replicatorFillImages[i].color = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
-            }
-        }
-
-        /// <summary>A boss "dominates its arena" (AC 2/6) — a soft halo behind a bright disc, both sized
-        /// well past the boss's own authored footprint (which can be as small as 3.5 m in a 30-46 m
-        /// room) so it still reads as the room's centrepiece at full zoom-out.</summary>
-        private void AddBossMarker(MapEntity entity)
-        {
-            Vector2 pos = ContentPoint(entity.x, entity.z);
-            float size = MapScreenDesign.BossRadius * 2f;
-
-            var glow = AddImage(_content, HudTextures.Glow(32),
-                new Color(MapScreenDesign.Boss.r, MapScreenDesign.Boss.g, MapScreenDesign.Boss.b, 0.4f), "Boss Glow");
-            Anchor(glow.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
-            glow.rectTransform.anchoredPosition = pos;
-            glow.rectTransform.sizeDelta = new Vector2(size * 1.8f, size * 1.8f);
-            glow.raycastTarget = false;
-
-            var marker = AddImage(_content, HudTextures.Disc(24), MapScreenDesign.Boss, "Boss");
-            Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
-            marker.rectTransform.anchoredPosition = pos;
-            marker.rectTransform.sizeDelta = new Vector2(size, size);
-            marker.raycastTarget = false;
-
-            var outline = AddImage(marker.rectTransform, HudTextures.Ring(24, 2f), MapScreenDesign.BossOutline, "Outline");
-            Stretch(outline.rectTransform);
-            outline.raycastTarget = false;
+            Color blink = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+            for (int i = 0; i < _blinkFillImages.Count; i++)
+                _blinkFillImages[i].color = blink;
         }
 
         /// <summary>A gate as a short bar spanning its doorway's actual hole (MV-566 item 4: "using

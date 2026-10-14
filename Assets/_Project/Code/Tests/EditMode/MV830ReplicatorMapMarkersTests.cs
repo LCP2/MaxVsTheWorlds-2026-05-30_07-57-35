@@ -133,10 +133,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, deadCount, "MV-830 AC2: exactly the killed Replicator's marker must have flipped to destroyed");
             Assert.AreEqual(52, aliveCount, "MV-830 AC2: the other 52 markers must be unchanged");
 
-            // === AC3: the legend carries both new rows, by label text ===
+            // === AC3: the legend carries both rows, by label text. MV-1119 folded the Replicator-only
+            // "Replicator"/"Replicator (destroyed)" rows this AC originally named into the single shared
+            // "To destroy (blinking red)"/"Destroyed" pair every objective kind now uses — updated here
+            // rather than left asserting wording the new scheme intentionally replaced. ===
             string[] labels = _screenGo.GetComponentsInChildren<Text>(true).Select(t => t.text).ToArray();
-            Assert.Contains("Replicator", labels, "MV-830 AC3: legend must carry a 'Replicator' row");
-            Assert.Contains("Replicator (destroyed)", labels, "MV-830 AC3: legend must carry a 'Replicator (destroyed)' row");
+            Assert.Contains("To destroy (blinking red)", labels, "MV-830 AC3: legend must carry a 'To destroy (blinking red)' row");
+            Assert.Contains("Destroyed", labels, "MV-830 AC3: legend must carry a 'Destroyed' row");
         }
     }
 }
