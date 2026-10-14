@@ -131,12 +131,20 @@ namespace MaxWorlds.Enemies
         /// reason.</summary>
         public void Tick(float dt)
         {
-            Vector3 next = Step(transform.position, _direction, _speed, dt);
-            _traveled += Vector3.Distance(transform.position, next);
-            transform.position = next;
+            Vector3 previous = transform.position;
+            Vector3 next = Step(previous, _direction, _speed, dt);
+            _traveled += Vector3.Distance(previous, next);
 
+            // MV-1173: swept across the whole step, not just its endpoint. The Bolter's own authored
+            // numbers give an endpoint sample EXACTLY zero worst-case margin (lungeSpeed * Dt ==
+            // 2 * contactRadius), so a target sitting mid-step was relying on an exact float tie to
+            // register a hit at all, and ordinary float32 noise at realistic coordinate magnitudes
+            // could push both the previous and next samples just outside the radius. A target on the
+            // segment itself has no such tie to lose.
             bool closeEnough = _target != null &&
-                WithinHitRadius(transform.position, _target.position, _hitRadius);
+                SweptWithinHitRadius(previous, next, _target.position, _hitRadius);
+
+            transform.position = next;
 
             if (closeEnough) { Detonate(); return; }
             if (TraveledPastMaxRange(_traveled, _maxDistance)) { DespawnHarmless(); return; }
@@ -162,6 +170,26 @@ namespace MaxWorlds.Enemies
         {
             float dx = boltPosition.x - targetPosition.x, dz = boltPosition.z - targetPosition.z;
             return dx * dx + dz * dz <= hitRadius * hitRadius;
+        }
+
+        /// <summary>MV-1173: the swept counterpart to <see cref="WithinHitRadius"/> — horizontal
+        /// point-to-segment distance from <paramref name="fromPosition"/> to <paramref name="toPosition"/>,
+        /// clamped to the segment, rather than a single endpoint sample. Replaces the endpoint-only
+        /// check inside <see cref="Tick"/>; <see cref="WithinHitRadius"/> itself is left in place since
+        /// other call sites/tests still exercise the plain point check on its own terms.</summary>
+        public static bool SweptWithinHitRadius(Vector3 fromPosition, Vector3 toPosition,
+            Vector3 targetPosition, float hitRadius)
+        {
+            float fromX = fromPosition.x - targetPosition.x, fromZ = fromPosition.z - targetPosition.z;
+            float deltaX = toPosition.x - fromPosition.x, deltaZ = toPosition.z - fromPosition.z;
+
+            float segmentLengthSq = deltaX * deltaX + deltaZ * deltaZ;
+            float t = segmentLengthSq > 1e-12f
+                ? Mathf.Clamp01(-(fromX * deltaX + fromZ * deltaZ) / segmentLengthSq)
+                : 0f;
+
+            float closestX = fromX + deltaX * t, closestZ = fromZ + deltaZ * t;
+            return closestX * closestX + closestZ * closestZ <= hitRadius * hitRadius;
         }
 
         /// <summary>The hit amount (AC1, extended MV-622): 5% of the hit receiver's OWN max health,
