@@ -48,6 +48,7 @@ namespace MaxWorlds.Weapons
         private const float TeleportLandingSearchStep = 0.25f;
 
         private CharacterController _cc;
+        private PlayerController _playerController;
         private WaterBalloonSplashVfx _splashVfx;
         private float _waterBalloonCooldown;
         private float _teleportCooldown;
@@ -161,6 +162,7 @@ namespace MaxWorlds.Weapons
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
+            _playerController = GetComponent<PlayerController>();
         }
 
         /// <summary>The splash's cosmetic sub-component, built lazily on the first actual throw
@@ -768,21 +770,39 @@ namespace MaxWorlds.Weapons
         /// <summary>How close an aimed placement point must stay to an existing sentinel or a live
         /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC). MV-1113:
         /// the arrival search below reuses this unchanged for the "at least 1.5 m from other sentinels"
-        /// predicate; robots/bosses use their OWN larger, relaxable <see cref="SentinelArrivalEnemyClearanceMin"/>
+        /// predicate; robots/bosses use their OWN <see cref="SentinelArrivalEnemyClearanceFloor"/>
         /// instead of this constant (see <see cref="IsValidSentinelPlacement"/> vs <see cref="IsArrivalCandidateValid"/>).</summary>
         public const float SentinelPlacementClearance = 1.5f;
 
-        /// <summary>MV-1113: the arrival search's own three distance rules (ticket item 3) — how far from
-        /// Max a candidate point must sit, the clearance it must keep from every awake enemy robot/boss
-        /// (relaxed in <see cref="SentinelArrivalEnemyClearanceStep"/> steps down to
-        /// <see cref="SentinelArrivalEnemyClearanceFloor"/> when nothing qualifies at the full distance).</summary>
-        public const float SentinelArrivalMinDistance = 2.5f;
-        public const float SentinelArrivalMaxDistance = 4.5f;
-        public const float SentinelArrivalEnemyClearanceMin = 3f;
+        /// <summary>MV-1182: the arrival search's own distance rule — radius 1.5 m (one robot-length)
+        /// behind Max is tried first; only when nothing qualifies there does the search widen to
+        /// 2.0 m, then 2.5 m, the hard maximum. Supersedes MV-1113's 2.5-4.5 m band and its
+        /// "farthest from enemy" scoring, which could put a sentinel on the far side of a barrier or
+        /// inside an enclosure Max himself could never reach (Lee, device playtest 14 Oct).</summary>
+        public static readonly float[] SentinelArrivalRadii = { 1.5f, 2.0f, 2.5f };
+
+        /// <summary>MV-1182: every awake enemy robot/boss must clear this flat distance from a
+        /// candidate point — fixed, no relaxation loop, since the search below is now ordered by
+        /// direction around Max rather than by distance from the nearest enemy.</summary>
         public const float SentinelArrivalEnemyClearanceFloor = 1.5f;
-        public const float SentinelArrivalEnemyClearanceStep = 0.5f;
-        private const float ArrivalRadiusStep = 0.25f;
-        private const int ArrivalAngleSamples = 24; // 15 degree steps
+
+        /// <summary>MV-1182: the sentinel's own body radius used by the straight-walk
+        /// <c>Physics.SphereCast</c> from Max to a candidate point — rejects anything behind a pipe,
+        /// barrier, fence, hedge or pen wall even when <see cref="LineOfSight.Clear"/> passes clean
+        /// over it.</summary>
+        private const float SentinelArrivalWalkCheckRadius = 0.25f;
+
+        /// <summary>MV-1182 item 3: the angle offsets the search tries around "directly behind" Max,
+        /// IN ORDER — 0 (directly behind) first, then alternating +/-15, +/-30, ... up to +/-165, with
+        /// 180 (directly in front) tried dead last. The first candidate at a given radius that
+        /// satisfies every predicate wins; there is no more "farthest from enemy" scoring.</summary>
+        private static readonly float[] ArrivalAngleOffsetsDeg =
+        {
+            0f,
+            15f, -15f, 30f, -30f, 45f, -45f, 60f, -60f, 75f, -75f, 90f, -90f,
+            105f, -105f, 120f, -120f, 135f, -135f, 150f, -150f, 165f, -165f,
+            180f,
+        };
 
         /// <summary>How far a deploy point must clear a wall or a gate/doorway span (MV-579 item 4):
         /// the sentinel's own body radius (0.25 m, see <see cref="Sentinel"/>'s CreatePrimitive
@@ -981,80 +1001,75 @@ namespace MaxWorlds.Weapons
             return zone?.AreaIndex ?? -1;
         }
 
-        /// <summary>MV-1113 item 3: searches for a sentinel arrival point near Max, trying the full
-        /// <see cref="SentinelArrivalEnemyClearanceMin"/> enemy clearance first and relaxing it in
-        /// <see cref="SentinelArrivalEnemyClearanceStep"/> steps down to
-        /// <see cref="SentinelArrivalEnemyClearanceFloor"/> only when nothing qualifies at a tighter
-        /// clearance. Returns the first relaxation step that finds ANY qualifying candidate, choosing
-        /// (within that step) whichever candidate sits farthest from its own nearest enemy.</summary>
+        /// <summary>MV-1182 item 3: searches for a sentinel arrival point about one robot-length
+        /// behind Max, widening the radius only when nothing qualifies at the tighter one (see
+        /// <see cref="SentinelArrivalRadii"/>). Returns the FIRST candidate that qualifies at the
+        /// first radius that has one — there is no more "farthest from enemy" scoring.</summary>
         private bool TryFindSentinelArrivalPoint(out Vector3 point)
         {
             Vector3 maxPos = transform.position;
             MapData map = EnemyNavigation.Map;
+            Vector3 behindDir = SentinelArrivalBehindDirection();
 
-            for (float clearance = SentinelArrivalEnemyClearanceMin;
-                 clearance >= SentinelArrivalEnemyClearanceFloor - 1e-3f;
-                 clearance -= SentinelArrivalEnemyClearanceStep)
+            foreach (float radius in SentinelArrivalRadii)
             {
-                if (TryBestArrivalCandidate(map, maxPos, clearance, out point)) return true;
+                if (TryBestArrivalCandidate(map, maxPos, behindDir, radius, out point)) return true;
             }
 
             point = maxPos;
             return false;
         }
 
-        private bool TryBestArrivalCandidate(MapData map, Vector3 maxPos, float enemyClearance, out Vector3 best)
+        /// <summary>MV-1182 item 1: "behind" is the flattened opposite of
+        /// <see cref="PlayerController.Facing"/>; world -Z when that flattens to zero length (Max
+        /// facing straight up/down, which <see cref="PlayerController"/> never actually produces —
+        /// this is a degenerate-input guard, not a normal case).</summary>
+        private Vector3 SentinelArrivalBehindDirection()
         {
-            best = maxPos;
-            float bestNearestEnemyDist = -1f;
-            bool found = false;
-
-            int radiusSteps = Mathf.RoundToInt((SentinelArrivalMaxDistance - SentinelArrivalMinDistance) / ArrivalRadiusStep);
-            for (int ri = 0; ri <= radiusSteps; ri++)
-            {
-                float radius = SentinelArrivalMinDistance + ri * ArrivalRadiusStep;
-                for (int ai = 0; ai < ArrivalAngleSamples; ai++)
-                {
-                    float angle = ai * (360f / ArrivalAngleSamples) * Mathf.Deg2Rad;
-                    Vector3 candidate = maxPos + new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
-                    candidate.y = maxPos.y;
-
-                    if (!IsArrivalCandidateValid(map, maxPos, candidate, enemyClearance, out float nearestEnemyDist)) continue;
-
-                    if (nearestEnemyDist > bestNearestEnemyDist)
-                    {
-                        bestNearestEnemyDist = nearestEnemyDist;
-                        best = candidate;
-                        found = true;
-                    }
-                }
-            }
-            return found;
+            Vector3 facing = _playerController != null ? _playerController.Facing : Vector3.zero;
+            Vector3 flatFacing = new Vector3(facing.x, 0f, facing.z);
+            if (flatFacing.sqrMagnitude < 1e-6f) return Vector3.back; // world -Z
+            return -flatFacing.normalized;
         }
 
-        /// <summary>Every predicate from ticket item 3 except the distance-from-Max band, which is
-        /// guaranteed by construction (<see cref="TryBestArrivalCandidate"/> only ever samples within
-        /// [<see cref="SentinelArrivalMinDistance"/>, <see cref="SentinelArrivalMaxDistance"/>]).</summary>
-        private bool IsArrivalCandidateValid(MapData map, Vector3 maxPos, Vector3 candidate, float enemyClearance, out float nearestEnemyDist)
+        /// <summary>Walks <see cref="ArrivalAngleOffsetsDeg"/> in order at a single radius, returning
+        /// the first candidate that satisfies every <see cref="IsArrivalCandidateValid"/> predicate.</summary>
+        private bool TryBestArrivalCandidate(MapData map, Vector3 maxPos, Vector3 behindDir, float radius, out Vector3 best)
         {
-            nearestEnemyDist = float.MaxValue;
+            foreach (float offsetDeg in ArrivalAngleOffsetsDeg)
+            {
+                Vector3 dir = Quaternion.AngleAxis(offsetDeg, Vector3.up) * behindDir;
+                Vector3 candidate = maxPos + dir * radius;
+                candidate.y = maxPos.y;
 
+                if (IsArrivalCandidateValid(map, maxPos, candidate))
+                {
+                    best = candidate;
+                    return true;
+                }
+            }
+
+            best = maxPos;
+            return false;
+        }
+
+        /// <summary>Every predicate from ticket item 4 except the distance-from-Max band, which is
+        /// guaranteed by construction (<see cref="TryBestArrivalCandidate"/> only ever samples at one
+        /// of <see cref="SentinelArrivalRadii"/>).</summary>
+        private bool IsArrivalCandidateValid(MapData map, Vector3 maxPos, Vector3 candidate)
+        {
             // On Max's own level, on walkable ground inside Max's current area.
             if (map != null && !map.IsWalkable(maxPos, candidate)) return false;
 
-            // At least `enemyClearance` from every awake enemy robot and boss.
+            // At least SentinelArrivalEnemyClearanceFloor from every awake enemy robot and boss.
             foreach (RobotEnemy robot in RobotEnemy.Active)
             {
                 if (robot == null || !robot.IsAwake) continue;
-                float d = FlatDistance(robot.transform.position, candidate);
-                if (d < nearestEnemyDist) nearestEnemyDist = d;
-                if (d < enemyClearance) return false;
+                if (FlatDistance(robot.transform.position, candidate) < SentinelArrivalEnemyClearanceFloor) return false;
             }
             foreach (Vector3 bossPos in BossCensus.LivingPositions())
             {
-                float d = FlatDistance(bossPos, candidate);
-                if (d < nearestEnemyDist) nearestEnemyDist = d;
-                if (d < enemyClearance) return false;
+                if (FlatDistance(bossPos, candidate) < SentinelArrivalEnemyClearanceFloor) return false;
             }
 
             // At least SentinelPlacementClearance from other sentinels.
@@ -1071,10 +1086,22 @@ namespace MaxWorlds.Weapons
                 return false;
             }
 
+            // MV-1182: Max himself must be able to walk there in a straight line — a sphere-cast
+            // sized to the sentinel's own body catches a pipe run, barrier, fence, hedge or pen wall
+            // even when it is too low for LineOfSight.Clear below to ever notice.
+            Vector3 delta = candidate - maxPos;
+            float dist = delta.magnitude;
+            if (CoverLayer.Exists && dist > 1e-3f &&
+                Physics.SphereCast(maxPos, SentinelArrivalWalkCheckRadius, delta / dist, out _, dist,
+                                    CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+            {
+                return false;
+            }
+
             // Not in sludge.
             if (MapSlowZones.Instance.SpeedMultiplierAt(candidate) < 1f) return false;
 
-            // Clear line of sight to Max.
+            // Clear line of sight to Max — redundant after the sphere-cast above; kept, it's cheap.
             if (!LineOfSight.Clear(candidate, maxPos)) return false;
 
             return true;
