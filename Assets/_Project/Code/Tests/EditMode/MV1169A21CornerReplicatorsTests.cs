@@ -20,6 +20,15 @@ namespace MaxWorlds.Tests.EditMode
     /// Fails on 06c0566 (pre-MV-1169 world2_config.json, a21 authors no Replicators) — the
     /// <c>reps.Count == 4</c> assertion fails with "Expected: 4 But was: 0". See the fix comment for the
     /// quoted failure.
+    ///
+    /// MV-1169 defect 2: the flood fill below is collider-only (<see cref="IsBlocked"/>) and raw sludge
+    /// carries no collider at all, so this clause proves only "no collider blocks the route" — it would
+    /// pass even if the true route were sludge all the way, and does NOT prove a dry walkable path. a21's
+    /// four sludge rects are channel-eligible (narrower dimension ≤ StormdrainDressing's 8 m ceiling) and
+    /// so get bridged by walkable crossing planks (MV-1087), which is why the route is in fact dry — but
+    /// that fact is established by reading the dressing code, not by this test. Deliberately NOT swapped
+    /// for a hazard-aware predicate (MV-1164's): g24's own mouth sits inside a21_sludge3, so a hazard-aware
+    /// fill would fail at the opening before it ever reached a Replicator.
     /// </summary>
     public sealed class MV1169A21CornerReplicatorsTests
     {
@@ -31,6 +40,14 @@ namespace MaxWorlds.Tests.EditMode
 
         private const float OpeningSearchRadiusCells = 6;
         private const float CornerBudget = 10f;
+
+        // MV-1169 defect 1: a21_rep4's footprint sits exactly flush against a21_sludge2/3 (0.00 m on
+        // two sides). Rect.Overlaps is strict (xMax > xMin, not >=), so a bare Overlaps call cannot
+        // distinguish "touching" from "clear" — both read as false. Naming the budget (0 m: touching is
+        // tolerated, penetration is not) and inflating the hazard rect by it before the Overlaps call
+        // makes the margin a visible number instead of a silent boundary case, so a future nudge that
+        // pushes a Replicator into the hazard — rather than just up against it — is what actually trips.
+        private const float MinClearanceMeters = 0f;
 
         [SetUp]
         public void SetUp()
@@ -157,13 +174,18 @@ namespace MaxWorlds.Tests.EditMode
         {
             foreach (Rect z in zones)
             {
-                if (footprint.Overlaps(z))
+                Rect inflated = Inflate(z, MinClearanceMeters);
+                if (footprint.Overlaps(inflated))
                 {
-                    violations.Add($"'{id}' at {footprint.center} overlaps {label} at {z.center}");
+                    violations.Add($"'{id}' at {footprint.center} is within {MinClearanceMeters:0.##} m of " +
+                                   $"{label} at {z.center} (required clearance not met)");
                     return;
                 }
             }
         }
+
+        private static Rect Inflate(Rect r, float margin) =>
+            Rect.MinMaxRect(r.xMin - margin, r.yMin - margin, r.xMax + margin, r.yMax + margin);
 
         /// <summary>The point just outside a Replicator's own IN face — where Max/a robot actually
         /// stands to queue — matching <see cref="WorldReplicator.facing"/>'s own convention.</summary>
