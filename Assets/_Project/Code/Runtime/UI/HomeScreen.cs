@@ -268,15 +268,16 @@ namespace MaxWorlds.UI
         ///
         /// <paramref name="maxRig"/> selects which populated state the button hands the tester:
         /// <list type="bullet">
-        /// <item>false (WORLD 2, MV-737; SUPPORT carve-out MV-1095): World 1's own EXIT state —
-        /// ENERGY/MOVE additionally unlocked and maxed to World 1's own level caps
-        /// (<see cref="UnlockAndMaxCategory"/>, capped via <see cref="RigBoard.SnapshotMaxLevels"/> —
-        /// MV-856: never World 2's own higher caps/extra nodes, which stay for the player to buy in
-        /// World 2), PRIMARY left on the morph's owned-but-unupgraded floor, SECONDARY mystery-locked
-        /// untouched, SUPPORT LOCKED (MV-1095: a real player arriving this way has it locked too, same
-        /// as SECONDARY — <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already remembers
+        /// <item>false (MV-737; SUPPORT carve-out MV-1095; generalised off a literal World 1 by
+        /// MV-1180): the PREVIOUS world's own EXIT state — ENERGY/MOVE (and SECONDARY, when
+        /// <see cref="WorldDefinition.CarrySecondaryAcrossMorph"/> is set) additionally unlocked and
+        /// maxed to <c>worldIndex - 1</c>'s own level caps (<see cref="UnlockAndMaxCategory"/>, capped
+        /// via <see cref="RigBoard.SnapshotMaxLevels"/> — MV-856: never this world's own higher
+        /// caps/extra nodes, which stay for the player to buy in here), PRIMARY left on the morph's
+        /// owned-but-unupgraded floor, SUPPORT LOCKED (MV-1095: a real player arriving this way has it
+        /// locked too — <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already remembers
         /// whatever this dev jump would otherwise have maxed, which is nothing on a fresh dev slot),
-        /// exactly as a player who cleared World 1 would arrive.</item>
+        /// exactly as a player who cleared the previous world would arrive.</item>
         /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
         /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>
         /// (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content, not to make the tester
@@ -301,19 +302,29 @@ namespace MaxWorlds.UI
             }
             else
             {
-                // MV-856: cap at World 1's own levels, not whichever board ApplyWeaponCoreMorph just
-                // switched RigBoard onto (World 2's, which raises existing caps, e.g. e_ff's maxLevel
-                // 8 -> 10) — a WORLD 2 start must arrive exactly as a player who cleared World 1 would,
-                // with World 2's own higher ceilings left for the player to buy into in World 2.
-                // MV-1157: e_cmg (Cell Magneto) is no longer a World-2-only addition here — it now
+                // MV-856: cap at the PREVIOUS world's own levels, not whichever board
+                // ApplyWeaponCoreMorph just switched RigBoard onto (which raises existing caps, e.g.
+                // World 2's e_ff maxLevel 8 -> 10) — a dev start must arrive exactly as a player who
+                // cleared that previous world would, with this world's own higher ceilings left for
+                // the player to buy into here. MV-1180: generalised off the literal World 1 this used
+                // to read for every row — each row now caps at whichever world came immediately before
+                // it. MV-1157: e_cmg (Cell Magneto) is no longer a World-2-only addition here — it now
                 // lives on World 1's own board too, so this cap sweep maxes it like any other owned
-                // ENERGY node, same as a player who actually earned it in World 1 would have.
-                IReadOnlyDictionary<string, int> world1MaxLevels = RigBoard.SnapshotMaxLevels(0);
-                UnlockAndMaxCategory("ENERGY", world1MaxLevels);
-                UnlockAndMaxCategory("MOVE", world1MaxLevels);
+                // ENERGY node, same as a player who actually earned it in that previous world would
+                // have.
+                int previousWorld = worldIndex - 1;
+                IReadOnlyDictionary<string, int> caps = RigBoard.SnapshotMaxLevels(previousWorld);
+                UnlockAndMaxCategory("ENERGY", caps);
+                UnlockAndMaxCategory("MOVE", caps);
+                // MV-1180: SECONDARY carries too, on a row whose Weapon Core morph keeps the previous
+                // world's SECONDARY ids on its own board (today, the City and the Reef) — same reason
+                // ENERGY/MOVE carry: a real player arriving here kept whatever they'd already earned.
+                if (WorldCatalog.Get(worldIndex).CarrySecondaryAcrossMorph)
+                    UnlockAndMaxCategory("SECONDARY", caps);
                 // MV-1095: SUPPORT is deliberately NOT unlocked/maxed here any more — a real player
                 // arriving this way has the family LOCKED (ApplyWeaponCoreMorph above already does
-                // that), re-earned through this world's own cadence, same as SECONDARY.
+                // that), re-earned through this world's own cadence, same as SECONDARY (when it isn't
+                // carried).
             }
         }
 
@@ -321,6 +332,26 @@ namespace MaxWorlds.UI
         /// one-line call onto <see cref="StartSlotWorld"/> so it can never drift from it (MV-726
         /// AC4). Unchanged by MV-736: still world 1, maxRig: false.</summary>
         public static void StartSlotWorld2(int slot) => StartSlotWorld(slot, worldIndex: WorldCatalog.IndexOf(WorldIds.Stormdrain), maxRig: false);
+
+        /// <summary>The DEV row's own per-world entry point (MV-1180) — reads
+        /// <see cref="WorldDefinition.DevStart"/> off <paramref name="worldIndex"/>'s own catalog row
+        /// and routes to whichever populated state that row asks for, replacing the old
+        /// <c>capturedIndex &gt;= 2</c> rule that handed every row from World 3 up a fully maxed rig
+        /// regardless of which world it actually was (the rule the City's insertion broke — see this
+        /// ticket's own "Now"). Public static and side-effect-pure of any UI, same reason
+        /// <see cref="StartSlotWorld"/> is.</summary>
+        public static void StartDevWorld(int slot, int worldIndex)
+        {
+            DevStartLoadout devStart = WorldCatalog.Get(worldIndex).DevStart;
+            if (devStart == DevStartLoadout.FreshRun)
+            {
+                WipeFreshWorld(slot, worldIndex);
+            }
+            else
+            {
+                StartSlotWorld(slot, worldIndex, maxRig: devStart == DevStartLoadout.MaxedRig);
+            }
+        }
 
         /// <summary>MV-736: fully maxes THE RIG for whichever board is currently active (already
         /// switched onto <paramref name="worldIndex"/>'s board by the caller's own
@@ -432,11 +463,13 @@ namespace MaxWorlds.UI
         /// just saved. <see cref="SaveSystem.ActiveSlot"/> is already set by the time the reload's own
         /// <see cref="Start"/> runs, which is what stops Home reopening on it (same guard the
         /// Replay-triggered reload relies on) — and <see cref="RigState"/>/<see cref="WeaponSystemState"/>
-        /// are plain static state, untouched by a scene reload, so the rig <see cref="StartSlotWorld"/>
-        /// just seeded survives it exactly as <c>WorldIndex</c> does.</summary>
-        private void OnWorldDevStart(int slot, int worldIndex, bool maxRig)
+        /// are plain static state, untouched by a scene reload, so the rig <see cref="StartDevWorld"/>
+        /// just seeded survives it exactly as <c>WorldIndex</c> does. MV-1180: routes through
+        /// <see cref="StartDevWorld"/>, which reads each row's own <see cref="WorldDefinition.DevStart"/>,
+        /// rather than taking a <c>maxRig</c> bool decided by the caller.</summary>
+        private void OnWorldDevStart(int slot, int worldIndex)
         {
-            StartSlotWorld(slot, worldIndex, maxRig);
+            StartDevWorld(slot, worldIndex);
             Time.timeScale = 1f;
             Scene scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
@@ -444,14 +477,14 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-1151: the same fresh-run wipe PLAY/<see cref="StartSlot"/> always runs, but
         /// (dev-only) also forces the slot onto <paramref name="worldIndex"/> regardless of how far the
-        /// profile has already progressed — shared by the W1 dev button (<see cref="OnWorldDevStartFreshWorld"/>,
-        /// row 0) and LAST AREA's own empty-slot fallback (<see cref="OnDevFinalAreaTapped"/>), which has
-        /// nothing to jump to until this seeds one. No <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>
-        /// call here: <see cref="WipeForFreshRun"/>'s own <see cref="WeaponSystemState.Reset"/> already
-        /// lands RigBoard on World 1's own baseline board via the same
-        /// <see cref="WeaponSystemState.ApplyWorldLoadout"/>(0) call every other fresh-profile path uses —
-        /// a literal 0 passed in by both callers below is that same baseline, not a hand-rolled second
-        /// one.</summary>
+        /// profile has already progressed — shared by the W1 dev button (<see cref="StartDevWorld"/>'s
+        /// own <c>DevStartLoadout.FreshRun</c> route, MV-1180) and LAST AREA's own empty-slot fallback
+        /// (<see cref="OnDevFinalAreaTapped"/>), which has nothing to jump to until this seeds one. No
+        /// <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> call here: <see cref="WipeForFreshRun"/>'s
+        /// own <see cref="WeaponSystemState.Reset"/> already lands RigBoard on World 1's own baseline
+        /// board via the same <see cref="WeaponSystemState.ApplyWorldLoadout"/>(0) call every other
+        /// fresh-profile path uses — a literal 0 passed in by both callers below is that same baseline,
+        /// not a hand-rolled second one.</summary>
         private static void WipeFreshWorld(int slot, int worldIndex)
         {
             WipeForFreshRun(slot);
@@ -460,19 +493,6 @@ namespace MaxWorlds.UI
             data.WorldIndex = worldIndex;
             data.WeaponCorePending = false;
             SaveSystem.Save(slot, data);
-        }
-
-        /// <summary>W1 dev entry point (MV-1151, DEV row index 0): <see cref="WipeFreshWorld"/>, then the
-        /// same post-wipe scene reload <see cref="OnWorldDevStart"/> runs. Unlike PLAY (which never
-        /// reloads the scene, and so plays through whatever world the Home screen scene already happened
-        /// to be built as), this always rebuilds at <paramref name="worldIndex"/> so the button genuinely
-        /// means that world regardless of what the slot's profile had progressed to.</summary>
-        private void OnWorldDevStartFreshWorld(int slot, int worldIndex)
-        {
-            WipeFreshWorld(slot, worldIndex);
-            Time.timeScale = 1f;
-            Scene scene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(scene.buildIndex);
         }
 
         /// <summary>RESUME tapped on a slot carrying a checkpoint (MV-524 part 3) — restores it and
@@ -605,7 +625,7 @@ namespace MaxWorlds.UI
         ///
         /// MV-1151: interactable on every slot now, including an empty one — there is nothing to jump to
         /// on an empty slot yet, so this runs row 0's own fresh-World-1 wipe first
-        /// (<see cref="WipeFreshWorld"/>, the exact one <see cref="OnWorldDevStartFreshWorld"/> runs)
+        /// (<see cref="WipeFreshWorld"/>, the same one row 0's <see cref="StartDevWorld"/> route runs)
         /// before resolving the jump below exactly as on an occupied slot.</summary>
         private void OnDevFinalAreaTapped(int slot)
         {
@@ -856,12 +876,14 @@ namespace MaxWorlds.UI
         ///
         /// MV-1151: one button per <see cref="WorldCatalog"/> row (index 0 to <see cref="WorldCatalog.Count"/>
         /// - 1, label "W" + (index + 1)), in index order, then one LAST AREA button — nothing here names a
-        /// world by number, so a row added to the catalog gets a button with no edit here. Row 0 is a
-        /// fresh World 1 run (today's PLAY shape, no intro — <see cref="OnWorldDevStartFreshWorld"/>); row
-        /// 1 keeps the old WORLD 2 button's own shape (World 1's own exit rig, maxRig false); every row
-        /// from 2 up keeps the old WORLD 3 button's own shape (a fully maxed rig) — the City's own dev
-        /// loadout, once it lands at row 2, is a later ticket's job, not this one's. Every world button is
-        /// interactable on every slot, empty or not. LAST AREA is now interactable on every slot too
+        /// world by number, so a row added to the catalog gets a button with no edit here. MV-1180: every
+        /// button calls <see cref="OnWorldDevStart"/>, which reads that row's own
+        /// <see cref="WorldDefinition.DevStart"/> — a fresh World 1 run for row 0 (today's PLAY shape, no
+        /// intro), the previous world's own exit rig for a row whose <c>DevStart</c> is
+        /// <c>PreviousWorldExitRig</c>, a fully maxed rig for one whose <c>DevStart</c> is
+        /// <c>MaxedRig</c> — replacing the old literal <c>capturedIndex == 0</c> / <c>&gt;= 2</c> rules,
+        /// which the City's insertion at row 2 broke. Every world button is interactable on every slot,
+        /// empty or not. LAST AREA is now interactable on every slot too
         /// (MV-1151, superseding MV-1057's occupied-only gate) via <see cref="OnDevFinalAreaTapped"/>'s
         /// own empty-slot fallback.
         ///
@@ -923,16 +945,11 @@ namespace MaxWorlds.UI
                     int capturedIndex = i;
                     string label = "W" + (i + 1);
 
-                    UnityEngine.Events.UnityAction onClick;
-                    if (capturedIndex == 0)
-                    {
-                        onClick = () => OnWorldDevStartFreshWorld(capturedSlot, capturedIndex);
-                    }
-                    else
-                    {
-                        bool maxRig = capturedIndex >= 2;
-                        onClick = () => OnWorldDevStart(capturedSlot, capturedIndex, maxRig);
-                    }
+                    // MV-1180: every row now routes through StartDevWorld, which reads that row's own
+                    // WorldDefinition.DevStart — replaces the old capturedIndex == 0 / >= 2 rules,
+                    // which hard-coded "row 0 is fresh, every row from 2 up is maxed" and broke the
+                    // moment the City's insertion put a non-maxed row at index 2.
+                    UnityEngine.Events.UnityAction onClick = () => OnWorldDevStart(capturedSlot, capturedIndex);
 
                     BuildButton(label, x, shareWidth, true, onClick);
                     x += shareWidth + gap;
