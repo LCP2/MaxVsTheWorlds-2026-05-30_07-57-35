@@ -202,11 +202,13 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             // --- AC1d: ResetForTests (called in the finally block above) restores the shipped rows:
-            // same count, same ids, in the same order, as before UseForTests. ---
-            Assert.AreEqual(3, WorldCatalog.Count, "ResetForTests must restore exactly the three shipped rows");
+            // same count, same ids, in the same order, as before UseForTests. MV-1176: the Reef and the
+            // City are resolved by Id, not literal index, now that the City sits between them. ---
+            Assert.AreEqual(4, WorldCatalog.Count, "ResetForTests must restore every shipped row, City included");
             Assert.AreEqual(WorldIds.Backyard, WorldCatalog.Get(0).Id);
             Assert.AreEqual(WorldIds.Stormdrain, WorldCatalog.Get(1).Id);
-            Assert.AreEqual(WorldIds.Reef, WorldCatalog.Get(2).Id);
+            Assert.AreEqual(WorldIds.City, WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.City)).Id);
+            Assert.AreEqual(WorldIds.Reef, WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef)).Id);
         }
     }
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -26,7 +27,9 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class MV1029WorldThreePartsFaucetTests
     {
-        private const int WorldThreeIndex = 2;   // 0-based: World 1 = 0, World 2 = 1, World 3 = 2
+        // MV-1176: resolved by Id, not a literal index — the City's insertion moved the Reef
+        // (the row this test actually means by "World 3") from index 2 to index 3.
+        private static int WorldThreeIndex => WorldCatalog.IndexOf(WorldIds.Reef);
         private const int AreaFive = 5;
         private const int LargeKillsInArea = 6;   // divides 2 x CellsForArea(5) == 18 evenly
 

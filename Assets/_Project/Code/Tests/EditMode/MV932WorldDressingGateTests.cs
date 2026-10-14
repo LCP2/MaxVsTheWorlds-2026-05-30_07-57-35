@@ -124,10 +124,11 @@ namespace MaxWorlds.Tests.EditMode
 
                 var path = pathGo.AddComponent<BackyardPath>();
 
-                // Reproduces BackyardPath.Awake's own World 3 branch (worldIndex >= 2), the same
+                // Reproduces BackyardPath.Awake's own World 3 (Reef) branch, resolved by the Reef's own
+                // row rather than a literal index — MV-1176 moved the Reef from index 2 to index 3. Same
                 // reflection idiom MV755StormdrainDressingTests already uses for the World 2 branch.
                 typeof(BackyardPath).GetMethod("ApplyWorldMaterials", BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Invoke(path, new object[] { 2, host.transform, built.Cover });
+                    .Invoke(path, new object[] { WorldCatalog.IndexOf(WorldIds.Reef), host.transform, built.Cover });
 
                 MapStaticBatchRoot batchRoot = GetBatchRoot(host, map);
                 InvokePrivate(batchRoot, "Start");

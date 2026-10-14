@@ -41,25 +41,30 @@ namespace MaxWorlds.Tests.EditMode
             File.ReadAllText(Path.Combine(_dir, $"save_slot_{slot}.json"));
 
         [Test]
-        public void OldSave_MigratesToVersion1_UnchangedOtherwise_AndSaveStampsIt()
+        public void OldSave_MigratesToCurrentVersion_UnchangedOtherwise_AndSaveStampsIt()
         {
+            // MV-1176: WorldIndex 0 (below the City's insertion point, CityInsertedAtSaveV2 = 2) stays
+            // unshifted by the real shipped 1->2 step, so this generic "migration doesn't otherwise touch
+            // data" test stays decoupled from the specific world-shifting behaviour its own sibling test
+            // (AStepThatMovesWorlds...) already covers.
             WriteSlotJson(0,
-                "{\"HasData\":true,\"WorldIndex\":2,\"FurthestWorldIndex\":2,\"HasRunInProgress\":true," +
-                "\"CheckpointAreaIndex\":7,\"CheckpointWorldIndex\":2,\"CheckpointRigBoardWorldIndex\":2}");
+                "{\"HasData\":true,\"WorldIndex\":0,\"FurthestWorldIndex\":0,\"HasRunInProgress\":true," +
+                "\"CheckpointAreaIndex\":7,\"CheckpointWorldIndex\":0,\"CheckpointRigBoardWorldIndex\":0}");
 
             SaveSlotData data = SaveSystem.Load(0);
 
-            Assert.That(data.SaveVersion, Is.EqualTo(1), "a save with no SaveVersion key must migrate to version 1");
-            Assert.That(data.WorldIndex, Is.EqualTo(2));
-            Assert.That(data.FurthestWorldIndex, Is.EqualTo(2));
+            Assert.That(data.SaveVersion, Is.EqualTo(SaveSystem.CurrentSaveVersion),
+                "a save with no SaveVersion key must migrate all the way to the current version");
+            Assert.That(data.WorldIndex, Is.EqualTo(0));
+            Assert.That(data.FurthestWorldIndex, Is.EqualTo(0));
             Assert.That(data.HasRunInProgress, Is.True);
             Assert.That(data.CheckpointAreaIndex, Is.EqualTo(7));
-            Assert.That(data.CheckpointWorldIndex, Is.EqualTo(2));
-            Assert.That(data.CheckpointRigBoardWorldIndex, Is.EqualTo(2));
+            Assert.That(data.CheckpointWorldIndex, Is.EqualTo(0));
+            Assert.That(data.CheckpointRigBoardWorldIndex, Is.EqualTo(0));
 
             SaveSystem.Save(0, data);
 
-            Assert.That(ReadSlotJson(0), Does.Contain("\"SaveVersion\":1"));
+            Assert.That(ReadSlotJson(0), Does.Contain($"\"SaveVersion\":{SaveSystem.CurrentSaveVersion}"));
         }
 
         [Test]

@@ -164,8 +164,9 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(path2.gameObject);
                 path2 = null;
 
-                // --- World 3 (resolved world index 2): new green body/accent, pale-gold eye, 1.6x green bolt ---
-                path3 = NewResolvedPath(2);
+                // --- World 3 (the Reef — MV-1176 moved it to resolved world index 3, now that the City
+                // sits at index 2): new green body/accent, pale-gold eye, 1.6x green bolt ---
+                path3 = NewResolvedPath(WorldCatalog.IndexOf(WorldIds.Reef));
                 sentinel3 = new GameObject("MV1069 Sentinel W3").AddComponent<Sentinel>();
                 sentinel3.Init(World3Origin, maxHp: 60f, range: 7f, fireInterval: 0.6f,
                     moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);

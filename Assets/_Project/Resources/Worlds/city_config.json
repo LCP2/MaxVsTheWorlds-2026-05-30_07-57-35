@@ -1,0 +1,179 @@
+{
+  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
+  "world": "World 3 — The City",
+  "revision": "MV-1176 2026-10-15: first authored pass, Market Street (a1) off the approved drawing cityA2.html.",
+  "note": "Market Street dressing (MV-1177) and the climb-corridor arrival (MV-1178) land in later tickets; this config is table/geometry/garrison only.",
+  "units": "1 world unit = 1 metre",
+  "wallHeight": 3,
+  "pressureNoun": "",
+  "pressureCaption": "",
+  "dials": {
+    "areaCount": 1,
+    "baseThreat": 20,
+    "threatGrowth": 0.1,
+    "band": {
+      "up": 0.4,
+      "down": -0.15
+    },
+    "pacingRhythm": [
+      1.0
+    ],
+    "toughnessCurve": {
+      "heavyFromArea": 8,
+      "bruteFromArea": 11,
+      "gunnerFromArea": 5,
+      "launcherFromArea": 10,
+      "blinkerFromArea": 9
+    },
+    "powerupCadence": 2
+  },
+  "enemyTypes": {
+    "small": {
+      "thv": 1.2
+    },
+    "large": {
+      "thv": 1.41
+    },
+    "heavy": {
+      "thv": 5.38
+    },
+    "brute": {
+      "thv": 8.53
+    },
+    "gunner": {
+      "thv": 3.0
+    },
+    "turret": {
+      "thv": 2.5
+    }
+  },
+  "enemyOverrides": [
+    {
+      "kind": "rusher",
+      "displayName": "COURIER"
+    },
+    {
+      "kind": "turret",
+      "displayName": "STOPLIGHT"
+    }
+  ],
+  "gates": [
+    {
+      "id": "g0",
+      "from": {
+        "area": "stub",
+        "wall": "E",
+        "pos": 0.5
+      },
+      "to": {
+        "area": "a1",
+        "wall": "W",
+        "pos": 0.145833
+      },
+      "width": 3,
+      "opensWith": "start"
+    }
+  ],
+  "areas": [
+    {
+      "id": "stub",
+      "index": 0,
+      "name": "Roadworks Hole",
+      "role": "entry",
+      "origin": {
+        "x": 0,
+        "z": 0.5
+      },
+      "size": {
+        "w": 6,
+        "d": 6
+      },
+      "hasShed": false,
+      "garrisonDensity": "none"
+    },
+    {
+      "id": "a1",
+      "index": 1,
+      "name": "Market Street",
+      "role": "exit",
+      "origin": {
+        "x": 6,
+        "z": 0
+      },
+      "size": {
+        "w": 44,
+        "d": 24
+      },
+      "hasShed": false,
+      "garrisonDensity": "light",
+      "composition": {
+        "rusher": 8,
+        "bruiser": 4,
+        "gunner": 4,
+        "turret": 2
+      },
+      "cover": [
+        { "id": "a1_c1", "x": 9, "z": 15, "width": 0.6, "depth": 2.0, "height": 1.0, "shape": "box", "dressing": "barrier" },
+        { "id": "a1_c2", "x": 9, "z": 9, "width": 0.6, "depth": 2.0, "height": 1.0, "shape": "box", "dressing": "barrier" },
+        { "id": "a1_c3", "x": 9, "z": 12, "width": 1.9, "depth": 0.5, "height": 1.4, "shape": "box", "dressing": "roadSign" },
+        { "id": "a1_c4", "x": 17, "z": 5.8, "width": 6.0, "depth": 2.2, "height": 1.6, "shape": "box", "dressing": "truck" },
+        { "id": "a1_c5", "x": 21.9, "z": 6.15, "width": 1.2, "depth": 1.2, "height": 1.0, "shape": "box", "dressing": "pallet" },
+        { "id": "a1_c6", "x": 24.05, "z": 5.75, "width": 1.2, "depth": 1.2, "height": 1.0, "shape": "box", "dressing": "pallet" },
+        { "id": "a1_c7", "x": 23.0, "z": 4.25, "width": 1.2, "depth": 1.2, "height": 1.0, "shape": "box", "dressing": "pallet" },
+        { "id": "a1_c8", "x": 15, "z": 20, "width": 3.0, "depth": 1.4, "height": 1.5, "shape": "box", "dressing": "flowerStall" },
+        { "id": "a1_c9", "x": 25, "z": 20.5, "width": 3.0, "depth": 1.2, "height": 1.0, "shape": "box", "dressing": "fruitStall" },
+        { "id": "a1_c10", "x": 30, "z": 18, "width": 0.5, "depth": 0.5, "height": 1.6, "shape": "cylinder", "dressing": "clockPost" },
+        { "id": "a1_c11", "x": 40, "z": 21, "width": 2.0, "depth": 1.0, "height": 1.1, "shape": "box", "dressing": "bookCart" },
+        { "id": "a1_c12", "x": 43, "z": 15.4, "width": 6.0, "depth": 2.2, "height": 1.6, "shape": "box", "dressing": "bus" },
+        { "id": "a1_c13", "x": 30.1, "z": 4.0, "width": 1.8, "depth": 0.9, "height": 0.8, "shape": "box", "dressing": "cafeTable" },
+        { "id": "a1_c14", "x": 33.7, "z": 4.2, "width": 1.8, "depth": 0.9, "height": 0.8, "shape": "box", "dressing": "cafeTable" },
+        { "id": "a1_c15", "x": 30.5, "z": 1.5, "width": 1.8, "depth": 0.9, "height": 0.8, "shape": "box", "dressing": "cafeTable" },
+        { "id": "a1_c16", "x": 34.0, "z": 1.7, "width": 1.8, "depth": 0.9, "height": 0.8, "shape": "box", "dressing": "cafeTable" },
+        { "id": "a1_c17", "x": 29.3, "z": 6.05, "width": 1.6, "depth": 0.5, "height": 0.6, "shape": "box", "dressing": "planterBox" },
+        { "id": "a1_c18", "x": 31.1, "z": 6.05, "width": 1.6, "depth": 0.5, "height": 0.6, "shape": "box", "dressing": "planterBox" },
+        { "id": "a1_c19", "x": 32.9, "z": 6.05, "width": 1.6, "depth": 0.5, "height": 0.6, "shape": "box", "dressing": "planterBox" },
+        { "id": "a1_c20", "x": 34.7, "z": 6.05, "width": 1.6, "depth": 0.5, "height": 0.6, "shape": "box", "dressing": "planterBox" },
+        { "id": "a1_c21", "x": 43, "z": 1.4, "width": 4.0, "depth": 0.6, "height": 1.5, "shape": "box", "dressing": "lockers" },
+        { "id": "a1_c22", "x": 10, "z": 22, "width": 3.1, "depth": 1.0, "height": 0.9, "shape": "box", "dressing": "bikeRack", "coverKind": "see_through" },
+        { "id": "a1_c23", "x": 12, "z": 17.55, "width": 0.3, "depth": 0.3, "height": 1.6, "shape": "cylinder", "dressing": "lampPost" },
+        { "id": "a1_c24", "x": 25.8, "z": 6.45, "width": 0.3, "depth": 0.3, "height": 1.6, "shape": "cylinder", "dressing": "lampPost" },
+        { "id": "a1_c25", "x": 36, "z": 17.55, "width": 0.3, "depth": 0.3, "height": 1.6, "shape": "cylinder", "dressing": "lampPost" },
+        { "id": "a1_c26", "x": 46.6, "z": 6.45, "width": 0.3, "depth": 0.3, "height": 1.6, "shape": "cylinder", "dressing": "lampPost" },
+        { "id": "a1_c27", "x": 48, "z": 16, "width": 0.4, "depth": 0.4, "height": 0.95, "shape": "cylinder", "dressing": "bollard" },
+        { "id": "a1_c28", "x": 48, "z": 14, "width": 0.4, "depth": 0.4, "height": 0.95, "shape": "cylinder", "dressing": "bollard" },
+        { "id": "a1_c29", "x": 48, "z": 12, "width": 0.4, "depth": 0.4, "height": 0.95, "shape": "cylinder", "dressing": "bollard" },
+        { "id": "a1_c30", "x": 48, "z": 10, "width": 0.4, "depth": 0.4, "height": 0.95, "shape": "cylinder", "dressing": "bollard" },
+        { "id": "a1_c31", "x": 48, "z": 8, "width": 0.4, "depth": 0.4, "height": 0.95, "shape": "cylinder", "dressing": "bollard" },
+        { "id": "a1_c32", "x": 32.3, "z": 18.5, "width": 1.9, "depth": 0.55, "height": 0.9, "shape": "box", "dressing": "bench" },
+        { "id": "a1_c33", "x": 38.4, "z": 1.1, "width": 1.9, "depth": 0.55, "height": 0.9, "shape": "box", "dressing": "bench" },
+        { "id": "a1_c34", "x": 28.5, "z": 17.9, "width": 0.6, "depth": 0.6, "height": 0.9, "shape": "cylinder", "dressing": "bin" },
+        { "id": "a1_c35", "x": 37.3, "z": 3.0, "width": 0.6, "depth": 0.6, "height": 0.9, "shape": "cylinder", "dressing": "bin" },
+        { "id": "a1_c36", "x": 27.4, "z": 19.2, "width": 0.65, "depth": 0.6, "height": 1.0, "shape": "box", "dressing": "aBoard" },
+        { "id": "a1_c37", "x": 11.4, "z": 6.1, "width": 0.55, "depth": 0.55, "height": 1.25, "shape": "cylinder", "dressing": "postBox" },
+        { "id": "a1_c38", "x": 7.4, "z": 1.0, "width": 0.72, "depth": 0.72, "height": 1.0, "shape": "cylinder", "dressing": "tub" },
+        { "id": "a1_c39", "x": 48.8, "z": 1.0, "width": 0.72, "depth": 0.72, "height": 1.0, "shape": "cylinder", "dressing": "tub" },
+        { "id": "a1_c40", "x": 48.9, "z": 17.9, "width": 0.72, "depth": 0.72, "height": 1.0, "shape": "cylinder", "dressing": "tub" }
+      ],
+      "garrison": [
+        { "kind": "rusher", "x": 20.5, "z": 4.0, "level": 0 },
+        { "kind": "rusher", "x": 21.8, "z": 3.4, "level": 0 },
+        { "kind": "rusher", "x": 20.7, "z": 2.6, "level": 0 },
+        { "kind": "rusher", "x": 22.1, "z": 2.4, "level": 0 },
+        { "kind": "rusher", "x": 43.8, "z": 17.95, "level": 0 },
+        { "kind": "rusher", "x": 45.2, "z": 17.75, "level": 0 },
+        { "kind": "rusher", "x": 46.5, "z": 18.2, "level": 0 },
+        { "kind": "rusher", "x": 44.7, "z": 19.0, "level": 0 },
+        { "kind": "bruiser", "x": 29.25, "z": 15.75, "level": 0 },
+        { "kind": "bruiser", "x": 36.75, "z": 15.75, "level": 0 },
+        { "kind": "bruiser", "x": 29.25, "z": 8.25, "level": 0 },
+        { "kind": "bruiser", "x": 36.75, "z": 8.25, "level": 0 },
+        { "kind": "gunner", "x": 24, "z": 22.3, "level": 0 },
+        { "kind": "gunner", "x": 26, "z": 22.5, "level": 0 },
+        { "kind": "gunner", "x": 39.2, "z": 22.9, "level": 0 },
+        { "kind": "gunner", "x": 41.5, "z": 22.5, "level": 0 },
+        { "kind": "turret", "x": 7.7, "z": 13.7, "level": 0 },
+        { "kind": "turret", "x": 48.9, "z": 9.0, "level": 0 }
+      ]
+    }
+  ]
+}

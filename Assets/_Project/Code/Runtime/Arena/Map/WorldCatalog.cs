@@ -17,6 +17,7 @@ namespace MaxWorlds.Arena
     {
         public const string Backyard = "backyard";
         public const string Stormdrain = "stormdrain";
+        public const string City = "city";
         public const string Reef = "reef";
     }
 
@@ -27,6 +28,7 @@ namespace MaxWorlds.Arena
         Garden,
         Stormdrain,
         Reef,
+        City,
     }
 
     /// <summary>Which gate skin a world's own doors wear (MV-1141) — read by both
@@ -130,6 +132,12 @@ namespace MaxWorlds.Arena
         /// <summary>How far a pickup's ground ring alpha is scaled back on this world's own floor — see
         /// <c>PickupArtDirector.ShowRing</c>. 1 = no scaling.</summary>
         public float RingAlphaScale;
+
+        /// <summary>MV-1176: the accent colour a corridor/arrival shell's guide lights point toward when
+        /// leading INTO this world — moved here from <c>WorldJoinSequence.GuideLightAccent</c>'s own
+        /// literal-index switch, which the City's insertion would otherwise have silently fallen through
+        /// on (its default case already resolves to the right tone by luck, not by design).</summary>
+        public Color GuideLightAccent;
 
         // --- MV-1142: weapons, RIG board and economy ---
 
@@ -427,6 +435,7 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = true,
                 Music = MusicWorld.Backyard,
                 RingAlphaScale = 1f,
+                GuideLightAccent = StormdrainKit.Status,
                 RigBoardResourcePath = RigBoardLibrary.World1ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Rcda,
                 SecondaryWeapon = SecondaryKind.WaterBalloon,
@@ -467,6 +476,7 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = false,
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = StormdrainRingAlphaScale,
+                GuideLightAccent = StormdrainKit.Status,
                 RigBoardResourcePath = RigBoardLibrary.World2ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Lppe,
                 SecondaryWeapon = SecondaryKind.ShoulderRack,
@@ -496,6 +506,53 @@ namespace MaxWorlds.Arena
             },
             new WorldDefinition
             {
+                // MV-1176: the City, inserted between the Stormdrain and the Reef — Lee, 13 Oct:
+                // "I NEED THE CITY ADDED AS WORLD THREE AND THE CURRENT WORLD THREE MOVED TO WORLD FOUR."
+                Id = WorldIds.City,
+                ConfigKey = WorldLibrary.City,
+                Palette = BiomePalette.City,
+                Look = BackyardLook.City,
+                Kit = WorldKit.City,
+                GateSkin = WorldGateSkin.None,
+                Style = new SentinelStyle(BodyColor, BodyAccent, EyeColor, emissionFactor: 0.35f,
+                    boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1.6f),
+                FiresWaterBeam = false,
+                Music = MusicWorld.Stormdrain,
+                RingAlphaScale = StormdrainRingAlphaScale,
+                GuideLightAccent = CityKit.NeonPink,
+                RigBoardResourcePath = RigBoardLibrary.World3ResourcePath,
+                // MV-1176 "Do not re-raise": City's Weapon Core morph grants Undertow + Shoulder Rack —
+                // the same loadout the Reef's own board already grants, because it IS the Reef's board
+                // (RigBoardResourcePath above); this is what World 2's Core already hands over, not a
+                // new weapon decision.
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.Undertow,
+                SecondaryWeapon = SecondaryKind.ShoulderRack,
+                CarrySecondaryAcrossMorph = true,
+                SecondaryMysteryLockedOnMorph = false,
+                PrimarySplitSeeded = true,
+                FusionsEnabled = false,
+                PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                UpgradeCostScale = 1f,
+                PartsMultiplier = () => 1f,
+                SupercellCadenceAreas = 2,
+                RackModuleDropsHere = false,
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
+                // MV-1176: a1's own E wall, mouth (50, 20.5) — Market Street's exit into the Reef's own
+                // entry stub.
+                ExitMode = WorldExitMode.Corridor,
+                ExitWall = Wall.E,
+                ExitDoorPos = 0.854166667f,
+                Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.854166667f, corridorLength: 30f,
+                    segmentAEnd: 10f, segmentBEnd: 16f,
+                    arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
+                // MV-1176 "Do not": plain shells into the Reef for now; the Market Street dressing ticket
+                // sets ExitDressing and the climb corridor ticket sets ArrivalDressing.
+                ExitDressing = ExitCorridorDressingKind.None,
+                ArrivalDressing = ArrivalDressingKind.None,
+                RunsLegacyExitGate = false,
+            },
+            new WorldDefinition
+            {
                 Id = WorldIds.Reef,
                 ConfigKey = WorldLibrary.World3,
                 Palette = BiomePalette.Reef,
@@ -509,6 +566,7 @@ namespace MaxWorlds.Arena
                 FiresWaterBeam = false,
                 Music = MusicWorld.Reef,
                 RingAlphaScale = 1f,
+                GuideLightAccent = WorldMaterials.ReefLampViolet,
                 RigBoardResourcePath = RigBoardLibrary.World3ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Undertow,
                 SecondaryWeapon = SecondaryKind.ShoulderRack,

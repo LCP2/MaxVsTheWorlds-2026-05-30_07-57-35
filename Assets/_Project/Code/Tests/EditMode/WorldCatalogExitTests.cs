@@ -62,30 +62,35 @@ namespace MaxWorlds.Tests.EditMode
         {
             WorldDefinition backyard = WorldCatalog.Get(0);
             WorldDefinition stormdrain = WorldCatalog.Get(1);
-            WorldDefinition realReef = WorldCatalog.Get(2);
+            WorldDefinition realReef = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef));
 
             WorldConfig world3Cfg = WorldLibrary.Load(WorldLibrary.World3);
             Assert.IsNotNull(world3Cfg, "world3_config failed to load — see the error log above.");
 
             // Not named worlds -- these two are deliberately raw structural positions: "one past
-            // the shipped catalog's end" and "where the probe row below lands", before and after
-            // this test shifts the real Reef one place further out (MV-1146: the guard's patterns
-            // flag a bare literal here, but WorldCatalog.IndexOf(WorldIds...) has no id to resolve
-            // for a row that hasn't been inserted yet, or for "probe").
+            // the shipped catalog's end" and "where the probe row below lands" in the synthetic
+            // 4-row test catalog this test builds further down ({backyard, stormdrain, probe,
+            // realReef} — independent of how many real rows sit between Stormdrain and the Reef
+            // today). probeIndex is pinned to "right after Stormdrain", not to the Reef's own
+            // (now-shifted, MV-1176) real index -- those two coincided before the City existed, but
+            // no longer do (MV-1146: the guard's patterns flag a bare literal here, but
+            // WorldCatalog.IndexOf(WorldIds...) has no id to resolve for a row that hasn't been
+            // inserted yet, or for "probe").
             int pastShippedRows = WorldCatalog.Count;
-            int probeIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+            int probeIndex = WorldCatalog.IndexOf(WorldIds.Stormdrain) + 1;
+            int todayRealReefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
 
-            // On the shipped 3-row catalog, index 3 (past the last row) gets no doorway at all.
+            // Past the shipped catalog's real end, no doorway resolves at all.
             Assert.IsTrue(WorldMapLoader.TryLoad(world3Cfg, out MapData baselineMap, out string baselineReason), baselineReason);
             WorldTransitions.ApplyExitDoorway(baselineMap, world3Cfg, worldIndex: pastShippedRows);
             Assert.IsFalse(baselineMap.exitDoorway.HasValue,
-                "before the probe is inserted, world index 3 (past the shipped rows) must get no doorway");
+                $"before the probe is inserted, world index {pastShippedRows} (past the shipped rows) must get no doorway");
 
-            // What the shipped rows produce for the Reef TODAY, at index 2 — the doorway index 3 must
-            // still produce once the probe pushes the real Reef row one place further out.
+            // What the shipped rows produce for the Reef TODAY, at its own real index — the doorway
+            // must still produce once the probe pushes the real Reef row one place further out.
             Assert.IsTrue(WorldMapLoader.TryLoad(world3Cfg, out MapData expectedMap, out string expectedReason), expectedReason);
-            WorldTransitions.ApplyExitDoorway(expectedMap, world3Cfg, worldIndex: probeIndex);
-            Assert.IsTrue(expectedMap.exitDoorway.HasValue, "the shipped Reef row must resolve a doorway at index 2");
+            WorldTransitions.ApplyExitDoorway(expectedMap, world3Cfg, worldIndex: todayRealReefIndex);
+            Assert.IsTrue(expectedMap.exitDoorway.HasValue, "the shipped Reef row must resolve a doorway at its real index");
             ExitDoorway expected = expectedMap.exitDoorway.Value;
 
             WorldDefinition probe = CloneRowWithId(realReef, "probe");
@@ -99,19 +104,19 @@ namespace MaxWorlds.Tests.EditMode
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, probe, realReef });
             int shiftedReefIndex = probeIndex + 1;
 
-            Assert.IsNotNull(WorldTransitions.For(probeIndex), "the probe's own row (index 2) must resolve a Corridor entry");
-            Assert.AreSame(probe.Entry, WorldTransitions.For(probeIndex), "index 2 must resolve the probe's own entry, not some other row's");
-            Assert.IsNull(WorldTransitions.For(shiftedReefIndex), "the real Reef, now at index 3, must still resolve no corridor (DoorOnly)");
+            Assert.IsNotNull(WorldTransitions.For(probeIndex), $"the probe's own row (index {probeIndex}) must resolve a Corridor entry");
+            Assert.AreSame(probe.Entry, WorldTransitions.For(probeIndex), $"index {probeIndex} must resolve the probe's own entry, not some other row's");
+            Assert.IsNull(WorldTransitions.For(shiftedReefIndex), $"the real Reef, now at index {shiftedReefIndex}, must still resolve no corridor (DoorOnly)");
 
             Assert.IsTrue(WorldMapLoader.TryLoad(world3Cfg, out MapData actualMap, out string actualReason), actualReason);
             WorldTransitions.ApplyExitDoorway(actualMap, world3Cfg, worldIndex: shiftedReefIndex);
-            Assert.IsTrue(actualMap.exitDoorway.HasValue, "the real Reef, now at index 3, must still resolve a doorway");
+            Assert.IsTrue(actualMap.exitDoorway.HasValue, $"the real Reef, now at index {shiftedReefIndex}, must still resolve a doorway");
             ExitDoorway actual = actualMap.exitDoorway.Value;
 
-            Assert.AreEqual(expected.Wall, actual.Wall, "the Reef's doorway wall must not change when it moves to index 3");
-            Assert.AreEqual(expected.Coord, actual.Coord, 0.001f, "the Reef's doorway coordinate must not change when it moves to index 3");
-            Assert.AreEqual(expected.Hole.Min, actual.Hole.Min, 0.001f, "the Reef's doorway span start must not change when it moves to index 3");
-            Assert.AreEqual(expected.Hole.Max, actual.Hole.Max, 0.001f, "the Reef's doorway span end must not change when it moves to index 3");
+            Assert.AreEqual(expected.Wall, actual.Wall, "the Reef's doorway wall must not change when it moves further out");
+            Assert.AreEqual(expected.Coord, actual.Coord, 0.001f, "the Reef's doorway coordinate must not change when it moves further out");
+            Assert.AreEqual(expected.Hole.Min, actual.Hole.Min, 0.001f, "the Reef's doorway span start must not change when it moves further out");
+            Assert.AreEqual(expected.Hole.Max, actual.Hole.Max, 0.001f, "the Reef's doorway span end must not change when it moves further out");
         }
 
         [Test]
@@ -124,7 +129,7 @@ namespace MaxWorlds.Tests.EditMode
                 "world 0's own entry must come straight off its row");
             Assert.AreSame(WorldCatalog.Get(stormdrainIndex).Entry, WorldTransitions.For(stormdrainIndex),
                 "world 1's own entry must come straight off its row");
-            Assert.IsNull(WorldTransitions.For(reefIndex), "world 2 (the Reef) is DoorOnly — it must resolve no corridor entry");
+            Assert.IsNull(WorldTransitions.For(reefIndex), "the Reef is DoorOnly — it must resolve no corridor entry");
 
             for (int i = 0; i < WorldLibrary.Count; i++)
             {
@@ -168,7 +173,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             WorldDefinition backyard = WorldCatalog.Get(0);
             WorldDefinition stormdrain = WorldCatalog.Get(1);
-            WorldDefinition reef = WorldCatalog.Get(2);
+            // MV-1176: must be the real (DoorOnly) Reef, not whatever row now sits at a bare index 2 —
+            // cloning a Corridor-exit row (the City) as this probe's last row would trip the unrelated
+            // "last row must be DoorOnly" check these assertions aren't testing.
+            WorldDefinition reef = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef));
 
             WorldDefinition zeroCostScale = CloneRowWithId(reef, "probe-cost-scale");
             zeroCostScale.UpgradeCostScale = 0f;

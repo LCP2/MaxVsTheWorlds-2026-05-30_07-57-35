@@ -22,8 +22,13 @@ namespace MaxWorlds.Arena
         /// the real level design.</summary>
         public const string World2 = "world2_config";
 
+        /// <summary>The City (MV-1176) — inserted as World 3; the file named <see cref="World3"/>
+        /// keeps naming the Reef, now World 4 (do not rename either file or this constant).</summary>
+        public const string City = "city_config";
+
         /// <summary>World 3 — The Reef (MV-712): 30 areas, a branching gate graph, and the a7-a12
-        /// double-pass loop MV-711's bridges/route engine exists for.</summary>
+        /// double-pass loop MV-711's bridges/route engine exists for. MV-1176: despite the filename,
+        /// this is now World 4 — the City was inserted ahead of it without renaming either.</summary>
         public const string World3 = "world3_config";
 
         /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
