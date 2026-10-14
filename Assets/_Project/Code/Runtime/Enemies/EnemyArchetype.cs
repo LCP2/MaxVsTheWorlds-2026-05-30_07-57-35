@@ -152,7 +152,12 @@ namespace MaxWorlds.Enemies
         ///
         /// MV-289 retuned speed to ~90% of Max's 3.01 (2.71, was YT-169's 1.85/~60%). MV-315 then
         /// baked Lee's dialed-in playtest number, 2.04 (~68% of Max) — the tuning panel's own 70%
-        /// reading, rounded, off the MV-289 default.</summary>
+        /// reading, rounded, off the MV-289 default.
+        ///
+        /// MV-1118 (Lee, device, 2026-10-06): recoverTime 0.7 -> 0.4, paired with
+        /// <see cref="RobotCompositionTuning.DefaultLungeTokenCap"/>'s 2 -> 4 — a full attack cycle
+        /// (telegraph + lunge + recover) shortens 1.47 -> 1.17 s. Damage (12), the 0.55 s telegraph
+        /// dodge window and move speed are deliberately untouched.</summary>
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
@@ -162,7 +167,7 @@ namespace MaxWorlds.Enemies
             maxHealth: 32f,
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
-            lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
+            lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.4f,  // MV-1118: 0.7 -> 0.4
             knockbackDecay: 28f,
             displayName: "RUSHER");
 

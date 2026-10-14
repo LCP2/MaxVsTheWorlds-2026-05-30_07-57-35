@@ -17,7 +17,8 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Change 2 — Rusher and Blinker keep the lunge but must hold a <see cref="LungeTokenPool"/>
     /// token to commit to Telegraph/Lunge, capped at
-    /// <see cref="RobotCompositionTuning.DefaultLungeTokenCap"/> (2) field-wide — which stands in
+    /// <see cref="RobotCompositionTuning.DefaultLungeTokenCap"/> (4, MV-1118 raised this from 2)
+    /// field-wide — which stands in
     /// for "per area" here because this game only ever has one arena's robots actively fighting at
     /// once (see <see cref="LungeTokenPool"/>'s own doc comment).
     ///
@@ -189,7 +190,7 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------ Change 2
 
         [Test]
-        public void EightLungingRobots_AtMostTwoAreInTelegraphOrLunge_OnAnyFrame()
+        public void EightLungingRobots_AtMostFourAreInTelegraphOrLunge_OnAnyFrame()
         {
             var rushers = new RobotEnemy[8];
             for (int i = 0; i < 8; i++)
@@ -204,9 +205,9 @@ namespace MaxWorlds.Tests.EditMode
                     if (e.Current == RobotEnemy.State.Telegraph || e.Current == RobotEnemy.State.Lunge)
                         committed++;
 
-                Assert.LessOrEqual(committed, 2, "at most the token cap may be mid-attack on any frame");
-                Assert.AreEqual(2, committed, "the default cap is 2, and 8 robots all wanting a token must fill it exactly");
-                Assert.AreEqual(2, LungeTokenPool.Held);
+                Assert.LessOrEqual(committed, 4, "at most the token cap may be mid-attack on any frame");
+                Assert.AreEqual(4, committed, "MV-1118's cap is 4, and 8 robots all wanting a token must fill it exactly");
+                Assert.AreEqual(4, LungeTokenPool.Held);
             }
             finally
             {
@@ -217,22 +218,30 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AttackToken_IsReleasedOnRecover_AndOnDeath_SoItCannotDeadlockOrLeak()
         {
+            // MV-1118 raised the cap 2 -> 4, so this needs cap+1 (5) Rushers to still prove a 5th
+            // contender finds no free token while the first four hold it.
             var a = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0f));
             var b = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0.01f));
             var c = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0.02f));
+            var d = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0.03f));
+            var e5 = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0.04f));
             try
             {
-                GiveSight(a); GiveSight(b); GiveSight(c);
+                GiveSight(a); GiveSight(b); GiveSight(c); GiveSight(d); GiveSight(e5);
 
                 InvokeTickChase(a, 0.02f);
                 InvokeTickChase(b, 0.02f);
+                InvokeTickChase(c, 0.02f);
+                InvokeTickChase(d, 0.02f);
                 Assert.AreEqual(RobotEnemy.State.Telegraph, a.Current);
                 Assert.AreEqual(RobotEnemy.State.Telegraph, b.Current);
-                Assert.AreEqual(2, LungeTokenPool.Held, "both tokens taken");
+                Assert.AreEqual(RobotEnemy.State.Telegraph, c.Current);
+                Assert.AreEqual(RobotEnemy.State.Telegraph, d.Current);
+                Assert.AreEqual(4, LungeTokenPool.Held, "all four tokens taken");
 
-                InvokeTickChase(c, 0.02f);
-                Assert.AreEqual(RobotEnemy.State.Chase, c.Current,
-                    "no token free — c must keep closing/pressuring instead of committing");
+                InvokeTickChase(e5, 0.02f);
+                Assert.AreEqual(RobotEnemy.State.Chase, e5.Current,
+                    "no token free — e5 must keep closing/pressuring instead of committing");
 
                 // Push A all the way to Recover — its token must come back.
                 SetStateTimer(a, 999f);
@@ -240,24 +249,26 @@ namespace MaxWorlds.Tests.EditMode
                 SetStateTimer(a, 999f);
                 InvokeTickLunge(a, 0.02f);     // -> Recover
                 Assert.AreEqual(RobotEnemy.State.Recover, a.Current);
-                Assert.AreEqual(1, LungeTokenPool.Held, "Recover must hand the token back");
+                Assert.AreEqual(3, LungeTokenPool.Held, "Recover must hand the token back");
 
-                // C can now take the freed token.
-                InvokeTickChase(c, 0.02f);
-                Assert.AreEqual(RobotEnemy.State.Telegraph, c.Current, "the freed token must reach another robot");
-                Assert.AreEqual(2, LungeTokenPool.Held);
+                // e5 can now take the freed token.
+                InvokeTickChase(e5, 0.02f);
+                Assert.AreEqual(RobotEnemy.State.Telegraph, e5.Current, "the freed token must reach another robot");
+                Assert.AreEqual(4, LungeTokenPool.Held);
 
                 // Kill B mid-Telegraph — death must ALSO hand its token back, not leak it, since B
                 // never reaches Recover.
                 b.TakeDamage(new DamageInfo(9999f, b.transform.position, Vector3.forward, Team.Player));
                 Assert.IsFalse(b.IsAlive);
-                Assert.AreEqual(1, LungeTokenPool.Held, "death mid-attack must not leak the token");
+                Assert.AreEqual(3, LungeTokenPool.Held, "death mid-attack must not leak the token");
             }
             finally
             {
                 Object.DestroyImmediate(a.gameObject);
                 Object.DestroyImmediate(b.gameObject);
                 Object.DestroyImmediate(c.gameObject);
+                Object.DestroyImmediate(d.gameObject);
+                Object.DestroyImmediate(e5.gameObject);
             }
         }
     }
