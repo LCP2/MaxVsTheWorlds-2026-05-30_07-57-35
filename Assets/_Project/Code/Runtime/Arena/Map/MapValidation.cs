@@ -112,13 +112,14 @@ namespace MaxWorlds.Arena
         public const float MinLowProfileCoverHeight = 0.3f;
 
         /// <summary>Cover dressings exempt from <see cref="MinCoverHeight"/> in favour of the lower
-        /// <see cref="MinLowProfileCoverHeight"/> (MV-1181) — additive alongside the existing
-        /// <see cref="CoverKind.SeeThrough"/>/Hedge/Pipe move-only exemption in
+        /// <see cref="MinLowProfileCoverHeight"/> (MV-1181, extended MV-1192) — additive alongside the
+        /// existing <see cref="CoverKind.SeeThrough"/>/Hedge/Pipe move-only exemption in
         /// <see cref="MapRuntime.BuildCover"/>, same "narrows one check for named dressings, replaces
         /// nothing" pattern, just for the height floor instead of sight/shot blocking.</summary>
         public static readonly HashSet<CoverDressing> LowProfileCoverDressings = new HashSet<CoverDressing>
         {
             CoverDressing.CafeTable, CoverDressing.PlanterBox, CoverDressing.Bollard,
+            CoverDressing.BikeRack, CoverDressing.Bench, CoverDressing.Bin,
         };
 
         public static bool Validate(MapData map, out string reason)

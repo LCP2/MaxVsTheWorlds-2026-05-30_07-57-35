@@ -23,11 +23,16 @@ namespace MaxWorlds.Arena
     /// mains as a cover dressing, not a freestanding placement": it uses the cover piece's own
     /// collider and footprint, adding none.
     ///
-    /// <see cref="CafeTable"/>/<see cref="PlanterBox"/>/<see cref="Bollard"/> (MV-1181) are Market
-    /// Street's low-profile street furniture, genuinely under the engine's ordinary
+    /// <see cref="CafeTable"/>/<see cref="PlanterBox"/>/<see cref="Bollard"/> (MV-1181) and
+    /// <see cref="BikeRack"/>/<see cref="Bench"/>/<see cref="Bin"/> (MV-1192) are Market Street's
+    /// low-profile street furniture, genuinely under the engine's ordinary
     /// <see cref="Map.MapValidation.MinCoverHeight"/> chase-cover floor — see
     /// <see cref="Map.MapValidation.LowProfileCoverDressings"/> for the exemption this adds.</summary>
-    public enum CoverDressing { None, Tree, Hedge, Planter, Shed, Machinery, Pipe, CafeTable, PlanterBox, Bollard }
+    public enum CoverDressing
+    {
+        None, Tree, Hedge, Planter, Shed, Machinery, Pipe, CafeTable, PlanterBox, Bollard,
+        BikeRack, Bench, Bin,
+    }
 
     /// <summary>MV-917: a cover piece's behaviour, as an explicit, data-driven property rather than an
     /// inference from <see cref="CoverDressing"/> — dressing is how a piece LOOKS, not how it behaves,
