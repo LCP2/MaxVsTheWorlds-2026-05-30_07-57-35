@@ -66,7 +66,13 @@ namespace MaxWorlds.Enemies
         /// <summary>How many Rusher/Blinker-kind robots may hold an attack token — be mid-Telegraph
         /// or mid-Lunge — at once (MV-428's Change 2). A robot without a token keeps closing and
         /// pressuring at its normal move speed instead of committing. Read live via
-        /// <see cref="MaxWorlds.Core.DevTuning.LungeTokenCap"/>.</summary>
-        public const float DefaultLungeTokenCap = 2f;
+        /// <see cref="MaxWorlds.Core.DevTuning.LungeTokenCap"/>.
+        ///
+        /// MV-1118: 2 -> 4 (Lee, device, 2026-10-06: "Rushers do OK damage but not frequently enough.
+        /// There should be a sense of urgency to get away.") — at most 2 attackers was ~16 dps against
+        /// 337 HP, no reason to move; 4 is paired with the Rusher's own shortened
+        /// <see cref="EnemyArchetype.RecoverTime"/> (0.7 -> 0.4 s) so a crowd left on top of Max is
+        /// actually dangerous.</summary>
+        public const float DefaultLungeTokenCap = 4f;
     }
 }
