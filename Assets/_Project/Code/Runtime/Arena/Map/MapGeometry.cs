@@ -348,13 +348,42 @@ namespace MaxWorlds.Arena
             return multiplier;
         }
 
+        /// <summary>MV-1102: a wall-gate's own height is authored as exactly <c>wallHeight</c> (MV-277),
+        /// so without this its top face sits on the exact same plane as the flanking wall's — a z-fight
+        /// Lee saw as "gate hinges flicker" on a device playtest (World 1, 2026-10-06), caught by
+        /// <c>AreaGateTests.MV1102_GateRenderers_ShareNoCoplanarOverlap_AndNeverToggleAcrossMovingFrames</c>.
+        /// Fixed from the WALL side, not the gate's: <c>MV771WorldTwoWallHeightTests</c> binds a built
+        /// gate's resolved height to <c>wallHeight</c> to the millimetre ("it must match the map's
+        /// wallHeight exactly"), and MV-1102's own "Do not re-raise: Gate look and size are unchanged"
+        /// forbids growing the gate to fix it instead — so the wall moves away from the gate's own top
+        /// face by this margin, the same size <c>BuildAreaGate</c>'s own <c>AntiZFightMargin</c> already
+        /// gives the depth axis for the identical reason.
+        ///
+        /// Which WAY the wall moves depends on which dressing it gets, so it stays hidden rather than
+        /// trading one visible seam for another — <see cref="MaxWorlds.Rendering.StormdrainKit.BuildSoffit"/>'s
+        /// own 2.2 m cutoff (MV-765) decides it, reused rather than re-derived:
+        /// * <c>wallHeight &lt; 2.2</c> m gets a coping cap flush with and ABOVE <c>wallHeight</c> (bottom
+        ///   at exactly <c>wallHeight</c>, nothing covers below it) — the wall must stand PROUD into the
+        ///   coping's own box, never recede below its flush bottom edge.
+        /// * <c>wallHeight &gt;= 2.2</c> m gets a soffit that already overlaps 0.35 m DOWN from
+        ///   <c>wallHeight</c> (its own top is flush with, never above, <c>wallHeight</c>) — proud here
+        ///   would poke a bare sliver out above the soffit's own edge, so the wall instead RECEDES,
+        ///   comfortably inside that 0.35 m the soffit already covers.
+        ///
+        /// Either way a wall's own bottom stays at exactly y = 0 (matching the floor and every gate's own
+        /// unmoved bottom) — grown/shrunk from the top only, same "extend one way, leave the other
+        /// surface where callers expect it" idiom <see cref="Floor"/> uses for <see cref="FloorThickness"/>.</summary>
+        public const float WallTopZFightMargin = 0.04f;
+
         /// <summary>Every wall the map needs, doorways already cut.</summary>
         public static List<WallSegment> Walls(MapData map)
         {
             var walls = new List<WallSegment>(16);
             if (map?.zones == null || map.zones.Length == 0) return walls;
 
-            float h = map.wallHeight;
+            // MV-1102: see WallTopZFightMargin's own doc for why the sign flips at StormdrainKit's
+            // 2.2 m coping/soffit threshold.
+            float h = map.wallHeight + (map.wallHeight < 2.2f ? WallTopZFightMargin : -WallTopZFightMargin);
             float t = map.wallThickness;
 
             // Lines running along X (walls you meet head-on, at a constant Z) and along Z (the side

@@ -241,8 +241,27 @@ namespace MaxWorlds.Arena
                 // Steps across the arch (180 deg at the left jamb to 0 deg at the right jamb) — the
                 // sides below the spring line are plain jambs, not curved.
                 float angle = Mathf.Lerp(180f, 0f, i / (float)segments) * Mathf.Deg2Rad;
-                Vector3 pos = new Vector3(Mathf.Cos(angle) * horizontalRadius,
-                    springY - halfHeight + Mathf.Sin(angle) * archRise, 0f);
+
+                // MV-1102: every rib shares Z=0 and ribDepth with Jamb L/R, the Inner Lip and the
+                // hazard Plate below (all built on that same backplane) — a coplanar, overlapping-area
+                // z-fight on that axis against whichever of those its own arc position happens to pass
+                // near (AreaGateTests' own MV-1102 measurement caught Rib0 against Jamb L and, once
+                // that was fixed, Rib1 against the hazard Plate — this is the general case, not a
+                // per-rib coincidence). Every rib proud of that shared backplane by half a
+                // Stormdrain-proud margin fixes the whole arc at once, the same "offset by at least
+                // 2 cm" fix BuildAreaGate uses against the wall.
+                //
+                // The two end ribs (i=0 at 180 deg, i=segments at 0 deg) land additionally at exactly
+                // the spring line's own X and ribSize column width — nudged half a margin inward
+                // (toward the doorway's own centre) too, so the arc still reads as one continuous
+                // frame with the jamb at this camera angle without sharing an exact face on either
+                // axis.
+                float xNudge = i == 0 ? StormdrainDressingProud * 0.5f
+                    : i == segments ? -StormdrainDressingProud * 0.5f : 0f;
+                float zNudge = StormdrainDressingProud * 0.5f;
+
+                Vector3 pos = new Vector3(Mathf.Cos(angle) * horizontalRadius + xNudge,
+                    springY - halfHeight + Mathf.Sin(angle) * archRise, zNudge);
                 StormdrainKit.Box(ring.transform, $"Rib{i}", pos, new Vector3(ribSize, ribSize, ribDepth),
                     StormdrainKit.Rust, SurfaceKind.Metal);
             }
@@ -260,11 +279,20 @@ namespace MaxWorlds.Arena
             // rectangle (the same MV-759-gate-closed.png QA pass caught this too, before the ellipse fix).
             float lipThickness = ribSize * 0.5f;
             float lipDepth = ribDepth * 0.5f;
-            StormdrainKit.Box(ring.transform, "Inner Lip Top", new Vector3(0f, halfHeight + lipThickness * 0.5f, 0f),
+            // MV-1102: lipThickness is exactly half of ribSize, so "Inner Lip Top"'s own bottom face
+            // (centre - lipThickness/2) landed EXACTLY on the apex rib's top face (centre + ribSize/2
+            // == halfHeight + ribSize*0.5 either way) -- a coplanar, overlapping-area z-fight caught
+            // the same way as the rib/jamb one above. An extra half-margin breaks that coincidental
+            // equality (it no longer matches ribSize*0.5 for any authored ribSize). The lip is also
+            // recessed in Z, distinct from the ribs' own proud offset above, for the same reason the
+            // ribs needed one against the jambs and the hazard plate sharing their Z=0 backplane.
+            float lipZ = -StormdrainDressingProud * 0.5f;
+            StormdrainKit.Box(ring.transform, "Inner Lip Top",
+                new Vector3(0f, halfHeight + lipThickness * 0.5f + StormdrainDressingProud * 0.5f, lipZ),
                 new Vector3(width + lipThickness * 2f, lipThickness, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
-            StormdrainKit.Box(ring.transform, "Inner Lip L", new Vector3(-width * 0.5f - lipThickness * 0.5f, 0f, 0f),
+            StormdrainKit.Box(ring.transform, "Inner Lip L", new Vector3(-width * 0.5f - lipThickness * 0.5f, 0f, lipZ),
                 new Vector3(lipThickness, height, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
-            StormdrainKit.Box(ring.transform, "Inner Lip R", new Vector3(width * 0.5f + lipThickness * 0.5f, 0f, 0f),
+            StormdrainKit.Box(ring.transform, "Inner Lip R", new Vector3(width * 0.5f + lipThickness * 0.5f, 0f, lipZ),
                 new Vector3(lipThickness, height, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
         }
 
@@ -277,8 +305,8 @@ namespace MaxWorlds.Arena
             float leafWidth = width * 0.5f;
             Vector3 leafSize = new Vector3(leafWidth, height, depth);
 
-            _leafL = BuildStormdrainLeaf(parent, "Leaf L", -leafWidth * 0.5f, leafSize, chamferSign: 1f);
-            _leafR = BuildStormdrainLeaf(parent, "Leaf R", leafWidth * 0.5f, leafSize, chamferSign: -1f);
+            _leafL = BuildStormdrainLeaf(parent, "Leaf L", -leafWidth * 0.5f, 0f, leafSize, chamferSign: 1f);
+            _leafR = BuildStormdrainLeaf(parent, "Leaf R", leafWidth * 0.5f, 0f, leafSize, chamferSign: -1f);
 
             _leafClosedLocalPosL = _leafL.transform.localPosition;
             _leafClosedLocalPosR = _leafR.transform.localPosition;
@@ -291,13 +319,13 @@ namespace MaxWorlds.Arena
             _doorSlideDistance = width;
         }
 
-        private static GameObject BuildStormdrainLeaf(Transform parent, string name, float localX,
+        private static GameObject BuildStormdrainLeaf(Transform parent, string name, float localX, float localY,
                                                        Vector3 size, float chamferSign)
         {
-            // Y=0, not size.y*0.5 -- this transform's local origin is the doorway's vertical CENTRE
-            // (see BuildStormdrainPortalRing's halfHeight note), and a leaf spans the full height
-            // centred on that same origin.
-            GameObject leaf = StormdrainKit.Box(parent, name, new Vector3(localX, 0f, 0f),
+            // Y=localY (0 unless a caller nudges it off centre) -- this transform's local origin is the
+            // doorway's vertical CENTRE (see BuildStormdrainPortalRing's halfHeight note), and a leaf
+            // spans the full height centred on that same origin.
+            GameObject leaf = StormdrainKit.Box(parent, name, new Vector3(localX, localY, 0f),
                 size, StormdrainKit.KerbConcrete, SurfaceKind.Metal);
 
             // Chamfer: a thin rust strip along the inner edge, angled slightly, so the closed pair
@@ -310,7 +338,7 @@ namespace MaxWorlds.Arena
             // worldPositionStays recomputes the local transform to compensate, and the chamfer still
             // slides with its leaf afterwards since it is genuinely that leaf's child from here on.
             var chamfer = StormdrainKit.Box(parent, "Inner Chamfer",
-                new Vector3(localX + chamferSign * size.x * 0.42f, 0f, 0f),
+                new Vector3(localX + chamferSign * size.x * 0.42f, localY, 0f),
                 new Vector3(Mathf.Min(size.x * 0.18f, 0.35f), size.y * 0.96f, size.z * 1.08f),
                 StormdrainKit.Rust, SurfaceKind.Metal);
             chamfer.transform.rotation *= Quaternion.Euler(0f, chamferSign * 8f, 0f);
@@ -718,13 +746,21 @@ namespace MaxWorlds.Arena
             return new Span(min, max);
         }
 
-        private void Update()
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>MV-1102: the per-frame advance (door slide + hinge swing), as an explicit public
+        /// step rather than only living inside <see cref="Update"/> — this project's synchronous
+        /// EditMode harness never ticks a real frame (see <see cref="AreaGateTests"/>'s own MV-386
+        /// note), so a test driving several simulated frames (to prove no renderer is toggled by this
+        /// gate's own per-frame logic) needs a real entry point it can call directly, not a reflection
+        /// hook into a private method.</summary>
+        public void Tick(float dt)
         {
-            AdvanceStormdrainSlide(Time.deltaTime);
+            AdvanceStormdrainSlide(dt);
 
             if (!_hinging) return;
 
-            _hingeT += Time.deltaTime;
+            _hingeT += dt;
             float k = HingeDuration > 0f ? Mathf.Clamp01(_hingeT / HingeDuration) : 1f;
             // Ease out — fast off the latch, settling into the open position, so the swing reads as
             // a snap rather than a slow architectural drift.
