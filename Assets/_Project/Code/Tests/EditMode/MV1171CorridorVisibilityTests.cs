@@ -1,4 +1,3 @@
-using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -11,16 +10,17 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-1171 (the one new test, testing policy Rule 1): the World 2 -> World 3 exit corridor, built
-    /// through the real <see cref="WorldJoinSequence.Initialize"/> entry point (same idiom
-    /// MV845/1123 already establish), with Max placed at the corridor's own midpoint.
+    /// MV-1171 (the one new test, testing policy Rule 1): the World 2 exit corridor, built through the
+    /// real <see cref="WorldJoinSequence.Initialize"/> entry point (same idiom MV845/1123 already
+    /// establish), with Max placed at the corridor's own midpoint.
     ///
-    /// Fails on base commit 234dca4:
-    /// <code>
-    /// 'Ocean_Manta' measures (15.00, 5.40, 0.00) -- it inherited its parent window's own non-uniform scale instead of its authored 6 m width
-    /// Expected: less than or equal to 8.0f
-    /// But was:  15.0f
-    /// </code>
+    /// Originally failed on base commit 234dca4 with an Ocean-backdrop-overscale defect (quoted in this
+    /// ticket's own history) -- MV-1178 withdraws that premise: World 2 now climbs into the City, not
+    /// the Reef, so there is no Reef hull/observation-window dressing left in this corridor for an
+    /// ocean backdrop to overscale. The AC1a/AC1c Max-visibility assertions below are unaffected by
+    /// which world is on the other end of the door and stay in place; the AC1b ocean-layer-size
+    /// assertions (this ticket's own original Rule 1 proof) are removed along with the geometry they
+    /// measured.
     /// </summary>
     public sealed class MV1171CorridorVisibilityTests
     {
@@ -142,33 +142,11 @@ namespace MaxWorlds.Tests.EditMode
                         $"(hit at {hitDist:F2} m, head at {headDist:F2} m)");
             }
 
-            // The defect this ticket actually traces to: WorldJoinDressing.DressObservationWindows
-            // parents ReefKit.BuildOceanBackdrop directly onto the observation window's own
-            // primitive-cube transform, which carries that window's own non-uniform (2.5, height, 0.1)
-            // local scale (ReefKit.BuildObservationWindow). Every "Ocean_*" backdrop quad is authored
-            // at a flat local scale of (6, 3, 1) against an UNSCALED parent (MV713ReefKitTests' own
-            // fixture, and ReefKit.BuildOceanBackdrop's own doc comment: "four small per-window
-            // parallax layers") -- inheriting the window's scale instead blows each layer up to
-            // world-space (15, ~5.4, 0.1) at World 2's own wallHeight (3 m): the cyan slab Lee saw
-            // "covering the top third to half of the screen." The sight-line check above does not
-            // happen to cross this specific geometry for a camera parked south of a corridor whose
-            // dressing sits on its north wall (the slab reads as *visually* overhead in a shallow,
-            // grazing frame without being on the literal 3D segment to Max's head) -- this is the
-            // resolved-bounds assertion that actually catches it, and is this ticket's Rule 1 proof.
-            Renderer[] oceanLayers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None)
-                .Where(r => r != null && r.enabled && r.name.StartsWith("Ocean_")).ToArray();
-            Assert.IsNotEmpty(oceanLayers, "the hull segment's observation windows must build their own ocean backdrop");
-
-            const float maxLayerWidth = 8f;    // > the authored 6 m width, well short of the bugged ~15 m
-            const float maxLayerHeight = 5f;   // > the authored 3 m height, well short of the bugged ~5.4-9 m
-            foreach (Renderer r in oceanLayers)
-            {
-                Vector3 size = r.bounds.size;
-                Assert.LessOrEqual(size.x, maxLayerWidth,
-                    $"'{r.name}' measures {size} -- it inherited its parent window's own non-uniform scale instead of its authored 6 m width");
-                Assert.LessOrEqual(size.y, maxLayerHeight,
-                    $"'{r.name}' measures {size} -- it inherited its parent window's own non-uniform scale instead of its authored 3 m height");
-            }
+            // MV-1178: World 2's exit corridor no longer carries Reef hull dressing (observation
+            // windows, ocean backdrops) at all -- it climbs into the City instead. The ocean-backdrop
+            // overscale assertions this ticket originally proved its own fix against are removed along
+            // with that geometry; ClimbCorridorTests (MV-1178) is this corridor's own current dressing
+            // test.
         }
     }
 }

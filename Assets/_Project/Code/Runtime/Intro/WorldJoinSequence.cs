@@ -349,6 +349,9 @@ namespace MaxWorlds.Intro
                 case ExitCorridorDressingKind.ExitReef:
                     WorldJoinDressing.DressExitReef(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
                     break;
+                case ExitCorridorDressingKind.ExitCity:
+                    WorldJoinDressing.DressExitCity(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
+                    break;
             }
         }
 
@@ -439,6 +442,9 @@ namespace MaxWorlds.Intro
                     break;
                 case ArrivalDressingKind.ArrivalReef:
                     WorldJoinDressing.DressArrivalReef(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+                    break;
+                case ArrivalDressingKind.ArrivalCity:
+                    WorldJoinDressing.DressArrivalCity(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
                     break;
             }
         }
@@ -543,6 +549,7 @@ namespace MaxWorlds.Intro
             {
                 case WorldGateSkin.Stormdrain: gate.ApplyStormdrainGateSkin(); break;
                 case WorldGateSkin.Reef: gate.ApplyReefSkin(); break;
+                case WorldGateSkin.City: gate.ApplyCitySkin(); break;
             }
         }
 
