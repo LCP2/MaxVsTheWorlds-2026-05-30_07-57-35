@@ -10,6 +10,9 @@ namespace MaxWorlds.Tests.EditMode
     /// no exemption mechanism. The fix narrows the floor to <see cref="MapValidation.MinLowProfileCoverHeight"/>
     /// for the specific low-profile dressings in <see cref="MapValidation.LowProfileCoverDressings"/>,
     /// leaving ordinary tactical cover's <see cref="MapValidation.MinCoverHeight"/> floor untouched.
+    ///
+    /// MV-1192 (sole guard, extended rather than duplicated): the same floor also refused Market
+    /// Street's bikeRack/bench/bin at 0.9 m, which MV-1181's exemption set didn't cover.
     /// </summary>
     public sealed class MV1181LowProfileCoverHeightTests
     {
@@ -57,6 +60,29 @@ namespace MaxWorlds.Tests.EditMode
                 dressing = "bollard",
             });
             Assert.IsTrue(MapValidation.Validate(bollard, out string bollardWhy), bollardWhy);
+
+            // --- AC1 continued (MV-1192): bikeRack/bench/bin, all authored at 0.9 m, City's own
+            // Market Street measured values (city_config.json a1_c22/a1_c32/a1_c33/a1_c34/a1_c35).
+            MapData bikeRack = Map(new MapEntity
+            {
+                id = "a1_c22", kind = "cover", x = 0f, z = 0f, width = 3.1f, height = 0.9f, depth = 1.0f,
+                dressing = "bikeRack",
+            });
+            Assert.IsTrue(MapValidation.Validate(bikeRack, out string bikeRackWhy), bikeRackWhy);
+
+            MapData bench = Map(new MapEntity
+            {
+                id = "a1_c32", kind = "cover", x = 0f, z = 0f, width = 1.9f, height = 0.9f, depth = 0.55f,
+                dressing = "bench",
+            });
+            Assert.IsTrue(MapValidation.Validate(bench, out string benchWhy), benchWhy);
+
+            MapData bin = Map(new MapEntity
+            {
+                id = "a1_c34", kind = "cover", x = 0f, z = 0f, width = 0.6f, height = 0.9f, depth = 0.6f,
+                shape = "cylinder", dressing = "bin",
+            });
+            Assert.IsTrue(MapValidation.Validate(bin, out string binWhy), binWhy);
 
             // --- AC2 (narrowing, not a removal): the SAME 0.8 m height with no low-profile dressing
             // still fails exactly as it always has — ordinary tactical cover keeps its 1 m floor.
