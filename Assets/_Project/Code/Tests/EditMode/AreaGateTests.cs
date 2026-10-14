@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Arena;
+using MaxWorlds.Core;
 using MaxWorlds.Feel;
 using MaxWorlds.UI;
 
@@ -513,6 +515,143 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(overlaps,
                 $"the {which} leaf's slid-open bounds [{b.min.x:0.##}, {b.max.x:0.##}] overlap the doorway " +
                 $"span {doorSpan} still covered by the gate's own hinge-swung collision leaf");
+        }
+
+        // --- MV-1102: gate hinges flicker -- camera-move z-fighting Lee reported on World 1's
+        // stone/wooden area gates. Built through the real map path (MapRuntime.Build) plus each
+        // skin's own real public entry point (ApplyStormdrainGateSkin/ApplyReefSkin) -- the plain,
+        // unskinned gate (World 1's GateSkin.None covers both the "wooden" and "stone" doors Lee
+        // described; neither is a distinct code path) stands in for the first two, since World 1
+        // authors no separate skin at all (MapRuntime.BuildExitDoorGate's own doc: "World 1 and
+        // World 3 apply no gate skin at all"). ONE consolidated EditMode test per MV-465 Rule 1,
+        // carrying both AC1 sub-checks (coplanar overlap, renderer-toggle) for every skin as
+        // sub-assertions of the one ticket.
+
+        /// <summary>AC1: for every pair of the gate's enabled renderers (plus the wall it is cut
+        /// into), the resolved world bounds must share no coplanar overlapping face; and across 30
+        /// simulated frames (varying dt -- the only "camera moving" signal <see cref="AreaGate.Tick"/>
+        /// itself ever reads), no gate renderer's <c>enabled</c> flag may change. Every assertion
+        /// reads a RESOLVED runtime value (a built <see cref="Renderer.bounds"/>, a real
+        /// <c>enabled</c> flag) through real entry points -- <see cref="MapRuntime.Build"/>,
+        /// <see cref="AreaGate.ApplyStormdrainGateSkin"/>/<see cref="AreaGate.ApplyReefSkin"/>,
+        /// <see cref="AreaGate.Tick"/> -- never an authored constant, a field set directly, or a
+        /// private method reached by reflection.</summary>
+        [Test]
+        public void MV1102_GateRenderers_ShareNoCoplanarOverlap_AndNeverToggleAcrossMovingFrames()
+        {
+            var cases = new (string skin, System.Action<AreaGate> apply)[]
+            {
+                ("plain (World 1 wooden/stone)", gate => { }),
+                ("stormdrain", gate => gate.ApplyStormdrainGateSkin()),
+                ("reef", gate => gate.ApplyReefSkin()),
+            };
+
+            foreach (var (skin, apply) in cases)
+            {
+                MapData map = TwoAreas(doorway: 4f);
+                var root = new GameObject($"MV-1102 Gate Probe ({skin})");
+                try
+                {
+                    MapBuild built = MapRuntime.Build(map, root.transform);
+                    GameObject gateGo = built.Actors["gate1"];
+                    var gate = gateGo.GetComponent<AreaGate>();
+                    Renderer baseRenderer = gateGo.GetComponent<Renderer>();
+
+                    // The adjoining wall: whichever StructuralWall renderers the gate's own
+                    // (undressed) cube overlaps -- exactly the segments SealWidth deliberately
+                    // overlaps into (MapRuntime.BuildAreaGate's own AntiZFightMargin comment).
+                    Bounds gateFootprint = baseRenderer.bounds;
+                    List<Renderer> wallRenderers = root.GetComponentsInChildren<StructuralWall>(false)
+                        .Select(w => w.GetComponent<Renderer>())
+                        .Where(r => r != null && r.enabled && r.bounds.Intersects(gateFootprint))
+                        .ToList();
+                    Assert.IsTrue(wallRenderers.Count > 0,
+                        $"[{skin}] found no adjoining wall renderer to check -- the fixture's doorway geometry moved");
+
+                    apply(gate);
+
+                    var gateRenderers = new List<Renderer>();
+                    if (baseRenderer.enabled) gateRenderers.Add(baseRenderer);
+                    if (gate.DressingRoot != null)
+                        gateRenderers.AddRange(
+                            gate.DressingRoot.GetComponentsInChildren<Renderer>(false).Where(r => r.enabled));
+                    Assert.IsTrue(gateRenderers.Count > 0, $"[{skin}] gate built no enabled renderer at all");
+
+                    var allRenderers = new List<Renderer>(gateRenderers);
+                    allRenderers.AddRange(wallRenderers);
+
+                    // AABB min/max only describes an actual flat FACE for a renderer whose rotation
+                    // matches the gate's own -- a piece rotated relative to it (the leaf's own angled
+                    // Inner Chamfer, a leaned hazard stripe) touches its world AABB at a CORNER, not a
+                    // face, so an AABB-edge coincidence there is not evidence of a real z-fight.
+                    Quaternion gateRotation = gateGo.transform.rotation;
+                    bool IsAxisAligned(Renderer r) => Quaternion.Angle(r.transform.rotation, gateRotation) < 0.1f;
+
+                    for (int i = 0; i < allRenderers.Count; i++)
+                        for (int j = i + 1; j < allRenderers.Count; j++)
+                            if (IsAxisAligned(allRenderers[i]) && IsAxisAligned(allRenderers[j]))
+                                AssertNoCoplanarOverlap(allRenderers[i], allRenderers[j], skin);
+
+                    // Second hypothesis: a renderer toggled every frame by visibility/de-clutter
+                    // logic, driven via the gate's own real per-frame entry point.
+                    var before = gateRenderers.Select(r => r.enabled).ToArray();
+                    for (int frame = 0; frame < 30; frame++)
+                        gate.Tick(0.016f + frame * 0.0003f);
+                    var after = gateRenderers.Select(r => r.enabled).ToArray();
+                    CollectionAssert.AreEqual(before, after,
+                        $"[{skin}] a gate renderer's enabled flag changed across 30 simulated frames");
+                }
+                finally
+                {
+                    Object.DestroyImmediate(root);
+                }
+            }
+        }
+
+        /// <summary>Fails if any pair of <paramref name="a"/>/<paramref name="b"/>'s world-space
+        /// faces sit within 5 mm of each other on one axis AND overlap in area on the other two --
+        /// the measurable shape of a z-fight (MV-1102), never a bare "the renderers are close" check.
+        ///
+        /// Only a MIN-vs-MIN or MAX-vs-MAX pair counts: both are the same-facing surface (e.g. two
+        /// renderers' top faces, both pointing up at the camera) competing for the same depth, which is
+        /// an actual z-fight. A MIN-vs-MAX pair is a butt joint — two solids meeting face to face, their
+        /// normals pointing at EACH OTHER rather than both at the camera — the ordinary, correct way two
+        /// adjoining pieces of built geometry touch, and flagging it would fail on legitimate
+        /// construction everywhere two boxes are meant to abut.
+        ///
+        /// A Y-axis MIN/MIN pair (both downward-facing, at or near ground level) is skipped too: this
+        /// project's camera is fixed angled top-down (CLAUDE.md "Camera is fixed angled top-down at
+        /// ~72 deg" -- never free-look, orbit or underground), so a downward-facing floor-level face can
+        /// never be the thing a player's camera actually sees flicker, whatever the depth buffer does
+        /// with it.</summary>
+        private static void AssertNoCoplanarOverlap(Renderer a, Renderer b, string skin)
+        {
+            if (a == b) return;
+            Bounds ba = a.bounds, bb = b.bounds;
+            const float tol = 0.005f;
+
+            for (int axis = 0; axis < 3; axis++)
+            {
+                int o1 = (axis + 1) % 3, o2 = (axis + 2) % 3;
+                var edgePairs = new (float ea, float eb, string which)[]
+                {
+                    (ba.min[axis], bb.min[axis], "min/min"),
+                    (ba.max[axis], bb.max[axis], "max/max"),
+                };
+
+                foreach (var (ea, eb, which) in edgePairs)
+                {
+                    if (axis == 1 && which == "min/min") continue; // floor-level, never camera-visible
+                    if (Mathf.Abs(ea - eb) > tol) continue;
+
+                    float overlap1 = Mathf.Min(ba.max[o1], bb.max[o1]) - Mathf.Max(ba.min[o1], bb.min[o1]);
+                    float overlap2 = Mathf.Min(ba.max[o2], bb.max[o2]) - Mathf.Max(ba.min[o2], bb.min[o2]);
+
+                    Assert.IsFalse(overlap1 > 0f && overlap2 > 0f,
+                        $"[{skin}] '{a.name}' and '{b.name}' share a same-facing ({which}) coplanar face " +
+                        $"on axis {axis} ({ea:0.####} vs {eb:0.####}) overlapping {overlap1:0.###}x{overlap2:0.###} m -- z-fight");
+                }
+            }
         }
     }
 }

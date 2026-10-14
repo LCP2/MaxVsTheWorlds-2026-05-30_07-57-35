@@ -2699,7 +2699,22 @@ namespace MaxWorlds.Arena
         /// front/back faces sit on the EXACT SAME plane as the wall's, and the two flicker (z-fight)
         /// against each other. 2 cm proud on each face, the same margin <c>BackyardDressingSet</c>
         /// gives its fence panels for the identical reason, is enough to always win the depth test
-        /// without being visible as a gap at this camera angle.</summary>
+        /// without being visible as a gap at this camera angle.
+        ///
+        /// MV-1102: <see cref="WorldMapLoader"/> authors a gate's <c>height</c> as exactly
+        /// <c>wallHeight</c> (MV-277, so the gate matches whichever wall it's set into) and both are
+        /// built from <c>baseY</c>, so a gate's top face sits on the exact same plane as the flanking
+        /// wall's — a second, taller-area z-fight than the depth one above (Lee's "gate hinges
+        /// flicker", device playtest, World 1, 2026-10-06), caught by
+        /// <c>AreaGateTests.MV1102_GateRenderers_ShareNoCoplanarOverlap_AndNeverToggleAcrossMovingFrames</c>
+        /// measuring the built gate's resolved bounds against its own adjoining wall. Fixed from the
+        /// WALL side, not the gate's — <see cref="MapGeometry.Walls"/>'s own <c>WallTopZFightMargin</c>
+        /// moves every wall's top face away from <c>wallHeight</c>, bottom untouched (see that constant's
+        /// own doc for which way, and why) — because <c>MV771WorldTwoWallHeightTests</c> binds a wall
+        /// GATE's resolved height to <c>wallHeight</c> to the millimetre ("it must match the map's
+        /// wallHeight exactly") and this ticket's own "Do not re-raise: Gate look and size are unchanged"
+        /// forbids growing the gate to fix it instead. The wall carries no such exact-match assertion
+        /// (only <c>&gt;= 2.9</c> m for World 2), so it's the one free to flex.</summary>
         private const float AntiZFightMargin = 0.04f;
 
         private static GameObject BuildAreaGate(MapData map, MapEntity e, Transform root, MapBuild built)
@@ -2783,6 +2798,9 @@ namespace MaxWorlds.Arena
                 ? new Vector3(mid, map.wallHeight * 0.5f, doorway.Coord)
                 : new Vector3(doorway.Coord, map.wallHeight * 0.5f, mid);
 
+            // MV-1102: same top-face z-fight against the flanking wall as BuildAreaGate's own gate
+            // (both built from map.wallHeight, centred the same way) -- same fix: the wall moves
+            // instead (MapGeometry.Walls' WallTopZFightMargin), this door's own height untouched.
             GameObject body = Spawn(root, "World Exit Door", PrimitiveType.Cube, center,
                 new Vector3(sealWidth, map.wallHeight, map.wallThickness + AntiZFightMargin));
 
