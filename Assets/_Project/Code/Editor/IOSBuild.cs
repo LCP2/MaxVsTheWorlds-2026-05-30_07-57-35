@@ -122,45 +122,88 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>
-        /// The committed placeholder icon, regenerated from code if it has gone missing so a fresh
-        /// clone (or a deleted asset) still produces a valid build rather than a 15-minute archive
-        /// that Apple rejects at the very end.
+        /// The committed app icon asset. There is no code fallback (MV-1139): the PNG is painted
+        /// art and IS the icon, so a missing file is a hard failure rather than something to
+        /// regenerate.
         /// </summary>
-        private static Texture2D LoadOrCreateIconAsset()
-        {
-            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
-            if (existing != null) return existing;
+        private static Texture2D LoadOrCreateIconAsset() =>
+            AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
 
-            Debug.LogWarning($"[IOSBuild] {IconAssetPath} is missing — regenerating it from code.");
-            WriteIconAsset();
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
+        /// <summary>
+        /// The app icon at the requested size (MV-1139). The committed <see cref="IconAssetPath"/>
+        /// PNG IS the icon — painted art, not something code can draw — so this loads it and scales
+        /// to the requested size rather than generating anything.
+        ///
+        /// Box-averages pixels on the CPU rather than going through a RenderTexture blit: a GPU blit
+        /// samples the sRGB-imported source through a linear-space shader and writes the result to a
+        /// non-sRGB target, so the read-back bytes are gamma-shifted from what the PNG actually
+        /// stores. Averaging the raw stored values directly avoids that conversion and still produces
+        /// a smooth downscale, not a nearest-neighbour one.
+        /// </summary>
+        public static Texture2D MakeAppIcon(int size)
+        {
+            size = Mathf.Max(1, size);
+            Texture2D source = LoadOrCreateIconAsset();
+            if (source == null)
+            {
+                throw new InvalidOperationException(
+                    $"[IOSBuild] {IconAssetPath} could not be loaded — the app icon art is missing.");
+            }
+
+            if (size == source.width && size == source.height && source.format == TextureFormat.RGB24)
+            {
+                return source;
+            }
+
+            int sw = source.width;
+            int sh = source.height;
+            Color[] srcPixels = source.GetPixels();
+            var dstPixels = new Color[size * size];
+
+            for (int y = 0; y < size; y++)
+            {
+                float v0 = (float)y / size * sh;
+                float v1 = (float)(y + 1) / size * sh;
+
+                for (int x = 0; x < size; x++)
+                {
+                    float u0 = (float)x / size * sw;
+                    float u1 = (float)(x + 1) / size * sw;
+                    dstPixels[y * size + x] = BoxAverage(srcPixels, sw, sh, u0, u1, v0, v1);
+                }
+            }
+
+            var scaled = new Texture2D(size, size, TextureFormat.RGB24, false);
+            scaled.SetPixels(dstPixels);
+            scaled.Apply(false, false);
+            return scaled;
         }
 
-        /// <summary>
-        /// The app icon at the requested size (YT-115). Delegates to <see cref="AppIconArt"/>, which
-        /// is the single source of truth for what the icon looks like.
-        ///
-        /// That indirection is the point. Before this, the committed PNG and the code that
-        /// regenerates it were two independent drawings of the same icon, and nothing compared them:
-        /// a fresh clone whose LFS pull had not run would silently regenerate the OLD greybox and
-        /// ship it, with every test still green. Now there is one drawing, and
-        /// <c>IOSIconTests.CommittedIcon_MatchesWhatTheCodeDraws</c> holds the PNG to it.
-        /// </summary>
-        public static Texture2D MakeAppIcon(int size) => AppIconArt.Build(size);
-
-        /// <summary>
-        /// Redraw the committed icon asset from <see cref="AppIconArt"/>. Run this after changing the
-        /// artwork — the PNG is what actually ships (PlayerSettings references it by GUID), so a
-        /// change to the drawing code that is not followed by this is a change that never reaches a
-        /// phone.
-        /// </summary>
-        [MenuItem("MaxWorlds/iOS/Regenerate App Icon")]
-        public static void WriteIconAsset()
+        /// <summary>Averages the source pixels covering the box [u0, u1) x [v0, v1), in source-pixel
+        /// coordinates — the one destination pixel's worth of source area.</summary>
+        private static Color BoxAverage(Color[] src, int sw, int sh, float u0, float u1, float v0, float v1)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(IconAssetPath));
-            File.WriteAllBytes(IconAssetPath, MakeAppIcon(MarketingIconSize).EncodeToPNG());
-            AssetDatabase.ImportAsset(IconAssetPath, ImportAssetOptions.ForceSynchronousImport);
-            Debug.Log($"[IOSBuild] Wrote {MarketingIconSize}x{MarketingIconSize} app icon to {IconAssetPath}");
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(u0), 0, sw - 1);
+            int x1 = Mathf.Clamp(Mathf.CeilToInt(u1) - 1, 0, sw - 1);
+            int y0 = Mathf.Clamp(Mathf.FloorToInt(v0), 0, sh - 1);
+            int y1 = Mathf.Clamp(Mathf.CeilToInt(v1) - 1, 0, sh - 1);
+
+            float r = 0f, g = 0f, b = 0f;
+            int count = 0;
+            for (int y = y0; y <= y1; y++)
+            {
+                int row = y * sw;
+                for (int x = x0; x <= x1; x++)
+                {
+                    Color c = src[row + x];
+                    r += c.r;
+                    g += c.g;
+                    b += c.b;
+                    count++;
+                }
+            }
+
+            return new Color(r / count, g / count, b / count, 1f);
         }
 
         // -----------------------------------------------------------------------------------------
