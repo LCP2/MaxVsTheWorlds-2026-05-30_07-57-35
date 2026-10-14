@@ -16,10 +16,15 @@ namespace MaxWorlds.Tests.EditMode
     /// coarse AABB — see <c>TryRayMeshDistance</c> below) of any hair or brow renderer before reaching
     /// the eye.
     ///
-    /// Fails on the commit before this ticket (main 7db54db): the fringe locks hang straight down
-    /// across the brow (<c>MaxHair.FringeHug0</c> = (0,-1,0.25)) and the hair cap overhangs it
-    /// (profile point (0.214, 1.778) sits just above the brow at y=1.73), with no chin-up pitch to lift
-    /// either clear of the camera's line to the eyes — expected to block at least one eye.
+    /// <c>RestingPose</c> sits the camera at -Z from its target (<c>ComputeOffset</c>), so Max must be
+    /// yawed 180 degrees — face toward -Z — to look into it; yaw 0 (face toward +Z, his authored eye z)
+    /// puts the camera behind his skull instead, which blocked an earlier draft of this test for the
+    /// wrong reason (the crown, not the fringe or brow).
+    ///
+    /// Fails on the commit before this ticket (main 7db54db): with no chin-up pitch, the brow prism and
+    /// cap's front overhang sit close enough to the camera's line to the eye to graze it, and the
+    /// fringe locks hang down across the brow (<c>MaxHair.FringeHug0</c> = (0,-1,0.25)) — expected to
+    /// block at least one eye.
     /// </summary>
     public sealed class MV1161MaxFaceVisibilityTests
     {
@@ -124,9 +129,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void EyesAreClearOfHairAndBrowFromThePlayCamera()
         {
-            // Max faces the camera's down-screen direction (local +Z) — same convention
-            // MV1133MaxOutfitV3Tests' own face-visibility check uses.
-            _playerGo.transform.eulerAngles = Vector3.zero;
+            // Max faces the camera's down-screen direction. FixedAngleCameraRig.ComputeOffset puts the
+            // camera at -Z from its target (pitch about X, distance along -cos/+sin), so a Max at yaw 0
+            // (face toward +Z, MaxBody.cs's authored eye z) has the camera looking at the BACK of his
+            // head, not his face — that is MV1133MaxOutfitV3Tests' own convention (a +Z camera in front
+            // of the face), which does not match RestingPose. Yaw 180 turns his face to -Z, into the
+            // camera's actual down-screen direction (Apply() sets camera rotation Euler(60,0,0), whose
+            // local up/down-screen axis flattens to -Z) — see Lee's triage on MV-1161.
+            _playerGo.transform.eulerAngles = new Vector3(0f, 180f, 0f);
             Invoke(_rig, "Follow");
 
             // Let the hair settle into its idle resting pose before judging it — a fresh, un-simulated

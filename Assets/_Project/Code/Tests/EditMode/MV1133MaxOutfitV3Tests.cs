@@ -145,7 +145,15 @@ namespace MaxWorlds.Tests.EditMode
             _playerGo.transform.eulerAngles = Vector3.zero;
             Invoke(_rig, "Follow");
 
-            Vector3 faceTarget = head.TransformPoint(new Vector3(0f, 1.68f, 0.18f));
+            // MV-1161 pitched the whole face 15 degrees chin-up about the neck point, so a fixed
+            // head-local point is no longer where the eyes resolve to — read the midpoint of the two
+            // built eye renderers instead (a resolved value, same idiom this file's own class doc
+            // already calls for), which tracks the tilt automatically.
+            var eyeMatForTarget = GetField<Material>(_rig, "_eyeMat");
+            Vector3 faceTarget = head.GetComponentsInChildren<MeshRenderer>(true)
+                .Where(r => r.sharedMaterial == eyeMatForTarget)
+                .Select(r => r.transform.position)
+                .Aggregate(Vector3.zero, (sum, p) => sum + p) / 2f;
             float pitch = 72f * Mathf.Deg2Rad;
             Vector3 camDir = new Vector3(0f, Mathf.Sin(pitch), Mathf.Cos(pitch));
             Vector3 camPos = faceTarget + camDir * 5f;
