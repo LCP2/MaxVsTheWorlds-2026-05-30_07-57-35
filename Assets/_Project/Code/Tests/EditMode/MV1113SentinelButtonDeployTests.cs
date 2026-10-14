@@ -15,9 +15,9 @@ namespace MaxWorlds.Tests.EditMode
     /// point the game itself picks. One test (MV-465 Rule 1) through the REAL deploy path
     /// (<see cref="PlayerAbilities.TryDeploySentinelNearMax"/>) carrying every AC1 assertion as a
     /// sub-check:
-    ///  - three seeded layouts (open floor; Max ringed by six awake robots at 2m; Max on a deck strip)
-    ///    each deploy a sentinel whose chosen point satisfies every item-3 predicate, asserted
-    ///    individually against the REAL registries/map this test seeds — never a hardcoded point;
+    ///  - three seeded layouts (open floor; Max ringed by six awake robots; Max on a deck strip)
+    ///    each deploy a sentinel whose chosen point satisfies every item-3/MV-1182-item-4 predicate,
+    ///    asserted individually against the REAL registries/map this test seeds — never a hardcoded point;
     ///  - a fourth, fully-blocked layout proves the NO ROOM outcome: wallet and cooldown untouched;
     ///  - a second tap within the 10s cooldown deploys nothing;
     ///  - from tap to 2.99s the sentinel takes no damage and fires no shot; once the arrival is over
@@ -111,9 +111,12 @@ namespace MaxWorlds.Tests.EditMode
         private static void AssertArrivalPredicates(Vector3 point, Vector3 maxPos, string label)
         {
             float distToMax = FlatDistance(point, maxPos);
-            Assert.That(distToMax, Is.InRange(
-                    PlayerAbilities.SentinelArrivalMinDistance - 1e-2f, PlayerAbilities.SentinelArrivalMaxDistance + 1e-2f),
-                $"{label}: distance from Max must sit in the [2.5, 4.5] band — was {distToMax}");
+            float[] radii = PlayerAbilities.SentinelArrivalRadii;
+            // MV-1182: the band is now one of three discrete radii (1.5/2.0/2.5 m), not a continuous
+            // 2.5-4.5 m ring — this is a sanity bound spanning all three, not a claim every value in
+            // between is valid.
+            Assert.That(distToMax, Is.InRange(radii[0] - 1e-2f, radii[radii.Length - 1] + 1e-2f),
+                $"{label}: distance from Max must sit in the [{radii[0]}, {radii[radii.Length - 1]}] band — was {distToMax}");
 
             foreach (RobotEnemy robot in RobotEnemy.Active)
             {
@@ -184,7 +187,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(targetRobot.HealthCurrent, Is.LessThan(robotHpBeforeLive),
                 "once live, the Sentinel must fire at a robot in range");
 
-            // ---------------------------------------------------------------- Layout B: Max ringed by six robots at 2m
+            // ---------------------------------------------------------------- Layout B: Max ringed by six robots, one directly behind
+            // MV-1182 retired the old 2.5-4.5 m band and its farthest-from-enemy relaxation loop, which
+            // is what used to let this layout escape a tight ring by searching much farther out. The new
+            // search only ever samples 1.5/2.0/2.5 m, so the ring radius here (2.8 m) is chosen so the
+            // directly-behind candidate (aligned with one of the six robots) fails the new fixed 1.5 m
+            // clearance floor at every radius, while the +/-30 degree fallback at the SAME minimum 1.5 m
+            // radius clears it — exercising the new angle-fallback-before-radius-widening order.
             ResetState();
             var originB = new Vector3(82234f, 0f, 52234f);
             InstallMap(new MapData { deckHeight = 2.5f, zones = new[]
@@ -192,17 +201,20 @@ namespace MaxWorlds.Tests.EditMode
                 new MapZone { id = "b1", x = originB.x, z = originB.z, width = 40f, depth = 40f, level = 0 },
             }});
             PlayerAbilities abilitiesB = NewMax(originB);
+            const float ringRadiusB = 2.8f;
             for (int i = 0; i < 6; i++)
             {
                 float angle = i * 60f * Mathf.Deg2Rad;
-                NewAwakeRobot(originB + new Vector3(Mathf.Sin(angle) * 2f, 0f, Mathf.Cos(angle) * 2f));
+                NewAwakeRobot(originB + new Vector3(Mathf.Sin(angle) * ringRadiusB, 0f, Mathf.Cos(angle) * ringRadiusB));
             }
 
             var outcomeB = abilitiesB.TryDeploySentinelNearMax();
             Assert.That(outcomeB, Is.EqualTo(PlayerAbilities.SentinelDeployOutcome.Deployed),
-                "ringed by six robots at 2m: a relaxed-clearance point must still be found");
+                "ringed by six robots: the angle fallback at the minimum radius must still find a clear point");
             Vector3 pointB = Sentinel.Active[0].transform.position;
             AssertArrivalPredicates(pointB, originB, "ringed by six robots");
+            Assert.That(FlatDistance(pointB, originB), Is.EqualTo(PlayerAbilities.SentinelArrivalRadii[0]).Within(1e-2f),
+                "ringed by six robots: the fallback must stay at the minimum 1.5 m radius, never widen, since a clear angle exists there");
 
             // ---------------------------------------------------------------- Layout C: Max on a deck strip
             ResetState();
