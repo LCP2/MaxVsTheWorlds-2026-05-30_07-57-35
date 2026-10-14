@@ -12,8 +12,9 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-1161 (Lee, 10 Oct: "it looks like a lot of his face is covered... see if you can adjust the
     /// design so that more of his face is available"). AC1: with Max built at rest, facing the camera's
     /// down-screen direction, and the play camera placed exactly as <c>FixedAngleCameraRig.RestingPose</c>
-    /// places it, a line from the camera to each eye white's centre must not pass through the
-    /// world-space bounds of any hair or brow renderer.
+    /// places it, a line from the camera to each eye white's centre must not hit the real mesh (not a
+    /// coarse AABB — see <c>TryRayMeshDistance</c> below) of any hair or brow renderer before reaching
+    /// the eye.
     ///
     /// Fails on the commit before this ticket (main 7db54db): the fringe locks hang straight down
     /// across the brow (<c>MaxHair.FringeHug0</c> = (0,-1,0.25)) and the hair cap overhangs it
@@ -62,17 +63,62 @@ namespace MaxWorlds.Tests.EditMode
         private static T GetField<T>(object target, string name) =>
             (T)target.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(target);
 
-        /// <summary>Does the segment from <paramref name="from"/> to <paramref name="to"/> enter
-        /// <paramref name="bounds"/> strictly before reaching <paramref name="to"/>? A hit exactly at (or
-        /// past) the target is the eye's own bounds, not something blocking the view of it.</summary>
-        private static bool SegmentEntersBounds(Vector3 from, Vector3 to, Bounds bounds)
+        /// <summary>Nearest ray/triangle hit distance against a renderer's real mesh, in world space —
+        /// copied from <c>MV1133MaxOutfitV3Tests.TryRayMeshDistance</c>. A single merged renderer's AABB
+        /// (<c>Bounds.IntersectRay</c>) is too coarse here: all 25 hair locks share one renderer, so its
+        /// box swallows both eyes outright and the test fails identically on base and on the fix.</summary>
+        private static bool TryRayMeshDistance(Ray ray, MeshRenderer r, out float distance)
         {
-            Vector3 delta = to - from;
-            float len = delta.magnitude;
-            if (len < 1e-6f) return false;
+            distance = float.PositiveInfinity;
+            var mf = r.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return false;
 
-            var ray = new Ray(from, delta / len);
-            return bounds.IntersectRay(ray, out float dist) && dist < len - 1e-3f;
+            Mesh mesh = mf.sharedMesh;
+            Vector3[] verts = mesh.vertices;
+            int[] tris = mesh.triangles;
+            Transform t = r.transform;
+            bool hit = false;
+
+            for (int i = 0; i < tris.Length; i += 3)
+            {
+                Vector3 a = t.TransformPoint(verts[tris[i]]);
+                Vector3 b = t.TransformPoint(verts[tris[i + 1]]);
+                Vector3 c = t.TransformPoint(verts[tris[i + 2]]);
+
+                if (RayTriangle(ray, a, b, c, out float d) && d < distance)
+                {
+                    distance = d;
+                    hit = true;
+                }
+            }
+            return hit;
+        }
+
+        /// <summary>Standard Moller-Trumbore ray/triangle intersection, both winding directions — copied
+        /// from <c>MV1133MaxOutfitV3Tests.RayTriangle</c> (these meshes are smooth/flat shaded for
+        /// lighting, not reliably single-sided for a raycast).</summary>
+        private static bool RayTriangle(Ray ray, Vector3 a, Vector3 b, Vector3 c, out float t)
+        {
+            t = 0f;
+            Vector3 edge1 = b - a, edge2 = c - a;
+            Vector3 h = Vector3.Cross(ray.direction, edge2);
+            float det = Vector3.Dot(edge1, h);
+            if (Mathf.Abs(det) < 1e-8f) return false;
+
+            float inv = 1f / det;
+            Vector3 s = ray.origin - a;
+            float u = Vector3.Dot(s, h) * inv;
+            if (u < -1e-5f || u > 1f + 1e-5f) return false;
+
+            Vector3 q = Vector3.Cross(s, edge1);
+            float v = Vector3.Dot(ray.direction, q) * inv;
+            if (v < -1e-5f || u + v > 1f + 1e-5f) return false;
+
+            float dist = Vector3.Dot(edge2, q) * inv;
+            if (dist < 1e-5f) return false;
+
+            t = dist;
+            return true;
         }
 
         [Test]
@@ -83,10 +129,20 @@ namespace MaxWorlds.Tests.EditMode
             _playerGo.transform.eulerAngles = Vector3.zero;
             Invoke(_rig, "Follow");
 
-            // Let the hair settle into its idle resting pose (zero wind/stride transients already
-            // averaged out) before judging it — a fresh, un-simulated frame is not what the camera
-            // actually sees.
-            for (int i = 0; i < 120; i++) Invoke(_rig, "TickHair", 1f / 60f);
+            // Let the hair settle into its idle resting pose before judging it — a fresh, un-simulated
+            // frame is not what the camera actually sees. Ticked directly against MaxHairRig.Tick
+            // (public) rather than through the private TickHair wrapper, with windStrength pinned to 0
+            // and speed01 pinned to 0: TickHair reads the instance's hairWindStrength field (default
+            // MaxHair.WindStrengthDefault = 0.55, not zero) and the real Time.time, and with either
+            // nonzero the resolved pose depends on wall-clock time the editor happened to hold when the
+            // test started — nondeterministic from run to run. With windStrength = 0 and speed01 = 0,
+            // MaxHair.ComputePushWorld's gust term and MaxHair.Tick's per-node flutter term both collapse
+            // to exactly zero regardless of the time value passed in, so the resting pose this converges
+            // to is fully deterministic.
+            var hairLocks = GetField<MaxHairRig>(_rig, "_hairLocks");
+            const float dt = 1f / 60f;
+            for (int i = 0; i < 120; i++)
+                hairLocks.Tick(dt, Vector3.forward, 0f, 0f, i * dt, 0f, MaxHair.WindDirWorld);
 
             // The play camera, placed exactly the way the game places it — never a hand-picked angle.
             _camGo = new GameObject("MV1161 Camera Probe");
@@ -107,14 +163,20 @@ namespace MaxWorlds.Tests.EditMode
                 eyesChecked++;
 
                 Vector3 eyeCentre = eyeRenderer.transform.position;
+                Vector3 toEye = eyeCentre - camPos;
+                float eyeDist = toEye.magnitude;
+                var ray = new Ray(camPos, toEye / eyeDist);
+
                 foreach (var occluder in allRenderers)
                 {
                     bool isHairOrBrow = occluder.sharedMaterial == hairMat || occluder.sharedMaterial == hairRibbonMat;
                     if (!isHairOrBrow) continue;
 
-                    Assert.IsFalse(SegmentEntersBounds(camPos, eyeCentre, occluder.bounds),
+                    bool blocked = TryRayMeshDistance(ray, occluder, out float hitDist) && hitDist < eyeDist - 1e-3f;
+                    Assert.IsFalse(blocked,
                         $"the camera's line to {eyeRenderer.name} at {eyeCentre} is blocked by " +
-                        $"'{occluder.name}' (bounds {occluder.bounds}) before it reaches the eye.");
+                        $"'{occluder.name}' (nearest mesh hit at {hitDist:0.000} m, eye at {eyeDist:0.000} m) " +
+                        "before it reaches the eye.");
                 }
             }
 
