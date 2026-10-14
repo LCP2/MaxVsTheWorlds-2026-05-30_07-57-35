@@ -56,6 +56,61 @@ namespace MaxWorlds.Tests.EditMode
                 $"a bolt {distance} m from the player, against a 0.35 m hit radius, should read hit={expectHit}");
         }
 
+        // ---------------------------------------------------------------- MV-1173: the endpoint-only
+        // sample has EXACTLY zero worst-case margin for the Bolter (lungeSpeed * Dt == 2 *
+        // contactRadius), so a target sitting mid-step relies on an exact float tie to register a hit
+        // at all. At realistic coordinate magnitudes, float32 noise pushes that tie just outside the
+        // radius on both sides -- this is MV1105's intermittent Bolter row. A swept segment test has no
+        // tie to lose: the target sits ON the segment, so its distance resolves to ~0, not ~radius.
+
+        [Test]
+        public void Tick_LandsAHitWhenTheStepSweepsPastATargetParkedMidStep_MV1173()
+        {
+            // Coordinate magnitude matches MV1105EveryKindDamagesASentinelTests' own origin (~1e5) --
+            // this is the scale at which float32 ULP (~0.0078 m here) is large enough to flip a
+            // zero-margin comparison; near the world origin this same geometry would pass regardless
+            // of which sample is checked and would prove nothing.
+            const float speed = 14f, dt = 0.05f, hitRadius = 0.35f;
+            var target = new Vector3(0f, 0f, 97531f);
+            // Fire from due -Z so the locked flight direction is exactly world +Z (no quaternion
+            // round-trip noise to blur the deliberately exact arithmetic below).
+            var origin = target - new Vector3(0f, 0f, 5f);
+
+            var targetGo = new GameObject("MV-1173 test target", typeof(CharacterController));
+            try
+            {
+                var health = targetGo.AddComponent<PlayerHealth>();
+                health.Initialize();
+                targetGo.transform.position = target;
+
+                BolterBolt bolt = BolterBolt.Fire(origin, targetGo.transform, speed, maxRange: 9f, hitRadius);
+                try
+                {
+                    // Skip straight to the knife edge this stride/radius ratio produces: one hit
+                    // radius short of the target, so this single Tick's step carries the bolt exactly
+                    // across the target to one hit radius past it -- the target sits on the segment's
+                    // midpoint, not at either endpoint.
+                    bolt.transform.position = target - new Vector3(0f, 0f, hitRadius);
+
+                    float healthBefore = health.Current;
+                    bolt.Tick(dt);
+
+                    Assert.Less(health.Current, healthBefore,
+                        "a bolt whose single-tick step sweeps directly across the target's position " +
+                        "must land a hit, even though neither the step's start nor end point alone " +
+                        "sits inside the hit radius at this coordinate magnitude");
+                }
+                finally
+                {
+                    if (bolt != null) Object.DestroyImmediate(bolt.gameObject);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetGo);
+            }
+        }
+
         // ---------------------------------------------------------------- AC4: despawns past max range
 
         [TestCase(0f, false)]
