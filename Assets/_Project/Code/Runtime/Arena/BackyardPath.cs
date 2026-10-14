@@ -236,6 +236,12 @@ namespace MaxWorlds.Arena
                 // colour (Lee: "the area to the left of start should be solid ground") — this fills it.
                 World2GroundFill.Build(_map, host);
             }
+            // MV-1177: Market Street's own surfaces, walls and props — World 3 never got a kit pass
+            // until now (MV-1176's own "Do not": the dressing lands in a later ticket, which this is).
+            else if (world.Kit == WorldKit.City)
+            {
+                CityDressing.Dress(host, _map, _cfg, cover);
+            }
 
             // MV-759: a gated world re-skins its own doors into a round portal/sliding set instead of
             // the plain slab MapRuntime already built — now one switch over the row's own gate skin
