@@ -56,9 +56,9 @@ namespace MaxWorlds.VFX
     ///     robots on one frame, and eight simultaneous scatters is visual noise anyway (the Craft
     ///     Bible: juice must never obscure the read).
     ///
-    /// One shared mesh and two shared materials (silver, onyx) across every spring — same shader,
-    /// different `_BaseColor` — so they still SRP-batch into essentially one draw call no matter how
-    /// many are on the lawn.
+    /// One shared mesh and five shared materials (one per muted metal shade, MV-1189) across every
+    /// spring — same shader, different `_BaseColor` — so they still SRP-batch down to one draw call
+    /// per shade no matter how many coils are on the lawn.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("vfx")]
@@ -66,16 +66,16 @@ namespace MaxWorlds.VFX
     {
         // ---------------------------------------------------------------- tuning
 
-        /// <summary>Coils per dead robot. Raised from 4 (YT-101) — a couple of springs read as
-        /// "flicked a switch", ten reads as "it came apart". Still a handful, not a firework: killing
-        /// three robots in a second must not carpet the lawn.</summary>
-        public const int PerDeath = 10;
+        /// <summary>Coils per dead robot. Raised from 4 (YT-101) to 10, then to 14 (MV-1189, "a little
+        /// bit more of an event") — still a handful, not a firework: killing three robots in a second
+        /// must not carpet the lawn.</summary>
+        public const int PerDeath = 14;
 
-        /// <summary>Every spring that can exist at once. At ~4 s of life and 10 per kill that is about
-        /// nine kills' worth of springs alive on screen together (roughly two kills a second
-        /// sustained) before the oldest start getting recycled — comfortably past the rate the slice
-        /// can actually produce.</summary>
-        public const int Capacity = 90;
+        /// <summary>Every spring that can exist at once. Raised from 90 to 126 alongside
+        /// <see cref="PerDeath"/> (MV-1189) to keep the same nine-kills' worth of headroom (roughly
+        /// two kills a second sustained) before the oldest start getting recycled — comfortably past
+        /// the rate the slice can actually produce.</summary>
+        public const int Capacity = 126;
 
         /// <summary>Deaths that get springs on any one frame. See the class note.</summary>
         public const int DeathsPerFrame = 3;
@@ -111,19 +111,28 @@ namespace MaxWorlds.VFX
         private const float SizeMax = 0.27f;
 
         /// <summary>Metallic silver and near-black — swapped in for the old warm beige, which read as
-        /// brown rather than steel. Two colours instead of one gives the burst some variety without
-        /// adding a new hue to the yard: the robots are turquoise and violet
-        /// (<see cref="CharacterSkin"/>), the sparks are gold, the ground is a low-saturation
-        /// green-gold, and neutral metal is the one value left that pops off all of them.</summary>
+        /// brown rather than steel. Neutral metal is the one hue family left that pops off everything
+        /// else in the yard: the robots are turquoise and violet (<see cref="CharacterSkin"/>), the
+        /// sparks are gold, the ground is a low-saturation green-gold.</summary>
         private static readonly Color Silver = new Color(0.86f, 0.88f, 0.90f, 1f);
 
-        /// <summary>The darker half of the pair — mixed in with <see cref="Silver"/> so a burst reads
-        /// as a handful of distinct coils rather than one flat-coloured clump.</summary>
         private static readonly Color Onyx = new Color(0.05f, 0.05f, 0.06f, 1f);
+        private static readonly Color Gunmetal = new Color(0.36f, 0.38f, 0.41f, 1f);
+        private static readonly Color Copper = new Color(0.60f, 0.38f, 0.25f, 1f);
+        private static readonly Color Brass = new Color(0.66f, 0.57f, 0.33f, 1f);
 
-        /// <summary>Share of springs that come out silver rather than onyx. Silver majority, black for
-        /// interest — not a 50/50 split, which would read as two separate explosions.</summary>
-        private const float SilverChance = 0.65f;
+        /// <summary>MV-1189: five muted metal shades instead of two, so a burst reads as a handful of
+        /// distinct coils without turning visually striking — no emission, no saturation boost, just
+        /// more neutral variety. Parallel to <see cref="ShadeWeights"/> and <see cref="ShadeNames"/>.</summary>
+        private static readonly Color[] ShadeColors = { Silver, Onyx, Gunmetal, Copper, Brass };
+
+        /// <summary>Share of springs that come out each shade. Silver stays the majority; the other
+        /// four fill in behind it rather than splitting the burst into even, separately-readable
+        /// groups.</summary>
+        private static readonly float[] ShadeWeights = { 0.35f, 0.20f, 0.20f, 0.15f, 0.10f };
+
+        private static readonly string[] ShadeNames =
+            { "SpringSilver", "SpringOnyx", "SpringGunmetal", "SpringCopper", "SpringBrass" };
 
         // ---------------------------------------------------------------- state
 
@@ -143,8 +152,7 @@ namespace MaxWorlds.VFX
         }
 
         private readonly List<Spring> _springs = new List<Spring>(Capacity);
-        private Material _silverMat;
-        private Material _onyxMat;
+        private readonly Material[] _materials = new Material[ShadeColors.Length];
         private int _next;              // round-robin cursor: the oldest slot to recycle
         private int _deathsThisFrame;
 
@@ -173,12 +181,12 @@ namespace MaxWorlds.VFX
             // Ours, and explicit. A primitive's default material is not in the build's shader set and
             // ships MAGENTA (YT-58), so nothing here is ever left to a default.
             var template = MaterialLibrary.Character();
-            _silverMat = BuildSpringMaterial(template, "SpringSilver", Silver);
-            _onyxMat = BuildSpringMaterial(template, "SpringOnyx", Onyx);
+            for (int i = 0; i < ShadeColors.Length; i++)
+                _materials[i] = BuildSpringMaterial(template, ShadeNames[i], ShadeColors[i]);
         }
 
-        // Same shader instance for both, just a different _BaseColor — that is what keeps a mixed
-        // burst of silver and onyx coils SRP-batching as one draw call instead of two.
+        // Same shader instance for every shade, just a different _BaseColor — that is what keeps a
+        // mixed burst SRP-batching down to one draw call per shade instead of one per coil.
         private static Material BuildSpringMaterial(Material template, string name, Color color)
         {
             var m = template != null ? new Material(template) : new Material(MaterialLibrary.SurfaceShader);
@@ -197,8 +205,8 @@ namespace MaxWorlds.VFX
 
         private void OnDestroy()
         {
-            if (_silverMat != null) Destroy(_silverMat);
-            if (_onyxMat != null) Destroy(_onyxMat);
+            for (int i = 0; i < _materials.Length; i++)
+                if (_materials[i] != null) Destroy(_materials[i]);
         }
 
         // ---------------------------------------------------------------- the kill
@@ -240,7 +248,9 @@ namespace MaxWorlds.VFX
             Vector3 dir = Vector3.Slerp(Vector3.up, Random.onUnitSphere, 0.62f).normalized;
             if (dir.y < 0.15f) dir.y = 0.15f;    // never fire one straight into the lawn
 
-            s.Vel = dir.normalized * Random.Range(3.2f, 6.4f);
+            // MV-1189: 20% more initial speed than the original 3.2-6.4 range, part of "a little bit
+            // more of an event".
+            s.Vel = dir.normalized * Random.Range(3.84f, 7.68f);
             s.SpinAxis = Random.onUnitSphere;
             s.SpinSpeed = Random.Range(320f, 780f) * (Random.value < 0.5f ? -1f : 1f);
             s.Age = 0f;
@@ -249,8 +259,8 @@ namespace MaxWorlds.VFX
             s.Live = true;
 
             // Re-rolled per launch, not fixed per slot — a recycled spring must not keep wearing
-            // whichever colour it happened to spawn with the first time.
-            if (s.Renderer != null) s.Renderer.sharedMaterial = Random.value < SilverChance ? _silverMat : _onyxMat;
+            // whichever shade it happened to spawn with the first time.
+            if (s.Renderer != null) s.Renderer.sharedMaterial = _materials[PickShadeIndex()];
 
             // Start at the robot's middle — that is where guts come from — with a little scatter so
             // ten coils from one kill do not leave as a single clump.
@@ -296,7 +306,7 @@ namespace MaxWorlds.VFX
             go.AddComponent<MeshFilter>().sharedMesh = SpringMesh.Shared;
 
             var r = go.AddComponent<MeshRenderer>();
-            r.sharedMaterial = _silverMat;
+            r.sharedMaterial = _materials[0];
             // No shadows. Ninety coils casting shadow maps is a real cost for a mark nobody can
             // see under a spring the size of a thumbnail — and the ground already carries the
             // contact shadows that matter (YT-85).
@@ -378,6 +388,23 @@ namespace MaxWorlds.VFX
             vel.x *= GroundFriction;
             vel.z *= GroundFriction;
             spin *= GroundFriction;
+        }
+
+        /// <summary>
+        /// Picks a shade index from <see cref="ShadeWeights"/> via <see cref="Random.value"/>.
+        /// Public so a test can drive the real pick path under a fixed seed and check the resulting
+        /// distribution, rather than asserting the authored weight constants against themselves.
+        /// </summary>
+        public static int PickShadeIndex()
+        {
+            float r = Random.value;
+            float cumulative = 0f;
+            for (int i = 0; i < ShadeWeights.Length; i++)
+            {
+                cumulative += ShadeWeights[i];
+                if (r < cumulative) return i;
+            }
+            return ShadeWeights.Length - 1;
         }
 
         /// <summary>

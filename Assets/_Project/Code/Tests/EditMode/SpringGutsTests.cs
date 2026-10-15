@@ -169,5 +169,29 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(a);
             Assert.AreSame(a, b, "the shared coil is not rebuilt per ask");
         }
+
+        // ---------------------------------------------------------------- the five shades (MV-1189)
+
+        [Test]
+        public void PickShadeIndex_MatchesTheAuthoredWeights_AcrossAllFiveShades()
+        {
+            // The real pick path, not a reimplementation of it — a fixed seed makes the distribution
+            // reproducible without asserting the weight constants against themselves (Tier 1).
+            Random.InitState(20261015);
+
+            const int draws = 2000;
+            var counts = new int[5];
+            for (int i = 0; i < draws; i++) counts[SpringGuts.PickShadeIndex()]++;
+
+            float[] weights = { 0.35f, 0.20f, 0.20f, 0.15f, 0.10f };
+            for (int shade = 0; shade < counts.Length; shade++)
+            {
+                Assert.Greater(counts[shade], 0, $"shade {shade} never came up in {draws} draws");
+
+                float share = (float)counts[shade] / draws;
+                Assert.That(share, Is.EqualTo(weights[shade]).Within(0.05f),
+                    $"shade {shade}: {share:P1} is more than 5 points off its {weights[shade]:P0} weight");
+            }
+        }
     }
 }
