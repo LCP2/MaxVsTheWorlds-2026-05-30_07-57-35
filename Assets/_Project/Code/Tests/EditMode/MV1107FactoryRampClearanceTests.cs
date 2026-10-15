@@ -107,7 +107,73 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(doorsChecked, 0, "setup failure: no factory doors were found to check at all");
         }
 
-        private static void CheckDoor(Component body, string id, string worldKey, MapData map, ref int doorsChecked, List<string> violations)
+        /// <param name="requireVisible">MV-1188: false (the general suite's own default) treats a
+        /// suppressed ramp as nothing further to assert — correct for a door that lost a genuine
+        /// structural conflict elsewhere (MV-1148 territory) and legitimately draws nothing. The known
+        /// flush-packed Replicator rows have no such conflict (see <see cref="FlushPackedReplicatorRow_AllNineRampsVisibleAndClear"/>,
+        /// which passes true): for those nine ids a suppressed ramp is exactly the defect this ticket
+        /// closes, not something to quietly skip past.</param>
+        /// <summary>
+        /// MV-1188: a14's three same-facing pairs and a11's column of three — two independently-
+        /// authored "Replicator Nest" rows, flush-packed at exactly 2.0 m pitch on the kit's own 2.0 m
+        /// <see cref="WorldMapLoader.ReplicatorFootprint"/> grid. On base commit a87ee42e,
+        /// <see cref="FactoryDoorway"/>'s isotropic 0.2 m ramp grow manufactured a conflict out of this
+        /// geometry that was never real (see the ticket's own measured table), and every one of these
+        /// nine doors' <see cref="FactoryDoorway.RampVisible"/> came out false. <see cref="CheckDoor"/>'s
+        /// own early-out at <c>!door.RampVisible</c> is what let the general suite above pass green
+        /// while asserting nothing about any of them — <paramref name="requireVisible"/>'s true here
+        /// turns that into a real assertion instead.
+        ///
+        /// Tier 2 (resolved values): <see cref="FactoryDoorway.RampVisible"/> is <c>_ramp</c>'s own
+        /// renderer <c>.enabled</c> state after the real fix-up pass has run; the overlap check inside
+        /// <see cref="CheckDoor"/> reads resolved <see cref="FactoryDoorway.RampBounds"/> and every other
+        /// renderer's own resolved world bounds, never an authored constant.
+        /// </summary>
+        [Test]
+        public void FlushPackedReplicatorRow_AllNineRampsVisibleAndClear()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World2);
+            Assert.IsNotNull(cfg, "setup failure: World2 did not load");
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string loadReason),
+                $"setup failure: World2 did not build a map: {loadReason}");
+
+            var root = new GameObject("MV1188 root");
+            _spawned.Add(root);
+            MapBuild built = MapRuntime.Build(map, root.transform);
+            // World2's own real dressing pass — same source of colliderless pipe runs/kerbs the general
+            // test above dresses with, so this reproduces the exact scene the production bug saw.
+            StormdrainDressing.Dress(root.transform, map, built.Cover);
+            FactoryDoorway.Install();
+
+            var byId = new Dictionary<string, Replicator>();
+            foreach (Replicator r in built.Replicators) byId[r.name] = r;
+
+            string[] ids =
+            {
+                "a11_rep1", "a11_rep2", "a11_rep3",
+                "a14_rep1", "a14_rep2", "a14_rep3", "a14_rep4", "a14_rep5", "a14_rep6",
+            };
+
+            var violations = new List<string>();
+            int doorsChecked = 0;
+            foreach (string id in ids)
+            {
+                if (!byId.TryGetValue(id, out Replicator body))
+                {
+                    violations.Add($"{id}: not found in World2's built replicators — level data moved, update this test's id list");
+                    continue;
+                }
+                CheckDoor(body, id, WorldLibrary.World2, map, ref doorsChecked, violations, requireVisible: true);
+            }
+
+            if (violations.Count > 0)
+                Assert.Fail(string.Join("\n", violations));
+            Assert.AreEqual(ids.Length, doorsChecked, "setup failure: not every expected replicator door was checked");
+        }
+
+        private static void CheckDoor(Component body, string id, string worldKey, MapData map, ref int doorsChecked, List<string> violations, bool requireVisible = false)
         {
             FactoryDoorway door = FactoryDoorway.DoorFor(body);
             if (door == null) { violations.Add($"{worldKey}/{id}: no door was installed for this factory"); return; }
@@ -121,11 +187,11 @@ namespace MaxWorlds.Tests.EditMode
                 violations.Add($"{label}: outward {door.OutwardDirection} != authored facing {authoredFacing.AuthoredDoorOutward.Value}");
             }
 
-            // A ramp FactoryDoorway's own fix-up pass already disabled (see RampVisible's own doc) lost
-            // its argument to a later-built neighbour landing in the same footprint — it draws nothing,
-            // so there is no visible ramp left here for anything else to clear, and no foot point a
-            // robot could ever stand on. Nothing further to assert for this door.
-            if (!door.RampVisible) return;
+            if (!door.RampVisible)
+            {
+                if (requireVisible) violations.Add($"{label}: RampVisible is false — ramp was suppressed");
+                return;
+            }
 
             // === the ramp's resolved bounds overlap no other enabled renderer (outside the building's ===
             // === own hierarchy and the floor) by more than 0.05 m ===
