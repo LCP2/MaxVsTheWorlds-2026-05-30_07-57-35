@@ -116,7 +116,7 @@ namespace MaxWorlds.VFX
                 var d = All[i];
                 if (d == null || !d._built) continue;
                 lift = Mathf.Max(lift, FactoryDoorGeometry.RampLiftAt(
-                    worldPos, d._doorway, d._outward, d._across, SillHeight, RampRun, RampHalfWidth));
+                    worldPos, d._doorway, d._outward, d._across, SillHeight, RampRun, d._rampHalfWidth));
             }
             return lift;
         }
@@ -139,6 +139,14 @@ namespace MaxWorlds.VFX
         private Vector3 _outward;    // unit, axis-aligned, flat
         private Vector3 _across;     // unit, flat, perpendicular to _outward
         private bool _built;
+
+        /// <summary>MV-1188: this door's own ramp half-width, clamped to the body's own half-extent
+        /// across the door — <see cref="RampHalfWidth"/> is a shed-sized ceiling, not an entitlement; a
+        /// Replicator's box is narrower than that ceiling, and a ramp wider than the box it serves
+        /// overhangs into whatever sits flush beside it (see this field's one setter, in
+        /// <see cref="ChooseFace"/>, for the worked case). A no-op for every shed in the game — a
+        /// shed's own half-extent across is already wider than the ceiling.</summary>
+        private float _rampHalfWidth = RampHalfWidth;
 
         private Transform _ramp;    // MV-1107: the ramp alone (not the kerbs/frame/shutter around it)
 
@@ -311,6 +319,13 @@ namespace MaxWorlds.VFX
             float half = Mathf.Abs(Vector3.Dot(b.extents, _outward));
             _doorway = b.center + _outward * half;
             _doorway.y = b.min.y;
+
+            // MV-1188: RampHalfWidth (1.05 m) is sized for a shed (ShedFootprint 2.25 -> half-extent
+            // 1.125 m, wider than the ceiling, so sheds are unaffected). A Replicator's box is only
+            // 2 m across (half-extent 1.0 m) — an unclamped 1.05 m ramp overhangs its own body by 5 cm
+            // per side, which is real geometry: two flush-packed Replicators' ramps then genuinely
+            // interpenetrate by 0.10 m across the full run, raw bounds, no grow needed.
+            _rampHalfWidth = Mathf.Min(RampHalfWidth, Mathf.Abs(Vector3.Dot(b.extents, _across)));
         }
 
         private const float MaxProbe = 14f;
@@ -334,7 +349,7 @@ namespace MaxWorlds.VFX
                 - ramp.transform.up * (RampThickness * 0.5f);
             // MV-779: a Bevelled box, not the flat primitive cube — it is walked on, so its shape
             // (a plain slab) is unchanged, only the edge is chamfered like every other kit box.
-            Vector3 rampSize = new Vector3(RampHalfWidth * 2f, RampThickness, length);
+            Vector3 rampSize = new Vector3(_rampHalfWidth * 2f, RampThickness, length);
             ramp.transform.localScale = Vector3.one;
             ramp.GetComponent<MeshFilter>().sharedMesh =
                 CharacterMeshes.Bevelled(rampSize, CharacterMeshes.DefaultBevel(rampSize));
@@ -357,8 +372,13 @@ namespace MaxWorlds.VFX
                 // — the Prism's TOP (the narrower end) lands on ramp local +Z, which is _outward: the
                 // room the ramp leads into.
                 kerb.transform.rotation = ramp.transform.rotation * Quaternion.Euler(90f, 0f, 0f);
+                // MV-1188: inset by the kerb's own axis-aligned half-width (kerbWidth, at its wider
+                // base end — see the Prism call below) so its outer edge sits flush with the ramp's
+                // own edge, never past it. The old flat "-0.06f" margin left the kerb overshooting the
+                // ramp edge by a constant 0.06 m regardless of width — invisible while nothing ever sat
+                // this close, but a flush-packed Replicator row puts a neighbour's ramp exactly there.
                 kerb.transform.position = ramp.transform.position
-                    + _across * (s * (RampHalfWidth - 0.06f)) + ramp.transform.up * 0.06f;
+                    + _across * (s * (_rampHalfWidth - kerbWidth)) + ramp.transform.up * 0.06f;
                 kerb.transform.localScale = Vector3.one;
                 kerb.GetComponent<MeshFilter>().sharedMesh =
                     CharacterMeshes.Prism(4, diag * kerbWidth, diag * kerbWidth * 0.74f, length, 0.12f);
@@ -607,6 +627,31 @@ namespace MaxWorlds.VFX
                 && a.min.z < b.max.z - epsilon && a.max.z > b.min.z + epsilon;
         }
 
+        /// <summary>MV-1188: grows a ramp's raw world AABB only in the directions dressing can actually
+        /// be in its way — <c>+outward</c> (further down the ramp's own run), both ways across, and
+        /// vertically — and NEVER <c>-outward</c>, back through the door's own face plane. The old
+        /// isotropic <c>Bounds.Expand</c> grew that direction too, inflating the ramp backward into the
+        /// building it is bolted to; since the door plane IS the body's own face (<see cref="_doorway"/>
+        /// is set from it in <see cref="ChooseFace"/>), no authored geometry resting flush against that
+        /// face could ever survive growth that direction — which is exactly what made every flush-packed
+        /// Replicator row's ramps suppress each other.</summary>
+        private static Bounds GrowRampFootprint(Bounds raw, Vector3 outward, Vector3 across, float grow)
+        {
+            Vector3 min = raw.min, max = raw.max;
+
+            if (outward.x > 0.5f) max.x += grow; else if (outward.x < -0.5f) min.x -= grow;
+            if (outward.z > 0.5f) max.z += grow; else if (outward.z < -0.5f) min.z -= grow;
+
+            if (Mathf.Abs(across.x) > 0.5f) { min.x -= grow; max.x += grow; }
+            if (Mathf.Abs(across.z) > 0.5f) { min.z -= grow; max.z += grow; }
+
+            min.y -= grow; max.y += grow;
+
+            var bounds = new Bounds();
+            bounds.SetMinMax(min, max);
+            return bounds;
+        }
+
         /// <summary>
         /// MV-1107, change 3: once the ramp is built, anything still sitting in its (slightly grown)
         /// footprint is either structural/authored — a wall, an authored cover piece, another door's own
@@ -628,8 +673,8 @@ namespace MaxWorlds.VFX
             Renderer rampRenderer = _ramp.GetComponent<Renderer>();
             if (rampRenderer == null) return;
 
-            Bounds grown = rampRenderer.bounds;
-            grown.Expand(RampGrowMetres * 2f); // Expand grows the TOTAL size, so this is 0.2 m per side.
+            Bounds rawRamp = rampRenderer.bounds;
+            Bounds grown = GrowRampFootprint(rawRamp, _outward, _across, RampGrowMetres);
 
             foreach (Renderer r in sceneRenderers)
             {
@@ -637,7 +682,17 @@ namespace MaxWorlds.VFX
                 if (IsGroundPlane(r, _doorway.y)) continue;
                 if (_body != null && (r.transform == _body.transform || r.transform.IsChildOf(_body.transform))) continue;
 
-                if (!ReallyOverlaps(grown, r.bounds, 0.05f)) continue;
+                // MV-1188: another door's own ramp is tested against RAW bounds, never grown — the grow
+                // models how far decorative dressing can still be "in the way", and a neighbour's ramp
+                // resting flush against this one (see <see cref="_rampHalfWidth"/>'s own doc on why that
+                // no longer genuinely overlaps) is not dressing. Using the grown box here is what let
+                // two flush neighbours take turns disabling each other depending on build order.
+                bool isOtherRamp = r.transform.parent != null
+                    && r.transform.parent.TryGetComponent(out FactoryDoorway otherDoor)
+                    && otherDoor != this && r.transform == otherDoor._ramp;
+
+                Bounds testAgainst = isOtherRamp ? rawRamp : grown;
+                if (!ReallyOverlaps(testAgainst, r.bounds, 0.05f)) continue;
 
                 // MV-1107: a collider alone isn't "structural or authored" — MV-1087's channel kerbs
                 // and crossing decks are decorative dressing that ALSO carry one, purely so something
