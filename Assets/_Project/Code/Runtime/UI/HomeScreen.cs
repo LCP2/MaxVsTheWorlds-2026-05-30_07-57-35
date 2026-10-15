@@ -811,6 +811,19 @@ namespace MaxWorlds.UI
             btn.onClick.AddListener(OnSettingsTapped);
         }
 
+        // MV-1114: RESET's own rect, named so the status block below it is DERIVED from these, not a
+        // second hand-typed guess — the original bug was exactly that drift (status y=96 was typed
+        // independently of RESET's real y=20..120, so the two silently overlapped). Status then runs
+        // from RESET's own bottom edge (+ gap) down to the RESUME/PLAY row's own top.
+        private const float ResetInsetRight = 28f, ResetWidth = 180f, ResetInsetTop = 20f, ResetHeight = 100f;
+        private const float ResetBottomY = ResetInsetTop + ResetHeight;
+        private const float StatusGapBelowReset = 8f;
+        private const float StatusTopY = ResetBottomY + StatusGapBelowReset;
+        private const float StatusInsetX = 28f;   // matches the title/RESUME/PLAY left inset
+        private const float ButtonRowTopY = 210f;   // RESUME/PLAY's own PlaceTL y, below
+        private const float StatusMaxFontSize = 26f;
+        private const float StatusMinFontSize = 11f;   // the AC's own floor
+
         private void BuildCard(RectTransform stage, int slot, float x, float y, float w, float h,
             Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
         {
@@ -843,19 +856,31 @@ namespace MaxWorlds.UI
             // >=100 floor — 100 tall wins over the 86 in prose; flagged in the fix comment).
             var resetBtn = AddButton(cardRt, "RESET", data.HasData ? DestructiveRed : CardRim,
                 data.HasData, () => OnResetTapped(slot), fontSize: 28f);
-            PlaceTL(resetBtn, w - 28f - 180f, 20f, 180f, 100f);
+            PlaceTL(resetBtn, w - ResetInsetRight - ResetWidth, ResetInsetTop, ResetWidth, ResetHeight);
             if (!data.HasData)
             {
                 var resetText = resetBtn.GetComponentInChildren<Text>();
                 if (resetText != null) resetText.color = new Color(1f, 1f, 1f, 0.35f);
             }
 
-            var status = AddText(cardRt, 26f, Dim, TextAnchor.UpperLeft, FontStyle.Normal);
-            status.gameObject.name = "Status";
-            // MV-986: raised (was y 124, h 68) to fit three lines and still end at/above y 204, clear
-            // of RESUME/PLAY at y 210.
-            PlaceTL(status.rectTransform, 28f, 96f, 520f, 108f);
-            status.text = Summarise(data, worldInfoCache);
+            // MV-1114: the info block sits entirely BELOW RESET's own bottom edge (+ gap) now, so it
+            // can never cover RESET's text again (was y=96, inside RESET's own y=20..120 span, which is
+            // what let RESET's end-of-row "of 30" overlap happen). Three independent single-line Texts,
+            // not one multi-line block, so each can best-fit/truncate on its own — a short "Best: 1
+            // death" line has no reason to shrink just because the world/area line above it is long.
+            var statusRoot = NewRect("Status", cardRt, Vector2.zero, Vector2.zero);
+            float statusW = w - 2f * StatusInsetX;
+            float lineH = (ButtonRowTopY - StatusTopY) / 3f;
+            PlaceTL(statusRoot, StatusInsetX, StatusTopY, statusW, ButtonRowTopY - StatusTopY);
+
+            string[] statusLines = StatusLines(data, worldInfoCache);
+            for (int li = 0; li < statusLines.Length; li++)
+            {
+                var line = AddText(statusRoot, StatusMaxFontSize, Dim, TextAnchor.UpperLeft, FontStyle.Normal);
+                line.gameObject.name = $"Status Line {li + 1}";
+                PlaceTL(line.rectTransform, 0f, li * lineH, statusW, lineH);
+                FitLineWithEllipsis(line, statusLines[li], statusW);
+            }
 
             if (data.HasRunInProgress)
             {
@@ -1007,27 +1032,35 @@ namespace MaxWorlds.UI
             _confirmRoot = null;
         }
 
-        /// <summary>The card's three-line status block (MV-986; supersedes MV-427's single "best: N
-        /// deaths" line, which named neither the world, the area of N, nor how long a run in progress
-        /// had been played). <paramref name="worldInfoCache"/> is filled at most once per world index
-        /// across one <see cref="Build"/> call (see call site).</summary>
-        private static string Summarise(SaveSlotData data, Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
+        /// <summary>The card's three status lines (MV-986; supersedes MV-427's single "best: N deaths"
+        /// line, which named neither the world, the area of N, nor how long a run in progress had been
+        /// played). Always exactly 3 entries (MV-1114: one per <see cref="BuildCard"/> status Text,
+        /// blank where a branch has nothing to say) so the caller never needs a branch of its own.
+        /// <paramref name="worldInfoCache"/> is filled at most once per world index across one
+        /// <see cref="Build"/> call (see call site).</summary>
+        private static string[] StatusLines(SaveSlotData data, Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
         {
-            if (!data.HasData) return "Empty";
+            if (!data.HasData) return new[] { "Empty", string.Empty, string.Empty };
 
             if (data.HasRunInProgress)
             {
                 int worldIndex = data.CheckpointWorldIndex >= 0 ? data.CheckpointWorldIndex : data.WorldIndex;
                 (string name, int areaCount) = WorldInfo(worldIndex, worldInfoCache);
-                string line1 = $"World {worldIndex + 1}: {name} - Area {data.CheckpointAreaIndex} of {areaCount}";
-                string line2 = $"Played {FormatPlayedTime(data.CheckpointElapsedSeconds)} - {DeathsPhrase(data.CheckpointDeathsTaken)}";
-                return $"{line1}\n{line2}\n{BestLine(data.BestDeathsToVictory)}";
+                return new[]
+                {
+                    $"World {worldIndex + 1}: {name} - Area {data.CheckpointAreaIndex} of {areaCount}",
+                    $"Played {FormatPlayedTime(data.CheckpointElapsedSeconds)} - {DeathsPhrase(data.CheckpointDeathsTaken)}",
+                    BestLine(data.BestDeathsToVictory)
+                };
             }
 
             (string nextName, _) = WorldInfo(data.WorldIndex, worldInfoCache);
-            string next = $"Next: World {data.WorldIndex + 1}: {nextName}";
-            string furthest = $"Furthest: World {data.FurthestWorldIndex + 1}";
-            return $"{next}\n{BestLine(data.BestDeathsToVictory)}\n{furthest}";
+            return new[]
+            {
+                $"Next: World {data.WorldIndex + 1}: {nextName}",
+                BestLine(data.BestDeathsToVictory),
+                $"Furthest: World {data.FurthestWorldIndex + 1}"
+            };
         }
 
         /// <summary>Loads <paramref name="worldIndex"/>'s config at most once per <see cref="Build"/>
@@ -1114,6 +1147,39 @@ namespace MaxWorlds.UI
             Stretch(t.rectTransform);
             t.text = label;
             return (RectTransform)go.transform;
+        }
+
+        /// <summary>MV-1114: fits <paramref name="full"/> on one line within <paramref name="maxWidth"/>
+        /// ref units — shrinks <paramref name="text"/>'s own font size from <see cref="StatusMaxFontSize"/>
+        /// down to <see cref="StatusMinFontSize"/> (the AC's own best-fit floor), then — only if it still
+        /// doesn't fit at the floor — trims characters off the end and appends an ASCII "..." (never the
+        /// Unicode ellipsis glyph: <c>MV600AsciiOnlyPlayerFacingTextTests</c> already flags U+2026 as a
+        /// LegacyRuntime.ttf gap for exactly this reason) until the truncated string measures inside
+        /// <paramref name="maxWidth"/> at the floor size. Legacy <see cref="Text"/> has no built-in
+        /// ellipsis-overflow mode (that's a TextMeshPro feature), so this measures directly off
+        /// <see cref="Text.preferredWidth"/> — the same generator the renderer itself uses — at each
+        /// candidate size/string rather than estimating.</summary>
+        private static void FitLineWithEllipsis(Text text, string full, float maxWidth)
+        {
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+
+            for (int size = (int)StatusMaxFontSize; size >= (int)StatusMinFontSize; size--)
+            {
+                text.fontSize = size;
+                text.text = full;
+                if (text.preferredWidth <= maxWidth) return;
+            }
+
+            text.fontSize = (int)StatusMinFontSize;
+            string candidate = full;
+            while (candidate.Length > 0)
+            {
+                candidate = candidate.Substring(0, candidate.Length - 1);
+                text.text = candidate + "...";
+                if (text.preferredWidth <= maxWidth) return;
+            }
+            text.text = "...";
         }
 
         private static Image AddImage(Transform parent, Sprite sprite, Color color, string name)

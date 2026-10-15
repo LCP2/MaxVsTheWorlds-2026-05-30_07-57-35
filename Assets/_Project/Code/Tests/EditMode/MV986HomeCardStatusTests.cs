@@ -16,9 +16,14 @@ namespace MaxWorlds.Tests.EditMode
     /// "no finished run yet\nRun in progress - Area 16" for this exact fixture, not the three-line
     /// World/Played/Best block this ticket adds (quoted in the fix comment).
     ///
+    /// MV-1114 split the old single multi-line "Status" <c>Text</c> into three independent
+    /// "Status Line N" Texts (so each can best-fit/truncate on its own without a long line dragging a
+    /// short one down with it) — this test now reads those three by name instead of one combined
+    /// string, same underlying content check.
+    ///
     /// Builds the real Home screen (Tier 2: resolved rect/text after
     /// <c>LayoutRebuilder.ForceRebuildLayoutImmediate</c>), same idiom as
-    /// <see cref="MV960HomeLayoutTests"/>, then reads slot 0's card status <c>Text</c> by name.
+    /// <see cref="MV960HomeLayoutTests"/>, then reads slot 0's card status line Texts by name.
     /// "Stormdrain" and its area count are read from the real World 2 config, not hard-coded, so this
     /// never drifts from the authored data (Testing policy v2: no asserting an authored constant).
     /// </summary>
@@ -75,23 +80,28 @@ namespace MaxWorlds.Tests.EditMode
             var card = stage.Find("Card 1") as RectTransform;
             Assert.That(card, Is.Not.Null, "fixture: slot 0's card must be named 'Card 1'");
 
-            var statusRt = card.Find("Status") as RectTransform;
-            var status = statusRt != null ? statusRt.GetComponent<Text>() : null;
-            Assert.That(status, Is.Not.Null, "the card's status text must be reachable by name 'Status'");
+            var statusRoot = card.Find("Status") as RectTransform;
+            Assert.That(statusRoot, Is.Not.Null, "fixture: the card's status block must be reachable by name 'Status'");
 
             Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(statusRt);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(statusRoot);
+
+            Text Line(int n)
+            {
+                var rt = statusRoot.Find($"Status Line {n}") as RectTransform;
+                var t = rt != null ? rt.GetComponent<Text>() : null;
+                Assert.That(t, Is.Not.Null, $"the card's status block must carry a 'Status Line {n}' text");
+                return t;
+            }
 
             WorldConfig world2 = WorldLibrary.Load(WorldLibrary.KeyForIndex(WorldCatalog.IndexOf(WorldIds.Stormdrain)));
             Assert.That(world2, Is.Not.Null, "fixture: World 2's config must load");
             string worldName = world2.world.Substring(world2.world.IndexOf('—') + 1).Trim();
             int areaCount = world2.dials.areaCount;
 
-            string expected = $"World 2: {worldName} - Area 16 of {areaCount}\nPlayed 23 min - 4 deaths\nBest: 1 death";
-            Assert.That(status.text, Is.EqualTo(expected));
-
-            Assert.That(status.preferredHeight, Is.LessThanOrEqualTo(statusRt.rect.height),
-                $"status text ({status.preferredHeight:0.0} tall) overflows its rect ({statusRt.rect.height:0.0} tall)");
+            Assert.That(Line(1).text, Is.EqualTo($"World 2: {worldName} - Area 16 of {areaCount}"));
+            Assert.That(Line(2).text, Is.EqualTo("Played 23 min - 4 deaths"));
+            Assert.That(Line(3).text, Is.EqualTo("Best: 1 death"));
         }
     }
 }
