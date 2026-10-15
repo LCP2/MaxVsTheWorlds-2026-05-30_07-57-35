@@ -20,19 +20,19 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-1129 (the one new test, per CC_AUTONOMY's testing policy): a cold-boot RESUME into a world
-    /// whose final boss is already recorded defeated must not strand the run, in every one of the
-    /// ticket's three resume states. Fails on base commit d30d293: <c>WorldFinaleGate</c> has no
-    /// <c>ResumeFromCheckpoint</c> method at all (CS1061) — nothing seeds <c>_finalBossDefeated</c> from
-    /// a restored checkpoint, because <c>BossCensus.ApplyCheckpointDefeatedAreas</c> deliberately never
-    /// re-fires <c>BossDefeated</c> (see that method's own doc comment — "restoring history, not scoring
-    /// a fresh kill"), so a freshly-rebuilt gate never arms and the world's one Weapon Core never
-    /// reappears, clean-up never resumes, and an already-open exit never re-opens.
+    /// whose final boss is already recorded defeated must not strand the run. Originally two carried
+    /// three resume states (weapon not granted / weapon granted, exit not open / exit open); MV-1183
+    /// collapsed the middle one away — collecting the Core now destroys the final area's remaining
+    /// robots and opens the door in the SAME call, so "weapon granted" and "exit open" are the same
+    /// moment and this test now covers exactly two cases: before that moment (re-drop the Core) and
+    /// after it (re-open the door and re-destroy whatever the cold-boot rebuild just placed back into
+    /// the final area).
     ///
     /// Drives the real resume path for each case: a real World 1 map/<c>BackyardPath</c> build,
     /// <c>SaveSystem.CaptureCheckpoint</c>/<c>RestoreCheckpoint</c>, and <c>WorldFinaleGate</c>'s own
     /// public Tick methods — never a reflection-set field under test, and never an authored constant
     /// asserted back at itself. Tier 2 (resolved values): a real <c>Pickup</c>'s resolved position and
-    /// kind, <c>WorldFinaleGate.IsOpen</c>/<c>WeaponMomentResolved</c>, and a real <c>RobotEnemy.IsAlive</c>.
+    /// kind, <c>WorldFinaleGate.IsOpen</c>, and a real <c>RobotEnemy.IsAlive</c>.
     /// </summary>
     public sealed class MV1129FinaleResumeTests
     {
@@ -101,9 +101,6 @@ namespace MaxWorlds.Tests.EditMode
 
         private static void InvokeOnEnable(Object c) =>
             c.GetType().GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, null);
-
-        private static void InvokeUpdate(Object c) =>
-            c.GetType().GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, null);
 
         private static void SetPrivateField(object target, string field, object value) =>
             target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(target, value);
@@ -195,7 +192,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ResumeAfterFinalBossAlreadyDefeated_HandlesAllThreeCases()
+        public void ResumeAfterFinalBossAlreadyDefeated_HandlesBothCases()
         {
             SaveSystem.ActiveSlot = 0;
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "TEST", WorldIndex = 0 });
@@ -240,14 +237,13 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.LessOrEqual(Mathf.Min(distToBoss1, distToBoss2), 2f,
                         "the resume-spawned Core must land at the final area's own boss, not somewhere arbitrary");
 
+                    // MV-1183: collecting it resolves the whole finale in the same call -- no clean-up
+                    // or exit beat left for the door to wait on.
                     PickupDirector pickupDirector = PickupDirector.EnsureInstalled();
                     InvokeCollect(pickupDirector, cores[0]);
-                    gate.TickWeaponBeat(2.5f);
-                    gate.TickExitBeat(1.0f);
 
                     Assert.IsTrue(gate.IsOpen,
-                        "MV-1129 case 1: collecting the resume-spawned Core must still carry the finale " +
-                        "through clean-up to an open exit, well within the clean-up failsafe");
+                        "MV-1129 case 1: collecting the resume-spawned Core must open the exit immediately");
                 }
                 finally
                 {
@@ -259,7 +255,7 @@ namespace MaxWorlds.Tests.EditMode
 
             ResetStatics();
 
-            // ================================================ Case 2: weapon granted, exit not open
+            // ========================================= Case 2: weapon granted (== exit already open)
             {
                 World w = BuildWorld1();
                 GameObject player = NewPlayer();
@@ -269,43 +265,33 @@ namespace MaxWorlds.Tests.EditMode
 
                     WorldFinaleGate prevGate = NewGate();
 
-                    var robot = new GameObject("MV1129 a30 robot");
-                    robot.transform.position = boss1.transform.position; // MV-1122: inside the final
-                    // area's own footprint -- clean-up now force-kills a stamped robot it finds outside it.
-                    robot.AddComponent<CharacterController>();
-                    var enemy = robot.AddComponent<RobotEnemy>();
-                    InvokeOnEnable(enemy); // runs ResetState(); SetAreaIndex must come after
-                    enemy.SetAreaIndex(w.Cfg.dials.areaCount);
-
-                    // Previous session, live: the last boss falls, the Core is collected, the weapon
-                    // beat applies the morph -- but a30's own robot is still alive, so clean-up never
-                    // reaches the exit beat before the app closes.
+                    // Previous session, live: the last boss falls and the Core is collected -- MV-1183:
+                    // that single call already destroyed every robot alive in a30 and opened the door,
+                    // before the app closed.
                     RecordBothBossesDefeated(w, boss1, boss2);
                     HudSignals.EmitWeaponCoreCollected();
-                    prevGate.TickWeaponBeat(2.5f);
 
-                    Assert.IsFalse(prevGate.IsOpen, "precondition: a30's own robot is still alive");
-                    Assert.IsTrue(prevGate.WeaponMomentResolved,
-                        "precondition: the weapon moment has already resolved -- clean-up is under way");
+                    Assert.IsTrue(prevGate.IsOpen, "precondition: the exit must already be open this session");
 
                     SaveSystem.CaptureCheckpoint(0, areaIndex: w.Cfg.dials.areaCount, worldIndex: 0);
                     SaveSlotData captured = SaveSystem.Load(0);
                     Assert.IsTrue(captured.CheckpointFinaleWeaponGranted,
                         "the checkpoint must record the weapon as already granted");
-                    Assert.IsFalse(captured.CheckpointFinaleExitOpen, "precondition: the exit was never open");
+                    Assert.IsTrue(captured.CheckpointFinaleExitOpen,
+                        "MV-1183: weapon-granted and exit-open are the same moment now, so both must be true");
 
-                    // Cold boot: the previous session's gate/robot are gone; a fresh copy of each stands
-                    // in their place, exactly as a rebuilt scene would.
+                    // Cold boot: the previous session's gate is gone, and the level's own authored a30
+                    // robot is placed back into the (rebuilt-from-scratch) scene fresh -- exactly what a
+                    // real RESUME does, since nothing persists a robot's death individually.
                     BossCensus.Reset();
                     Object.DestroyImmediate(prevGate.gameObject);
-                    Object.DestroyImmediate(robot);
                     Sweep();
 
                     var freshRobot = new GameObject("MV1129 a30 robot (resumed)");
-                    freshRobot.transform.position = boss1.transform.position; // MV-1122: see the other robot's own comment above
+                    freshRobot.transform.position = boss1.transform.position;
                     freshRobot.AddComponent<CharacterController>();
                     var freshEnemy = freshRobot.AddComponent<RobotEnemy>();
-                    InvokeOnEnable(freshEnemy);
+                    InvokeOnEnable(freshEnemy); // runs ResetState(); SetAreaIndex must come after
                     freshEnemy.SetAreaIndex(w.Cfg.dials.areaCount);
 
                     WorldFinaleGate gate = NewGate();
@@ -313,69 +299,14 @@ namespace MaxWorlds.Tests.EditMode
                     SaveSlotData resumed = SaveSystem.Load(0);
                     gate.ResumeFromCheckpoint(resumed.CheckpointFinaleWeaponGranted, resumed.CheckpointFinaleExitOpen);
 
-                    Assert.IsFalse(gate.IsOpen,
-                        "MV-1129 case 2: resuming with the weapon already granted must resume at clean-up, " +
-                        "not skip straight to an open exit while a robot is still alive in the final area");
-                    Assert.IsTrue(freshEnemy.IsAlive, "sanity: the robot hasn't been killed yet");
-
-                    freshEnemy.TakeDamage(new DamageInfo(999999f, freshRobot.transform.position, Vector3.forward, Team.Player));
-                    InvokeUpdate(gate);
-                    gate.TickExitBeat(1.0f);
-
                     Assert.IsTrue(gate.IsOpen,
-                        "MV-1129 case 2: once clean-up's last robot is dead, the resumed finale must still " +
-                        "reach an open exit, well within the clean-up failsafe");
+                        "MV-1129 case 2: resuming after the orb was already taken must leave the door open " +
+                        "-- it is never locked again, including after a RESUME");
+                    Assert.IsFalse(freshEnemy.IsAlive,
+                        "MV-1183: a resume after the orb is taken must restore an EMPTY final area -- the " +
+                        "robot the cold-boot rebuild just placed back into a30 must be destroyed again");
 
                     Object.DestroyImmediate(freshRobot);
-                }
-                finally
-                {
-                    Object.DestroyImmediate(player);
-                    Object.DestroyImmediate(w.Root);
-                    Sweep();
-                }
-            }
-
-            ResetStatics();
-
-            // ===================================================================== Case 3: exit open
-            {
-                World w = BuildWorld1();
-                GameObject player = NewPlayer();
-                try
-                {
-                    (BigBermudaBoss boss1, BigBermudaBoss boss2) = FinalBosses(w);
-
-                    WorldFinaleGate prevGate = NewGate();
-
-                    // Previous session, live: the last boss falls, the Core is collected, and -- with no
-                    // robot modeled this time -- clean-up finds zero left and moves straight through the
-                    // exit beat to a fully open door, before the app closes.
-                    RecordBothBossesDefeated(w, boss1, boss2);
-                    HudSignals.EmitWeaponCoreCollected();
-                    prevGate.TickWeaponBeat(2.5f);
-                    prevGate.TickExitBeat(1.0f);
-                    Assert.IsTrue(prevGate.IsOpen, "precondition: the exit must already be open this session");
-
-                    SaveSystem.CaptureCheckpoint(0, areaIndex: w.Cfg.dials.areaCount, worldIndex: 0);
-                    SaveSlotData captured = SaveSystem.Load(0);
-                    Assert.IsTrue(captured.CheckpointFinaleWeaponGranted);
-                    Assert.IsTrue(captured.CheckpointFinaleExitOpen,
-                        "the checkpoint must record the exit as already open");
-
-                    // Cold boot.
-                    BossCensus.Reset();
-                    Object.DestroyImmediate(prevGate.gameObject);
-                    Sweep(); // clears the previous session's own WorldJoinSequence/corridor too
-
-                    WorldFinaleGate gate = NewGate();
-                    Assert.IsTrue(SaveSystem.RestoreCheckpoint(0), "precondition: the checkpoint must round-trip");
-                    SaveSlotData resumed = SaveSystem.Load(0);
-                    gate.ResumeFromCheckpoint(resumed.CheckpointFinaleWeaponGranted, resumed.CheckpointFinaleExitOpen);
-
-                    Assert.IsTrue(gate.IsOpen,
-                        "MV-1129 case 3: resuming with the exit already open must leave the door open, with " +
-                        "no clean-up or weapon beat to replay -- the run can be finished by walking through it");
                 }
                 finally
                 {

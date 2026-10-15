@@ -46,6 +46,16 @@ namespace MaxWorlds.Bosses
         /// defeat is permanent for the rest of the scene's life, cleared only by <see cref="Reset"/>.</summary>
         private static readonly HashSet<int> DefeatedAreas = new HashSet<int>(4);
 
+        /// <summary>MV-1183: how many bosses have actually died in each area so far this scene's
+        /// lifetime, incremented unconditionally in <see cref="ReportDefeated"/> — unlike
+        /// <see cref="AnyLivingIn"/>, which only ever sees a boss that has already <see cref="Register"/>-ed,
+        /// this counts every real kill regardless of registration order. The fix for World 1 a30's own
+        /// bug (two Big Bermudas; killing the first dropped the orb while the second sat Dormant,
+        /// never yet <see cref="Register"/>-ed, so <see cref="AnyLivingIn"/> alone already read "empty"):
+        /// a caller that also knows the area's AUTHORED boss total (<c>WorldArea.Bosses().Length</c>)
+        /// can compare it against this count instead of trusting the registered-living set alone.</summary>
+        private static readonly Dictionary<int, int> DeadCountByArea = new Dictionary<int, int>(4);
+
         /// <summary>MV-721: sum of <c>Max</c> for every boss that has died so far in the CURRENT fight
         /// (i.e. since the engage latch last re-armed), with an implicit <c>Current</c> of 0 for each.
         /// <see cref="EmitCombinedHealth"/> folds this into its denominator so a death only ever removes
@@ -80,6 +90,7 @@ namespace MaxWorlds.Bosses
             _deadMaxThisFight = 0f;
             LastDefeatedAreaIndex = 0;
             DefeatedAreas.Clear();
+            DeadCountByArea.Clear();
         }
 
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
@@ -151,6 +162,10 @@ namespace MaxWorlds.Bosses
             int areaIndex = AreaByBoss.TryGetValue(boss, out int a) ? a : 0;
             AreaByBoss.Remove(boss);
 
+            // MV-1183: every real kill counts, not just the one that happens to empty the registered-
+            // living set -- see this field's own doc comment.
+            DeadCountByArea[areaIndex] = DeadCountByArea.TryGetValue(areaIndex, out int dead) ? dead + 1 : 1;
+
             HudSignals.EmitBossKilled(diedAt);
 
             if (!AnyLivingIn(areaIndex))
@@ -221,6 +236,11 @@ namespace MaxWorlds.Bosses
         /// fresh and Dormant — the checkpoint restore that knows an area was already cleared runs well
         /// before Max ever walks into that boss's wake area and triggers this check for real.</summary>
         public static bool IsAreaDefeated(int areaIndex) => DefeatedAreas.Contains(areaIndex);
+
+        /// <summary>MV-1183: how many bosses have actually died in <paramref name="areaIndex"/> so far
+        /// this scene's lifetime — see <see cref="DeadCountByArea"/>'s own doc comment.</summary>
+        public static int DeadCountInArea(int areaIndex) =>
+            DeadCountByArea.TryGetValue(areaIndex, out int c) ? c : 0;
 
         /// <summary>The area indices <see cref="DefeatedAreas"/> holds right now, sorted (MV-995) — what
         /// <see cref="MaxWorlds.Save.SaveSystem.CaptureCheckpoint"/> persists into

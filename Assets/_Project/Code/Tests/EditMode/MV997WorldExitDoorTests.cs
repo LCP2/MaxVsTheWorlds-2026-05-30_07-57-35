@@ -261,12 +261,9 @@ namespace MaxWorlds.Tests.EditMode
                         .Single(p => p.Kind == PickupKind.WeaponCore);
                     InvokeCollect(pickupDirector, core);
 
-                    // MV-1079: collecting the Core now starts Beat A (2.5s; this director's own per-area
-                    // robot count is 0, so clean-up finds zero left and moves straight to Beat B, 1.0s of
-                    // which is what actually calls WorldFinaleGate.Open()).
-                    gate.TickWeaponBeat(2.5f);
-                    gate.TickExitBeat(1.0f);
-
+                    // MV-1183: collecting the Core destroys the final area's remaining robots (none
+                    // modeled by this director) and opens the door in the SAME call -- no clean-up
+                    // phase or exit beat for WorldFinaleGate.Open() to wait on any more.
                     Assert.IsTrue(gate.IsOpen, $"world {row.WorldIndex}'s gate must open once the Core is collected");
                     Assert.IsTrue(built.ExitGate.IsOpen,
                         $"world {row.WorldIndex}: the SAME real map gate MapRuntime built must be the one that opened");
