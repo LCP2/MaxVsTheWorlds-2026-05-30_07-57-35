@@ -232,6 +232,7 @@ namespace MaxWorlds.Bosses
             if (BossCensus.IsAreaDefeated(areaIndex))
             {
                 _phase = Phase.Dead;
+                DestroyBoundRig();
                 gameObject.SetActive(false);
                 Destroy(gameObject);
                 return;
@@ -249,6 +250,16 @@ namespace MaxWorlds.Bosses
             MapZone zone = map?.ZoneAt(transform.position.x, transform.position.z);
             if (zone == null) return 0;
             return AreaAccumulationDirector.AreaIndexOf(zone.id);
+        }
+
+        /// <summary>MV-1193: same "the MV-995 self-removal path must never leave an inert husk standing"
+        /// reasoning as <see cref="BigBermudaBoss.DestroyBoundRig"/> — <see cref="SludgequeenRig"/> is a
+        /// separate, unparented top-level GameObject, so <c>Destroy(gameObject)</c> on the boss alone
+        /// would leave her body standing, undamageable and never dying.</summary>
+        private void DestroyBoundRig()
+        {
+            foreach (SludgequeenRig rig in FindObjectsByType<SludgequeenRig>(FindObjectsSortMode.None))
+                if (rig != null && rig.Boss == this) Destroy(rig.gameObject);
         }
 
         /// <summary>MV-1110: same shared wake rule as <see cref="BigBermudaBoss.TickDormant"/> — within

@@ -296,6 +296,7 @@ namespace MaxWorlds.Bosses
             if (BossCensus.IsAreaDefeated(areaIndex))
             {
                 _phase = Phase.Dead;
+                DestroyBoundRig();
                 gameObject.SetActive(false);
                 Destroy(gameObject);
                 return;
@@ -306,6 +307,21 @@ namespace MaxWorlds.Bosses
             // 2 phases -> HUD bar shows the 50% segment. MV-542: routed through BossCensus so a 2+
             // boss fight engages the bar once and shows the COMBINED health, not a per-boss re-engage.
             BossCensus.Register(this, _displayName, 2, _health.Current, _health.Max, areaIndex);
+        }
+
+        /// <summary>MV-1193: the MV-995 self-removal path above must never leave this boss's own rig
+        /// body standing as an inert husk — <see cref="BigBermudaRig"/>/<see cref="AnchorheadRig"/> is a
+        /// separate, unparented top-level GameObject (see <see cref="BigBermudaRig.CreateFor"/>'s own
+        /// doc comment), so <c>Destroy(gameObject)</c> on the boss alone leaves the body standing,
+        /// undamageable and never dying (World 1 a30's second Big Bermuda; Lee, device, 15 Oct). Checks
+        /// both rig kinds since this boss class backs both <see cref="BossKinds.BigBermuda"/> and
+        /// <see cref="BossKinds.Anchorhead"/> — never both at once for one boss.</summary>
+        private void DestroyBoundRig()
+        {
+            foreach (BigBermudaRig rig in FindObjectsByType<BigBermudaRig>(FindObjectsSortMode.None))
+                if (rig != null && rig.Boss == this) Destroy(rig.gameObject);
+            foreach (AnchorheadRig rig in FindObjectsByType<AnchorheadRig>(FindObjectsSortMode.None))
+                if (rig != null && rig.Boss == this) Destroy(rig.gameObject);
         }
 
         /// <summary>Which area this boss stands in (MV-591). Resolved from its own world position, so

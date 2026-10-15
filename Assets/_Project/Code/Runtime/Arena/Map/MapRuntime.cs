@@ -1443,6 +1443,7 @@ namespace MaxWorlds.Arena
 
             BuildProps(map, root, staticGeometry, built, rendererZones);
             PlaceActors(map, root, built, rendererZones);
+            SeedBossAuthoredCounts(map);
             WireGates(map, built);
 
             // MV-706: "REPLICATORS n/N" for a world with replicators and no sheds; "FACTORIES" wording
@@ -2440,6 +2441,33 @@ namespace MaxWorlds.Arena
                         break;
                 }
             }
+        }
+
+        /// <summary>MV-1193: seed <see cref="BossCensus"/> with each area's AUTHORED boss count, counted
+        /// straight off <paramref name="map"/>'s own entity list rather than threading a
+        /// <see cref="MaxWorlds.Arena.WorldConfig"/> through <see cref="Build"/> — every authored
+        /// <c>WorldArea.Bosses()</c> entry became exactly one <see cref="EntityKind.Boss"/> entity by the
+        /// time <see cref="WorldMapLoader"/> finished, so counting those per resolved area is the same
+        /// number with no second data source to keep in sync. This is what lets
+        /// <see cref="BossCensus.ReportDefeated"/> tell "every boss here has died" from "no REGISTERED
+        /// boss is alive" — the two read as the same question only by coincidence until a second boss in
+        /// one area (World 1's a20, a30) stays Dormant, never <see cref="BossCensus.Register"/>-ed, while
+        /// its sibling wakes, fights and dies (Lee, device, 15 Oct: a30's second Big Bermuda never woke,
+        /// no orb, exit stays LOCKED). Called AFTER <see cref="PlaceActors"/> (so every boss entity has
+        /// already been placed to read a position from) and after this method's own
+        /// <see cref="BossCensus.Reset"/> above (so a seed here is never the one that gets wiped).</summary>
+        private static void SeedBossAuthoredCounts(MapData map)
+        {
+            var countByArea = new Dictionary<int, int>(4);
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind != EntityKind.Boss) continue;
+                MapZone zone = map.ZoneAt(e.x, e.z);
+                int areaIndex = zone != null ? AreaAccumulationDirector.AreaIndexOf(zone.id) : 0;
+                countByArea[areaIndex] = countByArea.TryGetValue(areaIndex, out int c) ? c + 1 : 1;
+            }
+            foreach (KeyValuePair<int, int> kv in countByArea)
+                BossCensus.SeedAuthoredCount(kv.Key, kv.Value);
         }
 
         /// <summary>
