@@ -19,6 +19,10 @@ namespace MaxWorlds.Weapons
         public const string World2ResourcePath = "UI/rig_board.world2";
         public const string World3ResourcePath = "UI/rig_board.world3";
 
+        /// <summary>MV-1195: the City's own board — RICOCHET's PRIMARY family (p_ric/p_aim/p_dmg/p_rof)
+        /// in place of UNDERTOW's; every other family is byte-for-byte World 3's own file.</summary>
+        public const string CityResourcePath = "UI/rig_board.city";
+
         /// <summary>The <c>Resources</c> path for <paramref name="worldIndex"/>'s own board (MV-1142:
         /// read off <see cref="WorldCatalog"/>'s own row rather than a per-index lookup table, so a
         /// world inserted between two existing ones brings its own board with it).</summary>

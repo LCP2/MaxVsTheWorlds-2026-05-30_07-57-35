@@ -9,6 +9,7 @@ using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -428,6 +429,10 @@ namespace MaxWorlds.Arena
                 gate.Reclose();
 
             Sentinel.DestroyAllActive();
+            // MV-1195: "Freeze, death or resume: discs in flight are cleared" — a RESUME is exactly as
+            // much an area change as walking through a gate is, the same reason Sentinels are cleared
+            // on the line above.
+            RicochetDisc.ClearAll();
 
             EnsurePlayer();
             RespawnPlayer(plan);
@@ -478,6 +483,7 @@ namespace MaxWorlds.Arena
             gate.ForceOpen();
 
             Sentinel.DestroyAllActive();
+            RicochetDisc.ClearAll();   // MV-1195: same "resume clears discs" rule as ResumeCheckpoint
 
             EnsurePlayer();
             RespawnJustInsideGate(gate, areaIndex, level);
@@ -785,6 +791,7 @@ namespace MaxWorlds.Arena
             // Sentinels never travel between areas (MV-362/396) — a death is exactly as much an area
             // change as walking through a gate is.
             Sentinel.DestroyAllActive();
+            RicochetDisc.ClearAll();   // MV-1195: "Freeze, death or resume: discs in flight are cleared"
 
             RespawnPlayer(plan);
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);

@@ -57,10 +57,16 @@ namespace MaxWorlds.Tests.EditMode
 
             HomeScreen.StartDevWorld(0, cityIndex);
 
-            Assert.AreEqual(WeaponCatalog.PrimaryKind.Undertow, WeaponSystemState.ActivePrimary,
-                "the City's own Weapon Core morph grants Undertow");
-            Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg is the owned-but-unupgraded morph floor");
-            Assert.AreEqual(1, RigState.Level("p_spr"), "City's PRIMARY is PrimarySplitSeeded — p_spr arrives owned at level 1");
+            // MV-1195: the City's own Weapon Core morph now grants RICOCHET, not UNDERTOW -- and
+            // RICOCHET's own RICOCHETS/RATE tracks need the same explicit non-zero-floor seed p_dmg
+            // already gets (ApplyWeaponCoreMorph's own doc), so a DEV start lands exactly at the
+            // ticket's own authored start levels: Ricochets 2, Power 1, Rate 1, Aiming 0.
+            Assert.AreEqual(WeaponCatalog.PrimaryKind.Ricochet, WeaponSystemState.ActivePrimary,
+                "the City's own Weapon Core morph grants Ricochet");
+            Assert.AreEqual(1, RigState.Level("p_dmg"), "p_dmg (POWER) is the owned-but-unupgraded morph floor");
+            Assert.AreEqual(2, RigState.Level("p_ric"), "p_ric (RICOCHETS) must arrive at its own board start level, 2");
+            Assert.AreEqual(1, RigState.Level("p_rof"), "p_rof (RATE) must arrive at its own board start level, 1");
+            Assert.AreEqual(0, RigState.Level("p_aim"), "p_aim (AIMING) must arrive unowned, at 0");
 
             IReadOnlyDictionary<string, int> stormdrainMaxLevels = RigBoard.SnapshotMaxLevels(stormdrainIndex);
             foreach (var kv in stormdrainMaxLevels)

@@ -63,8 +63,12 @@ namespace MaxWorlds.Tests.EditMode
                 WeaponCatalog.PrimaryKind.Rcda, SecondaryKind.WaterBalloon);
             AssertWorldLoadoutRestored(world: 1, nodeId: "s_rkt", nodeLevel: 2,
                 WeaponCatalog.PrimaryKind.Lppe, SecondaryKind.ShoulderRack);
-            AssertWorldLoadoutRestored(world: 2, nodeId: "p_spr", nodeLevel: 1,
-                WeaponCatalog.PrimaryKind.Undertow, SecondaryKind.ShoulderRack);
+            // MV-1195: world 2 is the City (RICOCHET on its own rig_board.city.json), not UNDERTOW --
+            // p_ric exists only on that board, same "a node that exists only on that world's own board"
+            // shape the other two rows already use. Level 4 (not p_ric's own start level 2) so this
+            // still proves the checkpoint's OWN level survives the restore, not a coincidental floor.
+            AssertWorldLoadoutRestored(world: 2, nodeId: "p_ric", nodeLevel: 4,
+                WeaponCatalog.PrimaryKind.Ricochet, SecondaryKind.ShoulderRack);
         }
 
         private static void AssertWorldLoadoutRestored(int world, string nodeId, int nodeLevel,

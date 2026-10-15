@@ -25,8 +25,11 @@ namespace MaxWorlds.Weapons
         /// by the LPPE for the rest of the campaign once World 2 begins, then by UNDERTOW once World 3
         /// begins (MV-714). The swap itself is MV-689/MV-698 (World 2) and the same
         /// <c>WeaponSystemState.ApplyWeaponCoreMorph</c> path extended for World 3; this ticket only
-        /// adds the weapon and makes it selectable.</summary>
-        public enum PrimaryKind { Rcda, Lppe, Undertow }
+        /// adds the weapon and makes it selectable. MV-1195: RICOCHET is now granted BETWEEN the LPPE
+        /// and UNDERTOW — World 2's Core morph grants it for the City, and the City's own bossless exit
+        /// hands UNDERTOW on to the Reef in its place (an interim hand-over, until the City's own boss
+        /// exists).</summary>
+        public enum PrimaryKind { Rcda, Lppe, Ricochet, Undertow }
 
         /// <summary>World 2's primary (MV-708) — the Locked-Phase Pulse Emitter. Whether "LPPE" itself
         /// gets renamed is Lee's call; the code identifier stays <see cref="PrimaryKind.Lppe"/> either
@@ -40,10 +43,16 @@ namespace MaxWorlds.Weapons
         public const string UndertowName = "UNDERTOW";
         public const string UndertowShortName = "UNDERTOW";
 
+        /// <summary>The City's own primary (MV-1195) — bouncing discs. Short and long names are the
+        /// same word, same shape as UNDERTOW's.</summary>
+        public const string RicochetName = "RICOCHET";
+        public const string RicochetShortName = "RICOCHET";
+
         public static string DisplayName(PrimaryKind kind) => kind switch
         {
             PrimaryKind.Rcda => PrimaryName,
             PrimaryKind.Lppe => LppeName,
+            PrimaryKind.Ricochet => RicochetName,
             PrimaryKind.Undertow => UndertowName,
             _ => kind.ToString(),
         };
@@ -52,6 +61,7 @@ namespace MaxWorlds.Weapons
         {
             PrimaryKind.Rcda => PrimaryShortName,
             PrimaryKind.Lppe => LppeShortName,
+            PrimaryKind.Ricochet => RicochetShortName,
             PrimaryKind.Undertow => UndertowShortName,
             _ => kind.ToString(),
         };
@@ -272,6 +282,17 @@ namespace MaxWorlds.Weapons
         {
             LppeTrackKind.Rate => 4,
             LppeTrackKind.Capacity => 5,
+            _ => 1,
+        };
+
+        /// <summary>The level cap for a RICOCHET-only track (MV-1195), matching
+        /// <c>rig_board.city.json</c>'s own per-node <c>maxLevel</c> — RICOCHETS caps at 6 (owned from
+        /// 2), AIMING at 4 (unowned from 0), RATE at 5 (owned from 1).</summary>
+        public static int MaxLevel(RicochetTrackKind kind) => kind switch
+        {
+            RicochetTrackKind.Ricochets => 6,
+            RicochetTrackKind.Aiming => 4,
+            RicochetTrackKind.Rate => 5,
             _ => 1,
         };
 
