@@ -1,6 +1,7 @@
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Combat
@@ -27,6 +28,11 @@ namespace MaxWorlds.Combat
         public const float DefaultSpeed = 20f;
         public const float DefaultRadius = 0.25f;
         public const float DefaultLifetimeSeconds = 2.5f;
+
+        /// <summary>MV-1197: how far the aim preview casts each leg looking for a bounce -- the
+        /// farthest a disc could ever actually travel in one uninterrupted leg (its own top speed times
+        /// its own lifetime), not an arbitrary preview-only number.</summary>
+        public const float PreviewMaxLegDistance = DefaultSpeed * DefaultLifetimeSeconds;
 
         /// <summary>"Each disc costs 2.7 energy from the shared gauge, the same as a Pulse Emitter
         /// shot" (spec) — a flat authored number, not track-scaled, same shape as
@@ -100,6 +106,7 @@ namespace MaxWorlds.Combat
         private bool _lastEmitting;
         private bool _depleted;
         private EnergyPool _tank;
+        private RicochetAimPreviewVfx _aimPreview;
 
         private void Awake()
         {
@@ -109,6 +116,8 @@ namespace MaxWorlds.Combat
             // PlayerController.Awake (code-driven scenes, no scene wiring), so it must resolve its own
             // aim source here rather than relying on one being wired in the editor.
             if (aimSource == null) aimSource = GetComponent<PlayerController>();
+
+            _aimPreview = RicochetAimPreviewVfx.Attach(transform);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -141,6 +150,17 @@ namespace MaxWorlds.Combat
             bool emitting = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Ricochet
                 && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(cost));
             _lastEmitting = emitting;
+
+            // MV-1197: the aim preview is gated on "aim stick held with RICOCHET active" alone -- not on
+            // IsEmitting's energy check, since the preview is a free aiming aid, not something that
+            // should vanish the instant the tank runs dry. aimSource.enabled covers "hide during freezes
+            // and cutscenes": a cutscene disables PlayerController directly (see WorldFinaleGate /
+            // WorldJoinSequence), which this component itself keeps ticking through, so that flag is the
+            // one real signal a frozen aim source actually leaves behind.
+            bool previewVisible = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Ricochet
+                && IsFiring && (aimSource == null || aimSource.enabled);
+            _aimPreview.Refresh(previewVisible, transform.position, transform.forward, DefaultRadius,
+                PreviewMaxLegDistance, AimTurnRateDegPerSec, AimLookaheadMetres);
 
             if (!emitting) { _tickTimer = 0f; return; }
 

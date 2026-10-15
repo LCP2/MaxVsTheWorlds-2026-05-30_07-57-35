@@ -101,6 +101,14 @@ namespace MaxWorlds.Weapons
         /// bounce spends one.</summary>
         public int StudCount => _bouncesRemaining;
 
+        /// <summary>MV-1197: this disc's own first and second bounce CONTACT points (not the
+        /// post-bounce offset position <see cref="Tick"/> moves to afterward) -- a resolved value an
+        /// EditMode test reads to prove the aim preview's own prediction
+        /// (<see cref="ComputePreviewLegs"/>) matches what this disc actually does, both running the
+        /// exact same hit/bounce code.</summary>
+        public Vector3 FirstBouncePoint { get; private set; }
+        public Vector3 SecondBouncePoint { get; private set; }
+
         /// <summary>MV-1196: POWER's own disc marks, two levels per mark (rig_board.city.json's
         /// <c>p_dmg</c>: maxLevel 8) — Mark I (1-2) through Mark IV (7-8). Pure, so a test can assert it
         /// without a live disc instance.</summary>
@@ -163,6 +171,8 @@ namespace MaxWorlds.Weapons
             disc._lifetime = lifetime;
             disc._age = 0f;
             disc._active = true;
+            disc.FirstBouncePoint = Vector3.zero;
+            disc.SecondBouncePoint = Vector3.zero;
             // Spec: "Trails are cleared on reuse" -- cleared here, at the NEXT spawn, not at retire.
             if (disc._trail != null) disc._trail.Clear();
 
@@ -228,6 +238,8 @@ namespace MaxWorlds.Weapons
                 {
                     _bouncesRemaining--;
                     _bouncesTaken++;
+                    if (_bouncesTaken == 1) FirstBouncePoint = contact.point;
+                    else if (_bouncesTaken == 2) SecondBouncePoint = contact.point;
                     ApplyStudVisual();   // MV-1196: "the count drops as it bounces"
                     Vector3 priorDirection = _direction;
                     _direction = ReflectHorizontal(_direction, contact.normal);
@@ -287,7 +299,10 @@ namespace MaxWorlds.Weapons
             if (dir.sqrMagnitude > 1e-6f) _direction = dir.normalized;
         }
 
-        private static RobotEnemy FindSteerCandidate(Vector3 origin, Vector3 direction, float range)
+        /// <summary>Public (MV-1197): also the aim preview's own target-marker selector
+        /// (<see cref="MaxWorlds.VFX.RicochetAimPreviewVfx"/>) -- the SAME "which robot will this bend
+        /// toward" logic <see cref="Steer"/> uses for the live disc, not a second approximation.</summary>
+        public static RobotEnemy FindSteerCandidate(Vector3 origin, Vector3 direction, float range)
         {
             var active = RobotEnemy.Active;
             MapData map = EnemyNavigation.Map;
@@ -322,7 +337,15 @@ namespace MaxWorlds.Weapons
         /// which are on the Cover layer and none of which carry a Team.Enemy IDamageable) is correctly
         /// passed straight through, the same "the first REAL hit wins, everything else is see-through"
         /// idiom <see cref="SeekerPulse.TryHitWorldDamageable"/> already uses.</summary>
-        private bool TryFindContact(Vector3 from, Vector3 to, out RaycastHit contact)
+        private bool TryFindContact(Vector3 from, Vector3 to, out RaycastHit contact) =>
+            TryFindContactStatic(from, to, _radius, s_hits, out contact);
+
+        /// <summary>The real hit query, pulled out static and buffer-parameterised (MV-1197) so the
+        /// aim preview can run the EXACT same swept-sphere/filter code against its OWN buffer
+        /// (<see cref="s_previewHits"/>) without touching a live disc's <see cref="s_hits"/> -- the
+        /// preview runs every frame regardless of whether a disc is actually in flight.</summary>
+        private static bool TryFindContactStatic(Vector3 from, Vector3 to, float radius,
+            RaycastHit[] buffer, out RaycastHit contact)
         {
             contact = default;
             Vector3 delta = to - from;
@@ -330,14 +353,14 @@ namespace MaxWorlds.Weapons
             if (dist < 1e-5f) return false;
             Vector3 dir = delta / dist;
 
-            int count = Physics.SphereCastNonAlloc(from, _radius, dir, s_hits, dist, ~0,
+            int count = Physics.SphereCastNonAlloc(from, radius, dir, buffer, dist, ~0,
                 QueryTriggerInteraction.Ignore);
 
             float bestDist = float.MaxValue;
             bool found = false;
             for (int i = 0; i < count; i++)
             {
-                RaycastHit rh = s_hits[i];
+                RaycastHit rh = buffer[i];
                 bool isCover = CoverLayer.Exists && rh.collider.gameObject.layer == CoverLayer.Index;
                 bool isEnemy = !isCover && rh.collider.TryGetComponent(out IDamageable d) &&
                                d.IsAlive && d.Team == Team.Enemy;
@@ -347,6 +370,59 @@ namespace MaxWorlds.Weapons
             }
 
             return found;
+        }
+
+        private static readonly RaycastHit[] s_previewHits = new RaycastHit[16];
+
+        /// <summary>MV-1197 (design v5 §3.1): the aim preview's own bounce geometry -- pure, no side
+        /// effects, reusing the EXACT <see cref="TryFindContactStatic"/>/<see cref="ReflectHorizontal"/>
+        /// code <see cref="Tick"/>'s own bounce branch uses, never a separate approximation.
+        ///
+        /// <paramref name="pointsOut"/> must have length &gt;= 3 (caller-owned, reused every call -- no
+        /// per-frame allocation here). <c>pointsOut[0]</c> is always <paramref name="origin"/>. Returns
+        /// the total point count written (2 if the first leg found nothing, 3 otherwise).
+        /// <paramref name="bounceCount"/> reports how many of the remaining points are REAL collisions
+        /// (0, 1 or 2) rather than a distance-capped "where it would end" point -- a bounce ring is only
+        /// correct at a real contact.</summary>
+        public static int ComputePreviewLegs(Vector3 origin, Vector3 direction, float radius,
+            float maxLegDistance, Vector3[] pointsOut, out int bounceCount)
+        {
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 1e-4f) direction = Vector3.forward;
+            direction.Normalize();
+
+            pointsOut[0] = origin;
+            bounceCount = 0;
+            Vector3 pos = origin;
+            Vector3 dir = direction;
+
+            for (int leg = 0; leg < 2; leg++)
+            {
+                Vector3 to = pos + dir * maxLegDistance;
+                if (TryFindContactStatic(pos, to, radius, s_previewHits, out RaycastHit contact))
+                {
+                    pointsOut[leg + 1] = contact.point;
+                    bounceCount++;
+
+                    // Same clearance-offset idiom as Tick's own bounce branch (see its comment): offset
+                    // the NEXT leg's origin along the hit's own normal, not the new travel direction, or
+                    // a shallow-angle bounce can leave the sphere still overlapping the surface it just
+                    // left.
+                    Vector3 priorDirection = dir;
+                    dir = ReflectHorizontal(dir, contact.normal);
+                    Vector3 clearNormal = contact.normal; clearNormal.y = 0f;
+                    if (clearNormal.sqrMagnitude < 1e-6f) clearNormal = -priorDirection;
+                    else clearNormal.Normalize();
+                    pos = contact.point + clearNormal * (radius + BounceEpsilon);
+                }
+                else
+                {
+                    pointsOut[leg + 1] = to;
+                    return leg + 2;
+                }
+            }
+
+            return 3;
         }
 
         private void Retire()
