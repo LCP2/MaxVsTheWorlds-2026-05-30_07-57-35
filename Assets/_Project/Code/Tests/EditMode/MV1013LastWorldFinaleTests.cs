@@ -101,6 +101,14 @@ namespace MaxWorlds.Tests.EditMode
             typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private static void SetPrivateField(object target, string field, object value) =>
             target.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance).SetValue(target, value);
 
@@ -208,6 +216,9 @@ namespace MaxWorlds.Tests.EditMode
 
                 // --- Anchorhead falls via the normal damage path -- the world's only boss in a30. ---
                 InvokeOnDeath(boss);
+                // MV-1190: the Weapon Core drop is now deferred to BossDeathSequence.FinaleTime (1.6s)
+                // into the death choreography -- flush it before the AC1 assertion below.
+                AdvanceWeaponCoreSpawn(payoff);
 
                 // AC1 (same frame as the death): a Weapon Core within 1 m of the boss's own death spot,
                 // and the finale door open -- neither may depend on a30's other robots being dead.

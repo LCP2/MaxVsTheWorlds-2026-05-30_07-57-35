@@ -105,6 +105,16 @@ namespace MaxWorlds.Bosses
         /// whether the fling beat already fired earlier in the same run.</summary>
         private bool _weaponCoreDropped;
 
+        /// <summary>MV-1190: the Weapon Core no longer appears the instant the final boss dies — it
+        /// appears "where the boss stood at the moment of the big blast", <see cref="BossDeathSequence.FinaleTime"/>
+        /// (1.6s) into that boss's own death choreography. <see cref="MaybeDropWeaponCore"/> still
+        /// decides AND captures the position synchronously, at the instant of death (unchanged — see
+        /// <see cref="_lastKilledPos"/>'s own doc comment for why that must happen right there); only
+        /// the actual spawn is deferred.</summary>
+        private bool _coreSpawnPending;
+        private Vector3 _pendingCorePos;
+        private float _coreSpawnElapsed;
+
         private void OnEnable()
         {
             HudSignals.BossKilled += OnBossKilled;
@@ -155,7 +165,24 @@ namespace MaxWorlds.Bosses
             if (!IsFinalBossAreaDefeat()) return;
 
             _weaponCoreDropped = true;
-            PickupDirector.EnsureInstalled().SpawnWeaponCore(_lastKilledPos + Vector3.up * 1.4f);
+            _coreSpawnPending = true;
+            _coreSpawnElapsed = 0f;
+            _pendingCorePos = _lastKilledPos + Vector3.up * 1.4f;
+        }
+
+        /// <summary>MV-1190: advances the pending Weapon Core spawn by <paramref name="dt"/> UNSCALED
+        /// seconds, firing it the instant <see cref="BossDeathSequence.FinaleTime"/> (1.6s) is reached
+        /// — same "explicit dt" seam <c>BossDeathSequence.Tick</c>/<c>SludgequeenRig.Tick</c> already
+        /// use, so a test can fast-forward past it with no real clock. Pulled out of <see cref="Update"/>
+        /// rather than reading <c>Time.unscaledDeltaTime</c> inline, for exactly that reason.</summary>
+        private void TickPendingWeaponCore(float dt)
+        {
+            if (!_coreSpawnPending) return;
+            _coreSpawnElapsed += dt;
+            if (_coreSpawnElapsed < BossDeathSequence.FinaleTime) return;
+
+            _coreSpawnPending = false;
+            PickupDirector.EnsureInstalled().SpawnWeaponCore(_pendingCorePos);
         }
 
         /// <summary>MV-1183: a dormant companion boss (not yet woken/registered when its sibling died)
@@ -182,6 +209,8 @@ namespace MaxWorlds.Bosses
 
         private void Update()
         {
+            TickPendingWeaponCore(Time.unscaledDeltaTime);
+
             if (!_running || _finished) return;
 
             _elapsed += Time.deltaTime;

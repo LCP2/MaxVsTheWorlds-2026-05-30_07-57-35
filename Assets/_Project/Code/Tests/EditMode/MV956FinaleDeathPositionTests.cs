@@ -92,6 +92,14 @@ namespace MaxWorlds.Tests.EditMode
             typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         // Same "no stray collider beside the required CharacterController" construction
         // Mv915WorldOneFinaleSequenceTests/MV698WeaponCoreFinaleDropTests use.
         private static BigBermudaBoss NewBoss(string name)
@@ -191,6 +199,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 boss1DeathPos = boss1Go.transform.position;
             InvokeOnDeath(boss1);   // a30_boss1 is the one that actually empties a30 this time
+            AdvanceWeaponCoreSpawn(payoff1);
 
             // MV-1078: the boss dying (even the last one) no longer opens the exit -- a30's other 30
             // garrison robots, built above and still alive, are what the gate now waits on.
@@ -234,6 +243,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 boss2DeathPos = boss2b.transform.position;
             InvokeOnDeath(boss2b);   // a30_boss2 is the one that empties a30 this time
+            AdvanceWeaponCoreSpawn(payoff2);
 
             // MV-1078: the boss dying (even the last one) no longer opens the exit by itself -- see the
             // gate1 half above. Victory still seals below despite a30's robots staying alive throughout

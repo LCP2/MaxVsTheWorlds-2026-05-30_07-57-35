@@ -84,7 +84,7 @@ namespace MaxWorlds.VFX
         private float _lastHealth = 1f;
 
         private bool _dying;
-        private float _dieTimer;
+        private BossDeathSequence _deathSeq;
 
         /// <summary>The boss this rig is bound to — for a test to prove distinct rigs bind to distinct
         /// bosses (MV-573's own multi-boss guarantee), and specifically that a30 carries THIS rig and
@@ -309,10 +309,13 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (_boss == null) return;
+
+            // MV-1190: once dying, the body freezes where it died — the death sequence owns the
+            // transform entirely (X/Z jitter only, Y pinned), so Follow() (which re-anchors to the
+            // ground plane) is skipped, same as BigBermudaRig.
+            if (_dying) { TickDeath(Time.unscaledDeltaTime); return; }
+
             Follow();
-
-            if (_dying) { TickDeath(); return; }
-
             TickTells(Time.deltaTime);
         }
 
@@ -352,24 +355,49 @@ namespace MaxWorlds.VFX
             if (_boss == null || !_boss.IsDead) return;
             if (_dying) return;
             _dying = true;
-            _dieTimer = 0f;
+
+            FindFirstObjectByType<BossSpectacle>()?.ThroesShake(); // MV-1190 step 1's own "medium camera shake"
+
+            _deathSeq = new BossDeathSequence(transform.position, WorldBoundsNow(),
+                onBlast: (pos, scale, kind) => FindFirstObjectByType<BossSpectacle>()?.Blast(pos, scale),
+                onFinale: centre =>
+                {
+                    BossDeathFinaleVfx.SpawnChunks(centre, new[] { RustBrown, Charcoal });
+                    BossDeathFinaleVfx.Flash();
+                    FindFirstObjectByType<SpringGuts>()?.Burst(centre, 3 * SpringGuts.PerDeath);
+                });
         }
 
-        private void TickDeath()
+        /// <summary>The combined world bounds of every renderer this rig owns — where
+        /// <see cref="_deathSeq"/>'s chain explosions and finale blast are centred.</summary>
+        private Bounds WorldBoundsNow()
         {
-            const float duration = 0.55f;
-            _dieTimer += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(_dieTimer / duration);
-            float k = 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime);
+            var renderers = GetComponentsInChildren<MeshRenderer>();
+            if (renderers.Length == 0) return new Bounds(transform.position, Vector3.one);
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
+        }
 
-            _eyeColor = Color.Lerp(_eyeColor, Color.black, k);
+        /// <summary>
+        /// MV-1190: one shared death sequence (<see cref="BossDeathSequence"/>), not this rig's own
+        /// fixed tick — the body never sinks below the Y it died standing at (the sequence jitters
+        /// X/Z only). The core-goes-dark read is kept, as the ticket asks, but now flickers across the
+        /// death throes instead of fading smoothly to black.
+        /// </summary>
+        private void TickDeath(float dt)
+        {
+            if (_deathSeq == null) return;
+
+            transform.position = _deathSeq.Tick(dt);
+
+            bool lit = _deathSeq.Elapsed < BossDeathSequence.ThroesEnd
+                && ((int)(_deathSeq.Elapsed / 0.1f) % 2 == 0);
+            _eyeColor = lit ? EyeAmber : Color.black;
             ApplyEyes(_eyeColor);
             ApplyLensColor(_telegraphRing, Color.black);
 
-            transform.rotation *= Quaternion.Euler(t * 11f, 0f, t * 7f);
-            transform.position += Vector3.down * (t * t * 0.8f);
-
-            if (t >= 1f) gameObject.SetActive(false);
+            if (_deathSeq.Done) gameObject.SetActive(false);
         }
 
         private void OnDestroy()

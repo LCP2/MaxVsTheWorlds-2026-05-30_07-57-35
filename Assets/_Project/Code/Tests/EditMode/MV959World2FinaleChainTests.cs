@@ -93,6 +93,14 @@ namespace MaxWorlds.Tests.EditMode
             boss.GetType().GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private static Pickup[] LivePickups() =>
             Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None);
 
@@ -149,6 +157,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 bossDeathPos = bossGo.transform.position;
             InvokeOnDeath(boss);
+            AdvanceWeaponCoreSpawn(payoff);
 
             // MV-1078: the boss dying no longer opens the exit by itself -- a31's own ambient robots
             // (built by the real map above, same as its boss) are what the gate now waits on, on top of

@@ -112,6 +112,14 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeOnDeath(Component boss) =>
             boss.GetType().GetMethod("OnDeath", NonPublicInstance).Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", NonPublicInstance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private static void SetPrivateField(object target, string field, object value) =>
             target.GetType().GetField(field, NonPublicInstance).SetValue(target, value);
 
@@ -327,6 +335,7 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.IsFalse(finale.IsOpen, $"world {row.WorldIndex}'s gate must stay shut before its own boss dies");
 
                     foreach (MonoBehaviour b in finalBosses) InvokeOnDeath(b);
+                    AdvanceWeaponCoreSpawn(payoff);
 
                     Assert.IsFalse(finale.IsOpen,
                         $"world {row.WorldIndex}: boss death alone must not open the exit -- the Core must be collected");
