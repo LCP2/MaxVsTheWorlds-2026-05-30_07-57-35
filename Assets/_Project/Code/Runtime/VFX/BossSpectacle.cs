@@ -7,22 +7,21 @@ using MaxWorlds.Feel;
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Makes the Big Bermuda fight feel like an event (YT-55): an intro beat when it wakes, a jolt
-    /// at the phase turn, and a staged defeat sequence.
+    /// Makes the Big Bermuda fight feel like an event (YT-55): an intro beat when it wakes and a jolt
+    /// at the phase turn, both still driven entirely off the HudSignals the boss already raises
+    /// (BossEngaged / BossHealthChanged). No boss logic, no fight timings, no damage values touched.
     ///
-    /// Driven entirely off the HudSignals the boss already raises (BossEngaged / BossHealthChanged /
-    /// BossDefeated). No boss logic, no fight timings, no damage values are touched.
+    /// MV-1190: the defeat itself is no longer this class's own fixed choreography on
+    /// <c>HudSignals.BossKilled</c> — <see cref="Blast"/> is now a reusable call any boss's own
+    /// <see cref="MaxWorlds.Bosses.BossDeathSequence"/> makes at whatever position, moment and size
+    /// its own choreography calls for (a chain-reaction hit, then the finale), so the death doesn't
+    /// run on a fixed timer independent of the rest of the sequence (the shudder, the chunks, the
+    /// orb) playing out around it.
     ///
-    /// IMPORTANT — why the defeat VFX run on UNSCALED time: the run ends the moment the boss dies.
-    /// RunTracker hears BossDefeated, ends the run, and ResultScreen pauses everything with
-    /// timeScale = 0 in the same frame. A normal, scaled-time explosion would therefore be frozen
-    /// solid before a single particle moved. Running the death sequence unscaled means it still
-    /// plays out over the stopped game behind the result card.
-    ///
-    /// It is still not the climax it should be, because the card lands on top of it instantly.
-    /// Giving the defeat real screen time means delaying the result card, which lives in RunTracker
-    /// — a gameplay-stream file this stream doesn't own. Raised with Lee on the ticket rather than
-    /// reached into unilaterally.
+    /// IMPORTANT — why <see cref="Blast"/>'s VFX run on UNSCALED time: the caller (a rig's death
+    /// sequence) runs unscaled for exactly the reason the old fixed defeat sequence did — something
+    /// elsewhere may freeze scaled time the moment the boss dies, and the blast must still play out
+    /// over that freeze, not vanish under it.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("bosses")]
@@ -69,14 +68,12 @@ namespace MaxWorlds.VFX
         {
             HudSignals.BossEngaged += OnEngaged;
             HudSignals.BossHealthChanged += OnHealth;
-            HudSignals.BossKilled += OnKilled;
         }
 
         private void OnDisable()
         {
             HudSignals.BossEngaged -= OnEngaged;
             HudSignals.BossHealthChanged -= OnHealth;
-            HudSignals.BossKilled -= OnKilled;
 
             // A sequence interrupted part-way (scene change, replay) would otherwise leave the
             // shockwave ring stranded on the ground, mid-expansion, forever.
@@ -194,54 +191,44 @@ namespace MaxWorlds.VFX
 
         // --- defeat ---
 
-        /// <summary>MV-721: fires once per boss's OWN death (<see cref="HudSignals.BossKilled"/>), not
-        /// only for the area's last boss (<see cref="HudSignals.BossDefeated"/>) — so a boss that dies
-        /// with company still gets its own explosion. Takes the dying boss's position straight off the
-        /// signal payload rather than <see cref="BossPos"/>'s <c>FindFirstObjectByType</c>: that lookup
-        /// is ambiguous the moment a second boss exists and blind once the dying one deactivates.</summary>
-        private void OnKilled(Vector3 at) => StartCoroutine(Defeat(at));
+        /// <summary>
+        /// MV-1190 step 1's own "medium camera shake" for the 0.0-0.6s death throes — the ticket's
+        /// own line, "use the existing GameFeel shake" (the same <see cref="ScreenShake"/> this class's
+        /// own <see cref="Shake"/> already reaches). A distinct beat from <see cref="Blast"/>'s own
+        /// per-size trauma: the throes' spark blast alone is sized 0.15, which would only ever reach
+        /// ~0.045 trauma — nowhere near "medium" next to the chain hit's 0.18 or the finale's 0.6.
+        /// </summary>
+        public void ThroesShake() => Shake()?.AddTrauma(0.4f);
 
         /// <summary>
-        /// Staged, not one bang: three quick flashes that read as it coming apart, then the big one.
-        /// Everything here waits on realtime and emits into unscaled-time systems, because the game
-        /// is frozen from the same frame the boss dies (see the class summary).
+        /// MV-1190: the reusable "boss blast" — what used to be this class's own fixed three-flashes-
+        /// then-the-big-one <c>Defeat()</c> coroutine, now callable at whatever position, moment and
+        /// size a boss's own <see cref="MaxWorlds.Bosses.BossDeathSequence"/> calls for (a chain-
+        /// reaction hit at 60%, the finale at 200%), instead of this class choreographing its own
+        /// fixed timing on <see cref="HudSignals.BossKilled"/>. <paramref name="sizeScale"/> 1 is
+        /// roughly the old single "big one".
         /// </summary>
-        private IEnumerator Defeat(Vector3 diedAt)
+        public void Blast(Vector3 at, float sizeScale)
         {
-            Vector3 at = diedAt + Vector3.up * 1.2f;
-            var shake = Shake();
+            Vector3 pos = at + Vector3.up * 1.2f;
+            Shake()?.AddTrauma(Mathf.Clamp01(0.3f * sizeScale));
 
-            for (int i = 0; i < 3; i++)
-            {
-                shake?.AddTrauma(0.3f);
-                _fire.Emit(at, 14,
-                    axis: Vector3.up, spreadDegrees: 120f,
-                    speedMin: 2f, speedMax: 6f,
-                    sizeMin: 0.4f, sizeMax: 1.1f,
-                    lifeMin: 0.2f, lifeMax: 0.45f,
-                    colorA: FireHot, colorB: FireDeep);
-
-                yield return new WaitForSecondsRealtime(0.13f);
-            }
-
-            // The big one.
-            shake?.AddTrauma(1f);
-
-            _fire.Emit(at, 70,
-                axis: Vector3.up, spreadDegrees: 130f,
-                speedMin: 4f, speedMax: 16f,
-                sizeMin: 0.8f, sizeMax: 2.6f,
-                lifeMin: 0.45f, lifeMax: 1.1f,
+            _fire.Emit(pos, Mathf.Max(1, Mathf.RoundToInt(24f * sizeScale)),
+                axis: Vector3.up, spreadDegrees: 125f,
+                speedMin: 3f * sizeScale, speedMax: 10f * sizeScale,
+                sizeMin: 0.5f * sizeScale, sizeMax: 1.4f * sizeScale,
+                lifeMin: 0.3f, lifeMax: 0.7f,
                 colorA: FireHot, colorB: FireDeep);
 
-            _debris.Emit(at, 45,
+            _debris.Emit(pos, Mathf.Max(1, Mathf.RoundToInt(16f * sizeScale)),
                 axis: Vector3.up, spreadDegrees: 100f,
-                speedMin: 5f, speedMax: 17f,
-                sizeMin: 0.25f, sizeMax: 0.7f,
-                lifeMin: 0.9f, lifeMax: 1.8f,
+                speedMin: 4f * sizeScale, speedMax: 12f * sizeScale,
+                sizeMin: 0.2f * sizeScale, sizeMax: 0.5f * sizeScale,
+                lifeMin: 0.6f, lifeMax: 1.2f,
                 colorA: Debris, colorB: FireDeep);
 
-            yield return Shockwave(at, from: 1.5f, to: 11f, seconds: 0.9f, color: ShockColor);
+            StartCoroutine(Shockwave(pos, from: 1f * sizeScale, to: 6f * sizeScale,
+                seconds: 0.4f + 0.3f * sizeScale, color: sizeScale >= 1.5f ? ShockColor : FireDeep));
         }
 
         // --- shared ---

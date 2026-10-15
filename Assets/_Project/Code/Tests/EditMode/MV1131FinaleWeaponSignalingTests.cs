@@ -136,6 +136,14 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeLifecycle(Component c, string method) =>
             c.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(c, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private static Pickup[] LivePickups() => Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None);
 
         private static void InvokeCollect(PickupDirector director, Pickup pickup)
@@ -201,6 +209,7 @@ namespace MaxWorlds.Tests.EditMode
             BossCensus.Register(boss2, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 30);
             BossCensus.ReportDefeated(boss1);
             BossCensus.ReportDefeated(boss2); // a30's last boss -- fires BossDefeated, drops the Core
+            AdvanceWeaponCoreSpawn(payoff);
 
             var pickupDirector = PickupDirector.EnsureInstalled();
             Pickup core = LivePickups().SingleOrDefault(p => p.Kind == PickupKind.WeaponCore);

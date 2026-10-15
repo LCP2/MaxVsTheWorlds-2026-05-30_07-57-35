@@ -219,6 +219,16 @@ namespace MaxWorlds.VFX
             for (int i = 0; i < PerDeath; i++) Launch(pos);
         }
 
+        /// <summary>MV-1190: the boss death finale's own "spring-guts burst of 3x PerDeath" — a direct
+        /// call rather than faking <see cref="HudSignals.EnemyKilled"/> three times, which would also
+        /// inflate the run's kill count and HUD kill feed. Bypasses <see cref="DeathsPerFrame"/> on
+        /// purpose: that cap exists for an ordinary crowd wipe, not for the one deliberate finale beat
+        /// a whole run only ever has once.</summary>
+        public void Burst(Vector3 at, int count)
+        {
+            for (int i = 0; i < count; i++) Launch(at);
+        }
+
         private void Launch(Vector3 from)
         {
             int slot = Take();

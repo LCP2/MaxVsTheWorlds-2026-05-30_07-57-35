@@ -104,6 +104,14 @@ namespace MaxWorlds.Tests.EditMode
             typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private BigBermudaBoss NewBoss(string name)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -234,6 +242,7 @@ namespace MaxWorlds.Tests.EditMode
             // AC3: the second (last) of a30's two bosses dies.
             trace.Add("--- a30 boss2 dies ---");
             InvokeOnDeath(boss2);
+            AdvanceWeaponCoreSpawn(payoff);
 
             Assert.IsFalse(rig2.Running, "AC3: a death spectacle must fire for boss2 too");
             Assert.AreEqual(0f, LastHealth(trace), 0.001f,

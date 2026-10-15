@@ -193,7 +193,7 @@ namespace MaxWorlds.VFX
         private bool _alarmCritical;
 
         private bool _dying;
-        private float _dieTimer;
+        private BossDeathSequence _deathSeq;
 
         /// <summary>The eye lens renderer — what MV-1124 AC1b's camera-ray test must hit first.</summary>
         public MeshRenderer EyeLens => _eyeLens;
@@ -559,7 +559,12 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (_boss == null) return;
-            Tick(Time.deltaTime);
+            // MV-1190: the death sequence runs on UNSCALED time (same reason every boss-defeat
+            // director does — it must keep playing even if something elsewhere freezes scaled time),
+            // chosen here rather than inside Tick so Tick's own signature — and MV-1132's existing
+            // reflection-driven walk test, which calls it directly with its own chosen dt — stay
+            // unchanged.
+            Tick(_dying ? Time.unscaledDeltaTime : Time.deltaTime);
         }
 
         /// <summary>Everything this rig does once a frame, with an explicit <paramref name="dt"/> —
@@ -567,10 +572,10 @@ namespace MaxWorlds.VFX
         /// own "ticked at 60 Hz") rather than depending on <see cref="Time.deltaTime"/>.</summary>
         private void Tick(float dt)
         {
+            if (_dying) { TickDeath(dt); return; }
+
             Follow();
             UpdateGait(dt);
-
-            if (_dying) TickDeath();
         }
 
         private void Follow()
@@ -707,29 +712,32 @@ namespace MaxWorlds.VFX
             ApplyLensColor(_alarmLens, critical ? AlarmBright : AlarmDark);
         }
 
-        /// <summary>The drain-away on death (MV-696's own "the 3 s drain-out itself is a rig-only visual,
-        /// left to the art pass"). UNSCALED, same reason as <see cref="BigBermudaRig.TickDeath"/>: the run
-        /// ends the frame the boss dies and ResultScreen sets timeScale = 0 that same frame.
+        /// <summary>
+        /// MV-1190: one shared death sequence (<see cref="BossDeathSequence"/>), replacing the old
+        /// "3 s drain-out" that sank the housing into the floor. The body NEVER sinks below the Y it
+        /// died standing at — <see cref="_deathSeq"/> jitters X/Z only. The core-goes-dark read (the
+        /// eye/sludge/alarm/hatch/cannon lenses) is kept, as the ticket asks, but now flickers across
+        /// the death throes instead of draining smoothly to black over 3s.
         /// </summary>
-        private void TickDeath()
+        private void TickDeath(float dt)
         {
-            const float duration = 3f;   // the ticket's own "3 s drain-out"
+            if (_deathSeq == null) return;
 
-            _dieTimer += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(_dieTimer / duration);
+            transform.position = _deathSeq.Tick(dt);
 
-            ApplyLensColor(_eyeLens, Color.Lerp(GoldColor, Color.black, t));
-            ApplyLensColor(_sludgeSurface, Color.Lerp(SludgeGlow, Color.black, t));
-            ApplyLensColor(_alarmLens, Color.Lerp(_alarmCritical ? AlarmBright : AlarmDark, Color.black, t));
+            bool lit = _deathSeq.Elapsed < BossDeathSequence.ThroesEnd
+                && ((int)(_deathSeq.Elapsed / 0.1f) % 2 == 0);
+
+            ApplyLensColor(_eyeLens, lit ? GoldColor : Color.black);
+            ApplyLensColor(_sludgeSurface, lit ? SludgeGlow : Color.black);
+            ApplyLensColor(_alarmLens, lit ? (_alarmCritical ? AlarmBright : AlarmDark) : Color.black);
             for (int i = 0; i < 2; i++)
             {
-                ApplyLensColor(_hatchStrips[i], Color.Lerp(SludgeGlow, Color.black, t));
-                ApplyLensColor(_cannonMouths[i], Color.Lerp(SludgeGlow, Color.black, t));
+                ApplyLensColor(_hatchStrips[i], lit ? SludgeGlow : Color.black);
+                ApplyLensColor(_cannonMouths[i], lit ? SludgeGlow : Color.black);
             }
 
-            transform.position += Vector3.down * (t * t * 1.2f);   // sinks into the drained floor
-
-            if (t >= 1f) gameObject.SetActive(false);
+            if (_deathSeq.Done) gameObject.SetActive(false);
         }
 
         private void ApplyLensColor(MeshRenderer r, Color c)
@@ -749,8 +757,29 @@ namespace MaxWorlds.VFX
             if (_boss == null || !_boss.IsDead) return;
             if (_dying) return;
             _dying = true;
-            _dieTimer = 0f;
             _gait?.Freeze();   // MV-1132 Change #9: no new step starts; feet mid-step drop where they are.
+
+            FindFirstObjectByType<BossSpectacle>()?.ThroesShake(); // MV-1190 step 1's own "medium camera shake"
+
+            _deathSeq = new BossDeathSequence(transform.position, WorldBoundsNow(),
+                onBlast: (pos, scale, kind) => FindFirstObjectByType<BossSpectacle>()?.Blast(pos, scale),
+                onFinale: centre =>
+                {
+                    BossDeathFinaleVfx.SpawnChunks(centre, new[] { RustColor, TealColor, DarkColor });
+                    BossDeathFinaleVfx.Flash();
+                    FindFirstObjectByType<SpringGuts>()?.Burst(centre, 3 * SpringGuts.PerDeath);
+                });
+        }
+
+        /// <summary>The combined world bounds of every renderer this rig owns — where
+        /// <see cref="_deathSeq"/>'s chain explosions and finale blast are centred.</summary>
+        private Bounds WorldBoundsNow()
+        {
+            var renderers = GetComponentsInChildren<MeshRenderer>();
+            if (renderers.Length == 0) return new Bounds(transform.position, Vector3.one);
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
         }
 
     }

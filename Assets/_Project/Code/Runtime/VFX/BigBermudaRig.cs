@@ -180,7 +180,7 @@ namespace MaxWorlds.VFX
         private Vector3 _lastPos;
         private bool _awake;
         private bool _dying;
-        private float _dieTimer;
+        private BossDeathSequence _deathSeq;
 
         private float _hatchOpen;                // 0 shut … 1 fully hinged, eased
         private bool _venting;                   // true while the hatches are meant to be open (YT-157)
@@ -197,6 +197,11 @@ namespace MaxWorlds.VFX
         /// <summary>The boss this rig is bound to — for a test to prove distinct rigs bind to distinct
         /// bosses, not the same one FindFirstObjectByType happened to see first (MV-573).</summary>
         public BigBermudaBoss Boss => _boss;
+
+        /// <summary>MV-1190: the running death choreography once this boss has died — null until then.
+        /// Exposed for a test to sample timing (the body's Y, the chain/finale blast counts) without
+        /// needing a real clock.</summary>
+        public BossDeathSequence DeathSequence => _deathSeq;
 
         // ---------------------------------------------------------------- build
 
@@ -638,9 +643,13 @@ namespace MaxWorlds.VFX
         {
             if (_boss == null) return;
 
-            Follow();
+            // MV-1190: once dying, the body FREEZES at the spot it died (no more Follow() re-anchoring
+            // it to the ground plane every frame) and the death sequence takes over its transform
+            // entirely — jittering X/Z only, never touching Y, which is the whole fix for "it sinks
+            // into the lawn".
+            if (_dying) { TickDeath(Time.unscaledDeltaTime); return; }
 
-            if (_dying) { TickDeath(); return; }
+            Follow();
 
             float dt = Time.deltaTime;
 
@@ -837,7 +846,6 @@ namespace MaxWorlds.VFX
             if (_boss == null || !_boss.IsDead) return;
             if (_dying) return;
             _dying = true;
-            _dieTimer = 0f;
             _venting = false;
 
             if (_motes != null)
@@ -845,30 +853,47 @@ namespace MaxWorlds.VFX
                 var emission = _motes.emission;
                 emission.enabled = false;
             }
+
+            FindFirstObjectByType<BossSpectacle>()?.ThroesShake(); // MV-1190 step 1's own "medium camera shake"
+
+            _deathSeq = new BossDeathSequence(transform.position, WorldBoundsNow(),
+                onBlast: (pos, scale, kind) => FindFirstObjectByType<BossSpectacle>()?.Blast(pos, scale),
+                onFinale: centre =>
+                {
+                    BossDeathFinaleVfx.SpawnChunks(centre, new[] { ChitinDark, ChitinPlate, Iridescent });
+                    BossDeathFinaleVfx.Flash();
+                    FindFirstObjectByType<SpringGuts>()?.Burst(centre, 3 * SpringGuts.PerDeath);
+                });
+        }
+
+        /// <summary>The combined world bounds of every renderer this rig owns — where
+        /// <see cref="_deathSeq"/>'s chain explosions and finale blast are centred.</summary>
+        private Bounds WorldBoundsNow()
+        {
+            var renderers = GetComponentsInChildren<MeshRenderer>();
+            if (renderers.Length == 0) return new Bounds(transform.position, Vector3.one);
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b;
         }
 
         /// <summary>
-        /// It comes apart, and it takes its time about it.
-        ///
-        /// UNSCALED, because the run ends on the frame the boss dies: RunTracker hears BossDefeated and
-        /// ResultScreen sets timeScale = 0 the same frame, so anything on scaled time is frozen before it
-        /// moves. YT-55's defeat sequence runs unscaled for exactly this reason and this runs alongside it.
-        ///
-        /// The boss deactivates its own GameObject the instant it dies — but this body is not parented to
-        /// it, so it outlives it by half a second and actually DIES on screen: the core goes out, the
-        /// shells sag apart, and the whole hulk sinks into the lawn while YT-55's flashes go off on top.
-        /// Then it is gone, before the result card settles.
+        /// MV-1190: one shared death sequence (<see cref="BossDeathSequence"/>), not each rig's own
+        /// fixed tick — a shudder, a chain reaction, then the finale blast, at whatever position the
+        /// sequence calls for. The body NEVER sinks below the Y it died standing at: <see cref="_deathSeq"/>
+        /// jitters X/Z only (see <see cref="LateUpdate"/>'s own note on why <see cref="Follow"/> is
+        /// skipped once dying). The core-goes-dark read is kept here, as the ticket asks, but now
+        /// flickers across the death throes instead of fading smoothly to black.
         /// </summary>
-        private void TickDeath()
+        private void TickDeath(float dt)
         {
-            const float duration = 0.55f;
+            if (_deathSeq == null) return;
 
-            _dieTimer += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(_dieTimer / duration);
-            float k = 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime);
+            transform.position = _deathSeq.Tick(dt);
 
-            // The core dies first, and fast. Whatever was in there has left.
-            _eyeColor = Color.Lerp(_eyeColor, Color.black, k);
+            bool lit = _deathSeq.Elapsed < BossDeathSequence.ThroesEnd
+                && ((int)(_deathSeq.Elapsed / 0.1f) % 2 == 0);
+            _eyeColor = lit ? EyeIdle : Color.black;
             ApplyEyes(_eyeColor);
             if (_spine != null)
             {
@@ -876,29 +901,10 @@ namespace MaxWorlds.VFX
                 _portMpb.SetColor(BaseColorId, _eyeColor);
                 _spine.SetPropertyBlock(_portMpb);
             }
-
-            // The shells sag half-open as it dies — the carrier splitting one last time. Absolute, driven
-            // entirely by t (Follow() re-anchored us this frame, so each pose is applied clean; accumulate
-            // instead and the fall would depend on the frame rate).
-            _hatchOpen = Mathf.Lerp(_hatchOpen, 0.4f, k);
-            float deg = _hatchOpen * hatchMaxDeg;
-            if (_hatchL != null) _hatchL.localRotation = Quaternion.Euler(0f, 0f, deg);
-            if (_hatchR != null) _hatchR.localRotation = Quaternion.Euler(0f, 0f, -deg);
-            if (_brood != null)
-            {
-                _brood.GetPropertyBlock(_portMpb);
-                _portMpb.SetColor(BaseColorId, Color.Lerp(EyeIdle, Color.black, t) * _hatchOpen);
-                _brood.SetPropertyBlock(_portMpb);
-            }
-
-            // And it topples — over into the grass it spent the whole fight cutting.
-            transform.rotation *= Quaternion.Euler(t * 11f, 0f, t * 7f);
-            transform.position += Vector3.down * (t * t * 0.8f);
-
             if (_chitinMat != null && _chitinMat.HasProperty(EmissionId)) _chitinMat.SetColor(EmissionId, Color.black);
             if (_plateMat != null && _plateMat.HasProperty(EmissionId)) _plateMat.SetColor(EmissionId, Color.black);
 
-            if (t >= 1f) gameObject.SetActive(false);
+            if (_deathSeq.Done) gameObject.SetActive(false);
         }
 
         private void OnDestroy()

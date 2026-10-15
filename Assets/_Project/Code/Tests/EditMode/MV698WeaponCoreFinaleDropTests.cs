@@ -75,6 +75,14 @@ namespace MaxWorlds.Tests.EditMode
             typeof(BigBermudaBoss).GetMethod("OnDeath", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(boss, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         // Same "no stray collider beside the required CharacterController" construction BossTests.cs
         // uses (BossPrimitive_HasNoColliderBesidesTheCharacterController).
         private static BigBermudaBoss NewBoss(string name)
@@ -145,6 +153,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 // a30's LAST boss falling clears the area -- exactly one Weapon Core, never a Device.
                 InvokeOnDeath(boss2);
+                AdvanceWeaponCoreSpawn(payoff);
                 Assert.AreEqual(1, LivePickups().Count(p => p.Kind == PickupKind.WeaponCore),
                     "a30's last boss dying must drop exactly one Weapon Core");
                 Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.Device),

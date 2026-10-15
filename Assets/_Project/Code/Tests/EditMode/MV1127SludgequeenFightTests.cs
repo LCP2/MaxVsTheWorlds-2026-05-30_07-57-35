@@ -106,6 +106,14 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeOnDeath(Object component) =>
             component.GetType().GetMethod("OnDeath", NonPublicInstance).Invoke(component, null);
 
+        // MV-1190: the Weapon Core no longer drops synchronously on death -- it drops at
+        // BossDeathSequence.FinaleTime (1.6s) into the dying boss's own death choreography. A single
+        // big tick past that threshold fires the deferred spawn immediately, same as a real 1.6s wait
+        // would, with no real clock needed.
+        private static void AdvanceWeaponCoreSpawn(BossVictoryPayoff payoff) =>
+            typeof(BossVictoryPayoff).GetMethod("TickPendingWeaponCore", NonPublicInstance)
+                .Invoke(payoff, new object[] { BossDeathSequence.FinaleTime + 0.01f });
+
         private static float ContactReachTo(SludgequeenBoss boss, Transform target) =>
             (float)typeof(SludgequeenBoss).GetMethod("ContactReachTo", NonPublicInstance)
                 .Invoke(boss, new object[] { target });
@@ -541,6 +549,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 deathPos = bossGo.transform.position;
             InvokeOnDeath(boss);
+            AdvanceWeaponCoreSpawn(payoff);
 
             Pickup core = Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None)
                 .SingleOrDefault(p => p.Kind == PickupKind.WeaponCore);
