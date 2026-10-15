@@ -193,9 +193,34 @@ namespace MaxWorlds.Arena
         /// drive the exact run-start step with no scene/map involved.
         /// <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/> is already idempotent (a no-op
         /// once nothing is banked), so THE RIG's own open ceremony keeps calling it too — a fallback for
-        /// anything that never runs a <see cref="BackyardPath"/> at all (the dev capture harness).</summary>
-        public static void ApplyPendingMorphAtRunStart(int worldIndex) =>
-            WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex);
+        /// anything that never runs a <see cref="BackyardPath"/> at all (the dev capture harness).
+        ///
+        /// MV-1179: when nothing was pending (the City's own bossless finale grants no Core), this
+        /// also re-anchors <see cref="RigBoard.ActiveWorldIndex"/> straight to <paramref name="worldIndex"/>
+        /// for a same-board/same-primary advance (the City -&gt; Reef step) — see the method body for
+        /// why that's safe.</summary>
+        public static void ApplyPendingMorphAtRunStart(int worldIndex)
+        {
+            if (WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex)) return;
+
+            // MV-1179: the City (World 3) grants no Weapon Core of its own -- its finale is bossless,
+            // so nothing ever banks a pending morph for the walk into the Reef, and RigBoard.ActiveWorldIndex
+            // (only ever advanced by RigBoard.UseWorld, which the morph above is the only other caller
+            // of) stays pinned on the City forever. That stale index is what AbilityTuning.ShoulderRackBaseDamageForWorld
+            // and the checkpoint both read, so Reef rockets kept hitting at the City/World 2 rate (Lee's
+            // bug report). Re-anchor directly, but ONLY when the two rows share the same board and
+            // primary (RigBoardResourcePath/PrimaryWeapon) -- i.e. a real morph would have been a
+            // no-op anyway -- never when they differ, which would silently skip a morph some OTHER path
+            // is supposed to grant instead.
+            if (RigBoard.ActiveWorldIndex >= worldIndex) return;
+
+            WorldDefinition current = WorldCatalog.Get(RigBoard.ActiveWorldIndex);
+            WorldDefinition target = WorldCatalog.Get(worldIndex);
+            if (current.RigBoardResourcePath != target.RigBoardResourcePath) return;
+            if (current.PrimaryWeapon != target.PrimaryWeapon) return;
+
+            WeaponSystemState.ApplyWorldLoadout(worldIndex);
+        }
 
         /// <summary>Dresses the arena in the loaded world's own biome (MV-690) — World 1's lawn-green or
         /// World 2's wet concrete, read off <see cref="WorldCatalog"/>'s own row (MV-1141) rather than
