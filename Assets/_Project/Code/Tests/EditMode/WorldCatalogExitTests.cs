@@ -55,6 +55,9 @@ namespace MaxWorlds.Tests.EditMode
             ExitDressing = source.ExitDressing,
             ArrivalDressing = source.ArrivalDressing,
             RunsLegacyExitGate = source.RunsLegacyExitGate,
+            DevStart = source.DevStart,
+            DevStartParts = source.DevStartParts,
+            DevStartCells = source.DevStartCells,
         };
 
         [Test]
@@ -203,6 +206,16 @@ namespace MaxWorlds.Tests.EditMode
             fixedMultiplier.PrimarySecondaryCostMultiplier = 1f;
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, fixedMultiplier });
             Assert.IsEmpty(WorldCatalog.Validate(), "setting PrimarySecondaryCostMultiplier back to 1f must validate clean");
+
+            // MV-1185 AC2: a row with a negative DevStartCells must report a problem (covered here
+            // rather than as a second new test, per that ticket's own AC2).
+            WorldDefinition negativeCells = CloneRowWithId(reef, "probe-dev-start-cells");
+            negativeCells.DevStartCells = -1;
+            WorldCatalog.UseForTests(new[] { backyard, stormdrain, negativeCells });
+            List<string> devStartCellsProblems = WorldCatalog.Validate();
+            Assert.IsTrue(devStartCellsProblems.Exists(p => p.Contains("probe-dev-start-cells") && p.Contains("DevStartCells")),
+                "a row with a negative DevStartCells must report a problem naming the row and field: "
+                + string.Join("; ", devStartCellsProblems));
         }
     }
 }

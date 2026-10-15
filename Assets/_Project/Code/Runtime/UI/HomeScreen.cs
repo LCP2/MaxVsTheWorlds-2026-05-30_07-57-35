@@ -326,6 +326,12 @@ namespace MaxWorlds.UI
                 // that), re-earned through this world's own cadence, same as SECONDARY (when it isn't
                 // carried).
             }
+
+            // MV-1185: a DEV world start must not leave PickupWallet empty -- Lee then fought a
+            // world's last area with no Power Cells for rockets and arrived in the next world with
+            // nothing. Floors, resolved AFTER the rig above is applied (Capacity depends on e_cel's
+            // now-current level); never reduces an existing higher balance.
+            WorldCatalog.ApplyDevStartFloor(worldIndex);
         }
 
         /// <summary>WORLD 2 dev entry point (MV-726) — the original single-world shape, kept as a

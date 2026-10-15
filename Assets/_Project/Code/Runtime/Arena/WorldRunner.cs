@@ -526,6 +526,10 @@ namespace MaxWorlds.Arena
             RefreshConditionGates();
 
             ResumeCheckpoint(finaleIndex);
+
+            // MV-1185: LAST AREA is the other DEV jump that used to leave PickupWallet empty -- floor
+            // it to this world's own row, never reducing an existing higher balance.
+            WorldCatalog.ApplyDevStartFloor(_areaDirector.ActiveWorldIndex);
             return true;
         }
 
