@@ -157,6 +157,8 @@ namespace MaxWorlds.Intro
         private readonly List<RobotEnemy> _frozenRobots = new List<RobotEnemy>(16);
 
         private AreaGate _doorGate;
+        private float _wallThickness;
+        private Rect? _inPlayFootprint;
         private Transform _segmentARoot;
         private Transform _segmentBRoot;
         private Transform _segmentCRoot;
@@ -210,6 +212,20 @@ namespace MaxWorlds.Intro
         /// <see cref="BuildExit"/> has run.</summary>
         public AreaGate FarGate => _farGate;
 
+        /// <summary>The door this instance itself opens/recloses — the exit door for an Exit-mode
+        /// instance, the arrival door for an Arrival-mode one. Null until <see cref="BuildExit"/>/
+        /// <see cref="InitializeArrival"/> has run, and for a fixture built with no real gate at all
+        /// (MV-1194's own test-facing path can pass one in).</summary>
+        public AreaGate DoorGate => _doorGate;
+
+        /// <summary>MV-1194: true while Max is walking the exit corridor under his own control — the
+        /// phase <see cref="FallSafetyNet"/>'s registered in-play rect exists to cover.</summary>
+        public bool IsInCorridorWalk => _phase == Phase.CorridorWalk;
+
+        /// <summary>MV-1194: true once the belt-and-braces recovery in <see cref="TickCorridorWalk"/>
+        /// has handed the sequence back to its "wait for Max to cross" phase.</summary>
+        public bool IsAwaitingCrossing => _phase == Phase.AwaitingCrossing;
+
         // ------------------------------------------------------------------ build (exit)
 
         /// <summary>The test-facing entry point (MV-845's own idiom: a MonoBehaviour without
@@ -241,6 +257,7 @@ namespace MaxWorlds.Intro
 
             float wallHeight = ResolveWallHeight(fromMap);
             float wallThickness = ResolveWallThickness(fromMap);
+            _wallThickness = wallThickness;
 
             WorldArea exitArea = entry.ExitArea(fromCfg);
             _doorMouth = exitArea != null ? entry.ExitDoorMouth(fromCfg)
@@ -259,6 +276,7 @@ namespace MaxWorlds.Intro
 
             BuildExitCorridor(wallHeight, wallThickness);
             ClearIntrudingGeometry(entry.CorridorLength, wallHeight);
+            RegisterInPlayFootprint(entry.CorridorLength);
 
             int toWorld = fromWorldIndex + 1;
             _farDoorMouth = PointAtXZ(_doorMouth, _wall, entry.CorridorLength);
@@ -378,6 +396,7 @@ namespace MaxWorlds.Intro
 
             float wallHeight = ResolveWallHeight(toMap);
             float wallThickness = ResolveWallThickness(toMap);
+            _wallThickness = wallThickness;
             int toWorld = fromWorldIndex + 1;
 
             WorldArea stub = entry.ArrivalArea(toCfg);
@@ -399,6 +418,7 @@ namespace MaxWorlds.Intro
 
             BuildArrivalShell(wallHeight, wallThickness, toWorld);
             ClearIntrudingGeometry(entry.ArrivalShellLength, wallHeight);
+            RegisterInPlayFootprint(entry.ArrivalShellLength);
             BuildFade();
             ApplyFadeAlpha(1f);   // fully black -- the world has just booted, nothing to see yet
 
@@ -517,22 +537,48 @@ namespace MaxWorlds.Intro
         /// axis-aligned, never a rotated OBB.</summary>
         private static Bounds WalkableVolume(Vector2 doorMouth, Wall wall, float length, float width, float wallHeight)
         {
-            bool travelAlongX = wall == Wall.E || wall == Wall.W;
-            bool positive = wall == Wall.N || wall == Wall.E;
-            Rect footprint;
-            if (travelAlongX)
-            {
-                float xMin = positive ? doorMouth.x : doorMouth.x - length;
-                footprint = new Rect(xMin, doorMouth.y - width * 0.5f, length, width);
-            }
-            else
-            {
-                float yMin = positive ? doorMouth.y : doorMouth.y - length;
-                footprint = new Rect(doorMouth.x - width * 0.5f, yMin, width, length);
-            }
-
+            Rect footprint = FootprintRect(doorMouth, wall, 0f, length, width);
             return new Bounds(new Vector3(footprint.center.x, wallHeight * 0.5f, footprint.center.y),
                 new Vector3(footprint.width, wallHeight, footprint.height));
+        }
+
+        /// <summary>The XZ rect spanning [<paramref name="alongMin"/>, <paramref name="alongMax"/>]
+        /// metres outward from <paramref name="doorMouth"/> along <paramref name="wall"/>'s own outward
+        /// axis (same convention as <see cref="AlongDistance"/>/<see cref="PointAtXZ"/> — 0 is the door
+        /// line, positive is further out — so <paramref name="alongMin"/> may be negative to reach back
+        /// behind the door), <paramref name="width"/> wide across it.</summary>
+        private static Rect FootprintRect(Vector2 doorMouth, Wall wall, float alongMin, float alongMax, float width)
+        {
+            bool travelAlongX = wall == Wall.E || wall == Wall.W;
+            bool positive = wall == Wall.N || wall == Wall.E;
+            float coordMin = positive ? alongMin : -alongMax;
+            float coordMax = positive ? alongMax : -alongMin;
+
+            return travelAlongX
+                ? new Rect(doorMouth.x + coordMin, doorMouth.y - width * 0.5f, coordMax - coordMin, width)
+                : new Rect(doorMouth.x - width * 0.5f, doorMouth.y + coordMin, width, coordMax - coordMin);
+        }
+
+        /// <summary>MV-1194: registers this instance's own corridor/arrival-shell footprint as in play
+        /// with <see cref="FallSafetyNet"/> — both are built outside the FROM/TO world's own
+        /// <see cref="MapData.Bounds"/> by design (MV-964 §5), which otherwise reads Max's own
+        /// uninterrupted walk down one (MV-1123) as having fallen out of the world. Matches
+        /// <see cref="BuildBanks"/>'s own extended span exactly (<see cref="BankEndExtension"/> past
+        /// each end, <see cref="BankSideWidth"/> past each wall) so the registered rect covers
+        /// everywhere Max can actually stand, not just the walkway's own 5 m width.</summary>
+        private void RegisterInPlayFootprint(float length)
+        {
+            float width = WorldTransitionEntry.CorridorWidth + 2f * (_wallThickness + BankSideWidth);
+            Rect footprint = FootprintRect(_doorMouth, _wall, -BankEndExtension, length + BankEndExtension, width);
+            _inPlayFootprint = footprint;
+            FallSafetyNet.RegisterInPlayArea(footprint);
+        }
+
+        private void UnregisterInPlayFootprint()
+        {
+            if (!_inPlayFootprint.HasValue) return;
+            FallSafetyNet.UnregisterInPlayArea(_inPlayFootprint.Value);
+            _inPlayFootprint = null;
         }
 
         // ------------------------------------------------------------------ shared geometry
@@ -965,6 +1011,15 @@ namespace MaxWorlds.Intro
             _restored = true;
             if (_player != null) _player.enabled = true;
             if (_hud != null) _hud.gameObject.SetActive(true);
+            UnfreezeRobots();
+        }
+
+        /// <summary>Un-pauses whichever robots this sequence itself froze (<see cref="SuspendGameplay"/>,
+        /// <see cref="BeginCorridorWalk"/>) — shared by <see cref="RestoreGameplay"/> and the
+        /// MV-1194 belt-and-braces recovery in <see cref="TickCorridorWalk"/>, which hands control back
+        /// without otherwise restoring gameplay (the HUD/player were never suspended for this phase).</summary>
+        private void UnfreezeRobots()
+        {
             foreach (RobotEnemy r in _frozenRobots) if (r != null) r.SetCutsceneFrozen(false);
             _frozenRobots.Clear();
         }
@@ -1021,9 +1076,25 @@ namespace MaxWorlds.Intro
         /// <see cref="FarDoorCrossClearance"/> m past it (§6).</summary>
         private void TickCorridorWalk(float dt)
         {
+            float alongFromExit = AlongDistance(_playerT.position, _doorMouth, _wall);
+
+            // MV-1194 belt-and-braces: if Max is ever recovered or teleported back onto the from-world
+            // side of the exit door while this sequence thinks he's mid-corridor (recovery landing him
+            // on his last grounded spot, which is always back in the FROM area since nothing INSIDE the
+            // corridor should ever trip recovery once RegisterInPlayFootprint is doing its job) --
+            // reopen the door he's now stuck behind, unfreeze the robots this sequence froze, and let
+            // him simply walk through again rather than leaving the run stuck.
+            if (alongFromExit < 0f)
+            {
+                if (_doorGate != null) _doorGate.ForceOpen();
+                UnfreezeRobots();
+                _phase = Phase.AwaitingCrossing;
+                _phaseElapsed = 0f;
+                return;
+            }
+
             ApplyCorridorLighting();
 
-            float alongFromExit = AlongDistance(_playerT.position, _doorMouth, _wall);
             float distanceToFarDoor = _entry.CorridorLength - alongFromExit;
 
             if (!_farDoorOpened && distanceToFarDoor <= FarDoorOpenDistance)
@@ -1150,6 +1221,7 @@ namespace MaxWorlds.Intro
         {
             if (_phase == Phase.Done) return;
             _phase = Phase.Done;
+            UnregisterInPlayFootprint();
 
             if (_mode == Mode.Arrival)
             {
@@ -1165,6 +1237,7 @@ namespace MaxWorlds.Intro
 
         private void OnDestroy()
         {
+            UnregisterInPlayFootprint();
             RestoreGameplay();
             // The fade quad is parented to the real gameplay camera, not to this transform, so it
             // doesn't fall away for free when this GameObject is destroyed -- clean it up explicitly.

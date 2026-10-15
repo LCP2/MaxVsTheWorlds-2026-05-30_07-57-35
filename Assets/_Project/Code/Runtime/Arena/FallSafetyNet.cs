@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaxWorlds.Arena
@@ -22,14 +23,36 @@ namespace MaxWorlds.Arena
         /// recovers it — the ticket's own "briefly might be acceptable" grace window.</summary>
         public const float GraceSeconds = 0.5f;
 
+        /// <summary>MV-1194: extra XZ rects that count as in play even though they sit outside
+        /// <see cref="MapData.Bounds"/> — a <see cref="MaxWorlds.Intro.WorldJoinSequence"/>'s own exit
+        /// corridor or arrival shell, both built outside the FROM/TO world's own walls by design.
+        /// Registered while the sequence exists (<see cref="RegisterInPlayArea"/>) and removed the
+        /// instant it finishes or is destroyed (<see cref="UnregisterInPlayArea"/>) — never left stale,
+        /// since a dangling rect would quietly exempt the void beyond it from recovery forever.</summary>
+        private static readonly List<Rect> _inPlayAreas = new List<Rect>(2);
+
+        public static void RegisterInPlayArea(Rect area) => _inPlayAreas.Add(area);
+
+        public static void UnregisterInPlayArea(Rect area) => _inPlayAreas.Remove(area);
+
+        private static bool IsInRegisteredArea(Vector3 position)
+        {
+            var xz = new Vector2(position.x, position.z);
+            foreach (Rect area in _inPlayAreas)
+                if (area.Contains(xz)) return true;
+            return false;
+        }
+
         /// <summary>True if <paramref name="position"/> is more than <see cref="BelowFloorMargin"/>
-        /// below the floor plane, or outside <paramref name="map"/>'s own <see cref="MapData.Bounds"/>
-        /// (XZ only — falling past a DECK's height is normal, only the floor plane underneath every
-        /// area is the true bottom). No map loaded (a bare fixture) only ever fails the floor check —
-        /// there is no map to be out of bounds of.</summary>
+        /// below the floor plane, or outside both <paramref name="map"/>'s own <see cref="MapData.Bounds"/>
+        /// and every registered <see cref="RegisterInPlayArea"/> rect (XZ only — falling past a DECK's
+        /// height is normal, only the floor plane underneath every area is the true bottom). No map
+        /// loaded (a bare fixture) only ever fails the floor check — there is no map to be out of bounds
+        /// of.</summary>
         public static bool IsOutOfPlay(Vector3 position, MapData map)
         {
             if (position.y < -BelowFloorMargin) return true;
+            if (IsInRegisteredArea(position)) return false;
             if (map == null) return false;
 
             Rect bounds = map.Bounds();
