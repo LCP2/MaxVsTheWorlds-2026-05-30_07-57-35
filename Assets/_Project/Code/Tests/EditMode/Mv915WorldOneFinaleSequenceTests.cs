@@ -253,21 +253,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.Device),
                 "the World 1 finale drop must never be a Device");
 
-            // MV-1078: collecting the Core now applies the next world's weapon (no more waiting for THE
-            // RIG's own open ceremony at the next world's run start) and, with no a30 garrison modeled
-            // here, clean-up finds zero robots left and moves straight to the exit beat. MV-1079: both
-            // of those now happen inside scripted beats rather than synchronously -- the morph lands at
-            // Beat A's own 0.5s instant (driven here to its 2.5s end, which starts clean-up), and
-            // WorldFinaleGate.Open() lands at Beat B's own 1.0s instant.
+            // MV-1183: collecting the Core now destroys the final area's remaining robots and opens the
+            // door in the SAME call (none modeled in this lightweight fixture, so that half is vacuous
+            // here) -- no more clean-up phase or exit beat for the door to wait on. The weapon morph
+            // itself still plays as its own cosmetic beat (unchanged, Beat A) -- driven here to its 2.5s
+            // end so the morph's own 0.5s instant has definitely landed.
             InvokeCollect(pickupDirector, core[0]);
+            Assert.IsTrue(gate.IsOpen,
+                "MV-1183: collecting the Core must open the exit immediately, with no further clean-up " +
+                "or exit-beat gate");
             gate.TickWeaponBeat(2.5f);
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary,
                 "AC3: collecting the Core must resolve the active primary weapon to the laser (LPPE) " +
                 "immediately, not wait for the next world's run start");
-            gate.TickExitBeat(1.0f);
-            Assert.IsTrue(gate.IsOpen,
-                "MV-1078: with no a30 robots modeled in this fixture, collecting the Core must open the " +
-                "exit right away");
 
             // AC4: the boss payoff beat (a12's own walk-out, unrelated to a30) finishing is RunTracker's
             // other seal condition. In the real game its Update() loop would already have fired

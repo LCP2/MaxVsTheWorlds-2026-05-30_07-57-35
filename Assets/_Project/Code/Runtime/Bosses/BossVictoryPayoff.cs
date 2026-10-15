@@ -158,6 +158,14 @@ namespace MaxWorlds.Bosses
             PickupDirector.EnsureInstalled().SpawnWeaponCore(_lastKilledPos + Vector3.up * 1.4f);
         }
 
+        /// <summary>MV-1183: a dormant companion boss (not yet woken/registered when its sibling died)
+        /// must still count — <see cref="BossCensus.AnyLivingIn"/> (what the <see cref="HudSignals.BossDefeated"/>
+        /// signal that lands us here is already gated on) only ever sees a REGISTERED boss, so it read
+        /// World 1 a30's two Big Bermudas as "empty" the instant the first died while the second sat
+        /// Dormant, never approached. Re-check against the area's AUTHORED boss total
+        /// (<see cref="WorldArea.Bosses"/>) when one exists; a synthetic fixture with no authored boss
+        /// data (every pre-MV-1183 test here) falls back to the old "no more boss we know about is
+        /// still alive" answer, unchanged.</summary>
         private static bool IsFinalBossAreaDefeat()
         {
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
@@ -166,7 +174,10 @@ namespace MaxWorlds.Bosses
 
             int areaIndex = BossCensus.LastDefeatedAreaIndex;
             WorldArea area = cfg.AreaByIndex(areaIndex);
-            return area != null && area.IsBossRole && areaIndex == cfg.dials.areaCount;
+            if (area == null || !area.IsBossRole || areaIndex != cfg.dials.areaCount) return false;
+
+            int authoredTotal = area.Bosses().Length;
+            return authoredTotal <= 0 || BossCensus.DeadCountInArea(areaIndex) >= authoredTotal;
         }
 
         private void Update()

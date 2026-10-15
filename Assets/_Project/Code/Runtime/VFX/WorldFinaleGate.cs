@@ -33,11 +33,20 @@ namespace MaxWorlds.VFX
     /// <see cref="IsFinalBossAreaDefeat"/>), the same event <c>BossVictoryPayoff</c> drops the Weapon
     /// Core on. MV-1078 reverses that: the orb (collecting the Core) is what matters now, not the boss
     /// dying — Lee, 2026-10-03, "I can't help thinking that the orb means nothing." The boss dying only
-    /// latches <see cref="_finalBossDefeated"/>; the exit stays shut until every living robot in the
-    /// final area is dead too (see <see cref="OnWeaponCoreCollected"/>/<see cref="TickCleanup(float)"/>)
-    /// — MV-1122's own four clean-up safety nets (see that ticket's own doc block, just above
-    /// <see cref="NoProgressSeconds"/>) are what stop one stuck robot stalling the ending forever, the
-    /// actual risk the 2026-09-26 ruling this reverses was guarding against.
+    /// latches <see cref="_finalBossDefeated"/>.
+    ///
+    /// MV-1183: Lee's device playtests (12-14 Oct) found the finale "totally broken" — MV-1122's
+    /// clean-up phase (a visible count, red rings, off-screen arrows, a 45s timer), MV-1125's watched
+    /// exit-open beat and ground trail, and World 1 a30's two-boss orb drop (the FIRST boss dying
+    /// dropped the orb while the second sat Dormant, never registered with <c>BossCensus</c>, so
+    /// <c>BossCensus.AnyLivingIn</c> alone already read the area "empty") have all been retired/fixed.
+    /// The rule now (option A, "heavily simplify"): every boss in the final area must die
+    /// (<see cref="IsFinalBossAreaDefeat"/> checks the AUTHORED total, <c>WorldArea.Bosses().Length</c>,
+    /// not just the registered-living set) before the orb appears; collecting it
+    /// (<see cref="OnWeaponCoreCollected"/>) destroys every robot still alive in the final area and
+    /// opens the exit, all in the same frame, with no further clean-up/exit-beat gate and no camera or
+    /// input take-over steering Max toward the door — he walks there himself. <see cref="DestroyRestAndOpenDoor"/>
+    /// is the shared step a bossless finale area (MV-1179, the City's a1) calls too.
     ///
     /// MV-964: no longer a barrier that sinks in place — opening now hands off to
     /// <see cref="WorldJoinSequence"/> to cut the REAL door <see cref="WorldTransitions"/> authors for
@@ -76,19 +85,13 @@ namespace MaxWorlds.VFX
         /// died, not an authored flag (MV-915 AC4; MV-956 changed the trigger from RunComplete).</summary>
         public bool IsOpen { get; private set; }
 
-        /// <summary>MV-1129: true once this finale has moved past its weapon moment — the Core collected
-        /// and, if there is a next world, its morph already applied (<see cref="TickWeaponBeat"/>) —
-        /// into clean-up or later. Not simply <c>_cleanupActive || IsOpen</c>: <see cref="TickCleanup(float)"/>
-        /// can hand straight off to <see cref="BeginExitBeat"/> inside the very same call, with no frame
-        /// where <c>_cleanupActive</c> is true and <see cref="IsOpen"/> isn't yet — <c>_exitBeatActive</c>
-        /// covers exactly that gap. What <see cref="MaxWorlds.Save.SaveSlotData.CheckpointFinaleWeaponGranted"/>
+        /// <summary>MV-1129: true once this finale has moved past its weapon moment — the Core
+        /// collected and the exit opened. MV-1183: collecting the Core now destroys the final area's
+        /// remaining robots and opens the door in the same call (see <see cref="OnWeaponCoreCollected"/>),
+        /// so there is no longer a gap between "the Core is granted" and "the door is open" for this to
+        /// cover — it is simply <see cref="IsOpen"/>. What <see cref="MaxWorlds.Save.SaveSlotData.CheckpointFinaleWeaponGranted"/>
         /// persists.</summary>
-        public bool WeaponMomentResolved => _cleanupActive || _exitBeatActive || IsOpen;
-
-        /// <summary>MV-1122 test seam: whether Beat B (EXIT OPEN) has started — distinct from
-        /// <see cref="IsOpen"/>, which only flips true <see cref="ExitBeatDoorOpenTime"/> seconds into
-        /// that beat. What "the exit beat has begun" (the clean-up safety nets' own AC wording) means.</summary>
-        public bool ExitBeatActive => _exitBeatActive;
+        public bool WeaponMomentResolved => IsOpen;
 
         private WorldConfig _cfg;
         private MapData _map;
@@ -106,83 +109,12 @@ namespace MaxWorlds.VFX
         private bool _crossed;
 
         /// <summary>MV-1078: this gate's own final boss has died — latched by
-        /// <see cref="OnBossDefeated"/>, which no longer opens the exit directly. Independent of
-        /// <see cref="_cleanupActive"/>: a boss can die well before Max ever walks back to collect the
-        /// Core it dropped.</summary>
+        /// <see cref="OnBossDefeated"/>, which no longer opens the exit directly. A boss can die well
+        /// before Max ever walks back to collect the Core it dropped.</summary>
         private bool _finalBossDefeated;
 
         /// <summary>MV-1129: guards <see cref="ResumeFromCheckpoint"/> to exactly once per gate.</summary>
         private bool _resumedFromCheckpoint;
-
-        /// <summary>MV-1078: true from the moment the Core is collected until the final area's last
-        /// living robot is dead and the exit actually opens.</summary>
-        private bool _cleanupActive;
-
-        /// <summary>MV-1078: the final area index (<c>cfg.dials.areaCount</c>), resolved fresh in
-        /// <see cref="BeginCleanup"/> rather than reused from <see cref="Awake"/>'s own geometry (null in
-        /// the geometry-independent tests, same reasoning as <see cref="IsFinalBossAreaDefeat"/>).</summary>
-        private int _finalAreaIndex;
-
-        private int _lastRobotsLeft;
-
-        // ---------------------------------------------------------------- MV-1122: clean-up safety nets
-        //
-        // Four independent layers so a robot the player can never deal with can never hold the exit
-        // shut (Lee, 2026-10-07): (1) BigBermudaBoss.LandInFlightAdds lands an airborne add the instant
-        // its boss dies, so nothing can stay suspended with its brain off forever. (2) TickUnreachableRemoval
-        // removes a counted robot once a second if it's disabled/inactive, stuck off the floor, outside
-        // the area's own footprint, or has had no route to Max for 2s. (3) TickNoProgressThinning — the
-        // old 25s all-at-once CleanupFailsafeSeconds is GONE; after NoProgressSeconds (10s) with no
-        // genuine kill, the remainder is thinned one every NoProgressThinInterval (0.3s). (4) the hard
-        // HardLimitSeconds (45s) ceiling clears everyone left and opens the exit regardless. All four
-        // are driven off _cleanupClock, an explicit elapsed-seconds accumulator advanced by TickCleanup's
-        // own dt argument — never Time.unscaledTime directly — so an EditMode test can drive 45+ seconds
-        // of clean-up deterministically in a tight loop, the same "a Tick(dt) the test can drive"
-        // contract TickWeaponBeat/TickExitBeat already give their own beats.
-
-        private const float NoProgressSeconds = 10f; // was CleanupFailsafeSeconds's 25s, single-shot
-        private const float NoProgressThinInterval = 0.3f;
-        private const float HardLimitSeconds = 45f;
-        private const float UnreachableCheckInterval = 1f;
-        private const float OffFloorTolerance = 0.5f;
-        private const float OffFloorGraceSeconds = 1f;
-        private const float NoRouteGraceSeconds = 2f;
-
-        private const float CleanupRingRadius = 0.9f;
-        private static readonly Color CleanupRingColor = new Color(1f, 0.231f, 0.188f, 0.9f); // #FF3B30 @ .9
-        private static readonly Color CleanupBorderColor = new Color(1f, 0.231f, 0.188f);      // #FF3B30
-        private const int MaxEdgeArrows = 6;
-
-        private float _cleanupClock;
-        private float _lastProgressClock;
-        private float _lastThinClock;
-        private float _lastUnreachableCheckClock;
-
-        /// <summary>Robots currently counted toward clean-up — alive, stamped with the final area, and
-        /// standing inside its own footprint. Rebuilt from scratch every <see cref="TickCleanup(float)"/>
-        /// (same "scan FindObjectsByType, never RobotEnemy.Active" reasoning as <see cref="AreaAccumulationDirector.ActiveCountForArea"/>'s
-        /// own doc comment — OnEnable never runs outside Play mode), so a removal this method makes is
-        /// only ever a same-tick bookkeeping shortcut; the next refresh would exclude it anyway.</summary>
-        private readonly List<RobotEnemy> _cleanupRobots = new List<RobotEnemy>(16);
-
-        private readonly Dictionary<RobotEnemy, GroundRing> _cleanupRings = new Dictionary<RobotEnemy, GroundRing>();
-        private readonly List<EdgeArrow> _cleanupArrows = new List<EdgeArrow>(MaxEdgeArrows);
-        private readonly Dictionary<RobotEnemy, float> _offFloorSinceClock = new Dictionary<RobotEnemy, float>();
-        private readonly Dictionary<RobotEnemy, float> _noRouteSinceClock = new Dictionary<RobotEnemy, float>();
-
-        /// <summary>Robots this tick's own forced removal (footprint violation, unreachable, thinning,
-        /// hard limit) has already killed — consumed once, at the top of the NEXT <see cref="TickCleanup(float)"/>,
-        /// to tell a genuine player kill (resets <see cref="_lastProgressClock"/>) apart from one of
-        /// clean-up's own safety-net kills (must NOT read as progress, or the no-progress thinner would
-        /// perpetually postpone itself on the very kills it just made).</summary>
-        private readonly HashSet<RobotEnemy> _forcedKillsPending = new HashSet<RobotEnemy>();
-
-        /// <summary>MV-1122 test/HUD seam: every ring currently marking a counted robot, keyed by the
-        /// robot it follows — resolved runtime state (position, scale), not a reflected field.</summary>
-        public IReadOnlyDictionary<RobotEnemy, GroundRing> CleanupRings => _cleanupRings;
-
-        /// <summary>MV-1122 test seam: how many off-screen edge arrows are showing right now.</summary>
-        public int ActiveEdgeArrowCount { get; private set; }
 
         // ---------------------------------------------------------------- MV-1079: Beat A, WEAPON TAKEN
 
@@ -250,78 +182,9 @@ namespace MaxWorlds.VFX
         private LightPillar _coreBeaconPillar;
         private GroundRing _coreBeaconRing;
 
-        // ---------------------------------------------------------------- MV-1079: Beat B, EXIT OPEN
-
-        private const float ExitBeatDuration = 3.0f;
-        private const float ExitBeatDoorOpenTime = 1.0f;
-        private const float ExitBeatHoldUntil = 2.2f;
-        private const float ExitBeatBurstFadeSeconds = 0.3f;
-        private const float ExitBeatBurstDiameter = 1.5f; // MV-1125: a camera-facing flare, not a flat disc
-        private const float ExitBeatBoltSpeedFloor = 1f;
-
-        private bool _exitBeatActive;
-        private float _exitBeatTime;
-        private bool _exitBeatDoorOpened;
-        private Vector3 _exitBeatDoorPosition;
-        private Vector3 _exitBeatWedgeDirection;
-        private CameraTargetRig _exitBeatCameraRig;
-        private SentinelBolt _exitBeatBolt;
-        private CameraFacingFlare _exitBeatBurstFlare;
-
         private FinaleBanner _banner;
         private readonly List<RobotEnemy> _frozenRobots = new List<RobotEnemy>(16);
         private PlayerController _frozenPlayer;
-
-        // ---------------------------------------------------------------- MV-1125: the door's own jamb
-        // lamp (red while shut, green once open), the floor light wedge that marks the open doorway, and
-        // the post-beat chevron trail leading Max to it.
-
-        private const float ExitLampDiameter = 0.38f;
-        private static readonly Color ExitLampLockedColor = new Color(0.90f, 0.15f, 0.10f);
-        private static readonly Color ExitLampOpenColor = new Color(0.208f, 0.878f, 0.420f); // #35E06B
-        private static readonly int ExitLampColorId = Shader.PropertyToID("_BaseColor");
-
-        private GameObject _exitLampGo;
-        private MeshRenderer _exitLampRenderer;
-        private MaterialPropertyBlock _exitLampMpb;
-
-        private const float ExitWedgeNearWidth = 3f;
-        private const float ExitWedgeFarWidth = 6f;
-        private const float ExitWedgeLength = 7f;
-        private static readonly Color ExitWedgeColor = new Color(1f, 0.92f, 0.78f, 0.35f);
-        private GroundWedge _exitWedge;
-
-        private const float ExitTrailStepDistance = 2f;
-        private const int ExitTrailMaxChevrons = 12;
-        private static readonly Color ExitTrailChevronColor = new Color(0.616f, 1f, 0.710f, 0.9f); // #9DFFB5 @ .9
-        private static readonly Color ExitTrailBorderColor = new Color(0.208f, 0.878f, 0.420f); // #35E06B
-
-        private bool _trailActive;
-        private Vector3 _trailDoorPosition;
-        private readonly List<GroundChevron> _trailChevrons = new List<GroundChevron>(ExitTrailMaxChevrons);
-
-        /// <summary>MV-1125 test seam: how many chevrons the trail is currently showing.</summary>
-        public int ExitTrailChevronCount { get; private set; }
-
-        /// <summary>MV-1125 test seam: the i'th live chevron's own resolved world position.</summary>
-        public Vector3 ExitTrailChevronPosition(int i) => _trailChevrons[i].transform.position;
-
-        /// <summary>MV-1125 test seam: the i'th live chevron's own resolved facing.</summary>
-        public Vector3 ExitTrailChevronForward(int i) => _trailChevrons[i].transform.forward;
-
-        /// <summary>MV-1125 test seam: the exit door lamp's own resolved rendered colour, read back off
-        /// its renderer's MaterialPropertyBlock — not a cached field copy of whichever constant last set
-        /// it.</summary>
-        public Color ExitDoorLampColor
-        {
-            get
-            {
-                if (_exitLampRenderer == null) return default;
-                var mpb = new MaterialPropertyBlock();
-                _exitLampRenderer.GetPropertyBlock(mpb);
-                return mpb.GetColor(ExitLampColorId);
-            }
-        }
 
         private void Awake()
         {
@@ -353,7 +216,6 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
-            HudSignals.FinaleGateCrossed += OnFinaleGateCrossedForTrail;
         }
 
         private void OnDisable()
@@ -361,26 +223,21 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
-            HudSignals.FinaleGateCrossed -= OnFinaleGateCrossedForTrail;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
-            if (_weaponBeatActive || _exitBeatActive) RestoreGameplayForBeat();
+            if (_weaponBeatActive) RestoreGameplayForBeat();
             HideWeaponBeatVisuals();
-            HideExitBeatVisuals();
             HideCoreBeacon();
-            HideCleanupVisuals();
-            if (_exitLampGo != null) _exitLampGo.SetActive(false);
-            _exitWedge?.Hide();
-            foreach (GroundChevron c in _trailChevrons) c?.Hide();
             if (_banner != null) { _banner.DestroySelf(); _banner = null; }
         }
 
-        /// <summary>MV-956: <see cref="HudSignals.BossDefeated"/> fires for the last living boss of ANY
-        /// area emptying (a12, a20, a30 alike) — only latch for THIS gate's own final area. MV-1078:
-        /// no longer opens the exit — see the class doc comment for why.</summary>
+        /// <summary>MV-956: <see cref="HudSignals.BossDefeated"/> fires for the last REGISTERED living
+        /// boss of ANY area emptying (a12, a20, a30 alike) — only latch for THIS gate's own final area.
+        /// MV-1183: see <see cref="IsFinalBossAreaDefeat"/> for why that alone isn't enough.</summary>
         private void OnBossDefeated()
         {
+            if (_finalBossDefeated) return;
             if (!IsFinalBossAreaDefeat()) return;
             _finalBossDefeated = true;
         }
@@ -397,12 +254,17 @@ namespace MaxWorlds.VFX
         /// this area already dropped — collected or not before the app closed — never resumes anything.
         ///
         /// A no-op unless this gate's own final area is recorded defeated: nothing to resume into
-        /// otherwise, and the ordinary live BossDefeated -&gt; Core -&gt; clean-up -&gt; exit chain runs
-        /// exactly as before this ticket. Idempotent — a second call does nothing once the first already
-        /// ran.</summary>
+        /// otherwise, and the ordinary live BossDefeated -&gt; Core -&gt; door chain runs exactly as
+        /// before this ticket. Idempotent — a second call does nothing once the first already ran.
+        ///
+        /// MV-1183: <paramref name="weaponGranted"/> and <paramref name="exitOpen"/> are now equivalent
+        /// (collecting the Core opens the door in the very same call, see
+        /// <see cref="OnWeaponCoreCollected"/>) — either one means the orb was already taken before the
+        /// checkpoint was captured, so this restores the SAME shared step live collection uses: the
+        /// final area's remaining robots destroyed and the door open, re-applied here since a cold-boot
+        /// RESUME rebuilds those robots fresh from the level's own authored placements.</summary>
         /// <param name="weaponGranted">The checkpoint's own <c>CheckpointFinaleWeaponGranted</c> — true
-        /// once the Core had already been collected (and, if there is a next world, its morph already
-        /// applied) by the time the checkpoint was captured.</param>
+        /// once the Core had already been collected by the time the checkpoint was captured.</param>
         /// <param name="exitOpen">The checkpoint's own <c>CheckpointFinaleExitOpen</c>.</param>
         public void ResumeFromCheckpoint(bool weaponGranted, bool exitOpen)
         {
@@ -415,8 +277,7 @@ namespace MaxWorlds.VFX
             _resumedFromCheckpoint = true;
             _finalBossDefeated = true;
 
-            if (exitOpen) { Open(); return; }
-            if (weaponGranted) { BeginCleanup(); return; }
+            if (weaponGranted || exitOpen) { DestroyRestAndOpenDoor(finalAreaIndex); return; }
 
             PickupDirector.EnsureInstalled().SpawnWeaponCore(ResolveFinalBossPosition(finalAreaIndex));
         }
@@ -426,8 +287,8 @@ namespace MaxWorlds.VFX
         /// is seeded before any boss's own <c>Wake()</c> ever runs, so it silently self-destructs without
         /// ever registering (see <c>BigBermudaBoss.Wake</c>'s own doc comment) rather than vanishing the
         /// instant the scene builds, leaving its GameObject and position right there to read. Falls back
-        /// to the door position for a geometry-independent fixture with no boss built at all, same
-        /// fallback <see cref="ResolveDoorPosition"/> itself uses.</summary>
+        /// to the exit gate's own position (or Max's, with no gate built at all) for a geometry-
+        /// independent fixture with no boss built.</summary>
         private Vector3 ResolveFinalBossPosition(int areaIndex)
         {
             foreach (BigBermudaBoss boss in FindObjectsByType<BigBermudaBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -437,19 +298,55 @@ namespace MaxWorlds.VFX
             foreach (SludgequeenBoss boss in FindObjectsByType<SludgequeenBoss>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (boss != null && IsInArea(boss.transform.position, areaIndex))
                     return boss.transform.position + Vector3.up * 1.4f;
-            return ResolveDoorPosition();
+            if (_exitGate != null) return _exitGate.transform.position;
+            Transform max = MaxTransform();
+            return max != null ? max.position : Vector3.zero;
         }
 
-        /// <summary>MV-1078: the orb is what starts the WEAPON TAKEN/CLEAN-UP beat — never before the
-        /// final boss has actually died (a Weapon Core only ever drops off that death, but this guard
-        /// keeps the two concerns independent), and never twice for the same finale. MV-1079: the beat
-        /// that actually starts here is now Beat A (<see cref="BeginWeaponBeat"/>), the player-visible
-        /// "orb becomes the weapon" moment — CLEAN-UP itself only begins once that beat finishes.</summary>
+        /// <summary>MV-1078/MV-1183: the orb is what matters, never the boss dying by itself — never
+        /// before the final boss has actually died (a Weapon Core only ever drops off that death, but
+        /// this guard keeps the two concerns independent), and never twice for the same finale. MV-1183,
+        /// Lee's "heavily simplify" ruling: taking it resolves the WHOLE finale in this one call — the
+        /// final area's remaining robots are destroyed and the door opens (<see cref="DestroyRestAndOpenDoor"/>),
+        /// same frame, no further gate. <see cref="BeginWeaponBeat"/> (Beat A, unchanged) only plays the
+        /// player-visible "orb becomes the weapon" flourish on top of that; it no longer gates anything
+        /// downstream of it.</summary>
         private void OnWeaponCoreCollected()
         {
-            if (!_finalBossDefeated || _cleanupActive || _weaponBeatActive || IsOpen) return;
+            if (!_finalBossDefeated || _weaponBeatActive || IsOpen) return;
             HideCoreBeacon();
+
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
+            int finalAreaIndex = cfg?.dials != null ? cfg.dials.areaCount : 0;
+
+            DestroyRestAndOpenDoor(finalAreaIndex);
             BeginWeaponBeat();
+        }
+
+        /// <summary>MV-1183's shared end-of-finale step: every robot still alive in
+        /// <paramref name="areaIndex"/> — awake, Dormant, replicated or stuck mid-air alike — is
+        /// destroyed with the ordinary death effect and no drops (same <see cref="RobotEnemy.KillWithoutDrops"/>
+        /// MV-1122's own safety nets already used), that area's sheds/Replicators stop producing, and
+        /// the exit door opens and stays open. Filtered on <see cref="RobotEnemy.AreaIndex"/> alone —
+        /// the stamp every spawn path already sets — not map footprint, so this needs no built scene to
+        /// run (a geometry-independent test's whole point). Called from the live orb pickup
+        /// (<see cref="OnWeaponCoreCollected"/>) and from <see cref="ResumeFromCheckpoint"/>; MV-1179's
+        /// bossless finale area (the City's a1) calls this same method from its own trigger instead of
+        /// duplicating it.</summary>
+        private void DestroyRestAndOpenDoor(int areaIndex)
+        {
+            if (areaIndex > 0)
+            {
+                var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+                areaDirector?.DiscardQueuedForArea(areaIndex);
+                StopFinalAreaProduction(areaIndex);
+
+                foreach (RobotEnemy r in FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    if (r != null && r.IsAlive && r.AreaIndex == areaIndex) r.KillWithoutDrops();
+            }
+
+            Open();
         }
 
         /// <summary>MV-1131, Change B: while the Weapon Core waits on the ground — a camera-facing light
@@ -505,55 +402,19 @@ namespace MaxWorlds.VFX
             HudSignals.EmitObjective(null, default);
         }
 
-        /// <summary>MV-1078, WEAPON TAKEN -&gt; CLEAN-UP: (a) the final area's own sheds/Replicators stop
-        /// producing and anything still queued for it is discarded. (b) every living robot already in the
-        /// final area wakes and hunts, whatever its dormancy state. Then CLEAN-UP begins:
-        /// <see cref="TickCleanup"/> drives the rest. MV-1079: the weapon morph itself no longer applies
-        /// here — <see cref="TickWeaponBeat"/> applies it mid-beat, at its own authored instant, and this
-        /// method only ever runs once that beat (or its no-next-weapon skip) has already finished.</summary>
-        private void BeginCleanup()
-        {
-            _cleanupActive = true;
-
-            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
-            _finalAreaIndex = cfg?.dials != null ? cfg.dials.areaCount : 0;
-
-            if (_finalAreaIndex > 0)
-            {
-                areaDirector?.DiscardQueuedForArea(_finalAreaIndex);
-                StopFinalAreaProduction(_finalAreaIndex);
-                WakeFinalAreaRobots(_finalAreaIndex);
-            }
-
-            _lastRobotsLeft = -1;
-            _cleanupClock = 0f;
-            _lastProgressClock = 0f;
-            _lastThinClock = -NoProgressThinInterval;
-            _lastUnreachableCheckClock = -UnreachableCheckInterval;
-            _cleanupRobots.Clear();
-            _cleanupRings.Clear();
-            _offFloorSinceClock.Clear();
-            _noRouteSinceClock.Clear();
-            _forcedKillsPending.Clear();
-            TickCleanup(0f);
-        }
-
         /// <summary>MV-1079, Beat A entry point: the player-visible "orb becomes the weapon" beat (2.5 s)
         /// — gameplay suspends, the Core flies into the gadget, the morph applies at its own authored
-        /// instant mid-beat (<see cref="TickWeaponBeat"/>), and CLEAN-UP (<see cref="BeginCleanup"/>)
-        /// only starts once it finishes. Skipped entirely — straight to CLEAN-UP, nothing to animate or
-        /// apply — when this world has no next weapon (the last world).</summary>
+        /// instant mid-beat (<see cref="TickWeaponBeat"/>). MV-1183: purely cosmetic now — the final
+        /// area's robots and the door are already resolved by the time this is called (see
+        /// <see cref="OnWeaponCoreCollected"/>/<see cref="DestroyRestAndOpenDoor"/>), so there is nothing
+        /// further to hand off to once it ends. Skipped entirely — nothing to animate or apply — when
+        /// this world has no next weapon (the last world).</summary>
         private void BeginWeaponBeat()
         {
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
             int playedWorld = areaDirector != null ? areaDirector.ActiveWorldIndex : 0;
 
-            if (playedWorld + 1 >= WorldLibrary.Count)
-            {
-                BeginCleanup();
-                return;
-            }
+            if (playedWorld + 1 >= WorldLibrary.Count) return;
 
             _weaponBeatActive = true;
             _weaponBeatTime = 0f;
@@ -579,9 +440,8 @@ namespace MaxWorlds.VFX
             if (!_weaponBeatMorphApplied && _weaponBeatTime >= WeaponBeatMorphTime)
             {
                 _weaponBeatMorphApplied = true;
-                // MV-1079: the weapon change lands at THIS instant, not before — BeginCleanup used to
-                // apply it the moment the Core was collected; now the beat itself is what applies it,
-                // inside the flash below.
+                // MV-1079: the weapon change lands at THIS instant, not the moment the Core was
+                // collected — the beat itself is what applies it, inside the flash below.
                 PendingMorphingModule.TakeWeaponCore();
                 WeaponSystemState.ApplyWeaponCoreMorph(_weaponBeatPlayedWorld + 1);
             }
@@ -607,7 +467,6 @@ namespace MaxWorlds.VFX
                 _weaponBeatCameraRestDistance = -1f;
 
                 FindFirstObjectByType<HudController>()?.SetControlsHidden(false);
-                BeginCleanup();
             }
         }
 
@@ -827,286 +686,17 @@ namespace MaxWorlds.VFX
             return zone != null && MapEnums.AreaIndexOf(zone.id) == areaIndex;
         }
 
-        /// <summary>MV-1078 (c): every living robot already placed in the final area wakes and joins the
-        /// hunt, regardless of dormancy — <see cref="RobotEnemy.Activate"/> is idempotent and a no-op on
-        /// anything already awake, the same "call it unconditionally" shape
-        /// <see cref="AreaAccumulationDirector.ActivateGarrisonFor"/> already relies on. Scans
-        /// <see cref="Object.FindObjectsByType{T}(FindObjectsInactive, FindObjectsSortMode)"/> rather
-        /// than <see cref="RobotEnemy.Active"/> — see <see cref="AreaAccumulationDirector.ActiveCountForArea"/>'s
-        /// own doc for why.</summary>
-        private static void WakeFinalAreaRobots(int areaIndex)
-        {
-            foreach (RobotEnemy r in FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (r != null && r.IsAlive && r.AreaIndex == areaIndex) r.Activate();
-        }
-
-        /// <summary>MV-1078/MV-1122, CLEAN-UP: the top HUD objective strip reads "CLEAR THE AREA
-        /// ROBOTS LEFT n" (n = alive robots stamped with the final area AND standing inside its own
-        /// footprint — see <see cref="RefreshCleanupRobots"/>). <paramref name="dt"/>-driven, not
-        /// <c>Time.unscaledTime</c> (MV-1122) — see the class's own clean-up-safety-nets doc block for
-        /// why. Public — same "an EditMode test can drive this deterministically" contract
-        /// <see cref="TickWeaponBeat"/>/<see cref="TickExitBeat"/> already give their own beats; a real
-        /// run always arrives here through <see cref="Update"/>, which passes <c>Time.unscaledDeltaTime</c>.</summary>
-        public void TickCleanup(float dt)
-        {
-            if (!_cleanupActive) return;
-            _cleanupClock += dt;
-
-            List<RobotEnemy> previous = new List<RobotEnemy>(_cleanupRobots);
-            RefreshCleanupRobots();
-            int left = _cleanupRobots.Count;
-
-            bool realProgress = _lastRobotsLeft < 0;
-            if (!realProgress)
-            {
-                foreach (RobotEnemy prev in previous)
-                {
-                    if (prev == null || _cleanupRobots.Contains(prev) || _forcedKillsPending.Contains(prev)) continue;
-                    realProgress = true;
-                    break;
-                }
-            }
-            _forcedKillsPending.Clear();
-            if (realProgress) _lastProgressClock = _cleanupClock;
-
-            if (left != _lastRobotsLeft) { _lastRobotsLeft = left; EmitCleanupObjective(left); }
-
-            if (left > 0)
-            {
-                if (_cleanupClock >= HardLimitSeconds)
-                {
-                    KillAllCleanupRobots();
-                }
-                else
-                {
-                    TickUnreachableRemoval();
-                    TickNoProgressThinning();
-                }
-                left = _cleanupRobots.Count;
-                if (left != _lastRobotsLeft) { _lastRobotsLeft = left; EmitCleanupObjective(left); }
-            }
-
-            UpdateCleanupVisuals();
-
-            if (left <= 0)
-            {
-                _cleanupActive = false;
-                HideCleanupVisuals();
-                BeginExitBeat(ResolveDoorPosition());
-            }
-        }
-
-        /// <summary>Rebuilds <see cref="_cleanupRobots"/> from the live scene — alive, stamped with the
-        /// final area, and standing inside its own footprint. A robot stamped with the final area but
-        /// found OUTSIDE its footprint is destroyed on the spot, no drops (MV-1122 Change 2) — never
-        /// added to the list, so it never shows up as "counted" even for one frame. Scans
-        /// <see cref="Object.FindObjectsByType{T}(FindObjectsInactive, FindObjectsSortMode)"/> rather
-        /// than <see cref="RobotEnemy.Active"/>, same reasoning as <see cref="WakeFinalAreaRobots"/>'s
-        /// own doc comment.</summary>
-        private void RefreshCleanupRobots()
-        {
-            _cleanupRobots.Clear();
-            foreach (RobotEnemy r in FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            {
-                if (r == null || !r.IsAlive || r.AreaIndex != _finalAreaIndex) continue;
-
-                // MV-1122: IsInArea's own established "can't tell, so no" default (_map == null) is
-                // right for the no-op callers it already had; it would be wrong here, where "no" means
-                // "force-kill" — a geometry-independent fixture/test with no BackyardPath (every sibling
-                // finale test's own convention, see WorldFinaleGate's own class doc) would then nuke
-                // every robot it holds on the very first tick. Only a real, resolved "outside" counts.
-                if (_map != null && !IsInArea(r.transform.position, _finalAreaIndex))
-                {
-                    _forcedKillsPending.Add(r);
-                    r.KillWithoutDrops();
-                    continue;
-                }
-
-                _cleanupRobots.Add(r);
-            }
-        }
-
-        /// <summary>MV-1122 Change 7, layer 2: once a second, removes a counted robot that cannot
-        /// actually be dealt with — disabled/inactive, outside the footprint (a straggler that wandered
-        /// out after being counted), stuck more than <see cref="OffFloorTolerance"/> off the floor for
-        /// <see cref="OffFloorGraceSeconds"/>, or with no route to Max for <see cref="NoRouteGraceSeconds"/>.
-        /// No drops — the player never actually fought it.</summary>
-        private void TickUnreachableRemoval()
-        {
-            if (_cleanupClock - _lastUnreachableCheckClock < UnreachableCheckInterval) return;
-            _lastUnreachableCheckClock = _cleanupClock;
-
-            Transform max = MaxTransform();
-            List<RobotEnemy> toRemove = null;
-
-            foreach (RobotEnemy r in _cleanupRobots)
-            {
-                if (r == null) continue;
-
-                bool disabledOrInactive = !r.enabled || !r.gameObject.activeInHierarchy;
-                bool outsideFootprint = _map != null && !IsInArea(r.transform.position, _finalAreaIndex);
-                if (disabledOrInactive || outsideFootprint)
-                {
-                    (toRemove ??= new List<RobotEnemy>()).Add(r);
-                    continue;
-                }
-
-                bool offFloorExpired = TrackTimer(_offFloorSinceClock, r, IsOffFloor(r), OffFloorGraceSeconds);
-                bool noRouteExpired = max != null && TrackTimer(_noRouteSinceClock, r, !HasRouteTo(r, max.position), NoRouteGraceSeconds);
-                if (offFloorExpired || noRouteExpired) (toRemove ??= new List<RobotEnemy>()).Add(r);
-            }
-
-            if (toRemove == null) return;
-            foreach (RobotEnemy r in toRemove) RemoveCleanupRobot(r);
-        }
-
-        /// <summary>Tracks how long <paramref name="conditionTrue"/> has held continuously for
-        /// <paramref name="r"/> against <see cref="_cleanupClock"/>; clears the timer the instant the
-        /// condition lifts. Returns whether <paramref name="grace"/> has now elapsed.</summary>
-        private bool TrackTimer(Dictionary<RobotEnemy, float> since, RobotEnemy r, bool conditionTrue, float grace)
-        {
-            if (!conditionTrue) { since.Remove(r); return false; }
-            if (!since.TryGetValue(r, out float first)) { since[r] = _cleanupClock; return false; }
-            return _cleanupClock - first >= grace;
-        }
-
-        /// <summary>Whether <paramref name="r"/>'s own pivot sits more than <see cref="OffFloorTolerance"/>
-        /// from where its kind should rest on the floor under it (<see cref="MapData.SurfaceHeightAt"/>
-        /// plus its own authored <see cref="EnemyArchetype.SpawnHeight"/> ground clearance — the same
-        /// offset every spawn path already adds when placing a robot). False with no map registered
-        /// (nothing to measure against).</summary>
-        private bool IsOffFloor(RobotEnemy r)
-        {
-            if (_map == null) return false;
-            float floorY = _map.SurfaceHeightAt(r.transform.position);
-            float expectedY = floorY + EnemyArchetype.Of(r.Kind).SpawnHeight;
-            return Mathf.Abs(r.transform.position.y - expectedY) > OffFloorTolerance;
-        }
-
-        /// <summary>Whether the room graph currently has any way at all from <paramref name="r"/>'s own
-        /// zone to <paramref name="targetPos"/>'s zone — a plain room-graph reachability check
-        /// (<see cref="MapRoutes.Rooms"/>), not a guarantee the live route is walkable this instant; this
-        /// is a safety net against a genuinely sealed-off robot, not a navigation system. True (never the
-        /// reason to remove anything) with no map, or either position resolving to no zone/the same zone.</summary>
-        private bool HasRouteTo(RobotEnemy r, Vector3 targetPos)
-        {
-            if (_map == null) return true;
-            MapZone from = _map.ZoneAt(r.transform.position.x, r.transform.position.z);
-            MapZone to = _map.ZoneAt(targetPos.x, targetPos.z);
-            if (from == null || to == null || from == to) return true;
-            return MapRoutes.Rooms(_map, from, to, EnemyNavigation.IsGateOpen).Count > 0;
-        }
-
-        /// <summary>MV-1122 Change 7, layer 3: after <see cref="NoProgressSeconds"/> with no GENUINE
-        /// kill (<see cref="_lastProgressClock"/> — a safety-net removal never counts as progress, see
-        /// <see cref="_forcedKillsPending"/>'s own doc comment), the remainder is thinned one every
-        /// <see cref="NoProgressThinInterval"/>. Replaces the old single-shot 25s CleanupFailsafeSeconds
-        /// entirely.</summary>
-        private void TickNoProgressThinning()
-        {
-            if (_cleanupRobots.Count == 0) return;
-            if (_cleanupClock - _lastProgressClock < NoProgressSeconds) return;
-            if (_cleanupClock - _lastThinClock < NoProgressThinInterval) return;
-            _lastThinClock = _cleanupClock;
-
-            RemoveCleanupRobot(_cleanupRobots[0]);
-        }
-
-        /// <summary>MV-1122 Change 7, layer 4: <see cref="HardLimitSeconds"/> after clean-up began, every
-        /// robot still counted is removed on this one tick and the exit beat follows immediately — the
-        /// exit can therefore never stay shut more than <see cref="HardLimitSeconds"/> past the weapon
-        /// beat ending, whatever layers 1-3 did or didn't manage to clear.</summary>
-        private void KillAllCleanupRobots()
-        {
-            // A snapshot: RemoveCleanupRobot mutates _cleanupRobots as it goes.
-            foreach (RobotEnemy r in new List<RobotEnemy>(_cleanupRobots)) RemoveCleanupRobot(r);
-        }
-
-        private void RemoveCleanupRobot(RobotEnemy r)
-        {
-            _cleanupRobots.Remove(r);
-            _offFloorSinceClock.Remove(r);
-            _noRouteSinceClock.Remove(r);
-            if (r == null || !r.IsAlive) return;
-            _forcedKillsPending.Add(r);
-            r.KillWithoutDrops();
-        }
-
-        /// <summary>MV-1122 Change 4: the top objective strip — "CLEAR THE AREA   ROBOTS LEFT n" with a
-        /// red (<see cref="CleanupBorderColor"/>) border, "ROBOTS LEFT n" itself in yellow via an inline
-        /// rich-text tag (<see cref="HudController.ObjectiveText"/>'s own doc comment explains why an
-        /// EditMode test never sees the tag). Cleared (no strip at all) the instant the count is back to
-        /// 0 — Change 3's "no strip, no wait" when clean-up opens on an already-empty area.</summary>
-        private void EmitCleanupObjective(int left)
-        {
-            if (left <= 0) { HudSignals.EmitObjective(null, default); return; }
-            HudSignals.EmitObjective($"CLEAR THE AREA   <color=#FFD23C>ROBOTS LEFT {left}</color>", CleanupBorderColor);
-        }
-
-        /// <summary>MV-1122 Change 5/6: a following red ground ring (<see cref="CleanupRingRadius"/>) on
-        /// every counted robot, and up to <see cref="MaxEdgeArrows"/> off-screen edge arrows for whichever
-        /// of them the camera can't currently see, nearest first.</summary>
-        private void UpdateCleanupVisuals()
-        {
-            var stillCounted = new HashSet<RobotEnemy>(_cleanupRobots);
-            List<RobotEnemy> staleRings = null;
-            foreach (KeyValuePair<RobotEnemy, GroundRing> kv in _cleanupRings)
-            {
-                if (stillCounted.Contains(kv.Key)) continue;
-                kv.Value?.Hide();
-                (staleRings ??= new List<RobotEnemy>()).Add(kv.Key);
-            }
-            if (staleRings != null) foreach (RobotEnemy r in staleRings) _cleanupRings.Remove(r);
-
-            foreach (RobotEnemy r in _cleanupRobots)
-            {
-                if (!_cleanupRings.TryGetValue(r, out GroundRing ring))
-                    _cleanupRings[r] = ring = GroundRing.Create($"MV-1122 Cleanup Ring {r.GetInstanceID()}");
-                ring.Show(r.transform.position, CleanupRingRadius, CleanupRingColor);
-            }
-
-            Camera cam = Camera.main;
-            Transform max = MaxTransform();
-            Vector3 origin = max != null ? max.position : Vector3.zero;
-
-            var offScreen = cam != null ? new List<RobotEnemy>(_cleanupRobots.Count) : null;
-            if (cam != null)
-            {
-                foreach (RobotEnemy r in _cleanupRobots)
-                {
-                    Vector3 vp = cam.WorldToViewportPoint(r.transform.position);
-                    bool onScreen = vp.z >= 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
-                    if (!onScreen) offScreen.Add(r);
-                }
-                offScreen.Sort((a, b) => Vector3.SqrMagnitude(a.transform.position - origin)
-                    .CompareTo(Vector3.SqrMagnitude(b.transform.position - origin)));
-            }
-
-            int shown = 0;
-            int available = offScreen?.Count ?? 0;
-            for (; shown < available && shown < MaxEdgeArrows; shown++)
-            {
-                if (shown >= _cleanupArrows.Count) _cleanupArrows.Add(EdgeArrow.Create($"MV-1122 Edge Arrow {shown}"));
-                _cleanupArrows[shown].Show(offScreen[shown].transform.position, cam);
-            }
-            for (int i = shown; i < _cleanupArrows.Count; i++) _cleanupArrows[i].Hide();
-
-            ActiveEdgeArrowCount = shown;
-        }
-
-        private void HideCleanupVisuals()
-        {
-            foreach (KeyValuePair<RobotEnemy, GroundRing> kv in _cleanupRings) kv.Value?.Hide();
-            _cleanupRings.Clear();
-            foreach (EdgeArrow a in _cleanupArrows) a.Hide();
-            ActiveEdgeArrowCount = 0;
-        }
-
-        /// <summary>The exact same "was the area that just cleared the world's own final boss area"
-        /// check <c>BossVictoryPayoff.IsFinalBossAreaDefeat</c> makes before dropping the Weapon Core —
-        /// kept local rather than shared (two lines, and the two classes must never depend on one
-        /// another). Deliberately independent of this component's own <see cref="Awake"/>-resolved
-        /// geometry: a test driving pure boss-death/seal logic has no reason to build a real scene.</summary>
+        /// <summary>MV-1183: a dormant companion boss (not yet woken/registered when its sibling died)
+        /// must still count — <see cref="BossCensus.AnyLivingIn"/> (what the <see cref="HudSignals.BossDefeated"/>
+        /// signal that lands us here is already gated on) only ever sees a REGISTERED boss, so it read
+        /// World 1 a30's two Big Bermudas as "empty" the instant the first died while the second sat
+        /// Dormant, never approached. Re-check against the area's AUTHORED boss total
+        /// (<see cref="WorldArea.Bosses"/>) when one exists; a synthetic fixture with no authored boss
+        /// data (every pre-MV-1183 test here) falls back to the old "no more boss we know about is
+        /// still alive" answer, unchanged. Kept local rather than shared with <c>BossVictoryPayoff</c>'s
+        /// own identical check (two lines, and the two classes must never depend on one another).
+        /// Deliberately independent of this component's own <see cref="Awake"/>-resolved geometry: a
+        /// test driving pure boss-death/seal logic has no reason to build a real scene.</summary>
         private static bool IsFinalBossAreaDefeat()
         {
             var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
@@ -1115,7 +705,10 @@ namespace MaxWorlds.VFX
 
             int areaIndex = BossCensus.LastDefeatedAreaIndex;
             WorldArea area = cfg.AreaByIndex(areaIndex);
-            return area != null && area.IsBossRole && areaIndex == cfg.dials.areaCount;
+            if (area == null || !area.IsBossRole || areaIndex != cfg.dials.areaCount) return false;
+
+            int authoredTotal = area.Bosses().Length;
+            return authoredTotal <= 0 || BossCensus.DeadCountInArea(areaIndex) >= authoredTotal;
         }
 
         private void Open()
@@ -1136,247 +729,6 @@ namespace MaxWorlds.VFX
                 _exitGate.ForceOpen();
         }
 
-        /// <summary>MV-1079: the door's own resolved world position, for Beat B's camera travel and
-        /// bolt target — <see cref="_exitGate"/> when Awake resolved real geometry (every production
-        /// run), falling back to Max's own position (a geometry-independent fixture/test with nothing
-        /// built at all, where the beat then measures as "already at the door" and skips its travel).</summary>
-        private Vector3 ResolveDoorPosition()
-        {
-            if (_exitGate != null) return _exitGate.transform.position;
-            Transform max = MaxTransform();
-            return max != null ? max.position : Vector3.zero;
-        }
-
-        /// <summary>MV-1079, Beat B entry point: the player-visible "exit blows open" beat (3.0 s) —
-        /// gameplay suspends, a bolt travels from the gadget to the door, the camera travels with it
-        /// (<see cref="CameraTargetRig.ApplyFocusOverride"/>), the door itself opens mid-beat
-        /// (<see cref="TickExitBeat"/> moves the existing <see cref="Open"/> call to that instant), and
-        /// gameplay resumes once it ends. Public — same "an EditMode test can drive this deterministically,
-        /// no scene required" contract as <see cref="WorldJoinSequence.Initialize"/>: a real run always
-        /// arrives here through <see cref="TickCleanup"/>, which resolves <paramref name="doorPosition"/>
-        /// itself (<see cref="ResolveDoorPosition"/>); a test can call this directly with an explicit
-        /// position instead.</summary>
-        public void BeginExitBeat(Vector3 doorPosition)
-        {
-            if (_exitBeatActive || IsOpen) return;
-
-            _exitBeatActive = true;
-            _exitBeatTime = 0f;
-            _exitBeatDoorOpened = false;
-            _exitBeatDoorPosition = doorPosition;
-
-            // MV-1125: the camera always travels to the door now -- a short move is still a move (Lee,
-            // 2026-10-03: "the exit opening must be an event the player sees"). The old near-door skip
-            // (ExitBeatNearDoorSkipDistance) meant a player already standing close to the exit saw
-            // nothing happen at all.
-            _exitBeatCameraRig = FindFirstObjectByType<CameraTargetRig>();
-
-            SuspendGameplayForBeat();
-            FindFirstObjectByType<HudController>()?.SetControlsHidden(true);
-
-            // MV-1079 step 1: the bolt and its ground glow fly for exactly the travel window
-            // (0.00-1.00 s). MV-1125: externallyDriven -- this bolt is ticked explicitly below
-            // (_exitBeatBolt?.Tick(dt)), so its own Update() must not ALSO tick it, or it arrives in
-            // roughly half the intended 1.0 s (the double-tick the ticket's own hypothesis named).
-            Vector3 origin = GadgetPosition();
-            float speed = Mathf.Max(ExitBeatBoltSpeedFloor, Vector3.Distance(origin, doorPosition) / ExitBeatDoorOpenTime);
-            _exitBeatBolt = SentinelBolt.Fire(origin, doorPosition, speed, ExitBeatColor(), externallyDriven: true);
-
-            Vector3 toOrigin = origin - doorPosition; toOrigin.y = 0f;
-            _exitBeatWedgeDirection = toOrigin.sqrMagnitude > 1e-4f ? toOrigin.normalized : Vector3.forward;
-
-            ShowExitDoorLamp(doorPosition, ExitLampLockedColor);
-        }
-
-        /// <summary>Advance Beat B by <paramref name="dt"/> seconds. Public — same test-driving contract
-        /// as <see cref="TickWeaponBeat"/>.</summary>
-        public void TickExitBeat(float dt)
-        {
-            if (!_exitBeatActive) return;
-            _exitBeatTime += dt;
-
-            _exitBeatBolt?.Tick(dt);
-
-            if (_exitBeatCameraRig != null)
-            {
-                float travel;
-                if (_exitBeatTime <= ExitBeatDoorOpenTime)
-                    travel = AnimSequence.OutQuad(Mathf.Clamp01(_exitBeatTime / ExitBeatDoorOpenTime));
-                else if (_exitBeatTime <= ExitBeatHoldUntil)
-                    travel = 1f;
-                else
-                    travel = 1f - Mathf.Clamp01((_exitBeatTime - ExitBeatHoldUntil) / (ExitBeatDuration - ExitBeatHoldUntil));
-
-                _exitBeatCameraRig.ApplyFocusOverride(_exitBeatDoorPosition, travel);
-            }
-
-            if (!_exitBeatDoorOpened && _exitBeatTime >= ExitBeatDoorOpenTime)
-            {
-                _exitBeatDoorOpened = true;
-                Open(); // MV-1079: moved here from the instant the final robot died — see class doc.
-                PlayExitBeatBurst();
-                ShowExitDoorLamp(_exitBeatDoorPosition, ExitLampOpenColor);
-                ShowExitLightWedge();
-            }
-
-            UpdateExitBeatBurst();
-            UpdateExitBeatBanner();
-
-            if (_exitBeatTime >= ExitBeatDuration)
-            {
-                _exitBeatActive = false;
-                if (_exitBeatCameraRig != null) _exitBeatCameraRig.EndFocusOverride();
-                HideExitBeatVisuals();
-                RestoreGameplayForBeat();
-                FindFirstObjectByType<HudController>()?.SetControlsHidden(false);
-                BeginExitTrail(_exitBeatDoorPosition);
-            }
-        }
-
-        /// <summary>MV-1079, Beat B step 2: a camera-facing additive flare 1.5 m across at the door, the
-        /// instant it opens. MV-1125: replaces the old flat <see cref="GroundRing"/> disc (not on the
-        /// ground, not facing the camera, per the class doc's own observation) with a
-        /// <see cref="CameraFacingFlare"/>, the same fix Beat A's own flash already got (MV-1131).</summary>
-        private void PlayExitBeatBurst()
-        {
-            if (_exitBeatBurstFlare == null) _exitBeatBurstFlare = CameraFacingFlare.Create("MV-1125 Exit Burst Flare");
-            _exitBeatBurstFlare.Show(_exitBeatDoorPosition, ExitBeatBurstDiameter, ExitBeatColor());
-        }
-
-        private void UpdateExitBeatBurst()
-        {
-            if (_exitBeatBurstFlare == null || !_exitBeatBurstFlare.Visible) return;
-            float sinceOpen = _exitBeatTime - ExitBeatDoorOpenTime;
-            float t = Mathf.Clamp01(sinceOpen / ExitBeatBurstFadeSeconds);
-            if (t >= 1f) { _exitBeatBurstFlare.Hide(); return; }
-            Color c = ExitBeatColor();
-            c.a = 1f - t;
-            _exitBeatBurstFlare.Show(_exitBeatDoorPosition, ExitBeatBurstDiameter, c);
-        }
-
-        /// <summary>MV-1079, Beat B step 3: the centre banner reads "EXIT OPEN" from the instant the door
-        /// opens (1.00 s) to 2.40 s. MV-1125: now the scaled HUD canvas's own large white treatment
-        /// (<see cref="FinaleBanner.ShowExitOpen"/>) rather than Line1's small cyan slot.</summary>
-        private void UpdateExitBeatBanner()
-        {
-            const float BannerStart = ExitBeatDoorOpenTime;
-            const float BannerEnd = 2.4f;
-            if (_exitBeatTime < BannerStart || _exitBeatTime > BannerEnd)
-            {
-                _banner?.Hide();
-                return;
-            }
-
-            if (_banner == null) _banner = FinaleBanner.Create();
-            _banner.ShowExitOpen(1f);
-        }
-
-        private void HideExitBeatVisuals()
-        {
-            _exitBeatBurstFlare?.Hide();
-            _banner?.Hide();
-        }
-
-        /// <summary>MV-1125: the door's own jamb lamp — a small emissive sphere, red while the door is
-        /// locked and green (<see cref="ExitLampOpenColor"/>) once it's open. Built lazily, moved/retinted
-        /// in place thereafter (never rebuilt) so it keeps reading as the SAME fixture across the beat.</summary>
-        private void ShowExitDoorLamp(Vector3 doorPosition, Color color)
-        {
-            if (_exitLampGo == null)
-            {
-                _exitLampGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                _exitLampGo.name = "MV-1125 Exit Door Lamp";
-                Collider col = _exitLampGo.GetComponent<Collider>();
-                if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
-
-                _exitLampRenderer = _exitLampGo.GetComponent<MeshRenderer>();
-                _exitLampRenderer.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-                _exitLampRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                _exitLampRenderer.receiveShadows = false;
-                _exitLampGo.transform.localScale = Vector3.one * ExitLampDiameter;
-                _exitLampMpb = new MaterialPropertyBlock();
-            }
-
-            if (!_exitLampGo.activeSelf) _exitLampGo.SetActive(true);
-            _exitLampGo.transform.position = doorPosition + Vector3.up * 1.2f;
-
-            _exitLampRenderer.GetPropertyBlock(_exitLampMpb);
-            _exitLampMpb.SetColor(ExitLampColorId, color);
-            _exitLampRenderer.SetPropertyBlock(_exitLampMpb);
-        }
-
-        /// <summary>MV-1125: the flat additive light wedge marking the open doorway — shown once, the
-        /// instant the door opens, and left up (it "stays while the door is open").</summary>
-        private void ShowExitLightWedge()
-        {
-            if (_exitWedge == null)
-                _exitWedge = GroundWedge.Create("MV-1125 Exit Light Wedge", ExitWedgeNearWidth, ExitWedgeFarWidth, ExitWedgeLength);
-            _exitWedge.Show(_exitBeatDoorPosition, _exitBeatWedgeDirection, ExitWedgeColor);
-        }
-
-        /// <summary>MV-1125: after the exit beat ends, until Max crosses the door line — the objective
-        /// strip reads "GO TO THE EXIT" and a chevron trail leads him there (<see cref="RefreshExitTrail"/>).
-        /// Ends on <see cref="HudSignals.FinaleGateCrossed"/> (<see cref="OnFinaleGateCrossedForTrail"/>),
-        /// the same signal both <see cref="WorldJoinSequence"/>'s own corridor crossing and THIS class's
-        /// own last-world crossing check (<see cref="Update"/>) raise, so one subscription covers both.</summary>
-        private void BeginExitTrail(Vector3 doorPosition)
-        {
-            _trailActive = true;
-            _trailDoorPosition = doorPosition;
-            HudSignals.EmitObjective("GO TO THE EXIT", ExitTrailBorderColor);
-            RefreshExitTrail();
-        }
-
-        /// <summary>Recomputes the chevron trail from Max's CURRENT position toward the door, stepping
-        /// <see cref="ExitTrailStepDistance"/> m at a time along <see cref="EnemyNavigation.Waypoint"/> —
-        /// the same "where would a robot walk" router every robot in the arena already asks, so the trail
-        /// follows a real walkable route (a straight line when Max and the door are in the same room,
-        /// same as <see cref="EnemyNavigation.Waypoint"/> itself resolves that case). Public — the test can
-        /// drive this directly after moving Max, and <see cref="Update"/> calls it every live frame so the
-        /// trail re-lays itself as he actually walks.</summary>
-        public void RefreshExitTrail()
-        {
-            if (!_trailActive) return;
-
-            Transform max = MaxTransform();
-            Vector3 cursor = max != null ? max.position : Vector3.zero;
-
-            int shown = 0;
-            for (; shown < ExitTrailMaxChevrons; shown++)
-            {
-                Vector3 waypoint = EnemyNavigation.Waypoint(cursor, _trailDoorPosition);
-                Vector3 delta = waypoint - cursor; delta.y = 0f;
-                if (delta.magnitude <= ExitTrailStepDistance) break;
-
-                Vector3 dir = delta.normalized;
-                Vector3 next = cursor + dir * ExitTrailStepDistance;
-
-                if (shown >= _trailChevrons.Count) _trailChevrons.Add(GroundChevron.Create($"MV-1125 Exit Chevron {shown}"));
-                _trailChevrons[shown].Show(next, dir, ExitTrailChevronColor);
-
-                cursor = next;
-            }
-
-            for (int i = shown; i < _trailChevrons.Count; i++) _trailChevrons[i].Hide();
-            ExitTrailChevronCount = shown;
-        }
-
-        private void EndExitTrail()
-        {
-            if (!_trailActive) return;
-            _trailActive = false;
-            foreach (GroundChevron c in _trailChevrons) c.Hide();
-            ExitTrailChevronCount = 0;
-            HudSignals.EmitObjective(null, default);
-        }
-
-        private void OnFinaleGateCrossedForTrail() => EndExitTrail();
-
-        /// <summary>The new primary's own glow colour — the bolt and the door-open burst both play in it
-        /// (ticket: "in the new weapon's glow colour"). Falls back to the LPPE/RCDA lens family
-        /// (<see cref="MaxRig.LensGlass"/>) for a primary with no distinct glow of its own.</summary>
-        private static Color ExitBeatColor() => MaxRig.LensGlass;
-
         /// <summary>MV-1013: the last world's own crossing check — every OTHER world hands this job to
         /// <see cref="WorldJoinSequence"/>'s own <c>AwaitingCrossing</c> phase (armed via <see cref="_entry"/>
         /// in <see cref="Open"/>), so this only ever runs when <see cref="_entry"/> is null and there is
@@ -1387,18 +739,6 @@ namespace MaxWorlds.VFX
         {
             UpdateCoreBeacon();
             if (_weaponBeatActive) TickWeaponBeat(Time.unscaledDeltaTime);
-            // MV-1122: clamped, unlike the beats above -- TickCleanup's own safety-net thresholds span
-            // real seconds of gameplay (10-45s), and an EditMode caller driving this gate through plain
-            // Update() (InvokeUpdate, every sibling finale test's own idiom) can hand it an arbitrarily
-            // large stray Time.unscaledDeltaTime between two synchronous statements (the editor's real
-            // clock, not a simulated frame) -- unclamped, that one stray value mass-kills every counted
-            // robot instantly instead of just fast-forwarding a short cosmetic beat the way the weapon/
-            // exit beats above tolerate. A real 60fps frame (~0.016s) is always far under this ceiling,
-            // so live gameplay is unaffected; a test wanting to drive real elapsed clean-up time still
-            // does so explicitly and unclamped through the public TickCleanup(dt) itself.
-            if (_cleanupActive && !IsOpen) TickCleanup(Mathf.Min(Time.unscaledDeltaTime, 0.1f));
-            if (_exitBeatActive) TickExitBeat(Time.unscaledDeltaTime);
-            if (_trailActive) RefreshExitTrail();
 
             if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;
 

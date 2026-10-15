@@ -31,17 +31,6 @@ namespace MaxWorlds.CameraRig
         private Vector3 _lastSubjectPos;
         private Vector3 _smoothedLead;
 
-        /// <summary>MV-1079: true while the finale's exit beat is walking the tracked point away from
-        /// <see cref="subject"/> toward the exit door — see <see cref="ApplyFocusOverride"/>. Suppresses
-        /// the ordinary look-ahead follow below so the beat's own Lerp isn't fought (and overwritten)
-        /// the same frame by <see cref="LateUpdate"/>.</summary>
-        private bool _focusOverrideActive;
-
-        /// <summary>MV-1125 test seam: the last <paramref name="t"/> <see cref="ApplyFocusOverride"/>
-        /// resolved (clamped 0-1) — a resolved runtime value, not an authored constant, since it only
-        /// ever reflects whatever progress the caller's own beat timeline actually drove.</summary>
-        public float FocusWeight { get; private set; }
-
         private void Awake()
         {
             if (subject != null)
@@ -50,32 +39,8 @@ namespace MaxWorlds.CameraRig
             }
         }
 
-        /// <summary>MV-1079: eases the rig's tracked point away from <see cref="subject"/> toward
-        /// <paramref name="target"/> as <paramref name="t"/> runs 0 (fully on the subject) to 1 (fully
-        /// on <paramref name="target"/>) — what the finale's exit beat drives with its own
-        /// AnimSequence-resolved progress to walk the camera to the exit door and back, without ever
-        /// touching Cinemachine state directly. Pure position math (plus latching
-        /// <see cref="_focusOverrideActive"/> so <see cref="LateUpdate"/> doesn't immediately overwrite
-        /// it), so an EditMode test can drive it directly with no scene Update loop and no live camera.</summary>
-        public void ApplyFocusOverride(Vector3 target, float t)
-        {
-            _focusOverrideActive = true;
-            FocusWeight = Mathf.Clamp01(t);
-            Vector3 basePos = subject != null ? subject.position : transform.position;
-            transform.position = Vector3.Lerp(basePos, target, FocusWeight);
-        }
-
-        /// <summary>Ends the override — the next <see cref="LateUpdate"/> resumes ordinary
-        /// subject-following look-ahead.</summary>
-        public void EndFocusOverride() => _focusOverrideActive = false;
-
         private void LateUpdate()
         {
-            if (_focusOverrideActive)
-            {
-                return;
-            }
-
             if (subject == null)
             {
                 return;

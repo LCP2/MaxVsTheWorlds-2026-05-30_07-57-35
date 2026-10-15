@@ -22,9 +22,10 @@ namespace MaxWorlds.Tests.EditMode
     /// <c>WorldTransitions.ApplyExitDoorway</c> -&gt; <c>MapRuntime.Build</c> pipeline <c>BackyardPath.Awake</c>
     /// runs, <see cref="MV997WorldExitDoorTests"/>'s own idiom), not a synthetic single-area config.
     ///
-    /// MV-1078 updated this test's own exit-door assertions: the real door opens once the Core is
-    /// collected AND a30's other robots are dead too, not on the boss's death alone — see that ticket for
-    /// the full ruling. The Weapon-Core-on-death-alone assertions are untouched.
+    /// MV-1183 updated this test's own exit-door assertions again: collecting the Core now destroys
+    /// every robot still alive in a30 and opens the door in the SAME call — MV-1078's own clean-up
+    /// phase (kill the rest first, THEN the door opens) is retired. The Weapon-Core-on-death-alone
+    /// assertions are untouched.
     ///
     /// Fails on base commit 3cfa5fb two different ways: <c>BossVictoryPayoff.MaybeDropWeaponCore</c> and
     /// <c>WorldFinaleGate.Install</c> both bail out via their own <c>HasNextWorld()</c> guard, which
@@ -225,26 +226,18 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (RobotEnemy r in otherRobots)
                     Assert.IsTrue(r.IsAlive, "a30's other robots must still be alive while the gate is shut");
 
-                // --- Max collects the core. The weapon morph applies immediately; a30's other robots
-                // are still alive, so the door stays shut. ---
+                // --- Max collects the core. MV-1183: in the SAME call, every robot still alive in a30
+                // is destroyed (ordinary death effect, no drops) and the door opens -- no clean-up phase
+                // or exit beat to wait on any more. ---
                 InvokeCollect(pickupDirector, cores[0]);
-                Assert.IsFalse(gate.IsOpen,
-                    "MV-1078: collecting the Core alone must not open the door -- a30's other robots are " +
-                    "still alive");
-
-                // --- a30's other robots die. Only now does the door open. ---
-                foreach (RobotEnemy r in otherRobots)
-                {
-                    r.TakeDamage(new DamageInfo(999999f, r.transform.position, Vector3.forward, Team.Player));
-                    InvokeUpdate(gate);
-                }
-
-                // MV-1079: the last robot dying starts Beat B (EXIT OPEN, 3.0s) -- WorldFinaleGate.Open()
-                // itself now lands 1.0s into that beat, not synchronously off the kill.
-                gate.TickExitBeat(1.0f);
 
                 Assert.IsTrue(gate.IsOpen,
-                    "MV-1078: with the Core collected and a30's other robots now dead, the door must open");
+                    "MV-1183: collecting the Core must open the finale door immediately, with no " +
+                    "requirement that a30's other robots be hunted down first");
+                foreach (RobotEnemy r in otherRobots)
+                    Assert.IsFalse(r.IsAlive,
+                        "MV-1183: every robot still alive in the final area must be destroyed the " +
+                        "instant the orb is taken");
                 Assert.IsTrue(built.ExitGate.IsOpen,
                     "the SAME real map gate MapRuntime built must be the one that opened -- no corridor to build");
 
