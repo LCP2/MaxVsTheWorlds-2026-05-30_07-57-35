@@ -241,6 +241,7 @@ namespace MaxWorlds.VFX
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
             HudSignals.EnemyKilled += OnEnemyKilled;
+            HudSignals.FactoryDestroyed += OnFactoryDestroyed;
         }
 
         private void OnDisable()
@@ -249,6 +250,7 @@ namespace MaxWorlds.VFX
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
             HudSignals.EnemyKilled -= OnEnemyKilled;
+            HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
@@ -377,8 +379,29 @@ namespace MaxWorlds.VFX
         /// <see cref="BosslessFinaleClearThreshold"/> or fewer of the final area's robots are left
         /// standing, the rest are destroyed and the door opens in the same call — no clean-up
         /// count/ring/arrow/timer, no camera take-over, and (unlike <see cref="OnWeaponCoreCollected"/>)
-        /// no Core or weapon morph: <see cref="BeginWeaponBeat"/> is never called from here.</summary>
-        private void OnEnemyKilled(Vector3 _)
+        /// no Core or weapon morph: <see cref="BeginWeaponBeat"/> is never called from here.
+        ///
+        /// MV-1198: also re-checked off <see cref="HudSignals.FactoryDestroyed"/> (<see cref="OnFactoryDestroyed"/>)
+        /// — see <see cref="ResolveBosslessFinaleIfReady"/> for why a robot death alone is not enough.</summary>
+        private void OnEnemyKilled(Vector3 _) => ResolveBosslessFinaleIfReady();
+
+        /// <summary>MV-1198: the factory counterpart to <see cref="OnEnemyKilled"/> — the last robot
+        /// source can die AFTER the ambient count has already dropped to or below
+        /// <see cref="BosslessFinaleClearThreshold"/> (Lee, device, TestFlight 16 Oct: the City's exit
+        /// opened and Undertow was granted ~20s into a run, while 18 garrison robots plus the area's
+        /// own factory were still alive — <see cref="AreaAccumulationDirector.ActiveCountForArea"/>
+        /// correctly counts a Dormant/parked garrison, so the real gap was that nothing ever checked
+        /// whether the factory itself had died). Without this hook the finale would sit stuck waiting on
+        /// a robot death that may never come once the ambient count already reads low.</summary>
+        private void OnFactoryDestroyed(Vector3 _) => ResolveBosslessFinaleIfReady();
+
+        /// <summary>MV-1198: the bossless exit fires only once BOTH are true — every robot source in the
+        /// final area is destroyed (<see cref="AreaSourcesCleared"/>) AND
+        /// <see cref="BosslessFinaleClearThreshold"/> or fewer of the area's robots (any state —
+        /// awake, Dormant, parked) are still alive. Shared by <see cref="OnEnemyKilled"/> and
+        /// <see cref="OnFactoryDestroyed"/> so either event can be the one that finally satisfies both
+        /// conditions.</summary>
+        private void ResolveBosslessFinaleIfReady()
         {
             if (IsOpen || _bosslessFinaleResolving) return;
 
@@ -391,6 +414,7 @@ namespace MaxWorlds.VFX
             if (area == null || area.IsBossRole || !area.IsExitRole) return;
 
             if (areaDirector.ActiveCountForArea(finalAreaIndex) > BosslessFinaleClearThreshold) return;
+            if (!AreaSourcesCleared()) return;
 
             // Guards against DestroyRestAndOpenDoor's own kill loop re-entering this handler for each
             // robot it destroys below -- Open() (called last, inside that method) is what finally sets
@@ -401,6 +425,22 @@ namespace MaxWorlds.VFX
             TryApplyCityToReefHandover(areaDirector);
             _bosslessFinaleResolving = false;
         }
+
+        /// <summary>MV-1198: true once every registered robot source this run has — every
+        /// <see cref="MowerHutch"/> and <see cref="Replicator"/> <see cref="FactoryCensus"/> knows
+        /// about — is destroyed. Field-wide rather than filtered to one area: <see cref="MowerHutch"/>
+        /// carries no area tag of its own the way <see cref="RobotEnemy.AreaIndex"/> does (unlike
+        /// <see cref="StopFinalAreaProduction"/>'s position-based filter, which needs a real, built
+        /// <see cref="_map"/> that a geometry-independent test never has), and the only live caller
+        /// (<see cref="ResolveBosslessFinaleIfReady"/>, the City's a1) is this world's one and only
+        /// area — the same "every source in the run" scope <see cref="BigBermudaBoss"/> already wakes
+        /// off via <see cref="FactoryCensus.Cleared"/>. Vacuously true when this run registers no source
+        /// at all, same convention <see cref="FactoryCensus.AllDown"/>/<see cref="FactoryCensus.AllReplicatorsDestroyed"/>
+        /// already use — <c>CityToReefTests</c>' own fixture, with no factory built at all, must keep
+        /// resolving exactly as before this ticket.</summary>
+        private static bool AreaSourcesCleared() =>
+            FactoryCensus.Destroyed == FactoryCensus.Total &&
+            FactoryCensus.ReplicatorsDestroyed == FactoryCensus.RegisteredReplicators.Count;
 
         /// <summary>MV-1195, design v5 Decision 3: the interim hand-over to the Reef, until the City's
         /// own boss (The Core) is built — the City's bossless exit (above) grants UNDERTOW the same
