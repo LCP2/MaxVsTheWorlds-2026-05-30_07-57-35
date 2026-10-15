@@ -173,6 +173,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv699Sludgequeen() => RunFromMenu(CapturePresets.All["mv699sludgequeen"]);
         public static void CaptureMv699Sludgequeen() => Run(CapturePresets.All["mv699sludgequeen"]);
 
+        [MenuItem("MaxWorlds/Capture/Ricochet Look (MV-1196)")]
+        public static void MenuMv1196RicochetLook() => RunFromMenu(CapturePresets.All["mv1196ricochetlook"]);
+        public static void CaptureMv1196RicochetLook() => Run(CapturePresets.All["mv1196ricochetlook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

@@ -431,6 +431,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1097ShedLaserBeamCheck());
             Add(BuildMv1112GroundFillCheck());
             Add(BuildMv1113SentinelArrival());
+            Add(BuildMv1196RicochetLook());
             return d;
         }
 
@@ -1773,6 +1774,138 @@ namespace MaxWorlds.Dev
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1113-sentinel-arrival", Setup, new[] { mirrorPath }) },
                 Cleanup = () => { if (sentinelGo != null) Destroy(sentinelGo); },
+            };
+        }
+
+        // ---- MV1196RicochetLook (MV-1196 AC2) --------------------------------------------------
+
+        /// <summary>Four static discs (Marks I-IV, left to right) then Max's own RICOCHET launcher
+        /// framed at Rate 1, 3 and 5 — one armed run, four shots, no tuning loop (AC2's own words). The
+        /// discs are spawned at zero speed/turn-rate purely so they hold still for the shot; the
+        /// launcher shots drive the REAL path (the City's own Weapon Core morph, then
+        /// <c>WeaponSystemState.RaiseLevelById("p_rof")</c>, which fires <c>Changed</c> and lets
+        /// <see cref="MaxRig"/>'s own subscription re-fit the rig) so what's captured is the resolved
+        /// rig, not a hand-built stand-in.</summary>
+        private static CapturePreset BuildMv1196RicochetLook()
+        {
+            const float discPitch = 55f;
+            const float discDistance = 3.5f;
+            // The launcher sits low (world y ~= 0.75-1.06m -- see MaxRig.GunHipPos/GunAimPos's own
+            // doc), close to the CharacterController's own capsule-centre height, not up at the
+            // Shoulder Rack's ~1.28m -- BuildMv702LppeShoulderRack's own "+1m, pitch 60, distance 4"
+            // recipe frames the WRONG height for this gadget (MV-1196 iteration 2: his hair/head
+            // swallowed the shot). Framing on the capsule centre directly, a little closer, keeps the
+            // hip/glove area the launcher actually rides on in frame instead.
+            const float launcherPitch = 40f;
+            const float launcherDistance = 1.8f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject maxGo = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let HomeScreen's own captureBypass StartSlot (frame 1) finish first
+
+                // MV-1196 iteration 4: HomeScreen.Start()'s own captureBypass path (MV-1032, "a capture
+                // never resumes a live run") unconditionally calls StartSlot(0, ...) the instant
+                // CaptureDirector.Armed() is true -- which it already is for this whole run -- and that
+                // calls WeaponSystemState.Reset(). Staging the City's own Weapon Core morph in
+                // BeforeSceneLoad (as BuildMv702LppeShoulderRack's own preset does) is therefore silently
+                // wiped a frame later by HomeScreen itself; applying it HERE, after that wipe has
+                // already happened, is what actually sticks.
+                WeaponSystemState.Reset();
+                PendingMorphingModule.Reset();
+                PendingMorphingModule.SetWeaponCore();
+                WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: WorldCatalog.IndexOf(WorldIds.City));
+
+                maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let MaxRig's own Awake read the morphed state
+
+                // MV-1196 iteration 5: facing the camera dead-on (Vector3.back) put the camera looking
+                // straight down the launcher's own barrel axis -- its parallel rails only ever differ
+                // by a lateral Y offset along THAT axis, so from dead-on they all overlap into one
+                // blob regardless of how many are actually active (iteration 4's images). Facing him
+                // SIDEWAYS instead (same idiom BuildMv555WaterGroundTrail/BuildMv617WaterReach use to
+                // force a direction via reflection) turns the barrel perpendicular to the lens, so the
+                // rails fan out in profile instead of stacking.
+                var facingField = typeof(PlayerController).GetField("_facing", BindingFlags.NonPublic | BindingFlags.Instance);
+                var player = maxGo.GetComponent<PlayerController>();
+                Vector3 targetFacing = Vector3.right;
+                if (player != null && facingField != null) facingField.SetValue(player, targetFacing);
+                int turnFrame = 0;
+                while (turnFrame < 90 && Vector3.Angle(maxGo.transform.forward, targetFacing) > 1f)
+                {
+                    yield return null;
+                    turnFrame++;
+                }
+            }
+
+            IEnumerator DiscsSetup(Camera cam)
+            {
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? (maxGo.transform.position + maxGo.transform.forward * 4f);
+                focus.y = 1f;
+
+                // design v5 §3.1: Mark I 1-2, Mark II 3-4, Mark III 5-6, Mark IV 7-8 -- one representative
+                // POWER level per mark.
+                int[] powerLevels = { 1, 3, 5, 7 };
+                for (int i = 0; i < powerLevels.Length; i++)
+                {
+                    Vector3 at = focus + new Vector3((i - 1.5f) * 1.1f, 0f, 0f);
+                    RicochetDisc.Spawn(at, Vector3.forward, speed: 0f, bounces: 2,
+                        powerLevel: powerLevels[i], aimLevel: 0,
+                        damage: 0f, bankBonusPerBounce: 0f, turnRateDegPerSec: 0f, lookaheadMetres: 0f,
+                        radius: 0.25f, lifetime: 120f);
+                }
+
+                var rot = Quaternion.Euler(discPitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * discDistance, rot);
+                yield return null;
+            }
+
+            IEnumerator LauncherSetup(Camera cam, int targetRateLevel)
+            {
+                int level = WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Rate);
+                int guard = 0;
+                while (level < targetRateLevel && guard++ < 10)
+                {
+                    if (!WeaponSystemState.RaiseLevelById("p_rof")) break;
+                    level = WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Rate);
+                }
+                for (int i = 0; i < 3; i++) yield return null;   // let MaxRig's ApplyPrimaryVisual re-fit the rails
+
+                Vector3 focus = maxGo.transform.position;
+                var rot = Quaternion.Euler(launcherPitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * launcherDistance, rot);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1196ricochetlook",
+                LogTag = "[MV1196Capture]",
+                Flag = "-mv1196shot",
+                ArmFile = "Temp/mv1196.arm",
+                HeadlessMarker = "Temp/mv1196.headless",
+                DoneFileName = "_mv1196_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () => SaveSystem.ActiveSlot = 0,
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1196-discs", DiscsSetup),
+                    new CaptureShot("MV-1196-launcher-rate1", cam => LauncherSetup(cam, 1)),
+                    new CaptureShot("MV-1196-launcher-rate3", cam => LauncherSetup(cam, 3)),
+                    new CaptureShot("MV-1196-launcher-rate5", cam => LauncherSetup(cam, 5)),
+                },
+                Cleanup = () => RicochetDisc.DestroyPoolForTests(),
             };
         }
 

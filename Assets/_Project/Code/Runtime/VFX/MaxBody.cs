@@ -62,6 +62,14 @@ namespace MaxWorlds.VFX
         /// glow so the two weapons don't share a light colour.</summary>
         public readonly MeshRenderer[] LppeGlow;
 
+        /// <summary>MV-1196: the City's RICOCHET gadget submesh — inactive by default, shown once
+        /// <c>WeaponSystemState.ActivePrimary</c> reads <c>Ricochet</c> (the City's own Weapon Core
+        /// morph), same toggle-not-rebuild shape as <see cref="RcdaGadget"/>/<see cref="LppeGadget"/>.
+        /// Its RATE-dependent rail/drum/vent children are toggled separately by
+        /// <see cref="ApplyRicochetRate"/> rather than carried as their own result fields — there are
+        /// five of them and none need driving every frame, unlike the two gadgets' own glow lenses.</summary>
+        public readonly GameObject RicochetGadget;
+
         /// <summary>The Shoulder Rack's 3-tube mount — inactive by default (unbought), shown once
         /// <c>ShoulderRack.IsBought</c> is true.</summary>
         public readonly GameObject RackMount;
@@ -95,7 +103,8 @@ namespace MaxWorlds.VFX
         public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips, Transform[] knees, GameObject rcdaGadget,
                              GameObject lppeGadget, MeshRenderer[] lppeGlow, GameObject rackMount,
                              MeshRenderer[] rackTubeGlow, Transform gun, Transform armL, Transform armR,
-                             Transform handL, Transform handR, Transform head, Transform faceTilt)
+                             Transform handL, Transform handR, Transform head, Transform faceTilt,
+                             GameObject ricochetGadget)
         {
             GadgetGlow = gadgetGlow;
             Hips = hips;
@@ -112,6 +121,7 @@ namespace MaxWorlds.VFX
             HandR = handR;
             Head = head;
             FaceTilt = faceTilt;
+            RicochetGadget = ricochetGadget;
         }
     }
 
@@ -287,6 +297,17 @@ namespace MaxWorlds.VFX
             BuildGunBody(lppeRoot.transform, p, lppeGlow);
             lppeRoot.SetActive(false);   // RCDA is Max's run-start primary; MaxRig flips these on ActivePrimary
 
+            // ---- the RICOCHET launcher (MV-1196) — the City's own primary, welded to the same -----
+            // glove position the other two gadgets occupy. Unlike those two (one fixed shape each),
+            // the design asks the launcher itself to grow with RATE: one rail at Rate 1-2, two rails
+            // plus a drum at Rate 3-4, three rails plus vents at Rate 5 — so this builds every rail/
+            // drum/vent up front, inactive, and MaxRig flips them with ApplyRicochetRate as RATE levels
+            // rather than rebuilding the mesh.
+            var ricochetRoot = new GameObject("GadgetRicochet");
+            ricochetRoot.transform.SetParent(gunAssembly.transform, worldPositionStays: false);
+            BuildRicochetLauncher(ricochetRoot.transform, p);
+            ricochetRoot.SetActive(false);   // shown only once ActivePrimary reads Ricochet
+
             // ---- MV-717: the two grip points, parented under the gun so the hands cannot come off it
             // no matter how it is posed. MV-730 (Lee: "his left arm comes right across his body to hold
             // the device... to fire the weapon his right hand should come up above waist height") swaps
@@ -335,7 +356,7 @@ namespace MaxWorlds.VFX
 
             return new MaxBodyResult(gadgetGlow.ToArray(), hips, knees, rcdaRoot, lppeRoot, lppeGlow.ToArray(),
                                      rackRoot, rackTubeGlow, gunAssembly.transform, armL, armR, handL, handR, head,
-                                     faceTilt);
+                                     faceTilt, ricochetRoot);
         }
 
         /// <summary>MV-1161: the neck point everything above pitches about, in Head-local space.</summary>
@@ -407,6 +428,77 @@ namespace MaxWorlds.VFX
             Add(gt, CharacterMeshes.Prism(4, 0.06f, 0.042f, 0.18f, 0.2f, 0f), p.Housing, new Vector3(0f, -0.012f, -0.21f), Quaternion.Euler(98f, 0f, 0f), Vector3.one, "Stock");
             Add(gt, CharacterMeshes.Prism(4, 0.036f, 0.032f, 0.11f, 0.2f, 0f), p.Belt, new Vector3(0f, -0.095f, -0.07f), Quaternion.Euler(18f, 0f, 0f), Vector3.one, "StrapWrap1");
             Add(gt, CharacterMeshes.Prism(4, 0.032f, 0.029f, 0.09f, 0.2f, 0f), p.Belt, new Vector3(0f, -0.085f, 0.12f), Quaternion.Euler(8f, 0f, 0f), Vector3.one, "StrapWrap2");
+        }
+
+        /// <summary>
+        /// MV-1196: the RICOCHET launcher — "the part you see on Max" (design v5 §3.1), built from the
+        /// same generated-mesh vocabulary as <see cref="BuildGunBody"/>'s RCDA/LPPE housing rather than
+        /// imported art. Sits at the same <c>GunBody</c> anchor/rotation those two gadgets use, so the
+        /// swap between any of the three primaries never visibly relocates the gadget on Max's glove.
+        ///
+        /// RATE (<c>p_rof</c>) grows the launcher rather than swapping its shape outright: one rail at
+        /// Rate 1-2, a second rail plus a drum at Rate 3-4, a third rail plus two vents at Rate 5.
+        /// Every stage is built here, up front, named so <see cref="ApplyRicochetRate"/> can find and
+        /// toggle each by name — a SetActive flip is cheaper than tearing down and re-emitting this
+        /// fused body on every RATE level-up, the same reasoning <see cref="MaxBodyResult"/>'s own doc
+        /// gives for toggling RCDA/LPPE instead of rebuilding them.
+        /// </summary>
+        private static void BuildRicochetLauncher(Transform gunRoot, in MaxPalette p)
+        {
+            var g = new GameObject("GunBody");
+            g.transform.SetParent(gunRoot, worldPositionStays: false);
+            g.transform.localPosition = new Vector3(0.2715f, 0.701f, 0.11f);
+            g.transform.localRotation = Quaternion.Euler(0f, -15f, 0f);
+            var gt = g.transform;
+            var z90 = Quaternion.Euler(90f, 0f, 0f);
+
+            // The housing — the same mass/colour family every gadget's own base wears.
+            Add(gt, CharacterMeshes.Prism(4, 0.07f, 0.065f, 0.2f, 0.12f, 0f), p.Housing, Vector3.zero, z90, Vector3.one, "Housing");
+
+            // Rate 1-2: "one rail" — always present, the base the other two rails join.
+            Add(gt, CharacterMeshes.Prism(8, 0.028f, 0.028f, 0.3f, 0.08f, 0f), p.Metal, new Vector3(0f, 0.045f, 0.2f), z90, Vector3.one, "Rail0");
+
+            // Rate 3-4: "two rails with a drum" — a second parallel rail plus a stubby drum behind them.
+            var rail1 = Add(gt, CharacterMeshes.Prism(8, 0.028f, 0.028f, 0.3f, 0.08f, 0f), p.Metal, new Vector3(0f, -0.045f, 0.2f), z90, Vector3.one, "Rail1");
+            var drum = Add(gt, CharacterMeshes.Prism(10, 0.075f, 0.075f, 0.1f, 0.1f, 0f), p.Housing, new Vector3(0f, 0f, 0.0f), z90, Vector3.one, "Drum");
+            rail1.gameObject.SetActive(false);
+            drum.gameObject.SetActive(false);
+
+            // Rate 5: "three rails with vents" — a third rail astride the first two, with a pair of
+            // vent stubs flaring off the housing.
+            var rail2 = Add(gt, CharacterMeshes.Prism(8, 0.028f, 0.028f, 0.3f, 0.08f, 0f), p.Metal, new Vector3(0.05f, 0f, 0.2f), z90, Vector3.one, "Rail2");
+            var vent0 = Add(gt, CharacterMeshes.Prism(6, 0.022f, 0.022f, 0.05f, 0.1f, 0f), p.Dark, new Vector3(0.06f, 0.05f, -0.04f), z90, Vector3.one, "Vent0");
+            var vent1 = Add(gt, CharacterMeshes.Prism(6, 0.022f, 0.022f, 0.05f, 0.1f, 0f), p.Dark, new Vector3(-0.06f, 0.05f, -0.04f), z90, Vector3.one, "Vent1");
+            rail2.gameObject.SetActive(false);
+            vent0.gameObject.SetActive(false);
+            vent1.gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1196: shows the rail/drum/vent stages matching <paramref name="rateLevel"/>
+        /// (<c>p_rof</c>'s own level, 1 to 5) and hides the rest — <see cref="BuildRicochetLauncher"/>
+        /// already built every stage, so this is a visibility flip, not a rebuild. Pure and public so a
+        /// test can prove the resolved stage without a live <see cref="MaxWorlds.Player.PlayerController"/>
+        /// in the scene (same contract <see cref="MaxRig.ApplyPrimaryVisual(GameObject, GameObject, GameObject, WeaponCatalog.PrimaryKind)"/>
+        /// already keeps for the RCDA/LPPE/RICOCHET swap).</summary>
+        public static void ApplyRicochetRate(GameObject ricochetGadget, int rateLevel)
+        {
+            if (ricochetGadget == null) return;
+            Transform root = ricochetGadget.transform.Find("GunBody");
+            if (root == null) return;
+
+            bool twoRails = rateLevel >= 3;
+            bool threeRails = rateLevel >= 5;
+            SetChildActive(root, "Rail1", twoRails);
+            SetChildActive(root, "Drum", twoRails);
+            SetChildActive(root, "Rail2", threeRails);
+            SetChildActive(root, "Vent0", threeRails);
+            SetChildActive(root, "Vent1", threeRails);
+        }
+
+        private static void SetChildActive(Transform root, string name, bool active)
+        {
+            Transform t = root.Find(name);
+            if (t != null) t.gameObject.SetActive(active);
         }
 
         /// <summary>An empty rotation handle — the hinge <see cref="MaxRig.TickRun"/> swings a foot

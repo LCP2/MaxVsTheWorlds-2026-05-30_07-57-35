@@ -254,19 +254,27 @@ namespace MaxWorlds.Tests.EditMode
 
                 var rcda = GetField<GameObject>(_rig, "_rcdaGadget");
                 var lppe = GetField<GameObject>(_rig, "_lppeGadget");
-                GameObject activeGadget = rcda.activeSelf ? rcda : (lppe.activeSelf ? lppe : null);
+                // MV-1196: World 3 (City, worldIndex 2) resolves a THIRD gadget now (RICOCHET) rather
+                // than leaving RCDA/LPPE to fight over which stays wrongly active — see that gadget's
+                // own doc for why it carries no glow array to check below.
+                var ricochet = GetField<GameObject>(_rig, "_ricochetGadget");
+                GameObject activeGadget = rcda.activeSelf ? rcda
+                    : (lppe.activeSelf ? lppe : (ricochet != null && ricochet.activeSelf ? ricochet : null));
                 Assert.IsNotNull(activeGadget, $"no gadget submesh is active under world {worldIndex}.");
 
-                var activeGlow = rcda.activeSelf
-                    ? GetField<MeshRenderer[]>(_rig, "_gadgetGlow")
-                    : GetField<MeshRenderer[]>(_rig, "_lppeGlow");
-                Assert.That(activeGlow, Is.Not.Null.And.Not.Empty,
-                    $"world {worldIndex}'s active gadget has no glow renderers.");
-                foreach (var glowRenderer in activeGlow)
+                if (rcda.activeSelf || lppe.activeSelf)
                 {
-                    Assert.IsNotNull(glowRenderer, $"world {worldIndex} has a null glow renderer.");
-                    Assert.IsTrue(glowRenderer.gameObject.activeInHierarchy,
-                        $"world {worldIndex}'s glow renderer is not enabled.");
+                    var activeGlow = rcda.activeSelf
+                        ? GetField<MeshRenderer[]>(_rig, "_gadgetGlow")
+                        : GetField<MeshRenderer[]>(_rig, "_lppeGlow");
+                    Assert.That(activeGlow, Is.Not.Null.And.Not.Empty,
+                        $"world {worldIndex}'s active gadget has no glow renderers.");
+                    foreach (var glowRenderer in activeGlow)
+                    {
+                        Assert.IsNotNull(glowRenderer, $"world {worldIndex} has a null glow renderer.");
+                        Assert.IsTrue(glowRenderer.gameObject.activeInHierarchy,
+                            $"world {worldIndex}'s glow renderer is not enabled.");
+                    }
                 }
             }
 

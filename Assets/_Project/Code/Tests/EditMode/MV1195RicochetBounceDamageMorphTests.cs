@@ -115,7 +115,8 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 disc = RicochetDisc.Spawn(Vector3.zero, direction45, Ricochet.DefaultSpeed,
-                    weapon.BouncesPerDisc, weapon.EffectiveDamagePerDisc, weapon.BankBonusPerBounce,
+                    weapon.BouncesPerDisc, powerLevel: 1, aimLevel: 0,
+                    weapon.EffectiveDamagePerDisc, weapon.BankBonusPerBounce,
                     weapon.AimTurnRateDegPerSec, weapon.AimLookaheadMetres, Ricochet.DefaultRadius,
                     Ricochet.DefaultLifetimeSeconds);
             }

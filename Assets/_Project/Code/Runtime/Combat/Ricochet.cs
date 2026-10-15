@@ -155,7 +155,13 @@ namespace MaxWorlds.Combat
 
         private void FireOneDisc()
         {
+            // MV-1196: the disc's own look reads POWER's raw level (for its mark) and AIMING's raw
+            // level (for its fin count) directly, rather than the already-resolved damage/turn-rate
+            // values below, since neither of THOSE values round-trips back to a level number.
+            int powerLevel = WeaponSystemState.TrackLevel(WeaponTrackKind.Damage);
+            int aimLevel = WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Aiming);
             RicochetDisc.Spawn(transform.position, transform.forward, DefaultSpeed, BouncesPerDisc,
+                powerLevel, aimLevel,
                 EffectiveDamagePerDisc, BankBonusPerBounce, AimTurnRateDegPerSec, AimLookaheadMetres,
                 DefaultRadius, DefaultLifetimeSeconds);
         }

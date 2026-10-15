@@ -24,6 +24,12 @@ namespace MaxWorlds.Weapons
     [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class RicochetDisc : MonoBehaviour
     {
+        /// <summary>MV-1196 (design v5 §3.1): POWER's four disc marks — Mark I (Power 1-2, a plain
+        /// blue disc) through Mark IV (Power 7-8, a violet curved-blade star). <see cref="MarkForPowerLevel"/>
+        /// derives this straight from <c>p_dmg</c>'s own level (rig_board.city.json: maxLevel 8, two
+        /// levels per mark) rather than a second authored table.</summary>
+        public enum DiscMark { I, II, III, IV }
+
         public const int MaxDiscsInFlight = 24;
 
         /// <summary>A small forward nudge after a bounce so the disc doesn't immediately re-collide
@@ -58,6 +64,16 @@ namespace MaxWorlds.Weapons
         private float _age;
         private TrailRenderer _trail;
 
+        // ---- MV-1196: the look (design v5 §3.1) — built once per pooled instance in BuildVisual,
+        // re-applied every Spawn (the mark/fin count can differ from the previous shot this same
+        // pooled GameObject carried) and again on each bounce (the stud count drops as bounces spend).
+        private Transform _discVisual;
+        private Transform[] _rimTeeth;
+        private Transform[] _blades;
+        private Transform _ivCore;
+        private Transform[] _studs;
+        private Transform[] _fins;
+
         private static readonly RaycastHit[] s_hits = new RaycastHit[16];
 
         /// <summary>Whether this pooled instance is currently a live, flying disc.</summary>
@@ -68,10 +84,39 @@ namespace MaxWorlds.Weapons
         /// to prove the bounce count itself.</summary>
         public int BouncesTaken => _bouncesTaken;
 
+        /// <summary>MV-1196: POWER's resolved disc mark for this shot (see <see cref="DiscMark"/>).</summary>
+        public DiscMark Mark { get; private set; }
+
+        /// <summary>MV-1196: this disc's on-screen diameter in metres, resolved from <see cref="Mark"/>
+        /// (<see cref="DiameterForMark"/>) — what an EditMode test measures against the design's
+        /// 19px-at-Mark-I/36px-at-Mark-IV range.</summary>
+        public float VisualDiameter { get; private set; }
+
+        /// <summary>MV-1196: AIMING's own fin count for this shot, <c>p_aim</c>'s level directly
+        /// (0 to 4, rig_board.city.json's own cap).</summary>
+        public int FinCount { get; private set; }
+
+        /// <summary>MV-1196: "one white stud on the disc for every bounce it has left" — exactly
+        /// <see cref="_bouncesRemaining"/>, re-read live rather than cached so it drops the instant a
+        /// bounce spends one.</summary>
+        public int StudCount => _bouncesRemaining;
+
+        /// <summary>MV-1196: POWER's own disc marks, two levels per mark (rig_board.city.json's
+        /// <c>p_dmg</c>: maxLevel 8) — Mark I (1-2) through Mark IV (7-8). Pure, so a test can assert it
+        /// without a live disc instance.</summary>
+        public static DiscMark MarkForPowerLevel(int powerLevel) =>
+            (DiscMark)Mathf.Clamp((Mathf.Max(1, powerLevel) - 1) / 2, 0, 3);
+
+        /// <summary>MV-1196: a mark's on-screen diameter in metres — 0.40 m at Mark I to 0.75 m at Mark
+        /// IV (design v5: 19px/36px at the play camera's ~48px/m), evenly stepped across the four marks.</summary>
+        public static float DiameterForMark(DiscMark mark) =>
+            Mathf.Lerp(MinDiscDiameter, MaxDiscDiameter, (int)mark / 3f);
+
         /// <summary>Fire one disc. Reuses the first inactive pooled instance, or builds a new one while
         /// under <see cref="MaxDiscsInFlight"/> — returns null, spawning nothing, once the pool is
         /// already full of live discs (design v5: "24 discs in flight" is a hard cap, not a queue).</summary>
         public static RicochetDisc Spawn(Vector3 origin, Vector3 direction, float speed, int bounces,
+            int powerLevel, int aimLevel,
             float damage, float bankBonusPerBounce, float turnRateDegPerSec, float lookaheadMetres,
             float radius, float lifetime)
         {
@@ -85,9 +130,17 @@ namespace MaxWorlds.Weapons
             {
                 if (s_pool.Count >= MaxDiscsInFlight) return null;
                 var go = new GameObject("RicochetDisc (stand-in)");
-                BuildVisual(go.transform, out TrailRenderer trail);
+                BuildVisual(go.transform, out TrailRenderer trail, out Transform discVisual,
+                    out Transform[] rimTeeth, out Transform[] blades, out Transform ivCore,
+                    out Transform[] studs, out Transform[] fins);
                 disc = go.AddComponent<RicochetDisc>();
                 disc._trail = trail;
+                disc._discVisual = discVisual;
+                disc._rimTeeth = rimTeeth;
+                disc._blades = blades;
+                disc._ivCore = ivCore;
+                disc._studs = studs;
+                disc._fins = fins;
                 s_pool.Add(disc);
             }
 
@@ -112,6 +165,15 @@ namespace MaxWorlds.Weapons
             disc._active = true;
             // Spec: "Trails are cleared on reuse" -- cleared here, at the NEXT spawn, not at retire.
             if (disc._trail != null) disc._trail.Clear();
+
+            // MV-1196: the look — a pooled disc can carry a different mark/fin count on every reuse,
+            // so this has to re-apply every Spawn rather than build once.
+            disc.Mark = MarkForPowerLevel(powerLevel);
+            disc.VisualDiameter = DiameterForMark(disc.Mark);
+            disc.FinCount = Mathf.Clamp(aimLevel, 0, MaxFinSlots);
+            disc.ApplyMarkVisual();
+            disc.ApplyFinVisual();
+            disc.ApplyStudVisual();
             return disc;
         }
 
@@ -166,6 +228,7 @@ namespace MaxWorlds.Weapons
                 {
                     _bouncesRemaining--;
                     _bouncesTaken++;
+                    ApplyStudVisual();   // MV-1196: "the count drops as it bounces"
                     Vector3 priorDirection = _direction;
                     _direction = ReflectHorizontal(_direction, contact.normal);
                     // Offset along the HIT'S OWN NORMAL (not the new travel direction) by just past the
@@ -292,16 +355,48 @@ namespace MaxWorlds.Weapons
             gameObject.SetActive(false);
         }
 
-        /// <summary>A flat, unlit disc 0.40 m across in disc blue, with a short trail (spec item 7 —
-        /// the placeholder look; the real disc/launcher art is a follow-up ticket). Collider stripped,
-        /// same idiom <see cref="BolterBolt"/> uses: this disc's own hit test is a manual
-        /// <see cref="Physics.SphereCastNonAlloc"/>, never physics collision response.</summary>
+        /// <summary>A flat, unlit disc in disc blue, with a short trail — the base look every mark
+        /// starts from (spec item 7). Collider stripped, same idiom <see cref="BolterBolt"/> uses: this
+        /// disc's own hit test is a manual <see cref="Physics.SphereCastNonAlloc"/>, never physics
+        /// collision response.</summary>
         private static readonly Color DiscColor = new Color(0.35f, 0.65f, 1.0f);
-        private const float DiscDiameter = 0.40f;
+
+        /// <summary>MV-1196: Mark I's diameter — the design's 19px at ~48px/m.</summary>
+        private const float MinDiscDiameter = 0.40f;
+
+        /// <summary>MV-1196: Mark IV's diameter — the design's 36px at ~48px/m.</summary>
+        private const float MaxDiscDiameter = 0.75f;
+
         private const float DiscThickness = 0.06f;
         private const float TrailSeconds = 0.15f;
 
-        private static void BuildVisual(Transform parent, out TrailRenderer trail)
+        /// <summary>MV-1196: Mark II's cog rim / Mark III's saw edge share one ring of slots — the two
+        /// marks never show at once, so one set of transforms re-dressed by <see cref="ApplyMarkVisual"/>
+        /// avoids building (and the test having to reason about) two separate rings.</summary>
+        private const int RimTeethCount = 8;
+
+        private const int BladeCount = 4;
+
+        /// <summary>MV-1196: RICOCHETS' own level cap (rig_board.city.json's <c>p_ric</c>: maxLevel 6) —
+        /// the most studs a disc can ever need to show.</summary>
+        private const int MaxStudSlots = 6;
+
+        /// <summary>MV-1196: AIMING's own level cap (rig_board.city.json's <c>p_aim</c>: maxLevel 4).</summary>
+        private const int MaxFinSlots = 4;
+
+        /// <summary>The disc's own flat face is perpendicular to its direction of travel (+Z) — every
+        /// rim decoration shares this same local rotation so it sits flush in that plane.</summary>
+        private static readonly Quaternion DiscPlaneRotation = Quaternion.Euler(90f, 0f, 0f);
+
+        private static readonly Color CogColor = new Color(0.90f, 0.90f, 0.94f);
+        private static readonly Color SawColor = new Color(0.80f, 0.88f, 1.0f);
+        private static readonly Color VioletColor = new Color(0.55f, 0.20f, 0.85f);
+        private static readonly Color StudColor = new Color(0.95f, 0.95f, 0.98f);
+        private static readonly Color FinColor = new Color(0.55f, 0.75f, 1.0f);
+
+        private static void BuildVisual(Transform parent, out TrailRenderer trail, out Transform discVisual,
+            out Transform[] rimTeeth, out Transform[] blades, out Transform ivCore,
+            out Transform[] studs, out Transform[] fins)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
@@ -309,16 +404,17 @@ namespace MaxWorlds.Weapons
             disc.name = "Disc";
             StripCollider(disc);
             disc.transform.SetParent(parent, false);
-            disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            disc.transform.localRotation = DiscPlaneRotation;
             // Unity's cylinder primitive is 2 units pole-to-pole and 1 unit across at scale 1.
-            disc.transform.localScale = new Vector3(DiscDiameter, DiscThickness * 0.5f, DiscDiameter);
+            disc.transform.localScale = new Vector3(MinDiscDiameter, DiscThickness * 0.5f, MinDiscDiameter);
             Material discMat = VfxMaterials.AdditiveTinted(DiscColor);
             if (discMat != null) disc.GetComponent<MeshRenderer>().sharedMaterial = discMat;
+            discVisual = disc.transform;
 
             trail = parent.gameObject.AddComponent<TrailRenderer>();
             trail.time = TrailSeconds;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
-            trail.widthMultiplier = DiscDiameter * 0.6f;
+            trail.widthMultiplier = MinDiscDiameter * 0.6f;
             trail.minVertexDistance = 0.02f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
@@ -327,6 +423,143 @@ namespace MaxWorlds.Weapons
             trail.startColor = trailColor;
             trailColor.a = 0f;
             trail.endColor = trailColor;
+
+            rimTeeth = BuildSlots(parent, "Tooth", RimTeethCount, PrimitiveType.Cube);
+            blades = BuildSlots(parent, "Blade", BladeCount, PrimitiveType.Cube);
+            ivCore = BuildSlot(parent, "IvCore", PrimitiveType.Sphere);
+            studs = BuildSlots(parent, "Stud", MaxStudSlots, PrimitiveType.Sphere);
+            fins = BuildSlots(parent, "Fin", MaxFinSlots, PrimitiveType.Cube);
+        }
+
+        private static Transform[] BuildSlots(Transform parent, string prefix, int count, PrimitiveType shape)
+        {
+            var arr = new Transform[count];
+            for (int i = 0; i < count; i++) arr[i] = BuildSlot(parent, prefix + i, shape);
+            return arr;
+        }
+
+        private static Transform BuildSlot(Transform parent, string name, PrimitiveType shape)
+        {
+            GameObject go = GameObject.CreatePrimitive(shape);
+            go.name = name;
+            StripCollider(go);
+            go.transform.SetParent(parent, false);
+            go.SetActive(false);
+            return go.transform;
+        }
+
+        /// <summary>A point on the disc's own rim, in the disc root's local space — see
+        /// <see cref="DiscPlaneRotation"/>'s doc for why this is the root's local X/Y plane (not X/Z):
+        /// the "Disc" child's own rim circle, after its 90-degree local rotation, resolves to
+        /// <c>(x, -z, 0)</c> in the root's frame, so a decoration built as a SIBLING of "Disc" (not a
+        /// child of it, which would also inherit Disc's own non-uniform thickness scale) reaches the
+        /// same visible ring with its own independent scale.</summary>
+        private static Vector3 RimPoint(float diameter, float angleDeg, float radiusScale)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            float r = 0.5f * diameter * radiusScale;
+            return new Vector3(Mathf.Cos(rad) * r, -Mathf.Sin(rad) * r, 0f);
+        }
+
+        private static void SetMaterial(Transform t, Material mat)
+        {
+            if (t == null || mat == null) return;
+            var mr = t.GetComponent<MeshRenderer>();
+            if (mr != null) mr.sharedMaterial = mat;
+        }
+
+        /// <summary>MV-1196: POWER's own look — the disc's diameter/colour and its mark-specific
+        /// decoration (Mark II's cog rim, Mark III's saw edge, Mark IV's star blades + glow core).
+        /// Re-applied every <see cref="Spawn"/> since a pooled disc can carry a different mark each
+        /// reuse.</summary>
+        private void ApplyMarkVisual()
+        {
+            float d = VisualDiameter;
+            if (_discVisual != null)
+            {
+                _discVisual.localScale = new Vector3(d, DiscThickness * 0.5f, d);
+                SetMaterial(_discVisual, VfxMaterials.AdditiveTinted(Mark == DiscMark.IV ? VioletColor : DiscColor));
+            }
+            if (_trail != null) _trail.widthMultiplier = d * 0.6f;
+
+            bool showRim = Mark == DiscMark.II || Mark == DiscMark.III;
+            Material rimMat = VfxMaterials.AdditiveTinted(Mark == DiscMark.III ? SawColor : CogColor);
+            float toothSize = (Mark == DiscMark.III ? 0.09f : 0.07f) * d;
+            for (int i = 0; i < _rimTeeth.Length; i++)
+            {
+                Transform t = _rimTeeth[i];
+                t.gameObject.SetActive(showRim);
+                if (!showRim) continue;
+                float angle = i * (360f / _rimTeeth.Length);
+                t.localPosition = RimPoint(d, angle, 1.0f);
+                t.localRotation = DiscPlaneRotation;
+                t.localScale = new Vector3(toothSize, toothSize, toothSize * 0.6f);
+                SetMaterial(t, rimMat);
+            }
+
+            bool showBlades = Mark == DiscMark.IV;
+            Material bladeMat = VfxMaterials.AdditiveTinted(VioletColor);
+            for (int i = 0; i < _blades.Length; i++)
+            {
+                Transform t = _blades[i];
+                t.gameObject.SetActive(showBlades);
+                if (!showBlades) continue;
+                float angle = i * (360f / _blades.Length) + 45f;
+                t.localPosition = RimPoint(d, angle, 1.25f);
+                t.localRotation = DiscPlaneRotation * Quaternion.Euler(0f, 0f, angle);
+                t.localScale = new Vector3(d * 0.18f, d * 0.4f, 0.02f);
+                SetMaterial(t, bladeMat);
+            }
+            if (_ivCore != null)
+            {
+                _ivCore.gameObject.SetActive(showBlades);
+                if (showBlades)
+                {
+                    _ivCore.localScale = Vector3.one * (d * 0.22f);
+                    SetMaterial(_ivCore, VfxMaterials.AdditiveTinted(VioletColor * 1.3f));
+                }
+            }
+        }
+
+        /// <summary>MV-1196: AIMING's own fins — one per <see cref="FinCount"/> level (0 to 4), fixed at
+        /// spawn (the turn rate/lookahead this fin count corresponds to are also fixed for the whole
+        /// shot — see <see cref="Ricochet.AimTurnRateDegPerSec"/>).</summary>
+        private void ApplyFinVisual()
+        {
+            float d = VisualDiameter;
+            Material finMat = VfxMaterials.AdditiveTinted(FinColor);
+            for (int i = 0; i < _fins.Length; i++)
+            {
+                Transform t = _fins[i];
+                bool active = i < FinCount;
+                t.gameObject.SetActive(active);
+                if (!active) continue;
+                float angle = i * (360f / _fins.Length) + 45f;
+                t.localPosition = RimPoint(d, angle, 1.15f);
+                t.localRotation = DiscPlaneRotation * Quaternion.Euler(0f, 0f, angle);
+                t.localScale = new Vector3(d * 0.12f, d * 0.3f, 0.015f);
+                SetMaterial(t, finMat);
+            }
+        }
+
+        /// <summary>MV-1196: RICOCHETS' own studs — "one white stud on the disc for every bounce it has
+        /// left", read live off <see cref="StudCount"/> (<see cref="_bouncesRemaining"/>) so the count
+        /// drops the instant a bounce spends one (see the bounce branch in <see cref="Tick"/>).</summary>
+        private void ApplyStudVisual()
+        {
+            float d = VisualDiameter;
+            Material studMat = VfxMaterials.AdditiveTinted(StudColor);
+            for (int i = 0; i < _studs.Length; i++)
+            {
+                Transform t = _studs[i];
+                bool active = i < StudCount;
+                t.gameObject.SetActive(active);
+                if (!active) continue;
+                float angle = i * (360f / _studs.Length);
+                t.localPosition = RimPoint(d, angle, 0.6f);
+                t.localScale = Vector3.one * (d * 0.08f);
+                SetMaterial(t, studMat);
+            }
         }
 
         private static void StripCollider(GameObject go)

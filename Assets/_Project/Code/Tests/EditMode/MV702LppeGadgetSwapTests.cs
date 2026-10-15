@@ -9,7 +9,7 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-702 (the one new test, per the testing policy): the LPPE gadget submesh <see cref="MaxBody.Build"/>
     /// hands back must actually swap with <c>WeaponSystemState.ActivePrimary</c> — resolved
     /// <c>GameObject.activeSelf</c> state after running the real toggle logic
-    /// (<see cref="MaxRig.ApplyPrimaryVisual(GameObject, GameObject, WeaponCatalog.PrimaryKind)"/>),
+    /// (<see cref="MaxRig.ApplyPrimaryVisual(GameObject, GameObject, GameObject, WeaponCatalog.PrimaryKind)"/>),
     /// never an authored constant.
     ///
     /// Fails on the MV-693 merge commit (55bc034): <c>MaxBodyResult</c> has no <c>RcdaGadget</c>/
@@ -33,12 +33,12 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(body.LppeGadget.activeSelf, Is.False, "the LPPE gadget must start hidden");
 
                 // Flip to the LPPE (MV-689's World 2 morph) — the resolved visibility must swap.
-                MaxRig.ApplyPrimaryVisual(body.RcdaGadget, body.LppeGadget, WeaponCatalog.PrimaryKind.Lppe);
+                MaxRig.ApplyPrimaryVisual(body.RcdaGadget, body.LppeGadget, body.RicochetGadget, WeaponCatalog.PrimaryKind.Lppe);
                 Assert.That(body.RcdaGadget.activeSelf, Is.False, "the RCDA gadget must hide once ActivePrimary is Lppe");
                 Assert.That(body.LppeGadget.activeSelf, Is.True, "the LPPE gadget must show once ActivePrimary is Lppe");
 
                 // And back — the swap is not one-directional.
-                MaxRig.ApplyPrimaryVisual(body.RcdaGadget, body.LppeGadget, WeaponCatalog.PrimaryKind.Rcda);
+                MaxRig.ApplyPrimaryVisual(body.RcdaGadget, body.LppeGadget, body.RicochetGadget, WeaponCatalog.PrimaryKind.Rcda);
                 Assert.That(body.RcdaGadget.activeSelf, Is.True, "the RCDA gadget must return once ActivePrimary is Rcda again");
                 Assert.That(body.LppeGadget.activeSelf, Is.False, "the LPPE gadget must hide once ActivePrimary is Rcda again");
             }

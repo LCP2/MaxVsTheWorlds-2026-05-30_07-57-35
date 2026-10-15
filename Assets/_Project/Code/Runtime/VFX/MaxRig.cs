@@ -634,6 +634,10 @@ namespace MaxWorlds.VFX
         /// three tube-tip lenses (migrated here from <c>ShoulderRack</c>'s own placeholder — see that
         /// class's history).</summary>
         private GameObject _rcdaGadget, _lppeGadget, _rackMount;
+
+        /// <summary>MV-1196: the City's RICOCHET gadget submesh, toggled the same way as
+        /// <see cref="_rcdaGadget"/>/<see cref="_lppeGadget"/> — see <see cref="ApplyPrimaryVisual()"/>.</summary>
+        private GameObject _ricochetGadget;
         private MeshRenderer[] _lppeGlow, _rackTubeGlow;
         private ShoulderRack _shoulderRack;
         private Vector3 _rackMountBasePos;
@@ -926,6 +930,7 @@ namespace MaxWorlds.VFX
 
             _rcdaGadget = body.RcdaGadget;
             _lppeGadget = body.LppeGadget;
+            _ricochetGadget = body.RicochetGadget;
             _lppeGlow = body.LppeGlow;
             _rackMount = body.RackMount;
             _rackTubeGlow = body.RackTubeGlow;
@@ -1015,18 +1020,30 @@ namespace MaxWorlds.VFX
         /// visibility flip, not a rebuild. Runs once at build time and again every time
         /// <see cref="WeaponSystemState.Changed"/> fires (MV-689's World 2 morph is the only thing that
         /// ever actually changes it mid-run).</summary>
-        private void ApplyPrimaryVisual() => ApplyPrimaryVisual(_rcdaGadget, _lppeGadget, WeaponSystemState.ActivePrimary);
+        private void ApplyPrimaryVisual()
+        {
+            WeaponCatalog.PrimaryKind primary = WeaponSystemState.ActivePrimary;
+            ApplyPrimaryVisual(_rcdaGadget, _lppeGadget, _ricochetGadget, primary);
+
+            // MV-1196: the launcher's own rail/drum/vent stage also has to re-fit on every RATE
+            // level-up, not just on a primary swap — WeaponSystemState.Changed (this method's own
+            // subscription) fires for both, so one extra call here covers it without a second handler.
+            if (primary == WeaponCatalog.PrimaryKind.Ricochet)
+                MaxBody.ApplyRicochetRate(_ricochetGadget, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Rate));
+        }
 
         /// <summary>The toggle rule itself, pulled out as a pure static so an EditMode test can prove
         /// the resolved <c>GameObject.activeSelf</c> state directly off <see cref="MaxBody.Build"/>'s
         /// own output — <see cref="Awake"/> requires a live <see cref="PlayerController"/> in the scene,
         /// which <see cref="MaxBody.Build"/> does not.</summary>
-        public static void ApplyPrimaryVisual(GameObject rcdaGadget, GameObject lppeGadget,
+        public static void ApplyPrimaryVisual(GameObject rcdaGadget, GameObject lppeGadget, GameObject ricochetGadget,
             WeaponCatalog.PrimaryKind primary)
         {
             bool lppe = primary == WeaponCatalog.PrimaryKind.Lppe;
-            if (rcdaGadget != null) rcdaGadget.SetActive(!lppe);
+            bool ricochet = primary == WeaponCatalog.PrimaryKind.Ricochet;
+            if (rcdaGadget != null) rcdaGadget.SetActive(!lppe && !ricochet);
             if (lppeGadget != null) lppeGadget.SetActive(lppe);
+            if (ricochetGadget != null) ricochetGadget.SetActive(ricochet);
         }
 
         private static Transform Pivot(string name, Transform parent, Vector3 at)
