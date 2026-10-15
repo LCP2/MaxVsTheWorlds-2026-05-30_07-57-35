@@ -256,6 +256,19 @@ namespace MaxWorlds.Arena
         /// <summary>Which populated rig state this world's own DEV row button hands the tester — see
         /// <see cref="DevStartLoadout"/>.</summary>
         public DevStartLoadout DevStart;
+
+        // --- MV-1185: DEV-start wallet floor ---
+
+        /// <summary>The Parts (<see cref="MaxWorlds.Pickups.PickupWallet.PowerCells"/>) floor a DEV
+        /// world start raises the bank to, if it's lower — never reduces an existing higher balance.
+        /// An authored, per-world estimate of "what a typical player would be carrying" (no telemetry
+        /// yet), retunable by Lee. See <see cref="WorldCatalog.ApplyDevStartFloor"/>.</summary>
+        public int DevStartParts;
+
+        /// <summary>The Power Cells (<see cref="MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary"/>)
+        /// floor a DEV world start raises the bank to, if it's lower. Same "never reduces" rule as
+        /// <see cref="DevStartParts"/>.</summary>
+        public int DevStartCells;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -429,9 +442,26 @@ namespace MaxWorlds.Arena
 
                 if (isLastRow && row.ExitMode != WorldExitMode.DoorOnly)
                     problems.Add($"row {i} ('{row.Id}'): last row's exit mode must be DoorOnly");
+
+                // MV-1185
+                if (row.DevStartParts < 0) problems.Add($"row {i} ('{row.Id}'): DevStartParts negative");
+                if (row.DevStartCells < 0) problems.Add($"row {i} ('{row.Id}'): DevStartCells negative");
             }
 
             return problems;
+        }
+
+        /// <summary>MV-1185: raises the wallet to <paramref name="worldIndex"/>'s own authored DEV-start
+        /// floor (<see cref="WorldDefinition.DevStartParts"/>/<see cref="WorldDefinition.DevStartCells"/>)
+        /// — a FLOOR, never a set: a bank already above either value is left untouched. Called after any
+        /// DEV world start (<see cref="MaxWorlds.UI.HomeScreen.StartSlotWorld"/>) and after
+        /// <see cref="MaxWorlds.Arena.WorldRunner.JumpToFinaleArea"/>, using the target world's own row.
+        /// Normal play never calls this.</summary>
+        public static void ApplyDevStartFloor(int worldIndex)
+        {
+            WorldDefinition row = Get(worldIndex);
+            if (PickupWallet.PowerCells < row.DevStartParts) PickupWallet.SetPowerCells(row.DevStartParts);
+            if (PickupWallet.PowerCellsSecondary < row.DevStartCells) PickupWallet.SetPowerCellSecondary(row.DevStartCells);
         }
 
         /// <summary>Test seam (MV-1141). No <c>InternalsVisibleTo</c> back to the EditMode test assembly
@@ -485,6 +515,9 @@ namespace MaxWorlds.Arena
                 ArrivalDressing = ArrivalDressingKind.None,
                 RunsLegacyExitGate = true,
                 DevStart = DevStartLoadout.FreshRun,
+                // MV-1185: a fresh run is unchanged -- FreshRun already lands PickupWallet at 0/0.
+                DevStartParts = 0,
+                DevStartCells = 0,
             },
             new WorldDefinition
             {
@@ -530,6 +563,10 @@ namespace MaxWorlds.Arena
                 ArrivalDressing = ArrivalDressingKind.Arrival,
                 RunsLegacyExitGate = false,
                 DevStart = DevStartLoadout.PreviousWorldExitRig,
+                // MV-1185: PreviousWorldExitRig caps e_cel at World 1's own maxLevel (4, same on every
+                // board), so Capacity resolves to DefaultCapacity(20) + 4*10 = 60 -- 50% rounded down = 30.
+                DevStartParts = 30,
+                DevStartCells = 15,
             },
             new WorldDefinition
             {
@@ -578,6 +615,10 @@ namespace MaxWorlds.Arena
                 ArrivalDressing = ArrivalDressingKind.ArrivalCity,
                 RunsLegacyExitGate = false,
                 DevStart = DevStartLoadout.PreviousWorldExitRig,
+                // MV-1185: PreviousWorldExitRig caps e_cel at the Stormdrain's own maxLevel (4, same on
+                // every board), so Capacity resolves to 60 the same as every other row here -- 50% = 30.
+                DevStartParts = 30,
+                DevStartCells = 20,
             },
             new WorldDefinition
             {
@@ -629,6 +670,10 @@ namespace MaxWorlds.Arena
                 ArrivalDressing = ArrivalDressingKind.ArrivalReef,
                 RunsLegacyExitGate = false,
                 DevStart = DevStartLoadout.MaxedRig,
+                // MV-1185: MaxedRig maxes e_cel at the Reef's own board too (maxLevel 4, same as every
+                // other board), so Capacity resolves to 60 here as well -- 50% = 30.
+                DevStartParts = 30,
+                DevStartCells = 25,
             },
         };
     }

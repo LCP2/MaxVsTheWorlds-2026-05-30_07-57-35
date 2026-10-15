@@ -126,9 +126,12 @@ namespace MaxWorlds.Tests.EditMode
             foreach (RigFusionDef fusion in RigBoard.Fusions)
                 Assert.IsFalse(RigFusionState.IsForged(fusion.Id), $"{fusion.Id} must be unforged");
 
-            // Wallet — empty: no Parts, no Power Cells.
-            Assert.AreEqual(0, PickupWallet.PowerCells, "no Parts");
-            Assert.AreEqual(0, PickupWallet.PowerCellsSecondary, "no Power Cells");
+            // MV-1185 supersedes this test's own original empty-wallet assertions: a DEV world start
+            // now floors the wallet to the Stormdrain's own authored DevStartParts/DevStartCells (Lee,
+            // 14 Oct: a DEV jump used to leave the wallet empty, skewing his difficulty judgement).
+            // Updated in place rather than left to rot red, same precedent MV-1095's own note above sets.
+            Assert.AreEqual(30, PickupWallet.PowerCells, "floored to the Stormdrain's own DevStartParts");
+            Assert.AreEqual(15, PickupWallet.PowerCellsSecondary, "floored to the Stormdrain's own DevStartCells");
         }
     }
 }
