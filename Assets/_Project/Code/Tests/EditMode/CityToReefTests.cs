@@ -117,10 +117,18 @@ namespace MaxWorlds.Tests.EditMode
         public void ClearingMarketStreetOpensTheWayAndTheReefPlaysByItsOwnRules()
         {
             // ---------------------------------------------------------------- Part one: the bossless clear.
+            int cityIndex = WorldCatalog.IndexOf(WorldIds.City);
+            int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+
             WorldConfig cfg = CityConfig();
 
             var areaDirector = _root.AddComponent<AreaAccumulationDirector>();
-            areaDirector.ConfigureWorld(cfg);
+            // MV-1195: the real City index, not the 0 (Backyard) default -- WorldFinaleGate's own
+            // City-&gt;Reef interim hand-over (below) is keyed by WorldCatalog.Get(ActiveWorldIndex).Id,
+            // so this fixture must actually resolve as the City for that hand-over to be exercised here.
+            areaDirector.ConfigureWorld(cfg, cityIndex);
+
+            RigBoard.UseWorld(cityIndex);
 
             var gate = new GameObject("WorldFinaleGate Test").AddComponent<WorldFinaleGate>();
             InvokeOnEnable(gate);
@@ -130,8 +138,6 @@ namespace MaxWorlds.Tests.EditMode
             RobotEnemy r2 = NewAliveRobot("a1_robot2", 1);
             RobotEnemy r3 = NewAliveRobot("a1_robot3", 1);
             RobotEnemy r4 = NewAliveRobot("a1_robot4", 1);
-
-            WeaponCatalog.PrimaryKind primaryBefore = WeaponSystemState.ActivePrimary;
 
             Assert.AreEqual(4, areaDirector.ActiveCountForArea(1), "precondition: four living a1 robots");
             Assert.IsFalse(gate.WeaponMomentResolved,
@@ -147,8 +153,14 @@ namespace MaxWorlds.Tests.EditMode
                 "the City's bossless finale must never bank a Weapon Core morph");
             Assert.AreEqual(0, LivePickups().Count(p => p.Kind == PickupKind.WeaponCore),
                 "no Weapon Core pickup must ever exist for a bossless finale");
-            Assert.AreEqual(primaryBefore, WeaponSystemState.ActivePrimary,
-                "no weapon change -- the City grants no Core or morph");
+
+            // MV-1195: the City's bossless exit now grants the interim hand-over to the Reef (UNDERTOW),
+            // in place of the no-Core/no-morph rule MV-1179 shipped -- there is a real weapon now, so
+            // leaving the City on RICOCHET forever (as if the Reef never existed) is no longer correct.
+            Assert.AreEqual(WeaponCatalog.PrimaryKind.Undertow, WeaponSystemState.ActivePrimary,
+                "the City's bossless exit must hand UNDERTOW over to the Reef in RICOCHET's place");
+            Assert.AreEqual(reefIndex, RigBoard.ActiveWorldIndex,
+                "the interim hand-over's own ApplyWeaponCoreMorph must re-anchor RigBoard.ActiveWorldIndex onto the Reef");
 
             Assert.AreEqual(0, areaDirector.ActiveCountForArea(1),
                 "every remaining a1 robot must be destroyed in the same call");
@@ -164,18 +176,17 @@ namespace MaxWorlds.Tests.EditMode
             gate.ResumeFromCheckpoint(weaponGranted: false, exitOpen: true);
             Assert.IsTrue(gate.IsOpen, "MV-1179: a bossless finale's open door must never re-lock after a RESUME");
 
-            // ---------------------------------------------------------------- Part two: the Reef re-anchor.
-            int cityIndex = WorldCatalog.IndexOf(WorldIds.City);
-            int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
-
-            RigBoard.UseWorld(cityIndex);
-            RigState.RestoreSnapshot(new Dictionary<string, int> { ["p_dmg"] = 4 }, new[] { "PRIMARY" });
-
+            // ---------------------------------------------------------------- Part two: the run-start
+            // fallback is now a safe no-op. MV-1195: the City and Reef no longer share a board/primary,
+            // so BackyardPath.ApplyPendingMorphAtRunStart's own "same board, free re-anchor" shortcut
+            // (ApplyPendingMorphAtRunStart's doc) correctly refuses to act here -- the real hand-over
+            // above already did the job. Calling it again on arrival must change nothing.
+            int levelBefore = RigState.Level("p_dmg");
             BackyardPath.ApplyPendingMorphAtRunStart(reefIndex);
 
             Assert.AreEqual(reefIndex, RigBoard.ActiveWorldIndex,
-                "arriving in the Reef from the City must re-anchor RigBoard.ActiveWorldIndex, even with no Core to morph");
-            Assert.AreEqual(4, RigState.Level("p_dmg"), "levels must be untouched -- this is a re-anchor, not a morph");
+                "the run-start fallback must leave RigBoard.ActiveWorldIndex on the Reef, already set by the real hand-over");
+            Assert.AreEqual(levelBefore, RigState.Level("p_dmg"), "the run-start fallback must not re-apply a morph on top of the real one");
             Assert.AreEqual(AbilityTuning.DefaultShoulderRackBaseDamageWorld3,
                 AbilityTuning.ShoulderRackBaseDamageForWorld(RigBoard.ActiveWorldIndex),
                 "Reef rockets must read the Reef's own (lower) base damage, not the City/World 2 rate");

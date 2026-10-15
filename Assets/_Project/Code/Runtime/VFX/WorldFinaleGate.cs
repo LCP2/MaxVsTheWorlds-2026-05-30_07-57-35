@@ -128,6 +128,18 @@ namespace MaxWorlds.VFX
         /// instead of a 45s timer's floor.</summary>
         private const int BosslessFinaleClearThreshold = 3;
 
+        /// <summary>MV-1195: whether the City-&gt;Reef interim hand-over banner is currently showing —
+        /// see <see cref="TryApplyCityToReefHandover"/>.</summary>
+        private bool _interimBannerActive;
+        private float _interimBannerTime;
+
+        /// <summary>MV-1195: how long the interim hand-over banner holds before fading — same figure
+        /// as Beat A's own <see cref="WeaponBeatDuration"/> below, for the same read-the-banner time,
+        /// without borrowing that cinematic's own camera/ring/flash machinery (there is no physical
+        /// Core object for a bossless finale to fly, so Beat A's flight animation has nothing to
+        /// animate here).</summary>
+        private const float InterimBannerSeconds = 2.5f;
+
         // ---------------------------------------------------------------- MV-1079: Beat A, WEAPON TAKEN
 
         private const float WeaponBeatDuration = 2.5f;
@@ -386,7 +398,31 @@ namespace MaxWorlds.VFX
             // whole step on top of itself.
             _bosslessFinaleResolving = true;
             DestroyRestAndOpenDoor(finalAreaIndex);
+            TryApplyCityToReefHandover(areaDirector);
             _bosslessFinaleResolving = false;
+        }
+
+        /// <summary>MV-1195, design v5 Decision 3: the interim hand-over to the Reef, until the City's
+        /// own boss (The Core) is built — the City's bossless exit (above) grants UNDERTOW the same
+        /// way a boss world's own Weapon Core orb would, but with no physical Core to fly (a bossless
+        /// area never calls <see cref="PickupDirector.SpawnWeaponCore"/>), so this applies the morph
+        /// directly and shows a brief banner instead of borrowing Beat A's full cinematic. Only fires
+        /// for the City itself (by <see cref="WorldIds"/>, not "any bossless world") — this is a named,
+        /// one-off hand-over, not a generalised rule for every bossless finale that might exist
+        /// later.</summary>
+        private void TryApplyCityToReefHandover(AreaAccumulationDirector areaDirector)
+        {
+            int playedWorld = areaDirector != null ? areaDirector.ActiveWorldIndex : -1;
+            if (playedWorld < 0 || WorldCatalog.Get(playedWorld).Id != WorldIds.City) return;
+            if (playedWorld + 1 >= WorldCatalog.Count) return;
+
+            WeaponSystemState.ApplyWeaponCoreMorph(playedWorld + 1);
+
+            (string shortName, string effectLine) = BannerCopyFor(WeaponSystemState.ActivePrimary);
+            if (_banner == null) _banner = FinaleBanner.Create();
+            _banner.Show("NEW WEAPON", shortName, effectLine, 1f);
+            _interimBannerActive = true;
+            _interimBannerTime = 0f;
         }
 
         /// <summary>MV-1183's shared end-of-finale step: every robot still alive in
@@ -675,6 +711,7 @@ namespace MaxWorlds.VFX
             kind switch
             {
                 WeaponCatalog.PrimaryKind.Lppe => ("PULSE EMITTER", "Fires pulses that home in on robots"),
+                WeaponCatalog.PrimaryKind.Ricochet => ("RICOCHET", "Discs that bounce off walls and robots"),
                 WeaponCatalog.PrimaryKind.Undertow => ("UNDERTOW", "A beam that seeks robots and grips them"),
                 _ => (WeaponCatalog.ShortName(kind), string.Empty),
             };
@@ -804,6 +841,16 @@ namespace MaxWorlds.VFX
         {
             UpdateCoreBeacon();
             if (_weaponBeatActive) TickWeaponBeat(Time.unscaledDeltaTime);
+
+            if (_interimBannerActive)
+            {
+                _interimBannerTime += Time.unscaledDeltaTime;
+                if (_interimBannerTime >= InterimBannerSeconds)
+                {
+                    _interimBannerActive = false;
+                    _banner?.Hide();
+                }
+            }
 
             if (_entry != null || _crossed || !IsOpen || !_doorway.HasValue) return;
 

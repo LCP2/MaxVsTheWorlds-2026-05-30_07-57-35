@@ -584,16 +584,17 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = StormdrainRingAlphaScale,
                 GuideLightAccent = CityKit.NeonPink,
-                RigBoardResourcePath = RigBoardLibrary.World3ResourcePath,
-                // MV-1176 "Do not re-raise": City's Weapon Core morph grants Undertow + Shoulder Rack —
-                // the same loadout the Reef's own board already grants, because it IS the Reef's board
-                // (RigBoardResourcePath above); this is what World 2's Core already hands over, not a
-                // new weapon decision.
-                PrimaryWeapon = WeaponCatalog.PrimaryKind.Undertow,
+                RigBoardResourcePath = RigBoardLibrary.CityResourcePath,
+                // MV-1195: the City's own primary is RICOCHET now (Lee, 15 Oct: "we designed a
+                // completely new weapon for the city area") — World 2's Core morph grants it here;
+                // UNDERTOW moves on to the Reef via the City's own bossless-exit hand-over
+                // (WorldFinaleGate.OnEnemyKilled) instead of this row.
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.Ricochet,
                 SecondaryWeapon = SecondaryKind.ShoulderRack,
                 CarrySecondaryAcrossMorph = true,
                 SecondaryMysteryLockedOnMorph = false,
-                PrimarySplitSeeded = true,
+                // RICOCHET has no SPLIT-style seeded track (rig_board.city.json carries no p_spr).
+                PrimarySplitSeeded = false,
                 FusionsEnabled = false,
                 PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
                 UpgradeCostScale = 1f,

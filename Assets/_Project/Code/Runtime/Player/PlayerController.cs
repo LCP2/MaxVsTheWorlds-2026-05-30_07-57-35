@@ -133,6 +133,12 @@ namespace MaxWorlds.Player
             // unconditionally costs nothing before the morph — it self-gates on ActivePrimary the same
             // way PulseLaser gates on ActivePrimary == Lppe.
             if (GetComponent<Undertow>() == null) gameObject.AddComponent<Undertow>();
+
+            // MV-1195: Ricochet self-attaches the same way — the City's Weapon Core morph flips
+            // WeaponSystemState.ActivePrimary to Ricochet, but nothing else ever attaches a live
+            // Ricochet component to fire. Attaching this unconditionally costs nothing before the
+            // morph — it self-gates on ActivePrimary the same way Undertow/PulseLaser do.
+            if (GetComponent<Ricochet>() == null) gameObject.AddComponent<Ricochet>();
         }
 
         private void OnEnable()

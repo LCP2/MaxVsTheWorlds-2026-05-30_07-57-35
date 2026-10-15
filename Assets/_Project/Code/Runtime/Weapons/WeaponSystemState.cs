@@ -105,6 +105,17 @@ namespace MaxWorlds.Weapons
             _ => null,
         };
 
+        /// <summary>MV-1195: the City's RICOCHET own PRIMARY-family tracks with no legacy enum
+        /// equivalent — see <see cref="RicochetTrackKind"/>'s class doc for why these aren't folded
+        /// into <see cref="MapId(WeaponTrackKind)"/>/<see cref="MapId(LppeTrackKind)"/>.</summary>
+        private static string MapId(RicochetTrackKind kind) => kind switch
+        {
+            RicochetTrackKind.Ricochets => "p_ric",
+            RicochetTrackKind.Aiming => "p_aim",
+            RicochetTrackKind.Rate => "p_rof",
+            _ => null,
+        };
+
         private static string MapId(AbilityKind kind) => kind switch
         {
             AbilityKind.Speed => "m_spd",
@@ -382,6 +393,18 @@ namespace MaxWorlds.Weapons
             // World 1 -> World 2 morph: RestoreSnapshot drops any id the target board doesn't define,
             // and World 2's board carries no p_spr at all.
             if (world.PrimarySplitSeeded) preservedLevels["p_spr"] = 1;
+            // MV-1195: RICOCHET's own RICOCHETS/RATE tracks are owned from a non-zero level the instant
+            // the City grants it (rig_board.city.json: p_ric startLevel 2, p_rof startLevel 1) -- the
+            // same "RestoreSnapshot never defaults a missing id to its own RigBoard.StartLevel" gap
+            // p_dmg/p_spr already need an explicit seed for above. Read off the board's own authored
+            // startLevel rather than a literal, so a retune of that file never drifts out of step with
+            // this. A no-op for every other world: RestoreSnapshot drops any id the target board
+            // doesn't define, and no other board carries p_ric at all.
+            if (world.PrimaryWeapon == WeaponCatalog.PrimaryKind.Ricochet)
+            {
+                preservedLevels["p_ric"] = RigBoard.StartLevel("p_ric");
+                preservedLevels["p_rof"] = RigBoard.StartLevel("p_rof");
+            }
             preservedCategories.Add("PRIMARY");
             // MV-727: SECONDARY is deliberately NOT added here for the World 1 -> World 2 morph — it
             // stays locked until the World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not
@@ -430,6 +453,11 @@ namespace MaxWorlds.Weapons
         /// routed through here exactly like <see cref="TrackLevel"/> reads <c>p_dmg</c>/<c>p_rng</c>, so
         /// <see cref="MaxWorlds.Combat.PulseLaser"/> never reads <see cref="RigState"/> directly.</summary>
         public static int LppeTrackLevel(LppeTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>MV-1195: a RICOCHET-only track's current level (RICOCHETS/AIMING/RATE,
+        /// <see cref="RicochetTrackKind"/>) — same role for <see cref="MaxWorlds.Combat.Ricochet"/> that
+        /// <see cref="LppeTrackLevel"/> plays for the LPPE.</summary>
+        public static int RicochetTrackLevel(RicochetTrackKind kind) => RigState.Level(MapId(kind));
 
         /// <summary>Spend a part to raise a Shoulder Rack track by one level. Fails if its RIG node
         /// isn't reached yet or is already at its cap.</summary>
