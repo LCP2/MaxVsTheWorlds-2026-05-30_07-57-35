@@ -158,6 +158,12 @@ namespace MaxWorlds.VFX
         private SludgequeenBoss _boss;
         private MaterialPropertyBlock _mpb;
 
+        /// <summary>The boss this rig is bound to (MV-1193) — same "a test/caller can match a rig back
+        /// to its own boss, never the first one FindObjectsByType happens to see" reasoning as
+        /// <see cref="BigBermudaRig.Boss"/>. Lets <see cref="SludgequeenBoss.Wake"/>'s own MV-995
+        /// self-removal path find and destroy ITS rig rather than leaving an inert body standing.</summary>
+        public SludgequeenBoss Boss => _boss;
+
         /// <summary>Only the housing + hatch boxes live here — <see cref="SludgequeenBoss.FitColliderTo"/>
         /// is fitted against this subset, not the legs (the ticket's own "fitted to the housing and
         /// hatches, not to the legs").</summary>

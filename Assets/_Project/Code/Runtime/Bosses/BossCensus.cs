@@ -56,6 +56,17 @@ namespace MaxWorlds.Bosses
         /// can compare it against this count instead of trusting the registered-living set alone.</summary>
         private static readonly Dictionary<int, int> DeadCountByArea = new Dictionary<int, int>(4);
 
+        /// <summary>MV-1193: each area's AUTHORED boss count (<c>WorldArea.Bosses().Length</c>), seeded
+        /// once per map build by <see cref="SeedAuthoredCount"/> — what lets <see cref="ReportDefeated"/>
+        /// tell "every boss here has died" from "no REGISTERED boss is alive", the two having been the
+        /// same question only by coincidence until a second boss in one area (a20, a30) stayed Dormant,
+        /// never registered, while its sibling woke, fought and died. No entry for an area this scene's
+        /// map build never seeded (a bare EditMode fixture, or an area no actual boss stands in) — every
+        /// read through <see cref="AuthoredCountIn"/> falls back to 0, which <see cref="ReportDefeated"/>
+        /// treats as "unknown; trust the registered-living set alone", unchanged from before this
+        /// ticket.</summary>
+        private static readonly Dictionary<int, int> AuthoredCountByArea = new Dictionary<int, int>(4);
+
         /// <summary>MV-721: sum of <c>Max</c> for every boss that has died so far in the CURRENT fight
         /// (i.e. since the engage latch last re-armed), with an implicit <c>Current</c> of 0 for each.
         /// <see cref="EmitCombinedHealth"/> folds this into its denominator so a death only ever removes
@@ -91,7 +102,25 @@ namespace MaxWorlds.Bosses
             LastDefeatedAreaIndex = 0;
             DefeatedAreas.Clear();
             DeadCountByArea.Clear();
+            AuthoredCountByArea.Clear();
         }
+
+        /// <summary>MV-1193: seed <paramref name="areaIndex"/>'s AUTHORED boss count — see
+        /// <see cref="AuthoredCountByArea"/>'s own doc comment. Called once per boss-authoring area,
+        /// right after a fresh map build's own <see cref="Reset"/> runs (so a seed here is never the one
+        /// that gets wiped). A no-op for <paramref name="count"/> &lt;= 0 — nothing to seed for an area
+        /// with no authored boss.</summary>
+        public static void SeedAuthoredCount(int areaIndex, int count)
+        {
+            if (count <= 0) return;
+            AuthoredCountByArea[areaIndex] = count;
+        }
+
+        /// <summary>This area's seeded authored boss count, or 0 if <see cref="SeedAuthoredCount"/> was
+        /// never called for it — see <see cref="AuthoredCountByArea"/>'s own doc comment for what 0
+        /// means to a caller.</summary>
+        private static int AuthoredCountIn(int areaIndex) =>
+            AuthoredCountByArea.TryGetValue(areaIndex, out int c) ? c : 0;
 
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
         /// later ones (a 2+ boss fight) just add to the combined total — engaging a second time would
@@ -168,7 +197,18 @@ namespace MaxWorlds.Bosses
 
             HudSignals.EmitBossKilled(diedAt);
 
-            if (!AnyLivingIn(areaIndex))
+            // MV-1193: "area defeated" means every AUTHORED boss here has died, not "no REGISTERED
+            // boss is alive" -- AnyLivingIn only ever sees a boss that has already Register-ed, so it
+            // read World 1 a30's two Big Bermudas as "empty" the instant the first died while the
+            // second sat Dormant, never approached, never registered. Falls back to the old
+            // AnyLivingIn-only answer when this area's authored count was never seeded (0) -- a bare
+            // EditMode fixture, or any area this ticket doesn't change the behaviour of.
+            int authoredTotal = AuthoredCountIn(areaIndex);
+            bool allAuthoredBossesDead = authoredTotal > 0
+                ? DeadCountByArea[areaIndex] >= authoredTotal
+                : !AnyLivingIn(areaIndex);
+
+            if (allAuthoredBossesDead)
             {
                 LastDefeatedAreaIndex = areaIndex;
                 DefeatedAreas.Add(areaIndex);
@@ -268,6 +308,14 @@ namespace MaxWorlds.Bosses
 
             foreach (int areaIndex in areaIndices)
             {
+                // MV-1193: a checkpoint saved under the old "no REGISTERED boss alive" rule can carry
+                // an area wrongly marked defeated while a 2nd/3rd AUTHORED boss there was never
+                // actually killed -- it was sitting Dormant, never Register-ed, the moment the save was
+                // captured. Trust a saved defeat only for a single-boss area (or one this scene never
+                // seeded an authored count for, same pre-MV-1193 fallback as everywhere else in this
+                // class); a multi-boss area's bosses rebuild Dormant instead and are fought for real.
+                if (AuthoredCountIn(areaIndex) > 1) continue;
+
                 DefeatedAreas.Add(areaIndex);
 
                 var toRemove = new List<MonoBehaviour>();
