@@ -116,6 +116,18 @@ namespace MaxWorlds.VFX
         /// <summary>MV-1129: guards <see cref="ResumeFromCheckpoint"/> to exactly once per gate.</summary>
         private bool _resumedFromCheckpoint;
 
+        /// <summary>MV-1179: guards <see cref="OnEnemyKilled"/> against its own
+        /// <see cref="DestroyRestAndOpenDoor"/> call re-entering itself — every robot that call kills
+        /// fires <see cref="HudSignals.EnemyKilled"/> too, before <see cref="Open"/> (called last) has
+        /// had a chance to set <see cref="IsOpen"/>.</summary>
+        private bool _bosslessFinaleResolving;
+
+        /// <summary>MV-1179 (Lee, 14 Oct, option A): the City's bossless finale area (a1) destroys
+        /// whatever is left and opens its exit once this few of its own robots remain standing — the
+        /// same threshold Lee approved for the retired boss-world clean-up phase, now the live trigger
+        /// instead of a 45s timer's floor.</summary>
+        private const int BosslessFinaleClearThreshold = 3;
+
         // ---------------------------------------------------------------- MV-1079: Beat A, WEAPON TAKEN
 
         private const float WeaponBeatDuration = 2.5f;
@@ -216,6 +228,7 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
+            HudSignals.EnemyKilled += OnEnemyKilled;
         }
 
         private void OnDisable()
@@ -223,6 +236,7 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
+            HudSignals.EnemyKilled -= OnEnemyKilled;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
@@ -272,7 +286,24 @@ namespace MaxWorlds.VFX
             if (_cfg?.dials == null) return;
 
             int finalAreaIndex = _cfg.dials.areaCount;
-            if (finalAreaIndex <= 0 || !BossCensus.IsAreaDefeated(finalAreaIndex)) return;
+            if (finalAreaIndex <= 0) return;
+
+            // MV-1179: the City's a1 has no boss, so BossCensus.IsAreaDefeated(finalAreaIndex) can
+            // never read true for it -- the guard below would otherwise strand every bossless RESUME.
+            // Its own door-state flags (already equivalent to IsOpen, see WeaponMomentResolved's own
+            // doc) are the only signal this shape has: nothing to resume if neither was ever set, and
+            // DestroyRestAndOpenDoor re-applies the shared step (destroy what's left, re-open the door)
+            // when either was.
+            WorldArea finalArea = _cfg.AreaByIndex(finalAreaIndex);
+            if (finalArea != null && finalArea.IsExitRole && !finalArea.IsBossRole)
+            {
+                if (!weaponGranted && !exitOpen) return;
+                _resumedFromCheckpoint = true;
+                DestroyRestAndOpenDoor(finalAreaIndex);
+                return;
+            }
+
+            if (!BossCensus.IsAreaDefeated(finalAreaIndex)) return;
 
             _resumedFromCheckpoint = true;
             _finalBossDefeated = true;
@@ -322,6 +353,40 @@ namespace MaxWorlds.VFX
 
             DestroyRestAndOpenDoor(finalAreaIndex);
             BeginWeaponBeat();
+        }
+
+        /// <summary>MV-1179: the bossless finale's own trigger — the City's Market Street (a1) has no
+        /// boss to die and drop a Core, so there is no <see cref="OnWeaponCoreCollected"/> to hang the
+        /// finale off. Hooked to every robot death field-wide (<see cref="HudSignals.EnemyKilled"/>),
+        /// since nothing else already reports "this area's own population just dropped" — the area's
+        /// authored roster is a few dozen robots at most, so re-checking <see cref="AreaAccumulationDirector.ActiveCountForArea"/>
+        /// on each one is cheap. A no-op for any boss-role finale (that path is <see cref="OnWeaponCoreCollected"/>'s)
+        /// and for every other robot death in the game. Lee, 14 Oct (option A): once
+        /// <see cref="BosslessFinaleClearThreshold"/> or fewer of the final area's robots are left
+        /// standing, the rest are destroyed and the door opens in the same call — no clean-up
+        /// count/ring/arrow/timer, no camera take-over, and (unlike <see cref="OnWeaponCoreCollected"/>)
+        /// no Core or weapon morph: <see cref="BeginWeaponBeat"/> is never called from here.</summary>
+        private void OnEnemyKilled(Vector3 _)
+        {
+            if (IsOpen || _bosslessFinaleResolving) return;
+
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
+            if (cfg?.dials == null) return;
+
+            int finalAreaIndex = cfg.dials.areaCount;
+            WorldArea area = cfg.AreaByIndex(finalAreaIndex);
+            if (area == null || area.IsBossRole || !area.IsExitRole) return;
+
+            if (areaDirector.ActiveCountForArea(finalAreaIndex) > BosslessFinaleClearThreshold) return;
+
+            // Guards against DestroyRestAndOpenDoor's own kill loop re-entering this handler for each
+            // robot it destroys below -- Open() (called last, inside that method) is what finally sets
+            // IsOpen, so without this a 4th, 3rd, 2nd... robot death would each re-enter and re-run the
+            // whole step on top of itself.
+            _bosslessFinaleResolving = true;
+            DestroyRestAndOpenDoor(finalAreaIndex);
+            _bosslessFinaleResolving = false;
         }
 
         /// <summary>MV-1183's shared end-of-finale step: every robot still alive in
