@@ -181,6 +181,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1201CityRelay() => RunFromMenu(CapturePresets.All["mv1201cityrelay"]);
         public static void CaptureMv1201CityRelay() => Run(CapturePresets.All["mv1201cityrelay"]);
 
+        [MenuItem("MaxWorlds/Capture/City Ground Texture (MV-1205)")]
+        public static void MenuMv1205CityGround() => RunFromMenu(CapturePresets.All["mv1205cityground"]);
+        public static void CaptureMv1205CityGround() => Run(CapturePresets.All["mv1205cityground"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

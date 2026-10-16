@@ -24,6 +24,10 @@ namespace MaxWorlds.Rendering
         Dirt,
         Metal,
         Foliage,
+
+        // --- MV-1205: the City's own road/pavement surfaces, textured instead of grass-shaded ---
+        Asphalt,
+        Pavement,
     }
 
     /// <summary>

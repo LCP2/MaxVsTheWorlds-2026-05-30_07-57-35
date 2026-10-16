@@ -36,9 +36,18 @@ namespace MaxWorlds.Rendering
     {
         // ---------------------------------------------------------------- palette
 
-        public static readonly Color Asphalt = Rgb(52, 56, 72);
-        public static readonly Color Pavement = Rgb(112, 118, 134);
-        public static readonly Color Kerb = Rgb(176, 182, 196);
+        // MV-1205: lifted from Rgb(52, 56, 72) (mean ~0.235 linear) — Lee's TestFlight shot (17 Oct)
+        // read the road as "nondescript... I don't feel like I'm standing on anything" at that value,
+        // and the ticket's own number is "about 0.32 linear".
+        public static readonly Color Asphalt = new Color(0.28f, 0.32f, 0.36f);
+
+        // MV-1205: "lighter than the road, about 0.45 linear" (was Rgb(112, 118, 134), mean ~0.476 —
+        // already close; nudged to land exactly on the ticket's number on the same blue-grey hue).
+        public static readonly Color Pavement = new Color(0.41f, 0.44f, 0.50f);
+
+        // MV-1205: "15% lighter than the pavement" — derived, not authored, so the relationship the
+        // ticket asks for can never drift out of step with Pavement.
+        public static readonly Color Kerb = Lighten(Pavement, 1.15f);
         public static readonly Color Line = Rgb(232, 234, 240);
         public static readonly Color Joint = Rgb(92, 98, 114);
         public static readonly Color WindowWarm = Rgb(255, 214, 150);
@@ -191,17 +200,15 @@ namespace MaxWorlds.Rendering
 
         // ---------------------------------------------------------------- floor paint
 
-        /// <summary>A painted slab plus joint lines every <paramref name="jointPitch"/> m on both axes.</summary>
-        public static GameObject BuildPavement(Transform parent, Rect area, float jointPitch = 2f)
+        /// <summary>MV-1205: a single slab wearing the Pavement surface kind's own baked texture —
+        /// 1.0 x 0.6 m running-bond slabs with 3 cm darker joints (see
+        /// <see cref="StylizedTextures.PavingSlabHeight"/>) — replacing the old hand-painted joint
+        /// lines every 2 m, which drew a coarser, non-running-bond grid the texture now owns.</summary>
+        public static GameObject BuildPavement(Transform parent, Rect area)
         {
             Transform root = NewRoot(parent, "Pavement");
             StormdrainKit.Box(root, "Slab", new Vector3(area.center.x, 0.006f, area.center.y),
-                new Vector3(area.width, 0.012f, area.height), Pavement);
-
-            for (float x = area.xMin + jointPitch; x < area.xMax - 0.001f; x += jointPitch)
-                SegmentLine(root, $"Joint V{x:F2}", new Vector2(x, area.yMin), new Vector2(x, area.yMax), 0.05f, 0.002f, 0.013f, Joint);
-            for (float z = area.yMin + jointPitch; z < area.yMax - 0.001f; z += jointPitch)
-                SegmentLine(root, $"Joint H{z:F2}", new Vector2(area.xMin, z), new Vector2(area.xMax, z), 0.05f, 0.002f, 0.013f, Joint);
+                new Vector3(area.width, 0.012f, area.height), Pavement, SurfaceKind.Pavement);
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;

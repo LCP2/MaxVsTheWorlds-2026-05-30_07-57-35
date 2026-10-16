@@ -50,12 +50,38 @@ namespace MaxWorlds.Arena
             root.SetParent(host, false);
             root.gameObject.AddComponent<KeepsOwnMaterial>();
 
+            DressGround(host);
+
             WorldArea a1 = cfg.Area("a1");
             if (a1 != null) DressSurfaces(root, a1);
 
             DressWalls(root, host, map, cfg);
             DressDoorFrames(root, host);
             DressCover(root, cover);
+        }
+
+        // ---------------------------------------------------------------- (0) ground
+
+        /// <summary>MV-1205: re-skins every City floor renderer from the generic per-world sweep's
+        /// grass-shaded Ground material (<see cref="WorldMaterials.Apply"/>, already run by the time
+        /// <see cref="Dress"/> is called — see <see cref="BackyardPath.ApplyWorldMaterials"/>) onto
+        /// the City's own baked asphalt texture. Every City area's floor gets this, not just a1's —
+        /// unlike <see cref="DressSurfaces"/>'s authored pavement/kerb paint, which only a1 carries
+        /// surfaces data for. Same "runs after the sweep, overrides by KindOf, marks dressed" shape
+        /// as <see cref="ReefKit.DressHull"/>'s own floor override.</summary>
+        private static void DressGround(Transform host)
+        {
+            Material asphalt = MaterialLibrary.Tinted(SurfaceKind.Asphalt, CityKit.Asphalt);
+            if (asphalt == null) return;
+
+            foreach (MeshRenderer r in host.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (!WorldMaterials.IsWorldSurface(r)) continue;
+                if (WorldMaterials.KindOf(r) != SurfaceKind.Ground) continue;
+
+                r.sharedMaterial = asphalt;
+                if (r.GetComponent<KeepsOwnMaterial>() == null) r.gameObject.AddComponent<KeepsOwnMaterial>();
+            }
         }
 
         // ---------------------------------------------------------------- (a) surfaces

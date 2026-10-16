@@ -403,6 +403,19 @@ namespace MaxWorlds.Rendering
                 case SurfaceKind.Foliage:
                     return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f, wind: 0.26f);
 
+                // MV-1205: the City road. Tile repeats every 4 m (DetailScale = 1/4 m), matte — wet
+                // asphalt would catch a highlight that reads as a puddle, not a road — and 10%
+                // contrast per the ticket's own number.
+                case SurfaceKind.Asphalt:
+                    return new SurfaceProfile(0.25f, 0.7f, 0.08f, 0.12f);
+
+                // MV-1205: the City's pavement. 1.0 x 0.6 m slabs at a 6 m tile (DetailScale = 1/6 m)
+                // — see StylizedTextures.PavingSlabHeight for the cell maths — a little more sheen
+                // than the road (worn concrete, not fresh tar) but still well short of Stone's wet
+                // look.
+                case SurfaceKind.Pavement:
+                    return new SurfaceProfile(1f / 6f, 1.0f, 0.12f, 0.12f);
+
                 default:
                     return new SurfaceProfile(1.0f, 0.5f, 0.06f, 0.10f);
             }
