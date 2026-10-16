@@ -442,7 +442,10 @@ namespace MaxWorlds.UI
             // subscribed yet to hear it. Catch up on whatever was last emitted rather than defaulting to
             // World 1's wording just because this object subscribed too late to hear it live.
             if (HudSignals.LastWorldFactoryWording.HasValue)
-                OnWorldFactoryWording(HudSignals.LastWorldFactoryWording.Value);
+            {
+                (bool isReplicatorWorld, string noun) = HudSignals.LastWorldFactoryWording.Value;
+                OnWorldFactoryWording(isReplicatorWorld, noun);
+            }
             if (HudSignals.LastPressureWording.HasValue)
             {
                 (string noun, string caption) = HudSignals.LastPressureWording.Value;
@@ -670,7 +673,7 @@ namespace MaxWorlds.UI
         private void OnCheckpointRestored() =>
             _model.RestoreFactoriesDestroyed(FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed);
 
-        private void OnWorldFactoryWording(bool isReplicatorWorld) => _model.Arena.SetReplicatorWorld(isReplicatorWorld);
+        private void OnWorldFactoryWording(bool isReplicatorWorld, string noun) => _model.Arena.SetReplicatorWorld(isReplicatorWorld, noun);
 
         /// <summary>MV-741: this world's Invasion Dial wording arrived (or is being caught up on from
         /// <see cref="HudSignals.LastPressureWording"/> — see <see cref="OnEnable"/>). The caption applies
@@ -2311,7 +2314,7 @@ namespace MaxWorlds.UI
         /// (set by <c>WorldFinaleGate</c> during a finale's clean-up beat) takes over this line
         /// entirely while it's set.</summary>
         public static string ArenaLabelText(ArenaProgress a) =>
-            a.OverrideText ?? $"{(a.IsReplicatorWorld ? "REPLICATORS" : "FACTORIES")} {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+            a.OverrideText ?? $"{(a.IsReplicatorWorld ? a.ReplicatorNoun : "FACTORIES")} {a.FactoriesDestroyed}/{a.FactoriesTotal}";
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
         /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is

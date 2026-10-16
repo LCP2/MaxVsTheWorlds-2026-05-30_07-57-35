@@ -1,6 +1,7 @@
 // MV-693 EXCEPTION: hand-authored, same reason as RobotBodies' own BuildBolter/BuildLurker/
 // BuildTurret/BuildSludger — robot-gen-mesh.html is an interactive browser tool this worker
 // cannot drive headlessly. Flagged for Lee to fold into the design source at his convenience.
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
@@ -57,14 +58,19 @@ namespace MaxWorlds.VFX
             /// just suddenly disappearing"). Built disabled, two positions, world space; <see cref="Replicator"/>'s
             /// own TickConsumption aims and toggles it every tick a pull is live.</summary>
             public readonly LineRenderer PullBeam;
+            /// <summary>MV-1201: every World 2 hazard-stripe piece (the roofline band and the base
+            /// banding) — <see cref="Replicator.ApplyCityRelaySkin"/> hides these before laying its own
+            /// Teleport Relay dressing over the top, the same "disable the old renderer, build fresh
+            /// over it" idiom <c>AreaGate.ApplyCitySkin</c> already uses. Never touched for World 2.</summary>
+            public readonly Transform[] HazardDressing;
 
             public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
                                    Transform fan, Transform outputLip, MeshRenderer statusRing,
-                                   MeshRenderer replicationBeacon, LineRenderer pullBeam)
+                                   MeshRenderer replicationBeacon, LineRenderer pullBeam, Transform[] hazardDressing)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
                 OutputLip = outputLip; StatusRing = statusRing;
-                ReplicationBeacon = replicationBeacon; PullBeam = pullBeam;
+                ReplicationBeacon = replicationBeacon; PullBeam = pullBeam; HazardDressing = hazardDressing;
             }
         }
 
@@ -92,12 +98,13 @@ namespace MaxWorlds.VFX
             // same hard-colour-block idiom Bolter/Rusher's own two-tone chassis reads use rather
             // than a fine diagonal tape texture that would not survive being ~20 px tall at
             // gameplay distance.
+            var hazardDressing = new List<Transform>(8);
             float bandH = size.y * 0.05f;
             float bandY = hh - size.y * 0.09f;
-            Add(root, CharacterMeshes.Prism(4, diag * 1.012f, diag * 1.012f, bandH, 0.25f), s_hazard,
-                new Vector3(0f, bandY, 0f), Quaternion.identity, new Vector3(hw, 1f, hd), "HazardBand");
-            Add(root, CharacterMeshes.Prism(4, diag * 1.02f, diag * 1.02f, bandH, 0.25f), s_dark,
-                new Vector3(0f, bandY - bandH, 0f), Quaternion.identity, new Vector3(hw, 1f, hd), "HazardBandDark");
+            hazardDressing.Add(Add(root, CharacterMeshes.Prism(4, diag * 1.012f, diag * 1.012f, bandH, 0.25f), s_hazard,
+                new Vector3(0f, bandY, 0f), Quaternion.identity, new Vector3(hw, 1f, hd), "HazardBand"));
+            hazardDressing.Add(Add(root, CharacterMeshes.Prism(4, diag * 1.02f, diag * 1.02f, bandH, 0.25f), s_dark,
+                new Vector3(0f, bandY - bandH, 0f), Quaternion.identity, new Vector3(hw, 1f, hd), "HazardBandDark"));
 
             // The rusted hatch, on the lure face (-Z — the same face MV-706's own LED sat on).
             // MV-693's own "irises open" is cut to the Reads list's glow tell (HatchGlow below) —
@@ -163,10 +170,10 @@ namespace MaxWorlds.VFX
             float baseBandHeight = Mathf.Max(0.42f, size.y * 0.14f);
             float baseBandY = -hh + baseBandHeight * 0.5f + 0.01f;
             const float baseBandDepth = 0.02f;
-            StormdrainKit.BuildHazardBanding(root, new Vector3(hw, baseBandY, 0f),
-                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
-            StormdrainKit.BuildHazardBanding(root, new Vector3(-hw, baseBandY, 0f),
-                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth);
+            hazardDressing.Add(StormdrainKit.BuildHazardBanding(root, new Vector3(hw, baseBandY, 0f),
+                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth).transform);
+            hazardDressing.Add(StormdrainKit.BuildHazardBanding(root, new Vector3(-hw, baseBandY, 0f),
+                size.z * 0.92f, baseBandHeight, alongX: false, baseBandDepth).transform);
 
             // MV-822: the hatch/output faces' own bands used to run the plate's full width, straight
             // through the footprint RampIn/RampOut occupy (+-hatchHalfW) — the ramp's own sloped deck
@@ -184,10 +191,10 @@ namespace MaxWorlds.VFX
                 float flankCentreX = hatchHalfW + rampClearance + flankBandLength * 0.5f;
                 foreach (float faceZ in new[] { hd, -hd })
                 {
-                    StormdrainKit.BuildHazardBanding(root, new Vector3(flankCentreX, baseBandY, faceZ),
-                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth);
-                    StormdrainKit.BuildHazardBanding(root, new Vector3(-flankCentreX, baseBandY, faceZ),
-                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth);
+                    hazardDressing.Add(StormdrainKit.BuildHazardBanding(root, new Vector3(flankCentreX, baseBandY, faceZ),
+                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth).transform);
+                    hazardDressing.Add(StormdrainKit.BuildHazardBanding(root, new Vector3(-flankCentreX, baseBandY, faceZ),
+                        flankBandLength, baseBandHeight, alongX: true, baseBandDepth).transform);
                 }
             }
 
@@ -226,7 +233,77 @@ namespace MaxWorlds.VFX
             pullBeamGo.SetActive(false);
 
             return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
-                outputLipGo.transform, statusRing, replicationBeacon, pullBeam);
+                outputLipGo.transform, statusRing, replicationBeacon, pullBeam, hazardDressing.ToArray());
+        }
+
+        // ---------------------------------------------------------------- MV-1201: City Teleport Relay
+
+        private static Material s_citySteel;
+
+        /// <summary>MV-1201: the relay's own reserved red (robots hold it — see
+        /// <see cref="MaxWorlds.Rendering.CityKit.IsReservedRelayColour"/>'s own red/amber/cyan bands).</summary>
+        private static readonly Color RelayGlowRed = new Color(1.00f, 0.08f, 0.05f);
+
+        /// <summary>MV-1201: the relay's own reserved gold — the mast's ring and eye lamp.</summary>
+        private static readonly Color RelayGold = new Color(1.00f, 0.78f, 0.15f);
+
+        /// <summary>MV-1201: Lee's own authored figure — "a 2.8 m mast on top".</summary>
+        private const float RelayMastHeight = 2.8f;
+        private const float RelayMastRadius = 0.07f;
+
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+        /// <summary>Builds the City's Teleport Relay topside (MV-1201) onto an otherwise-empty
+        /// <paramref name="root"/> — <see cref="Replicator.ApplyCityRelaySkin"/>'s own dressing root,
+        /// laid over a box that already carries <see cref="BuildReplicator"/>'s default World 2 look
+        /// with its hazard striping hidden. A red glow ring at the base ("because the robots hold it",
+        /// Lee 16 Oct) and a mast — named "RelayMast", read back by <c>Replicator</c>'s own EditMode
+        /// test — carrying one gold ring and one gold eye lamp. <paramref name="size"/> is the same
+        /// box footprint <see cref="BuildReplicator"/> took.</summary>
+        public static void BuildTeleportRelayDressing(Transform root, Vector3 size)
+        {
+            EnsureCityMaterials();
+
+            float hw = size.x * 0.5f, hh = size.y * 0.5f, hd = size.z * 0.5f;
+            float baseRadius = Mathf.Min(hw, hd);
+
+            MeshRenderer baseGlow = CharacterPart.AddLens(root, CharacterMeshes.Ring(baseRadius * 0.92f, baseRadius * 1.08f, 0.04f),
+                new Vector3(0f, -hh + 0.02f, 0f), Quaternion.identity, Vector3.one);
+            baseGlow.gameObject.name = "RelayGlow";
+            TintLens(baseGlow, RelayGlowRed);
+
+            // The mast — rooted at the hull's own top, so "2.8 m on top" reads off the real box height.
+            var mast = new GameObject("RelayMast");
+            mast.transform.SetParent(root, worldPositionStays: false);
+            mast.transform.localPosition = new Vector3(0f, hh, 0f);
+
+            Add(mast.transform, CharacterMeshes.Prism(8, RelayMastRadius, RelayMastRadius, RelayMastHeight, 0.015f),
+                s_citySteel, new Vector3(0f, RelayMastHeight * 0.5f, 0f), Quaternion.identity, Vector3.one, "MastPole");
+
+            MeshRenderer ring = CharacterPart.AddLens(mast.transform,
+                CharacterMeshes.Ring(RelayMastRadius * 1.6f, RelayMastRadius * 2.4f, 0.05f),
+                new Vector3(0f, RelayMastHeight * 0.62f, 0f), Quaternion.identity, Vector3.one);
+            ring.gameObject.name = "RelayRing";
+            TintLens(ring, RelayGold);
+
+            MeshRenderer eye = CharacterPart.AddLens(mast.transform, CharacterMeshes.Sphere(14),
+                new Vector3(0f, RelayMastHeight, 0f), Quaternion.identity, Vector3.one * 0.28f);
+            eye.gameObject.name = "RelayEye";
+            TintLens(eye, RelayGold);
+        }
+
+        private static void TintLens(MeshRenderer r, Color c)
+        {
+            var mpb = new MaterialPropertyBlock();
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor(BaseColorId, c);
+            r.SetPropertyBlock(mpb);
+        }
+
+        private static void EnsureCityMaterials()
+        {
+            if (s_citySteel != null) return;
+            s_citySteel = NewMaterial("Factory_CitySteel", new Color(0.58f, 0.60f, 0.64f));
         }
 
         /// <summary>MV-808: one sloped deck plus a handful of cross-slats between <paramref name="footLocal"/>

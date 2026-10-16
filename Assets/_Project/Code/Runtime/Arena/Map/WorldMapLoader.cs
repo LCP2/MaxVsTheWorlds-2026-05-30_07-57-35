@@ -568,6 +568,7 @@ namespace MaxWorlds.Arena
                 pressureNoun = cfg.pressureNoun ?? "",
                 pressureCaption = cfg.pressureCaption ?? "",
                 dressingKit = cfg.dressingKit ?? "",
+                replicatorNoun = cfg.replicatorNoun ?? "",
             };
 
             return MapValidation.Validate(map, out reason);

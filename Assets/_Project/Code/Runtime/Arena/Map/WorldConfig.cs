@@ -904,6 +904,12 @@ namespace MaxWorlds.Arena
         /// default caption, same idiom as <see cref="pressureNoun"/>.</summary>
         public string pressureCaption = "";
 
+        /// <summary>MV-1201: the word the bottom banner uses in place of "REPLICATORS" for a world
+        /// whose sources are Replicators (the City's own "RELAYS" — "they're not replicators in this
+        /// world", Lee 16 Oct). Empty (every world but the City today) means "REPLICATORS", same "empty
+        /// means not authored" idiom as <see cref="pressureNoun"/>.</summary>
+        public string replicatorNoun = "";
+
         /// <summary>Height, in metres, of the arena's walls/fences (MV-277). 0 (the JSON default when
         /// the field is omitted) means "not authored" — <see cref="WorldMapLoader.TryLoad"/> falls back
         /// to <see cref="MapData.DefaultWallHeight"/> rather than building unwalkable zero-height walls.</summary>

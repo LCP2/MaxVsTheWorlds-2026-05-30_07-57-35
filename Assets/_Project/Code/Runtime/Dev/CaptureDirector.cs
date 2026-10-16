@@ -408,6 +408,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1025RocketFireEvent());
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
+            Add(BuildMv1201CityRelay());
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
@@ -3472,6 +3473,70 @@ namespace MaxWorlds.Dev
                     if (replicatorGo != null) Destroy(replicatorGo);
                     if (rusherGo != null) Destroy(rusherGo);
                 },
+            };
+        }
+
+        // ---- MV1201CityRelay (MV-1201) ---------------------------------------------------------
+
+        /// <summary>AC2's own "one capture of a City relay next to Max" — builds a real Replicator,
+        /// re-skins it via the actual <see cref="Replicator.ApplyCityRelaySkin"/> production entry point
+        /// (no scripted VFX call), and frames it beside the real Player-tagged Max: proof of the actual
+        /// result, not a description of one.</summary>
+        private static CapturePreset BuildMv1201CityRelay()
+        {
+            const float pitch = 55f;
+            const float distance = 7f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject replicatorGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                Vector3 focus = maxGo.transform.position + maxGo.transform.right * 3.5f;
+
+                replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                replicatorGo.name = "MV1201CaptureCityRelay";
+                replicatorGo.transform.position = focus;
+                replicatorGo.transform.localScale = new Vector3(2f, 1.5f, 2f); // the authored 2x1.5x2 footprint
+                var replicator = replicatorGo.AddComponent<Replicator>();
+                replicator.Configure(1);
+                replicator.ApplyCityRelaySkin();
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body (mast/glow) settle
+
+                Vector3 camFocus = Vector3.Lerp(maxGo.transform.position, focus, 0.5f) + Vector3.up * 1.2f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1201cityrelay",
+                LogTag = "[MV1201Capture]",
+                Flag = "-mv1201shot",
+                ArmFile = "Temp/mv1201.arm",
+                HeadlessMarker = "Temp/mv1201.headless",
+                DoneFileName = "_mv1201_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV693Replicator's own presets use: on
+                    // a fresh profile HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1201-city-relay", Setup) },
+                Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
             };
         }
 
