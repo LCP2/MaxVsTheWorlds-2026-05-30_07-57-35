@@ -54,8 +54,20 @@ namespace MaxWorlds.Intro
         /// <summary>How close Max must get to the far door before it slides open (MV-1123 §5).</summary>
         private const float FarDoorOpenDistance = 6f;
 
-        /// <summary>How far past the far door Max must walk before the screen starts fading (MV-1123 §6).</summary>
-        private const float FarDoorCrossClearance = 2f;
+        /// <summary>MV-1199: the fade now starts just BEFORE the far door, not past it — Max was being
+        /// asked to walk <see cref="FarDoorOpenDistance"/>'s old 2 m clearance onto a corridor floor
+        /// that stops dead at the door (<see cref="BuildExitCorridor"/>'s segment C ends exactly at
+        /// <c>CorridorLength</c>), so he fell, got fall-recovered back, and looped forever (MV-1178's
+        /// climb corridors hit this first, but every corridor shares the same floor-ends-at-the-door
+        /// shape). Starting the fade this far SHORT of the door line means Max never has to leave the
+        /// corridor's own floor to finish the walk.</summary>
+        private const float FarDoorFadeStartMargin = 0.5f;
+
+        /// <summary>MV-1199 belt-and-braces: segment C's own floor extends this far past the far door —
+        /// at the same height/width/material as the rest of the corridor — so even a position past where
+        /// the fade now starts still has real ground under it, rather than the sheer drop
+        /// <see cref="FarDoorFadeStartMargin"/> alone would still leave just past the door line.</summary>
+        private const float FarDoorFloorLanding = 3f;
 
         /// <summary>How far inside the arrival area's own wall Max must walk before the arrival door
         /// re-closes behind him, and before this sequence hands control back for good (MV-1123 §8).</summary>
@@ -341,7 +353,7 @@ namespace MaxWorlds.Intro
                 floorB, IntroBuild.Lit($"{keyPrefix}_B_wall", Color.Lerp(from.ColorFor(SurfaceKind.Wall), to.ColorFor(SurfaceKind.Wall), 0.5f)));
 
             _segmentCRoot = BuildSegment(root, "C", wallHeight, wallThickness, _entry.SegmentBEnd, _entry.CorridorLength,
-                floorC, IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)));
+                floorC, IntroBuild.Lit($"{keyPrefix}_C_wall", to.ColorFor(SurfaceKind.Wall)), FarDoorFloorLanding);
 
             // MV-1123 §2: solid banks, top level with the wall tops, replacing the old floor-level
             // ground apron (MV-1076) — the camera no longer looks over the walls into a void OR a flat
@@ -780,15 +792,19 @@ namespace MaxWorlds.Intro
 
         /// <summary>Floor + both side walls between <paramref name="alongMin"/> and
         /// <paramref name="alongMax"/> (metres outward from <see cref="_doorMouth"/>), parented under
-        /// their own root so a dressing ticket can attach art to exactly this stretch.</summary>
+        /// their own root so a dressing ticket can attach art to exactly this stretch. MV-1199:
+        /// <paramref name="floorExtraPastEnd"/> extends the FLOOR ONLY (never the walls — the far door
+        /// caps the walkway's width right at <paramref name="alongMax"/>) that much further, same height
+        /// and material as the rest of this floor box, giving the segment's own far end real ground past
+        /// wherever a door sits flush with it.</summary>
         private Transform BuildSegment(Transform parent, string label, float wallHeight, float wallThickness,
-            float alongMin, float alongMax, Material floorMat, Material wallMat)
+            float alongMin, float alongMax, Material floorMat, Material wallMat, float floorExtraPastEnd = 0f)
         {
             Transform segRoot = new GameObject($"Corridor Segment {label}").transform;
             segRoot.SetParent(parent, worldPositionStays: false);
 
             float halfWidth = WorldTransitionEntry.CorridorWidth * 0.5f;
-            BuildBox(segRoot, $"Segment {label} Floor", alongMin, alongMax, 0f, WorldTransitionEntry.CorridorWidth, 0.1f, -0.05f, floorMat);
+            BuildBox(segRoot, $"Segment {label} Floor", alongMin, alongMax + floorExtraPastEnd, 0f, WorldTransitionEntry.CorridorWidth, 0.1f, -0.05f, floorMat);
             BuildBox(segRoot, $"Segment {label} Wall 1", alongMin, alongMax, halfWidth + wallThickness * 0.5f, wallThickness, wallHeight, wallHeight * 0.5f, wallMat);
             BuildBox(segRoot, $"Segment {label} Wall 2", alongMin, alongMax, -(halfWidth + wallThickness * 0.5f), wallThickness, wallHeight, wallHeight * 0.5f, wallMat);
 
@@ -1072,8 +1088,9 @@ namespace MaxWorlds.Intro
 
         /// <summary>MV-1123 §4-6: Max walks the whole corridor himself. This just watches his real
         /// position: lighting/fog follow him (unchanged from MV-964 §4.4), the far door slides open once
-        /// he's within <see cref="FarDoorOpenDistance"/> of it (§5), and the fade starts once he's walked
-        /// <see cref="FarDoorCrossClearance"/> m past it (§6).</summary>
+        /// he's within <see cref="FarDoorOpenDistance"/> of it (§5), and the fade starts once he's within
+        /// <see cref="FarDoorFadeStartMargin"/> m of it (§6, MV-1199: moved from 2 m past the door to just
+        /// short of it — Max never needs to leave the corridor's own floor).</summary>
         private void TickCorridorWalk(float dt)
         {
             float alongFromExit = AlongDistance(_playerT.position, _doorMouth, _wall);
@@ -1104,7 +1121,7 @@ namespace MaxWorlds.Intro
                 SetDoorLamps(DoorLampGreen);
             }
 
-            if (alongFromExit >= _entry.CorridorLength + FarDoorCrossClearance)
+            if (alongFromExit >= _entry.CorridorLength - FarDoorFadeStartMargin)
             {
                 _phase = Phase.FadeOut;
                 _phaseElapsed = 0f;
