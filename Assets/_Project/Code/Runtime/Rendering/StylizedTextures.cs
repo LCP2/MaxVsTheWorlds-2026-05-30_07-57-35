@@ -562,6 +562,70 @@ namespace MaxWorlds.Rendering
             });
         }
 
+        /// <summary>MV-1205: the City road's asphalt — fine grain plus a scatter of faint repair
+        /// patches 1-3 m across within the tile (the tile itself is ~4 m, per
+        /// <see cref="MaterialLibrary"/>'s own Asphalt <c>DetailScale</c>). Deliberately NOT built
+        /// the lawn's way (<see cref="GroundHeight"/>): that generator suppresses low frequencies on
+        /// purpose, because a tiled BLOTCH is what makes grass look like wallpaper. A repair patch is
+        /// the opposite case — the ticket asks for it to be SEEN, not hidden — so this keeps the
+        /// patch layer un-averaged (a single thresholded noise, not an FBM blur) to hold the contrast
+        /// a flattened sum would otherwise wash out, and that is also what pushes AC1's std-dev floor
+        /// past the grain alone.</summary>
+        private static float[] AsphaltHeight(int size)
+        {
+            return Height($"asphaltH{size}", size, (u, v) =>
+            {
+                // A single un-averaged noise layer, not FBM: averaging octaves is exactly what tames
+                // variance toward the centre, and a flattened grain is the pre-fix defect this ticket
+                // exists to undo (AC1's own std-dev floor is measuring precisely this).
+                float grain = Noise(u * 30f, v * 30f, 30, 30);
+
+                // baseFreq 3 over the kind's own ~4 m tile puts a patch cell at ~1.3 m — inside the
+                // ticket's 1-3 m range. A single un-averaged octave plus a NARROW threshold band
+                // carves distinct, mostly-binary patches rather than a soft gradient — bimodal mass
+                // at the extremes is what a bounded 0..1 range needs to carry real variance.
+                float patchRaw = Fbm(u, v, baseFreq: 3, octaves: 1);
+                float patch = Curve(0.50f, 0.62f, patchRaw);
+
+                return grain * 0.35f + patch * 0.65f;
+            });
+        }
+
+        /// <summary>MV-1205: the City's paving slabs — a running bond of 1.0 x 0.6 m slabs (6 x 10
+        /// cells across the Pavement kind's own 6 m tile, see <see cref="MaterialLibrary"/>'s
+        /// Pavement <c>DetailScale</c>), 3 cm darker joints, each slab its own tone. The row count
+        /// (10) is EVEN for the same reason <see cref="StoneHeight"/>'s own <c>Cells</c> is: the
+        /// half-slab offset alternates by row parity, and an odd row count disagrees with itself
+        /// about that parity across the tile's own wrap.</summary>
+        private static float[] PavingSlabHeight(int size)
+        {
+            const int CellsU = 6;          // 1.0 m slabs at a 6 m tile
+            const int CellsV = 10;         // 0.6 m slabs — EVEN, see summary
+            const float JointFracU = 0.03f;  // 3 cm joint / 1.0 m slab width
+            const float JointFracV = 0.05f;  // 3 cm joint / 0.6 m slab height
+
+            return Height($"pavingH{size}", size, (u, v) =>
+            {
+                int cy = Mathf.FloorToInt(v * CellsV);
+                float bond = (cy & 1) * 0.5f;          // running bond: alternate rows offset half a slab
+
+                int cx = Mathf.FloorToInt(u * CellsU + bond);
+                float slab = Hash(cx, cy, CellsU, CellsV);
+
+                float ex = Mathf.Abs(Frac(u * CellsU + bond) - 0.5f) * 2f;
+                float ey = Mathf.Abs(Frac(v * CellsV) - 0.5f) * 2f;
+                float gapU = Curve(1f - JointFracU, 1f, ex);
+                float gapV = Curve(1f - JointFracV, 1f, ey);
+                float gap = Mathf.Max(gapU, gapV);
+
+                float pit = Fbm(u, v, baseFreq: 18, octaves: 2);
+
+                float h = 0.5f + slab * 0.26f + (pit - 0.5f) * 0.10f;
+                h *= Mathf.Lerp(1f, 0.30f, gap);       // the joint reads darker than the slab it cuts
+                return h;
+            });
+        }
+
         /// <summary>The greyscale mask for a surface — a *mask*, selecting between two tones (see
         /// <see cref="Blend"/>), not an albedo. Null for kinds with no material of their own.</summary>
         public static Texture2D MaskFor(SurfaceKind kind, int size = 256)
@@ -618,6 +682,10 @@ namespace MaxWorlds.Rendering
                     return MetalHeight(size);
                 case SurfaceKind.Foliage:
                     return FoliageHeight(size);
+                case SurfaceKind.Asphalt:
+                    return AsphaltHeight(size);
+                case SurfaceKind.Pavement:
+                    return PavingSlabHeight(size);
                 default:
                     return null;            // Ground has its own; Prop keeps the plain grain
             }
