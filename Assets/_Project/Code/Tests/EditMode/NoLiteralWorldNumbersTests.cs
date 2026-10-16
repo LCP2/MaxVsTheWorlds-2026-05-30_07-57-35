@@ -61,10 +61,11 @@ namespace MaxWorlds.Tests.EditMode
              "anywhere outside this constructor (grep confirms no '.FromWorld' consumer exists)."),
 
             ("WorldCatalog.cs",
-             "Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.854166667f, corridorLength: 30f,",
+             "Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.5f, corridorLength: 30f,",
              "MV-1176: the City row's own FromWorld field, same reason as the Stormdrain row's entry above — " +
              "authored inside this same array literal, before s_rows exists for IndexOf to search, and never " +
-             "read outside this constructor."),
+             "read outside this constructor. MV-1200 moved the City's own ExitDoorPos from 0.854166667f to " +
+             "0.5f (a1 -> a30); the FromWorld literal and this entry's reason are unchanged."),
 
             ("WorldFinaleGate.cs",
              "WeaponSystemState.ApplyWeaponCoreMorph(_weaponBeatPlayedWorld + 1);",

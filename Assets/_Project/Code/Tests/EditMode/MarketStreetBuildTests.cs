@@ -32,9 +32,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(cfg, "the City's own shipped config must load for this test to mean anything");
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-            // The real exit doorway (a1's own E wall, MV-1176's "mouth (50, 20.5)") must be cut before
-            // MapRuntime.Build runs MapGeometry.Walls, exactly as BackyardPath.Awake does — otherwise
-            // the E wall builds solid and this test's own flood fill would wrongly refuse to reach it.
+            // The real exit doorway (MV-1200: now a30's own E wall, not a1's) must be cut before
+            // MapRuntime.Build runs MapGeometry.Walls, exactly as BackyardPath.Awake does. a1's own
+            // route onward to a2 is an ordinary authored gate (g1, a1's N wall) and is cut by the
+            // normal gate-building pass regardless of this call.
             int cityWorldIndex = WorldCatalog.IndexOf(WorldIds.City);
             Assert.AreNotEqual(-1, cityWorldIndex, "WorldCatalog must carry a row for WorldIds.City");
             WorldTransitions.ApplyExitDoorway(map, cfg, cityWorldIndex);
@@ -52,7 +53,7 @@ namespace MaxWorlds.Tests.EditMode
                 var failures = new List<string>();
 
                 AssertCoverFits(build, dressingRoot, failures);
-                AssertWallsRebuilt(host, dressingRoot, map, failures);
+                AssertWallsRebuilt(host, dressingRoot, map, cfg, failures);
                 AssertFloodFillReachesTheExitAndClearsMostOfA1(host, cfg, failures);
                 AssertShopfrontSpansTheRun(dressingRoot, failures);
                 AssertNoReservedRelayColour(dressingRoot, failures);
@@ -145,12 +146,35 @@ namespace MaxWorlds.Tests.EditMode
 
         // ---------------------------------------------------------------- AC2: walls
 
-        private static void AssertWallsRebuilt(Transform host, Transform dressingRoot, MapData map, List<string> failures)
+        /// <summary>MV-1200: the City grew to 30 areas, but <see cref="CityDressing.DressWalls"/> was
+        /// written for MV-1177 and still only dresses walls on a1's and the stub's own boundaries
+        /// (Market Street is this ticket's whole scope; a2-a30 are a separate pass per CLAUDE.md's
+        /// "Do not re-raise"). Scoping this check to that same footprint keeps it a real regression
+        /// guard on a1's own dressing instead of wrongly demanding art for every other area's walls.</summary>
+        private static void AssertWallsRebuilt(Transform host, Transform dressingRoot, MapData map, WorldConfig cfg, List<string> failures)
         {
+            const float margin = 1f;
+            Rect scope = cfg.Area("a1").Footprint;
+            WorldArea stub = cfg.Area("stub");
+            if (stub != null)
+            {
+                Rect s = stub.Footprint;
+                scope = Rect.MinMaxRect(
+                    Mathf.Min(scope.xMin, s.xMin), Mathf.Min(scope.yMin, s.yMin),
+                    Mathf.Max(scope.xMax, s.xMax), Mathf.Max(scope.yMax, s.yMax));
+            }
+            scope = new Rect(scope.x - margin, scope.y - margin, scope.width + margin * 2f, scope.height + margin * 2f);
+
             Renderer[] dressingRenderers = dressingRoot.GetComponentsInChildren<Renderer>(true).Where(r => r.enabled).ToArray();
 
             foreach (StructuralWall wall in host.GetComponentsInChildren<StructuralWall>(true))
             {
+                // Position, not collider.bounds: freshly-built colliders don't push their world bounds
+                // into PhysX until the next sync, so collider.bounds reads as origin-centred junk here.
+                // transform.position has no such lag and is all this filter needs.
+                if (!scope.Contains(new Vector2(wall.transform.position.x, wall.transform.position.z)))
+                    continue;
+
                 Collider collider = wall.GetComponent<Collider>();
                 if (collider == null) { failures.Add($"{wall.gameObject.name}: StructuralWall has no collider"); continue; }
 
@@ -227,7 +251,9 @@ namespace MaxWorlds.Tests.EditMode
             int IzOf(float z) => Mathf.Clamp(Mathf.FloorToInt((z - a1.ZMin) / Cell), 0, nz - 1);
 
             var startXz = new Vector2(6.6f, 3.5f);
-            var endXz = new Vector2(49.5f, 20.5f);
+            // MV-1200: a1 is no longer the exit area -- its own onward route is gate g1 on its N wall
+            // (pos 0.318182, mouth x~=20.0), not the old E-wall world-exit mouth at (49.5, 20.5).
+            var endXz = new Vector2(20.0f, 23.5f);
             int startIx = IxOf(startXz.x), startIz = IzOf(startXz.y);
 
             if (blocked[startIx, startIz])
