@@ -22,5 +22,11 @@ namespace MaxWorlds.Weapons
 
         /// <summary>RATE (<c>p_rof</c>): discs per second, 3.0 -&gt; 6.0 over 5 levels, owned from level 1.</summary>
         Rate,
+
+        /// <summary>MV-1204 CAPACITY (<c>p_cap</c>): the tank's own max right now — 140 at level 0,
+        /// rising to 280 at this board's own level-5 cap, same +25%/level formula as World 2's own
+        /// <c>p_cap</c> (<see cref="LppeTrackKind.Capacity"/>) -- a different board, so no formula is
+        /// shared, only the id's shape.</summary>
+        Capacity,
     }
 }

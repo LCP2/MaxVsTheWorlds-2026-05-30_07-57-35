@@ -113,6 +113,7 @@ namespace MaxWorlds.Weapons
             RicochetTrackKind.Ricochets => "p_ric",
             RicochetTrackKind.Aiming => "p_aim",
             RicochetTrackKind.Rate => "p_rof",
+            RicochetTrackKind.Capacity => "p_cap",
             _ => null,
         };
 

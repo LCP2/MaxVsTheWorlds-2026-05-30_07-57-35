@@ -1,5 +1,5 @@
 {
-  "$comment": "THE RIG board — CITY (MV-1195). Same schema 3 as rig_board.world3.json; SECONDARY/ENERGY/MOVE/SUPPORT/fusions/geometry/colours/icons are byte-for-byte identical to that file — only PRIMARY differs, since the City's primary is RICOCHET (RigBoardLibrary.CityResourcePath resolves to this file), not UNDERTOW. RICOCHET reads p_ric/p_aim/p_dmg/p_rof (Ricochet.cs); UNDERTOW's p_rng/p_spr and the CAPTURE trio (p_trp/p_tcap/p_trad) are dropped here rather than sold as paid-for levels wired to nothing.",
+  "$comment": "THE RIG board — CITY (MV-1195). Same schema 3 as rig_board.world3.json; SECONDARY/ENERGY/MOVE/SUPPORT/fusions/geometry/colours/icons are byte-for-byte identical to that file — only PRIMARY differs, since the City's primary is RICOCHET (RigBoardLibrary.CityResourcePath resolves to this file), not UNDERTOW. RICOCHET reads p_ric/p_aim/p_dmg/p_rof/p_cap (Ricochet.cs); UNDERTOW's p_rng/p_spr and the CAPTURE trio (p_trp/p_tcap/p_trad) are dropped here rather than sold as paid-for levels wired to nothing.",
   "schema": 3,
   "canvas": {
     "w": 1920,
@@ -228,6 +228,19 @@
       "parent": "p_dmg",
       "startLevel": 1,
       "$comment": "MV-1195: discs per second, 3.0 -> 6.0 over 5 levels, owned from level 1 (same shape as p_dmg). Shares its id with World 2's LPPE p_rof (RicochetTrackKind.Rate vs LppeTrackKind.Rate), but the two never share a board or a formula. Ricochet.DiscsPerSecond reads this track directly."
+    },
+    {
+      "id": "p_cap",
+      "category": "PRIMARY",
+      "x": 370,
+      "y": 740,
+      "icon": "flw",
+      "label": "CAPACITY",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "p_dmg",
+      "startLevel": 0,
+      "$comment": "MV-1204, Lee: 'RICOCHET needs a way to upgrade its energy capacity if it runs out.' Byte-for-byte the same maxLevel/startLevel/parent as rig_board.world2.json's own p_cap -- enlarges the tank 140 -> 280 over 5 levels (140*(1+0.25*L)), read by Ricochet.EffectiveMaxEnergy (RicochetTrackKind.Capacity), never LppeTrackKind.Capacity. Placed at tier3 (370,740) rather than tier2 (580) -- tier2 is already full between p_ric(175,580)/p_aim(345,580) and SECONDARY's s_rld(490,580) with no 100px gap free, same reasoning rig_board.world3.json's own RADIUS node (370,740) documents."
     },
     {
       "id": "s_rkt",

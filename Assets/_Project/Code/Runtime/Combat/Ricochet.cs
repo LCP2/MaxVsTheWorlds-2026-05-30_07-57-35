@@ -102,6 +102,14 @@ namespace MaxWorlds.Combat
 
         public float BankBonusPerBounce => DefaultBankBonusPerBounce;
 
+        /// <summary>MV-1204 CAPACITY (<c>p_cap</c>): the tank's own max right now — 140 at level 0,
+        /// rising to 280 at this board's own level-5 cap. Same formula and shape as
+        /// <see cref="MaxWorlds.Combat.PulseLaser.EffectiveMaxEnergy"/>, read through
+        /// <see cref="RicochetTrackKind.Capacity"/> instead of <see cref="LppeTrackKind.Capacity"/>.</summary>
+        public float EffectiveMaxEnergy => WeaponCatalog.EffectiveMaxEnergy(
+            BlasterTuning.MaxEnergy, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Capacity),
+            WeaponCatalog.DefaultLppeCapacityPerLevel);
+
         private float _tickTimer;
         private bool _lastEmitting;
         private bool _depleted;
@@ -110,7 +118,7 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
-            _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+            _tank = new EnergyPool(EffectiveMaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
 
             // MV-1012-style self-attach: this component is added unconditionally from
             // PlayerController.Awake (code-driven scenes, no scene wiring), so it must resolve its own
@@ -128,6 +136,11 @@ namespace MaxWorlds.Combat
         /// calls.</summary>
         private void Tick(float dt)
         {
+            // MV-1204: buying a CAPACITY level must raise the tank's max immediately and hand the
+            // difference straight to the current charge (EnergyPool.Retune's own "a bigger tank you
+            // have to earn back is a worse upgrade than one that just tops you up" rule), same shape
+            // PulseLaser.Tick already uses for its own p_cap.
+            _tank.Retune(EffectiveMaxEnergy);
             _tank.Tick(dt);
 
             if (aimSource != null)
