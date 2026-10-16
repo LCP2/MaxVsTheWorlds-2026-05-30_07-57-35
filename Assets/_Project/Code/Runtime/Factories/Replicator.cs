@@ -212,6 +212,16 @@ namespace MaxWorlds.Factories
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
 
+        /// <summary>MV-1201: every World 2 hazard-stripe piece <see cref="BuildBody"/> built —
+        /// <see cref="ApplyCityRelaySkin"/> hides these before laying the Teleport Relay dressing over
+        /// the top. Empty (never null) until <see cref="BuildBody"/> runs.</summary>
+        private Transform[] _hazardDressing = System.Array.Empty<Transform>();
+
+        /// <summary>MV-1201: this box's own City re-skin root, once built — null means
+        /// <see cref="ApplyCityRelaySkin"/> has not run yet, the guard that makes it idempotent (same
+        /// contract <c>AreaGate.ApplyCitySkin</c>'s own <c>_cityDressingRoot</c> keeps).</summary>
+        private GameObject _cityRelayRoot;
+
         /// <summary>MV-820: found once in <see cref="Start"/> (never by an EditMode test — see that
         /// method's own doc comment) so this box can unsubscribe from
         /// <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> in <see cref="OnDestroy"/>.</summary>
@@ -530,6 +540,28 @@ namespace MaxWorlds.Factories
             _hatchClosedLocalRotation = _hatch != null ? _hatch.localRotation : Quaternion.identity;
             _fan = parts.Fan;
             _outputLip = parts.OutputLip;
+            _hazardDressing = parts.HazardDressing ?? System.Array.Empty<Transform>();
+        }
+
+        /// <summary>MV-1201: re-skins this box into a City Teleport Relay — hides World 2's hazard
+        /// striping (Lee, 16 Oct: "they're not replicators in this world ... some other structure") and
+        /// lays a steel mast (one gold ring, one gold eye lamp) plus a red base glow over the top. Same
+        /// idempotent post-build re-skin idiom as <see cref="MowerHutch.ApplyReefSkin"/>/
+        /// <see cref="MaxWorlds.Arena.AreaGate.ApplyCitySkin"/> — called once, from
+        /// <see cref="MaxWorlds.Arena.BackyardPath"/>'s own City dressing branch, after this box has
+        /// already built its World 2 default (see <see cref="BuildBody"/>). Touches no health, collider,
+        /// hatch, ramp, queue or spawn behaviour — only dressing.</summary>
+        public void ApplyCityRelaySkin()
+        {
+            if (_cityRelayRoot != null || _bodyRoot == null) return;
+
+            for (int i = 0; i < _hazardDressing.Length; i++)
+                if (_hazardDressing[i] != null) _hazardDressing[i].gameObject.SetActive(false);
+
+            _cityRelayRoot = new GameObject("TeleportRelayDressing");
+            _cityRelayRoot.transform.SetParent(_bodyRoot, worldPositionStays: false);
+            _cityRelayRoot.AddComponent<KeepsOwnMaterial>();
+            FactoryBodies.BuildTeleportRelayDressing(_cityRelayRoot.transform, transform.lossyScale);
         }
 
         /// <summary>MV-1120: the health bar Lee's World 2 device playthrough found missing —

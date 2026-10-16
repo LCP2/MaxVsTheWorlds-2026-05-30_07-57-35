@@ -28,6 +28,11 @@ namespace MaxWorlds.UI
         /// wording), set once the map finishes building (<see cref="SetReplicatorWorld"/>).</summary>
         public bool IsReplicatorWorld { get; private set; }
 
+        /// <summary>MV-1201: the word the banner actually prints when <see cref="IsReplicatorWorld"/> is
+        /// true — "REPLICATORS" by default, the City's own "RELAYS" when authored. Meaningless while
+        /// <see cref="IsReplicatorWorld"/> is false (the banner reads "FACTORIES" instead).</summary>
+        public string ReplicatorNoun { get; private set; } = "REPLICATORS";
+
         /// <summary>MV-1078: replaces the ordinary "FACTORIES x/y"/"REPLICATORS x/y" text while a
         /// world's finale clean-up is live — null (the default) defers to the ordinary count.</summary>
         public string OverrideText { get; private set; }
@@ -94,9 +99,10 @@ namespace MaxWorlds.UI
         /// <summary>MV-706: which word the banner uses. A quiet tick (Lee's eye isn't meant to be
         /// pulled by a label swap the way a count change pulls it) — but still notifies, so the HUD
         /// text rebuilds even if it happens to land on an otherwise-unchanged count.</summary>
-        public void SetReplicatorWorld(bool isReplicatorWorld)
+        public void SetReplicatorWorld(bool isReplicatorWorld, string noun = "REPLICATORS")
         {
             IsReplicatorWorld = isReplicatorWorld;
+            ReplicatorNoun = string.IsNullOrEmpty(noun) ? "REPLICATORS" : noun;
             Changed?.Invoke(false);
         }
 

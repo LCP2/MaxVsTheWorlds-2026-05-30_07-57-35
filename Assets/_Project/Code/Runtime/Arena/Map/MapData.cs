@@ -370,6 +370,12 @@ namespace MaxWorlds.Arena
         /// not authored, fall back to the default" idiom as <see cref="pressureNoun"/>.</summary>
         public string pressureCaption = "";
 
+        /// <summary>This world's <see cref="WorldConfig.replicatorNoun"/> (MV-1201) — the word a world
+        /// whose sources are Replicators uses in place of "REPLICATORS" (the City's own "RELAYS").
+        /// Empty (unauthored, every world but the City today) means "REPLICATORS", same "empty means not
+        /// authored" idiom as <see cref="pressureNoun"/>.</summary>
+        public string replicatorNoun = "";
+
         /// <summary>The value <see cref="dressingKit"/> carries for World 1's garden set (MV-750) —
         /// fence panels, hedges, trees, flower beds and the shed clutter <see cref="BackyardDressingSet"/>
         /// builds, plus the standalone <see cref="BackyardHomeShed"/>/<see cref="BackyardBackdrop"/>

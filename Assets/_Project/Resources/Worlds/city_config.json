@@ -7,6 +7,7 @@
  "wallHeight": 3,
  "pressureNoun": "",
  "pressureCaption": "",
+ "replicatorNoun": "RELAYS",
  "dials": {
   "areaCount": 30,
   "baseThreat": 20,

@@ -266,6 +266,12 @@ namespace MaxWorlds.Arena
             else if (world.Kit == WorldKit.City)
             {
                 CityDressing.Dress(host, _map, _cfg, cover);
+                // MV-1201: the City's 58 relays are authored as `replicators` (World 2's own machinery)
+                // but must not look like World 2's sewer machine — re-skin every one already built into
+                // the scene into a Teleport Relay, same "re-skin after the default build" idiom as the
+                // Reef hydroponic-reactor pass above.
+                foreach (var replicator in FindObjectsByType<Replicator>(FindObjectsSortMode.None))
+                    replicator.ApplyCityRelaySkin();
             }
 
             // MV-759: a gated world re-skins its own doors into a round portal/sliding set instead of

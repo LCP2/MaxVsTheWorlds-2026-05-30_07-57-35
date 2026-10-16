@@ -1451,7 +1451,7 @@ namespace MaxWorlds.Arena
             // never shows this at all (HudModel's own count-driven visibility is unaffected either way).
             bool hasReplicators = built.Replicators.Count > 0;
             bool hasSheds = built.Factories.Count > 0;
-            HudSignals.EmitWorldFactoryWording(hasReplicators && !hasSheds);
+            HudSignals.EmitWorldFactoryWording(hasReplicators && !hasSheds, map.replicatorNoun);
 
             // MV-741: this world's own Invasion Dial wording (empty means "use World 1's default"),
             // fired the same way and at the same point as the factory wording just above.

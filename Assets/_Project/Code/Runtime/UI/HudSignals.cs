@@ -208,14 +208,17 @@ namespace MaxWorlds.UI
         /// so a subscriber that attaches after the fact can catch up instead of missing it — the bug this
         /// ticket fixes: World 1's default (false) happened to already match "FACTORIES", so nobody
         /// noticed the signal was never actually arriving until World 2 needed it to read true.</summary>
-        public static event Action<bool> WorldFactoryWording;
+        /// MV-1201: a second arg carries the noun itself (default "REPLICATORS") — the City's own
+        /// "RELAYS", read off <see cref="MaxWorlds.Arena.Map.MapData.replicatorNoun"/>, so a world whose
+        /// Replicators are dressed as something else entirely is never stuck with World 2's word.
+        public static event Action<bool, string> WorldFactoryWording;
 
-        private static bool? _lastWorldFactoryWording;
+        private static (bool isReplicatorWorld, string noun)? _lastWorldFactoryWording;
 
         /// <summary>The value <see cref="WorldFactoryWording"/> most recently fired with, for a
         /// subscriber that attaches after the emit already happened (MV-741). Null before any level has
         /// ever built.</summary>
-        public static bool? LastWorldFactoryWording => _lastWorldFactoryWording;
+        public static (bool isReplicatorWorld, string noun)? LastWorldFactoryWording => _lastWorldFactoryWording;
 
         /// <summary>MV-741: this world's Invasion Dial wording (<c>HudController.BuildInvasionDial</c>/
         /// <c>UpdateInvasionDial</c>) — a fixed noun for the current pressure and the permanent caption
@@ -262,10 +265,11 @@ namespace MaxWorlds.UI
         public static void EmitFittingDestroyed(Vector3 worldPos)
             => FittingDestroyed?.Invoke(worldPos);
 
-        public static void EmitWorldFactoryWording(bool isReplicatorWorld)
+        public static void EmitWorldFactoryWording(bool isReplicatorWorld, string noun = "REPLICATORS")
         {
-            _lastWorldFactoryWording = isReplicatorWorld;
-            WorldFactoryWording?.Invoke(isReplicatorWorld);
+            string resolvedNoun = string.IsNullOrEmpty(noun) ? "REPLICATORS" : noun;
+            _lastWorldFactoryWording = (isReplicatorWorld, resolvedNoun);
+            WorldFactoryWording?.Invoke(isReplicatorWorld, resolvedNoun);
         }
 
         public static void EmitPressureWording(string noun, string caption)
