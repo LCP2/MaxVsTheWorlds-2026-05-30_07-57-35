@@ -111,6 +111,14 @@ namespace MaxWorlds.Arena
         /// props to a bar meant for cover nobody is expected to hide behind.</summary>
         public const float MinLowProfileCoverHeight = 0.3f;
 
+        /// <summary>Smallest footprint overlap between two cover pieces that counts as a real clash
+        /// (MV-1202). <see cref="Geo.Epsilon"/>'s own 1 cm, matching every other tolerant comparison in
+        /// this file — <c>Rect.Overlaps</c> itself is a bare strict comparison with no tolerance, so an
+        /// end-to-end barrier wall or an L-corner authored with faces exactly coincident can round either
+        /// side of zero in float32 depending on where in the world it sits (worst case measured ~31 µm;
+        /// this is ~500x that). Both axes must clear this before the pair is reported.</summary>
+        public const float MinCoverOverlap = Geo.Epsilon;
+
         /// <summary>Cover dressings exempt from <see cref="MinCoverHeight"/> in favour of the lower
         /// <see cref="MinLowProfileCoverHeight"/> (MV-1181, extended MV-1192) — additive alongside the
         /// existing <see cref="CoverKind.SeeThrough"/>/Hedge/Pipe move-only exemption in
@@ -403,8 +411,11 @@ namespace MaxWorlds.Arena
 
                 for (int j = i + 1; j < cover.Count; j++)
                 {
-                    if (body.Overlaps(cover[j].ToCover()))
-                        violations.Add($"'{c.id}' overlaps '{cover[j].id}'");
+                    Rect other = cover[j].ToCover().Footprint;
+                    float ovX = Mathf.Min(body.Footprint.xMax, other.xMax) - Mathf.Max(body.Footprint.xMin, other.xMin);
+                    float ovZ = Mathf.Min(body.Footprint.yMax, other.yMax) - Mathf.Max(body.Footprint.yMin, other.yMin);
+                    if (ovX > MinCoverOverlap && ovZ > MinCoverOverlap)
+                        violations.Add($"'{c.id}' overlaps '{cover[j].id}' by {ovX:0.###} x {ovZ:0.###} m");
                 }
             }
 
