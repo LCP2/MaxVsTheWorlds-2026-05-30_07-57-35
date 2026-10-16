@@ -63,14 +63,20 @@ namespace MaxWorlds.VFX
             /// Teleport Relay dressing over the top, the same "disable the old renderer, build fresh
             /// over it" idiom <c>AreaGate.ApplyCitySkin</c> already uses. Never touched for World 2.</summary>
             public readonly Transform[] HazardDressing;
+            /// <summary>MV-1208: "a short green flash marks it" — a lens at the output face, built for
+            /// every Replicator (cheap, inert, same as <see cref="ReplicationBeacon"/>) but only ever
+            /// triggered by a City relay's beam-in Exit beat; World 2 never touches it.</summary>
+            public readonly MeshRenderer ExitFlashGreen;
 
             public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
                                    Transform fan, Transform outputLip, MeshRenderer statusRing,
-                                   MeshRenderer replicationBeacon, LineRenderer pullBeam, Transform[] hazardDressing)
+                                   MeshRenderer replicationBeacon, LineRenderer pullBeam, Transform[] hazardDressing,
+                                   MeshRenderer exitFlashGreen)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
                 OutputLip = outputLip; StatusRing = statusRing;
                 ReplicationBeacon = replicationBeacon; PullBeam = pullBeam; HazardDressing = hazardDressing;
+                ExitFlashGreen = exitFlashGreen;
             }
         }
 
@@ -232,8 +238,18 @@ namespace MaxWorlds.VFX
             pullBeam.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
             pullBeamGo.SetActive(false);
 
+            // MV-1208: the City beam-in's "a short green flash marks it" tell — mirrors EmitFlash's own
+            // lens-at-the-face placement, just on the OUTPUT face instead of the hatch, and coloured by
+            // the Replicator that owns it rather than at build time (same "built inert, painted by the
+            // owner" convention as ReplicationBeacon/PullBeam above). Harmless and unused for World 2.
+            MeshRenderer exitFlashGreen = CharacterPart.AddLens(root, CharacterMeshes.Sphere(14),
+                outputLipGo.transform.localPosition + new Vector3(0f, 0f, 0.14f), Quaternion.identity,
+                Vector3.one * (hatchHalfW * 1.1f));
+            exitFlashGreen.gameObject.name = "CityExitFlash";
+
             return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
-                outputLipGo.transform, statusRing, replicationBeacon, pullBeam, hazardDressing.ToArray());
+                outputLipGo.transform, statusRing, replicationBeacon, pullBeam, hazardDressing.ToArray(),
+                exitFlashGreen);
         }
 
         // ---------------------------------------------------------------- MV-1201: City Teleport Relay
@@ -253,14 +269,51 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
+        /// <summary>MV-1208: what <see cref="Replicator"/> needs back from the City dressing pass —
+        /// the aperture rim (pulsed brighter by the owning Replicator while a robot is arriving) and
+        /// its anchor point (the descent target, and the world point the pooled column/sky-line VFX
+        /// and the reused <see cref="ReplicatorParts.PullBeam"/> all aim at), plus the pooled beam
+        /// VFX themselves — built once here, never per-arrival, per the ticket's own "no per-arrival
+        /// allocations" rule.</summary>
+        public readonly struct TeleportRelayParts
+        {
+            public readonly MeshRenderer ApertureRim;
+            public readonly Transform ApertureAnchor;
+            public readonly MeshRenderer[] BeamColumns;
+            public readonly LineRenderer[] SkyLines;
+
+            public TeleportRelayParts(MeshRenderer apertureRim, Transform apertureAnchor,
+                MeshRenderer[] beamColumns, LineRenderer[] skyLines)
+            {
+                ApertureRim = apertureRim; ApertureAnchor = apertureAnchor;
+                BeamColumns = beamColumns; SkyLines = skyLines;
+            }
+        }
+
+        /// <summary>MV-1208: how many concurrent descents this relay can show at once without a
+        /// per-arrival allocation — comfortably above the steady-state of ~1 (a 2.5 s beam-in interval
+        /// against a 1.2 s descent), so a timing edge never has to drop a visual.</summary>
+        private const int CityBeamVfxPoolSize = 2;
+
+        /// <summary>MV-1208: the relay's own reserved green — the pull beam, the teleport column, the
+        /// sky line and the aperture rim all share it, matching <see cref="Replicator.ReplicationLightColor"/>
+        /// (the ticket's own "reuses existing World 2 ... effects").</summary>
+        private static readonly Color RelayTeleportGreen = new Color(0.20f, 1.00f, 0.35f);
+
+        private static Material s_teleportColumn;
+
         /// <summary>Builds the City's Teleport Relay topside (MV-1201) onto an otherwise-empty
         /// <paramref name="root"/> — <see cref="Replicator.ApplyCityRelaySkin"/>'s own dressing root,
         /// laid over a box that already carries <see cref="BuildReplicator"/>'s default World 2 look
         /// with its hazard striping hidden. A red glow ring at the base ("because the robots hold it",
         /// Lee 16 Oct) and a mast — named "RelayMast", read back by <c>Replicator</c>'s own EditMode
         /// test — carrying one gold ring and one gold eye lamp. <paramref name="size"/> is the same
-        /// box footprint <see cref="BuildReplicator"/> took.</summary>
-        public static void BuildTeleportRelayDressing(Transform root, Vector3 size)
+        /// box footprint <see cref="BuildReplicator"/> took.
+        ///
+        /// MV-1208 adds the round aperture robots are beamed down into (a dark disc with a glowing
+        /// green rim) and the pooled teleport-column/sky-line VFX a beam-in descent drives — see
+        /// <see cref="TeleportRelayParts"/>.</summary>
+        public static TeleportRelayParts BuildTeleportRelayDressing(Transform root, Vector3 size)
         {
             EnsureCityMaterials();
 
@@ -290,6 +343,94 @@ namespace MaxWorlds.VFX
                 new Vector3(0f, RelayMastHeight, 0f), Quaternion.identity, Vector3.one * 0.28f);
             eye.gameObject.name = "RelayEye";
             TintLens(eye, RelayGold);
+
+            // MV-1208: the aperture — "a round opening 1.0 m across: a dark disc with a glowing green
+            // rim" — on the hull top, clear of the mast's own footprint (RelayMastRadius is tiny by
+            // comparison, no overlap to worry about).
+            const float apertureDiameter = 1.0f;
+            float apertureOuter = apertureDiameter * 0.5f;
+            Vector3 apertureLocal = new Vector3(0f, hh + 0.02f, 0f);
+
+            var apertureAnchorGo = new GameObject("Aperture");
+            apertureAnchorGo.transform.SetParent(root, worldPositionStays: false);
+            apertureAnchorGo.transform.localPosition = apertureLocal;
+
+            Add(root, CharacterMeshes.Prism(16, apertureOuter, apertureOuter, 0.02f, 0.01f), s_dark,
+                apertureLocal, Quaternion.identity, Vector3.one, "ApertureDisc");
+
+            MeshRenderer apertureRim = CharacterPart.AddLens(root,
+                CharacterMeshes.Ring(apertureOuter * 0.8f, apertureOuter, 0.03f),
+                apertureLocal + Vector3.up * 0.01f, Quaternion.identity, Vector3.one);
+            apertureRim.gameObject.name = "ApertureRim";
+            TintLens(apertureRim, RelayTeleportGreen * 0.6f);
+
+            // MV-1208: the pooled descent VFX — a translucent column (built the same way as Max's own
+            // force field, see BuildBeamColumn) and a thin sky line, reused across arrivals via an
+            // index into these arrays rather than built fresh each time.
+            var columns = new MeshRenderer[CityBeamVfxPoolSize];
+            var skyLines = new LineRenderer[CityBeamVfxPoolSize];
+            for (int i = 0; i < CityBeamVfxPoolSize; i++)
+            {
+                columns[i] = BuildBeamColumn(root, $"TeleportColumn{i}");
+                skyLines[i] = BuildSkyLine(root, $"TeleportSkyLine{i}");
+            }
+
+            return new TeleportRelayParts(apertureRim, apertureAnchorGo.transform, columns, skyLines);
+        }
+
+        /// <summary>MV-1208: "a wider glowing column like Max's force field" — same shader
+        /// (<c>MaxWorlds/ForceFieldShield</c>, Fresnel rim + alpha, see <see cref="MaxWorlds.Weapons.ForceFieldBubble"/>)
+        /// and the same stock-primitive-plus-<see cref="SelfDrivenTint"/> construction, swapping the
+        /// bubble's Sphere for a Cylinder. Built inactive, scaled and repositioned every tick by the
+        /// owning Replicator — never rebuilt per arrival.</summary>
+        private static MeshRenderer BuildBeamColumn(Transform root, string name)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            var col = go.GetComponent<Collider>();
+            if (col != null)
+            {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(col);
+                else UnityEngine.Object.DestroyImmediate(col);
+            }
+            go.transform.SetParent(root, worldPositionStays: false);
+            go.AddComponent<MaxWorlds.Core.SelfDrivenTint>();
+
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = TeleportColumnMaterial();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            go.SetActive(false);
+            return mr;
+        }
+
+        /// <summary>MV-1208: "the green pull beam ... from the aperture to the robot" reuses
+        /// <see cref="ReplicatorParts.PullBeam"/> directly; this is the SECOND green line the ticket
+        /// asks for — "a thin line extends 6 m up from the robot into the sky" — pooled the same way
+        /// as <see cref="BuildBeamColumn"/>.</summary>
+        private static LineRenderer BuildSkyLine(Transform root, string name)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root, worldPositionStays: false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.positionCount = 2;
+            lr.useWorldSpace = true;
+            lr.widthMultiplier = 0.05f;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            go.SetActive(false);
+            return lr;
+        }
+
+        private static Material TeleportColumnMaterial()
+        {
+            if (s_teleportColumn != null) return s_teleportColumn;
+            var shader = Shader.Find("MaxWorlds/ForceFieldShield");
+            s_teleportColumn = shader != null && shader.isSupported
+                ? new Material(shader) { name = "TeleportColumnShield", hideFlags = HideFlags.HideAndDontSave }
+                : VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            return s_teleportColumn;
         }
 
         private static void TintLens(MeshRenderer r, Color c)

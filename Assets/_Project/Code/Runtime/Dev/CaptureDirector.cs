@@ -409,6 +409,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv1201CityRelay());
+            Add(BuildMv1208CityRelayBeamIn());
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
@@ -3537,6 +3538,81 @@ namespace MaxWorlds.Dev
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1201-city-relay", Setup) },
                 Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
+            };
+        }
+
+        // ---- Mv1208CityRelayBeamIn (MV-1208 AC2) ----------------------------------------------
+
+        /// <summary>MV-1208 AC2: one capture of a City relay's beam-in descent mid-flight — the
+        /// teleport column, the reused <see cref="Replicator"/> pull beam (aperture to robot) and the
+        /// sky line, all visible in one frame. Two direct <see cref="Replicator.TickCityBeamIn"/> calls
+        /// (not real-time ticking) land the shot deterministically at exactly half of
+        /// <see cref="Replicator.CityBeamArrivalSeconds"/> — plainly mid-descent, neither just-appeared
+        /// nor about to land.</summary>
+        private static CapturePreset BuildMv1208CityRelayBeamIn()
+        {
+            string primary = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press", "city-relay-beam-in"));
+            const string secondary = @"C:\Dev\MaxVsTheWorlds-Images\_screens\city-relay-beam-in";
+
+            GameObject relayGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? maxGo.transform.position + maxGo.transform.forward * 6f;
+                maxGo.transform.position = focus + new Vector3(10f, 0f, 0f); // 10 m — well within the 25 m CityBeamInRadius
+
+                relayGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                relayGo.name = "MV1208CaptureCityRelay";
+                relayGo.transform.position = focus;
+                relayGo.transform.localScale = new Vector3(2f, 1.5f, 2f); // the authored 2x1.5x2 footprint
+                var relay = relayGo.AddComponent<Replicator>();
+                relay.Build();
+                relay.Configure(0); // irrelevant to a City relay — no doubling budget to spend
+                relay.ApplyCityRelaySkin();
+                relayGo.GetComponent<EnemySpawner>().ConfigureAreaComposition(new WorldComposition { rusher = 5 });
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body/dressing settle
+
+                Vector3 maxPos = maxGo.transform.position;
+                // First tick starts the arrival (Elapsed 0); the second advances it to exactly half of
+                // CityBeamArrivalSeconds (1.2 s) — mid-descent, not at either end.
+                relay.TickCityBeamIn(0.01f, maxPos);
+                relay.TickCityBeamIn(0.6f, maxPos);
+
+                float boxTopY = relayGo.transform.position.y + relayGo.transform.localScale.y * 0.5f;
+                Vector3 frameCenter = new Vector3(relayGo.transform.position.x, boxTopY + 7f, relayGo.transform.position.z);
+                var rot = Quaternion.Euler(8f, 35f, 0f);
+                cam.transform.SetPositionAndRotation(frameCenter - rot * Vector3.forward * 20f, rot);
+
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1208cityrelaybeamin",
+                LogTag = "[MV1208Capture]",
+                Flag = "-mv1208shot",
+                ArmFile = "Temp/mv1208.arm",
+                HeadlessMarker = "Temp/mv1208.headless",
+                DoneFileName = "_mv1208_done.txt",
+                Width = 1600,
+                Height = 1200,
+                OutputDirs = new[] { primary, secondary },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV693Replicator's own presets use: on
+                    // a fresh profile HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1208-city-relay-beam-in-descent", Setup) },
+                Cleanup = () => { if (relayGo != null) Destroy(relayGo); },
             };
         }
 
