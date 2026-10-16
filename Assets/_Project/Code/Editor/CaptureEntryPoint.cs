@@ -181,6 +181,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1201CityRelay() => RunFromMenu(CapturePresets.All["mv1201cityrelay"]);
         public static void CaptureMv1201CityRelay() => Run(CapturePresets.All["mv1201cityrelay"]);
 
+        [MenuItem("MaxWorlds/Capture/City Relay Beam-In (MV-1208)")]
+        public static void MenuMv1208CityRelayBeamIn() => RunFromMenu(CapturePresets.All["mv1208cityrelaybeamin"]);
+        public static void CaptureMv1208CityRelayBeamIn() => Run(CapturePresets.All["mv1208cityrelaybeamin"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

@@ -170,6 +170,70 @@ namespace MaxWorlds.Factories
         /// 2 m footprint.</summary>
         private const float ReplicatorBarWorldWidth = 1.2f;
 
+        // --- MV-1208: City relay beam-in — replaces Lure/Queue/Intake/Twin outright for a Replicator
+        // that has had ApplyCityRelaySkin applied (see _isCityRelay). Robots are beamed down from the
+        // ship instead of walking into a hatch; there is no queue, no capacity budget, no doubling. ---
+
+        /// <summary>How close Max must be (planar) for this relay to beam anything in.</summary>
+        public const float CityBeamInRadius = 25f;
+
+        /// <summary>Seconds between successive beam-in starts, while Max is in range and under
+        /// <see cref="CityBeamInMaxAlive"/>.</summary>
+        public const float CityBeamInIntervalSeconds = 2.5f;
+
+        /// <summary>The most robots this relay may have beamed in and still alive at once — arrivals
+        /// mid-descent count toward this the same as ones already spawned.</summary>
+        public const int CityBeamInMaxAlive = 8;
+
+        /// <summary>Metres above the aperture a robot appears at the instant its descent begins.</summary>
+        public const float CityBeamArrivalHeight = 12f;
+
+        /// <summary>Total seconds the Arrival beat (the sky-to-aperture descent) takes.</summary>
+        public const float CityBeamArrivalSeconds = 1.2f;
+
+        /// <summary>Seconds the Exit beat's green flash lingers once the robot is spawned at the OUT pad.</summary>
+        public const float CityBeamExitFlashSeconds = 0.4f;
+
+        /// <summary>Metres across the teleport column.</summary>
+        public const float CityBeamColumnDiameter = 1.2f;
+
+        /// <summary>Metres the thin sky line extends up from the descending robot.</summary>
+        public const float CityBeamSkyLineHeight = 6f;
+
+        private readonly struct CityArrival
+        {
+            public readonly float Elapsed;
+            public readonly EnemyKind Kind;
+            public readonly int VfxSlot;
+            public CityArrival(float elapsed, EnemyKind kind, int vfxSlot)
+            {
+                Elapsed = elapsed; Kind = kind; VfxSlot = vfxSlot;
+            }
+        }
+
+        /// <summary>True once <see cref="ApplyCityRelaySkin"/> has run — switches <see cref="TickLure"/>
+        /// and <see cref="TickConsumption"/>'s World 2 body off outright (change 1: "no intake") and
+        /// routes this box's own per-tick work through <see cref="TickCityBeamIn"/> instead.</summary>
+        private bool _isCityRelay;
+
+        /// <summary>Counts down to the next beam-in attempt; 0 so the very first tick Max is in range
+        /// can fire immediately, same convention as every other retry timer in this file
+        /// (<see cref="_lureRetryTimer"/>).</summary>
+        private float _cityBeamTimer;
+
+        private readonly List<CityArrival> _cityArrivals = new List<CityArrival>(2);
+
+        /// <summary>Every robot this relay has beamed in that is still alive — pruned each tick, never
+        /// a total budget (unlike World 2's <see cref="capacity"/>), just the live concurrency cap.</summary>
+        private readonly List<RobotEnemy> _cityBeamedAlive = new List<RobotEnemy>(CityBeamInMaxAlive);
+
+        private FactoryBodies.TeleportRelayParts _relayParts;
+        private MaterialPropertyBlock _apertureMpb;
+        private MaterialPropertyBlock _cityColumnMpb;
+        private MeshRenderer _cityExitFlash;
+        private MaterialPropertyBlock _cityExitFlashMpb;
+        private float _cityExitFlashTimer;
+
         [SerializeField] private int capacity;
 
         // MV-808: the LED now signals BUSY (a robot mid-Intake or mid-Cycle/Output), not just capacity
@@ -229,6 +293,11 @@ namespace MaxWorlds.Factories
 
         /// <summary>MV-775: the hatch this box actually draws a consumed robot into — the Lure/Intake
         /// beats' steering target and arrive gate, and the swing-open transform LateUpdate drives.</summary>
+        /// <summary>MV-1208: Max's transform, resolved once (by "Player" tag, same idiom
+        /// <c>MowerHutch.Update</c> already uses) — <see cref="Update"/>'s own cache so a City relay
+        /// isn't re-running a tag search every frame. Null until the lookup first succeeds.</summary>
+        private Transform _cityPursuitTarget;
+
         private Transform _hatch;
         private Quaternion _hatchClosedLocalRotation;
         private float _hatchOpenAmount;
@@ -541,6 +610,11 @@ namespace MaxWorlds.Factories
             _fan = parts.Fan;
             _outputLip = parts.OutputLip;
             _hazardDressing = parts.HazardDressing ?? System.Array.Empty<Transform>();
+
+            // MV-1208: the City beam-in's exit flash — built for every Replicator, only ever triggered
+            // by TickCityBeamIn.
+            _cityExitFlash = parts.ExitFlashGreen;
+            _cityExitFlashMpb = new MaterialPropertyBlock();
         }
 
         /// <summary>MV-1201: re-skins this box into a City Teleport Relay — hides World 2's hazard
@@ -555,13 +629,19 @@ namespace MaxWorlds.Factories
         {
             if (_cityRelayRoot != null || _bodyRoot == null) return;
 
+            // MV-1208: from this instant, Lure/Queue/Intake/Twin (TickLure, TickConsumption's World 2
+            // body) are permanently off for this box — see those methods' own early-return guards.
+            _isCityRelay = true;
+
             for (int i = 0; i < _hazardDressing.Length; i++)
                 if (_hazardDressing[i] != null) _hazardDressing[i].gameObject.SetActive(false);
 
             _cityRelayRoot = new GameObject("TeleportRelayDressing");
             _cityRelayRoot.transform.SetParent(_bodyRoot, worldPositionStays: false);
             _cityRelayRoot.AddComponent<KeepsOwnMaterial>();
-            FactoryBodies.BuildTeleportRelayDressing(_cityRelayRoot.transform, transform.lossyScale);
+            _relayParts = FactoryBodies.BuildTeleportRelayDressing(_cityRelayRoot.transform, transform.lossyScale);
+            _apertureMpb = new MaterialPropertyBlock();
+            _cityColumnMpb = new MaterialPropertyBlock();
         }
 
         /// <summary>MV-1120: the health bar Lee's World 2 device playthrough found missing —
@@ -721,6 +801,8 @@ namespace MaxWorlds.Factories
         /// (MV-820): an eligible robot's distance and area membership are the only things that matter.</summary>
         public void TickLure()
         {
+            // MV-1208: a City relay beams robots in; it never lures, queues or intakes one.
+            if (_isCityRelay) return;
             if (!IsAlive || capacity <= 0) return;
 
             while (_queue.Count < EffectiveQueueCap)
@@ -824,6 +906,9 @@ namespace MaxWorlds.Factories
         public void TickConsumption(float dt)
         {
             if (!IsAlive) return;
+            // MV-1208: a City relay's own per-tick work runs through TickCityBeamIn instead — none of
+            // World 2's Lure/Queue/Intake/Twin/telemetry beats below ever apply to it.
+            if (_isCityRelay) return;
 
             // MV-1066 Step 2.1: resolve "is Max physically in this box's area" fresh off the area
             // director's own live-position tracker every tick — never solely off the
@@ -1076,6 +1161,187 @@ namespace MaxWorlds.Factories
         /// comment).</summary>
         public bool PullBeamActive => _pullBeam != null && _pullBeam.gameObject.activeSelf;
 
+        /// <summary>MV-1208: how many robots this relay currently counts toward <see cref="CityBeamInMaxAlive"/>
+        /// — in-flight descents plus already-spawned-and-still-alive ones. Public so a test (or a
+        /// future HUD tell) can read it back without re-deriving the two lists it sums.</summary>
+        public int CityBeamedCount => _cityArrivals.Count + _cityBeamedAlive.Count;
+
+        /// <summary>MV-1208: the City relay's own per-tick beat — replaces Lure/Queue/Intake/Twin
+        /// outright (see <see cref="ApplyCityRelaySkin"/>'s own <see cref="_isCityRelay"/> guard on
+        /// <see cref="TickLure"/>/<see cref="TickConsumption"/>). Public and explicitly dt/position-
+        /// parameterized, same "an EditMode test can drive it directly" convention as every other Tick*
+        /// method in this file (and the same shape as <c>MowerHutch.TickMobility</c>'s own
+        /// dt+targetPosition signature) — <see cref="Update"/> resolves Max's live position once via
+        /// the "Player" tag and passes it straight through.
+        ///
+        /// Order each tick: advance (and, on completion, spawn) every in-flight descent first, THEN
+        /// decide whether to start a new one — so a robot that finishes this very tick already counts
+        /// against <see cref="CityBeamInMaxAlive"/> before a fresh one is let through.</summary>
+        public void TickCityBeamIn(float dt, Vector3 maxPosition)
+        {
+            if (!IsAlive || !_isCityRelay) return;
+
+            for (int i = _cityBeamedAlive.Count - 1; i >= 0; i--)
+                if (_cityBeamedAlive[i] == null || !_cityBeamedAlive[i].IsAlive) _cityBeamedAlive.RemoveAt(i);
+
+            for (int i = _cityArrivals.Count - 1; i >= 0; i--)
+            {
+                CityArrival a = _cityArrivals[i];
+                float elapsed = a.Elapsed + dt;
+                if (elapsed >= CityBeamArrivalSeconds)
+                {
+                    HideCityArrivalVfx(a);
+                    CompleteCityArrival(a);
+                    _cityArrivals.RemoveAt(i);
+                }
+                else
+                {
+                    a = new CityArrival(elapsed, a.Kind, a.VfxSlot);
+                    _cityArrivals[i] = a;
+                    UpdateCityArrivalVfx(a);
+                }
+            }
+            if (_cityArrivals.Count == 0 && _pullBeam != null) _pullBeam.gameObject.SetActive(false);
+
+            bool maxNear = HorizontalDistance(maxPosition, transform.position) <= CityBeamInRadius;
+            if (maxNear)
+            {
+                _cityBeamTimer -= dt;
+                if (_cityBeamTimer <= 0f)
+                {
+                    if (CityBeamedCount < CityBeamInMaxAlive) StartCityArrival();
+                    _cityBeamTimer = CityBeamInIntervalSeconds;
+                }
+            }
+            else
+            {
+                // Same "reset so the very first tick back in range fires immediately" convention as
+                // _lureRetryTimer.
+                _cityBeamTimer = 0f;
+            }
+
+            UpdateCityExitFlash(dt);
+            UpdateCityApertureGlow();
+        }
+
+        /// <summary>MV-1208 Change 3: "drawn from its area's own garrison mix, weighted by the
+        /// composition counts" — exactly <see cref="EnemyMix.AreaCadence.TryNextKind"/>, read off the
+        /// attached <see cref="EnemySpawner"/>'s own <see cref="EnemySpawner.Cadence"/>, which
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/> already configures with this relay's area
+        /// composition (the same call it makes for every Replicator, World 2 or City). Falls back to
+        /// Rusher if nothing is authored (an un-configured test fixture, or a malformed area) rather
+        /// than emitting nothing.</summary>
+        private EnemyKind NextCityBeamKind() =>
+            _spawner != null && _spawner.Cadence.TryNextKind(out EnemyKind kind) ? kind : EnemyKind.Rusher;
+
+        private void StartCityArrival()
+        {
+            int poolSize = _relayParts.BeamColumns != null ? _relayParts.BeamColumns.Length : 1;
+            int slot = poolSize > 0 ? _cityArrivals.Count % poolSize : 0;
+            _cityArrivals.Add(new CityArrival(0f, NextCityBeamKind(), slot));
+        }
+
+        /// <summary>MV-1208 Exit beat: spawns the robot — "acts normally" (<see cref="EnemySpawner.SpawnKind"/>'s
+        /// own <c>asTwin: true</c> lands it awake and attacking, same as a World 2 twin) — at the OUT
+        /// pad via the existing <see cref="PlaceAtOutRamp"/>/<see cref="TwinPlacement"/> machinery
+        /// (change 2's own "using the existing twin spawn position and walk-out"), then seeds the exit
+        /// flash. <see cref="EnemySpawner.ReserveReplicatorSlot"/>/<see cref="EnemySpawner.ReleaseReplicatorReservation"/>
+        /// are a World 2 bookkeeping pair for "give back what was consumed" — nothing is ever consumed
+        /// here, so neither applies.</summary>
+        private void CompleteCityArrival(CityArrival a)
+        {
+            List<RobotEnemy> spawned = _spawner.SpawnExact(a.Kind, 1, 0f, ignorePerFactoryCap: true, ignoreGlobalRoom: true);
+            PlaceAtOutRamp(spawned, twinIndex: 0);
+            if (spawned.Count > 0) _cityBeamedAlive.Add(spawned[0]);
+            _cityExitFlashTimer = CityBeamExitFlashSeconds;
+        }
+
+        /// <summary>MV-1208 Arrival beat: positions the pooled column/sky-line for this arrival's
+        /// current descent height, and aims the reused <see cref="_pullBeam"/> at it (ticket's own
+        /// explicit "the green _pullBeam line runs from the aperture to the robot").</summary>
+        private void UpdateCityArrivalVfx(CityArrival a)
+        {
+            Vector3 aperture = _relayParts.ApertureAnchor != null ? _relayParts.ApertureAnchor.position : transform.position;
+            float t = Mathf.Clamp01(a.Elapsed / CityBeamArrivalSeconds);
+            Vector3 robotPos = aperture + Vector3.up * Mathf.Lerp(CityBeamArrivalHeight, 0f, t);
+
+            if (_relayParts.BeamColumns != null && a.VfxSlot < _relayParts.BeamColumns.Length)
+            {
+                MeshRenderer column = _relayParts.BeamColumns[a.VfxSlot];
+                if (column != null)
+                {
+                    float height = Mathf.Max(0.05f, robotPos.y - aperture.y);
+                    column.gameObject.SetActive(true);
+                    column.transform.position = aperture + Vector3.up * (height * 0.5f);
+                    // The built-in Cylinder primitive spans local Y [-1, 1] (2 units tall) at scale 1.
+                    column.transform.localScale = new Vector3(CityBeamColumnDiameter, height * 0.5f, CityBeamColumnDiameter);
+                    column.GetPropertyBlock(_cityColumnMpb);
+                    Color fill = ReplicationLightColor; fill.a = 0.18f;
+                    _cityColumnMpb.SetColor("_BaseColor", fill);
+                    _cityColumnMpb.SetColor("_RimColor", ReplicationLightColor);
+                    column.SetPropertyBlock(_cityColumnMpb);
+                }
+            }
+
+            if (_relayParts.SkyLines != null && a.VfxSlot < _relayParts.SkyLines.Length)
+            {
+                LineRenderer skyLine = _relayParts.SkyLines[a.VfxSlot];
+                if (skyLine != null)
+                {
+                    skyLine.gameObject.SetActive(true);
+                    skyLine.SetPosition(0, robotPos);
+                    skyLine.SetPosition(1, robotPos + Vector3.up * CityBeamSkyLineHeight);
+                    skyLine.startColor = ReplicationLightColor;
+                    skyLine.endColor = ReplicationLightColor;
+                }
+            }
+
+            if (_pullBeam != null)
+            {
+                _pullBeam.SetPosition(0, aperture);
+                _pullBeam.SetPosition(1, robotPos);
+                _pullBeam.startColor = ReplicationLightColor;
+                _pullBeam.endColor = ReplicationLightColor;
+                _pullBeam.gameObject.SetActive(true);
+            }
+        }
+
+        private void HideCityArrivalVfx(CityArrival a)
+        {
+            if (_relayParts.BeamColumns != null && a.VfxSlot < _relayParts.BeamColumns.Length
+                && _relayParts.BeamColumns[a.VfxSlot] != null)
+                _relayParts.BeamColumns[a.VfxSlot].gameObject.SetActive(false);
+            if (_relayParts.SkyLines != null && a.VfxSlot < _relayParts.SkyLines.Length
+                && _relayParts.SkyLines[a.VfxSlot] != null)
+                _relayParts.SkyLines[a.VfxSlot].gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1208: "a short green flash marks it" — same decaying-fade formula as the
+        /// existing white twin flash (<see cref="_emitFlash"/>'s own LateUpdate fade), just driven here
+        /// instead so an EditMode test can read the resolved colour back off a synthetic dt, the same
+        /// convention as every other tell in this file.</summary>
+        private void UpdateCityExitFlash(float dt)
+        {
+            if (_cityExitFlash == null) return;
+            _cityExitFlashTimer = Mathf.Max(0f, _cityExitFlashTimer - dt);
+            Color flash = _cityExitFlashTimer > 0f
+                ? ReplicationLightColor * (_cityExitFlashTimer / CityBeamExitFlashSeconds) * 2.5f
+                : Color.clear;
+            _cityExitFlash.GetPropertyBlock(_cityExitFlashMpb);
+            _cityExitFlashMpb.SetColor("_BaseColor", flash);
+            _cityExitFlash.SetPropertyBlock(_cityExitFlashMpb);
+        }
+
+        /// <summary>MV-1208 Change 4: "while a robot is arriving it pulses brighter."</summary>
+        private void UpdateCityApertureGlow()
+        {
+            if (_relayParts.ApertureRim == null) return;
+            Color c = _cityArrivals.Count > 0 ? ReplicationLightColor * 1.6f : ReplicationLightColor * 0.6f;
+            _relayParts.ApertureRim.GetPropertyBlock(_apertureMpb);
+            _apertureMpb.SetColor("_BaseColor", c);
+            _relayParts.ApertureRim.SetPropertyBlock(_apertureMpb);
+        }
+
         /// <summary>MV-834: paints/toggles <see cref="_replicationBeacon"/> off <see cref="_replicationLightOn"/>
         /// — fully inactive when off ("the difference must be unmistakable", MV-823's own words, still
         /// true here), strobing 60%-100% at <see cref="BeaconStrobeHz"/> when on.</summary>
@@ -1204,9 +1470,24 @@ namespace MaxWorlds.Factories
             // ever reached this box, so it reads as powered before the player touches it.
             if (_fan != null) _fan.Rotate(Vector3.up, FanIdleSpeedDegPerSec * Time.deltaTime, Space.Self);
 
-            // MV-820: no periodic lure tick any more — R1 (area entry) and R2 (instant refill) are the
-            // only two triggers, both already reached from OnAreaEntered/TickConsumption.
-            TickConsumption(Time.deltaTime);
+            // MV-1208: a City relay runs its own beam-in beat, keyed off Max's live position rather
+            // than area membership — TickConsumption's World 2 body never runs for it (see that
+            // method's own _isCityRelay guard).
+            if (_isCityRelay)
+            {
+                if (_cityPursuitTarget == null)
+                {
+                    var p = GameObject.FindGameObjectWithTag("Player");
+                    if (p != null) _cityPursuitTarget = p.transform;
+                }
+                if (_cityPursuitTarget != null) TickCityBeamIn(Time.deltaTime, _cityPursuitTarget.position);
+            }
+            else
+            {
+                // MV-820: no periodic lure tick any more — R1 (area entry) and R2 (instant refill) are
+                // the only two triggers, both already reached from OnAreaEntered/TickConsumption.
+                TickConsumption(Time.deltaTime);
+            }
 
             FrameCost.End(FrameCost.Bucket.Repl);
         }
@@ -1258,6 +1539,11 @@ namespace MaxWorlds.Factories
                 _intakeRobot = null;
             }
             _intakeSeq = null;
+
+            // MV-1208: "any robot mid-descent is cancelled with a fizzle" — the visuals disappear for
+            // free once _bodyRoot is hidden below; clearing the list is what stops a stale arrival from
+            // resuming if this box were ever somehow revived.
+            _cityArrivals.Clear();
 
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
