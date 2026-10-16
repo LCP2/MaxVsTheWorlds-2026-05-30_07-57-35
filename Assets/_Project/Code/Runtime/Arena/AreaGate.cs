@@ -142,6 +142,13 @@ namespace MaxWorlds.Arena
 
         private GameObject _cityDressingRoot;
 
+        /// <summary>MV-1203 (Lee's 17 Oct correction): the shutter's own fixed, deliberate total height
+        /// in metres -- NOT derived from the doorway's authored height, which is what let the old code
+        /// build it in the gate's own (already-scaled) local space and render at roughly height^2
+        /// (~9 m for a 3 m door) by accident. Lee likes the big shutter; this is only "about 6 m instead
+        /// of about 9 m", not a shrink to the doorway's own size.</summary>
+        private const float CityShutterHeight = 6f;
+
         /// <summary>Builds the City's roller-shutter leaf art around this gate's own closed-pose geometry
         /// and hides the plain slab CreatePrimitive gave it — called once, from either
         /// <see cref="BackyardPath"/>'s per-world dressing pass or
@@ -161,44 +168,67 @@ namespace MaxWorlds.Arena
 
             _cityDressingRoot = new GameObject(gameObject.name + " (City Shutter)");
             _cityDressingRoot.transform.SetParent(transform, worldPositionStays: false);
+            // MV-1203: this root is a CHILD of the gate's own transform (deliberately, so it swings
+            // open with the hinge for free -- see this method's own doc comment above), which means it
+            // inherits the gate's (width, height, depth) scale on top of whatever BuildCityShutter
+            // already builds in literal metres. The inverse scale here cancels that out exactly: the
+            // two diagonal scale matrices share the gate's own local axes, so composing them collapses
+            // to identity regardless of the gate's rotation (an E/W-wall gate is spun 90 degrees --
+            // MapRuntime.BuildAreaGate). Without this, the shutter rendered at roughly width^2 x
+            // height^2 -- about 9 x 9 m for a 3 m door -- while only the true 3 m doorway was solid.
+            _cityDressingRoot.transform.localScale = new Vector3(1f / width, 1f / height, 1f / depth);
             _cityDressingRoot.AddComponent<KeepsOwnMaterial>();
 
-            BuildCityShutter(_cityDressingRoot.transform, width, height, depth);
+            // MapRuntime.BuildAreaGate centres this gate's own cube on its doorway (GroundedCenter-style
+            // Y, same convention BuildStormdrainPortalRing's own doc comment calls out), so local Y=0
+            // here is the doorway's VERTICAL CENTRE, not its floor -- the floor sits at -height*0.5 in
+            // this now-unscaled, metres-real local space (yaw-only rotation never touches Y, so this
+            // holds for an E/W-wall gate exactly as it does for N/S). The shutter is bottom-anchored
+            // there so its own fixed CityShutterHeight stacks straight up from the real floor, landing
+            // its top at CityShutterHeight above the floor regardless of the doorway's own height.
+            float floorY = -height * 0.5f;
+            BuildCityShutter(_cityDressingRoot.transform, width, depth, floorY);
         }
 
         /// <summary>Row 0 is a Pale bottom bar; rows 1.. are Slate slats on (approximately) a 0.12 m
-        /// pitch — <paramref name="height"/> can be as short as a World 2 doorway's own 1.5 m (AreaGate's
-        /// own BuildStormdrainPortalRing doc), so the row count is floored at 11 (10 slats once the
-        /// bottom bar claims row 0) rather than trusting a fixed pitch to clear the ticket's own "at
-        /// least 10 slat renderers" AC on every authored doorway size.</summary>
-        private static void BuildCityShutter(Transform root, float width, float height, float depth)
+        /// pitch, spanning <see cref="CityShutterHeight"/> from <paramref name="floorY"/> up — the row
+        /// count is floored at 11 (10 slats once the bottom bar claims row 0) rather than trusting a
+        /// fixed pitch to clear the ticket's own "at least 10 slat renderers" AC.</summary>
+        private static void BuildCityShutter(Transform root, float width, float depth, float floorY)
         {
             const float pitch = 0.12f;
-            int rows = Mathf.Max(11, Mathf.FloorToInt(height / pitch));
-            float rowHeight = height / rows;
-            float halfHeight = height * 0.5f;
+            int rows = Mathf.Max(11, Mathf.FloorToInt(CityShutterHeight / pitch));
+            float rowHeight = CityShutterHeight / rows;
 
-            StormdrainKit.Box(root, "Bottom Bar", new Vector3(0f, -halfHeight + rowHeight * 0.5f, 0f),
+            StormdrainKit.Box(root, "Bottom Bar", new Vector3(0f, floorY + rowHeight * 0.5f, 0f),
                 new Vector3(width, rowHeight * 0.98f, depth * 1.02f), CityKit.Pale, SurfaceKind.Metal);
 
             float slatHeight = rowHeight * 0.82f;
             for (int i = 1; i < rows; i++)
             {
-                float centerY = -halfHeight + rowHeight * (i + 0.5f);
+                float centerY = floorY + rowHeight * (i + 0.5f);
                 StormdrainKit.Box(root, $"Slat{i}", new Vector3(0f, centerY, 0f),
                     new Vector3(width * 0.98f, slatHeight, depth * 0.9f), CityKit.Slate, SurfaceKind.Metal);
             }
 
+            // MV-1203: posts sit FLUSH with the doorway's own edge (outer face at exactly +-halfWidth),
+            // not straddling past it -- the old +postWidth*0.5 offset put their outer edge a full
+            // postWidth beyond the doorway, which is exactly the "nothing may stick past the doorway"
+            // rule this ticket exists to fix, independent of the double-scale bug above. They now run
+            // the shutter's own full fixed height, floor to top, same as the slats.
             float postWidth = Mathf.Min(0.18f, width * 0.08f);
             foreach (float side in new[] { -1f, 1f })
                 StormdrainKit.Box(root, side < 0f ? "Post L" : "Post R",
-                    new Vector3(side * (width * 0.5f + postWidth * 0.5f), 0f, 0f),
-                    new Vector3(postWidth, height, depth * 1.1f), CityKit.Pale, SurfaceKind.Metal);
+                    new Vector3(side * (width * 0.5f - postWidth * 0.5f), floorY + CityShutterHeight * 0.5f, 0f),
+                    new Vector3(postWidth, CityShutterHeight, depth * 1.1f), CityKit.Pale, SurfaceKind.Metal);
 
-            // A white UNLIT bar over the opening (ticket, change item 3) -- genuinely unlit, not merely
-            // a pale lit tone, so a scene whose key light goes dark still reads the lintel as lit trim.
-            GameObject bar = StormdrainKit.Box(root, "Lintel Bar", new Vector3(0f, halfHeight + 0.15f, 0f),
-                new Vector3(width + postWidth * 2f, 0.12f, depth * 1.1f), CityKit.NeonWhite, SurfaceKind.Metal);
+            // MV-1203: flush against the shutter's own top edge, not proud above it -- same "nothing
+            // sticks past" rule the posts above now follow, and sized to the doorway's own width rather
+            // than width + postWidth*2.
+            const float lintelThickness = 0.12f;
+            GameObject bar = StormdrainKit.Box(root, "Lintel Bar",
+                new Vector3(0f, floorY + CityShutterHeight - lintelThickness * 0.5f, 0f),
+                new Vector3(width, lintelThickness, depth * 1.1f), CityKit.NeonWhite, SurfaceKind.Metal);
             var barRend = bar.GetComponent<Renderer>();
             if (barRend != null) barRend.sharedMaterial = StormdrainKit.Unlit(CityKit.NeonWhite, "CityGateLintel");
         }
@@ -651,6 +681,12 @@ namespace MaxWorlds.Arena
 
             var box = threshold.AddComponent<BoxCollider>();
             box.isTrigger = false;
+
+            // MV-1203: the threshold is a SIBLING of this gate (see this method's own doc comment just
+            // above), never a child, so GetComponentInParent<AreaGate>() from the threshold can never
+            // reach it -- a weapon that hits the threshold (the gate's own Cover-layer stand-in, MV-386)
+            // needs an explicit pointer back to resolve which gate it actually belongs to.
+            threshold.AddComponent<AreaGateThresholdLink>().Gate = this;
             return box;
         }
 
@@ -844,5 +880,16 @@ namespace MaxWorlds.Arena
 
             if (k >= 1f) _hinging = false;
         }
+    }
+
+    /// <summary>MV-1203: points a gate's <see cref="AreaGate.ThresholdObject"/> back at the
+    /// <see cref="AreaGate"/> it stands in for. The threshold carries no <c>IDamageable</c> of its own
+    /// and is a SIBLING of the gate, not a child (<see cref="AreaGate.BuildThresholdCollider"/>'s own
+    /// doc comment), so a weapon whose contact lands on the threshold — the gate's own Cover-layer
+    /// stand-in, MV-386 — needs this to resolve which gate to damage; a disc landing there otherwise
+    /// bounced off the gate without ever damaging it.</summary>
+    public sealed class AreaGateThresholdLink : MonoBehaviour
+    {
+        public AreaGate Gate;
     }
 }

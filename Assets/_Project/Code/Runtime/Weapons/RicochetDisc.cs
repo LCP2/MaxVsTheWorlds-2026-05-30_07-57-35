@@ -225,7 +225,7 @@ namespace MaxWorlds.Weapons
             {
                 transform.position = contact.point;
 
-                if (contact.collider.TryGetComponent(out IDamageable target) &&
+                if (TryResolveDamageable(contact.collider, out IDamageable target) &&
                     target.IsAlive && target.Team == Team.Enemy)
                 {
                     if (target is RobotEnemy robot && robot.IsDormant) robot.Activate();
@@ -339,6 +339,23 @@ namespace MaxWorlds.Weapons
         /// idiom <see cref="SeekerPulse.TryHitWorldDamageable"/> already uses.</summary>
         private bool TryFindContact(Vector3 from, Vector3 to, out RaycastHit contact) =>
             TryFindContactStatic(from, to, _radius, s_hits, out contact);
+
+        /// <summary>MV-1203: a contact's <see cref="IDamageable"/> is usually just the hit collider's
+        /// own component, but an <see cref="AreaGate"/>'s threshold collider (its Cover-layer stand-in,
+        /// MV-386) carries no <c>IDamageable</c> of its own — it is a SIBLING of the gate, not a child,
+        /// so <c>GetComponentInParent</c> from the threshold could never reach it either. Falling back
+        /// to <see cref="AreaGateThresholdLink"/> is what lets a disc that bounces off a closed gate's
+        /// threshold still damage the gate it just bounced off, instead of bouncing for free.</summary>
+        private static bool TryResolveDamageable(Collider collider, out IDamageable target)
+        {
+            if (collider.TryGetComponent(out target)) return true;
+            if (collider.TryGetComponent(out AreaGateThresholdLink link) && link.Gate != null)
+            {
+                target = link.Gate;
+                return true;
+            }
+            return false;
+        }
 
         /// <summary>The real hit query, pulled out static and buffer-parameterised (MV-1197) so the
         /// aim preview can run the EXACT same swept-sphere/filter code against its OWN buffer
