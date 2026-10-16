@@ -472,6 +472,16 @@ namespace MaxWorlds.VFX
             rail2.gameObject.SetActive(false);
             vent0.gameObject.SetActive(false);
             vent1.gameObject.SetActive(false);
+
+            // MV-1204 CAPACITY (p_cap): a small energy cell stacked behind the housing, one segment
+            // per level (1-5) -- same built-up-front/SetActive-toggle shape as the rails/drum/vents
+            // above, so a capacity level-up is a visibility flip, not a rebuild.
+            for (int i = 0; i < 5; i++)
+            {
+                var cell = Add(gt, CharacterMeshes.Prism(6, 0.022f, 0.022f, 0.025f, 0.1f, 0f), p.Metal,
+                    new Vector3(-0.07f, 0.03f + i * 0.028f, -0.03f), z90, Vector3.one, $"Cell{i}");
+                cell.gameObject.SetActive(false);
+            }
         }
 
         /// <summary>MV-1196: shows the rail/drum/vent stages matching <paramref name="rateLevel"/>
@@ -493,6 +503,20 @@ namespace MaxWorlds.VFX
             SetChildActive(root, "Rail2", threeRails);
             SetChildActive(root, "Vent0", threeRails);
             SetChildActive(root, "Vent1", threeRails);
+        }
+
+        /// <summary>MV-1204: shows the Cell0..Cell4 segments up to <paramref name="capLevel"/>
+        /// (<c>p_cap</c>'s own level, 0 to 5) and hides the rest -- <see cref="BuildRicochetLauncher"/>
+        /// already built every segment, so this is a visibility flip, not a rebuild. Same contract as
+        /// <see cref="ApplyRicochetRate"/>.</summary>
+        public static void ApplyRicochetCapacity(GameObject ricochetGadget, int capLevel)
+        {
+            if (ricochetGadget == null) return;
+            Transform root = ricochetGadget.transform.Find("GunBody");
+            if (root == null) return;
+
+            for (int i = 0; i < 5; i++)
+                SetChildActive(root, $"Cell{i}", capLevel > i);
         }
 
         private static void SetChildActive(Transform root, string name, bool active)

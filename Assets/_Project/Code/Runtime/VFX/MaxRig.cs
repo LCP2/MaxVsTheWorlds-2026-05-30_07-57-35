@@ -1028,8 +1028,12 @@ namespace MaxWorlds.VFX
             // MV-1196: the launcher's own rail/drum/vent stage also has to re-fit on every RATE
             // level-up, not just on a primary swap — WeaponSystemState.Changed (this method's own
             // subscription) fires for both, so one extra call here covers it without a second handler.
+            // MV-1204: CAPACITY's own cell-segment stack rides the same subscription.
             if (primary == WeaponCatalog.PrimaryKind.Ricochet)
+            {
                 MaxBody.ApplyRicochetRate(_ricochetGadget, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Rate));
+                MaxBody.ApplyRicochetCapacity(_ricochetGadget, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Capacity));
+            }
         }
 
         /// <summary>The toggle rule itself, pulled out as a pure static so an EditMode test can prove
