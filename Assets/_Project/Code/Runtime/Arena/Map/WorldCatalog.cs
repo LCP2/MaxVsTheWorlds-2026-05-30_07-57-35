@@ -602,12 +602,12 @@ namespace MaxWorlds.Arena
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
-                // MV-1176: a1's own E wall, mouth (50, 20.5) — Market Street's exit into the Reef's own
-                // entry stub.
+                // MV-1200: the City grows to 30 areas; the exit moves from a1's own E wall (Market
+                // Street) to a30's (Station Forecourt), mouth (277, 538) — the Reef's own entry stub.
                 ExitMode = WorldExitMode.Corridor,
                 ExitWall = Wall.E,
-                ExitDoorPos = 0.854166667f,
-                Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.854166667f, corridorLength: 30f,
+                ExitDoorPos = 0.5f,
+                Entry = new WorldTransitionEntry(fromWorld: 2, exitWall: Wall.E, exitDoorPos: 0.5f, corridorLength: 30f,
                     segmentAEnd: 10f, segmentBEnd: 16f,
                     arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
                 // MV-1176 "Do not": plain shells into the Reef for now; the Market Street dressing ticket

@@ -70,9 +70,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(stormdrainIntoCity.x, Is.EqualTo(0f).Within(0.01f));
             Assert.That(stormdrainIntoCity.y, Is.EqualTo(3.5f).Within(0.01f));
 
+            // MV-1200: the City grew to 30 areas and the exit moved from a1 (Market Street) to a30
+            // (Station Forecourt) -- these numbers are a30's own E-wall mouth now, not a1's.
             Vector2 cityExit = WorldTransitions.For(cityIndex).ExitDoorMouth(cityCfg);
-            Assert.That(cityExit.x, Is.EqualTo(50f).Within(0.01f));
-            Assert.That(cityExit.y, Is.EqualTo(20.5f).Within(0.01f));
+            Assert.That(cityExit.x, Is.EqualTo(277f).Within(0.01f));
+            Assert.That(cityExit.y, Is.EqualTo(538f).Within(0.01f));
 
             Vector2 cityIntoReef = WorldTransitions.For(cityIndex).ArrivalDoorMouth(reefCfg);
             Assert.That(cityIntoReef.x, Is.EqualTo(-6f).Within(0.01f));
@@ -106,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
 
             WorldArea finale = WorldRunner.ResolveFinaleArea(cityCfg);
             Assert.IsNotNull(finale, "the City must resolve a finale area");
-            Assert.AreEqual("a1", finale.id, "Market Street is the City's bossless finale");
+            Assert.AreEqual("a30", finale.id, "MV-1200: Station Forecourt (a30) is now the City's bossless finale");
 
             // --- an old save's world-number fields follow the Reef forward ---
             WriteSlotJson(0,
