@@ -328,11 +328,16 @@ namespace MaxWorlds.Rendering
         public static BiomePalette City => new BiomePalette
         {
             Tint = Color.white,
-            GroundBase = new Color(0.204f, 0.220f, 0.282f),
+            // MV-1207: Lee, 17 Oct — the City's structures were getting lost in too dark a shade.
+            // Wall/Prop(cover)/GroundBase lift 15% in HSV value, hue and saturation untouched (a
+            // uniform RGB scale does exactly that — see BackyardLook.City's own note). GroundAccent/
+            // GroundDry and every reserved state colour are deliberately left alone (ticket's own
+            // scope).
+            GroundBase = new Color(0.204f, 0.220f, 0.282f) * 1.15f,
             GroundAccent = new Color(0.235f, 0.250f, 0.310f),
             GroundDry = new Color(0.180f, 0.190f, 0.240f),
-            Wall = new Color(0.50f, 0.44f, 0.46f),
-            Prop = new Color(0.36f, 0.39f, 0.48f),
+            Wall = new Color(0.50f, 0.44f, 0.46f) * 1.15f,
+            Prop = new Color(0.36f, 0.39f, 0.48f) * 1.15f,
 
             Wood = new Color(0.627f, 0.471f, 0.314f),
             Stone = new Color(0.439f, 0.463f, 0.525f),

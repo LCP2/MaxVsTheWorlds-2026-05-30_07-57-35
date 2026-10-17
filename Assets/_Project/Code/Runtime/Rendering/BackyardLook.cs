@@ -304,7 +304,10 @@ namespace MaxWorlds.Rendering
         public static BackyardLook City => new BackyardLook
         {
             KeyColor = new Color(0.70f, 0.76f, 0.95f),
-            KeyIntensity = 0.70f,
+            // MV-1207: Lee, 17 Oct — "too much of a dark shade of colour; structures getting lost."
+            // +25% on the moon (was 0.70). Still a night key, just one that lets the structures the
+            // street is full of actually read.
+            KeyIntensity = 0.70f * 1.25f,
             KeyEuler = new Vector3(62f, -30f, 0f),
             ShadowStrength = 0.6f,
 
@@ -316,11 +319,17 @@ namespace MaxWorlds.Rendering
             RimIntensity = 0.9f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
-            AmbientSky = new Color(0.20f, 0.22f, 0.32f),
-            AmbientEquator = new Color(0.17f, 0.17f, 0.21f),
-            AmbientGround = new Color(0.12f, 0.12f, 0.15f),
+            // MV-1207: +35% ambient. A uniform RGB scale moves V without touching H/S (max and min
+            // both scale by the same factor, so (max-min)/max — the S term — cancels), so this is
+            // "lift the ambient" in exactly the sense the HSV-preserving palette lift below is.
+            AmbientSky = new Color(0.20f, 0.22f, 0.32f) * 1.35f,
+            AmbientEquator = new Color(0.17f, 0.17f, 0.21f) * 1.35f,
+            AmbientGround = new Color(0.12f, 0.12f, 0.15f) * 1.35f,
 
-            FogColor = new Color(0.05f, 0.055f, 0.08f),
+            // MV-1207: fog lifted 20% in value. Street-lamp pools are CityKit's own unlit/additive
+            // materials, untouched by this struct, so they keep reading as lamps against the lifted
+            // street.
+            FogColor = new Color(0.05f, 0.055f, 0.08f) * 1.2f,
             FogDensity = 0.010f,
 
             // Sky fields copied from Stormdrain — unused, ApplySky nulls the skybox for this biome

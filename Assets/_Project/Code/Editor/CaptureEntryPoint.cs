@@ -185,6 +185,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1205CityGround() => RunFromMenu(CapturePresets.All["mv1205cityground"]);
         public static void CaptureMv1205CityGround() => Run(CapturePresets.All["mv1205cityground"]);
 
+        [MenuItem("MaxWorlds/Capture/City Brightness (MV-1207)")]
+        public static void MenuMv1207CityBrightness() => RunFromMenu(CapturePresets.All["mv1207citybrightness"]);
+        public static void CaptureMv1207CityBrightness() => Run(CapturePresets.All["mv1207citybrightness"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
