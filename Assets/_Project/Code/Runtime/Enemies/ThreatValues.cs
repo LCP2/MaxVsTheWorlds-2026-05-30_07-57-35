@@ -44,6 +44,12 @@ namespace MaxWorlds.Enemies
         /// the Launcher's 3.6, on the same placeholder footing as every other kind here.</summary>
         public const float Charger = 3.4f;
 
+        /// <summary>MV-1217: the ticket's own authored THV — a slow, hard-to-kill garrison-only
+        /// platform, priced well above every other kind here on the same placeholder footing (it is
+        /// twice a shed's health and carries two independent ranged weapons) until real per-type
+        /// calibration lands.</summary>
+        public const float Dreadnought = 9.0f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -57,6 +63,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Turret => Turret,
             EnemyKind.Sludger => Sludger,
             EnemyKind.Charger => Charger,
+            EnemyKind.Dreadnought => Dreadnought,
             _ => Rusher,
         };
     }

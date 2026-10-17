@@ -328,6 +328,11 @@ namespace MaxWorlds.Enemies
             Level = 0;
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
+            // MV-1217: a pooled instance must not carry a previous Dreadnought life's turret cycle
+            // phase/aim into this one — re-seeded by TickDreadnoughtTurrets on its first tick either way.
+            _dreadnoughtTurretA = default;
+            _dreadnoughtTurretB = default;
+            _dreadnoughtTurretsInitialised = false;
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -667,9 +672,11 @@ namespace MaxWorlds.Enemies
         /// dodge-window indicator on the ground — a colour tell on a small robot doesn't read at
         /// the fixed ~72° camera with 20–30 enemies on screen. No behaviour change.</summary>
         public float TelegraphProgress =>
-            Current == State.Telegraph && telegraphTime > 0f
-                ? Mathf.Clamp01(_stateTimer / telegraphTime)
-                : 0f;
+            Kind == EnemyKind.Dreadnought
+                ? DreadnoughtTurretWarnProgress
+                : Current == State.Telegraph && telegraphTime > 0f
+                    ? Mathf.Clamp01(_stateTimer / telegraphTime)
+                    : 0f;
 
         /// <summary>MV-757: how far through RATTLE this Grate Lurker is, 0..1 (0 outside RATTLE) — the
         /// same "read-only window for VFX" idiom as <see cref="TelegraphProgress"/>, so
@@ -903,6 +910,13 @@ namespace MaxWorlds.Enemies
         /// existing ones are left untouched, never evicted for a newer one.</summary>
         public bool TryConvert(bool requirePortExposed)
         {
+            // MV-1217: a Dreadnought never converts, whichever ability drives this call — CAPTURE/TRAP
+            // (requirePortExposed: false) and Override (requirePortExposed: true) alike. The first
+            // kind-based exclusion in this method (see its own doc comment on the "no existing
+            // precedent" history) rather than a change to IsPortExposed/IsTrapCatchable, since both of
+            // those feed other read-only UI/targeting queries that should keep reporting the truth about
+            // this robot's health/catchability even though an actual conversion attempt is refused.
+            if (Kind == EnemyKind.Dreadnought) return false;
             if (requirePortExposed) { if (!IsPortExposed) return false; }
             else if (!IsAlive || IsConverted) return false;
             if (_converted.Count >= ConversionCap) return false;
@@ -1862,6 +1876,12 @@ namespace MaxWorlds.Enemies
             if (target != null)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
+            // MV-1217: the Dreadnought's two shoulder turrets tick every frame regardless of this body's
+            // own Current state — each is an independent emitter with its own 2.5 s cycle, not a single
+            // body-wide wind-up/commit the way every other ranged kind's ONE weapon is. Same "ticked
+            // regardless of state" footing as the corroded timer/Reef stealth visibility above.
+            if (Kind == EnemyKind.Dreadnought) TickDreadnoughtTurrets(dt);
+
             // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
             // "stops moving" per the spec table — so it must be decided before the ordinary state
             // machine below gets a chance to steer/attack this frame.
@@ -1949,6 +1969,9 @@ namespace MaxWorlds.Enemies
         public void ApplyKnockback(Vector3 impulse)
         {
             if (Current == State.Dead) return;
+            // MV-1217: "knockback moves it 0 m" — refused outright rather than merely decayed fast, so a
+            // spray/ability hit still lands its damage but never nudges this 950 HP platform at all.
+            if (Kind == EnemyKind.Dreadnought) return;
             _knockback += impulse;
         }
 
@@ -2654,7 +2677,12 @@ namespace MaxWorlds.Enemies
             // alternated advance/retreat every frame by construction. Replaced with a band: back off
             // below the inner edge, close in above the outer edge, and inside the band hold position
             // (speed 0, still facing Max via `to`) — no distance now produces a frame-to-frame flip.
-            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher || Kind == EnemyKind.Bolter;
+            // MV-1217: the Dreadnought holds its own 8 m standoff the same way, but never follows this
+            // into Telegraph below — its threat is two independent shoulder turrets, ticked every frame
+            // regardless of this body's own state (see TickBody's TickDreadnoughtTurrets), not a single
+            // body-wide wind-up/commit cycle the way every other ranged kind's single weapon is.
+            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher || Kind == EnemyKind.Bolter
+                          || Kind == EnemyKind.Dreadnought;
             bool inStandoffBand = false;
             bool retreating = false;
             if (ranged && standoffRange > 0f && _sight.HasSight)
@@ -2771,7 +2799,11 @@ namespace MaxWorlds.Enemies
             if (Kind == EnemyKind.Charger && MapSlowZones.Instance.SpeedMultiplierAt(transform.position) < 1f)
                 return;
 
-            if (_sight.HasSight && dist <= lungeRange && !retreating)
+            // MV-1217: the Dreadnought never enters Telegraph/Lunge at all — its turrets fire
+            // independently of this body's own state (see TickBody's TickDreadnoughtTurrets), so there
+            // is no single body-wide commit for it to walk into here the way every other ranged kind
+            // (whose ONE weapon IS the body's commit) does.
+            if (Kind != EnemyKind.Dreadnought && _sight.HasSight && dist <= lungeRange && !retreating)
             {
                 // MV-428 Change 2: Rusher/Blinker must hold an attack token to commit. Without one, a
                 // robot just keeps closing and pressuring at normal move speed (exactly what the
@@ -3059,6 +3091,145 @@ namespace MaxWorlds.Enemies
 
         private const float GlobPuddleRadius = 1.5f;
         private const float GlobPuddleDuration = 3f;
+
+        // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------
+
+        /// <summary>One shoulder turret's own independent cycle (MV-1217) — tracked yaw (world-space
+        /// degrees, same convention as <see cref="BearingDegrees"/>, capped at
+        /// <see cref="DreadnoughtTurretTurnRateDegPerSec"/>), a 2.5 s cycle timer that wraps, and how
+        /// many of this cycle's 3 bolts have already fired.</summary>
+        private struct DreadnoughtTurretState
+        {
+            public float AimYawDeg;
+            public float CycleTimer;
+            public int ShotsFiredThisCycle;
+        }
+
+        private DreadnoughtTurretState _dreadnoughtTurretA;
+        private DreadnoughtTurretState _dreadnoughtTurretB;
+        private bool _dreadnoughtTurretsInitialised;
+
+        private const float DreadnoughtTurretTurnRateDegPerSec = 60f;
+        private const float DreadnoughtTurretCycleSeconds = 2.5f;
+        private const float DreadnoughtTurretOffsetSeconds = 1.25f;  // half the cycle — bursts land ~1.25s apart
+        private const float DreadnoughtTurretWarnSeconds = 0.4f;
+        private const int DreadnoughtBurstBolts = 3;
+        private const float DreadnoughtBurstBoltInterval = 0.15f;
+        private const float DreadnoughtTurretRangeMeters = 12f;
+
+        /// <summary>How far off its own tracked aim <see cref="target"/>'s live bearing may sit and
+        /// still count as "locked on" for a shot (MV-1217's own "strafing around it must be able to
+        /// out-turn it") — generous enough that ordinary chase movement never denies a shot, tight
+        /// enough that circling faster than <see cref="DreadnoughtTurretTurnRateDegPerSec"/> reliably
+        /// does. A shot that fails this check is skipped outright, not redirected onto him anyway.</summary>
+        private const float DreadnoughtAimToleranceDeg = 22f;
+
+        /// <summary>Shoulder mount offsets (MV-1217), in local METRES relative to this robot's own
+        /// <see cref="transform"/>.position (the CharacterController's centre, already half the 3 m
+        /// collider height — 1.5 m — above the feet; +0.65 lands a shoulder at ~2.15 m, near the top of
+        /// the body <see cref="MaxWorlds.VFX.RobotBodies.BuildDreadnought"/> builds, feet-relative, for
+        /// the same point). Applied via the unit <c>right/up/forward</c> axes, not
+        /// <see cref="Transform.TransformPoint"/> — this robot's own transform carries a non-uniform
+        /// <see cref="EnemyArchetype.BodyScale"/>, which <c>TransformPoint</c> would fold into the
+        /// offset and distort it; a bolt's origin must work identically with no rig attached at all
+        /// (<see cref="MaxWorlds.VFX.RobotRig"/>'s own "delete this file and the game plays identically"
+        /// contract), so this never reads anything the rig built.</summary>
+        private static readonly Vector3 DreadnoughtTurretALocalOffset = new Vector3(0.95f, 0.65f, 0.2f);
+        private static readonly Vector3 DreadnoughtTurretBLocalOffset = new Vector3(-0.95f, 0.65f, 0.2f);
+
+        /// <summary>How far through its own pre-burst warn window either turret currently is, 0..1 (0
+        /// outside both turrets' warn windows) — folded into <see cref="TelegraphProgress"/> so the
+        /// existing body/eye heat-to-orange tell (<see cref="MaxWorlds.VFX.CharacterSkin"/>) reads as
+        /// the ticket's own "barrel tips glow orange for 0.4 s as a warning" with no second tell
+        /// system.</summary>
+        private float DreadnoughtTurretWarnProgress =>
+            Mathf.Max(TurretWarnProgress(_dreadnoughtTurretA), TurretWarnProgress(_dreadnoughtTurretB));
+
+        private static float TurretWarnProgress(in DreadnoughtTurretState s) =>
+            s.CycleTimer < DreadnoughtTurretWarnSeconds
+                ? Mathf.Clamp01(s.CycleTimer / DreadnoughtTurretWarnSeconds)
+                : 0f;
+
+        /// <summary>Ticks both shoulder turrets every frame regardless of this body's own Current state
+        /// (MV-1217, called from <see cref="TickBody"/>) — aim tracking always runs; firing is gated
+        /// per shot in <see cref="TryFireDreadnoughtTurret"/>.</summary>
+        private void TickDreadnoughtTurrets(float dt)
+        {
+            if (!_dreadnoughtTurretsInitialised)
+            {
+                // Start the second turret half a cycle ahead so a burst comes roughly every 1.25 s
+                // between the two, per the ticket's own "offset by 1.25s" — not a race with whichever
+                // order Awake/Apply happened to run in.
+                _dreadnoughtTurretB.CycleTimer = DreadnoughtTurretOffsetSeconds;
+                _dreadnoughtTurretsInitialised = true;
+            }
+
+            TickOneDreadnoughtTurret(ref _dreadnoughtTurretA, dt, DreadnoughtTurretALocalOffset);
+            TickOneDreadnoughtTurret(ref _dreadnoughtTurretB, dt, DreadnoughtTurretBLocalOffset);
+        }
+
+        private void TickOneDreadnoughtTurret(ref DreadnoughtTurretState s, float dt, Vector3 localOffset)
+        {
+            Vector3 origin = transform.position + transform.right * localOffset.x
+                                                 + transform.up * localOffset.y
+                                                 + transform.forward * localOffset.z;
+
+            if (target != null)
+            {
+                float bearing = BearingDegrees(origin, target.position);
+                s.AimYawDeg = Mathf.MoveTowardsAngle(s.AimYawDeg, bearing, DreadnoughtTurretTurnRateDegPerSec * dt);
+            }
+
+            s.CycleTimer += dt;
+            if (s.CycleTimer >= DreadnoughtTurretCycleSeconds)
+            {
+                s.CycleTimer -= DreadnoughtTurretCycleSeconds;
+                s.ShotsFiredThisCycle = 0;
+            }
+
+            while (s.ShotsFiredThisCycle < DreadnoughtBurstBolts)
+            {
+                float boltTime = DreadnoughtTurretWarnSeconds + s.ShotsFiredThisCycle * DreadnoughtBurstBoltInterval;
+                if (s.CycleTimer < boltTime) break;
+
+                s.ShotsFiredThisCycle++;
+                TryFireDreadnoughtTurret(s, origin);
+            }
+        }
+
+        /// <summary>One shoulder turret's single bolt attempt (MV-1217) — gated on line of sight and
+        /// range exactly like every other ranged kind's own fire check (<see cref="TickBolt"/>/
+        /// <see cref="TickGlobFire"/>), plus this kind's own "must still be aimed at him" check: a shot
+        /// whose tracked aim has drifted too far off <see cref="target"/>'s live bearing (he strafed
+        /// faster than this turret can turn) is skipped outright rather than snapping onto him anyway —
+        /// the ticket's own "strafing around it must be able to out-turn it", made a real mechanic
+        /// rather than a cosmetic-only wind-up. Reuses the Bolter's own bolt speed/hit radius directly
+        /// (the ticket's own "using the Bolter's existing bolt projectile, speed and damage") — this
+        /// kind's own range (12 m), not the Bolter's.</summary>
+        private void TryFireDreadnoughtTurret(in DreadnoughtTurretState s, Vector3 origin)
+        {
+            if (target == null || !_sight.HasSight) return;
+            if (!CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position)) return;
+
+            Vector3 toTarget = target.position - origin; toTarget.y = 0f;
+            if (toTarget.magnitude > DreadnoughtTurretRangeMeters) return;
+
+            float liveBearing = BearingDegrees(origin, target.position);
+            if (Mathf.Abs(Mathf.DeltaAngle(s.AimYawDeg, liveBearing)) > DreadnoughtAimToleranceDeg) return;
+
+            BolterBolt.Fire(origin, target, EnemyArchetype.Bolter.LungeSpeed,
+                DreadnoughtTurretRangeMeters, EnemyArchetype.Bolter.ContactRadius);
+        }
+
+        /// <summary>World-space bearing in degrees from <paramref name="from"/> to <paramref name="to"/>,
+        /// 0 along +Z, matching <see cref="Quaternion.LookRotation(Vector3)"/>'s own convention — the
+        /// same angle a body facing that direction reads on its own <c>transform.eulerAngles.y</c>.</summary>
+        private static float BearingDegrees(Vector3 from, Vector3 to)
+        {
+            Vector3 d = to - from; d.y = 0f;
+            if (d.sqrMagnitude < 1e-6f) return 0f;
+            return Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
+        }
 
         private void TickRecover(float dt)
         {

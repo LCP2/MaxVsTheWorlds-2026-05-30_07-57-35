@@ -743,7 +743,8 @@ namespace MaxWorlds.Factories
         /// can fold an eligible-count for a given area into its own single walk of
         /// <see cref="RobotEnemy.Active"/> instead of re-implementing (and risking drifting from) this
         /// box's own rule: alive, not a Lurker/Turret (they cannot walk to a box — kept, MV-688/MV-691),
-        /// not tagged NoReplicate, not already assigned to this or any other box
+        /// not a Dreadnought (MV-1217: garrison-only by design — never lured), not tagged NoReplicate,
+        /// not already assigned to this or any other box
         /// (<see cref="RobotEnemy.IsAssignedToReplicator"/>), physically in <paramref name="areaIndex"/>,
         /// AND on the same combat level (<see cref="CombatLevel.SameLevel"/>) as <paramref name="replicatorPosition"/>
         /// (MV-1086: a10/a11/a12 hold floor and deck robots under one area id — MV-944's "floor and deck
@@ -753,7 +754,7 @@ namespace MaxWorlds.Factories
         /// it separately; the probe only needs a count.</summary>
         public static bool IsEligibleFor(RobotEnemy r, int areaIndex, Vector3 replicatorPosition) =>
             r != null && r.IsAlive
-            && r.Kind != EnemyKind.Lurker && r.Kind != EnemyKind.Turret
+            && r.Kind != EnemyKind.Lurker && r.Kind != EnemyKind.Turret && r.Kind != EnemyKind.Dreadnought
             && !r.NoReplicate && !r.IsAssignedToReplicator
             && r.AreaIndex == areaIndex
             && CombatLevel.SameLevel(EnemyNavigation.Map, replicatorPosition, r.transform.position);

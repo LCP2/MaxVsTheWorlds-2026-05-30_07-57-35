@@ -6,6 +6,7 @@ using UnityEngine;
 using Unity.Cinemachine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Dev
@@ -29,6 +30,11 @@ namespace MaxWorlds.Dev
     /// not a hand-simplified stand-in. <see cref="RobotEnemy"/> is disabled immediately after — there is
     /// no Max in this shot for it to chase, and a robot that drifted mid-capture would blur the silhouette
     /// the ticket is judging.
+    ///
+    /// MV-1217 AC2 adds one extra shot at the end of the same run (<see cref="CaptureDreadnoughtPair"/>):
+    /// a Dreadnought next to a Bruiser, on the Reef's own floor, at the game's real play-camera pitch —
+    /// written to <c>dreadnought_pair.png</c>, reusing this director's scene/camera/writer rather than
+    /// standing up a second capture harness for one reference image.
     /// </summary>
     public sealed class RobotRosterDirector : MonoBehaviour
     {
@@ -38,6 +44,13 @@ namespace MaxWorlds.Dev
 
         private const float Pitch = 64.88f;
         private const float Distance = 15.81f;
+
+        /// <summary>MV-1217 AC2's own "play-camera framing" — the game's real fixed top-down angle
+        /// (same constant/reasoning as <see cref="PressKitDirector"/>'s own <c>FramePitch</c>), not this
+        /// director's closer single-robot review angle above.</summary>
+        private const float DreadnoughtPairPitch = 72f;
+        private const float DreadnoughtPairDistance = 12f;
+        private const float DreadnoughtPairSpacing = 3.4f;   // metres between the two robots' centres
 
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
@@ -115,7 +128,67 @@ namespace MaxWorlds.Dev
             }
             if (current != null) Destroy(current);
 
+            yield return CaptureDreadnoughtPair(cam, focusBase);
+
             Finish();
+        }
+
+        /// <summary>MV-1217 AC2 — the Dreadnought next to a Bruiser, on the Reef's own floor, at
+        /// play-camera framing: one extra shot appended to this director's existing run rather than a
+        /// whole second capture harness, since it needs nothing this one doesn't already have (a loaded
+        /// scene, a camera, the same <see cref="BuildRobot"/> greybox-then-rig recipe, the same PNG
+        /// writer).
+        ///
+        /// "The Reef floor" is a small plane dropped in under just these two robots, wearing
+        /// <see cref="WorldMaterials.M_ShipFloor"/> directly — the exact deck material World 3 itself
+        /// renders with. Deliberately NOT done by swapping the whole scene's <see cref="MaterialLibrary.Palette"/>
+        /// to <see cref="BiomePalette.Reef"/>: tried first, and it rendered this whole shot MAGENTA — the
+        /// scene's own ground/props already built their materials against the loaded Backyard palette by
+        /// the time this director's Start() runs several frames in, and <see cref="MaterialLibrary.Palette"/>'s
+        /// setter unconditionally DESTROYS every cached material on a change, including the ones those
+        /// still-live renderers point at (exactly the failure that class's own doc comment warns about —
+        /// "a material that is destroyed while a renderer is still pointing at it renders MAGENTA").
+        /// <see cref="WorldMaterials.M_ShipFloor"/> is a different, independent cache
+        /// (<c>WorldMaterials.s_reefCache</c>) that never touches <see cref="MaterialLibrary"/>'s own, so
+        /// dropping one plane in wearing it is safe regardless of what the rest of the loaded scene has
+        /// already built.</summary>
+        private IEnumerator CaptureDreadnoughtPair(Camera cam, Vector3 focusBase)
+        {
+            GameObject bruiser = null, dreadnought = null, floor = null;
+            try
+            {
+                Vector3 bruiserPos = focusBase + Vector3.left * (DreadnoughtPairSpacing * 0.5f);
+                Vector3 dreadnoughtPos = focusBase + Vector3.right * (DreadnoughtPairSpacing * 0.5f);
+
+                floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                floor.name = "MV1217 Reef Floor";
+                // Default Unity plane is 10x10 world metres — comfortably covers both robots plus
+                // framing margin with no scaling needed. A hair above the scene's own ground (y=0) so
+                // it draws cleanly on top rather than z-fighting whatever is already there.
+                floor.transform.position = new Vector3(focusBase.x, 0.01f, focusBase.z);
+                Material shipFloor = WorldMaterials.M_ShipFloor;
+                if (shipFloor != null) floor.GetComponent<MeshRenderer>().sharedMaterial = shipFloor;
+                var floorCollider = floor.GetComponent<Collider>();
+                if (floorCollider != null) Destroy(floorCollider);   // cosmetic only — no physics needed
+
+                bruiser = BuildRobot(EnemyKind.Bruiser, bruiserPos);
+                dreadnought = BuildRobot(EnemyKind.Dreadnought, dreadnoughtPos);
+                for (int i = 0; i < 3; i++) yield return null;   // let both rigs' build settle on screen
+
+                var rot = Quaternion.Euler(DreadnoughtPairPitch, 0f, 0f);
+                Vector3 focus = (bruiserPos + dreadnoughtPos) * 0.5f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * DreadnoughtPairDistance, rot);
+
+                yield return null;
+                yield return null;
+                Capture(cam, "dreadnought_pair");
+            }
+            finally
+            {
+                if (bruiser != null) Destroy(bruiser);
+                if (dreadnought != null) Destroy(dreadnought);
+                if (floor != null) Destroy(floor);
+            }
         }
 
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or

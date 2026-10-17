@@ -25,6 +25,9 @@ namespace MaxWorlds.VFX
         Turret,     // MV-691: the wall-mounted lobber — gunmetal, its own hue family
         Sludger,    // MV-705: the sapper that splits on death — acid-green, its own hue family
         Charger,    // MV-707: the straight-line rammer — burnt rust-copper, its own hue family
+        Dreadnought, // MV-1217: the Reef's twin-turret platform — its own warm rust, the shared
+                     // RobotCool teal as its other half (same two-lathe-half idiom every other kind
+                     // already wears — see RobotBodies.BuildDreadnought)
     }
 
     /// <summary>
@@ -213,6 +216,13 @@ namespace MaxWorlds.VFX
         /// the start, same margin every other hand-authored kind colour already sits at.</summary>
         private static readonly Color ChargerBody = new Color(0.50f, 0.20f, 0.07f);
 
+        /// <summary>The Dreadnought (MV-1217): the ticket's own "warm rust half" colour call —
+        /// deliberately its own deeper, darker rust than the Bolter's straight orange (0.55, 0.275,
+        /// 0.061) or the Charger's burnt rust-copper (0.50, 0.20, 0.07), since it's garrison-only and
+        /// can share an area with either. Authored directly under <see cref="SunlitAlbedo.Ceiling"/>
+        /// (0.6) from the start, same margin every other hand-authored kind colour already sits at.</summary>
+        private static readonly Color DreadnoughtBody = new Color(0.46f, 0.16f, 0.05f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -343,6 +353,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Turret: return TurretBody;
                 case CharacterRole.Charger: return ChargerBody;
                 case CharacterRole.Sludger: return SludgerBody;
+                case CharacterRole.Dreadnought: return DreadnoughtBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -368,6 +379,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Turret: return CharacterRole.Turret;
                 case EnemyKind.Charger: return CharacterRole.Charger;
                 case EnemyKind.Sludger: return CharacterRole.Sludger;
+                case EnemyKind.Dreadnought: return CharacterRole.Dreadnought;
                 default: return CharacterRole.Robot;
             }
         }
@@ -418,7 +430,8 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
             r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
-            r == CharacterRole.Sludger || r == CharacterRole.Charger || r == CharacterRole.Boss;
+            r == CharacterRole.Sludger || r == CharacterRole.Charger || r == CharacterRole.Dreadnought ||
+            r == CharacterRole.Boss;
 
         private void OnEnable()
         {

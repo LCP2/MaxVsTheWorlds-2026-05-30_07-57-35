@@ -6,6 +6,7 @@
 // fold into the design source and re-emit at his convenience; every other Build* method here is untouched.
 // MV-705 EXCEPTION: BuildSludger is hand-authored for the same reason.
 // MV-707 EXCEPTION: BuildCharger is hand-authored for the same reason.
+// MV-1217 EXCEPTION: BuildDreadnought is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -82,6 +83,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Turret:   BuildTurret(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Sludger:  BuildSludger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Charger:  BuildCharger(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Dreadnought: BuildDreadnought(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -567,6 +569,78 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.22f, 0.016f, 0.007f, 5), p.Dark, new Vector3(0.28f, 1.59f, -0.14f), Quaternion.Euler(8f, 0f, -13f), Vector3.one);
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(0.3295f, 1.7f, -0.1094f), Quaternion.identity, new Vector3(0.032f, 0.032f, 0.032f));
             Add(root, CharacterMeshes.Beam(0.15f, 0.016f, 0.007f, 5), p.Dark, new Vector3(-0.22f, 1.555f, -0.18f), Quaternion.Euler(-6f, 0f, 11f), Vector3.one);
+        }
+
+        /// <summary>Dreadnought (MV-1217) — hand-authored, same exception as <see cref="BuildBolter"/>/
+        /// <see cref="BuildLurker"/>/<see cref="BuildTurret"/>/<see cref="BuildSludger"/>/
+        /// <see cref="BuildCharger"/> above. A top-heavy diving-bell drum on four thin jointed legs
+        /// (<see cref="AddLeg"/>'s hip pivots, same "free waddle" idiom <see cref="BuildSludger"/>
+        /// already uses), the roster's usual two-lathe-half torso (<c>p.Cool</c> lower, <c>p.Warm</c>
+        /// upper — the ticket's own "cool teal half / warm rust half split by one hard straight line",
+        /// since <c>p.Cool</c> already IS a teal and <c>p.Warm</c> is this kind's own rust via
+        /// <see cref="CharacterSkin.DreadnoughtBody"/>), one big OFF-CENTRE eye lens (deliberately not
+        /// centred, and deliberately larger than every other kind's — the ticket's own "brightest thing
+        /// on it"), a tiny gold neck ring, and two shoulder turret nozzles — cosmetic only; the actual
+        /// aim/fire gameplay lives in <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own
+        /// <c>TickDreadnoughtTurrets</c>, unconditionally, so a bolt fires from the right place even
+        /// with no rig attached at all.</summary>
+        private static void BuildDreadnought(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // Four thin jointed legs, splayed wide for a stable top-heavy stance — same AddLeg/hip-pivot
+            // idiom as BuildSludger's four legs, just reaching much further (hip ~1.15m up, feet
+            // splayed out to ~1.9m radius) to hold a 3 m body well clear of the ground.
+            for (int i = 0; i < 4; i++)
+            {
+                float thetaDeg = 45f + i * 90f;
+                float thetaRad = thetaDeg * Mathf.Deg2Rad;
+                var hipDir = new Vector3(Mathf.Sin(thetaRad), 0f, Mathf.Cos(thetaRad));
+                Vector3 beamPos = new Vector3(hipDir.x * 0.5f, 1.15f, hipDir.z * 0.5f);
+                Transform legBeam = Add(root, CharacterMeshes.Beam(1.78f, 0.09f, 0.06f, 6), p.Dark,
+                    beamPos, Quaternion.Euler(28f, thetaDeg, 0f), Vector3.one);
+                Vector3 footPos = new Vector3(hipDir.x * 1.9f, 0.05f, hipDir.z * 1.9f);
+                Transform legFoot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.09f, 0f), new Vector2(0.06f, 0.05f), new Vector2(0.025f, 0.1f) }, 8), p.Dark,
+                    footPos, Quaternion.identity, Vector3.one, "Foot");
+                legs.Add(AddLeg(root, legBeam, legFoot, 0.89f));
+            }
+
+            // The diving-bell drum body — p.Cool (teal) below the seam, p.Warm (this kind's own rust)
+            // above it, same two-lathe-half idiom every other kind's torso already uses. Authored
+            // straight in world Y (feet at 0) rather than relative to a non-zero origin, since this
+            // body sits well clear of the ground on its own legs.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.5f, 1.1f), new Vector2(1.0f, 1.35f), new Vector2(1.18f, 1.65f), new Vector2(1.15f, 1.95f) }, 28), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(1.15f, 1.95f), new Vector2(1.05f, 2.3f), new Vector2(0.75f, 2.6f), new Vector2(0.35f, 2.8f) }, 28), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // The one hard straight line the ticket calls for between the two halves — a thin gold
+            // filigree ring at the seam, same idiom as Charger's own (MV-695).
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(1.15f, -0.012f), new Vector2(1.2f, 0f), new Vector2(1.15f, 0.012f) }, 24), p.Gold, new Vector3(0f, 1.95f, 0f), Quaternion.identity, Vector3.one);
+
+            // The tiny gold tell ring (distinct from the eye) — a small neck-band accent low on the
+            // warm half, the same "one small gold part" Tier-2 tell idiom every other kind carries.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.18f, -0.01f), new Vector2(0.22f, 0f), new Vector2(0.18f, 0.01f) }, 16), p.Gold, new Vector3(0.55f, 2.15f, 0.75f), Quaternion.Euler(70f, 0f, 0f), Vector3.one);
+
+            // ONE big OFF-CENTRE eye — deliberately not on the body's own forward axis (x = 0.35, not
+            // 0), and deliberately larger (0.26 lens scale, versus every other kind's ~0.19) — the
+            // ticket's own "the brightest thing on it".
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.3f, 0f), new Vector2(0.42f, 0.05f), new Vector2(0.45f, 0.11f), new Vector2(0.4f, 0.17f) }, 24), p.Dark, new Vector3(0.35f, 1.65f, 1.0f), Quaternion.Euler(50f, 0f, 0f), Vector3.one);
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0.35f, 1.73f, 1.14f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.26f, 0.26f, 0.09f)));
+
+            // Two independent shoulder turrets — cosmetic nozzle + gold tip bead each, mirrored left/
+            // right near the top of the drum, close to the world-space offsets RobotEnemy's own
+            // TickDreadnoughtTurrets fires bolts from (that gameplay math never reads these transforms —
+            // see its own doc comment on why it works with no rig attached at all).
+            BuildDreadnoughtTurret(root, p, mirroredRight: true);
+            BuildDreadnoughtTurret(root, p, mirroredRight: false);
+        }
+
+        private static void BuildDreadnoughtTurret(Transform root, in RobotPalette p, bool mirroredRight)
+        {
+            float x = mirroredRight ? 0.95f : -0.95f;
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.2f, 0f), new Vector2(0.24f, 0.05f), new Vector2(0.2f, 0.12f) }, 16), p.Dark,
+                new Vector3(x, 2.15f, 0.2f), Quaternion.identity, Vector3.one, "TurretMount");
+            Add(root, CharacterMeshes.Beam(0.4f, 0.05f, 0.035f, 8), p.Dark,
+                new Vector3(x, 2.2f, 0.42f), Quaternion.Euler(90f, 0f, 0f), Vector3.one, "TurretNozzle");
+            Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(x, 2.2f, 0.63f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
         }
 
         // ------------------------------------------------------------------ plumbing
