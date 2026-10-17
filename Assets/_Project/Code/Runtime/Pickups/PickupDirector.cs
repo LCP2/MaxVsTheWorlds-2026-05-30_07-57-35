@@ -220,12 +220,14 @@ namespace MaxWorlds.Pickups
                 if (dropped != null) MarkAgesOnGround(dropped);   // MV-1101: a robot-kill Part ages
             }
 
-            // MV-1106: a World 3 Brute (Dredge Hulk) always drops its own guaranteed parts too, whether
-            // it came from a reactor (shed) or the area garrison — Die() reaches this listener through
-            // the same DropSignals.EmitRobotDied call regardless of how the robot was placed, so this
-            // is additive insurance against ResolveCellDrop's own roll landing at zero, not a fix to a
-            // broken path.
-            if (kind == EnemyKind.Brute && ResolvePlayedWorldIndex() >= 2)
+            // MV-1106: the Reef's own Brute (Dredge Hulk) always drops its own guaranteed parts too,
+            // whether it came from a reactor (shed) or the area garrison — Die() reaches this listener
+            // through the same DropSignals.EmitRobotDied call regardless of how the robot was placed,
+            // so this is additive insurance against ResolveCellDrop's own roll landing at zero, not a
+            // fix to a broken path. MV-1219: keyed on the Reef's stable WorldIds entry, not a raw
+            // worldIndex >= 2 comparison — MV-1176 inserted the City at index 2 and moved the Reef to
+            // index 3, so that comparison also matched every City Brute.
+            if (kind == EnemyKind.Brute && WorldCatalog.Get(ResolvePlayedWorldIndex()).Id == WorldIds.Reef)
             {
                 for (int i = 0; i < DredgeHulkGuaranteedPartDrops; i++)
                 {
