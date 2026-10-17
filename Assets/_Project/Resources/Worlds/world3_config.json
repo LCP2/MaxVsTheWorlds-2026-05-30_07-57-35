@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 4 \u2014 The Reef",
- "revision": "WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
+ "revision": "WORLD 4 Reef V8 2026-10-17: interiors re-authored with the Reef structure kit (MV-1215) from MVW_World4_Reef_Level_Design_V8; footprints, route, gates, garrison, sheds, hull fill and dials unchanged; a15 and stub unchanged. Previous: WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 3,
@@ -882,7 +882,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -893,7 +893,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -904,7 +904,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -915,7 +915,117 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k1",
+     "x": 10.0,
+     "z": 60.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k2",
+     "x": 18.0,
+     "z": 60.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k3",
+     "x": 7.0,
+     "z": 31.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k4",
+     "x": 21.0,
+     "z": 31.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k5",
+     "x": 8.5,
+     "z": 47.0,
+     "width": 1,
+     "height": 1.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k6",
+     "x": 19.5,
+     "z": 47.0,
+     "width": 1,
+     "height": 1.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k7",
+     "x": 4.5,
+     "z": 55.0,
+     "width": 1,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k8",
+     "x": 23.5,
+     "z": 55.0,
+     "width": 1,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k9",
+     "x": 4.5,
+     "z": 39.0,
+     "width": 1,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a1_k10",
+     "x": 23.5,
+     "z": 39.0,
+     "width": 1,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     }
    ],
@@ -958,7 +1068,29 @@
      "x": 26.5,
      "z": 35.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 14.0,
+     "z": 42.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "W",
+     "from": 0.5882,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.0,
+     "to": 0.4118
+    }
+   ],
+   "wallDressing": "racks"
   },
   {
    "id": "a2",
@@ -1112,10 +1244,10 @@
      "x": 9.0,
      "z": 17.0,
      "width": 2,
-     "height": 1.8,
+     "height": 1.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_console",
      "coverKind": "solid"
     },
     {
@@ -1123,11 +1255,55 @@
      "x": 21.0,
      "z": 19.0,
      "width": 2,
-     "height": 1.8,
+     "height": 1.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_console",
      "coverKind": "solid"
+    },
+    {
+     "id": "a2_k1",
+     "x": 8.0,
+     "z": 26.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a2_k2",
+     "x": 20.0,
+     "z": 26.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a2_k3",
+     "x": 22.0,
+     "z": 23.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a2_k4",
+     "x": 13.5,
+     "z": 5.0,
+     "width": 1,
+     "height": 0.5,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [
@@ -1341,7 +1517,20 @@
      "x": 26.5,
      "z": 1.5
     }
-   ]
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.4286,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.4286,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a3",
@@ -1440,44 +1629,88 @@
      "x": 44.5,
      "z": 5.0,
      "width": 1,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 4,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a3_r9",
      "x": 35.0,
      "z": 13.5,
      "width": 6,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a3_r10",
      "x": 55.0,
      "z": 14.5,
      "width": 6,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a3_r11",
      "x": 45.5,
      "z": 23.0,
      "width": 1,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 4,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a3_k1",
+     "x": 32.5,
+     "z": 24.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a3_k2",
+     "x": 54.5,
+     "z": 22.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a3_k3",
+     "x": 33.5,
+     "z": 4.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a3_k4",
+     "x": 54.5,
+     "z": 4.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
     }
    ],
    "sludge": [],
@@ -1572,7 +1805,31 @@
      "x": 60.5,
      "z": 1.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 49.0,
+     "z": 25.0,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "kind": "hatch",
+     "x": 39.0,
+     "z": 3.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a4",
@@ -1597,7 +1854,7 @@
      "height": 1.8,
      "depth": 18,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1608,7 +1865,7 @@
      "height": 1.8,
      "depth": 11,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1619,7 +1876,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1630,7 +1887,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1641,7 +1898,7 @@
      "height": 1.8,
      "depth": 18,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1652,7 +1909,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1663,7 +1920,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1674,7 +1931,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1685,8 +1942,63 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
+    },
+    {
+     "id": "a4_k1",
+     "x": 81.0,
+     "z": 25.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a4_k2",
+     "x": 95.0,
+     "z": 9.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a4_k3",
+     "x": 65.0,
+     "z": 8.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a4_k4",
+     "x": 65.0,
+     "z": 2.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a4_k5",
+     "x": 72.0,
+     "z": 20.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -1776,7 +2088,25 @@
      "x": 98.5,
      "z": 1.5
     }
-   ]
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 0.2105
+    },
+    {
+     "wall": "S",
+     "from": 0.2368,
+     "to": 0.5789
+    },
+    {
+     "wall": "S",
+     "from": 0.6053,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a5",
@@ -1845,7 +2175,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1856,7 +2186,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -1867,7 +2197,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -1878,7 +2208,73 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k1",
+     "x": 104.0,
+     "z": 14.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k2",
+     "x": 132.0,
+     "z": 14.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k3",
+     "x": 125.0,
+     "z": 7.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k4",
+     "x": 117.0,
+     "z": 5.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k5",
+     "x": 120.0,
+     "z": 25.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a5_k6",
+     "x": 118.0,
+     "z": 19.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -2001,7 +2397,24 @@
      "x": 134.5,
      "z": 8.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 109.0,
+     "z": 26.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.2222,
+     "to": 0.7778
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a6",
@@ -2026,7 +2439,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2037,7 +2450,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2048,7 +2461,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2059,7 +2472,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2070,7 +2483,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2081,7 +2494,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2092,7 +2505,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2103,7 +2516,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2114,7 +2527,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2125,7 +2538,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2136,7 +2549,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2147,7 +2560,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2158,7 +2571,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2169,7 +2582,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2180,7 +2593,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2191,7 +2604,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2202,7 +2615,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2213,7 +2626,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -2224,8 +2637,19 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
+    },
+    {
+     "id": "a6_k1",
+     "x": 159.0,
+     "z": 8.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -2362,7 +2786,24 @@
      "x": 170.5,
      "z": 1.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 138.0,
+     "z": 25.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a7",
@@ -2519,7 +2960,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2530,7 +2971,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2541,7 +2982,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2552,7 +2993,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2563,7 +3004,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2574,7 +3015,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2585,7 +3026,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2596,7 +3037,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2607,7 +3048,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -2618,7 +3059,51 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a7_k1",
+     "x": 178.0,
+     "z": 31.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a7_k2",
+     "x": 197.0,
+     "z": 17.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a7_k3",
+     "x": 176.0,
+     "z": 12.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a7_k4",
+     "x": 184.0,
+     "z": 6.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
      "coverKind": "solid"
     }
    ],
@@ -2733,7 +3218,29 @@
      "x": 198.5,
      "z": 34.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 195.0,
+     "z": 34.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 0.5714
+    },
+    {
+     "wall": "E",
+     "from": 0.3333,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "racks"
   },
   {
    "id": "a8",
@@ -3211,6 +3718,72 @@
      "shape": "box",
      "dressing": "none",
      "coverKind": "solid"
+    },
+    {
+     "id": "a8_k1",
+     "x": 186.0,
+     "z": 60.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a8_k2",
+     "x": 175.0,
+     "z": 59.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a8_k3",
+     "x": 186.0,
+     "z": 48.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a8_k4",
+     "x": 186.0,
+     "z": 40.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a8_k5",
+     "x": 197.0,
+     "z": 68.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a8_k6",
+     "x": 197.0,
+     "z": 48.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
     }
    ],
    "sludge": [],
@@ -3377,7 +3950,24 @@
      "x": 173.5,
      "z": 70.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 174.0,
+     "z": 42.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "E",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a9",
@@ -3402,7 +3992,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3413,7 +4003,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3424,7 +4014,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3435,7 +4025,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3446,7 +4036,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3457,7 +4047,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3468,7 +4058,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3479,7 +4069,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3490,7 +4080,51 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a9_k1",
+     "x": 175.0,
+     "z": 101.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a9_k2",
+     "x": 192.0,
+     "z": 91.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a9_k3",
+     "x": 178.0,
+     "z": 88.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a9_k4",
+     "x": 185.0,
+     "z": 76.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
      "coverKind": "solid"
     }
    ],
@@ -3635,7 +4269,24 @@
      "x": 173.5,
      "z": 104.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 198.0,
+     "z": 104.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "E",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "racks"
   },
   {
    "id": "a10",
@@ -3770,7 +4421,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3781,7 +4432,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3792,7 +4443,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3803,7 +4454,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3814,7 +4465,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3825,7 +4476,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3836,7 +4487,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3847,7 +4498,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -3858,8 +4509,63 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
+    },
+    {
+     "id": "a10_k1",
+     "x": 176.0,
+     "z": 139.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a10_k2",
+     "x": 176.0,
+     "z": 108.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a10_k3",
+     "x": 192.5,
+     "z": 132.5,
+     "width": 1,
+     "height": 0.9,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a10_k4",
+     "x": 177.5,
+     "z": 126.5,
+     "width": 5,
+     "height": 0.9,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a10_k5",
+     "x": 193.5,
+     "z": 115.5,
+     "width": 5,
+     "height": 0.9,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [
@@ -4028,7 +4734,24 @@
      "x": 173.5,
      "z": 140.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 186.0,
+     "z": 108.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "E",
+     "from": 0.0,
+     "to": 0.7222
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a11",
@@ -4105,44 +4828,77 @@
      "x": 150.5,
      "z": 110.0,
      "width": 1,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 12,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a11_r7",
      "x": 162.5,
      "z": 120.5,
      "width": 11,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a11_r8",
      "x": 140.0,
      "z": 121.5,
      "width": 12,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a11_r9",
      "x": 151.5,
      "z": 132.5,
      "width": 1,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 11,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a11_k1",
+     "x": 166.0,
+     "z": 137.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a11_k2",
+     "x": 145.0,
+     "z": 103.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a11_k3",
+     "x": 135.0,
+     "z": 137.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -4364,7 +5120,17 @@
      "x": 131.5,
      "z": 101.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 170.0,
+     "z": 111.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a12",
@@ -4444,7 +5210,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -4455,7 +5221,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -4466,7 +5232,73 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k1",
+     "x": 126.0,
+     "z": 135.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k2",
+     "x": 94.0,
+     "z": 128.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k3",
+     "x": 103.0,
+     "z": 127.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k4",
+     "x": 95.0,
+     "z": 105.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k5",
+     "x": 123.0,
+     "z": 108.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a12_k6",
+     "x": 127.0,
+     "z": 103.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -4655,7 +5487,17 @@
      "x": 89.5,
      "z": 140.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 111.0,
+     "z": 140.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a13",
@@ -4878,7 +5720,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -4889,7 +5731,7 @@
      "height": 1.8,
      "depth": 4,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -4900,8 +5742,41 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
+    },
+    {
+     "id": "a13_k1",
+     "x": 58.0,
+     "z": 130.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a13_k2",
+     "x": 50.0,
+     "z": 106.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a13_k3",
+     "x": 83.0,
+     "z": 108.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -5110,7 +5985,17 @@
      "x": 29.5,
      "z": 101.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 86.0,
+     "z": 138.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a14",
@@ -5190,7 +6075,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -5201,7 +6086,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -5212,7 +6097,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -5223,7 +6108,73 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k1",
+     "x": 67.5,
+     "z": 83.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k2",
+     "x": 88.5,
+     "z": 83.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k3",
+     "x": 95.5,
+     "z": 78.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k4",
+     "x": 88.5,
+     "z": 75.5,
+     "width": 3,
+     "height": 2.4,
+     "depth": 3,
+     "shape": "cylinder",
+     "dressing": "reef_drum",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k5",
+     "x": 71.0,
+     "z": 59.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a14_k6",
+     "x": 77.0,
+     "z": 58.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -5500,7 +6451,24 @@
      "x": 86.5,
      "z": 57.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 79.0,
+     "z": 98.0,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "kind": "hatch",
+     "x": 58.0,
+     "z": 70.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a15",
@@ -6080,7 +7048,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6091,7 +7059,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6102,7 +7070,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6113,7 +7081,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6124,7 +7092,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6135,7 +7103,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6146,7 +7114,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6157,7 +7125,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6168,7 +7136,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6179,7 +7147,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6190,7 +7158,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6201,7 +7169,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6212,7 +7180,51 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a16_k1",
+     "x": 162.0,
+     "z": 60.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a16_k2",
+     "x": 168.0,
+     "z": 60.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a16_k3",
+     "x": 164.0,
+     "z": 97.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a16_k4",
+     "x": 156.0,
+     "z": 94.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -6489,7 +7501,8 @@
      "x": 170.5,
      "z": 57.5
     }
-   ]
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a17",
@@ -6514,7 +7527,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6525,7 +7538,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6536,7 +7549,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6547,7 +7560,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -6558,7 +7571,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -6569,7 +7582,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -6580,7 +7593,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -6591,8 +7604,41 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
+    },
+    {
+     "id": "a17_k1",
+     "x": 155.0,
+     "z": 52.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a17_k2",
+     "x": 151.0,
+     "z": 32.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a17_k3",
+     "x": 144.0,
+     "z": 43.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [
@@ -6967,7 +8013,17 @@
      "x": 139.5,
      "z": 29.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 170.0,
+     "z": 37.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a18",
@@ -6992,7 +8048,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7003,7 +8059,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7014,7 +8070,7 @@
      "height": 1.8,
      "depth": 8,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7025,7 +8081,7 @@
      "height": 1.8,
      "depth": 6,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7036,7 +8092,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7047,7 +8103,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7058,7 +8114,7 @@
      "height": 1.8,
      "depth": 7,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7069,7 +8125,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7080,7 +8136,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7091,7 +8147,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7102,7 +8158,7 @@
      "height": 1.8,
      "depth": 9,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7113,7 +8169,7 @@
      "height": 1.8,
      "depth": 8,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7124,7 +8180,7 @@
      "height": 1.8,
      "depth": 7,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7135,7 +8191,18 @@
      "height": 1.8,
      "depth": 6,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a18_k1",
+     "x": 134.0,
+     "z": 42.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -7496,7 +8563,17 @@
      "x": 101.5,
      "z": 29.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 102.0,
+     "z": 31.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a19",
@@ -7598,8 +8675,63 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
+    },
+    {
+     "id": "a19_k1",
+     "x": 70.0,
+     "z": 52.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a19_k2",
+     "x": 77.0,
+     "z": 51.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a19_k3",
+     "x": 96.5,
+     "z": 51.5,
+     "width": 1,
+     "height": 0.9,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a19_k4",
+     "x": 70.5,
+     "z": 30.5,
+     "width": 5,
+     "height": 0.9,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a19_k5",
+     "x": 82.5,
+     "z": 30.5,
+     "width": 5,
+     "height": 0.9,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [
@@ -7714,7 +8846,17 @@
      "x": 65.5,
      "z": 29.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 98.0,
+     "z": 30.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a20",
@@ -7827,7 +8969,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7838,7 +8980,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7849,7 +8991,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -7860,8 +9002,63 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
+    },
+    {
+     "id": "a20_k1",
+     "x": 60.0,
+     "z": 43.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a20_k2",
+     "x": 60.0,
+     "z": 32.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a20_k3",
+     "x": 31.0,
+     "z": 48.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a20_k4",
+     "x": 36.0,
+     "z": 44.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a20_k5",
+     "x": 48.0,
+     "z": 41.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [
@@ -8272,7 +9469,8 @@
      "x": 29.5,
      "z": 54.5
     }
-   ]
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a21",
@@ -8297,7 +9495,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -8308,7 +9506,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -8316,66 +9514,121 @@
      "x": 37.0,
      "z": 66.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a21_r4",
      "x": 47.0,
      "z": 70.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a21_r5",
      "x": 37.0,
      "z": 78.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a21_r6",
      "x": 47.0,
      "z": 82.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a21_r7",
      "x": 37.0,
      "z": 90.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a21_r8",
      "x": 47.0,
      "z": 94.5,
      "width": 8,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a21_k1",
+     "x": 37.0,
+     "z": 72.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a21_k2",
+     "x": 48.0,
+     "z": 64.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a21_k3",
+     "x": 43.0,
+     "z": 97.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a21_k4",
+     "x": 53.0,
+     "z": 97.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a21_k5",
+     "x": 36.0,
+     "z": 95.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -8764,7 +10017,8 @@
      "x": 29.5,
      "z": 98.5
     }
-   ]
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a22",
@@ -8977,6 +10231,28 @@
      "depth": 4,
      "shape": "box",
      "dressing": "none",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a22_k1",
+     "x": 24.0,
+     "z": 98.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a22_k2",
+     "x": 3.0,
+     "z": 66.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -9312,7 +10588,31 @@
      "x": 1.5,
      "z": 100.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 26.0,
+     "z": 74.0,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "kind": "hatch",
+     "x": 26.0,
+     "z": 68.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "W",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a23",
@@ -9426,6 +10726,72 @@
      "depth": 1,
      "shape": "box",
      "dressing": "none",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k1",
+     "x": 24.0,
+     "z": 139.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k2",
+     "x": 8.0,
+     "z": 127.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k3",
+     "x": 21.0,
+     "z": 117.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k4",
+     "x": 14.0,
+     "z": 106.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k5",
+     "x": 10.0,
+     "z": 116.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a23_k6",
+     "x": 25.0,
+     "z": 105.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -9864,7 +11230,39 @@
      "x": 1.5,
      "z": 140.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 3.0,
+     "z": 140.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "W",
+     "from": 0.775,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.525,
+     "to": 0.725
+    },
+    {
+     "wall": "W",
+     "from": 0.275,
+     "to": 0.475
+    },
+    {
+     "wall": "W",
+     "from": 0.0,
+     "to": 0.225
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a24",
@@ -10010,7 +11408,7 @@
      "height": 1.8,
      "depth": 6,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10021,7 +11419,7 @@
      "height": 1.8,
      "depth": 6,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10032,7 +11430,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10043,7 +11441,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10054,7 +11452,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10065,7 +11463,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -10076,7 +11474,51 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a24_k1",
+     "x": 14.0,
+     "z": 171.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a24_k2",
+     "x": 32.0,
+     "z": 157.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a24_k3",
+     "x": 24.0,
+     "z": 152.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a24_k4",
+     "x": 14.0,
+     "z": 146.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
      "coverKind": "solid"
     }
    ],
@@ -10592,7 +12034,29 @@
      "x": 34.5,
      "z": 174.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 32.0,
+     "z": 174.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.3056,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.0,
+     "to": 0.6765
+    }
+   ],
+   "wallDressing": "racks"
   },
   {
    "id": "a25",
@@ -10746,22 +12210,88 @@
      "x": 54.0,
      "z": 153.5,
      "width": 16,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     },
     {
      "id": "a25_r14",
      "x": 54.0,
      "z": 165.5,
      "width": 16,
-     "height": 1.8,
+     "height": 0.5,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe",
-     "coverKind": "SeeThrough"
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
+    },
+    {
+     "id": "a25_k1",
+     "x": 46.0,
+     "z": 161.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a25_k2",
+     "x": 40.0,
+     "z": 160.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a25_k3",
+     "x": 69.0,
+     "z": 159.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a25_k4",
+     "x": 61.0,
+     "z": 158.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a25_k5",
+     "x": 51.0,
+     "z": 149.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a25_k6",
+     "x": 45.0,
+     "z": 148.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
     }
    ],
    "sludge": [],
@@ -11187,7 +12717,54 @@
      "x": 70.5,
      "z": 147.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 62.0,
+     "z": 174.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 0.0833
+    },
+    {
+     "wall": "N",
+     "from": 0.1389,
+     "to": 0.25
+    },
+    {
+     "wall": "N",
+     "from": 0.3056,
+     "to": 0.4167
+    },
+    {
+     "wall": "N",
+     "from": 0.4722,
+     "to": 0.5833
+    },
+    {
+     "wall": "N",
+     "from": 0.6389,
+     "to": 0.75
+    },
+    {
+     "wall": "N",
+     "from": 0.8056,
+     "to": 0.9167
+    },
+    {
+     "wall": "N",
+     "from": 0.9722,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a26",
@@ -11245,7 +12822,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -11256,7 +12833,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -11267,7 +12844,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -11278,7 +12855,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -11289,7 +12866,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
     },
     {
@@ -11300,8 +12877,41 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_manifold",
      "coverKind": "solid"
+    },
+    {
+     "id": "a26_k1",
+     "x": 76.0,
+     "z": 169.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a26_k2",
+     "x": 76.0,
+     "z": 145.0,
+     "width": 4,
+     "height": 1.8,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_manifold",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a26_k3",
+     "x": 101.0,
+     "z": 162.5,
+     "width": 6,
+     "height": 0.5,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_floor_pipe",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -11313,7 +12923,24 @@
      "w": 4.0,
      "d": 4.0
     }
-   }
+   },
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 130.0,
+     "z": 144.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a27",
@@ -11492,7 +13119,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -11503,7 +13130,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -11514,7 +13141,29 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a27_k1",
+     "x": 135.0,
+     "z": 171.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a27_k2",
+     "x": 151.0,
+     "z": 166.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
      "coverKind": "solid"
     }
    ],
@@ -12061,7 +13710,31 @@
      "x": 164.5,
      "z": 143.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 134.0,
+     "z": 145.0,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "kind": "hatch",
+     "x": 163.0,
+     "z": 144.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a28",
@@ -12196,7 +13869,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12207,7 +13880,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12218,7 +13891,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12229,7 +13902,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12240,7 +13913,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12251,7 +13924,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12262,7 +13935,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12273,7 +13946,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12284,7 +13957,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12295,7 +13968,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12306,7 +13979,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12317,7 +13990,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12328,7 +14001,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12339,7 +14012,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12350,7 +14023,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12361,7 +14034,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12372,7 +14045,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12383,7 +14056,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12394,7 +14067,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12405,7 +14078,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12416,7 +14089,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -12427,8 +14100,41 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
+    },
+    {
+     "id": "a28_k1",
+     "x": 196.0,
+     "z": 164.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a28_k2",
+     "x": 191.0,
+     "z": 144.5,
+     "width": 2,
+     "height": 1.0,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "reef_console",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a28_k3",
+     "x": 169.5,
+     "z": 159.5,
+     "width": 1,
+     "height": 0.9,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "reef_planter",
+     "coverKind": "see_through"
     }
    ],
    "sludge": [],
@@ -13039,7 +14745,24 @@
      "x": 198.5,
      "z": 146.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 180.0,
+     "z": 173.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 0.7059
+    }
+   ],
+   "wallDressing": "planters"
   },
   {
    "id": "a29",
@@ -13108,7 +14831,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -13119,7 +14842,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -13130,7 +14853,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -13141,7 +14864,7 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -13152,7 +14875,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -13163,7 +14886,18 @@
      "height": 1.8,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a29_k1",
+     "x": 204.0,
+     "z": 159.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
      "coverKind": "solid"
     }
    ],
@@ -13980,7 +15714,49 @@
      "x": 230.5,
      "z": 143.5
     }
-   ]
+   ],
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 229.0,
+     "z": 144.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 0.25
+    },
+    {
+     "wall": "N",
+     "from": 0.3125,
+     "to": 0.7188
+    },
+    {
+     "wall": "N",
+     "from": 0.7812,
+     "to": 1.0
+    },
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 0.25
+    },
+    {
+     "wall": "S",
+     "from": 0.3125,
+     "to": 0.7188
+    },
+    {
+     "wall": "S",
+     "from": 0.7812,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "pipes"
   },
   {
    "id": "a30",
@@ -14049,7 +15825,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14060,7 +15836,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14071,7 +15847,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14082,7 +15858,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14093,7 +15869,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14104,7 +15880,7 @@
      "height": 1.8,
      "depth": 4,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14115,7 +15891,7 @@
      "height": 1.8,
      "depth": 1,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14126,7 +15902,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14137,7 +15913,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14148,7 +15924,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14159,7 +15935,7 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
      "coverKind": "solid"
     },
     {
@@ -14170,7 +15946,51 @@
      "height": 1.8,
      "depth": 5,
      "shape": "box",
-     "dressing": "machinery",
+     "dressing": "reef_crate",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a30_k1",
+     "x": 235.0,
+     "z": 180.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a30_k2",
+     "x": 240.0,
+     "z": 164.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a30_k3",
+     "x": 240.0,
+     "z": 156.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
+     "coverKind": "solid"
+    },
+    {
+     "id": "a30_k4",
+     "x": 240.0,
+     "z": 140.0,
+     "width": 2,
+     "height": 3.0,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "reef_pillar",
      "coverKind": "solid"
     }
    ],
@@ -14183,7 +16003,49 @@
      "w": 4.5,
      "d": 4.5
     }
-   }
+   },
+   "decor": [
+    {
+     "kind": "hatch",
+     "x": 274.0,
+     "z": 182.0,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "windows": [
+    {
+     "wall": "N",
+     "from": 0.0,
+     "to": 1.0
+    },
+    {
+     "wall": "S",
+     "from": 0.0,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.8571,
+     "to": 1.0
+    },
+    {
+     "wall": "W",
+     "from": 0.0,
+     "to": 0.25
+    },
+    {
+     "wall": "E",
+     "from": 0.0,
+     "to": 0.2554
+    },
+    {
+     "wall": "E",
+     "from": 0.3446,
+     "to": 1.0
+    }
+   ],
+   "wallDressing": "racks"
   }
  ]
 }
