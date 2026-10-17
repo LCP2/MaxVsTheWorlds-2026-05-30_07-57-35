@@ -434,6 +434,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1113SentinelArrival());
             Add(BuildMv1196RicochetLook());
             Add(BuildMv1205CityGroundCheck());
+            Add(BuildMv1207CityBrightnessCheck());
             return d;
         }
 
@@ -4130,6 +4131,81 @@ namespace MaxWorlds.Dev
                 {
                     new CaptureShot("MV-1205-a1", NoSetup),
                     new CaptureShot("MV-1205-a5", SetupA5),
+                },
+            };
+        }
+
+        // ---- Mv1207CityBrightnessCheck (MV-1207 AC2) ------------------------------------------
+
+        /// <summary>The ticket's own one-shot capture check: City a1 and a8 at the play camera, after
+        /// MV-1207's ambient/key/fog/palette brightening. Same zone-framing idiom as
+        /// <see cref="BuildMv1205CityGroundCheck"/> — reuses its "area" + index zone-id rewrite note
+        /// (city_config.json's a1/a8 carry index 1/8, well inside its areaCount of 30) rather than
+        /// re-deriving it.</summary>
+        private static CapturePreset BuildMv1207CityBrightnessCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"City map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("City built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area1");
+            }
+
+            IEnumerator SetupA8(Camera cam) => FrameZone(cam, "area8");
+
+            return new CapturePreset
+            {
+                Key = "mv1207citybrightness",
+                LogTag = "[MV1207Capture]",
+                Flag = "-mv1207shot",
+                ArmFile = "Temp/mv1207.arm",
+                HeadlessMarker = "Temp/mv1207.headless",
+                DoneFileName = "_mv1207_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1207-a1", NoSetup),
+                    new CaptureShot("MV-1207-a8", SetupA8),
                 },
             };
         }
