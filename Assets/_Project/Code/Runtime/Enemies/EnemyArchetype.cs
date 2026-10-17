@@ -9,7 +9,8 @@ namespace MaxWorlds.Enemies
     // Turret (MV-691) follows it too — a static, wall-mounted lobber, appended after Lurker.
     // Sludger (MV-705) follows it too — a sapper that splits in two on death, appended after Turret.
     // Charger (MV-707) follows it too — a telegraphed straight-line rammer, appended after Sludger.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger }
+    // Dreadnought (MV-1217) follows it too — a slow, hard-to-kill twin-turret platform, appended after Charger.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -34,6 +35,7 @@ namespace MaxWorlds.Enemies
                 case "turret": kind = EnemyKind.Turret; return true;
                 case "sludger": kind = EnemyKind.Sludger; return true;
                 case "charger": kind = EnemyKind.Charger; return true;
+                case "dreadnought": kind = EnemyKind.Dreadnought; return true;
                 default: kind = default; return false;
             }
         }
@@ -469,6 +471,41 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 60f,   // heavier than the base 28, lighter than the Bruiser's 100 HP -> 70
             displayName: "CHARGER");
 
+        /// <summary>
+        /// Dreadnought (MV-1217): a 3 m walking turret platform — the Reef's "bigger than the others
+        /// and hard to kill" robot. <see cref="MaxHealth"/> is twice a shed's 474.75 (<see cref="MaxWorlds.Factories.MowerHutch.factoryHealth"/>/
+        /// <see cref="MaxWorlds.Factories.Replicator.ReplicatorHealth"/>), per the ticket's own authored
+        /// number. Walks to <see cref="StandoffRange"/> (8 m) and holds — <see cref="RobotEnemy.TickChase"/>'s
+        /// ranged standoff band, same idiom the Gunner/Launcher/Bolter already use — and never lunges or
+        /// deals contact damage (<see cref="ContactDamage"/> 0, excluded from <c>RobotEnemy</c>'s
+        /// Telegraph/Lunge entirely rather than merely authoring a 0): its threat is two independent
+        /// shoulder turrets, ticked every frame regardless of body state
+        /// (<see cref="RobotEnemy.TickBody"/>'s own <c>TickDreadnoughtTurrets</c>), each firing the
+        /// Bolter's own bolt (reusing <see cref="Bolter"/>'s <see cref="LungeSpeed"/>/<see cref="ContactRadius"/>
+        /// directly, per the ticket's own "reuse the Bolter's existing bolt projectile, speed and
+        /// damage") rather than anything authored here. <see cref="LungeSpeed"/>/<see cref="LungeTime"/>/
+        /// <see cref="RecoverTime"/>/<see cref="TelegraphTime"/> are therefore unread — the body never
+        /// reaches Telegraph/Lunge/Recover — kept at nominal values rather than 0 only for readability.
+        /// <see cref="LungeRange"/> doubles as the turrets' own 12 m fire range (the "ranged kind's
+        /// LungeRange feeds the projectile's max distance" idiom <see cref="TickBolt"/> already uses).
+        /// <see cref="KnockbackDecay"/> is unread too — knockback is refused outright by kind, not merely
+        /// decayed fast (<see cref="RobotEnemy.ApplyKnockback(Vector3)"/>'s own kind check), per the
+        /// ticket's "knockback moves it 0 m".
+        /// </summary>
+        public static EnemyArchetype Dreadnought => new EnemyArchetype(
+            EnemyKind.Dreadnought, EnemyShape.Capsule, new Vector3(2.2f, 2.7f, 2.2f),
+            colliderHeight: 3.0f, colliderRadius: 1.2f,
+            moveSpeed: 0.25f, maxHealth: 950f,
+            contactDamage: 0f,     // no contact damage — see doc comment above
+            contactRadius: 1.6f,   // body-separation footing only; the turrets' own hit radius is Bolter's
+            lungeRange: 12f,       // doubles as the shoulder turrets' own fire range
+            telegraphTime: 0.4f,   // unread by the body — matches the turrets' own warn beat for readability
+            lungeSpeed: 0f,        // unread — turret bolts reuse Bolter's own LungeSpeed directly
+            lungeTime: 0f, recoverTime: 1f,   // unread — the body never reaches Lunge/Recover
+            knockbackDecay: 28f,   // unread — see doc comment above
+            standoffRange: 8f,
+            displayName: "DREADNOUGHT");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -482,6 +519,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Turret => Turret,
             EnemyKind.Sludger => Sludger,
             EnemyKind.Charger => Charger,
+            EnemyKind.Dreadnought => Dreadnought,
             _ => Rusher,
         };
 

@@ -1066,6 +1066,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Turret => c.Turret,
             EnemyKind.Sludger => c.Sludger,
             EnemyKind.Charger => c.Charger,
+            EnemyKind.Dreadnought => c.Dreadnought,
             _ => 0,
         };
 

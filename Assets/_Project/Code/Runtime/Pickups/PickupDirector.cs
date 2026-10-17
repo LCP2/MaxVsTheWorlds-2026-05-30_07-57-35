@@ -72,6 +72,13 @@ namespace MaxWorlds.Pickups
         /// share at zero. See <see cref="OnRobotDied"/>.</summary>
         private const int DredgeHulkGuaranteedPartDrops = 2;
 
+        /// <summary>MV-1217: a Dreadnought always drops this many Power Cells on top of the normal
+        /// per-area roll, keyed on kind alone — no world-index check (unlike <see cref="DredgeHulkGuaranteedPartDrops"/>),
+        /// since it's a garrison-only kind with no world-row restriction. Insurance against
+        /// <see cref="ResolveCellDrop"/>'s own roll landing short for the hardest single kill in the
+        /// swarm, same reasoning as the Dredge Hulk's own guarantee.</summary>
+        private const int DreadnoughtGuaranteedPowerCellDrops = 4;
+
         /// <summary>MV-626, change 2: uncollected power cells allowed live on the ground at once,
         /// oldest recycled first once this is hit — the actual bound on the accumulation this ticket
         /// fixes, independent of the reserve-full gate in <see cref="SpawnDrop"/> (which only stops
@@ -224,6 +231,21 @@ namespace MaxWorlds.Pickups
                 {
                     float ang = i * (Mathf.PI * 2f / DredgeHulkGuaranteedPartDrops) + 0.5f; // offset off the ring above
                     Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                    Pickup dropped = SpawnDrop(PickupKind.PowerCell, pos + off);
+                    if (dropped != null) MarkAgesOnGround(dropped);
+                }
+            }
+
+            // MV-1217: a Dreadnought always drops its own guaranteed Power Cells too, whatever world or
+            // area it was garrisoned in — kept separate from the Dredge Hulk's ring above (offset
+            // further out) so the two guaranteed rings never land on top of each other on the rare kill
+            // that somehow satisfied both kind checks.
+            if (kind == EnemyKind.Dreadnought)
+            {
+                for (int i = 0; i < DreadnoughtGuaranteedPowerCellDrops; i++)
+                {
+                    float ang = i * (Mathf.PI * 2f / DreadnoughtGuaranteedPowerCellDrops) + 0.25f;
+                    Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius * 1.5f;
                     Pickup dropped = SpawnDrop(PickupKind.PowerCell, pos + off);
                     if (dropped != null) MarkAgesOnGround(dropped);
                 }

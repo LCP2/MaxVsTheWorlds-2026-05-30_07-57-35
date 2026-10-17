@@ -163,6 +163,14 @@ namespace MaxWorlds.Arena
         /// grate coincidence, unlike <see cref="lurker"/>).</summary>
         public int charger;
 
+        /// <summary>MV-1217: the Dreadnought — authored-composition only, same footing as
+        /// <see cref="bolter"/>/<see cref="lurker"/>/<see cref="turret"/>: never drawn by
+        /// <see cref="MaxWorlds.Enemies.EnemyMix.AreaCadence"/>'s ambient shed cadence (the ticket's own
+        /// "appears only where it is authored as garrison"). Every garrisoned Dreadnought must still be
+        /// covered by a count here, the same <see cref="MaxWorlds.Arena.MapValidation"/> garrison-vs-
+        /// composition rule <see cref="turret"/>'s own doc comment describes.</summary>
+        public int dreadnought;
+
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
         /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
         /// once ANY area in the array carries the field, even ones whose JSON omits it entirely (a
@@ -171,10 +179,11 @@ namespace MaxWorlds.Arena
         /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
         public bool IsAuthored =>
             rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
-            blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0;
+            blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0 ||
+            dreadnought > 0;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought);
     }
 
     /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
@@ -894,6 +903,9 @@ namespace MaxWorlds.Arena
         // entry here yet, so an authored "turret" THV silently fell through to small's.
         public WorldEnemyTypeEntry turret;
 
+        // MV-1217: same optional/fallback footing as bolter above.
+        public WorldEnemyTypeEntry dreadnought;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -909,6 +921,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Sludger => sludger,
                 EnemyKind.Charger => charger,
                 EnemyKind.Turret => turret,
+                EnemyKind.Dreadnought => dreadnought,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
@@ -923,7 +936,7 @@ namespace MaxWorlds.Arena
             c.Gunner * Thv(EnemyKind.Gunner) + c.Launcher * Thv(EnemyKind.Launcher) +
             c.Blinker * Thv(EnemyKind.Blinker) + c.Bolter * Thv(EnemyKind.Bolter) +
             c.Lurker * Thv(EnemyKind.Lurker) + c.Sludger * Thv(EnemyKind.Sludger) +
-            c.Charger * Thv(EnemyKind.Charger);
+            c.Charger * Thv(EnemyKind.Charger) + c.Dreadnought * Thv(EnemyKind.Dreadnought);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170
