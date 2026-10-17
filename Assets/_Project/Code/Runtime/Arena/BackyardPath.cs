@@ -325,6 +325,19 @@ namespace MaxWorlds.Arena
             ReefKit.BuildOceanVoid(host);
             ReefDressing.DressCover(host, cover);
             ReefHydroponics.PlaceBeds(host, map, cfg, cover);
+
+            // MV-1215, Change items 2/3/6: the glow hatch, window wall and wall-mounted dressing —
+            // optional per-area vocabulary no shipped config authors yet. Walls are collected AFTER
+            // DressHull (not before): a wall DressHull has already dressed carries KeepsOwnMaterial,
+            // which WorldMaterials.IsWorldSurface would wrongly exclude (the same MV-1063 trap
+            // ReefKit.FindFloorRenderer's own doc documents) — CollectStructuralWalls finds every wall
+            // by its StructuralWall tag directly instead, sidestepping that trap entirely.
+            List<StructuralWall> walls = ReefKit.CollectStructuralWalls(host);
+            float wallHeight = map != null ? map.wallHeight : MapData.DefaultWallHeight;
+            float wallThickness = map != null ? map.wallThickness : MapData.DefaultWallThickness;
+            ReefAreaKit.BuildDecor(host, cfg);
+            ReefAreaKit.BuildWindows(host, cfg, walls, wallHeight);
+            ReefAreaKit.BuildWallDressing(host, cfg, walls, wallHeight, wallThickness);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

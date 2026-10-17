@@ -30,13 +30,22 @@ namespace MaxWorlds.Arena
     /// <see cref="Map.MapValidation.LowProfileCoverDressings"/> for the exemption this adds.
     ///
     /// The remaining Market Street dressings (MV-1176) — <see cref="Truck"/> through
-    /// <see cref="Tub"/> — are ordinary, full-height cover and need no such exemption.</summary>
+    /// <see cref="Tub"/> — are ordinary, full-height cover and need no such exemption.
+    ///
+    /// <see cref="ReefPillar"/> through <see cref="ReefCrate"/> (MV-1215) are the Reef's own structure
+    /// kit — Lee's 17 Oct 2026 concept-frame approval — built by <see cref="Rendering.ReefKit"/> and
+    /// routed by <see cref="ReefDressing.DressCover"/>. <see cref="ReefPlanter"/>/<see cref="ReefFloorPipe"/>
+    /// are see-through (table in the ticket) and low-profile, same footing as <see cref="Pipe"/> above —
+    /// see <see cref="Map.MapValidation.LowProfileCoverDressings"/>. <see cref="ReefCrate"/> is an
+    /// explicit alternative to leaving a crate dressed <see cref="None"/> (MV-1019's own original
+    /// shortcut) now that the V8 layout ticket can author it by name.</summary>
     public enum CoverDressing
     {
         None, Tree, Hedge, Planter, Shed, Machinery, Pipe, CafeTable, PlanterBox, Bollard,
         BikeRack, Bench, Bin,
         Truck, Bus, Car, Barrier, Fence, LampPost, RoadSign, Pallet, FlowerStall, FruitStall,
         ClockPost, BookCart, Lockers, ABoard, PostBox, Tub,
+        ReefPillar, ReefManifold, ReefDrum, ReefConsole, ReefPlanter, ReefFloorPipe, ReefCrate,
     }
 
     /// <summary>MV-917: a cover piece's behaviour, as an explicit, data-driven property rather than an

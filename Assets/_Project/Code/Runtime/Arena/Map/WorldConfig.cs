@@ -362,6 +362,36 @@ namespace MaxWorlds.Arena
         public float d;
     }
 
+    /// <summary>One authored floor decoration in an area (MV-1215) — e.g. the Reef's glow hatch
+    /// (<c>kind: "hatch"</c>): walkable, collider-free, purely cosmetic. <see cref="x"/>/<see cref="z"/>
+    /// are area-local (the MIN-corner convention <see cref="WorldSludge"/> already uses), <see cref="w"/>/
+    /// <see cref="d"/> its footprint. An unrecognised <see cref="kind"/> is simply never matched by
+    /// <see cref="ReefAreaKit.BuildDecor"/> — same forward-compatible idiom <see cref="WorldSurface"/>'s
+    /// own doc comment already uses.</summary>
+    [Serializable]
+    public sealed class WorldAreaDecor
+    {
+        public string kind;
+        public float x;
+        public float z;
+        public float w = 1f;
+        public float d = 1f;
+    }
+
+    /// <summary>One authored observation-window run along an area's own edge wall (MV-1215) — ocean
+    /// ports dressing that wall's run, built by <see cref="Rendering.ReefKit.BuildObservationWindow"/>
+    /// and scaled to the world's own <see cref="WorldConfig.wallHeight"/>. <see cref="from"/>/
+    /// <see cref="to"/> are fractions (0..1) of the wall's own span, the same convention a
+    /// <see cref="WorldGateEndpoint.pos"/> already uses. Decoration only — the wall's own collider and
+    /// sight-blocking are unchanged.</summary>
+    [Serializable]
+    public sealed class WorldAreaWindow
+    {
+        public string wall;
+        public float from;
+        public float to = 1f;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -435,6 +465,21 @@ namespace MaxWorlds.Arena
         /// each at its authored <c>kind</c>, and only fills any remaining seed slots from the ring.
         /// Optional; most areas carry none and behave exactly as before.</summary>
         public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
+
+        /// <summary>Floor decorations authored into this area (MV-1215) — e.g. the Reef's glow hatch.
+        /// Optional; most areas carry none.</summary>
+        public WorldAreaDecor[] decor = Array.Empty<WorldAreaDecor>();
+
+        /// <summary>Observation-window runs authored along this area's own edge walls (MV-1215).
+        /// Optional; most areas carry none.</summary>
+        public WorldAreaWindow[] windows = Array.Empty<WorldAreaWindow>();
+
+        /// <summary>This area's wall-mounted dressing (MV-1215, decided 17 Oct 2026) — <c>"racks"</c>,
+        /// <c>"planters"</c> or <c>"pipes"</c>, mounted on the inner face of every one of its own edge
+        /// walls (never a window run or a gate opening — see <see cref="ReefAreaKit.BuildWallDressing"/>).
+        /// Empty (unauthored, every area today) means none — the same "empty means not authored" idiom
+        /// <see cref="WorldConfig.pressureNoun"/> already uses.</summary>
+        public string wallDressing = "";
 
         /// <summary>This area's garrison entries for ONE VISIT (MV-711): when an area's own id appears
         /// twice in <see cref="WorldConfig.route"/> at two different levels (The Reef's under/over

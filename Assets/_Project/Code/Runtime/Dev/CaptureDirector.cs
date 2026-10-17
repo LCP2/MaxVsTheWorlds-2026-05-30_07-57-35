@@ -468,6 +468,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1196RicochetLook());
             Add(BuildMv1205CityGroundCheck());
             Add(BuildMv1207CityBrightnessCheck());
+            Add(BuildMv1215ReefKitSheet());
             return d;
         }
 
@@ -1985,6 +1986,93 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1019-reef-floor", NoSetup) },
+            };
+        }
+
+        // ---- MV1215ReefKitSheet (MV-1215 AC3) -------------------------------------------------
+
+        /// <summary>MV-1215's own AC3 capture: one instance of each of the Reef structure kit's seven
+        /// pieces (pillar, manifold, drum, console, planter, floor pipe, crate — the ticket's own
+        /// table), spawned in a row on the Reef floor via the SAME <see cref="ReefKit"/> builders
+        /// <see cref="ReefDressing.DressCover"/> calls in production, then framed at the fixed rig's own
+        /// angle — same boot/frame idiom as <see cref="BuildMv1019ReefFloorCheck"/>. world3_config.json
+        /// authors none of these yet (the ticket's own "changes no area data"), so the row is built here,
+        /// not loaded off the map. ONE capture only, per the ticket's own "compare once" instruction.
+        /// </summary>
+        private static CapturePreset BuildMv1215ReefKitSheet()
+        {
+            // AC3: "written to docs/press/" — the ticket's own wording, unlike most capture presets
+            // above (which only ever wrote to the Images-repo mirror). Mirrored there too, same two-dir
+            // idiom BuildHealthBarCluster already uses.
+            string docsPress = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press"));
+            const string mirror = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float spacing = 5f;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials/ReefKit finish
+
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 3 built no PlayerController to shoot");
+
+                var sheet = new GameObject("MV-1215 Kit Sheet").transform;
+                Vector3 rowStart = player.transform.position + Vector3.forward * 8f - Vector3.right * (3f * spacing);
+
+                void Place(int index, Func<Transform, Vector3, Vector3, GameObject> build, Vector3 size)
+                {
+                    Vector3 center = rowStart + Vector3.right * (index * spacing) + Vector3.up * (size.y * 0.5f);
+                    build(sheet, center, size);
+                }
+
+                Place(0, ReefKit.BuildPillar, new Vector3(2f, 3f, 2f));
+                Place(1, ReefKit.BuildManifold, new Vector3(4f, 1.8f, 2f));
+                Place(2, ReefKit.BuildDrum, new Vector3(3f, 2.4f, 3f));
+                Place(3, ReefKit.BuildConsole, new Vector3(2f, 1f, 1f));
+                Place(4, ReefKit.BuildPlanterRow, new Vector3(1f, 0.9f, 3f));
+                Place(5, ReefKit.BuildFloorPipe, new Vector3(1f, 0.5f, 4f));
+
+                // The crate: a plain box skinned via the same ReefKit.ApplyCrateSkin ReefDressing calls
+                // for CoverDressing.None/ReefCrate — no dedicated ReefKit builder exists for it (the
+                // ticket's own table: "the existing ApplyCrateSkin crate look").
+                var crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                crate.transform.SetParent(sheet, false);
+                crate.transform.position = rowStart + Vector3.right * (6 * spacing) + Vector3.up * 0.75f;
+                crate.transform.localScale = Vector3.one * 1.5f;
+                ReefKit.ApplyCrateSkin(crate, true);
+                var crateCollider = crate.GetComponent<Collider>();
+                if (crateCollider != null) Destroy(crateCollider);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+
+                Vector3 focus = rowStart + Vector3.right * (3f * spacing) + Vector3.up * 1.5f;
+                var rotQ = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rotQ * Vector3.forward * 44f, rotQ);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1215reefkit",
+                LogTag = "[MV1215Capture]",
+                Flag = "-mv1215shot",
+                ArmFile = "Temp/mv1215.arm",
+                HeadlessMarker = "Temp/mv1215.headless",
+                DoneFileName = "_mv1215_done.txt",
+                Width = 1920,
+                Height = 1080,
+                OutputDirs = new[] { docsPress, mirror },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1019ReefFloorCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1215-reef-kit-sheet", NoSetup) },
             };
         }
 

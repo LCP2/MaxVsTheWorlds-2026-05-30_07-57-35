@@ -189,6 +189,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1207CityBrightness() => RunFromMenu(CapturePresets.All["mv1207citybrightness"]);
         public static void CaptureMv1207CityBrightness() => Run(CapturePresets.All["mv1207citybrightness"]);
 
+        [MenuItem("MaxWorlds/Capture/Reef Structure Kit Sheet (MV-1215)")]
+        public static void MenuMv1215ReefKit() => RunFromMenu(CapturePresets.All["mv1215reefkit"]);
+        public static void CaptureMv1215ReefKit() => Run(CapturePresets.All["mv1215reefkit"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

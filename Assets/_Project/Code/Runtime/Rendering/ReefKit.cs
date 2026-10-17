@@ -463,6 +463,405 @@ namespace MaxWorlds.Rendering
             }
         }
 
+        // MV-1215: the Reef's own structure kit (Lee's 17 Oct 2026 concept-frame approval). Each
+        // builder below is called by MaxWorlds.Arena.ReefDressing with the cover piece's own authored
+        // centre/size, in place of a hidden body renderer — the same "collider stays, art swaps"
+        // contract BuildCoolantTurret already keeps. Every child here is built UNSCALED, under an
+        // identity-scale piece root, at literal metre offsets — not as a child of a scaled body the way
+        // CrateCap's own fraction-of-parent trick works — so none of these need that division-by-size
+        // arithmetic to stay a fixed metre thickness regardless of the piece's own authored footprint.
+
+        private const float PillarSeamWidth = 0.08f;
+        private const float ManifoldPipeRadius = 0.12f;
+        private const float ConsoleScreenProud = 0.01f;
+        private const float PlanterRimHeight = 0.5f;   // fraction of the piece's own authored height
+        private const float FloorPipeBracketWidth = 0.06f;
+
+        /// <summary>P — a heavy structural column, <see cref="WorldMaterials.M_MetalDark"/> with a
+        /// <see cref="WorldMaterials.M_Circuit_Cyan"/> seam light running its full height on one face
+        /// (ticket table: 2x2, solid).</summary>
+        public static GameObject BuildPillar(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefPillar");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            body.transform.localScale = size;
+            StripColliders(body);
+            var bodyRend = body.GetComponent<Renderer>();
+            if (bodyRend != null) bodyRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            var seam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            seam.name = "Seam Light";
+            seam.transform.SetParent(root.transform, false);
+            seam.transform.localPosition = new Vector3(0f, 0f, size.z * 0.5f + CircuitStripProud);
+            seam.transform.localScale = new Vector3(PillarSeamWidth, size.y + CircuitStripProud, PillarSeamWidth);
+            StripColliders(seam);
+            var seamRend = seam.GetComponent<Renderer>();
+            if (seamRend != null) seamRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+
+            return root;
+        }
+
+        /// <summary>K — a row of pipes on a base, each capped with a small cyan "U-bend" accent
+        /// (ticket table: 4x2, solid). Pipe count follows the piece's own authored width, same
+        /// "ask the authored footprint, never a hardcoded guess" idiom <see cref="ApplyDeckTiling"/>
+        /// already keeps for the deck's own tiling.</summary>
+        public static GameObject BuildManifold(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefManifold");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float baseHeight = size.y * 0.3f;
+            var baseBox = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            baseBox.name = "Base";
+            baseBox.transform.SetParent(root.transform, false);
+            baseBox.transform.localPosition = new Vector3(0f, -size.y * 0.5f + baseHeight * 0.5f, 0f);
+            baseBox.transform.localScale = new Vector3(size.x, baseHeight, size.z);
+            StripColliders(baseBox);
+            var baseRend = baseBox.GetComponent<Renderer>();
+            if (baseRend != null) baseRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            int pipes = Mathf.Max(1, Mathf.FloorToInt(size.x / 1f));
+            float pipeLength = size.z * 0.8f;
+            float pipeY = -size.y * 0.5f + baseHeight + ManifoldPipeRadius;
+
+            for (int i = 0; i < pipes; i++)
+            {
+                float t = (i + 0.5f) / pipes - 0.5f;
+                float px = t * size.x;
+
+                var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                pipe.name = $"Pipe {i}";
+                pipe.transform.SetParent(root.transform, false);
+                pipe.transform.localPosition = new Vector3(px, pipeY, 0f);
+                pipe.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                pipe.transform.localScale = new Vector3(ManifoldPipeRadius * 2f, pipeLength * 0.5f, ManifoldPipeRadius * 2f);
+                StripColliders(pipe);
+                var pipeRend = pipe.GetComponent<Renderer>();
+                if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+                foreach (int sz in new[] { -1, 1 })
+                {
+                    var bend = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    bend.name = "U-Bend";
+                    bend.transform.SetParent(root.transform, false);
+                    bend.transform.localPosition = new Vector3(px, pipeY, sz * pipeLength * 0.5f);
+                    bend.transform.localScale = Vector3.one * ManifoldPipeRadius * 2.2f;
+                    StripColliders(bend);
+                    var bendRend = bend.GetComponent<Renderer>();
+                    if (bendRend != null) bendRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+                }
+            }
+
+            return root;
+        }
+
+        /// <summary>D — a round tank with a glowing cyan core, <see cref="CoverShape.Cylinder"/> (ticket
+        /// table: 3x3, solid). <paramref name="size"/>'s X/Z is the tank's own diameter, same convention
+        /// <see cref="ArenaCover"/> already uses for a cylinder's footprint.</summary>
+        public static GameObject BuildDrum(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefDrum");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            var tank = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            tank.name = "Tank";
+            tank.transform.SetParent(root.transform, false);
+            tank.transform.localScale = new Vector3(size.x, size.y * 0.5f, size.z);
+            StripColliders(tank);
+            var tankRend = tank.GetComponent<Renderer>();
+            if (tankRend != null) tankRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            var core = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            core.name = "Core";
+            core.transform.SetParent(root.transform, false);
+            core.transform.localScale = new Vector3(size.x * 0.35f, size.y * 0.5f + CircuitStripProud, size.x * 0.35f);
+            StripColliders(core);
+            var coreRend = core.GetComponent<Renderer>();
+            if (coreRend != null) coreRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+
+            return root;
+        }
+
+        /// <summary>N — an angled control desk with a glowing screen (ticket table: 2x1, solid). The
+        /// "angle" reads from a stepped silhouette (low front desk, taller rear screen riser) rather
+        /// than an arbitrary rotation — every other box piece in this file stays axis-aligned too.
+        /// </summary>
+        public static GameObject BuildConsole(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefConsole");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float deskHeight = size.y * 0.5f;
+            var desk = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            desk.name = "Desk";
+            desk.transform.SetParent(root.transform, false);
+            desk.transform.localPosition = new Vector3(0f, -size.y * 0.5f + deskHeight * 0.5f, 0f);
+            desk.transform.localScale = new Vector3(size.x, deskHeight, size.z);
+            StripColliders(desk);
+            var deskRend = desk.GetComponent<Renderer>();
+            if (deskRend != null) deskRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            float screenHeight = size.y - deskHeight;
+            var screen = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            screen.name = "Screen";
+            screen.transform.SetParent(root.transform, false);
+            screen.transform.localPosition = new Vector3(0f, -size.y * 0.5f + deskHeight + screenHeight * 0.5f,
+                -size.z * 0.5f + size.z * 0.2f);
+            screen.transform.localScale = new Vector3(size.x * 0.85f, screenHeight, size.z * 0.4f + ConsoleScreenProud);
+            StripColliders(screen);
+            var screenRend = screen.GetComponent<Renderer>();
+            if (screenRend != null) screenRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+
+            return root;
+        }
+
+        /// <summary>T — a low, see-through row of pots with bioluminescent green plants (ticket table:
+        /// 1xN, see-through). Runs along whichever of the footprint's two axes is longer — the "N" the
+        /// ticket's own glyph leaves open.</summary>
+        public static GameObject BuildPlanterRow(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefPlanter");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float rimHeight = size.y * PlanterRimHeight;
+            var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rim.name = "Trough";
+            rim.transform.SetParent(root.transform, false);
+            rim.transform.localPosition = new Vector3(0f, -size.y * 0.5f + rimHeight * 0.5f, 0f);
+            rim.transform.localScale = new Vector3(size.x, rimHeight, size.z);
+            StripColliders(rim);
+            var rimRend = rim.GetComponent<Renderer>();
+            if (rimRend != null) rimRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            bool alongX = size.x >= size.z;
+            float runLength = alongX ? size.x : size.z;
+            int plants = Mathf.Max(1, Mathf.FloorToInt(runLength / 0.5f));
+            float plantHeight = size.y - rimHeight;
+
+            for (int i = 0; i < plants; i++)
+            {
+                float t = (i + 0.5f) / plants - 0.5f;
+                float offset = t * runLength;
+
+                var plant = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                plant.name = $"Plant {i}";
+                plant.transform.SetParent(root.transform, false);
+                Vector3 pos = alongX
+                    ? new Vector3(offset, -size.y * 0.5f + rimHeight + plantHeight * 0.5f, 0f)
+                    : new Vector3(0f, -size.y * 0.5f + rimHeight + plantHeight * 0.5f, offset);
+                plant.transform.localPosition = pos;
+                plant.transform.localRotation = Quaternion.Euler(0f, i * 47f, 0f);
+                plant.transform.localScale = new Vector3(size.x >= size.z ? 0.12f : size.x * 0.4f, plantHeight,
+                    size.x >= size.z ? size.z * 0.4f : 0.12f);
+                StripColliders(plant);
+                var plantRend = plant.GetComponent<Renderer>();
+                if (plantRend != null) plantRend.sharedMaterial = WorldMaterials.M_BioGlow;
+            }
+
+            return root;
+        }
+
+        /// <summary>L — a low, see-through pipe run on brackets (ticket table: 1xN, see-through). The
+        /// pipe is built lying along whichever axis is the footprint's longer one, same rotate-the-
+        /// mesh idiom <see cref="BuildWallLamps"/> already uses for "along X or along Z".</summary>
+        public static GameObject BuildFloorPipe(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefFloorPipe");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            bool alongX = size.x >= size.z;
+            float runLength = alongX ? size.x : size.z;
+            float diameter = size.y;
+
+            var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pipe.name = "Pipe";
+            pipe.transform.SetParent(root.transform, false);
+            pipe.transform.localPosition = new Vector3(0f, 0f, 0f);
+            pipe.transform.localRotation = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+            pipe.transform.localScale = new Vector3(diameter, runLength * 0.5f, diameter);
+            StripColliders(pipe);
+            var pipeRend = pipe.GetComponent<Renderer>();
+            if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            int brackets = Mathf.Max(2, Mathf.FloorToInt(runLength / 1f) + 1);
+            for (int i = 0; i < brackets; i++)
+            {
+                float t = brackets <= 1 ? 0f : (float)i / (brackets - 1) - 0.5f;
+                float offset = t * runLength;
+
+                var bracket = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bracket.name = $"Bracket {i}";
+                bracket.transform.SetParent(root.transform, false);
+                Vector3 pos = alongX
+                    ? new Vector3(offset, -diameter * 0.5f, 0f)
+                    : new Vector3(0f, -diameter * 0.5f, offset);
+                bracket.transform.localPosition = pos;
+                bracket.transform.localScale = new Vector3(
+                    alongX ? FloorPipeBracketWidth : diameter * 0.8f,
+                    diameter,
+                    alongX ? diameter * 0.8f : FloorPipeBracketWidth);
+                StripColliders(bracket);
+                var bracketRend = bracket.GetComponent<Renderer>();
+                if (bracketRend != null) bracketRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            }
+
+            return root;
+        }
+
+        // MV-1215, Change item 2: the glow hatch — a recessed, collider-free floor decal. Walkable by
+        // construction: nothing built here ever gets a collider, same contract every other Reef
+        // dressing piece keeps for its own visual-only overlays.
+        private const float HatchRecess = 0.06f;
+        private const float HatchRimThickness = 0.04f;
+        private const float HatchRimProud = 0.1f;
+
+        /// <summary>H — a recessed floor hatch with a cyan glow rim, <paramref name="w"/> x
+        /// <paramref name="d"/> (ticket: 2x2). Collider-free and walkable — a decoration, not an
+        /// obstacle.</summary>
+        public static GameObject BuildGlowHatch(Transform parent, Vector3 center, float w, float d)
+        {
+            var root = new GameObject("ReefGlowHatch");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            panel.name = "Panel";
+            panel.transform.SetParent(root.transform, false);
+            panel.transform.localPosition = new Vector3(0f, -HatchRecess * 0.5f, 0f);
+            panel.transform.localScale = new Vector3(w, HatchRecess, d);
+            StripColliders(panel);
+            var panelRend = panel.GetComponent<Renderer>();
+            if (panelRend != null) panelRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rim.name = "Rim";
+            rim.transform.SetParent(root.transform, false);
+            rim.transform.localPosition = new Vector3(0f, -HatchRecess - HatchRimThickness * 0.5f, 0f);
+            rim.transform.localScale = new Vector3(w + HatchRimProud, HatchRimThickness, d + HatchRimProud);
+            StripColliders(rim);
+            var rimRend = rim.GetComponent<Renderer>();
+            if (rimRend != null) rimRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+
+            return root;
+        }
+
+        // MV-1215, Change item 6 (decided 17 Oct 2026): wall-mounted dressing — racks, planters or
+        // pipes, mounted within the wall's own thickness. <paramref name="size"/>.x/.z follow the
+        // wall's own run/thickness axes exactly as MaxWorlds.Arena.ReefAreaKit resolves them; .y is
+        // the mounted band's own vertical extent. Collider-free throughout.
+
+        /// <summary>Shallow cargo racks with crates, for a cargo-hold area's own <c>wallDressing:
+        /// "racks"</c>.</summary>
+        public static GameObject BuildWallRacks(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefWallRacks");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            var backing = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            backing.name = "Backing";
+            backing.transform.SetParent(root.transform, false);
+            backing.transform.localScale = size;
+            StripColliders(backing);
+            var backingRend = backing.GetComponent<Renderer>();
+            if (backingRend != null) backingRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            bool alongX = size.x >= size.z;
+            float runLength = alongX ? size.x : size.z;
+            int crates = Mathf.Max(1, Mathf.FloorToInt(runLength / 1.2f));
+            for (int i = 0; i < crates; i++)
+            {
+                float t = (i + 0.5f) / crates - 0.5f;
+                float offset = t * runLength;
+
+                var crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                crate.name = $"Crate {i}";
+                crate.transform.SetParent(root.transform, false);
+                crate.transform.localPosition = alongX ? new Vector3(offset, 0f, 0f) : new Vector3(0f, 0f, offset);
+                crate.transform.localScale = new Vector3(
+                    alongX ? size.x / crates * 0.7f : size.x * 0.8f,
+                    size.y * 0.6f,
+                    alongX ? size.z * 0.8f : size.z / crates * 0.7f);
+                StripColliders(crate);
+                var crateRend = crate.GetComponent<Renderer>();
+                if (crateRend != null) crateRend.sharedMaterial = WorldMaterials.M_CrateBody;
+            }
+
+            return root;
+        }
+
+        /// <summary>Wall-hung planters with bioluminescent green plants, for a window-gallery/crew/
+        /// hydroponics area's own <c>wallDressing: "planters"</c>.</summary>
+        public static GameObject BuildWallPlanters(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefWallPlanters");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            box.name = "Box";
+            box.transform.SetParent(root.transform, false);
+            box.transform.localScale = new Vector3(size.x, size.y * 0.4f, size.z);
+            StripColliders(box);
+            var boxRend = box.GetComponent<Renderer>();
+            if (boxRend != null) boxRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            var plant = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            plant.name = "Plant";
+            plant.transform.SetParent(root.transform, false);
+            plant.transform.localPosition = new Vector3(0f, size.y * 0.3f, 0f);
+            plant.transform.localScale = new Vector3(size.x * 0.3f, size.y * 0.6f, size.z * 0.3f);
+            StripColliders(plant);
+            var plantRend = plant.GetComponent<Renderer>();
+            if (plantRend != null) plantRend.sharedMaterial = WorldMaterials.M_BioGlow;
+
+            return root;
+        }
+
+        /// <summary>Horizontal pipe runs with brackets, for an engine-room/reactor-bay/pressure-lock
+        /// area's own <c>wallDressing: "pipes"</c>.</summary>
+        public static GameObject BuildWallPipes(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefWallPipes");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            bool alongX = size.x >= size.z;
+            float runLength = alongX ? size.x : size.z;
+            float diameter = Mathf.Min(size.y * 0.3f, size.z);
+
+            var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pipe.name = "Pipe";
+            pipe.transform.SetParent(root.transform, false);
+            pipe.transform.localRotation = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+            pipe.transform.localScale = new Vector3(diameter, runLength * 0.5f, diameter);
+            StripColliders(pipe);
+            var pipeRend = pipe.GetComponent<Renderer>();
+            if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+
+            return root;
+        }
+
         /// <summary>An observation window panel — new geometry with no World 1 predecessor (the ticket
         /// names it without a "was X" annotation, unlike the other five reskins), wearing
         /// <see cref="WorldMaterials.M_GlassOcean"/>'s near/far gradient. Collider-free: it is a wall
@@ -653,6 +1052,21 @@ namespace MaxWorlds.Rendering
                 if (rend != null)
                     rend.sharedMaterial = (i == 1) ? WorldMaterials.M_KelpMagenta : WorldMaterials.M_KelpGreen;
             }
+        }
+
+        /// <summary>Every built wall under <paramref name="host"/>, found by its
+        /// <see cref="StructuralWall"/> tag directly — NOT <see cref="WorldMaterials.IsWorldSurface"/>
+        /// (the same MV-1063 trap <see cref="FindFloorRenderer"/>'s own doc already documents: a wall
+        /// <see cref="DressHull"/> has already dressed carries <see cref="KeepsOwnMaterial"/>, which
+        /// that check explicitly excludes). For a pass that runs AFTER <see cref="DressHull"/>, to place
+        /// area-authored dressing (<see cref="MaxWorlds.Arena.ReefAreaKit"/>) against the real wall
+        /// geometry (MV-1215).</summary>
+        public static List<StructuralWall> CollectStructuralWalls(Transform host)
+        {
+            var list = new List<StructuralWall>();
+            if (host == null) return list;
+            list.AddRange(host.GetComponentsInChildren<StructuralWall>(true));
+            return list;
         }
 
         /// <summary>Ocean backdrop and dressing props are scenery — never a thing Max, a robot or the

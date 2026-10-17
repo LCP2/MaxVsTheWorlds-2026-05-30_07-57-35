@@ -50,6 +50,7 @@ namespace MaxWorlds.Arena
             if (cover == null) return placed;
 
             Transform props = null;
+            Transform kit = null;
 
             foreach (CoverPiece piece in cover)
             {
@@ -83,13 +84,55 @@ namespace MaxWorlds.Arena
 
                     placed++;
                 }
-                else if (piece.Cover.Dressing == CoverDressing.None)
+                else if (piece.Cover.Dressing == CoverDressing.None || piece.Cover.Dressing == CoverDressing.ReefCrate)
                 {
+                    // MV-1215: "crate" (None, MV-1019's own original shortcut) and the new explicit
+                    // "reef_crate" dressing word both read as the same skinned crate — the V8 layout
+                    // ticket can now author it by name without changing what gets built.
                     ReefKit.ApplyCrateSkin(piece.Body, piece.Cover.Shape == CoverShape.Box);
+                }
+                else if (IsStructureKitDressing(piece.Cover.Dressing))
+                {
+                    // MV-1215: the Reef's structure kit (pillar/manifold/drum/console/planter/floor
+                    // pipe) — same "hide the body, build the kit piece at its footprint" contract as
+                    // the coolant turret above.
+                    if (kit == null)
+                    {
+                        kit = new GameObject("Reef Structure Kit").transform;
+                        kit.SetParent(parent, false);
+                        kit.gameObject.AddComponent<KeepsOwnMaterial>();
+                    }
+
+                    BuildStructureKitPiece(kit, piece.Cover);
+
+                    var renderer = piece.Body.GetComponent<Renderer>();
+                    if (renderer != null) renderer.enabled = false;
                 }
             }
 
             return placed;
+        }
+
+        /// <summary>The ticket's own table: every <see cref="CoverDressing"/> value MV-1215 adds other
+        /// than <see cref="CoverDressing.ReefCrate"/> (handled above, alongside <see cref="CoverDressing.None"/>).</summary>
+        private static bool IsStructureKitDressing(CoverDressing dressing) => dressing switch
+        {
+            CoverDressing.ReefPillar or CoverDressing.ReefManifold or CoverDressing.ReefDrum or
+                CoverDressing.ReefConsole or CoverDressing.ReefPlanter or CoverDressing.ReefFloorPipe => true,
+            _ => false,
+        };
+
+        private static void BuildStructureKitPiece(Transform kit, ArenaCover cover)
+        {
+            switch (cover.Dressing)
+            {
+                case CoverDressing.ReefPillar: ReefKit.BuildPillar(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefManifold: ReefKit.BuildManifold(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefDrum: ReefKit.BuildDrum(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefConsole: ReefKit.BuildConsole(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefPlanter: ReefKit.BuildPlanterRow(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefFloorPipe: ReefKit.BuildFloorPipe(kit, cover.Center, cover.Size); break;
+            }
         }
     }
 }
