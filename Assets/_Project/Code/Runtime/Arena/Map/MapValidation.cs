@@ -128,6 +128,9 @@ namespace MaxWorlds.Arena
         {
             CoverDressing.CafeTable, CoverDressing.PlanterBox, CoverDressing.Bollard,
             CoverDressing.BikeRack, CoverDressing.Bench, CoverDressing.Bin,
+            // MV-1215: the Reef's own low pieces — a planter row (~0.9 m) and a floor pipe run
+            // (~0.5 m), same exemption World 2's pipes and the City's low furniture already get.
+            CoverDressing.ReefPlanter, CoverDressing.ReefFloorPipe,
         };
 
         public static bool Validate(MapData map, out string reason)
