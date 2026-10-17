@@ -359,6 +359,39 @@ namespace MaxWorlds.Dev
             }
             return best?.Center;
         }
+
+        /// <summary>MV-1209 root cause: a bare <c>cam.Render()</c> with the camera's own
+        /// <c>targetTexture</c> left null renders to the screen backbuffer — which does not exist
+        /// under <c>-batchmode</c> and kills the Editor process natively (exit -1073740791 /
+        /// 0xC0000409 <c>STATUS_STACK_BUFFER_OVERRUN</c>, no managed exception, no stack trace, no
+        /// crash dump). Six presets (MV693Replicator, MV699Sludgequeen, MV775ReplicatorMachine,
+        /// MV1018Anchorhead, MV738SludgeCheck, MV769SludgeTreatment) had each separately pasted a
+        /// throwaway <c>cam.Render()</c> a few frames before their real shot, on a since-stale
+        /// diagnosis ("URP Render Graph throws once on the session's first manual Render() call") —
+        /// bisected on MV1201CityRelay by stripping the preset down to nothing but this one call
+        /// (CapturePresets with zero extra GameObjects, no Replicator, still crashed identically;
+        /// removing only this render-to-backbuffer call made it exit 0, see MV-1209's fix comment for
+        /// the four isolation runs). <see cref="CaptureDirector.Capture"/>'s own render a few frames
+        /// later never crashed, in any preset, ever — because it always targets an explicit
+        /// <see cref="RenderTexture"/> first. This helper gives a "warm-up" render the same safe
+        /// destination, at the shared call site every preset above now goes through, rather than each
+        /// one gambling on the backbuffer again.</summary>
+        internal static void WarmUpRender(Camera cam)
+        {
+            var prevTarget = cam.targetTexture;
+            var rt = RenderTexture.GetTemporary(Mathf.Max(cam.pixelWidth, 4), Mathf.Max(cam.pixelHeight, 4),
+                24, RenderTextureFormat.ARGB32);
+            try
+            {
+                cam.targetTexture = rt;
+                cam.Render();
+            }
+            finally
+            {
+                cam.targetTexture = prevTarget;
+                RenderTexture.ReleaseTemporary(rt);
+            }
+        }
     }
 
     /// <summary>Registry of every armable capture preset, keyed by <see cref="CapturePreset.Key"/>.
@@ -1134,12 +1167,9 @@ namespace MaxWorlds.Dev
                 Vector3 camFocus = focus + Vector3.up * 1f;
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
-                // A throwaway render to the screen backbuffer first: this preset's shot is the
-                // FIRST manual cam.Render() call of the whole session, and URP's Render Graph has
-                // logged a one-off NullReferenceException on exactly that first call in headless
-                // -nographics runs (seen on this exact preset) — warming it up here, before
-                // Capture()'s own render-to-texture call, keeps that hiccup off the real shot.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc — a bare cam.Render() here targeted the screen
+                // backbuffer, which crashes the Editor outright under -batchmode.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -1287,10 +1317,8 @@ namespace MaxWorlds.Dev
                 Vector3 camFocus = bossGo.transform.position + Vector3.up * 2.2f;   // follow the walk, roughly mid-height on the drum
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
-                // Same first-manual-Render() warm-up MV693Replicator's own preset needed — URP's
-                // Render Graph has logged a one-off NullReferenceException on exactly that first call
-                // in headless -nographics runs.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -1378,10 +1406,8 @@ namespace MaxWorlds.Dev
                 foreach (var pr in FindObjectsByType<ParticleSystemRenderer>(FindObjectsSortMode.None))
                     pr.enabled = false;
 
-                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
-                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
-                // in a headless -nographics run.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -1438,10 +1464,8 @@ namespace MaxWorlds.Dev
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
                 cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
 
-                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
-                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
-                // in a headless -nographics run.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -1515,10 +1539,8 @@ namespace MaxWorlds.Dev
 
                 for (int i = 0; i < bubbleSettleFrames; i++) yield return null;
 
-                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
-                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
-                // in a headless -nographics run.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -1552,7 +1574,8 @@ namespace MaxWorlds.Dev
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
                 cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
 
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -3447,7 +3470,8 @@ namespace MaxWorlds.Dev
                 Vector3 camFocus = focus + Vector3.up * 1f;
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -3515,7 +3539,7 @@ namespace MaxWorlds.Dev
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
-                cam.Render();
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
@@ -4954,10 +4978,8 @@ namespace MaxWorlds.Dev
                 Vector3 camFocus = focus + Vector3.up * 1.8f;
                 cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
 
-                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
-                // need -- URP's Render Graph has logged a one-off NullReferenceException on exactly
-                // that first call in headless -nographics runs.
-                cam.Render();
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
