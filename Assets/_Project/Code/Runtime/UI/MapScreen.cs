@@ -90,6 +90,10 @@ namespace MaxWorlds.UI
         /// <see cref="WeaponsScreen.IsOpen"/>.</summary>
         public bool IsOpen => _open;
 
+        /// <summary>The current zoom multiplier (1 = opening fit). Test-only, same idiom as
+        /// <see cref="IsOpen"/>.</summary>
+        public float Zoom => _zoom;
+
         private void OnDestroy()
         {
             if (_open)
@@ -136,14 +140,29 @@ namespace MaxWorlds.UI
             ResetView();
         }
 
-        /// <summary>Closes the map and resumes at whatever speed it paused from.</summary>
+        /// <summary>Closes the map and resumes at whatever speed it paused from. Persists the zoom
+        /// the player leaves it at (MV-1206) — once per close, not per gesture frame, so a pinch never
+        /// pays a PlayerPrefs disk flush while it's actually moving.</summary>
         public void Close()
         {
             if (!_open) return;
             _open = false;
+            MapZoomMemory.Save(CurrentWorldId(), _zoom);
             Time.timeScale = _prevTimeScale;
             ModalFrameRateGate.Exit();
             _screenRoot.gameObject.SetActive(false);
+        }
+
+        /// <summary>The stable id (<see cref="WorldIds"/>) of the world the map is currently showing —
+        /// MV-1206's own per-world zoom key. Falls back to <see cref="WorldCatalog.Get"/>'s own
+        /// row-0 default (same as every other field that needs a sane value with no
+        /// <see cref="BackyardPath"/> resolved, e.g. a bare EditMode fixture) rather than a dedicated
+        /// "no world" bucket — the zoom this ticket persists is a per-world convenience, not a fact
+        /// tied to having actually resolved a world.</summary>
+        private string CurrentWorldId()
+        {
+            int worldIndex = _backyardPath != null ? _backyardPath.ResolvedWorldIndex : -1;
+            return WorldCatalog.Get(worldIndex).Id;
         }
 
         private void Update()
@@ -616,13 +635,25 @@ namespace MaxWorlds.UI
             marker.raycastTarget = false;
         }
 
-        /// <summary>Resets zoom to the opening "fit the whole world" state and pan to centred — the
-        /// state every <see cref="Open"/> starts from (AC: "starts zoomed to fit the whole world").</summary>
+        /// <summary>Resets pan to centred and zoom to whatever this world's own player last set it to
+        /// (MV-1206), clamped to today's min/max — <see cref="MapZoomMemory.DefaultZoom"/> (1, "fit
+        /// the whole world") if nothing was ever saved for this world. Pan is never remembered (the
+        /// ticket's own AC4), only zoom.</summary>
         private void ResetView()
         {
-            _zoom = 1f;
+            _zoom = MapPanZoomModel.ClampZoom(MapZoomMemory.Load(CurrentWorldId()), _maxZoomMultiplier);
             _pan = Vector2.zero;
             _lastPointers.Clear();
+            ApplyTransform();
+        }
+
+        /// <summary>Sets the zoom multiplier directly, clamped to the map's current [1, max] range —
+        /// the same setter <see cref="ApplyPinch"/> uses, so nothing else can ever update <see cref="_zoom"/>
+        /// through a divergent clamp. Does not persist: a live pinch calls this every gesture frame,
+        /// and <see cref="Close"/> is where the final value is saved (MV-1206) — once, not per frame.</summary>
+        public void SetZoom(float zoomMultiplier)
+        {
+            _zoom = MapPanZoomModel.ClampZoom(zoomMultiplier, _maxZoomMultiplier);
             ApplyTransform();
         }
 
@@ -736,7 +767,7 @@ namespace MaxWorlds.UI
             _pan = MapPanZoomModel.ZoomAboutPoint(_pan, oldZoomFull, newZoomFull, pivot);
             // Two-finger pan: the midpoint itself moving (beyond the pinch spread) drags the map too.
             _pan += midpoint - prevMidpoint;
-            _zoom = newZoomMultiplier;
+            SetZoom(newZoomMultiplier); // already clamped above; SetZoom's own clamp is a no-op here
             _pan = MapPanZoomModel.ClampPan(_pan, ViewportSize(), _contentSize, _fitScale * _zoom);
             ApplyTransform();
         }
