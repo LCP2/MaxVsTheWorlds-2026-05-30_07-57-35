@@ -182,8 +182,32 @@ namespace MaxWorlds.Arena
             blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0 ||
             dreadnought > 0;
 
+        /// <summary>MV-1220: explicit opt-in, default false. JsonUtility's 0-means-"not authored"
+        /// idiom cannot tell "this area authors zero Rushers on purpose" (world1's a9: authored
+        /// <see cref="bolter"/> = 9, every dial-driven field left at its default 0, meaning "pure
+        /// Bolters, no Rushers") apart from "this field was never written, let the dial decide" —
+        /// both serialise identically. So blending can never be inferred from which fields happen
+        /// to be zero; it must be a field an author sets on purpose. Only once this is true does
+        /// <see cref="WorldConfig.SolveComposition"/> blend this composition's authored-only kinds
+        /// (bolter/lurker/turret/sludger/charger/dreadnought) onto the dial-derived solve instead
+        /// of replacing it entirely (MV-365's default, still what every area without this flag
+        /// gets) — letting a new authored-only kind be added to an otherwise dial-derived area
+        /// without having to also restate every dial-driven kind's current solved count by hand.</summary>
+        public bool blendWithDial;
+
         public DifficultyEngine.Composition ToEngineComposition() =>
             new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought);
+
+        /// <summary>MV-1220: carries THIS composition's authored-composition-only counts (bolter/
+        /// lurker/turret/sludger/charger/dreadnought) onto <paramref name="dialSolved"/>'s
+        /// dial-driven counts, instead of replacing the whole composition the way
+        /// <see cref="ToEngineComposition"/> does. Only ever called when <see cref="blendWithDial"/>
+        /// is true.</summary>
+        public DifficultyEngine.Composition BlendOnto(DifficultyEngine.Composition dialSolved) =>
+            new DifficultyEngine.Composition(
+                dialSolved.Rusher, dialSolved.Bruiser, dialSolved.Heavy, dialSolved.Brute,
+                dialSolved.Gunner, dialSolved.Launcher, dialSolved.Blinker,
+                bolter, lurker, sludger, charger, turret, dreadnought);
     }
 
     /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
@@ -1065,17 +1089,25 @@ namespace MaxWorlds.Arena
         {
             if (dials == null || areaIndex < 1 || areaIndex > dials.areaCount) return default;
 
+            WorldComposition authored = AreaByIndex(areaIndex)?.composition;
+
             // MV-365: an authored composition IS the answer for this area — it replaces the
             // dial-derived budget solve below entirely rather than being blended with it, so an
-            // authored arena reads exactly as designed instead of as an approximation of a budget.
-            WorldComposition authored = AreaByIndex(areaIndex)?.composition;
-            if (authored != null && authored.IsAuthored) return authored.ToEngineComposition();
+            // authored arena reads exactly as designed instead of as an approximation of a
+            // budget. MV-1220: UNLESS it explicitly opts into WorldComposition.blendWithDial, in
+            // which case it blends onto the dial solve below instead — see that field's own
+            // comment for why this can only ever be an explicit opt-in, never inferred.
+            if (authored != null && authored.IsAuthored && !authored.blendWithDial) return authored.ToEngineComposition();
 
             float baseThreat = DevTuning.Or(DevTuning.WorldBaseThreat, dials.baseThreat);
             float threatGrowth = DevTuning.Or(DevTuning.WorldThreatGrowth, dials.threatGrowth);
             float budget = DifficultyEngine.TargetBudget(areaIndex, baseThreat, threatGrowth, dials.EnginePacing);
             ToughnessCurve toughness = dials.toughnessCurve?.ToEngineCurve(dials.areaCount);
-            return DifficultyEngine.SolveComposition(areaIndex, budget, toughness);
+            DifficultyEngine.Composition dialSolved = DifficultyEngine.SolveComposition(areaIndex, budget, toughness);
+
+            if (authored != null && authored.blendWithDial) return authored.BlendOnto(dialSolved);
+
+            return dialSolved;
         }
 
         /// <summary>Σ THV for combat area <paramref name="areaIndex"/>, weighted by this world's own
