@@ -13,7 +13,7 @@ namespace MaxWorlds.Tests.EditMode
     /// areas"). World 2's own cover was already authored at 1.6 m, taller than the wall beside it
     /// (<c>MapRuntime.cs</c> carries a comment acknowledging it) — the supporting measurement for why
     /// this ticket raises ONLY World 2's <c>wallHeight</c> to 3.0 m, leaving World 1 and World 3
-    /// untouched.
+    /// untouched at the time. World 3 (the Reef) made the same move later, in MV-1213.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) asserting RESOLVED state (Tier 2): the
     /// loaded <see cref="MapData.wallHeight"/> per world, every built <see cref="StructuralWall"/>'s
@@ -40,7 +40,10 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(3.0f, w2map.wallHeight, 0.001f, "World 2's own experiment: wallHeight 1.5 -> 3.0");
             Assert.AreEqual(1.5f, w1map.wallHeight, 0.001f, "World 1's wallHeight must not move for this ticket");
-            Assert.AreEqual(1.5f, w3map.wallHeight, 0.001f, "World 3's wallHeight must not move for this ticket");
+            // MV-1213 (Lee, 17 Oct 2026): World 3 (the Reef) also moves to 3.0 m now — this assertion
+            // originally pinned MV-771's own scope boundary (only World 2 moved that ticket), not a
+            // standing invariant that World 3 stays put forever.
+            Assert.AreEqual(3.0f, w3map.wallHeight, 0.001f, "World 3's wallHeight must be 3.0 m (MV-1213: 1.5 -> 3.0)");
 
             var host = new GameObject("MV771 host").transform;
             try
