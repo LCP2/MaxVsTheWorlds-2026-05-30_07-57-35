@@ -44,6 +44,14 @@ namespace MaxWorlds.Tests.EditMode
     /// every one of them — caps included — is disabled once the gate moves off area10 entirely. Fails on
     /// 12419fa (the commit before this fix) on the SECOND half: a10_c11's own corner caps stay enabled
     /// with Max standing in an unrelated zone.
+    ///
+    /// MV-1216: nine of a10's 19 pieces (a10_c11-19) now author the explicit
+    /// <see cref="CoverDressing.ReefCrate"/> word instead of the old bare <see cref="CoverDressing.None"/>
+    /// (the V8 layout's rename, MV-1215) — the other ten (the unconverted hull-fill pieces, a10_h1-10)
+    /// stay <see cref="CoverDressing.None"/>. <see cref="ReefDressing.DressCover"/> already treats both
+    /// words identically (both call <see cref="ReefKit.ApplyCrateSkin"/>), so this test's own filter
+    /// just needs to keep catching all 19 by either word — the gate-tracking behaviour under test is
+    /// unchanged.
     /// </summary>
     public sealed class MV1052CrateCoverGateVisibleTests
     {
@@ -84,7 +92,8 @@ namespace MaxWorlds.Tests.EditMode
                 InvokePrivate(batchRoot, "Start");
 
                 List<CoverPiece> a10Crates = built.Cover
-                    .Where(p => p.Cover.Name.StartsWith("a10_") && p.Cover.Dressing == CoverDressing.None)
+                    .Where(p => p.Cover.Name.StartsWith("a10_") &&
+                                (p.Cover.Dressing == CoverDressing.None || p.Cover.Dressing == CoverDressing.ReefCrate))
                     .ToList();
                 Assert.AreEqual(19, a10Crates.Count,
                     "World 3 area 10 should still author exactly its 19 crate cover pieces for this test to mean anything");

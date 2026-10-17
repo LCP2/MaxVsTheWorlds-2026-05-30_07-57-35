@@ -27,6 +27,17 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// Fails on 12419fa (the commit before this fix): every machinery piece's own renderer is disabled
     /// outright, so the first assertion (<c>Assert.IsTrue(r.enabled, ...)</c>) fails for <c>a4_c1</c>.
+    ///
+    /// MV-1216: the Reef's own config now authors these four pieces' dressing as
+    /// <see cref="CoverDressing.ReefManifold"/> (the V8 layout's rename of the old bare "machinery"
+    /// word, MV-1215), which — unlike the old <see cref="CoverDressing.Machinery"/> path this test
+    /// originally keyed on — always hides the cover piece's own body and builds a separate
+    /// <see cref="ReefKit.BuildManifold"/> root instead, for every size. The 90%-footprint-coverage
+    /// check this test exists for still has to hold; it just has to look at whichever renderer is
+    /// actually live over the footprint now, not assume it is <c>piece.Body</c>'s own.
+    /// <see cref="ReefKit.BuildManifold"/> scales its own "Base" box to the piece's full authored
+    /// <c>size.x</c>/<c>size.z</c>, so the coverage check still passes for the real reason MV-1051
+    /// cared about: no invisible wall segment either side of a long manifold run.
     /// </summary>
     public sealed class MV1051MachineryWallVisibleTests
     {
@@ -47,7 +58,7 @@ namespace MaxWorlds.Tests.EditMode
                 ReefDressing.DressCover(host.transform, built.Cover);
 
                 List<CoverPiece> longA4Machinery = built.Cover
-                    .Where(p => p.Cover.Name.StartsWith("a4_") && p.Cover.Dressing == CoverDressing.Machinery)
+                    .Where(p => p.Cover.Name.StartsWith("a4_") && p.Cover.Dressing == CoverDressing.ReefManifold)
                     .Where(p => p.Cover.Size.x > 2.5f || p.Cover.Size.z > 2.5f)
                     .ToList();
 
@@ -55,28 +66,29 @@ namespace MaxWorlds.Tests.EditMode
                     "World 3 area 4 should still author exactly its 4 long machinery pieces " +
                     "(a4_c1, a4_c2, a4_c5, a4_c7) for this test to mean anything");
 
+                Renderer[] liveRenderers = host.GetComponentsInChildren<Renderer>(true);
+
                 var failures = new List<string>();
                 foreach (CoverPiece piece in longA4Machinery)
                 {
-                    Renderer r = piece.Body.GetComponent<Renderer>();
-                    if (r == null || !r.enabled)
-                    {
-                        failures.Add($"{piece.Cover.Name}: own block renderer must stay enabled for a " +
-                                     "machinery piece wider than 2.5 m on an axis");
-                        continue;
-                    }
-
                     Rect footprint = piece.Cover.Footprint;
                     float area = footprint.width * footprint.height;
 
-                    Bounds b = r.bounds;
-                    float ix = Mathf.Max(0f, Mathf.Min(footprint.xMax, b.max.x) - Mathf.Max(footprint.xMin, b.min.x));
-                    float iz = Mathf.Max(0f, Mathf.Min(footprint.yMax, b.max.z) - Mathf.Max(footprint.yMin, b.min.z));
-                    float coverage = (ix * iz) / area;
+                    float bestCoverage = 0f;
+                    foreach (Renderer r in liveRenderers)
+                    {
+                        if (r == null || !r.enabled) continue;
 
-                    if (coverage < MinCoverageFraction)
-                        failures.Add($"{piece.Cover.Name}: enabled renderer bounds cover only " +
-                                     $"{coverage:P0} of its {area:F1} m^2 authored footprint");
+                        Bounds b = r.bounds;
+                        float ix = Mathf.Max(0f, Mathf.Min(footprint.xMax, b.max.x) - Mathf.Max(footprint.xMin, b.min.x));
+                        float iz = Mathf.Max(0f, Mathf.Min(footprint.yMax, b.max.z) - Mathf.Max(footprint.yMin, b.min.z));
+                        bestCoverage = Mathf.Max(bestCoverage, (ix * iz) / area);
+                    }
+
+                    if (bestCoverage < MinCoverageFraction)
+                        failures.Add($"{piece.Cover.Name}: no enabled renderer covers at least " +
+                                     $"{MinCoverageFraction:P0} of its {area:F1} m^2 authored footprint " +
+                                     $"(best found: {bestCoverage:P0})");
                 }
 
                 Assert.IsEmpty(failures, "MV-1051 machinery footprint violations:\n" + string.Join("\n", failures));
