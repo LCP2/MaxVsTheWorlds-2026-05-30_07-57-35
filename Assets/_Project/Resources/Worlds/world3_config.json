@@ -4,7 +4,7 @@
  "revision": "WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
- "wallHeight": 1.5,
+ "wallHeight": 3,
  "dials": {
   "areaCount": 30,
   "baseThreat": 45.0,
