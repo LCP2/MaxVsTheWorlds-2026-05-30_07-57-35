@@ -1569,7 +1569,7 @@ namespace MaxWorlds.Dev
                 ("ipad-mini", 1078, 815),
             };
 
-            for (int world = 0; world < 3; world++)
+            foreach (int world in FamilyPanelContainmentWorldIndices())
             {
                 RigBoard.UseWorld(world);
                 RigBoardLayout.UseWorld(world);
@@ -1599,6 +1599,15 @@ namespace MaxWorlds.Dev
 
             RigBoard.UseWorld(savedWorld);
             RigBoardLayout.UseWorld(savedWorld);
+        }
+
+        /// <summary>MV-1214: the loop bound <see cref="RunFamilyPanelContainmentCheck"/> actually visits,
+        /// extracted so an EditMode test can assert it without driving the whole capture/camera pipeline.
+        /// Public rather than internal — no <c>InternalsVisibleTo</c> back to the EditMode test assembly
+        /// exists in this project (see <see cref="WorldCatalog.UseForTests"/>'s own note).</summary>
+        public static IEnumerable<int> FamilyPanelContainmentWorldIndices()
+        {
+            for (int world = 0; world < WorldCatalog.Count; world++) yield return world;
         }
 
         /// <summary>MV-480: one growing report file across all three measured aspects instead of the
