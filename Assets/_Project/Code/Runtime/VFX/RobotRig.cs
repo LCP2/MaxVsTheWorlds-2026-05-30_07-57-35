@@ -273,6 +273,10 @@ namespace MaxWorlds.VFX
         /// <see cref="UpdateBeamVfx"/>.</summary>
         private LineRenderer _beamLine;
 
+        /// <summary>The Tractor's dashed pull beam (MV-1238) — built lazily, and only ever for that one
+        /// kind; see <see cref="UpdatePullVfx"/>.</summary>
+        private LineRenderer _pullLine;
+
         /// <summary>The colour the eye is currently burning — the tell, in one value. What a test looks
         /// at to prove the wind-up actually reaches the screen.</summary>
         public Color TellColor => _tellColor;
@@ -813,6 +817,7 @@ namespace MaxWorlds.VFX
             RideTheRamp();
             SpinWheels();
             UpdateBeamVfx();
+            UpdatePullVfx();
             UpdateTeleportExpand();
             UpdateReefInflate();
 
@@ -1197,6 +1202,88 @@ namespace MaxWorlds.VFX
             lr.shadowCastingMode = ShadowCastingMode.Off;
             lr.receiveShadows = false;
             lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
+            lr.enabled = false;
+            return lr;
+        }
+
+        /// <summary>Dashed green, #33E659 family — the ticket's own authored beam colour
+        /// ("the dish glows and a dashed green line runs to Max").</summary>
+        private static readonly Color TractorBeamColor = new Color(0.2f, 0.9f, 0.35f);
+
+        private const float TractorBeamWidth = 0.06f;
+        private const float TractorDashesPerMetre = 0.6f;
+
+        /// <summary>
+        /// The Tractor's pull beam, drawn (MV-1238) — same two-phase shape as <see cref="UpdateBeamVfx"/>
+        /// (AIMING during <see cref="RobotEnemy.State.Telegraph"/>, FIRING during <see cref="RobotEnemy.State.Lunge"/>),
+        /// except this beam tracks <see cref="RobotEnemy.CurrentTarget"/>'s LIVE position every frame
+        /// rather than a direction locked at the end of the telegraph — the Tractor's pull itself is
+        /// re-aimed at its own position every tick (<see cref="RobotEnemy.TickPull"/>), so a beam that
+        /// only pointed <c>transform.forward</c> would lie the moment Max was pulled off that line.
+        /// Hidden the instant <see cref="RobotEnemy.HasSightOfTarget"/> goes false — the ticket's own "a
+        /// wall or solid cover ... snaps the line at once" is a visual promise as much as a movement one.
+        /// </summary>
+        private void UpdatePullVfx()
+        {
+            if (_enemy.Kind != EnemyKind.Tractor) return;
+
+            bool aiming = _enemy.Current == RobotEnemy.State.Telegraph;
+            bool firing = _enemy.Current == RobotEnemy.State.Lunge;
+            Transform target = _enemy.CurrentTarget;
+
+            if ((!aiming && !firing) || target == null || !_enemy.Sight.HasSight)
+            {
+                if (_pullLine != null) _pullLine.enabled = false;
+                return;
+            }
+
+            if (_pullLine == null) _pullLine = BuildPullLine();
+            _pullLine.enabled = true;
+
+            Vector3 origin = transform.position;
+            Vector3 end = target.position;
+            _pullLine.SetPosition(0, origin);
+            _pullLine.SetPosition(1, end);
+            _pullLine.material.mainTextureScale =
+                new Vector2(Mathf.Max(1f, Vector3.Distance(origin, end) * TractorDashesPerMetre), 1f);
+
+            if (aiming)
+            {
+                float t = _enemy.TelegraphProgress;
+                _pullLine.widthMultiplier = Mathf.Lerp(0.015f, TractorBeamWidth, t);
+                Color c = TractorBeamColor;
+                c.a = Mathf.Lerp(0.3f, 0.8f, t);
+                _pullLine.startColor = c;
+                _pullLine.endColor = c;
+            }
+            else // firing
+            {
+                _pullLine.widthMultiplier = TractorBeamWidth;
+                Color c = TractorBeamColor;
+                c.a = 1f;
+                _pullLine.startColor = c;
+                _pullLine.endColor = c;
+            }
+        }
+
+        /// <summary>The pull beam's LineRenderer, built once and reused — same lifetime/parenting idiom
+        /// as <see cref="BuildBeamLine"/>, dashed via a per-instance tiled material clone (same idiom
+        /// <see cref="MaxWorlds.VFX.LightMissileAimPreviewVfx.Build"/> already uses for its own dashed
+        /// launch lines) so it reads as a beam of segments rather than one solid line.</summary>
+        private LineRenderer BuildPullLine()
+        {
+            var go = new GameObject("PullBeam");
+            go.transform.SetParent(_model, worldPositionStays: false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 0;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = new Material(VfxMaterials.Additive(VfxMaterials.Glow()));
+            lr.textureMode = LineTextureMode.Tile;
             lr.enabled = false;
             return lr;
         }

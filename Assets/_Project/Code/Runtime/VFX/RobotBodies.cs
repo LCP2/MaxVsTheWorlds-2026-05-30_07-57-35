@@ -13,6 +13,8 @@
 // says explicitly "the look is a separate ticket" (MV-1231, which owns the neck collar and snapped
 // chain) — this body exists only so the roster-wide MV-535 regression guard (every kind must build a
 // geometry signature distinct from a Rusher's) stays green, not as the Breaker's final silhouette.
+// MV-1238 EXCEPTION: BuildTractor is hand-authored for the same reason (robot-gen-mesh.html is an
+// interactive browser tool this worker cannot drive headlessly).
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -112,6 +114,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Skitter:  BuildSkitter(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Breaker:  BuildBreaker(visualRoot, p, eyes, wheels, legs,
                                               out breakerChainPivot, out breakerChainEnd, out breakerWallAnchor); break;
+                case EnemyKind.Tractor:  BuildTractor(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -550,6 +553,35 @@ namespace MaxWorlds.VFX
             // The one bright gold eye (the ticket's own "bright gold eye") — oversized relative to the
             // body so it still reads at ~19px, per the roster's one-eye rule.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0f, 0.3f, 0.14f), Quaternion.Euler(-30f, 0f, 0f), new Vector3(0.09f, 0.09f, 0.04f)));
+        }
+
+        /// <summary>Tractor (MV-1238) — hand-authored, same exception as <see cref="BuildBolter"/>/
+        /// <see cref="BuildLurker"/>/<see cref="BuildTurret"/>/<see cref="BuildSludger"/>/
+        /// <see cref="BuildCharger"/>/<see cref="BuildSkitter"/>/<see cref="BuildBreaker"/> above. A
+        /// squat, wide stub base (the ticket's own "Bruiser-sized") topped with a wide shallow dish
+        /// angled up and forward — the ticket's own "emitter dish" — the same "stub + raised fixture"
+        /// read <see cref="BuildTurret"/> already established for a static emplacement, stretched to
+        /// the Bruiser's own wider footprint since this kind never has to read as a mover either
+        /// (<see cref="MaxWorlds.Enemies.EnemyArchetype.Tractor"/>'s own MoveSpeed is 0). One green
+        /// status lens at the dish's hub — the ticket's own "the dish glows ... green" tell, coloured by
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.Apply"/>'s own <c>TractorDishColor</c> — per the
+        /// roster's one-eye rule. The dashed pull beam itself (<see cref="RobotRig.UpdatePullVfx"/>) is
+        /// drawn from the robot's own root, not from this dish, so its exact mount position is cosmetic
+        /// only.</summary>
+        private static void BuildTractor(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // The stub base — squat and wide, same "mounted, not standing" read as the Turret's own
+            // stub, stretched to the Bruiser's own footprint.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.4f, 0f), new Vector2(0.44f, 0.04f), new Vector2(0.42f, 0.22f), new Vector2(0.38f, 0.26f) }, 20), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.38f, 0.26f), new Vector2(0.34f, 0.34f), new Vector2(0.2f, 0.4f), new Vector2(0.1f, 0.42f) }, 20), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // The emitter dish — a wide shallow lathe bowl, angled up and toward +Z (the aim axis every
+            // other ranged kind's own muzzle/barrel uses).
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.3f, 0.02f), new Vector2(0.34f, 0.08f), new Vector2(0.3f, 0.1f) }, 24), p.Dark, new Vector3(0f, 0.5f, 0.1f), Quaternion.Euler(-20f, 0f, 0f), Vector3.one, "Dish");
+
+            // The single green status lens at the dish's hub.
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0f, 0.5f, 0.14f), Quaternion.Euler(-20f, 0f, 0f), new Vector3(0.1f, 0.1f, 0.05f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>

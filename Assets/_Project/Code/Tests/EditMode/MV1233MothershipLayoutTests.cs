@@ -38,12 +38,14 @@ namespace MaxWorlds.Tests.EditMode
         private const int OpeningSearchRadiusCells = 6; // 1.5 m either side of an authored mouth/point
 
         // Areas tab (MVW_World5_Design.xlsx) column G, areas 1-30 in order — the per-area robot
-        // count every area's built garrison must match exactly.
+        // count every area's built garrison must match exactly. MV-1238 hand-added 2 Tractor
+        // garrison entries each to a15 (index 14), a16 (15), a22 (21), a23 (22) and a30 (29) — the
+        // only five counts below that differ from the Areas tab's own pre-Tractor column G.
         private static readonly int[] ExpectedRobotCounts =
         {
             14, 18, 16, 22, 24, 26, 22, 34, 28, 26,
-            24, 30, 30, 26, 37, 28, 32, 34, 32, 28,
-            36, 40, 36, 38, 32, 40, 40, 40, 40, 30,
+            24, 30, 30, 26, 39, 30, 32, 34, 32, 28,
+            36, 42, 38, 38, 32, 40, 40, 40, 40, 32,
         };
 
         private const int ExpectedAreaCount = 30;

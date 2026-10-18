@@ -201,8 +201,8 @@ namespace MaxWorlds.Player
         }
 
         /// <summary>MV-1222: one shared push/pull rule for every feature that moves Max without his
-        /// input — built for the Breaker's knockback and the Tractor's pull (both land in later
-        /// tickets). While active, <paramref name="velocity"/> displaces Max every tick through the
+        /// input — built for the Breaker's knockback (MV-1228) and the Tractor's pull (MV-1238), its
+        /// first two production callers. While active, <paramref name="velocity"/> displaces Max every tick through the
         /// same <see cref="CharacterControllerMotion.SafeMove"/> path his walk uses (<see cref="TickForcedMove"/>),
         /// so a wall, solid cover or a gate frame stops it exactly as it stops ordinary walking — never
         /// a teleport-style position set. Only one forced move is ever active: calling this again

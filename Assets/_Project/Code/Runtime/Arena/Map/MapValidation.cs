@@ -1072,6 +1072,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Dreadnought => c.Dreadnought,
             EnemyKind.Skitter => c.Skitter,
             EnemyKind.Breaker => c.Breaker,
+            EnemyKind.Tractor => c.Tractor,
             _ => 0,
         };
 
