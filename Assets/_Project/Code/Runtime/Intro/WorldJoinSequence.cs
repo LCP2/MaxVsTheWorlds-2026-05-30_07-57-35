@@ -382,6 +382,9 @@ namespace MaxWorlds.Intro
                 case ExitCorridorDressingKind.ExitCity:
                     WorldJoinDressing.DressExitCity(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry);
                     break;
+                case ExitCorridorDressingKind.PodLaunch:
+                    WorldJoinDressing.DressExitPodLaunch(_segmentARoot, _segmentBRoot, _segmentCRoot, _doorMouth, _wall, wallHeight, _entry, _playerT);
+                    break;
             }
         }
 
@@ -477,6 +480,9 @@ namespace MaxWorlds.Intro
                     break;
                 case ArrivalDressingKind.ArrivalCity:
                     WorldJoinDressing.DressArrivalCity(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
+                    break;
+                case ArrivalDressingKind.ArrivalPodLift:
+                    WorldJoinDressing.DressArrivalPodLift(_arrivalRoot, _doorMouth, _wall, wallHeight, _entry.ArrivalShellLength);
                     break;
             }
         }
@@ -578,6 +584,12 @@ namespace MaxWorlds.Intro
         /// <see cref="BuildBanks"/>'s own extended span exactly (<see cref="BankEndExtension"/> past
         /// each end, <see cref="BankSideWidth"/> past each wall) so the registered rect covers
         /// everywhere Max can actually stand, not just the walkway's own 5 m width.</summary>
+        /// <summary>MV-1229: the XZ rect this sequence itself registered with <see cref="FallSafetyNet"/>
+        /// (<see cref="RegisterInPlayFootprint"/>) -- exposed so a test can assert every corridor/arrival
+        /// collider's footprint lies inside it, without duplicating the registration formula. Null before
+        /// <see cref="RegisterInPlayFootprint"/> has run, and after <see cref="UnregisterInPlayFootprint"/>.</summary>
+        public Rect? InPlayFootprint => _inPlayFootprint;
+
         private void RegisterInPlayFootprint(float length)
         {
             float width = WorldTransitionEntry.CorridorWidth + 2f * (_wallThickness + BankSideWidth);

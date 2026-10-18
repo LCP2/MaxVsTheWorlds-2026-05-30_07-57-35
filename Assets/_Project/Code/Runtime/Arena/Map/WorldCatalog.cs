@@ -79,6 +79,8 @@ namespace MaxWorlds.Arena
         Exit,
         ExitReef,
         ExitCity,
+        /// <summary>MV-1229: the Reef's own exit -- the drop-pod launch tube into the Mothership.</summary>
+        PodLaunch,
     }
 
     /// <summary>Which <c>WorldJoinDressing</c> pass dresses the arrival shell built when Max arrives IN
@@ -90,6 +92,9 @@ namespace MaxWorlds.Arena
         Arrival,
         ArrivalReef,
         ArrivalCity,
+        /// <summary>MV-1229: the Mothership's own arrival -- the drop-pod launch tube continued onto
+        /// its own stub.</summary>
+        ArrivalPodLift,
     }
 
     /// <summary>A world's Sentinel look (MV-1141) — moved here from <c>Sentinel</c>'s own private
@@ -663,21 +668,23 @@ namespace MaxWorlds.Arena
                 RackModuleDropsHere = false,
                 // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
-                // MV-1013: the last world's own finale exit door -- real map geometry cut at boot exactly
-                // like a Corridor row's, but with no corridor behind it: there is no next world to walk
-                // into, so WorldFinaleGate opens this gate directly and watches for Max crossing it
-                // itself. a30's E wall (34x34, origin 586,0) -- same "exit runs east" convention every
-                // other row already follows. NOT the wall's exact centre (0.5, z 17): Anchorhead sits
+                // MV-1013/MV-1229: a30's E wall (34x34, origin 586,0) -- same "exit runs east" convention
+                // every other row already follows. NOT the wall's exact centre (0.5, z 17): Anchorhead sits
                 // there too (603, 17, dead centre of the room) with a flanking cover pair on every wall at
                 // its own centreline (a30_c17..c20 in world3_config.json) -- a door cut through the centre
                 // would open right behind a solid cover box. 0.3 (z 10.2) clears that piece, the south
                 // corner cluster (c5-c8, z up to 5.8) and both wall ends, with margin to spare against
                 // WorldTransitionCoverageTests' own clearances (2m from cover, 1.9m from a wall end).
-                ExitMode = WorldExitMode.DoorOnly,
+                // MV-1229: the Reef is no longer the last world (the Mothership is) -- its finale door now
+                // opens onto the drop-pod launch corridor into it, 30 m/0-10/10-22 per the ticket's own
+                // three-part split (wet deck / pod tube / ship deck plating).
+                ExitMode = WorldExitMode.Corridor,
                 ExitWall = Wall.E,
                 ExitDoorPos = 0.3f,
-                Entry = null,
-                ExitDressing = ExitCorridorDressingKind.None,
+                Entry = new WorldTransitionEntry(fromWorld: 3, exitWall: Wall.E, exitDoorPos: 0.3f, corridorLength: 30f,
+                    segmentAEnd: 10f, segmentBEnd: 22f,
+                    arrivalWall: Wall.W, arrivalDoorPos: 0.5f, arrivalShellLength: 10f),
+                ExitDressing = ExitCorridorDressingKind.PodLaunch,
                 ArrivalDressing = ArrivalDressingKind.ArrivalReef,
                 RunsLegacyExitGate = false,
                 DevStart = DevStartLoadout.MaxedRig,
@@ -728,9 +735,8 @@ namespace MaxWorlds.Arena
                 ExitDoorPos = 0.5f,
                 Entry = null,
                 ExitDressing = ExitCorridorDressingKind.None,
-                // MV-1229 (the W4->W5 corridor) sets the real arrival dressing once Max can actually
-                // walk in from the Reef -- this row has no corridor yet.
-                ArrivalDressing = ArrivalDressingKind.None,
+                // MV-1229: the drop-pod launch tube continued onto the Mothership's own stub.
+                ArrivalDressing = ArrivalDressingKind.ArrivalPodLift,
                 RunsLegacyExitGate = false,
                 // MV-1185/Lee 14 Oct: a DEV jump starts with what a typical player would carry.
                 DevStart = DevStartLoadout.PreviousWorldExitRig,

@@ -109,7 +109,9 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsNotNull(WorldTransitions.For(probeIndex), $"the probe's own row (index {probeIndex}) must resolve a Corridor entry");
             Assert.AreSame(probe.Entry, WorldTransitions.For(probeIndex), $"index {probeIndex} must resolve the probe's own entry, not some other row's");
-            Assert.IsNull(WorldTransitions.For(shiftedReefIndex), $"the real Reef, now at index {shiftedReefIndex}, must still resolve no corridor (DoorOnly)");
+            // MV-1229: the real Reef is Corridor now (into the Mothership) -- it must still resolve its
+            // OWN entry once the probe shifts it one place further out, not suddenly none.
+            Assert.AreSame(realReef.Entry, WorldTransitions.For(shiftedReefIndex), $"the real Reef, now at index {shiftedReefIndex}, must still resolve its own Corridor entry");
 
             Assert.IsTrue(WorldMapLoader.TryLoad(world3Cfg, out MapData actualMap, out string actualReason), actualReason);
             WorldTransitions.ApplyExitDoorway(actualMap, world3Cfg, worldIndex: shiftedReefIndex);
@@ -132,7 +134,10 @@ namespace MaxWorlds.Tests.EditMode
                 "world 0's own entry must come straight off its row");
             Assert.AreSame(WorldCatalog.Get(stormdrainIndex).Entry, WorldTransitions.For(stormdrainIndex),
                 "world 1's own entry must come straight off its row");
-            Assert.IsNull(WorldTransitions.For(reefIndex), "the Reef is DoorOnly — it must resolve no corridor entry");
+            // MV-1229: the Reef is Corridor now (into the Mothership) -- its own entry must come straight
+            // off its row too, the same as every other non-last world.
+            Assert.AreSame(WorldCatalog.Get(reefIndex).Entry, WorldTransitions.For(reefIndex),
+                "the Reef's own entry must come straight off its row");
 
             for (int i = 0; i < WorldLibrary.Count; i++)
             {
@@ -176,12 +181,13 @@ namespace MaxWorlds.Tests.EditMode
         {
             WorldDefinition backyard = WorldCatalog.Get(0);
             WorldDefinition stormdrain = WorldCatalog.Get(1);
-            // MV-1176: must be the real (DoorOnly) Reef, not whatever row now sits at a bare index 2 —
-            // cloning a Corridor-exit row (the City) as this probe's last row would trip the unrelated
-            // "last row must be DoorOnly" check these assertions aren't testing.
-            WorldDefinition reef = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef));
+            // MV-1176/MV-1229: must be a real DoorOnly row, not whatever row now sits at a bare index 2 —
+            // cloning a Corridor-exit row (the City, or now the Reef too) as this probe's last row would
+            // trip the unrelated "last row must be DoorOnly" check these assertions aren't testing. The
+            // Mothership is the real last/DoorOnly row now that the Reef has its own Corridor exit.
+            WorldDefinition doorOnlyRow = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Mothership));
 
-            WorldDefinition zeroCostScale = CloneRowWithId(reef, "probe-cost-scale");
+            WorldDefinition zeroCostScale = CloneRowWithId(doorOnlyRow, "probe-cost-scale");
             zeroCostScale.UpgradeCostScale = 0f;
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, zeroCostScale });
             List<string> costScaleProblems = WorldCatalog.Validate();
@@ -194,7 +200,7 @@ namespace MaxWorlds.Tests.EditMode
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, fixedCostScale });
             Assert.IsEmpty(WorldCatalog.Validate(), "setting UpgradeCostScale back to 1f must validate clean");
 
-            WorldDefinition zeroMultiplier = CloneRowWithId(reef, "probe-psc-multiplier");
+            WorldDefinition zeroMultiplier = CloneRowWithId(doorOnlyRow, "probe-psc-multiplier");
             zeroMultiplier.PrimarySecondaryCostMultiplier = 0f;
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, zeroMultiplier });
             List<string> multiplierProblems = WorldCatalog.Validate();
@@ -209,7 +215,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // MV-1185 AC2: a row with a negative DevStartCells must report a problem (covered here
             // rather than as a second new test, per that ticket's own AC2).
-            WorldDefinition negativeCells = CloneRowWithId(reef, "probe-dev-start-cells");
+            WorldDefinition negativeCells = CloneRowWithId(doorOnlyRow, "probe-dev-start-cells");
             negativeCells.DevStartCells = -1;
             WorldCatalog.UseForTests(new[] { backyard, stormdrain, negativeCells });
             List<string> devStartCellsProblems = WorldCatalog.Validate();

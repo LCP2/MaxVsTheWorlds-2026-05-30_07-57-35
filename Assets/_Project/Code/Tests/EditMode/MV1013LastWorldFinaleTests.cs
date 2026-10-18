@@ -7,7 +7,10 @@ using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
+using MaxWorlds.Player;
+using MaxWorlds.Rendering;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -53,6 +56,14 @@ namespace MaxWorlds.Tests.EditMode
             Pickup.ResetRegistry();
             Time.timeScale = 1f;
 
+            // MV-1229: the Reef's finale now builds a real WorldJoinSequence/BackyardLighting pair (same
+            // hygiene ClimbCorridorTests' own SetUp already keeps) -- a stray instance left by an earlier
+            // test/run must never be mistaken for this one's own.
+            foreach (var stray in Object.FindObjectsByType<WorldJoinSequence>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(stray.gameObject);
+            foreach (var stray in Object.FindObjectsByType<BackyardLighting>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(stray.gameObject);
+
             _root = new GameObject("MV-1013 Probe Root");
         }
 
@@ -66,6 +77,17 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var rs in Object.FindObjectsByType<ResultScreen>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(rs.gameObject);
 
+            // MV-1229: tear down the real corridor this test now builds, same reason as the SetUp sweep
+            // above -- ClimbCorridorTests' own established idiom.
+            foreach (var stray in Object.FindObjectsByType<WorldJoinSequence>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(stray.gameObject);
+            foreach (var stray in Object.FindObjectsByType<BackyardLighting>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(stray.gameObject);
+            WorldJoinDressing.Clear();
+            StormdrainKit.Clear();
+            MaterialLibrary.Clear();
+            RenderSettings.fog = false;
+
             // MV-1079: Beat B's own scratch VFX/UI (GroundRing burst, the travelling SentinelBolt, the
             // centre FinaleBanner) are never torn down by OnDisable here -- same "OnDisable isn't
             // reliably invoked for AddComponent outside Play mode" note as the ResultScreen cleanup above.
@@ -75,6 +97,9 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(bolt.gameObject);
             foreach (var banner in Object.FindObjectsByType<FinaleBanner>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 Object.DestroyImmediate(banner.gameObject);
+            // MV-1229: the Reef's corridor walk now reaches WorldJoinSequence's own §7 title card too.
+            foreach (var card in Object.FindObjectsByType<MaxWorlds.UI.WorldJoinTitleCard>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                Object.DestroyImmediate(card.gameObject);
 
             BossCensus.Reset();
             RobotEnemy.ResetRegistry();
@@ -161,6 +186,11 @@ namespace MaxWorlds.Tests.EditMode
                 // World 3 (the last world) has none.
                 WorldTransitions.ApplyExitDoorway(map, cfg, worldIndex);
 
+                // MV-1229: the Reef is no longer DoorOnly -- its finale now hands off to a real
+                // WorldJoinSequence corridor into the Mothership, exactly like every other world's.
+                WorldTransitionEntry entry = WorldTransitions.For(worldIndex);
+                Assert.IsNotNull(entry, "the Reef must author a WorldTransitions entry into the Mothership");
+
                 root = new GameObject("MV1013 Root");
                 MapBuild built = MapRuntime.Build(map, root.transform);
                 Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
@@ -239,6 +269,18 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (RobotEnemy r in otherRobots)
                     Assert.IsTrue(r.IsAlive, "a30's other robots must still be alive while the gate is shut");
 
+                // MV-1229: a live player must already exist before the Core is collected -- the Reef's
+                // own finale now opens into a real WorldJoinSequence corridor (WorldJoinSequence.OpenExitDoor
+                // bails out with no corridor built at all if it can't find one), where the old DoorOnly
+                // path only ever needed GameObject.FindGameObjectWithTag("Player") much later, on crossing.
+                playerGo = new GameObject("MV1013 Max") { tag = "Player" };
+                playerGo.AddComponent<CharacterController>();
+                PlayerController player = playerGo.AddComponent<PlayerController>();
+                ExitDoorway doorway = map.exitDoorway.Value;
+                Assert.AreEqual(Wall.E, doorway.Wall, "World 3's own exit convention: every world's door runs east");
+                // Stand him well back while the Core's own collection opens the door behind him.
+                playerGo.transform.position = new Vector3(doorway.Coord - 10f, 0f, doorway.Hole.Mid);
+
                 // --- Max collects the core. MV-1183: in the SAME call, every robot still alive in a30
                 // is destroyed (ordinary death effect, no drops) and the door opens -- no clean-up phase
                 // or exit beat to wait on any more. ---
@@ -252,30 +294,44 @@ namespace MaxWorlds.Tests.EditMode
                         "MV-1183: every robot still alive in the final area must be destroyed the " +
                         "instant the orb is taken");
                 Assert.IsTrue(built.ExitGate.IsOpen,
-                    "the SAME real map gate MapRuntime built must be the one that opened -- no corridor to build");
+                    "the SAME real map gate MapRuntime built must be the one that opened behind the new corridor");
+
+                WorldJoinSequence sequence = Object.FindFirstObjectByType<WorldJoinSequence>();
+                Assert.IsNotNull(sequence,
+                    "MV-1229: collecting the Core must build a real WorldJoinSequence corridor into the " +
+                    "Mothership, exactly as every other world's finale does");
+                Assert.IsTrue(sequence.IsAwaitingCrossing,
+                    "Max must still be in full control, walking up to the now-open door himself");
 
                 HudSignals.EmitBossPayoffFinished();
 
                 Assert.IsNull(Object.FindFirstObjectByType<ResultScreen>(),
                     "Victory must not seal before Max actually crosses the open door");
 
-                playerGo = new GameObject("MV1013 Max") { tag = "Player" };
-                ExitDoorway doorway = map.exitDoorway.Value;
-                Assert.AreEqual(Wall.E, doorway.Wall, "World 3's own exit convention: every world's door runs east");
-                // Standing well short of the door -- WorldFinaleGate's own crossing check must not fire yet.
+                // Standing well short of the door -- the crossing check must not fire yet.
                 playerGo.transform.position = new Vector3(doorway.Coord - 5f, 0f, doorway.Hole.Mid);
-                InvokeUpdate(gate);
+                sequence.Tick(0.016f);
                 Assert.IsNull(Object.FindFirstObjectByType<ResultScreen>(),
-                    "standing short of the open door must not raise FinaleGateCrossed / seal Victory");
+                    "standing short of the open door must not seal Victory");
 
-                // Now walk him through it.
+                // Now walk him through it, and all the way down the corridor to just short of the far
+                // door -- MV-1229: the Reef's own crossing check is WorldJoinSequence's own corridor
+                // walk now, exactly like every other world, not WorldFinaleGate's bespoke DoorOnly watch.
                 playerGo.transform.position = new Vector3(doorway.Coord + 1f, 0f, doorway.Hole.Mid);
-                InvokeUpdate(gate);
+                sequence.Tick(0.016f);
+                Assert.IsTrue(sequence.IsInCorridorWalk, "crossing the door must start the corridor walk");
+
+                playerGo.transform.position = new Vector3(doorway.Coord + entry.CorridorLength - 0.4f, 0f, doorway.Hole.Mid);
+                sequence.Tick(0.016f);
+                Assert.IsFalse(sequence.IsInCorridorWalk,
+                    "standing short of the far door must have started the fade");
+
+                sequence.Tick(1f); // exceeds FadeDuration -- completes the fade-out and emits FinaleGateCrossed
 
                 var resultScreen = Object.FindFirstObjectByType<ResultScreen>();
                 Assert.IsNotNull(resultScreen,
-                    "MV-1013: crossing the open door must raise Victory and show the Result screen, " +
-                    "exactly as every other world's finale does");
+                    "MV-1013/MV-1229: crossing the open door and walking the corridor must raise Victory " +
+                    "and show the Result screen, exactly as every other world's finale does");
 
                 foreach (RobotEnemy r in otherRobots)
                     Assert.IsFalse(r.IsAlive,
