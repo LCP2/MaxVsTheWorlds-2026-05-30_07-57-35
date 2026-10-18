@@ -4,6 +4,8 @@ using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
+using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Factories
 {
@@ -26,7 +28,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("assembly_cradle")]
-    public sealed class AssemblyCradle : MonoBehaviour, IDamageable, IFactoryBody
+    public sealed class AssemblyCradle : MonoBehaviour, IDamageable, IFactoryBody, IHealthReadout
     {
         public enum BuildStage { None, Frame, Plates, Done }
 
@@ -52,14 +54,43 @@ namespace MaxWorlds.Factories
         private const float OutPadHalfWidth = 1.0f; // half of the ticket's 2x2 m out pad
         private const float DropScatterRadius = 0.6f;
 
+        // --- MV-1227: the look — health bar sizes follow MowerHutch/Replicator's own world-bar
+        // convention, scaled for the ticket's taller 3x3x3 m frame. ---
+        private const float BarHeightAboveCentre = 2.6f;
+        private const float BarWorldWidth = 1.8f;
+
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private float _buildTimer;
         private bool _maxInArea;
 
+        // --- MV-1227: the gantry's own moving/measurable parts, built once in Build(). ---
+        private Transform[] _arms;
+        private Transform _bayRoot;
+        private Transform _frameStage;
+        private Transform _platesStage;
+        private Transform _doneStage;
+        private EnemyKind _previewKind;
+
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Max-side damage (Light Missile, Orbitals, sentinels, ...) can hit it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
+
+        // --- MV-1227: IHealthReadout — the always-on world health bar the ticket asks for. ---
+        public float HealthNormalized => Normalized;
+        public float HealthCurrent => _health?.Current ?? 0f;
+        public string ReadoutName => "ASSEMBLY CRADLE";
+
+        /// <summary>The two front-top turret housings (MV-1227 AC1 measures their own resolved
+        /// renderer width) — the barrel is a separate child, deliberately excluded so it can never
+        /// skew the bound.</summary>
+        public Transform[] TurretHousings { get; private set; }
+
+        /// <summary>The bay's current frame-stage body root — null until the first build cycle starts.
+        /// Exposed for MV-1227's own EditMode test to read each stage's resolved renderer-enabled set.</summary>
+        public Transform FrameStage => _frameStage;
+        public Transform PlatesStage => _platesStage;
+        public Transform DoneStage => _doneStage;
 
         /// <summary>0..1 through the current build cycle — for MV-1227's visual stages.</summary>
         public float BuildProgress => Mathf.Clamp01(_buildTimer / BuildSeconds);
@@ -87,6 +118,30 @@ namespace MaxWorlds.Factories
             _health.Destroyed += OnDestroyed;
             _spawner = GetComponent<EnemySpawner>();
             _spawner.Stop();
+
+            BuildVisual();
+            WorldHealthBar.Attach(gameObject, this, BarHeightAboveCentre, BarWorldWidth,
+                alwaysShow: true, showNumber: false);
+        }
+
+        /// <summary>MV-1227: the gantry frame, arms, turrets and out-pad outline — the primitive cube
+        /// this component sits on stays as the collider (the Water Blaster's hitbox), but its own
+        /// renderer is switched off, the same "renderer off, collider stays" treatment
+        /// <see cref="Replicator"/>'s own generated-mesh body uses.</summary>
+        private void BuildVisual()
+        {
+            var rend = GetComponent<Renderer>();
+            if (rend != null)
+            {
+                rend.enabled = false;
+                MapStaticBatchRoot.Active?.MarkPermanentlyHidden(rend);
+            }
+
+            Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
+            FactoryBodies.CradleGantry gantry = FactoryBodies.BuildAssemblyCradle(bodyRoot, transform.lossyScale);
+            _arms = gantry.Arms;
+            _bayRoot = gantry.BayRoot;
+            TurretHousings = gantry.TurretHousings;
         }
 
         private void Awake() => Build();
@@ -106,14 +161,75 @@ namespace MaxWorlds.Factories
             if (!IsAlive || !_maxInArea) return;
             if (_spawner.LiveCount >= MaxAliveSpawned) return; // at the cap: held at zero, not merely paused
 
+            if (_buildTimer <= 0f)
+            {
+                // A fresh cycle starting — decide (and cache) which kind this build will produce. Read
+                // exactly once per cycle, here at the start rather than at completion (MV-1223's
+                // original shape): TryNextKind mutates the cadence's own emitted tally (MV-1227 doc on
+                // AssemblyCradle), so calling it a second time to "peek" a preview kind would double-count
+                // every cycle. Moving the one call earlier keeps it at exactly once while letting the
+                // bay's build-stage visuals know which kind to preview for the whole cycle.
+                if (!_spawner.Cadence.TryNextKind(out EnemyKind kind)) return; // this area authors nothing
+                _previewKind = kind;
+                RebuildPreview(kind);
+            }
+
             _buildTimer += dt;
+            ApplyBuildStageVisual();
             if (_buildTimer < BuildSeconds) return;
 
             _buildTimer = 0f;
-            if (!_spawner.Cadence.TryNextKind(out EnemyKind kind)) return; // this area authors nothing
-
-            List<RobotEnemy> spawned = _spawner.SpawnExact(kind, 1, ignorePerFactoryCap: true);
+            List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true);
             PlaceOnOutPad(spawned);
+        }
+
+        /// <summary>MV-1227: rebuilds the bay's three build-stage bodies for <paramref name="kind"/> —
+        /// a no-op if <see cref="BuildVisual"/> never ran (a test fixture that calls <see cref="Tick"/>
+        /// without ever calling <see cref="Build"/>, which can't happen outside a hand-built fixture
+        /// since <see cref="Build"/> always sets <see cref="_bayRoot"/> first).</summary>
+        private void RebuildPreview(EnemyKind kind)
+        {
+            if (_bayRoot == null) return;
+            FactoryBodies.CradlePreview preview = FactoryBodies.BuildCradlePreview(_bayRoot, kind);
+            _frameStage = preview.Frame;
+            _platesStage = preview.Plates;
+            _doneStage = preview.Done;
+        }
+
+        /// <summary>MV-1227 AC1: shows exactly one of the bay's three stage bodies, driven by
+        /// <see cref="Stage"/> — toggling each renderer's own <c>enabled</c> flag (never
+        /// <c>SetActive</c>, so the AC's "resolved renderer enabled flags" read holds literally). None
+        /// shown while <see cref="Stage"/> is <see cref="BuildStage.None"/> (the lead-in before the
+        /// frame stage begins): the bay reads empty, never a stale leftover from the previous cycle.</summary>
+        private void ApplyBuildStageVisual()
+        {
+            BuildStage stage = Stage;
+            SetStageRenderersEnabled(_frameStage, stage == BuildStage.Frame);
+            SetStageRenderersEnabled(_platesStage, stage == BuildStage.Plates);
+            SetStageRenderersEnabled(_doneStage, stage == BuildStage.Done);
+        }
+
+        private static void SetStageRenderersEnabled(Transform stageRoot, bool show)
+        {
+            if (stageRoot == null) return;
+            Renderer[] renderers = stageRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = show;
+        }
+
+        /// <summary>The ticket's own "arms move while building" — a simple hinge sway, live only while
+        /// a build is actually progressing. Cosmetic: never runs in an EditMode test (Unity's Update
+        /// loop never ticks outside Play mode), so it cannot affect <see cref="Tick"/>'s own resolved
+        /// state.</summary>
+        private void LateUpdate()
+        {
+            if (_arms == null) return;
+            bool building = IsAlive && _buildTimer > 0f && _buildTimer < BuildSeconds;
+            for (int i = 0; i < _arms.Length; i++)
+            {
+                if (_arms[i] == null) continue;
+                float sway = building ? Mathf.Sin(Time.time * 2.5f + i * Mathf.PI) * 12f : 0f;
+                _arms[i].localRotation = Quaternion.Euler(sway, 0f, 0f);
+            }
         }
 
         /// <summary>The finished robot steps onto the 2x2 m out pad, awake — placed through the exact
