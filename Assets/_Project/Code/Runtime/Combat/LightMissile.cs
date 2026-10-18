@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Combat
@@ -91,6 +92,7 @@ namespace MaxWorlds.Combat
         private bool _lastEmitting;
         private bool _depleted;
         private EnergyPool _tank;
+        private LightMissileAimPreviewVfx _aimPreview;
 
         private void Awake()
         {
@@ -100,6 +102,8 @@ namespace MaxWorlds.Combat
             // PlayerController.Awake (code-driven scenes, no scene wiring), so it must resolve its own
             // aim source here rather than relying on one being wired in the editor.
             if (aimSource == null) aimSource = GetComponent<PlayerController>();
+
+            _aimPreview = LightMissileAimPreviewVfx.Attach(transform);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -136,6 +140,15 @@ namespace MaxWorlds.Combat
                 && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(volleyCost));
             _lastEmitting = emitting;
 
+            // MV-1212: the aim preview is gated on "aim stick held with LIGHT MISSILE active" alone --
+            // not on the energy check above, same reasoning Ricochet.Tick's own previewVisible gate
+            // gives (a free aiming aid, shown regardless of energy). aimSource.enabled covers "hide
+            // during freezes and cutscenes" the same way.
+            bool previewVisible = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.LightMissile
+                && IsFiring && (aimSource == null || aimSource.enabled);
+            _aimPreview.Refresh(previewVisible, transform.position, FlattenedForward(), BallsPerVolley,
+                DefaultFanDegrees, LightMissileBall.AreaIndexAt(transform.position));
+
             if (!emitting) { _tickTimer = 0f; return; }
 
             float interval = FireInterval;
@@ -147,13 +160,23 @@ namespace MaxWorlds.Combat
             }
         }
 
+        /// <summary>Max's own forward, flattened to the XZ plane and normalised -- the shared heading both
+        /// <see cref="FireVolley"/>'s real fan and <see cref="_aimPreview"/>'s preview fan are built from,
+        /// so the preview can never drift from what actually fires.</summary>
+        private Vector3 FlattenedForward()
+        {
+            Vector3 forward = transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-6f) return Vector3.forward;
+            forward.Normalize();
+            return forward;
+        }
+
         private void FireVolley()
         {
             int count = BallsPerVolley;
             Vector3 origin = transform.position;
-            Vector3 forward = transform.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-6f) forward = Vector3.forward; else forward.Normalize();
+            Vector3 forward = FlattenedForward();
 
             int areaIndex = LightMissileBall.AreaIndexAt(origin);
             float damage = EffectiveDamagePerBall;
