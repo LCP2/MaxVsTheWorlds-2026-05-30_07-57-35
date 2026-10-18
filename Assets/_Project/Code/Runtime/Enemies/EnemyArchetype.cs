@@ -10,7 +10,8 @@ namespace MaxWorlds.Enemies
     // Sludger (MV-705) follows it too — a sapper that splits in two on death, appended after Turret.
     // Charger (MV-707) follows it too — a telegraphed straight-line rammer, appended after Sludger.
     // Dreadnought (MV-1217) follows it too — a slow, hard-to-kill twin-turret platform, appended after Charger.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought }
+    // Skitter (MV-1224) follows it too — a tiny phase-hopping robot, appended after Dreadnought.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -36,6 +37,7 @@ namespace MaxWorlds.Enemies
                 case "sludger": kind = EnemyKind.Sludger; return true;
                 case "charger": kind = EnemyKind.Charger; return true;
                 case "dreadnought": kind = EnemyKind.Dreadnought; return true;
+                case "skitter": kind = EnemyKind.Skitter; return true;
                 default: kind = default; return false;
             }
         }
@@ -506,6 +508,39 @@ namespace MaxWorlds.Enemies
             standoffRange: 8f,
             displayName: "DREADNOUGHT");
 
+        /// <summary>
+        /// Skitter (MV-1224): Lee's "one that's really quite small, and maybe it jumps like phases"
+        /// (17 Oct 2026 ask) — the smallest body in the roster, 0.4 m tall and wide (smaller even than
+        /// <see cref="PlayerRadius"/>'s 0.5 m). <see cref="LungeRange"/> does TRIPLE duty here, the
+        /// same "one field, several doors" idiom <see cref="Launcher"/>/<see cref="Bolter"/> already
+        /// use: it is the hop's own "awake and more than 1.2 m from Max" stop condition
+        /// (<see cref="RobotEnemy.TickChase"/>'s Skitter gate, parallel to <see cref="Blinker"/>'s own
+        /// <c>dist &gt; lungeRange</c> check), the melee commit range once it's inside that, AND the
+        /// bite's own hit-check radius (<see cref="ContactRadius"/>) — all three are the ticket's own
+        /// single "1.2 m" number, so they can never drift apart. <see cref="TelegraphTime"/> doubles as
+        /// the hop's own pre-landing warn (the ticket's "a ring marks the landing spot 0.2 s before")
+        /// AND the bite's wind-up, the same double-duty <see cref="Blinker"/>'s own charge-up already
+        /// claims. <see cref="TeleportCooldown"/> is the hop cadence (the ticket's own "every 0.7 s");
+        /// the landing point itself is <see cref="SkitterHop"/>'s own map-aware maths, not
+        /// <see cref="BlinkerTeleport"/>'s — the ticket's own "reuse its pattern, but the Skitter hops
+        /// forward in short zig-zags rather than flanking". <see cref="TelegraphTime"/> +
+        /// <see cref="LungeTime"/> + <see cref="RecoverTime"/> (0.2 + 0.08 + 0.32) sum to the ticket's
+        /// own "every 0.6 s" bite cadence. <see cref="MoveSpeed"/> is a slow creep, not a serious
+        /// second locomotion — the hop does almost all of the closing; a nonzero value only keeps a
+        /// Skitter from being permanently stuck on map geometry that happens to refuse every hop
+        /// landing.
+        /// </summary>
+        public static EnemyArchetype Skitter => new EnemyArchetype(
+            EnemyKind.Skitter, EnemyShape.Capsule, new Vector3(0.4f, 0.4f, 0.4f),
+            colliderHeight: 0.4f, colliderRadius: 0.2f,
+            moveSpeed: 0.5f, maxHealth: 12f,
+            contactDamage: 5f, contactRadius: 1.2f,
+            lungeRange: 1.2f, telegraphTime: 0.2f,
+            lungeSpeed: 6f, lungeTime: 0.08f, recoverTime: 0.32f,
+            knockbackDecay: 28f,
+            teleportCooldown: 0.7f,
+            displayName: "SKITTER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -520,14 +555,16 @@ namespace MaxWorlds.Enemies
             EnemyKind.Sludger => Sludger,
             EnemyKind.Charger => Charger,
             EnemyKind.Dreadnought => Dreadnought,
+            EnemyKind.Skitter => Skitter,
             _ => Rusher,
         };
 
         /// <summary>Whether <paramref name="kind"/> counts as "large" for economy purposes (v0.5
         /// recut spec §5, MV-224): the bruiser, heavy and brute tiers all drop the large-kill loot
         /// and count toward the parts cadence — only the rusher is the small tier that drops
-        /// nothing (WV-226).</summary>
-        public static bool IsLarge(EnemyKind kind) => kind != EnemyKind.Rusher;
+        /// nothing (WV-226). MV-1224: the Skitter sits on the same small-tier footing as the Rusher
+        /// (the ticket's own "Drops: as a Rusher") — also excluded.</summary>
+        public static bool IsLarge(EnemyKind kind) => kind != EnemyKind.Rusher && kind != EnemyKind.Skitter;
 
         /// <summary>The same archetype, tougher (YT-181 Invasion Level): health and contact damage
         /// scaled by <paramref name="multiplier"/>, everything else — speed, silhouette, timing —
@@ -695,6 +732,9 @@ namespace MaxWorlds.Enemies
                     // MV-707: a floor-only rammer, same "ambient shed cadence" footing as Bolter/Sludger —
                     // it never needs a grate coincidence the way Lurker does.
                     _authored[(int)EnemyKind.Charger] = composition.charger;
+                    // MV-1224: a tiny phase-hopper, same "ambient shed cadence" footing as Bolter/
+                    // Sludger/Charger — it needs no grate coincidence either.
+                    _authored[(int)EnemyKind.Skitter] = composition.skitter;
                     // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
                     // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence
                     // must never invent one with no grate under it, so this area's authored lurker count

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -7,6 +8,7 @@ using Unity.Cinemachine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Dev
@@ -35,6 +37,10 @@ namespace MaxWorlds.Dev
     /// a Dreadnought next to a Bruiser, on the Reef's own floor, at the game's real play-camera pitch —
     /// written to <c>dreadnought_pair.png</c>, reusing this director's scene/camera/writer rather than
     /// standing up a second capture harness for one reference image.
+    ///
+    /// MV-1224 AC3 adds a second extra shot the same way (<see cref="CaptureSkitterPack"/>): a loose
+    /// pack of five Skitters, two of them caught genuinely mid-hop — written to
+    /// <c>skitter_pack.png</c>.
     /// </summary>
     public sealed class RobotRosterDirector : MonoBehaviour
     {
@@ -51,6 +57,11 @@ namespace MaxWorlds.Dev
         private const float DreadnoughtPairPitch = 72f;
         private const float DreadnoughtPairDistance = 12f;
         private const float DreadnoughtPairSpacing = 3.4f;   // metres between the two robots' centres
+
+        /// <summary>MV-1224 AC3's own framing — much closer than the roster's single-robot review angle
+        /// above, since the Skitter's whole body is only 0.4 m and a pack of five needs room to read.</summary>
+        private const float SkitterPackPitch = 55f;
+        private const float SkitterPackDistance = 5.5f;
 
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
@@ -129,6 +140,7 @@ namespace MaxWorlds.Dev
             if (current != null) Destroy(current);
 
             yield return CaptureDreadnoughtPair(cam, focusBase);
+            yield return CaptureSkitterPack(cam, focusBase);
 
             Finish();
         }
@@ -188,6 +200,59 @@ namespace MaxWorlds.Dev
                 if (bruiser != null) Destroy(bruiser);
                 if (dreadnought != null) Destroy(dreadnought);
                 if (floor != null) Destroy(floor);
+            }
+        }
+
+        /// <summary>MV-1224 AC3 — a loose pack of five Skitters (the ticket's own "packs of 4-6"),
+        /// scattered rather than in formation (a hop pack never arrives tidy), with two of them caught
+        /// GENUINELY mid-hop rather than hand-posed: each is repositioned to its own "landing" spot and
+        /// then fired through the exact same <see cref="HudSignals.BlinkerTeleported"/> beat a live
+        /// Skitter hop emits (<c>RobotEnemy.TickTeleport</c>'s own "the reposition is instant with
+        /// nothing to see — HudSignals carries both points so the VFX layer can play the beat without
+        /// this state machine knowing or caring what it looks like"), the same reuse the ticket's own
+        /// "the Blinker already teleports; reuse its pattern" asks for. Capturing two frames later
+        /// catches <see cref="RobotRig"/>'s own expand-from-zero body scale and
+        /// <see cref="MaxWorlds.VFX.CombatVfx"/>'s surge/flash beat still live — the shot is of the hop
+        /// actually happening, not a still life.</summary>
+        private IEnumerator CaptureSkitterPack(Camera cam, Vector3 focusBase)
+        {
+            var pack = new List<GameObject>(6);
+            try
+            {
+                Vector2[] offsets =
+                {
+                    new Vector2(-1.4f, -0.6f), new Vector2(-0.6f, 0.4f), new Vector2(0.2f, -0.3f),
+                    new Vector2(0.9f, 0.6f), new Vector2(1.6f, -0.2f),
+                };
+
+                foreach (Vector2 off in offsets)
+                {
+                    Vector3 pos = focusBase + new Vector3(off.x, 0f, off.y);
+                    pack.Add(BuildRobot(EnemyKind.Skitter, pos));
+                }
+                for (int i = 0; i < 3; i++) yield return null;   // let every rig's build settle on screen
+
+                for (int i = 0; i < pack.Count; i += 2)
+                {
+                    Transform t = pack[i].transform;
+                    Vector3 from = t.position;
+                    Vector3 to = from + new Vector3(0.6f, 0f, 0.6f);
+                    t.position = to;
+                    HudSignals.EmitBlinkerTeleported(from, to);
+                }
+
+                yield return null;
+                yield return null;
+
+                var rot = Quaternion.Euler(SkitterPackPitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focusBase - rot * Vector3.forward * SkitterPackDistance, rot);
+
+                yield return null;
+                Capture(cam, "skitter_pack");
+            }
+            finally
+            {
+                foreach (GameObject go in pack) if (go != null) Destroy(go);
             }
         }
 

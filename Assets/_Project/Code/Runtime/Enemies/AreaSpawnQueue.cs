@@ -133,6 +133,8 @@ namespace MaxWorlds.Enemies
             // it still has to be queued here or its garrison slot's exact-kind TryTakeForGarrison lookup
             // finds nothing and substitutes the wrong kind.
             for (int i = 0; i < composition.Dreadnought; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Dreadnought));
+            // MV-1224: an ambient tiny phase-hopper, same footing as Bolter/Sludger/Charger above.
+            for (int i = 0; i < composition.Skitter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Skitter));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

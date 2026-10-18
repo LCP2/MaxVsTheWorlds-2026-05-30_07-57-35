@@ -160,6 +160,11 @@ namespace MaxWorlds.Enemies
         /// same "stamped over the shared idle/windup tell pair" idiom as <see cref="LurkerEyeColor"/>.</summary>
         private static readonly Color TurretEyeColor = new Color(0.2f, 0.85f, 0.95f);
 
+        /// <summary>The Skitter's own bright gold eye (MV-1224, the ticket's own "a bright gold eye") —
+        /// same "stamped over the shared idle/windup tell pair" idiom as <see cref="LurkerEyeColor"/>,
+        /// more saturated than the shared default amber tell so it still reads at ~19px.</summary>
+        private static readonly Color SkitterEyeColor = new Color(1f, 0.85f, 0.25f);
+
         // --- Field-wide registry (YT-186) ---------------------------------------------------------
         // Tracked directly off OnEnable/OnDisable rather than tallied by hand, so it can never drift
         // from what is actually switched on: a normal death, being pooled back out, and a test's
@@ -321,6 +326,11 @@ namespace MaxWorlds.Enemies
             {
                 idleTell = TurretEyeColor;
                 windupTell = TurretEyeColor;
+            }
+            else if (Kind == EnemyKind.Skitter)
+            {
+                idleTell = SkitterEyeColor;
+                windupTell = SkitterEyeColor;
             }
             // MV-697: a pooled instance must never carry a previous spawn's deck leash into its next
             // life — the common case (Level 0, no footprint) is the correct default until whoever
@@ -1211,8 +1221,15 @@ namespace MaxWorlds.Enemies
         private float _teleportTimer;
 
         /// <summary>Where a Blinker is warping to — computed the instant the teleport triggers, in
-        /// <see cref="TickChase"/>, then executed after the charge-up in <see cref="TickTeleport"/>.</summary>
+        /// <see cref="TickChase"/>, then executed after the charge-up in <see cref="TickTeleport"/>.
+        /// Also what a Skitter's next hop lands at (MV-1224) — <see cref="TickTeleport"/> doesn't know
+        /// or care which kind set it.</summary>
         private Vector3 _teleportTarget;
+
+        /// <summary>Which side of the line to Max a Skitter's next hop zig-zags toward (MV-1224) —
+        /// flipped every hop in <see cref="TickChase"/> so the path actually alternates rather than
+        /// curving to one side. Irrelevant, and never flipped, for every other kind.</summary>
+        private float _skitterHopSign = 1f;
 
         // --- Grate Lurker cycle (MV-688) — irrelevant, and never advanced, for every other kind. ---
 
@@ -1515,6 +1532,8 @@ namespace MaxWorlds.Enemies
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
+            // MV-1224: a pooled Skitter starts its zig-zag fresh, not mid-alternation from its last life.
+            _skitterHopSign = 1f;
             // Same convention (MV-428): a fresh Bruiser/Heavy/Brute doesn't get a free hit the
             // instant it touches Max.
             _contactCooldownTimer = EffectiveContactCooldown;
@@ -2582,6 +2601,34 @@ namespace MaxWorlds.Enemies
                     _stateTimer = 0f;
                     SetTell(windupTell);
                     return;
+                }
+            }
+
+            // Skitter (MV-1224): a tiny phase-hopper, not a flanker — reuses Blinker's own
+            // charge/teleport/land plumbing (TickTeleport doesn't know or care which kind set
+            // _teleportTarget) but computes its landing with SkitterHop's own map-aware maths instead
+            // of BlinkerTeleport's, and stops hopping once within lungeRange (1.2 m, the ticket's own
+            // bite range) rather than Blinker's own lungeRange gate being about MELEE range generally —
+            // the two just happen to be the same field for the same reason.
+            else if (Kind == EnemyKind.Skitter)
+            {
+                _teleportTimer -= dt;
+                if (_teleportTimer <= 0f && _sight.HasSight && dist > lungeRange)
+                {
+                    _skitterHopSign = -_skitterHopSign;
+                    if (SkitterHop.TryResolveLanding(EnemyNavigation.Map, transform.position, target.position,
+                            _skitterHopSign, _cc.radius, out Vector3 landing))
+                    {
+                        _teleportTarget = landing;
+                        Current = State.Teleport;
+                        _stateTimer = 0f;
+                        SetTell(windupTell);
+                        return;
+                    }
+
+                    // No valid spot anywhere along the zig-zag (the ticket's own "skips the hop") —
+                    // try again next cadence rather than stalling forever on this one failed attempt.
+                    _teleportTimer = teleportCooldown;
                 }
             }
 

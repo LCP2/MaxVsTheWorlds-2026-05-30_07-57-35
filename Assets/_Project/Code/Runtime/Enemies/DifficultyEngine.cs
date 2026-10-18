@@ -72,23 +72,31 @@ namespace MaxWorlds.Enemies
             /// appears only where a world garrisons it by name, per the ticket's own "do not re-raise".</summary>
             public readonly int Dreadnought;
 
+            /// <summary>MV-1224: the tiny phase-hopper — same "authored-composition only" footing as
+            /// <see cref="Bolter"/>/<see cref="Lurker"/>/<see cref="Turret"/>/<see cref="Sludger"/>/
+            /// <see cref="Charger"/>/<see cref="Dreadnought"/> (no dial ever unlocks it in
+            /// <see cref="SolveComposition"/>).</summary>
+            public readonly int Skitter;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
-                int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0)
+                int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
                 Sludger = sludger; Charger = charger; Turret = turret; Dreadnought = dreadnought;
+                Skitter = skitter;
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger + Turret + Dreadnought;
+                Sludger + Charger + Turret + Dreadnought + Skitter;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
-            /// rusher tier drops loot, so this is every solved count but <see cref="Rusher"/>.</summary>
-            public int LargeCount => TotalCount - Rusher;
+            /// rusher tier drops loot, so this is every solved count but <see cref="Rusher"/>.
+            /// MV-1224: the Skitter sits on the same small-tier footing as the Rusher — also excluded.</summary>
+            public int LargeCount => TotalCount - Rusher - Skitter;
 
             public float TotalThreatValue =>
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
@@ -97,7 +105,7 @@ namespace MaxWorlds.Enemies
                 Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter +
                 Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger +
                 Charger * ThreatValues.Charger + Turret * ThreatValues.Turret +
-                Dreadnought * ThreatValues.Dreadnought;
+                Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

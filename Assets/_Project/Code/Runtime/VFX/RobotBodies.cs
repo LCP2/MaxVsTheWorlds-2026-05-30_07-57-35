@@ -7,6 +7,7 @@
 // MV-705 EXCEPTION: BuildSludger is hand-authored for the same reason.
 // MV-707 EXCEPTION: BuildCharger is hand-authored for the same reason.
 // MV-1217 EXCEPTION: BuildDreadnought is hand-authored for the same reason.
+// MV-1224 EXCEPTION: BuildSkitter is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -84,6 +85,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Sludger:  BuildSludger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Charger:  BuildCharger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Dreadnought: BuildDreadnought(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Skitter:  BuildSkitter(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -479,6 +481,32 @@ namespace MaxWorlds.VFX
 
             // The single red eye lens, on the basket's forward face.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.55f, 0.68f), Quaternion.identity, new Vector3(0.16f, 0.16f, 0.06f)));
+        }
+
+        /// <summary>Skitter (MV-1224) — hand-authored, same exception as <see cref="BuildBolter"/>/
+        /// <see cref="BuildLurker"/>/<see cref="BuildTurret"/>/<see cref="BuildSludger"/>/
+        /// <see cref="BuildCharger"/> above. Deliberately the smallest body in the roster (the ticket's
+        /// own "it is meant to be tiny; do not scale it up to read better") — a single small two-tone
+        /// lathe shell with a thin ring skirting its base (the ticket's own "soft cyan glow halo",
+        /// readability for a body this small) and one oversized gold eye lens (the ticket's own "bright
+        /// gold eye", coloured by <see cref="MaxWorlds.Enemies.RobotEnemy.Apply"/>'s own
+        /// <c>SkitterEyeColor</c>). No wheels, no legs — it never walks between hops, so there is
+        /// nothing here for a drivetrain or a gait to animate.</summary>
+        private static void BuildSkitter(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // The shell — two lathe halves, same "cool lower / warm upper" idiom as every other kind,
+            // just scaled to the ticket's own 0.4 m silhouette.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.02f, 0f), new Vector2(0.16f, 0.05f), new Vector2(0.18f, 0.18f), new Vector2(0.15f, 0.26f) }, 16), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.15f, 0.26f), new Vector2(0.12f, 0.33f), new Vector2(0.06f, 0.38f), new Vector2(0.02f, 0.4f) }, 16), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // The halo (the ticket's own "soft cyan glow halo") — a thin ring skirting the base, the
+            // same Ring primitive AddStormdrainShoulderBand already uses.
+            Add(root, CharacterMeshes.Ring(0.19f, 0.24f, 0.015f, 20), p.Warm, new Vector3(0f, 0.03f, 0f), Quaternion.identity, Vector3.one, "Halo");
+
+            // The one bright gold eye (the ticket's own "bright gold eye") — oversized relative to the
+            // body so it still reads at ~19px, per the roster's one-eye rule.
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0f, 0.3f, 0.14f), Quaternion.Euler(-30f, 0f, 0f), new Vector3(0.09f, 0.09f, 0.04f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>

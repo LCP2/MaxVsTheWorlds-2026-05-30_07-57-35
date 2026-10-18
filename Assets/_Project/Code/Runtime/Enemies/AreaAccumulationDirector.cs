@@ -641,6 +641,7 @@ namespace MaxWorlds.Enemies
                     case EnemyKind.Turret: c.turret++; break;
                     case EnemyKind.Sludger: c.sludger++; break;
                     case EnemyKind.Charger: c.charger++; break;
+                    case EnemyKind.Skitter: c.skitter++; break;
                 }
             }
             return c.ToEngineComposition();
