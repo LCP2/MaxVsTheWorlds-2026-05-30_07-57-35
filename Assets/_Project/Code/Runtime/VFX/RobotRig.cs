@@ -104,8 +104,14 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-800: World 2's shared faction signature — hazard yellow, worn identically by
         /// every stormdrain-skinned kind (see <see cref="RobotBodies.Build"/>'s shoulder band) so eight
-        /// different body hues still read as one faction assembled from one shed.</summary>
+        /// different body hues still read as one faction assembled from one shed. MV-1231: also the
+        /// Breaker's own (skin-independent) chassis band — see <see cref="BuildMaterials"/>.</summary>
         private static readonly Color StormdrainHazardBand = new Color(0.980f, 0.800f, 0.140f);
+
+        /// <summary>MV-1231: the Breaker's own red ram-head knuckle accent — its own local literal, the
+        /// same "one colour, one file" idiom <see cref="StormdrainHazardBand"/> already uses, since
+        /// nothing else in the roster wears it.</summary>
+        private static readonly Color BreakerRamAccent = new Color(0.70f, 0.09f, 0.05f);
 
         /// <summary>How much bigger the Puffer Mine's inflatable core gets at the end of its telegraph
         /// than at the start (MV-746 AC5) — a visible inflate, not a subtle one, since it IS the tell
@@ -163,6 +169,9 @@ namespace MaxWorlds.VFX
         private Material _darkMat;
         private Material _goldMat;
         private Material _hazardMat;
+
+        /// <summary>MV-1231: the Breaker's own red ram-head knuckle accent — null for every other kind.</summary>
+        private Material _accentMat;
         private MaterialPropertyBlock _eyeMpb;
 
         /// <summary>MV-969: the one renderer <see cref="CombineStaticParts"/> folds this robot's whole
@@ -228,6 +237,19 @@ namespace MaxWorlds.VFX
         /// <see cref="RobotBodies.Body.Inflatable"/>), or null for every other kind — see
         /// <see cref="UpdateReefInflate"/>.</summary>
         private Transform _reefInflatable;
+
+        /// <summary>MV-1231: the Breaker's own collar-chain joint/end/anchor (see
+        /// <see cref="RobotBodies.Body.BreakerChainPivot"/> and friends), null for every other kind —
+        /// see <see cref="OnBreakerChainSnapped"/>.</summary>
+        private Transform _breakerChainPivot;
+        private Transform _breakerChainEnd;
+        private Transform _breakerWallAnchor;
+
+        /// <summary>MV-1231: true once this robot's own chain has actually been subscribed to
+        /// <see cref="ChainSignals.ChainSnapped"/> — guards against double-subscribing if
+        /// <see cref="EnsureBuilt"/> were ever somehow re-entered, and lets <see cref="OnDestroy"/> know
+        /// whether there is anything to unsubscribe.</summary>
+        private bool _breakerChainSubscribed;
 
         /// <summary>0..1, 1 the instant a fresh Lunge begins, decaying to 0 (MV-723) — the punch half of
         /// <see cref="UpdateStrike"/>. Tracked here, not on <see cref="RobotEnemy"/>: the rig reads
@@ -330,6 +352,10 @@ namespace MaxWorlds.VFX
                 p.z = 0f;
                 _model.localPosition = p;
             }
+
+            // MV-1231: a pooled Breaker must not come back still slack from its last life — only
+            // ChainSnapped (a fresh Activate()) is allowed to release it again.
+            if (_breakerChainPivot != null) _breakerChainPivot.localRotation = RobotBodies.BreakerChainTautLocalRotation;
         }
 
         private void OnDisable()
@@ -371,6 +397,19 @@ namespace MaxWorlds.VFX
             }
 
             BuildModel();
+
+            // MV-1231: subscribed here, not OnEnable — OnEnable is not a reliable AddComponent side
+            // effect outside Play mode (see RobotBodySizeTests' own reflection workaround for exactly
+            // this), but EnsureBuilt is invoked directly by this rig's own EditMode tests, so this is
+            // the one place guaranteed to run once, in both Play mode and a test. Guarded by _built
+            // above (runs at most once per GameObject) and _breakerChainSubscribed so a respawn out of
+            // the pool — same GameObject, _built already true, EnsureBuilt a no-op — never subscribes a
+            // second handler.
+            if (_breakerChainPivot != null && !_breakerChainSubscribed)
+            {
+                ChainSignals.ChainSnapped += OnBreakerChainSnapped;
+                _breakerChainSubscribed = true;
+            }
 
             _built = true;
             ApplyEyes(_tellColor);
@@ -433,8 +472,9 @@ namespace MaxWorlds.VFX
             // MV-800: the shared stormdrain shoulder band — one material, worn identically by every
             // World 2 kind, so it never varies per-instance the way _bodyMat does. Null (no band) for
             // every other skin/world; RobotBodies.Build only reaches for RobotPalette.Hazard when this
-            // robot's own skin is "stormdrain".
-            if (stormdrain)
+            // robot's own skin is "stormdrain". MV-1231: also built for the Breaker, unconditionally —
+            // its hazard-striped chassis band is the kind's OWN look, not a world skin.
+            if (stormdrain || _enemy.Kind == EnemyKind.Breaker)
             {
                 _hazardMat = SharedCharacterMaterial("Robot_Stormdrain_Band", StormdrainHazardBand);
                 // A constant, not a per-robot value — every stormdrain-skinned robot shares this one
@@ -444,6 +484,10 @@ namespace MaxWorlds.VFX
                 if (_hazardMat.HasProperty(EmissionId))
                     _hazardMat.SetColor(EmissionId, StormdrainHazardBand * 0.30f);
             }
+
+            // MV-1231: the Breaker's own red ram-head knuckle accent — null for every other kind.
+            if (_enemy.Kind == EnemyKind.Breaker)
+                _accentMat = SharedCharacterMaterial("Robot_Breaker_RamAccent", BreakerRamAccent);
         }
 
         private static Material SharedCharacterMaterial(string name, Color color)
@@ -486,10 +530,13 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat),
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat),
                                          _enemy.Skin);
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
+            _breakerChainPivot = body.BreakerChainPivot;
+            _breakerChainEnd = body.BreakerChainEnd;
+            _breakerWallAnchor = body.BreakerWallAnchor;
             _restModelScale = _model.localScale;
 
             // MV-969: RobotBodies authors a wheel as TWO OR THREE co-located parts sharing one pivot
@@ -509,8 +556,9 @@ namespace MaxWorlds.VFX
             // MV-969: fold everything RobotBodies just built that ISN'T independently animated (an eye,
             // a wheel, the Reef Puffer Mine's inflatable core) into one combined renderer — must run
             // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
-            // exclusion set.
-            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _ownedMeshes);
+            // exclusion set. MV-1231: the Breaker's chain pivot joins the same exclusion — it rotates on
+            // ChainSnapped, and a combined static mesh would bake its TAUT pose in forever.
+            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _breakerChainPivot, _ownedMeshes);
             if (_combinedRenderer != null)
             {
                 Material[] mats = _combinedRenderer.sharedMaterials;
@@ -639,11 +687,13 @@ namespace MaxWorlds.VFX
         /// buckets into each other (mergeSubMeshes: false, which is what keeps each bucket its own
         /// submesh/material slot instead of collapsing them into one).
         ///
-        /// <paramref name="eyes"/>/<paramref name="wheels"/>/<paramref name="inflatable"/> are excluded
-        /// and left as their own renderers/transforms — RobotRig colours an eye and spins a wheel every
-        /// frame by writing to THAT renderer/transform directly (<see cref="ApplyEyes"/>,
-        /// <see cref="SpinWheels"/>, <see cref="UpdateReefInflate"/>), and folding any of them into a
-        /// static mesh would freeze it. <see cref="RobotBodies.Body.Legs"/> is folded IN, not excluded:
+        /// <paramref name="eyes"/>/<paramref name="wheels"/>/<paramref name="inflatable"/>/
+        /// <paramref name="breakerChainPivot"/> are excluded and left as their own renderers/transforms
+        /// — RobotRig colours an eye, spins a wheel and (MV-1231) rotates the Breaker's chain joint
+        /// every frame/on-event by writing to THAT renderer/transform directly (<see cref="ApplyEyes"/>,
+        /// <see cref="SpinWheels"/>, <see cref="UpdateReefInflate"/>, <see cref="OnBreakerChainSnapped"/>),
+        /// and folding any of them into a static mesh would freeze it. <see cref="RobotBodies.Body.Legs"/>
+        /// is folded IN, not excluded:
         /// this rig never reads that array (only <c>Sentinel.cs</c>'s own separately-built body drives
         /// <see cref="LegGaitDriver"/> off it), so a robot's own legs never move once this has built them.
         ///
@@ -656,7 +706,8 @@ namespace MaxWorlds.VFX
         /// comment). Destroying happens here, well before that cache is ever populated (it's built lazily
         /// on first use, never during <see cref="Awake"/>), so it always sees the post-combine hierarchy.
         /// </summary>
-        private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels, Transform inflatable, List<Mesh> ownedMeshes)
+        private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels,
+            Transform inflatable, Transform breakerChainPivot, List<Mesh> ownedMeshes)
         {
             var exclude = new HashSet<Renderer>();
             if (eyes != null)
@@ -666,6 +717,8 @@ namespace MaxWorlds.VFX
                     if (w != null) foreach (var r in w.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
             if (inflatable != null)
                 foreach (var r in inflatable.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
+            if (breakerChainPivot != null)
+                foreach (var r in breakerChainPivot.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
 
             var byMaterial = new Dictionary<Material, List<MeshRenderer>>();
             foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
@@ -1209,6 +1262,28 @@ namespace MaxWorlds.VFX
                 if (Application.isPlaying) Destroy(mesh); else DestroyImmediate(mesh);
             }
             _ownedMeshes.Clear();
+
+            // MV-1231: ChainSignals.ChainSnapped is a static, process-lifetime event — a robot that
+            // subscribed in EnsureBuilt and is never unsubscribed here would leak a handler pointing at
+            // a destroyed GameObject for the rest of the process.
+            if (_breakerChainSubscribed)
+            {
+                ChainSignals.ChainSnapped -= OnBreakerChainSnapped;
+                _breakerChainSubscribed = false;
+            }
+        }
+
+        /// <summary>MV-1231: the Breaker's collar-chain release — the chain swings from its built TAUT
+        /// pose to <see cref="RobotBodies.BreakerChainSlackLocalRotation"/> the instant this robot
+        /// actually wakes (never on a wake attempt the area's own cap refused — see
+        /// <see cref="ChainSignals"/>'s own doc comment). A flat rotation snap, not an eased animation:
+        /// the structural release has to be visible to a caller that inspects it synchronously (an
+        /// EditMode test, which never ticks a real Update loop), and CC_AUTONOMY.md's tight-slice
+        /// discipline cuts a continuous swinging pendulum rather than growing this ticket into one.</summary>
+        private void OnBreakerChainSnapped(RobotEnemy breaker)
+        {
+            if (breaker != _enemy || _breakerChainPivot == null) return;
+            _breakerChainPivot.localRotation = RobotBodies.BreakerChainSlackLocalRotation;
         }
     }
 }

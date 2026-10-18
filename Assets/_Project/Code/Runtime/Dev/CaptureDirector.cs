@@ -473,6 +473,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1207CityBrightnessCheck());
             Add(BuildMv1215ReefKitSheet());
             Add(BuildMv1230ShipKitSheet());
+            Add(BuildMv1231BreakerLook());
             return d;
         }
 
@@ -5398,6 +5399,86 @@ namespace MaxWorlds.Dev
                     if (rig != null) Destroy(rig.gameObject);
                     if (bossGo != null) Destroy(bossGo);
                 },
+            };
+        }
+
+        // ---- MV1231BreakerLook (MV-1231 AC3) --------------------------------------------------
+
+        /// <summary>AC3's own "one capture of a dormant and a woken Breaker" — one real
+        /// <see cref="RobotEnemy"/>/<see cref="RobotRig"/> (via <see cref="BuildClusterRobot"/>, so the
+        /// body is the actual production <see cref="RobotBodies.BuildBreaker"/> result, not a scripted
+        /// stand-in), put to sleep with the real <see cref="RobotEnemy.BeginDormant"/> for the first
+        /// shot, then woken with the real <see cref="RobotEnemy.Activate"/> for the second — the exact
+        /// call that fires <see cref="ChainSignals.ChainSnapped"/> in production. Two shots, one capture
+        /// pass, never iterated (DECISIONS.md "cap capture loops at one").</summary>
+        private static CapturePreset BuildMv1231BreakerLook()
+        {
+            // MV-1231: pitch=50/distance=5.5, then pitch=50/distance=11 (both measured via the capture
+            // itself, not assumed) both read as near-top-down on this kind's own dome-profile torso —
+            // the collar, the chain and the Cool/teal lower torso half all sit close enough to the
+            // body's own surface that a 50-degree pitch self-occludes them under the dome's overhang.
+            // 32 degrees — well under FixedAngleCameraRig.MinPitch (45), a deliberately shallower
+            // custom angle for inspection, not the live play camera — reads the collar/chain/teal half
+            // the design image's own side view shows.
+            const float pitch = 32f;
+            const float distance = 8f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject breakerGo = null;
+            RobotEnemy breaker = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                breakerGo = BuildClusterRobot(EnemyKind.Breaker, focus);
+                breaker = breakerGo.GetComponent<RobotEnemy>();
+                breaker.BeginDormant(authoredSlot: true);   // the real dormant path (CountAwakeBreakersInArea exempt)
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 1.3f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            IEnumerator WakeSetup(Camera cam)
+            {
+                breaker.Activate();   // the real wake path — fires ChainSignals.ChainSnapped
+                for (int i = 0; i < 4; i++) yield return null;   // let the chain-release read
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1231breakerlook",
+                LogTag = "[MV1231Capture]",
+                Flag = "-mv1231shot",
+                ArmFile = "Temp/mv1231.arm",
+                HeadlessMarker = "Temp/mv1231.headless",
+                DoneFileName = "_mv1231_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard every other preset in this file uses: on a fresh profile
+                    // (no slot picked yet) HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1231-breaker-dormant", NoSetup),
+                    new CaptureShot("MV-1231-breaker-woken", WakeSetup),
+                },
+                Cleanup = () => { if (breakerGo != null) Destroy(breakerGo); },
             };
         }
     }

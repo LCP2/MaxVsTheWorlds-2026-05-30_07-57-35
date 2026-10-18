@@ -209,6 +209,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1211LightMissileLook() => RunFromMenu(CapturePresets.All["mv1211lightmissilelook"]);
         public static void CaptureMv1211LightMissileLook() => Run(CapturePresets.All["mv1211lightmissilelook"]);
 
+        [MenuItem("MaxWorlds/Capture/Breaker Look (MV-1231)")]
+        public static void MenuMv1231BreakerLook() => RunFromMenu(CapturePresets.All["mv1231breakerlook"]);
+        public static void CaptureMv1231BreakerLook() => Run(CapturePresets.All["mv1231breakerlook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
