@@ -27,7 +27,7 @@ namespace MaxWorlds.Tests.EditMode
         public void TearDown() => RigBoard.ResetForTests();
 
         [Test]
-        public void MothershipRowResolvesByIdToIndex4_WithLightMissileAndAOneAreaPlaceholderConfig()
+        public void MothershipRowResolvesByIdToIndex4_WithLightMissileAndItsThirtyAreaConfig()
         {
             int index = WorldCatalog.IndexOf(WorldIds.Mothership);
             Assert.AreEqual(4, index, "the Mothership must resolve to catalog index 4, by its own stable id");
@@ -51,15 +51,15 @@ namespace MaxWorlds.Tests.EditMode
             WorldConfig cfg = WorldLibrary.Load(row.ConfigKey);
             Assert.IsNotNull(cfg, "the Mothership's own ConfigKey must load");
 
-            // Exactly one placeholder content area (dials.areaCount == 1) -- the standard entry stub
-            // every other world also carries is scaffolding, not the ticket's "one placeholder area".
+            // MV-1233: the full 30-area layout -- the standard entry stub every other world also
+            // carries is scaffolding, not one of the 30 combat areas.
             int contentAreas = cfg.areas.Count(a => a != null && a.index >= 1);
-            Assert.AreEqual(1, contentAreas,
-                "the Mothership's placeholder config must carry exactly one content area besides the entry stub");
+            Assert.AreEqual(30, contentAreas,
+                "the Mothership's config must carry all 30 combat areas besides the entry stub");
 
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
             Assert.AreEqual(3f, map.wallHeight,
-                "the Mothership's placeholder area's own resolved wall height must be 3 m");
+                "the Mothership's own resolved wall height must be 3 m");
         }
     }
 }

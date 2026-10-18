@@ -92,7 +92,11 @@ namespace MaxWorlds.Tests.EditMode
                 Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
 
                 // ---- cover: exactly the drawn pieces, at their drawn rects, +/-1 cm ----
-                Assert.AreEqual(ExpectedCover.Length, built.Cover.Count,
+                // MV-1233 extended this config to 30 areas, so built.Cover now also carries every
+                // other area's own cover -- scope the count to a1's own pieces (id prefix) rather
+                // than the whole build's.
+                List<CoverPiece> a1Cover = built.Cover.Where(p => p.Cover.Name.StartsWith("a1_")).ToList();
+                Assert.AreEqual(ExpectedCover.Length, a1Cover.Count,
                     "the Hangar Bay must hold exactly the drawn cover pieces, no more, no fewer");
                 foreach (var (id, x, z, w, d) in ExpectedCover)
                 {
@@ -106,8 +110,13 @@ namespace MaxWorlds.Tests.EditMode
                 }
 
                 // ---- the cradle: built for real, its out pad and 3x2 m lane clear of every cover rect ----
-                Assert.AreEqual(1, built.Cradles.Count, "the Hangar Bay must build exactly one Assembly Cradle");
-                AssemblyCradle cradle = built.Cradles[0];
+                // MV-1233: built.Cradles now carries all 30 areas' cradles -- a1's own is the one
+                // standing at its drawn position (world x=47, z=13, asserted above).
+                List<AssemblyCradle> a1Cradles = built.Cradles
+                    .Where(c => Vector3.Distance(c.transform.position, new Vector3(47f, c.transform.position.y, 13f)) < 1f)
+                    .ToList();
+                Assert.AreEqual(1, a1Cradles.Count, "the Hangar Bay must build exactly one Assembly Cradle");
+                AssemblyCradle cradle = a1Cradles[0];
                 Vector3 cradlePos = cradle.transform.position;
                 Vector3 outDir = cradle.transform.forward;
                 Assert.Less(outDir.x, -0.9f, "the cradle must face W (-X)");
