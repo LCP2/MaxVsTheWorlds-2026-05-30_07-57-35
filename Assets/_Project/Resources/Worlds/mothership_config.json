@@ -1,8 +1,8 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 5 — The Mothership",
-  "revision": "WORLD 5 V1 2026-10-18 (MV-1225): placeholder only -- one empty Hangar Bay area, 48x30m, no robots/machines/cover. The real 30-area Hangar Bay layout is MV-1232.",
-  "note": "MV-1225: data/wiring ticket only -- nothing here is judged by eye (no design image).",
+  "revision": "WORLD 5 V2 2026-10-19 (MV-1232): Hangar Bay area 1 built for real -- 48x30m, two dropship covers, six drop pods, two low crates, 14 garrison robots, one Assembly Cradle, OUT gate locked (nothing behind it in this slice). The 30-area layout is MV-1233.",
+  "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
   "pressureNoun": "",
@@ -68,6 +68,21 @@
       },
       "width": 3,
       "opensWith": "start"
+    },
+    {
+      "id": "g1",
+      "from": {
+        "area": "a1",
+        "wall": "N",
+        "pos": 0.854166666667
+      },
+      "to": {
+        "area": "a1_out_stub",
+        "wall": "S",
+        "pos": 0.5
+      },
+      "width": 3,
+      "opensWith": "area-entered:a1_out_stub"
     }
   ],
   "areas": [
@@ -90,7 +105,7 @@
     {
       "id": "a1",
       "index": 1,
-      "name": "Hangar Bay (placeholder)",
+      "name": "Hangar Bay",
       "role": "exit",
       "origin": {
         "x": 5,
@@ -99,6 +114,60 @@
       "size": {
         "w": 48,
         "d": 30
+      },
+      "hasShed": false,
+      "garrisonDensity": "none",
+      "cover": [
+        { "id": "a1_dropship1", "x": 11, "z": 19, "width": 10, "height": 1.6, "depth": 4, "shape": "box", "dressing": "ship_dropship", "coverKind": "solid" },
+        { "id": "a1_dropship2", "x": 29, "z": 9, "width": 10, "height": 1.6, "depth": 4, "shape": "box", "dressing": "ship_dropship", "coverKind": "solid" },
+        { "id": "a1_droppod1", "x": 27, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_droppod2", "x": 30, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_droppod3", "x": 33, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_droppod4", "x": 36, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_droppod5", "x": 39, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_droppod6", "x": 42, "z": 3, "width": 1.4, "height": 1.2, "depth": 1.4, "shape": "box", "dressing": "ship_drop_pod", "coverKind": "solid" },
+        { "id": "a1_crate1", "x": 23, "z": 3, "width": 3, "height": 1.0, "depth": 3, "shape": "box", "dressing": "ship_crate_low", "coverKind": "solid" },
+        { "id": "a1_crate2", "x": 46, "z": 3, "width": 3, "height": 1.0, "depth": 3, "shape": "box", "dressing": "ship_crate_low", "coverKind": "solid" }
+      ],
+      "composition": {
+        "rusher": 6,
+        "turret": 2,
+        "bruiser": 3,
+        "gunner": 2,
+        "launcher": 1
+      },
+      "garrison": [
+        { "kind": "gunner", "x": 31.5, "z": 26.1, "level": 0 },
+        { "kind": "rusher", "x": 35.0, "z": 25.6, "level": 0 },
+        { "kind": "gunner", "x": 30.2, "z": 24.0, "level": 0 },
+        { "kind": "bruiser", "x": 45.0, "z": 26.0, "level": 0 },
+        { "kind": "bruiser", "x": 43.2, "z": 24.4, "level": 0 },
+        { "kind": "rusher", "x": 38.6, "z": 21.9, "level": 0 },
+        { "kind": "launcher", "x": 46.6, "z": 22.0, "level": 0 },
+        { "kind": "rusher", "x": 39.0, "z": 17.9, "level": 0 },
+        { "kind": "bruiser", "x": 45.0, "z": 16.9, "level": 0 },
+        { "kind": "rusher", "x": 27.4, "z": 15.4, "level": 0 },
+        { "kind": "rusher", "x": 23.0, "z": 14.5, "level": 0 },
+        { "kind": "rusher", "x": 24.9, "z": 6.3, "level": 0 },
+        { "kind": "turret", "x": 49.2, "z": 7.0, "level": 0 },
+        { "kind": "turret", "x": 50.8, "z": 7.0, "level": 0 }
+      ],
+      "cradles": [
+        { "id": "a1_cradle", "x": 47, "z": 13, "facing": "W", "composition": { "rusher": 1 } }
+      ]
+    },
+    {
+      "id": "a1_out_stub",
+      "index": 0,
+      "name": "Beyond the Hangar Bay (unbuilt)",
+      "role": "bridge",
+      "origin": {
+        "x": 42,
+        "z": 30
+      },
+      "size": {
+        "w": 8,
+        "d": 4
       },
       "hasShed": false,
       "garrisonDensity": "none"

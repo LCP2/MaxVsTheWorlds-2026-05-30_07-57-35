@@ -24,6 +24,9 @@ namespace MaxWorlds.Arena
         /// <summary>The Replicators this map built (MV-706), in the order it authored them.</summary>
         public readonly List<Replicator> Replicators = new List<Replicator>(2);
 
+        /// <summary>The Assembly Cradles this map built (MV-1232), in the order it authored them.</summary>
+        public readonly List<AssemblyCradle> Cradles = new List<AssemblyCradle>(2);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -2407,6 +2410,10 @@ namespace MaxWorlds.Arena
                         built.Replicators.Add(BuildReplicator(map, e, root, built, rendererZones));
                         break;
 
+                    case EntityKind.Cradle:
+                        built.Cradles.Add(BuildCradle(map, e, root, built, rendererZones));
+                        break;
+
                     case EntityKind.AreaGate:
                         BuildAreaGate(map, e, root, built);
                         break;
@@ -2666,6 +2673,49 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return replicator;
+        }
+
+        /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly
+        /// Cradle's own <see cref="MaxWorlds.Factories.AssemblyCradle.PlaceOnOutPad"/> reads
+        /// <c>transform.forward</c> straight as the direction the finished robot walks out, so unlike
+        /// <see cref="Replicator.SetFacing"/>'s hatch (which sits on the OPPOSITE side to its own
+        /// forward) this is a plain, uninverted compass lookup.</summary>
+        private static Quaternion CradleFacingRotation(string facing)
+        {
+            Vector3 dir = facing switch
+            {
+                "N" => Vector3.forward,
+                "E" => Vector3.right,
+                "W" => Vector3.left,
+                _ => Vector3.back, // "S", the default, and any unrecognised value
+            };
+            return Quaternion.LookRotation(dir, Vector3.up);
+        }
+
+        /// <summary>An Assembly Cradle, from data (MV-1232 — the schema wiring <see cref="AssemblyCradle"/>
+        /// itself never got when MV-1223/1227 built its behaviour and look). Same recipe as
+        /// <see cref="BuildReplicator"/>: <c>AddComponent</c> runs the cradle's own <c>Awake</c>/<c>Build</c>
+        /// synchronously, so the body is spawned and sized FIRST, exactly as that method's own doc
+        /// explains for <see cref="MowerHutch"/>. <see cref="MapEntity.cradleComposition"/> (null unless
+        /// the ticket's own "composition for the cradle" is authored) is handed straight to the
+        /// cradle's own <see cref="EnemySpawner.ConfigureAreaComposition"/> — falling back to a single
+        /// rusher (the Mothership's own Drone) so an unauthored cradle still builds something rather
+        /// than sitting silently empty.</summary>
+        private static AssemblyCradle BuildCradle(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+            MarkDiscoverable(body);
+            body.transform.rotation = CradleFacingRotation(e.facing);
+
+            var cradle = body.AddComponent<AssemblyCradle>();
+            body.GetComponent<EnemySpawner>().ConfigureAreaComposition(
+                e.cradleComposition ?? new WorldComposition { rusher = 1 });
+
+            TagStatic(map, body, rendererZones);
+
+            built.Actors[e.id] = body;
+            return cradle;
         }
 
         /// <summary>

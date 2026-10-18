@@ -40,6 +40,11 @@ namespace MaxWorlds.Arena
         /// <summary>A Replicator's built height, in metres (MV-706).</summary>
         public const float ReplicatorHeight = 1.5f;
 
+        /// <summary>An Assembly Cradle's built footprint, cube, in metres (MV-1227's "taller 3x3x3 m
+        /// frame" — the same literal <see cref="MaxWorlds.Factories.AssemblyCradle"/>'s own capture
+        /// preset scales a probe body to).</summary>
+        public const float CradleSize = 3f;
+
         /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
@@ -237,6 +242,31 @@ namespace MaxWorlds.Arena
                         depth = ReplicatorFootprint,
                         capacity = r.capacity,
                         facing = string.IsNullOrEmpty(r.facing) ? "S" : r.facing,  // MV-860
+                    });
+                }
+            }
+
+            // MV-1232: an area's Assembly Cradles — the same MapRuntime.BuildCradle recipe every
+            // cradle builds through. One entity per authored cradle, same "per-entity not per-area"
+            // shape as WorldShed/WorldReplicator above (MV-475).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldCradle[] cradles = a.cradles ?? Array.Empty<WorldCradle>();
+                for (int i = 0; i < cradles.Length; i++)
+                {
+                    WorldCradle cr = cradles[i];
+                    if (cr == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(cr.id) ? $"{a.id}_cradle{i + 1}" : cr.id,
+                        kind = "cradle",
+                        x = cr.x,
+                        z = cr.z,
+                        width = CradleSize,
+                        height = CradleSize,
+                        depth = CradleSize,
+                        facing = string.IsNullOrEmpty(cr.facing) ? "S" : cr.facing,
+                        cradleComposition = cr.composition,
                     });
                 }
             }

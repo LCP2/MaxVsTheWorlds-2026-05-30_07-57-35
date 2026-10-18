@@ -20,6 +20,33 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class ShipDressing
     {
+        /// <summary>The full Ship pass for a real layout (MV-1232, the Hangar Bay ticket this class's
+        /// own header named as the one to call wall/floor dressing directly): cover dressing plus the
+        /// ticket's own "launch-pad hazard marking" — everything <see cref="DressCover"/> alone left
+        /// out. Wall dressing is still left for a later ticket; a plain structural wall reads fine at
+        /// this camera angle and the tie-breaker order (readability over visual richness) does not
+        /// need it to ship this one.</summary>
+        public static int Dress(Transform host, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
+        {
+            int dressed = DressCover(host, cover);
+            BuildLaunchPad(host, cfg);
+            return dressed;
+        }
+
+        /// <summary>MV-1232: the launch-pad hazard marking drawn in the ticket's own design image — a
+        /// patch of deck floor (yellow hazard stripes along its own N/S edges, <see cref="ShipKit.BuildDeckFloor"/>)
+        /// in the open ground between the two dropship covers and the drop-pod rack. Purely cosmetic
+        /// (<see cref="ShipKit.BuildDeckFloor"/> strips its own colliders), so it can never affect
+        /// walkability — only the Hangar Bay's own base floor does that.</summary>
+        private static void BuildLaunchPad(Transform host, WorldConfig cfg)
+        {
+            WorldArea hangarBay = cfg?.Area("a1");
+            if (hangarBay == null) return;
+
+            var pad = new Rect(hangarBay.XMin + 20f, hangarBay.ZMin + 15f, 16f, 11f);
+            ShipKit.BuildDeckFloor(host, pad);
+        }
+
         /// <summary>Builds the matching <see cref="ShipKit"/> piece over every cover entry whose
         /// <see cref="ArenaCover.Dressing"/> this kit owns, and hides that entry's own box renderer —
         /// the collider itself is left exactly as <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/>

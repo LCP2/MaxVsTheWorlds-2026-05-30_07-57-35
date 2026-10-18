@@ -20,6 +20,7 @@ namespace MaxWorlds.Arena
         Hatch,                // MV-697
         Replicator,           // MV-706
         Grate,                // MV-781
+        Cradle,               // MV-1232
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -233,6 +234,11 @@ namespace MaxWorlds.Arena
         /// <summary>Replicator only (MV-706) — the maximum number of doublings this box can ever
         /// perform, resolved from <see cref="WorldReplicator.capacity"/>. 0 for every other kind.</summary>
         public int capacity;
+
+        /// <summary>Cradle only (MV-1232) — resolved from <see cref="WorldCradle.composition"/>, handed
+        /// straight to the built <see cref="MaxWorlds.Enemies.EnemySpawner.ConfigureAreaComposition"/>
+        /// call. Null for every other kind.</summary>
+        public WorldComposition cradleComposition;
 
         /// <summary>Deck only (MV-852) — resolved from <see cref="WorldDeck.walled"/>: every non-mouth
         /// edge gets a solid, collider-bearing parapet instead of the ordinary open MV-821 edge band.

@@ -474,6 +474,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1215ReefKitSheet());
             Add(BuildMv1230ShipKitSheet());
             Add(BuildMv1231BreakerLook());
+            Add(BuildMv1232HangarBayCheck());
             return d;
         }
 
@@ -2206,6 +2207,77 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1230-ship-kit-sheet", NoSetup) },
+            };
+        }
+
+        // ---- MV1232HangarBayCheck (MV-1232 AC3) -----------------------------------------------
+
+        /// <summary>MV-1232 AC3: the Hangar Bay's real, in-game build — the same real-config boot idiom
+        /// as <see cref="BuildMv1230ShipKitSheet"/>, framed from just inside the IN gate ("g0") at the
+        /// production play camera's own pitch/distance (<see cref="FixedAngleCameraRig"/>).
+        ///
+        /// First pass copied <see cref="BuildMv759GateDoorsCheck"/>'s "yaw to face the gate" idiom, but
+        /// that preset is an explicit, documented DEPARTURE from the production angle (its own comment:
+        /// "a design-review framing... not this game's ~72 deg in-game rig angle") — the live rig
+        /// (<see cref="FixedAngleCameraRig.Apply"/>) never yaws at all, only
+        /// <c>Quaternion.Euler(pitchDegrees, 0, 0)</c>, a fixed WORLD-space tilt that does not turn to
+        /// face whichever way a gate happens to open. Yawing toward the gate's own forward pointed the
+        /// camera down the W5 entry stub (unbuilt void) instead of into the Hangar Bay, caught by
+        /// actually opening the written PNG (CC_AUTONOMY's own QA-loop step) — a resolved-pixel defect
+        /// an EditMode test cannot see. <see cref="BuildMv1230ShipKitSheet"/>'s own zero-yaw
+        /// <c>Quaternion.Euler(pitch, 0, 0)</c> is the one this preset now matches exactly.</summary>
+        private static CapturePreset BuildMv1232HangarBayCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + ShipDressing.Dress finish
+
+                GameObject gateGo = GameObject.Find("g0");
+                AreaGate gate = gateGo != null ? gateGo.GetComponent<AreaGate>() : null;
+                if (gate == null) throw new CaptureAbortException("World 5 built no IN gate ('g0') to shoot from");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                // Only used to push the focus a few metres off the wall, onto the "PLAY FRAME" spot
+                // the ticket's own design image marks just inside the IN gate — never for rotation
+                // (BuildAreaGate's own E/W-wall spin still makes this point into the room, not the
+                // stub, exactly as MapRuntime.BuildAreaGate's own doc explains).
+                Vector3 approach = gate.transform.forward;
+                if (approach.sqrMagnitude < 0.01f) approach = Vector3.right;
+                approach.Normalize();
+
+                Vector3 focus = gate.transform.position + approach * 6f + Vector3.up * 1f;
+                var rotQ = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rotQ * Vector3.forward * distance, rotQ);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1232hangarbay",
+                LogTag = "[MV1232Capture]",
+                Flag = "-mv1232shot",
+                ArmFile = "Temp/mv1232.arm",
+                HeadlessMarker = "Temp/mv1232.headless",
+                DoneFileName = "_mv1232_done.txt",
+                Width = 1920,
+                Height = 1080,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1230ShipKitSheet.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1232-hangar-bay-in-gate", NoSetup) },
             };
         }
 
