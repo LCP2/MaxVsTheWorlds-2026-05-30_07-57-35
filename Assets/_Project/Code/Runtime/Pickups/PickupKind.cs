@@ -16,7 +16,10 @@ namespace MaxWorlds.Pickups
     /// (MV-727) is World 2's Shoulder Rack pickup: the FIRST Replicator destroyed each run drops one in
     /// addition to its normal shed-equivalent drop; walking over it unlocks the SECONDARY category AND
     /// grants <c>s_rkt</c> at level 1 outright, for free — reversing MV-694's "buy it with cells the
-    /// instant the Weapon Core morph lands" shape.
+    /// instant the Weapon Core morph lands" shape. <see cref="PickupKind.HelmKey"/> (MV-1239) is World
+    /// 5's own finale drop: the Helmsman's death drop on the Bridge. What collecting it actually DOES
+    /// (the viewport exit) is MV-1245's own ticket — this kind exists so it can drop and be told apart
+    /// from every other pickup, not because this ticket wires the finale itself.
     /// </summary>
     public enum PickupKind
     {
@@ -26,5 +29,6 @@ namespace MaxWorlds.Pickups
         PowerCellSecondary,
         WeaponCore,
         RackModule,
+        HelmKey,
     }
 }
