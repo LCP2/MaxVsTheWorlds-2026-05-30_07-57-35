@@ -63,6 +63,12 @@ namespace MaxWorlds.Dev
         private const float SkitterPackPitch = 55f;
         private const float SkitterPackDistance = 5.5f;
 
+        /// <summary>MV-1226 AC3's own framing — close enough that a 0.78 m Drone and a 1.42 m Sentry
+        /// both read clearly side by side.</summary>
+        private const float MothershipPairPitch = 60f;
+        private const float MothershipPairDistance = 4.2f;
+        private const float MothershipPairSpacing = 1.6f;   // metres between the two robots' centres
+
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
 
@@ -141,6 +147,7 @@ namespace MaxWorlds.Dev
 
             yield return CaptureDreadnoughtPair(cam, focusBase);
             yield return CaptureSkitterPack(cam, focusBase);
+            yield return CaptureMothershipPair(cam, focusBase);
 
             Finish();
         }
@@ -276,15 +283,54 @@ namespace MaxWorlds.Dev
             return best?.Center;
         }
 
+        /// <summary>MV-1226 AC3 — the Drone and the Sentry side by side, at this director's own
+        /// Mothership-pair framing. Built from <see cref="EnemyArchetype.For"/> against the Mothership's
+        /// real <c>mothership_config.json</c> (not <see cref="EnemyArchetype.Of"/>) — the only way either
+        /// kind resolves to its "mothership" skin tag and so its own body rather than the base roster's
+        /// buggy Rusher / gunmetal Turret.</summary>
+        private IEnumerator CaptureMothershipPair(Camera cam, Vector3 focusBase)
+        {
+            GameObject drone = null, sentry = null;
+            try
+            {
+                WorldConfig mothershipConfig = WorldLibrary.Load(WorldLibrary.Mothership);
+                if (mothershipConfig == null) { LogWarn("mothership_pair capture skipped: mothership_config.json failed to load"); yield break; }
+
+                Vector3 dronePos = focusBase + Vector3.left * (MothershipPairSpacing * 0.5f);
+                Vector3 sentryPos = focusBase + Vector3.right * (MothershipPairSpacing * 0.5f);
+
+                drone = BuildRobot(EnemyArchetype.For(EnemyKind.Rusher, mothershipConfig), dronePos);
+                sentry = BuildRobot(EnemyArchetype.For(EnemyKind.Turret, mothershipConfig), sentryPos);
+                for (int i = 0; i < 3; i++) yield return null;   // let both rigs' build settle on screen
+
+                var rot = Quaternion.Euler(MothershipPairPitch, 0f, 0f);
+                Vector3 focus = (dronePos + sentryPos) * 0.5f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * MothershipPairDistance, rot);
+
+                yield return null;
+                yield return null;
+                Capture(cam, "mothership_pair");
+            }
+            finally
+            {
+                if (drone != null) Destroy(drone);
+                if (sentry != null) Destroy(sentry);
+            }
+        }
+
         /// <summary>Same greybox recipe as <c>EnemySpawner.CreateInstance</c>'s no-prefab path (that IS
         /// the shipped path — <c>prefab</c> is unset until Phase C art), minus the pooling/parenting this
         /// one-shot capture doesn't need. Internal static so <see cref="MsaaComparisonDirector"/>
         /// (MV-507) builds the exact same body rather than a hand-simplified stand-in.</summary>
-        internal static GameObject BuildRobot(EnemyKind kind, Vector3 at)
+        internal static GameObject BuildRobot(EnemyKind kind, Vector3 at) => BuildRobot(EnemyArchetype.Of(kind), at);
+
+        /// <summary>The archetype-driven form <see cref="BuildRobot(EnemyKind, Vector3)"/> delegates to
+        /// — MV-1226's own need: a world's <see cref="EnemyArchetype.For"/>-resolved archetype (skin,
+        /// display name, stats) rather than always the unskinned base table.</summary>
+        private static GameObject BuildRobot(EnemyArchetype a, Vector3 at)
         {
-            EnemyArchetype a = EnemyArchetype.Of(kind);
             var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
-            go.name = $"RobotRoster {kind}";
+            go.name = $"RobotRoster {a.Kind}";
             go.transform.SetPositionAndRotation(new Vector3(at.x, a.SpawnHeight, at.z), Quaternion.identity);
             go.transform.localScale = a.BodyScale;
 

@@ -41,6 +41,18 @@
       "thv": 8.53
     }
   },
+  "enemyOverrides": [
+    {
+      "kind": "rusher",
+      "displayName": "DRONE",
+      "skin": "mothership"
+    },
+    {
+      "kind": "turret",
+      "displayName": "SENTRY",
+      "skin": "mothership"
+    }
+  ],
   "gates": [
     {
       "id": "g0",

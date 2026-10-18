@@ -60,6 +60,13 @@ namespace MaxWorlds.VFX
         /// idiom as <see cref="ReefSkinTag"/>.</summary>
         private const string StormdrainSkinTag = "stormdrain";
 
+        /// <summary>World 5's skin tag (MV-1226) — same "one literal per file that needs it" idiom as
+        /// <see cref="ReefSkinTag"/>. Deliberately NOT read by <see cref="MaxWorlds.VFX.RobotRig.BuildMaterials"/>
+        /// the way <see cref="ReefSkinTag"/>/<see cref="StormdrainSkinTag"/> are — the Mothership keeps
+        /// every kind's own roster colour (the ticket's own "Lee likes the roster's kind colours; keep
+        /// them"), only the silhouette changes.</summary>
+        private const string MothershipSkinTag = "mothership";
+
         /// <summary>Build <paramref name="kind"/>'s body under <paramref name="root"/> and return the
         /// emissive lenses the rig drives as its tell. <paramref name="skin"/> selects a world
         /// reskin's OWN silhouette (MV-746) — null/anything else falls through to the base roster.</summary>
@@ -73,6 +80,9 @@ namespace MaxWorlds.VFX
 
             if (skin == ReefSkinTag && TryBuildReef(kind, visualRoot, p, eyes, wheels, legs, out inflatable))
                 return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), inflatable);
+
+            if (skin == MothershipSkinTag && TryBuildMothership(kind, visualRoot, p, eyes, wheels, legs))
+                return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
 
             switch (kind)
             {
