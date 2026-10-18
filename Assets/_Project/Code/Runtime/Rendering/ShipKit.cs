@@ -65,10 +65,9 @@ namespace MaxWorlds.Rendering
         ///
         /// Bands, each centred on an existing named colour already shipped elsewhere in this project:
         /// cradle red ~4&#176; (<c>MaxWorlds.VFX.FactoryBodies.CradleRed</c>, #E2483D, MV-1227's own
-        /// "red is reserved for cradles in this world"); vent orange ~27&#176; (the best in-repo match,
-        /// <c>MaxWorlds.VFX.FactoryLife</c>'s own vent tint #FF8C2E — this one is NOT a named "reserved"
-        /// constant anywhere, so treat the band as a best-effort placeholder until the design workbook's
-        /// own value is confirmed); Light Missile violet ~275&#176; (<c>LightMissileBall.HaloColor</c>,
+        /// "red is reserved for cradles in this world"); vent orange ~27&#176; — now MV-1240's own
+        /// confirmed value, <c>MaxWorlds.VFX.PlasmaVentVisual.GlowOrange</c>, #FF8C2E family, the actual
+        /// plasma vent this band was reserved for; Light Missile violet ~275&#176; (<c>LightMissileBall.HaloColor</c>,
         /// #B040FF). Orbitals (MV-1236) has shipped no colour yet, so it is not guarded here.
         ///
         /// Every band leaves a clear margin either side of this kit's own <see cref="RustOrange"/>

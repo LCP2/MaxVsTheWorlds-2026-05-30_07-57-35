@@ -1696,6 +1696,15 @@ namespace MaxWorlds.Arena
                         TagStatic(map, grateGo, rendererZones);
                         break;
                     }
+
+                    case EntityKind.Vent:
+                    {
+                        // MV-1240: excluded from the static batch — PlasmaVentVisual retints the grille
+                        // and toggles the flame column every cycle, same reasoning as Sludge/Grate above.
+                        GameObject ventGo = BuildVent(root, e);
+                        TagStatic(map, ventGo, rendererZones);
+                        break;
+                    }
                 }
             }
         }
@@ -1821,6 +1830,37 @@ namespace MaxWorlds.Arena
 
             float t = 1f - distance / OutfallGradeRadius;
             return Color.Lerp(SludgeColor, SludgeTealColor, t);
+        }
+
+        private const float VentThickness = 0.05f;
+
+        /// <summary>The flame column's radius as a fraction of the vent's own smaller footprint
+        /// dimension — comfortably inside the rect's edges on either authored size (2.5x2.5 or 2x4,
+        /// ticket table) so the column never pokes past the grille it rises from.</summary>
+        private const float VentColumnRadiusFraction = 0.35f;
+
+        /// <summary>A plasma vent's floor grille plus its own flame column (MV-1240) — a flat tinted tile
+        /// (same "flat colour is acceptable" scope as <see cref="BuildSludge"/>) carrying a child cylinder
+        /// that <see cref="PlasmaVentVisual"/> shows only while the column is live. Excluded from the
+        /// static batch by its caller for the same reason Sludge/Grate are.</summary>
+        private static GameObject BuildVent(Transform root, MapEntity e)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
+                new Vector3(e.x, VentThickness * 0.5f, e.z), new Vector3(e.width, VentThickness, e.depth));
+            StripCollider(body);
+
+            Material grilleMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, PlasmaVentVisual.IdleOrange);
+            Tint(body, grilleMaterial);
+
+            float columnRadius = Mathf.Min(e.width, e.depth) * VentColumnRadiusFraction;
+            GameObject column = Spawn(body.transform, "FlameColumn", PrimitiveType.Cylinder,
+                new Vector3(0f, MapVentDamage.ColumnHeight * 0.5f, 0f),
+                new Vector3(columnRadius, MapVentDamage.ColumnHeight * 0.5f, columnRadius));
+            StripCollider(column);
+            Tint(column, MaterialLibrary.Tinted(SurfaceKind.Prop, PlasmaVentVisual.ColumnColor));
+
+            body.AddComponent<PlasmaVentVisual>().Configure(body.GetComponent<Renderer>(), column.transform);
+            return body;
         }
 
         /// <summary>A deck's walkable top slab, built as an open raised walkway rather than a walled

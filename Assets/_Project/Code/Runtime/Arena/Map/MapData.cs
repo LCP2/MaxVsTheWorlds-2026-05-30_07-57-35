@@ -21,6 +21,7 @@ namespace MaxWorlds.Arena
         Replicator,           // MV-706
         Grate,                // MV-781
         Cradle,               // MV-1232
+        Vent,                 // MV-1240
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -531,6 +532,23 @@ namespace MaxWorlds.Arena
             foreach (MapEntity e in entities)
                 if (e != null && e.Kind == EntityKind.Sludge) list.Add(e);
             return _sludgeEntitiesCache = list.ToArray();
+        }
+
+        /// <summary>Every Vent entity in the map (MV-1240), same cache-once idiom as
+        /// <see cref="SludgeEntities"/> — what <see cref="MaxWorlds.Arena.MapVentDamage.IsInVent"/> walks
+        /// instead of the whole, unfiltered <see cref="entities"/> array every time the cycle fires.</summary>
+        private MapEntity[] _ventEntitiesCache;
+
+        public MapEntity[] VentEntities()
+        {
+            if (_ventEntitiesCache != null) return _ventEntitiesCache;
+
+            if (entities == null) return _ventEntitiesCache = Array.Empty<MapEntity>();
+
+            var list = new List<MapEntity>();
+            foreach (MapEntity e in entities)
+                if (e != null && e.Kind == EntityKind.Vent) list.Add(e);
+            return _ventEntitiesCache = list.ToArray();
         }
 
         /// <summary>The Deck/Hatch entity (never a ramp — MV-833's own rule) whose rect contains

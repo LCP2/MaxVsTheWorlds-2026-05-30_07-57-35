@@ -352,6 +352,21 @@ namespace MaxWorlds.Arena
         public float d;
     }
 
+    /// <summary>One authored plasma vent (MV-1240) — a static floor hazard that fires on a timer, a
+    /// rect in AREA-LOCAL metres (MIN corner), same convention as <see cref="WorldSludge"/>. The cycle
+    /// timing and damage amount are not authored per-instance — they are the one shared rule every vent
+    /// in the game follows (<see cref="MaxWorlds.Arena.MapVentDamage"/>) — only where a vent stands and
+    /// how big it is are a level author's own call.</summary>
+    [Serializable]
+    public sealed class WorldVent
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+    }
+
     /// <summary>A locked deck-cell opening (MV-697) — same area-local MIN-corner convention as
     /// <see cref="WorldSludge"/>, authored on the same <see cref="WorldArea"/> record as the
     /// <see cref="WorldDeck"/> it sits on. Built as an <see cref="AreaGate"/> lying flat at the deck's
@@ -617,6 +632,10 @@ namespace MaxWorlds.Arena
         /// <summary>Ramps joining the floor to a deck cell (MV-692), area-local rects. Optional — most
         /// areas carry none.</summary>
         public WorldRamp[] ramps = Array.Empty<WorldRamp>();
+
+        /// <summary>Plasma vents authored into this area (MV-1240), area-local rects. Optional — most
+        /// areas carry none.</summary>
+        public WorldVent[] vents = Array.Empty<WorldVent>();
 
         /// <summary>Locked deck-cell openings (MV-697), area-local rects — see <see cref="WorldHatch"/>.
         /// Optional — most areas carry none.</summary>
