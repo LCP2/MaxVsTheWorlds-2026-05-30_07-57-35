@@ -11,7 +11,8 @@ namespace MaxWorlds.Enemies
     // Charger (MV-707) follows it too — a telegraphed straight-line rammer, appended after Sludger.
     // Dreadnought (MV-1217) follows it too — a slow, hard-to-kill twin-turret platform, appended after Charger.
     // Skitter (MV-1224) follows it too — a tiny phase-hopping robot, appended after Dreadnought.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter }
+    // Breaker (MV-1228) follows it too — a chained, press-punching/ramming robot beast, appended after Skitter.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -38,6 +39,7 @@ namespace MaxWorlds.Enemies
                 case "charger": kind = EnemyKind.Charger; return true;
                 case "dreadnought": kind = EnemyKind.Dreadnought; return true;
                 case "skitter": kind = EnemyKind.Skitter; return true;
+                case "breaker": kind = EnemyKind.Breaker; return true;
                 default: kind = default; return false;
             }
         }
@@ -541,6 +543,38 @@ namespace MaxWorlds.Enemies
             teleportCooldown: 0.7f,
             displayName: "SKITTER");
 
+        /// <summary>
+        /// Breaker (MV-1228): Lee's "one quite large robot, almost gorilla-like in its dimensions ...
+        /// something that's going to ram you or hit you or punch you" (17 Oct 2026 ask) — a 2.4 m-wide,
+        /// 2.2 m-tall body, the biggest in the roster. Two attacks, chosen by range in
+        /// <see cref="RobotEnemy.TickChase"/>: inside <see cref="RobotEnemy.BreakerPunchRange"/> (2.2 m)
+        /// it press-punches (its own telegraph/hit/recover beat, entirely separate from the fields
+        /// below); from <see cref="RobotEnemy.BreakerRamMinRange"/> (6 m) out to <see cref="LungeRange"/>
+        /// (12 m) it rams — reusing the Cart Charger's (MV-707) exact telegraph/charge/wall-stun
+        /// mechanism (<see cref="RobotEnemy.TickCharge"/>/<see cref="RobotEnemy.HandleWallContact"/>),
+        /// which is what every field below actually feeds: <see cref="ContactDamage"/> (34) is the ram's
+        /// hit, <see cref="LungeTime"/> caps the ram's travel at a fixed 10 m (10 m / 8 m/s), same
+        /// "distance expressed as time*speed" idiom <see cref="Charger"/> uses for its own cap. The
+        /// Breaker's own wall-stun duration (1.5 s, vs the Charger's 1.2 s) is a Breaker-only constant on
+        /// <see cref="RobotEnemy"/>, not here — see <see cref="RobotEnemy.BreakerWallStunSeconds"/>.
+        /// <see cref="KnockbackDecay"/> is unread — <see cref="RobotEnemy.ApplyKnockback(Vector3)"/>
+        /// refuses the Breaker itself outright, same as the <see cref="Dreadnought"/>. Drops double a
+        /// <see cref="Brute"/>'s (<see cref="MaxWorlds.Pickups.PickupDirector"/>); nameplate "BREAKER".
+        /// </summary>
+        public static EnemyArchetype Breaker => new EnemyArchetype(
+            EnemyKind.Breaker, EnemyShape.Box, new Vector3(2.4f, 2.2f, 1.8f),
+            colliderHeight: 2.4f, colliderRadius: 0.9f,   // radius fits inside the ticket's 1.8 m footprint
+            moveSpeed: 1.2f, maxHealth: 600f,
+            contactDamage: 34f,     // the ram's hit, applied once on contact — see RobotEnemy.TickCharge
+            contactRadius: 1.6f,
+            lungeRange: 12f,        // the ram's max engage distance (RobotEnemy.BreakerRamMinRange is the 6 m floor)
+            telegraphTime: 0.9f,    // the ram's own tell — "pistons vent"
+            lungeSpeed: 8f,
+            lungeTime: 10f / 8f,    // caps the ram's travel at a fixed 10 m, regardless of engage distance
+            recoverTime: 1.4f,
+            knockbackDecay: 60f,    // unread — see doc comment above
+            displayName: "BREAKER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -556,6 +590,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Charger => Charger,
             EnemyKind.Dreadnought => Dreadnought,
             EnemyKind.Skitter => Skitter,
+            EnemyKind.Breaker => Breaker,
             _ => Rusher,
         };
 
@@ -740,6 +775,11 @@ namespace MaxWorlds.Enemies
                     // must never invent one with no grate under it, so this area's authored lurker count
                     // stays out of AreaCadence's ratio math and is only ever drawn by name via garrison
                     // placement.
+                    //
+                    // MV-1217's Dreadnought and MV-1228's Breaker are the same exemption for a different
+                    // reason each: the Dreadnought "appears only where it is authored as garrison" per
+                    // its own ticket, and the Breaker is chained to a wall anchor until it wakes — a
+                    // leashed enemy has no shed to be released from either. Neither is bound here.
                 }
 
                 for (int i = 0; i < _authored.Length; i++)

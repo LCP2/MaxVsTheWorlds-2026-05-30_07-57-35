@@ -55,6 +55,12 @@ namespace MaxWorlds.Enemies
         /// a group it never out-prices the Sludger band.</summary>
         public const float Skitter = 0.8f;
 
+        /// <summary>MV-1228: the ticket's own authored THV — priced well above every other kind here,
+        /// just under the Dreadnought's 9.0: 600 HP and two high-damage melee attacks (34/28), but no
+        /// ranged payoff and no twin-weapon redundancy, on the same placeholder footing until real
+        /// per-type calibration lands.</summary>
+        public const float Breaker = 6.5f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -70,6 +76,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Charger => Charger,
             EnemyKind.Dreadnought => Dreadnought,
             EnemyKind.Skitter => Skitter,
+            EnemyKind.Breaker => Breaker,
             _ => Rusher,
         };
     }
