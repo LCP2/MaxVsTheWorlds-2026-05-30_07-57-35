@@ -139,6 +139,13 @@ namespace MaxWorlds.Player
             // Ricochet component to fire. Attaching this unconditionally costs nothing before the
             // morph — it self-gates on ActivePrimary the same way Undertow/PulseLaser do.
             if (GetComponent<Ricochet>() == null) gameObject.AddComponent<Ricochet>();
+
+            // MV-1210: LIGHT MISSILE self-attaches the same way — World 5's Weapon Core morph (a later
+            // ticket, MV-1225's WorldCatalog row) will flip WeaponSystemState.ActivePrimary to
+            // LightMissile, but nothing else ever attaches a live LightMissile component to fire.
+            // Attaching this unconditionally costs nothing before that morph — it self-gates on
+            // ActivePrimary the same way Ricochet/Undertow/PulseLaser do.
+            if (GetComponent<LightMissile>() == null) gameObject.AddComponent<LightMissile>();
         }
 
         private void OnEnable()

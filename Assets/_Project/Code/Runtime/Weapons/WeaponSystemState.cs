@@ -117,6 +117,18 @@ namespace MaxWorlds.Weapons
             _ => null,
         };
 
+        /// <summary>MV-1210: World 5's LIGHT MISSILE own PRIMARY-family tracks with no legacy enum
+        /// equivalent — see <see cref="LightMissileTrackKind"/>'s class doc for why these aren't folded
+        /// into <see cref="MapId(WeaponTrackKind)"/>/<see cref="MapId(RicochetTrackKind)"/>.</summary>
+        private static string MapId(LightMissileTrackKind kind) => kind switch
+        {
+            LightMissileTrackKind.Count => "p_cnt",
+            LightMissileTrackKind.Tracking => "p_trk",
+            LightMissileTrackKind.Rate => "p_rof",
+            LightMissileTrackKind.Capacity => "p_cap",
+            _ => null,
+        };
+
         private static string MapId(AbilityKind kind) => kind switch
         {
             AbilityKind.Speed => "m_spd",
@@ -459,6 +471,11 @@ namespace MaxWorlds.Weapons
         /// <see cref="RicochetTrackKind"/>) — same role for <see cref="MaxWorlds.Combat.Ricochet"/> that
         /// <see cref="LppeTrackLevel"/> plays for the LPPE.</summary>
         public static int RicochetTrackLevel(RicochetTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>MV-1210: a LIGHT MISSILE-only track's current level (COUNT/TRACKING/RATE/CAPACITY,
+        /// <see cref="LightMissileTrackKind"/>) — same role for <see cref="MaxWorlds.Combat.LightMissile"/>
+        /// that <see cref="RicochetTrackLevel"/> plays for RICOCHET.</summary>
+        public static int LightMissileTrackLevel(LightMissileTrackKind kind) => RigState.Level(MapId(kind));
 
         /// <summary>Spend a part to raise a Shoulder Rack track by one level. Fails if its RIG node
         /// isn't reached yet or is already at its cap.</summary>
