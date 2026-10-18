@@ -343,6 +343,11 @@ namespace MaxWorlds.Weapons
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
             if (_teleportCooldown > 0f) return false;
 
+            // MV-1222: a teleport is one of the states a forced move (knockback/pull) must never
+            // survive -- it is never a teleport-style position set itself, but a blink straight through
+            // the wall that was holding one would be exactly that in effect.
+            _playerController?.ClearForcedMove();
+
             Vector3 aimed = new Vector3(aimDirection.x, 0f, aimDirection.z);
             Vector3 dir = aimed.sqrMagnitude > 1e-4f ? aimed.normalized : transform.forward;
 

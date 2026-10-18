@@ -9,6 +9,10 @@ using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Player
 {
+    /// <summary>MV-1222: who's pushing/pulling Max right now — the Breaker's knockback and the
+    /// Tractor's pull are the two cases <see cref="PlayerController.ApplyForcedMove"/> exists for.</summary>
+    public enum ForcedMoveSource { Knockback, Pull }
+
     /// <summary>
     /// Twin-stick locomotion for Max (YT-34). Greybox capsule stand-in —
     /// no art dependency. Left stick / WASD moves; right stick / arrow keys aims.
@@ -67,6 +71,28 @@ namespace MaxWorlds.Player
         private const float StuckDisplacementEpsilon = 0.001f;   // 1 mm
         private const float StuckLogIntervalSeconds = 1f;
         private float _stuckLogCooldown;
+
+        /// <summary>MV-1222: one shared push/pull rule — the Breaker's knockback and the Tractor's
+        /// pull both drive Max through <see cref="ApplyForcedMove"/> instead of each inventing its own
+        /// way to move him without his input. <see cref="_forcedMoveRemaining"/> counting down to 0
+        /// is "no forced move active"; a fresh <see cref="ApplyForcedMove"/> call simply overwrites
+        /// these, which is what makes a newer one replace an older one rather than stack with it.</summary>
+        private Vector3 _forcedMoveVelocity;
+        private float _forcedMoveRemaining;
+        private ForcedMoveSource _forcedMoveSource;
+
+        /// <summary>Consecutive <see cref="TickForcedMove"/> ticks in a row the active forced move has
+        /// made ~no progress (a wall/gate holding it) — <see cref="ForcedMoveBlockedTicksLimit"/> of
+        /// these ends it early rather than spending the rest of its duration pushing at nothing.</summary>
+        private int _forcedMoveBlockedTicks;
+
+        private const float ForcedMoveBlockedEpsilon = 0.001f;   // 1 mm, same idiom as StuckDisplacementEpsilon
+        private const int ForcedMoveBlockedTicksLimit = 3;
+
+        /// <summary>Lazily resolved once <see cref="PlayerHealth"/> exists on this object (it self-adds
+        /// after <see cref="PlayerController"/>, so Awake order can't be relied on) so a death clears
+        /// whatever forced move was mid-flight — see <see cref="ClearForcedMove"/>.</summary>
+        private bool _forcedMoveDiedSubscribed;
 
         /// <summary>True while the aim stick/keys are engaged — the gadget (YT-35) auto-fires while this holds.</summary>
         public bool IsAiming { get; private set; }
@@ -152,16 +178,97 @@ namespace MaxWorlds.Player
         {
             _move.Enable();
             _aim.Enable();
+            // MV-1222: a freeze/cutscene/world-join resume (this is exactly what re-enabling
+            // PlayerController means — see ApplyForcedMove's own doc comment) must never hand a stale
+            // shove back to whatever this run becomes next.
+            ClearForcedMove();
         }
 
         private void OnDisable()
         {
             _move.Disable();
             _aim.Disable();
+            // MV-1222: a freeze, a cutscene and a world-join all suspend Max by disabling this
+            // component (WorldFinaleGate.SuspendGameplayForBeat, WorldJoinSequence.SuspendGameplay,
+            // IntroCinematic) — clearing here is what makes all three "clear the forced move" for free.
+            ClearForcedMove();
+        }
+
+        /// <summary>MV-1222: one shared push/pull rule for every feature that moves Max without his
+        /// input — built for the Breaker's knockback and the Tractor's pull (both land in later
+        /// tickets). While active, <paramref name="velocity"/> displaces Max every tick through the
+        /// same <see cref="CharacterControllerMotion.SafeMove"/> path his walk uses (<see cref="TickForcedMove"/>),
+        /// so a wall, solid cover or a gate frame stops it exactly as it stops ordinary walking — never
+        /// a teleport-style position set. Only one forced move is ever active: calling this again
+        /// simply overwrites the fields below, so a newer call replaces an older one rather than
+        /// stacking with it.</summary>
+        public void ApplyForcedMove(Vector3 velocity, float duration, ForcedMoveSource source)
+        {
+            _forcedMoveVelocity = velocity;
+            _forcedMoveRemaining = Mathf.Max(0f, duration);
+            _forcedMoveSource = source;
+            _forcedMoveBlockedTicks = 0;
+        }
+
+        /// <summary>True while a forced move (knockback/pull) is still displacing Max this frame.</summary>
+        public bool IsForcedMoveActive => _forcedMoveRemaining > 0f;
+
+        /// <summary>Ends whatever forced move is active with no further displacement. Called from
+        /// <see cref="OnEnable"/>/<see cref="OnDisable"/> (freeze/cutscene/world-join/resume), from
+        /// <see cref="MaxWorlds.Weapons.PlayerAbilities.TryTeleport"/> (a teleport) and from
+        /// <see cref="PlayerHealth.Died"/> (death) — every case MV-1222's AC says must never carry a
+        /// shove across it.</summary>
+        public void ClearForcedMove()
+        {
+            _forcedMoveVelocity = Vector3.zero;
+            _forcedMoveRemaining = 0f;
+            _forcedMoveBlockedTicks = 0;
+        }
+
+        /// <summary>This frame's slice of the active forced move, if any — its own
+        /// <see cref="CharacterControllerMotion.SafeMove"/> call, same idiom as
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own knockback (applied separately from its
+        /// state-driven movement, not folded into one combined vector). Ends early once
+        /// <see cref="ForcedMoveBlockedTicksLimit"/> consecutive ticks have made ~no progress — a wall
+        /// or gate holding it — rather than spending the rest of <paramref name="dt"/>'s duration
+        /// pushing at something that isn't moving.</summary>
+        private void TickForcedMove(float dt)
+        {
+            if (_forcedMoveRemaining <= 0f) return;
+
+            float step = Mathf.Min(dt, _forcedMoveRemaining);
+            Vector3 before = transform.position;
+            CharacterControllerMotion.SafeMove(_cc, _forcedMoveVelocity * step);
+            Vector3 actualDelta = transform.position - before;
+
+            _forcedMoveRemaining -= dt;
+            _forcedMoveBlockedTicks = actualDelta.sqrMagnitude < ForcedMoveBlockedEpsilon * ForcedMoveBlockedEpsilon
+                ? _forcedMoveBlockedTicks + 1
+                : 0;
+
+            if (_forcedMoveRemaining <= 0f || _forcedMoveBlockedTicks >= ForcedMoveBlockedTicksLimit)
+            {
+                ClearForcedMove();
+            }
+        }
+
+        /// <summary>MV-1222: <see cref="PlayerHealth"/> self-adds after <see cref="PlayerController"/>
+        /// (see every scaffold/test site that builds Max), so it may not exist yet the first time this
+        /// runs — resolved lazily, same "cache once found" idiom <see cref="PlayerHealth.Abilities"/>
+        /// itself uses for its own lazy lookups. A no-op forever on an object with no PlayerHealth
+        /// (never true for the real Max, but true for plenty of movement-only test rigs).</summary>
+        private void EnsureForcedMoveClearsOnDeath()
+        {
+            if (_forcedMoveDiedSubscribed) return;
+            PlayerHealth health = GetComponent<PlayerHealth>();
+            if (health == null) return;
+            health.Died += ClearForcedMove;
+            _forcedMoveDiedSubscribed = true;
         }
 
         private void Update()
         {
+            EnsureForcedMoveClearsOnDeath();
             float dt = Time.deltaTime;
 
             Vector2 moveInput = _move.ReadValue<Vector2>();
@@ -208,6 +315,10 @@ namespace MaxWorlds.Player
             Vector3 displacement = horizontalDisplacement + verticalDisplacement;
 
             EvaluateStuckDiagnostic(moveDir, displacement, actualDelta, dt);
+
+            // MV-1222: its own SafeMove call, after the diagnostic above so a knockback/pull never
+            // pollutes the MV-503 stuck read, which is about INPUT-driven movement specifically.
+            TickForcedMove(dt);
 
             if (_facing.sqrMagnitude > 0.001f)
             {
