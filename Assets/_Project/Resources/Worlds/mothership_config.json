@@ -9236,7 +9236,7 @@
       "id": "a30",
       "index": 30,
       "name": "The Bridge",
-      "role": "exit",
+      "role": "boss+exit",
       "origin": {
         "x": 645.0,
         "z": 517.0
@@ -9247,6 +9247,12 @@
       },
       "hasShed": false,
       "garrisonDensity": "none",
+      "boss": {
+        "id": "helmsman",
+        "x": 675.0,
+        "z": 552.0,
+        "size": { "w": 4.5, "d": 4.5 }
+      },
       "cover": [
         {
           "id": "a30_cover1",

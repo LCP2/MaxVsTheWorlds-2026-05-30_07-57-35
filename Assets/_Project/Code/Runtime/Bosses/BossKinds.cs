@@ -17,6 +17,7 @@ namespace MaxWorlds.Bosses
         public const string BigBermuda = "bigbermuda";
         public const string Anchorhead = "anchorhead";
         public const string Sludgequeen = "sludgequeen";
+        public const string Helmsman = "helmsman";
 
         public sealed class Row
         {
@@ -67,6 +68,17 @@ namespace MaxWorlds.Bosses
                 sludgequeen.SetArenaBounds(footprint);
                 SludgequeenRig.CreateFor(sludgequeen);
                 return sludgequeen;
+            }),
+
+            [Helmsman] = new Row("HELMSMAN", (body, e, map) =>
+            {
+                // MV-1239: behaviour and placement only — the look (seated-then-torn-free body) is
+                // MV-1242's own ticket, so unlike the rows above this builds no rig yet and rides the
+                // greybox cube every boss starts as (same "bare fixture with no rig bound" fallback
+                // SludgequeenBoss's own cannon-mouth/chute-foot transforms already degrade to).
+                var helmsman = body.AddComponent<HelmsmanBoss>(); // RequireComponent adds the CharacterController
+                helmsman.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
+                return helmsman;
             }),
         };
 

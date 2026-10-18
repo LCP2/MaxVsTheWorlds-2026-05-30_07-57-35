@@ -132,6 +132,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _powerCellSecondaryPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _weaponCorePool = new Stack<Pickup>(1);
         private readonly Stack<Pickup> _rackModulePool = new Stack<Pickup>(1);
+        private readonly Stack<Pickup> _helmKeyPool = new Stack<Pickup>(1);
 
         /// <summary>MV-727: true once this run's ONE Rack Module has dropped — gates every Replicator
         /// after the first. Run-scoped like every other per-run flag in this codebase (RigState,
@@ -540,6 +541,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 PickupKind.WeaponCore => _weaponCorePool,
                 PickupKind.RackModule => _rackModulePool,
+                PickupKind.HelmKey => _helmKeyPool,
                 _ => _cellPool,
             };
             // MV-1147: a pooled entry can have been destroyed out from under the director while sitting
@@ -869,6 +871,13 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "SHOULDER RACK",
                         MaxWorlds.VFX.WeaponPartArt.RackModuleGlow);
                     break;
+                case PickupKind.HelmKey:
+                    // MV-1239: the Helmsman's drop. MV-1245 owns what collecting it actually DOES (the
+                    // viewport exit) -- this toast only confirms the pickup so it can't silently fall
+                    // into the Supercell default below and wrongly grant cells; the finale ticket wires
+                    // the real effect on top of this case.
+                    HudSignals.EmitPickup(p.transform.position, "HELM KEY", new Color(0.98f, 0.80f, 0.14f));
+                    break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
                     // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
@@ -891,6 +900,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 PickupKind.WeaponCore => _weaponCorePool,
                 PickupKind.RackModule => _rackModulePool,
+                PickupKind.HelmKey => _helmKeyPool,
                 _ => _cellPool,
             };
             pool.Push(p);
