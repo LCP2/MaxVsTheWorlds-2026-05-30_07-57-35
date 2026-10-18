@@ -185,6 +185,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1227AssemblyCradle() => RunFromMenu(CapturePresets.All["mv1227assemblycradle"]);
         public static void CaptureMv1227AssemblyCradle() => Run(CapturePresets.All["mv1227assemblycradle"]);
 
+        [MenuItem("MaxWorlds/Capture/Pod Launch (MV-1229)")]
+        public static void MenuMv1229PodLaunch() => RunFromMenu(CapturePresets.All["mv1229podlaunch"]);
+        public static void CaptureMv1229PodLaunch() => Run(CapturePresets.All["mv1229podlaunch"]);
+
         [MenuItem("MaxWorlds/Capture/City Ground Texture (MV-1205)")]
         public static void MenuMv1205CityGround() => RunFromMenu(CapturePresets.All["mv1205cityground"]);
         public static void CaptureMv1205CityGround() => Run(CapturePresets.All["mv1205cityground"]);

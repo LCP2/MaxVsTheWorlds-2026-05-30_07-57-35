@@ -87,6 +87,12 @@ namespace MaxWorlds.Tests.EditMode
              "Assert.IsNull(WorldTransitions.For(WorldLibrary.Count - 1),",
              "item 1's own allowed form for \"the last world\" (Count - 1) — the pattern's bare \\b[1-9]\\b " +
              "matches the arithmetic literal \"1\" regardless."),
+
+            ("WorldCatalog.cs",
+             "Entry = new WorldTransitionEntry(fromWorld: 3, exitWall: Wall.E, exitDoorPos: 0.3f, corridorLength: 30f,",
+             "MV-1229: the Reef row's own FromWorld field, same reason as the Stormdrain/City rows' entries " +
+             "above — authored inside this same array literal, before s_rows exists for IndexOf to search, " +
+             "and never read outside this constructor."),
         };
 
         [Test]

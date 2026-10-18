@@ -443,6 +443,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv1201CityRelay());
             Add(BuildMv1227AssemblyCradle());
+            Add(BuildMv1229PodLaunch());
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
@@ -4854,6 +4855,103 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-967-corridor-d22", cam => FrameAt(cam, shotD[2])),
                 },
                 Cleanup = Composite,
+            };
+        }
+
+        // ---- Mv1229PodLaunch (MV-1229 AC3) -----------------------------------------------------
+
+        /// <summary>One shot, Max standing inside the drop-pod launch tube (d=16, the midpoint of segment
+        /// B, 10-22) -- same real-entry-point idiom <see cref="BuildMv1126Ramp"/> already establishes:
+        /// drives <see cref="WorldJoinSequence.OpenExitDoor"/> directly on the Reef's own real exit row
+        /// rather than playing through its boss fight, then places Max at the pod before framing him.</summary>
+        private static CapturePreset BuildMv1229PodLaunch()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float shotD = 16f;
+
+            Vector2 doorMouth = default;
+            Wall wall = Wall.E;
+
+            Vector3 OutwardDir(Wall w) => w switch
+            {
+                Wall.N => Vector3.forward,
+                Wall.S => Vector3.back,
+                Wall.E => Vector3.right,
+                Wall.W => Vector3.left,
+                _ => Vector3.forward,
+            };
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Cfg == null || path.Map == null)
+                    throw new CaptureAbortException("The Reef built no BackyardPath to open the corridor from");
+
+                int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                WorldTransitionEntry entry = WorldTransitions.For(reefIndex);
+                if (entry == null) throw new CaptureAbortException("The Reef has no WorldTransitions entry into the Mothership");
+
+                WorldJoinSequence.OpenExitDoor(path.Cfg, path.Map, entry, fromWorldIndex: reefIndex, path.ExitGate);
+                for (int i = 0; i < 4; i++) yield return null;
+
+                if (FindFirstObjectByType<WorldJoinSequence>() == null)
+                    throw new CaptureAbortException("WorldJoinSequence failed to build the exit corridor");
+
+                doorMouth = entry.ExitDoorMouth(path.Cfg);
+                wall = entry.ExitWall;
+
+                var player = FindFirstObjectByType<MaxWorlds.Player.PlayerController>();
+                if (player == null) throw new CaptureAbortException("no Max in the scene to place at the pod");
+                var cc = player.GetComponent<CharacterController>();
+
+                // WorldJoinSequence's own AwaitingCrossing -> CorridorWalk transition re-teleports Max to
+                // d=1 itself the instant he's a metre past the door -- cross that threshold FIRST and let
+                // it fire once, rather than fighting it (same sequencing BuildMv1126Ramp establishes).
+                if (cc != null) cc.enabled = false;
+                player.transform.position = new Vector3(doorMouth.x, player.transform.position.y, doorMouth.y) + OutwardDir(wall) * 2f;
+                if (cc != null) cc.enabled = true;
+                yield return null;   // WorldJoinSequence.Update() -> TickAwaitingCrossing -> BeginCorridorWalk
+
+                Vector3 atPod = new Vector3(doorMouth.x, player.transform.position.y, doorMouth.y) + OutwardDir(wall) * shotD;
+                if (cc != null) cc.enabled = false;
+                player.transform.position = atPod;
+                player.transform.rotation = Quaternion.LookRotation(OutwardDir(wall), Vector3.up);
+                if (cc != null) cc.enabled = true;
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance * 0.7f : 14f;
+                Vector3 focus = new Vector3(doorMouth.x, 1f, doorMouth.y) + OutwardDir(wall) * shotD;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            IEnumerator NoSetup(Camera cam) { yield break; }
+
+            return new CapturePreset
+            {
+                Key = "mv1229podlaunch",
+                LogTag = "[MV1229Capture]",
+                Flag = "-mv1229podlaunch",
+                ArmFile = "Temp/mv1229podlaunch.arm",
+                HeadlessMarker = "Temp/mv1229podlaunch.headless",
+                DoneFileName = "_mv1229podlaunch_done.txt",
+                Width = 1200,
+                Height = 800,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1229-pod-launch", NoSetup) },
             };
         }
 

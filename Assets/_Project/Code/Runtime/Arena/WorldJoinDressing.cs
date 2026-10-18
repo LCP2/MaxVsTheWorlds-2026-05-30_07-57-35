@@ -903,5 +903,88 @@ namespace MaxWorlds.Arena
             var frameRend = frame.GetComponent<Renderer>();
             if (frameRend != null) frameRend.sharedMaterial = StormdrainKit.Unlit(CityKit.NeonPink, "CityShutterFrame");
         }
+
+        // ================================================================== World 4 (Reef) -> World 5
+        // (Mothership) (MV-1229)
+        //
+        // The drop-pod launch: segment A (wet deck, d 0-10) and segment C (ship deck plating, d 22-30)
+        // both reuse DressHullSegment's own relative-position branch (the same ReefShip floor/wall
+        // re-skin, strip lights, observation window, accent lamp and bio-glow language MV-967 already
+        // established for the Reef's own ship-hull corridor) -- "Reef materials" and "ship deck plating"
+        // read as the same kit in this project's own vocabulary, and the Mothership's row itself still
+        // copies the Reef's Kit/Palette/GateSkin until MV-1230 lands its real ship kit. Segment B (the
+        // pod tube, d 10-22) is new: a standing ring wall around the walkway with two porthole discs
+        // PodLaunchPorthole drives from ocean blue to sky to star field as Max walks through it.
+
+        private const float PodWallThickness = 0.15f;
+        private const float PodRimHeightFraction = 0.65f;
+        private const float PodPortholeRadius = 0.6f;
+        private const float PodPortholeThickness = 0.06f;
+        private static readonly Color PodOceanBlue = new Color(0.102f, 0.282f, 0.482f);
+
+        /// <summary>Segment A (wet deck), B (pod tube) and C (ship deck plating) -- the Reef's own exit
+        /// row for MV-1229.</summary>
+        public static void DressExitPodLaunch(Transform segA, Transform segB, Transform segC,
+            Vector2 doorMouth, Wall wall, float wallHeight, WorldTransitionEntry entry, Transform player)
+        {
+            if (segA != null) DressHullSegment(segA, doorMouth, wall, wallHeight, 0f, entry.SegmentAEnd, isArrival: true);
+            if (segB != null) DressPodLaunchTube(segB, doorMouth, wall, wallHeight, entry.SegmentAEnd, entry.SegmentBEnd, player);
+            if (segC != null) DressHullSegment(segC, doorMouth, wall, wallHeight, entry.SegmentBEnd, entry.CorridorLength, isArrival: true);
+        }
+
+        /// <summary>The Mothership's own arrival shell -- the ship-deck language continued onto its stub,
+        /// scaled to the shell's own shorter length.</summary>
+        public static void DressArrivalPodLift(Transform arrivalRoot, Vector2 doorMouth, Wall wall, float wallHeight, float shellLength)
+        {
+            if (arrivalRoot != null) DressHullSegment(arrivalRoot, doorMouth, wall, wallHeight, 0f, shellLength, isArrival: true);
+        }
+
+        /// <summary>The pod itself: a standing ring wall (<see cref="WorldTransitionEntry.CorridorWidth"/>'s
+        /// own walkway stays open through its middle -- <see cref="PodRadius"/> is comfortably wider than
+        /// Max's own CharacterController, MV-1123's "Max keeps control the whole way" holds unchanged), a
+        /// floor ring marking its own footprint, and two porthole discs <see cref="PodLaunchPorthole"/>
+        /// drives from the tube's own d-span. No collider on any of it (dressing only, same contract every
+        /// kit here keeps) -- the walkway's own flat floor, already built by
+        /// <see cref="MaxWorlds.Intro.WorldJoinSequence.BuildSegment"/>, is what MV-1229's own "the pod
+        /// floor carries him" refers to.</summary>
+        private const float PodRadius = 1.3f;
+
+        private static void DressPodLaunchTube(Transform segB, Vector2 doorMouth, Wall wall, float wallHeight,
+            float dStart, float dEnd, Transform player)
+        {
+            float podD = (dStart + dEnd) * 0.5f;
+            float rimHeight = wallHeight * PodRimHeightFraction;
+            float outerRadius = PodRadius + PodWallThickness;
+            Vector3 rimBase = At(doorMouth, wall, podD, 0f, 0f);
+
+            var rim = new GameObject("Pod Rim");
+            rim.transform.SetParent(segB, false);
+            rim.transform.localPosition = rimBase + Vector3.up * (rimHeight * 0.5f);
+            rim.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Ring(PodRadius, outerRadius, rimHeight, 28);
+            rim.AddComponent<MeshRenderer>().sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, WorldMaterials.ReefMetalDark);
+
+            var floorRing = new GameObject("Pod Floor Ring");
+            floorRing.transform.SetParent(segB, false);
+            floorRing.transform.localPosition = rimBase + Vector3.up * 0.015f;
+            floorRing.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Ring(PodRadius - 0.1f, PodRadius, 0.02f, 28);
+            floorRing.AddComponent<MeshRenderer>().sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, WorldMaterials.ReefCircuitCyan);
+
+            var portholes = new Renderer[2];
+            int i = 0;
+            foreach (float side in new[] { 1f, -1f })
+            {
+                Vector3 pos = At(doorMouth, wall, podD, side * outerRadius, rimHeight * 0.55f);
+                var disc = new GameObject(side > 0f ? "Porthole N" : "Porthole S");
+                disc.transform.SetParent(segB, false);
+                disc.transform.localPosition = pos;
+                disc.transform.localRotation = Quaternion.LookRotation(AcrossDir(wall) * side, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+                disc.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Ring(0f, PodPortholeRadius, PodPortholeThickness, 20);
+                var rend = disc.AddComponent<MeshRenderer>();
+                rend.sharedMaterial = StormdrainKit.Unlit(PodOceanBlue, disc.name);
+                portholes[i++] = rend;
+            }
+
+            segB.gameObject.AddComponent<PodLaunchPorthole>().Configure(doorMouth, wall, dStart, dEnd, portholes, player);
+        }
     }
 }
