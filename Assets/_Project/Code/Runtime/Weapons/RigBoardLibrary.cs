@@ -23,6 +23,11 @@ namespace MaxWorlds.Weapons
         /// in place of UNDERTOW's; every other family is byte-for-byte World 3's own file.</summary>
         public const string CityResourcePath = "UI/rig_board.city";
 
+        /// <summary>MV-1210/MV-1225: the Mothership's own board — LIGHT MISSILE's PRIMARY family
+        /// (p_cnt/p_trk/p_dmg/p_rof/p_cap) in place of RICOCHET's; every other family is byte-for-byte
+        /// <c>rig_board.city.json</c>'s own file (that file's own <c>$comment</c>).</summary>
+        public const string ShipResourcePath = "UI/rig_board.ship";
+
         /// <summary>The <c>Resources</c> path for <paramref name="worldIndex"/>'s own board (MV-1142:
         /// read off <see cref="WorldCatalog"/>'s own row rather than a per-index lookup table, so a
         /// world inserted between two existing ones brings its own board with it).</summary>

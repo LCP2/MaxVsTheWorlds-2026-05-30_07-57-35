@@ -19,6 +19,7 @@ namespace MaxWorlds.Arena
         public const string Stormdrain = "stormdrain";
         public const string City = "city";
         public const string Reef = "reef";
+        public const string Mothership = "mothership";
     }
 
     /// <summary>Which dressing pass <c>BackyardPath.ApplyWorldMaterials</c> runs for a world's own kit
@@ -319,6 +320,15 @@ namespace MaxWorlds.Arena
         /// by 10 or 15%"): 13%, the middle of his range, applied as a 0.87x scale on every Stormdrain
         /// RIG price.</summary>
         private const float UpgradeCostScaleWorld2 = 0.87f;
+
+        /// <summary>MV-1225: the Mothership's own Sentinel body — white, hex #FFF4E0 (Lee, 17 Oct 2026).
+        /// Reused for <see cref="SentinelStyle.Accent"/> too — neither was given a separate tone.</summary>
+        private static readonly Color BodyColorMothership = new Color(1f, 0.9569f, 0.8784f);
+
+        /// <summary>MV-1225: the Mothership's own Sentinel bolt/eye — gold, hex #F3D27A (Lee, 17 Oct
+        /// 2026). Reused for <see cref="SentinelStyle.Eye"/> too, same "the eye moves with whatever the
+        /// turret actually fires" rule <see cref="EyeColor"/>'s own doc comment already follows.</summary>
+        private static readonly Color BoltColorMothership = new Color(0.9529f, 0.8235f, 0.4784f);
 
         private static IReadOnlyList<WorldDefinition> s_rows = BuildShippedRows();
 
@@ -673,6 +683,57 @@ namespace MaxWorlds.Arena
                 DevStart = DevStartLoadout.MaxedRig,
                 // MV-1185: MaxedRig maxes e_cel at the Reef's own board too (maxLevel 4, same as every
                 // other board), so Capacity resolves to 60 here as well -- 50% = 30.
+                DevStartParts = 30,
+                DevStartCells = 25,
+            },
+            new WorldDefinition
+            {
+                // MV-1225: World 5, the Mothership -- the fifth and last world (Lee, 17 Oct 2026). Ships
+                // as a one-area placeholder; the real 30-area Hangar Bay layout is MV-1232.
+                Id = WorldIds.Mothership,
+                ConfigKey = WorldLibrary.Mothership,
+                // Kit/GateSkin/Palette/Look/Music all reuse the Reef's for now (ticket's own "do not
+                // re-raise") -- the ship kit ticket (MV-1230) adds WorldKit.Ship and switches this row.
+                Palette = BiomePalette.Reef,
+                Look = BackyardLook.Default,
+                Kit = WorldKit.Reef,
+                GateSkin = WorldGateSkin.Reef,
+                Style = new SentinelStyle(BodyColorMothership, BodyColorMothership, BoltColorMothership, emissionFactor: 0.35f,
+                    boltColor: BoltColorMothership, boltThicknessScale: 1.6f),
+                FiresWaterBeam = false,
+                Music = MusicWorld.Reef,
+                RingAlphaScale = 1f,
+                GuideLightAccent = WorldMaterials.ReefLampViolet,
+                RigBoardResourcePath = RigBoardLibrary.ShipResourcePath,
+                // MV-1210: World 5's own primary is LIGHT MISSILE.
+                PrimaryWeapon = WeaponCatalog.PrimaryKind.LightMissile,
+                SecondaryWeapon = SecondaryKind.ShoulderRack,
+                // Orbitals (MV-1236) is a later ticket -- the rack is put away on arrival for now.
+                CarrySecondaryAcrossMorph = false,
+                SecondaryMysteryLockedOnMorph = true,
+                PrimarySplitSeeded = false,
+                FusionsEnabled = false,
+                // Economy multipliers copy the Reef row's values (ticket's own instruction).
+                PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
+                UpgradeCostScale = 1f,
+                PartsMultiplier = () => 1f,
+                SupercellCadenceAreas = 2,
+                RackModuleDropsHere = false,
+                BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
+                // MV-1225: a DoorOnly row with no exit door built yet -- the Bridge finale (a later
+                // ticket) is what actually wires this gate; ExitWall/ExitDoorPos only need to resolve a
+                // valid doorway against this ticket's own one-area placeholder config.
+                ExitMode = WorldExitMode.DoorOnly,
+                ExitWall = Wall.E,
+                ExitDoorPos = 0.5f,
+                Entry = null,
+                ExitDressing = ExitCorridorDressingKind.None,
+                // MV-1229 (the W4->W5 corridor) sets the real arrival dressing once Max can actually
+                // walk in from the Reef -- this row has no corridor yet.
+                ArrivalDressing = ArrivalDressingKind.None,
+                RunsLegacyExitGate = false,
+                // MV-1185/Lee 14 Oct: a DEV jump starts with what a typical player would carry.
+                DevStart = DevStartLoadout.PreviousWorldExitRig,
                 DevStartParts = 30,
                 DevStartCells = 25,
             },

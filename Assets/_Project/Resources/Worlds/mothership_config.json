@@ -1,0 +1,95 @@
+{
+  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
+  "world": "World 5 — The Mothership",
+  "revision": "WORLD 5 V1 2026-10-18 (MV-1225): placeholder only -- one empty Hangar Bay area, 48x30m, no robots/machines/cover. The real 30-area Hangar Bay layout is MV-1232.",
+  "note": "MV-1225: data/wiring ticket only -- nothing here is judged by eye (no design image).",
+  "units": "1 world unit = 1 metre",
+  "wallHeight": 3,
+  "pressureNoun": "",
+  "pressureCaption": "",
+  "dials": {
+    "areaCount": 1,
+    "baseThreat": 20,
+    "threatGrowth": 0.1,
+    "band": {
+      "up": 0.4,
+      "down": -0.15
+    },
+    "pacingRhythm": [
+      1
+    ],
+    "toughnessCurve": {
+      "heavyFromArea": 99,
+      "bruteFromArea": 99,
+      "gunnerFromArea": 99,
+      "launcherFromArea": 99,
+      "blinkerFromArea": 99
+    },
+    "powerupCadence": 2
+  },
+  "enemyTypes": {
+    "small": {
+      "thv": 1.2
+    },
+    "large": {
+      "thv": 1.41
+    },
+    "heavy": {
+      "thv": 5.38
+    },
+    "brute": {
+      "thv": 8.53
+    }
+  },
+  "gates": [
+    {
+      "id": "g0",
+      "from": {
+        "area": "stub",
+        "wall": "E",
+        "pos": 0.5
+      },
+      "to": {
+        "area": "a1",
+        "wall": "W",
+        "pos": 0.266666666667
+      },
+      "width": 3,
+      "opensWith": "start"
+    }
+  ],
+  "areas": [
+    {
+      "id": "stub",
+      "index": 0,
+      "name": "Entry path",
+      "role": "entry",
+      "origin": {
+        "x": -3,
+        "z": 3
+      },
+      "size": {
+        "w": 8,
+        "d": 10
+      },
+      "hasShed": false,
+      "garrisonDensity": "none"
+    },
+    {
+      "id": "a1",
+      "index": 1,
+      "name": "Hangar Bay (placeholder)",
+      "role": "exit",
+      "origin": {
+        "x": 5,
+        "z": 0
+      },
+      "size": {
+        "w": 48,
+        "d": 30
+      },
+      "hasShed": false,
+      "garrisonDensity": "none"
+    }
+  ]
+}
