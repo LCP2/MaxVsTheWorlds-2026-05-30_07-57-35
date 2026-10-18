@@ -35,12 +35,20 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-800: World 2's shared stormdrain shoulder-band material — null for every other
         /// skin/world, in which case <see cref="RobotBodies.Build"/> builds no band at all. Optional so
-        /// every existing 4-argument caller (Sentinel, the EditMode tests) keeps compiling unchanged.</summary>
+        /// every existing 4-argument caller (Sentinel, the EditMode tests) keeps compiling unchanged.
+        /// MV-1231: also built (unconditionally, not skin-gated) for the Breaker's own hazard-striped
+        /// chassis band — see <see cref="RobotRig.BuildMaterials"/>.</summary>
         public readonly Material Hazard;
 
-        public RobotPalette(Material warm, Material cool, Material dark, Material gold, Material hazard = null)
+        /// <summary>MV-1231: the Breaker's own red ram-head knuckle accent — null for every other kind,
+        /// in which case <see cref="RobotBodies.BuildBreaker"/> (the only reader) would fall back to
+        /// <see cref="Warm"/>.</summary>
+        public readonly Material Accent;
+
+        public RobotPalette(Material warm, Material cool, Material dark, Material gold,
+                            Material hazard = null, Material accent = null)
         {
-            Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard;
+            Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard; Accent = accent;
         }
     }
 
@@ -81,6 +89,7 @@ namespace MaxWorlds.VFX
             var wheels = new List<Transform>(6);
             var legs = new List<Transform>(4);
             Transform inflatable = null;
+            Transform breakerChainPivot = null, breakerChainEnd = null, breakerWallAnchor = null;
             Transform visualRoot = VisualTrimRootFor(kind, root);
 
             if (skin == ReefSkinTag && TryBuildReef(kind, visualRoot, p, eyes, wheels, legs, out inflatable))
@@ -101,7 +110,8 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Charger:  BuildCharger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Dreadnought: BuildDreadnought(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Skitter:  BuildSkitter(visualRoot, p, eyes, wheels, legs); break;
-                case EnemyKind.Breaker:  BuildBreaker(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Breaker:  BuildBreaker(visualRoot, p, eyes, wheels, legs,
+                                              out breakerChainPivot, out breakerChainEnd, out breakerWallAnchor); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -112,7 +122,8 @@ namespace MaxWorlds.VFX
             // just built — never a silhouette change of its own (ticket AC4).
             if (skin == StormdrainSkinTag) AddStormdrainShoulderBand(kind, visualRoot, p);
 
-            return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
+            return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null,
+                            breakerChainPivot, breakerChainEnd, breakerWallAnchor);
         }
 
         /// <summary>MV-800: World 2's shared faction signature — a hazard-yellow band ringing every
@@ -177,9 +188,25 @@ namespace MaxWorlds.VFX
             /// and every non-Reef build.</summary>
             public readonly Transform Inflatable;
 
-            public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs, Transform inflatable = null)
+            /// <summary>MV-1231: the Breaker's own collar-chain assembly, null for every other kind.
+            /// <see cref="BreakerChainPivot"/> is the joint <see cref="MaxWorlds.VFX.RobotRig"/> rotates
+            /// from its built (taut) pose to <see cref="BreakerChainSlackLocalRotation"/> the instant
+            /// <see cref="MaxWorlds.Enemies.ChainSignals.ChainSnapped"/> fires for this robot;
+            /// <see cref="BreakerChainEnd"/> (the broken link, a child of the pivot) is what moves;
+            /// <see cref="BreakerWallAnchor"/> (a sibling of the pivot, under the same root, never
+            /// moves) is what it was pinned to. Built so that, at the pivot's authored TAUT rotation,
+            /// the end sits exactly on the anchor — see <see cref="BuildBreaker"/>.</summary>
+            public readonly Transform BreakerChainPivot;
+            public readonly Transform BreakerChainEnd;
+            public readonly Transform BreakerWallAnchor;
+
+            public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs, Transform inflatable = null,
+                        Transform breakerChainPivot = null, Transform breakerChainEnd = null,
+                        Transform breakerWallAnchor = null)
             {
                 Eyes = eyes; Wheels = wheels; Legs = legs; Inflatable = inflatable;
+                BreakerChainPivot = breakerChainPivot; BreakerChainEnd = breakerChainEnd;
+                BreakerWallAnchor = breakerWallAnchor;
             }
         }
 
@@ -687,16 +714,44 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(x, 2.2f, 0.63f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
         }
 
-        /// <summary>Breaker (MV-1228) — hand-authored, same exception as <see cref="BuildCharger"/>/
-        /// <see cref="BuildDreadnought"/>/<see cref="BuildSkitter"/> above, but ALSO a deliberate
-        /// placeholder: see the file-header EXCEPTION note. A wide, bent-leg stance under a tall
-        /// two-tone torso with long hanging arms reaching almost to the ground — "animal in stance,
-        /// machine in every part" (Lee, 17 Oct) read through plain lathe/prism/beam machine parts, no
-        /// organic shaping. Legs go through <see cref="AddLeg"/> like <see cref="BuildDreadnought"/>'s
-        /// so the shared gait driver can still animate its 1.2 m/s walk; the look ticket (MV-1231) is
-        /// free to replace any part of this wholesale.</summary>
+        /// <summary>MV-1231: the pivot's authored TAUT local rotation — the chain pulled straight back
+        /// to <see cref="BuildBreaker"/>'s wall anchor, while the Breaker is still <c>Dormant</c>.
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> restores a pooled Breaker to this on every respawn
+        /// (<c>OnEnable</c>), so a reused GameObject wakes up chained again, not still slack from its
+        /// last life.</summary>
+        public static readonly Quaternion BreakerChainTautLocalRotation = Quaternion.Euler(58f, 10f, 12f);
+
+        /// <summary>MV-1231: the pivot's local rotation once <see cref="MaxWorlds.Enemies.ChainSignals.ChainSnapped"/>
+        /// fires — the chain hanging under its own weight, well clear of the wall anchor it was pinned
+        /// to a moment before. <see cref="MaxWorlds.VFX.RobotRig"/> swings the pivot here and leaves it;
+        /// the "swings" half of the ticket's own wording is the one-time swing TO this rest pose, not a
+        /// continuous pendulum — Phase B's tight-slice discipline (CC_AUTONOMY.md) cuts the continuous
+        /// version rather than growing this ticket into a physics feature.</summary>
+        public static readonly Quaternion BreakerChainSlackLocalRotation = Quaternion.Euler(15f, 0f, -8f);
+
+        /// <summary>Breaker (MV-1228 placeholder, MV-1231 the real look) — "animal in stance, machine
+        /// in every part" (Lee, 17 Oct): a hunched chassis wider than its legs, two long forearms
+        /// reaching the floor with red ram-head knuckles, two shorter hind legs, a low forward head with
+        /// one big off-centre gold eye in a dark bezel, a hazard-striped chassis band, and a steel collar
+        /// with a 7-link chain pinned taut to a wall anchor until <see cref="MaxWorlds.Enemies.ChainSignals.ChainSnapped"/>
+        /// fires. Legs go through <see cref="AddLeg"/> like <see cref="BuildDreadnought"/>'s so the
+        /// shared gait driver can still animate its 1.2 m/s walk.
+        ///
+        /// Individual chain links are sub-pixel at the play camera's ~48 px/m (docs/DECISIONS.md) — what
+        /// has to read is the chain AS A SHAPE (a thin line off the collar), not any one link, so the
+        /// "broken" 7th link is not modelled as literally open; it only has to exist as a position for
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> to swing.
+        ///
+        /// Deliberately cut, per the ticket's own "Tells" bullets, noted rather than chased (MV-465/
+        /// DECISIONS.md "cap capture loops at one"; CC_AUTONOMY.md tight-slice discipline): the ram's
+        /// own steam-vent puff and a stun-specific eye flicker are not built here. The press-punch
+        /// arm-draw-back is NOT a gap — every kind's wind-up already pulls the whole body back
+        /// (<see cref="MaxWorlds.VFX.RobotRig.strikeWindupPullback"/>), which already reads as the
+        /// Breaker's one committed arm drawing back since its punch telegraph is this same generic
+        /// wind-up.</summary>
         private static void BuildBreaker(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs,
+                                    out Transform chainPivot, out Transform chainEnd, out Transform wallAnchor)
         {
             // Two short, thick bent legs, wide stance — hip ~0.75m up, feet splayed to ~0.5m either
             // side, the same beam+foot+AddLeg grouping BuildDreadnought's legs use for gait.
@@ -709,29 +764,110 @@ namespace MaxWorlds.VFX
                 legs.Add(AddLeg(root, legBeam, legFoot, 0.375f));
             }
 
-            // The torso — p.Cool lower half, p.Warm upper half, tapering toward a short neck, the same
-            // two-lathe-half idiom as every other kind, scaled to the ticket's own ~2.2 m body height.
+            // The torso — p.Cool lower half, p.Warm upper half (now the Breaker's own rust, CharacterSkin
+            // MV-1231), tapering toward a short neck: the ticket's own "rust/teal halves split by one
+            // hard line", the same two-lathe-half idiom as every other kind, scaled to its ~2.2 m height.
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.5f, 0.72f), new Vector2(0.75f, 0.92f), new Vector2(0.85f, 1.12f), new Vector2(0.82f, 1.3f) }, 24), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.82f, 1.3f), new Vector2(0.78f, 1.55f), new Vector2(0.55f, 1.82f), new Vector2(0.3f, 2.0f) }, 24), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
 
-            // The head — a small chamfered block riding the neck, with the one red eye lens on its
-            // forward face.
-            Add(root, CharacterMeshes.Prism(6, 0.28f, 0.22f, 0.26f, 0.2f, 0f), p.Dark, new Vector3(0f, 2.1f, 0f), Quaternion.identity, Vector3.one);
-            eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0f, 2.12f, 0.22f), Quaternion.identity, new Vector3(0.18f, 0.18f, 0.07f)));
+            // MV-800/MV-1231: the hazard-striped chassis band — built unconditionally for the Breaker
+            // (not skin-gated the way World 2's own stormdrain band is), reusing the same shared
+            // hazard-yellow material/geometry helper rather than authoring a second one.
+            AddStormdrainShoulderBand(EnemyKind.Breaker, root, p);
 
-            // Two long hanging arms — gorilla-proportioned, shoulder to a knuckle near the ground —
-            // the widest part of the body (the ticket's own 2.4 m), reaching the punch's own forward arc.
+            // The head — low and forward (not centred over the hips, an ape's head leads), a small
+            // chamfered block with one big OFF-CENTRE gold eye in a dark bezel on its forward face.
+            Add(root, CharacterMeshes.Prism(6, 0.28f, 0.22f, 0.26f, 0.2f, 0f), p.Dark, new Vector3(0f, 2.02f, 0.1f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Prism(10, 0.15f, 0.15f, 0.05f, 0.02f), p.Dark,
+                new Vector3(0.07f, 2.04f, 0.33f), Quaternion.identity, Vector3.one, "EyeBezel");
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0.07f, 2.04f, 0.35f), Quaternion.identity, new Vector3(0.21f, 0.21f, 0.08f)));
+
+            // Two long hanging arms — gorilla-proportioned, shoulder to a knuckle near the ground, red
+            // ram-head knuckles (the ticket's own accent, falls back to Warm if a caller passes none) —
+            // the widest part of the body, tuned to the ticket's own 2.4 m (MV-1231 AC1).
+            const float armSpan = 0.83f;
             for (int side = -1; side <= 1; side += 2)
             {
                 Add(root, CharacterMeshes.Prism(6, 0.32f, 0.26f, 0.42f, 0.18f, 0f), p.Warm,
-                    new Vector3(side * 0.95f, 1.62f, 0f), Quaternion.Euler(0f, 0f, side * -20f), Vector3.one, "Shoulder");
+                    new Vector3(side * 0.95f * armSpan, 1.62f, 0f), Quaternion.Euler(0f, 0f, side * -20f), Vector3.one, "Shoulder");
                 Add(root, CharacterMeshes.Beam(0.75f, 0.2f, 0.16f, 8), p.Dark,
-                    new Vector3(side * 1.1f, 1.2f, 0.05f), Quaternion.Euler(8f, 0f, side * 8f), Vector3.one, "UpperArm");
+                    new Vector3(side * 1.1f * armSpan, 1.2f, 0.05f), Quaternion.Euler(8f, 0f, side * 8f), Vector3.one, "UpperArm");
                 Add(root, CharacterMeshes.Beam(0.7f, 0.17f, 0.2f, 8), p.Dark,
-                    new Vector3(side * 1.2f, 0.5f, 0.1f), Quaternion.Euler(-4f, 0f, side * 4f), Vector3.one, "Forearm");
-                Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.21f, 0f), new Vector2(0.23f, 0.1f), new Vector2(0.18f, 0.2f) }, 12), p.Dark,
-                    new Vector3(side * 1.22f, 0.12f, 0.12f), Quaternion.identity, Vector3.one, "Fist");
+                    new Vector3(side * 1.2f * armSpan, 0.5f, 0.1f), Quaternion.Euler(-4f, 0f, side * 4f), Vector3.one, "Forearm");
+                Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.21f, 0f), new Vector2(0.23f, 0.1f), new Vector2(0.18f, 0.2f) }, 12), p.Accent != null ? p.Accent : p.Warm,
+                    new Vector3(side * 1.22f * armSpan, 0.12f, 0.12f), Quaternion.identity, Vector3.one, "Fist");
             }
+
+            BuildBreakerChain(root, p, out chainPivot, out chainEnd, out wallAnchor);
+        }
+
+        /// <summary>MV-1231: the steel collar and its 7-link chain, pinned taut to a wall anchor until
+        /// the Breaker wakes — see the doc comments on <see cref="BreakerChainTautLocalRotation"/>/
+        /// <see cref="BreakerChainSlackLocalRotation"/> for how <see cref="MaxWorlds.VFX.RobotRig"/>
+        /// releases it. The anchor's position is DERIVED from the pivot's own taut transform (never
+        /// hand-matched), so the chain's end provably sits ON the anchor the instant this builds —
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> never has to assume the two numbers agree.</summary>
+        private static void BuildBreakerChain(Transform root, in RobotPalette p,
+            out Transform chainPivot, out Transform chainEnd, out Transform wallAnchor)
+        {
+            const int linkCount = 7;
+            const float linkLength = 0.11f;
+            // 0.028 (half the current value) measured invisible in the AC3 capture — the chain hung at
+            // too small a Z offset to clear the torso's own 0.82m-radius bulge at y~1.3, so most of its
+            // length sat inside the torso mesh rather than out in front of it, and what little showed
+            // was too thin to read even once the taut rotation (below) was widened to clear it.
+            const float linkRadius = 0.045f;
+            float chainLength = linkCount * linkLength;
+            var pivotLocalPos = new Vector3(0.08f, 1.85f, 0.3f);
+
+            // The collar — a steel ring around the neck, p.Dark (every joint/cable on the roster wears
+            // this near-black, and a collar is exactly that kind of part). CharacterMeshes.Ring is
+            // already flat in XZ (thin along Y) — its natural, UNROTATED orientation IS "a washer the
+            // vertical neck passes through"; rotating it 90 degrees (an earlier version of this code
+            // did) turns it into a vertical disc spanning Y instead, which is what blew MV-1231 AC1's
+            // 2.2m height budget by 0.22m (measured via cc-test.bat). Sized to clear the torso lathe's
+            // own neck radius at y=1.9 (~0.44m — see BuildBreaker's upper-torso profile).
+            Add(root, CharacterMeshes.Ring(0.45f, 0.53f, 0.05f, 20), p.Dark,
+                new Vector3(0f, 1.9f, 0f), Quaternion.identity, Vector3.one, "Collar");
+
+            var pivotGo = new GameObject("ChainPivot");
+            pivotGo.transform.SetParent(root, worldPositionStays: false);
+            pivotGo.transform.localPosition = pivotLocalPos;
+            pivotGo.transform.localRotation = BreakerChainTautLocalRotation;
+            chainPivot = pivotGo.transform;
+
+            Mesh linkMesh = CharacterMeshes.Beam(linkLength * 0.9f, linkRadius, linkRadius, 6);
+            for (int i = 0; i < linkCount; i++)
+            {
+                // Alternating 90-degree twist is the classic chain-link read, cheap on a shared mesh —
+                // sub-pixel individually (docs/DECISIONS.md), reads as a chain in aggregate.
+                Add(chainPivot, linkMesh, p.Dark,
+                    new Vector3(0f, -((i + 0.5f) * linkLength), 0f),
+                    Quaternion.Euler(0f, (i % 2) * 90f, 90f), Vector3.one, i == linkCount - 1 ? "ChainEndLink" : "ChainLink");
+            }
+
+            // The chain's own measurable END — an unrendered marker, not one of the visual links above,
+            // so its position is EXACTLY chainLength down the pivot's local -Y (what the anchor below is
+            // also computed from) rather than a link's own centre, which sits half a link short of the
+            // tip. What MaxWorlds.VFX.RobotRig and MV1231BreakerLookTests both measure.
+            var chainEndGo = new GameObject("ChainEnd");
+            chainEndGo.transform.SetParent(chainPivot, worldPositionStays: false);
+            chainEndGo.transform.localPosition = new Vector3(0f, -chainLength, 0f);
+            chainEnd = chainEndGo.transform;
+
+            // The wall anchor — a bolted ring plate, fixed to ROOT (never the pivot, or releasing the
+            // chain would drag the anchor along with it). Positioned exactly where the pivot's own TAUT
+            // rotation puts the chain's end, so "taut" is geometrically true, not merely asserted.
+            Vector3 anchorLocalPos = pivotLocalPos + BreakerChainTautLocalRotation * (Vector3.down * chainLength);
+            var anchorGo = new GameObject("WallAnchor");
+            anchorGo.transform.SetParent(root, worldPositionStays: false);
+            anchorGo.transform.localPosition = anchorLocalPos;
+            wallAnchor = anchorGo.transform;
+
+            Add(wallAnchor, CharacterMeshes.Prism(4, 0.15f, 0.15f, 0.04f, 0.015f), p.Dark,
+                Vector3.zero, Quaternion.Euler(0f, 45f, 0f), Vector3.one, "AnchorPlate");
+            Add(wallAnchor, CharacterMeshes.Ring(0.06f, 0.11f, 0.03f, 14), p.Dark,
+                Vector3.zero, Quaternion.identity, Vector3.one, "AnchorRing");
         }
 
         // ------------------------------------------------------------------ plumbing
