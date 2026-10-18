@@ -57,7 +57,11 @@ namespace MaxWorlds.Tests.EditMode
             // --- catalog order and internal soundness ---
             Assert.AreEqual(stormdrainIndex + 1, cityIndex, "the City must sit directly after the Stormdrain");
             Assert.AreEqual(cityIndex + 1, reefIndex, "the Reef must sit directly after the City");
-            Assert.AreEqual(reefIndex + 1, WorldCatalog.Count, "the Reef must still be the last row");
+            // MV-1225: the Mothership is now the last row, one place further out than the Reef.
+            Assert.AreEqual(reefIndex + 1, WorldCatalog.IndexOf(WorldIds.Mothership),
+                "the Mothership must sit directly after the Reef");
+            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Mothership) + 1, WorldCatalog.Count,
+                "the Mothership must be the last row");
             Assert.IsEmpty(WorldCatalog.Validate(), "the shipped rows (City included) must carry no problems");
 
             // --- resolved transition geometry ---

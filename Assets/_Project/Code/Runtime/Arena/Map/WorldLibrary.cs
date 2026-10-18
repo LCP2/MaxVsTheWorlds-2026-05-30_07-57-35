@@ -31,6 +31,10 @@ namespace MaxWorlds.Arena
         /// this is now World 4 — the City was inserted ahead of it without renaming either.</summary>
         public const string World3 = "world3_config";
 
+        /// <summary>World 5 — The Mothership (MV-1225), the last world. Ships as a one-area placeholder
+        /// (the real 30-area Hangar Bay layout is MV-1232).</summary>
+        public const string Mothership = "mothership_config";
+
         /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
         /// <see cref="MaxWorlds.Save.SaveSlotData.WorldIndex"/> counts against. MV-1141: read off
         /// <see cref="WorldCatalog"/> rather than its own literal array, so there is one list.</summary>

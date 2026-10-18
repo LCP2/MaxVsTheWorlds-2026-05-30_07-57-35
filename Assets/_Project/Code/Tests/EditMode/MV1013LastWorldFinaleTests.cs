@@ -144,7 +144,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World3FinalBossDeath_DropsCoreAndOpensDoor_WithoutRequiringA30sOtherRobotsDead()
         {
-            int worldIndex = WorldCatalog.Count - 1; // World 3 -- the last entry in WorldLibrary
+            // MV-1225: World 3 (the Reef) is no longer the last catalog entry -- the Mothership is --
+            // so its own index must be resolved by id, not derived from WorldCatalog.Count.
+            int worldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
             GameObject root = null, pathGo = null, playerGo = null, payoffGo = null, trackerGo = null, gateGo = null;
             RobotEnemy[] otherRobots = null;
 
