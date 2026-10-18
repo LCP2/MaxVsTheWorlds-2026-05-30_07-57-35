@@ -389,11 +389,20 @@ namespace MaxWorlds.Core
         /// <see cref="MaxWorlds.Audio.MusicDirector.DefaultMusicVolume"/> (0.5).</summary>
         public static float? MusicVolume { get; set; }
 
-        /// <summary>Bitmask of muted SFX cues (MV-1009): bit <c>1 &lt;&lt; (int)cue</c> set means that
-        /// cue is OFF. Default 0 (every cue ON) — every <see cref="MaxWorlds.Audio.SfxCueLibrary.Cue"/>
-        /// ordinal fits inside a float's 24-bit mantissa with headroom to grow. See
+        /// <summary>Bitmask of muted SFX cues, ordinals 0-23 (MV-1009): bit <c>1 &lt;&lt; (int)cue</c>
+        /// set means that cue is OFF. Default 0 (every cue ON) — a float's mantissa only represents
+        /// integers exactly up to 2^24, so this covers ordinals 0-23 and
+        /// <see cref="MutedSfxCuesMaskHigh"/> (MV-1237) covers the rest. See
         /// <see cref="MaxWorlds.Audio.SfxDirector.IsCueMuted"/>.</summary>
         public static float? MutedSfxCuesMask { get; set; }
+
+        /// <summary>MV-1237: the muted-cue bitmask's overflow half — bit <c>1 &lt;&lt; (ordinal - 24)</c>
+        /// for every <see cref="MaxWorlds.Audio.SfxCueLibrary.Cue"/> ordinal 24 and up. Needed once the
+        /// Mothership's own cues pushed the cue count past 32 (<see cref="MutedSfxCuesMask"/> alone
+        /// can address only ordinals 0-31 before <c>1 &lt;&lt; (int)cue</c> wraps and collides with a
+        /// low cue, and only 0-23 before it loses float-exact precision) — a second mask, not a wider
+        /// int, keeps every existing player's saved low-mask bits valid as-is.</summary>
+        public static float? MutedSfxCuesMaskHigh { get; set; }
 
         /// <summary>Music on/off (MV-1009), 0/1 like <see cref="GateRequiresClear"/>. Default 1 (on) —
         /// the Settings panel's SOUND-tab Music toggle, beside <see cref="MusicVolume"/>.</summary>
@@ -456,7 +465,7 @@ namespace MaxWorlds.Core
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
             SfxVolume.HasValue || MusicVolume.HasValue ||
-            MutedSfxCuesMask.HasValue || MusicOn.HasValue;
+            MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -550,6 +559,7 @@ namespace MaxWorlds.Core
             SfxVolume = null;
             MusicVolume = null;
             MutedSfxCuesMask = null;
+            MutedSfxCuesMaskHigh = null;
             MusicOn = null;
         }
 
@@ -652,6 +662,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(SfxVolume), () => SfxVolume, v => SfxVolume = v),
             (PrefsPrefix + nameof(MusicVolume), () => MusicVolume, v => MusicVolume = v),
             (PrefsPrefix + nameof(MutedSfxCuesMask), () => MutedSfxCuesMask, v => MutedSfxCuesMask = v),
+            (PrefsPrefix + nameof(MutedSfxCuesMaskHigh), () => MutedSfxCuesMaskHigh, v => MutedSfxCuesMaskHigh = v),
             (PrefsPrefix + nameof(MusicOn), () => MusicOn, v => MusicOn = v),
         };
 

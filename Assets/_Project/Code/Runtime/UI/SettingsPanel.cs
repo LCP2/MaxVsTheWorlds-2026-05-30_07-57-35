@@ -975,7 +975,12 @@ namespace MaxWorlds.UI
                 // The page's height is a fixed RowH*5 (below), so every tab must fit within 5 rows —
                 // pick the fewest columns that keeps rowsPerCol <= 5, rather than the old fixed
                 // 2/3/4-column ladder, since WV-234's ENEMIES tab (23 knobs) needs a 5th column.
-                int cols = Mathf.Clamp(Mathf.CeilToInt(totalRows / 5f), 2, 6);
+                // MV-1237: upper bound raised 6 -> 9 for the SOUND tab's 38 cues (2 sliders + Music +
+                // ALL ON/OFF + 38 toggles = 43 rows; 6 columns would need 8 rows per column, pushing
+                // the footer below the phone-height ceiling this clamp exists to protect — see the
+                // comment above). No other tab's own totalRows needs more than 6, so this is a no-op
+                // for all of them.
+                int cols = Mathf.Clamp(Mathf.CeilToInt(totalRows / 5f), 2, 9);
                 float colW = (PanelW - Pad * 2f - ColGap * (cols - 1)) / cols;
                 int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(totalRows / (float)cols));
                 maxRows = Mathf.Max(maxRows, rowsPerCol);

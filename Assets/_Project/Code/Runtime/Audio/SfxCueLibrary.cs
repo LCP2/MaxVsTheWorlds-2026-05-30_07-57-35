@@ -37,9 +37,26 @@ namespace MaxWorlds.Audio
             ForceFieldPop,
             UiClick,
             UndertowLoop,    // MV-1136: Undertow.IsEmitting — polled, same as HoseLoop.
-            SentinelArrived, // MV-1159: must stay LAST (SfxDirector.IsCueMuted masks by 1 << (int)cue;
-                              // inserting a cue anywhere but the end would shift every existing
-                              // player's mute switches).
+            SentinelArrived, // MV-1159: must stay before every cue added after it (SfxDirector.IsCueMuted
+                              // masks by 1 << (int)cue; inserting a cue anywhere but the end would shift
+                              // every existing player's mute switches) — appending new cues after it is
+                              // fine, only inserting one BEFORE it would shift its own ordinal.
+
+            // MV-1237: the Mothership's own ship/robot cues — appended, never inserted, per the note above.
+            LightMissileLaunch,
+            LightMissileHit,
+            OrbitalsHit,
+            CradleBuildTick,
+            CradleStepOut,
+            CradleDestroyed,
+            SkitterHop,
+            BreakerChainSnap,
+            BreakerPunch,
+            BreakerRam,
+            TractorBeam,
+            VentFire,
+            HelmsmanLensSweep,
+            ViewportRising,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -73,6 +90,22 @@ namespace MaxWorlds.Audio
             { Cue.UiClick, "UI click" },
             { Cue.UndertowLoop, "Beam loop" },
             { Cue.SentinelArrived, "Sentinel arrival" },
+
+            // MV-1237: the Mothership's own ship/robot cues.
+            { Cue.LightMissileLaunch, "Light Missile launch" },
+            { Cue.LightMissileHit, "Light Missile hit" },
+            { Cue.OrbitalsHit, "Orbitals hit" },
+            { Cue.CradleBuildTick, "Cradle build tick" },
+            { Cue.CradleStepOut, "Cradle step-out" },
+            { Cue.CradleDestroyed, "Cradle destroyed" },
+            { Cue.SkitterHop, "Skitter hop" },
+            { Cue.BreakerChainSnap, "Breaker chain snap" },
+            { Cue.BreakerPunch, "Breaker punch" },
+            { Cue.BreakerRam, "Breaker ram" },
+            { Cue.TractorBeam, "Tractor beam" },
+            { Cue.VentFire, "Vent fire" },
+            { Cue.HelmsmanLensSweep, "Helmsman lens sweep" },
+            { Cue.ViewportRising, "Viewport rising" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -102,6 +135,21 @@ namespace MaxWorlds.Audio
             { Cue.ForceFieldPop, 16 },
             { Cue.UiClick, 15 },
             { Cue.SentinelArrived, 4 }, // MV-1159: lets two Sentinels arriving close together both be heard
+
+            // MV-1237: the Mothership's own ship/robot cues.
+            { Cue.LightMissileLaunch, 10 },
+            { Cue.LightMissileHit, 8 },
+            { Cue.OrbitalsHit, 12 },
+            { Cue.CradleBuildTick, 4 },
+            { Cue.CradleStepOut, 4 },
+            { Cue.CradleDestroyed, 16 },
+            { Cue.SkitterHop, 8 },
+            { Cue.BreakerChainSnap, 6 },
+            { Cue.BreakerPunch, 8 },
+            { Cue.BreakerRam, 6 },
+            { Cue.VentFire, 10 },
+            { Cue.HelmsmanLensSweep, 6 },
+            { Cue.ViewportRising, 4 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -282,6 +330,98 @@ namespace MaxWorlds.Audio
                 P(SfxWaveform.Sine, freq: 150f, slide: 2200f, attack: 0.05f, sustain: 0.4f, decay: 0.3f, volume: 0.95f),
                 P(SfxWaveform.Noise, attack: 0.01f, sustain: 0.1f, decay: 0.4f, lowPass: 2000f, volume: 0.95f, seed: 11),
                 P(SfxWaveform.Sine, freq: 60f, slide: -15f, attack: 0.01f, sustain: 0.05f, decay: 0.5f, volume: 0.95f),
+            },
+
+            // MV-1237: the Mothership's own ship/robot cues.
+
+            // "whoosh with a magenta-toned rising edge" — a brighter, faster slide than the
+            // Shoulder Rack's plain RocketMuzzle whoosh, so Light Missile reads as its own weapon.
+            [Cue.LightMissileLaunch] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.02f, sustain: 0.01f, decay: 0.07f, lowPass: 4200f, volume: 0.5f, seed: 12),
+            },
+
+            // "sharp magenta impact" — shares RocketImpact's crunchy-pop shape, brighter low-pass.
+            [Cue.LightMissileHit] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.1f, lowPass: 2400f, volume: 0.75f, seed: 13),
+            },
+
+            // "bright metallic tink" — the gold orbs' own contact beat.
+            [Cue.OrbitalsHit] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 1400f, slide: -200f, attack: 0.001f, sustain: 0.01f, decay: 0.08f, volume: 0.5f),
+            },
+
+            // "soft mechanical tick" — the gantry's own build-stage advance, not a hit.
+            [Cue.CradleBuildTick] = new[]
+            {
+                P(SfxWaveform.Square, freq: 700f, attack: 0.002f, sustain: 0.005f, decay: 0.03f, duty: 0.2f, volume: 0.4f),
+            },
+
+            // "clank + servo whine" — the finished robot stepping off the bay onto the out pad.
+            [Cue.CradleStepOut] = new[]
+            {
+                P(SfxWaveform.Square, freq: 220f, attack: 0.002f, sustain: 0.02f, decay: 0.05f, duty: 0.35f, volume: 0.5f),
+                P(SfxWaveform.Sine, freq: 900f, slide: -400f, attack: 0.01f, sustain: 0.02f, decay: 0.08f, volume: 0.4f),
+            },
+
+            // shares FactoryDestroyed's "big noise explosion" character — the cradle is the Mothership's
+            // own factory tier (same CradleHealth as MowerHutch/Replicator).
+            [Cue.CradleDestroyed] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.005f, sustain: 0.05f, decay: 0.55f, lowPass: 1300f, volume: 0.9f, seed: 14),
+            },
+
+            // "quick skittering hop" — a short noise burst with a rising pitch, insect-like.
+            [Cue.SkitterHop] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.002f, sustain: 0.01f, decay: 0.04f, lowPass: 5000f, volume: 0.45f, seed: 15),
+            },
+
+            // "metallic chain rattle + snap" — the Breaker's collar breaking free.
+            [Cue.BreakerChainSnap] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.03f, decay: 0.1f, lowPass: 6000f, volume: 0.6f, seed: 16),
+                P(SfxWaveform.Square, freq: 500f, slide: -250f, attack: 0.001f, sustain: 0.01f, decay: 0.06f, duty: 0.3f, volume: 0.55f),
+            },
+
+            // "heavy fist thud" — lower and shorter than BreakerRam.
+            [Cue.BreakerPunch] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 140f, slide: -40f, attack: 0.001f, sustain: 0.01f, decay: 0.1f, volume: 0.75f),
+            },
+
+            // "big body-slam crash" — louder and longer than BreakerPunch, with a noise crunch layered in.
+            [Cue.BreakerRam] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 90f, slide: -25f, attack: 0.002f, sustain: 0.03f, decay: 0.25f, volume: 0.85f),
+                P(SfxWaveform.Noise, attack: 0.002f, sustain: 0.02f, decay: 0.2f, lowPass: 1800f, volume: 0.7f, seed: 17),
+            },
+
+            // "sustained electromagnetic hum" — a pulsing saw drone, meant to be looped by whatever plays
+            // it, same "fallback preset, loop behaviour lives on the caller" shape as HoseLoop/UndertowLoop.
+            [Cue.TractorBeam] = new[]
+            {
+                P(SfxWaveform.Saw, freq: 180f, vibDepth: 20f, vibRate: 6f, attack: 0.05f, sustain: 0.3f, decay: 0.05f, lowPass: 2200f, volume: 0.4f),
+            },
+
+            // "gas vent hiss/burst" — shares DamageDealt's noise-tss shape, longer and lower.
+            [Cue.VentFire] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.01f, sustain: 0.15f, decay: 0.2f, lowPass: 3500f, volume: 0.5f, seed: 18),
+            },
+
+            // "lens sweep" — a slow rising-then-falling sine sweep, a scanner reading the room.
+            [Cue.HelmsmanLensSweep] = new[]
+            {
+                P(SfxWaveform.Sine, freq: 300f, slide: 260f, attack: 0.1f, sustain: 0.08f, decay: 0.2f, volume: 0.35f),
+            },
+
+            // "mechanical rising groan" — the viewport glass lifting into place, dull and slow.
+            [Cue.ViewportRising] = new[]
+            {
+                P(SfxWaveform.Square, freq: 70f, slide: 50f, attack: 0.1f, sustain: 0.15f, decay: 0.15f, lowPass: 900f, duty: 0.3f, volume: 0.55f),
             },
         };
 

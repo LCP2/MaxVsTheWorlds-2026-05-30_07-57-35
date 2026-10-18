@@ -7,7 +7,7 @@ namespace MaxWorlds.Audio
     /// <summary>Which world's loop/intensity layer to render (MV-1008) — matches
     /// <see cref="MaxWorlds.Arena.Map.WorldLibrary.Keys"/>'s 0-based ordering, so a caller holding
     /// <c>BackyardPath.ResolvedWorldIndex</c> converts with a plain cast/clamp.</summary>
-    public enum MusicWorld { Backyard = 0, Stormdrain = 1, Reef = 2 }
+    public enum MusicWorld { Backyard = 0, Stormdrain = 1, Reef = 2, Mothership = 3 }
 
     /// <summary>
     /// MV-1008: procedural music, same "nothing originated by Lee, no outside tools" idiom as
@@ -107,6 +107,19 @@ namespace MaxWorlds.Audio
                 HasKick = false, HasHat = false, ShuffleHat = false, HatLowpassHz = 0f,
                 BassWaveform = SfxWaveform.Sine, LeadWaveform = SfxWaveform.Sine,
                 LeadOctaveMultiplier = 4f, LeadSlotBeats = 3f, LeadNoteChance = 0.35f, Seed = 21608,
+            },
+            // World 5 Mothership (MV-1237): E minor, 60 BPM — slower and colder than the Reef. A low,
+            // near-static drone (duller pad, little detune, no swell), sparse metallic hits (the bright
+            // low-passed hat, same "metallic" register as Stormdrain's) and a pulsing square-wave synth
+            // lead (shorter slot, higher note chance than the Reef's sparse bell) instead of its swell.
+            new WorldSpec
+            {
+                Bpm = 60f, BassRootHz = 82.41f /* E2 */, Scale = NaturalMinor,
+                Progression = new[] { 0, 0, 0, 0, 5, 5, 0, 0 },
+                PadDegreeOffset = 5, PadDetuneCents = 3f, PadLowpassHz = 500f, PadSwell = false,
+                HasKick = false, HasHat = true, ShuffleHat = false, HatLowpassHz = 9000f,
+                BassWaveform = SfxWaveform.Sine, LeadWaveform = SfxWaveform.Square,
+                LeadOctaveMultiplier = 2f, LeadSlotBeats = 2f, LeadNoteChance = 0.5f, Seed = 22608,
             },
         };
 

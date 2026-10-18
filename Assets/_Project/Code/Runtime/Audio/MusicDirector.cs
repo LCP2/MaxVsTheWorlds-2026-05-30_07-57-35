@@ -49,14 +49,19 @@ namespace MaxWorlds.Audio
         private AudioSource _mainSource;
         private AudioSource _intensitySource;
 
-        private readonly AudioClip[] _loopCache = new AudioClip[3];
-        private readonly AudioClip[] _intensityCache = new AudioClip[3];
+        // MV-1237: sized off MusicWorld's own value count (now 4, with Mothership) rather than the
+        // old hardcoded 3 — these are indexed by (int)world for every world, generated or not, so a
+        // world past the old bound would index out of range the first time its music ever switched in.
+        private static readonly int WorldCount = System.Enum.GetValues(typeof(MusicWorld)).Length;
+
+        private readonly AudioClip[] _loopCache = new AudioClip[WorldCount];
+        private readonly AudioClip[] _intensityCache = new AudioClip[WorldCount];
 
         // MV-1137: generated tracks per world, checked once and cached (null = not generated for this
         // world, fall back to the synthesised path — see EnsureGeneratedLoaded).
-        private readonly AudioClip[] _generatedExploreCache = new AudioClip[3];
-        private readonly AudioClip[] _generatedBossCache = new AudioClip[3];
-        private readonly bool[] _generatedChecked = new bool[3];
+        private readonly AudioClip[] _generatedExploreCache = new AudioClip[WorldCount];
+        private readonly AudioClip[] _generatedBossCache = new AudioClip[WorldCount];
+        private readonly bool[] _generatedChecked = new bool[WorldCount];
         private bool _generatedModeActive;
         private SeamLoopPlayer _exploreGenerated;
         private SeamLoopPlayer _bossGenerated;
@@ -134,6 +139,10 @@ namespace MaxWorlds.Audio
         // loopEndSeconds alongside the BPM used to derive them — keep these two in sync by hand, the
         // manifest isn't read at runtime. Index = (int)MusicWorld. Values are the last whole bar before
         // each track's tail (or before clip end, for the two tracks with no detected tail).
+        // MV-1237: deliberately still length 3 — the Mothership has no generated track in the
+        // manifest, so EnsureGeneratedLoaded always caches null for it and SwitchToWorld/OnBossEngaged
+        // never read these two arrays at index 3 (both are only reached once a generated clip is
+        // actually found for the world in question).
         private static readonly float[] ExploreLoopEndSeconds =
         {
             Bars(35, 96f),   // Backyard_explore: no tail detected, last whole bar before the 90.04s clip end
