@@ -702,9 +702,10 @@ namespace MaxWorlds.Arena
                 // as a one-area placeholder; the real 30-area Hangar Bay layout is MV-1232.
                 Id = WorldIds.Mothership,
                 ConfigKey = WorldLibrary.Mothership,
-                // GateSkin/Palette/Look/Music still reuse the Reef's (ticket's own "do not re-raise" --
-                // the 30-area Hangar Bay layout, and any gate/palette pass it needs, is MV-1232's job).
+                // GateSkin/Palette/Look still reuse the Reef's (ticket's own "do not re-raise" -- the
+                // 30-area Hangar Bay layout, and any gate/palette pass it needs, is MV-1232's job).
                 // MV-1230: Kit switches to the Mothership's own ship kit.
+                // MV-1237: Music gets its own row -- no longer reuses the Reef's.
                 Palette = BiomePalette.Reef,
                 Look = BackyardLook.Default,
                 Kit = WorldKit.Ship,
@@ -712,7 +713,7 @@ namespace MaxWorlds.Arena
                 Style = new SentinelStyle(BodyColorMothership, BodyColorMothership, BoltColorMothership, emissionFactor: 0.35f,
                     boltColor: BoltColorMothership, boltThicknessScale: 1.6f),
                 FiresWaterBeam = false,
-                Music = MusicWorld.Reef,
+                Music = MusicWorld.Mothership,
                 RingAlphaScale = 1f,
                 GuideLightAccent = WorldMaterials.ReefLampViolet,
                 RigBoardResourcePath = RigBoardLibrary.ShipResourcePath,

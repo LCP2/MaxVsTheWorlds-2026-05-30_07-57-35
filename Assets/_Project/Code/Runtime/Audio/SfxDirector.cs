@@ -202,18 +202,39 @@ namespace MaxWorlds.Audio
 
         private static float MasterVolume() => Mathf.Clamp01(DevTuning.Or(DevTuning.SfxVolume, DefaultSfxVolume));
 
+        // MV-1237: ordinal 24 and up route to DevTuning.MutedSfxCuesMaskHigh instead of ...Mask — see
+        // that field's own doc for why a second mask, not a wider one, is what had to change.
+        private const int HighMaskStartOrdinal = 24;
+
         /// <summary>Whether the Settings panel's SOUND tab has this cue toggled OFF (MV-1009).</summary>
         public static bool IsCueMuted(Cue cue)
         {
+            int ordinal = (int)cue;
+            if (ordinal >= HighMaskStartOrdinal)
+            {
+                int maskHigh = (int)DevTuning.Or(DevTuning.MutedSfxCuesMaskHigh, 0f);
+                return (maskHigh & (1 << (ordinal - HighMaskStartOrdinal))) != 0;
+            }
+
             int mask = (int)DevTuning.Or(DevTuning.MutedSfxCuesMask, 0f);
-            return (mask & (1 << (int)cue)) != 0;
+            return (mask & (1 << ordinal)) != 0;
         }
 
         /// <summary>Flips one cue's mute bit (MV-1009) — the SOUND tab's per-cue toggle setter.</summary>
         public static void SetCueMuted(Cue cue, bool muted)
         {
+            int ordinal = (int)cue;
+            if (ordinal >= HighMaskStartOrdinal)
+            {
+                int bit = 1 << (ordinal - HighMaskStartOrdinal);
+                int maskHigh = (int)DevTuning.Or(DevTuning.MutedSfxCuesMaskHigh, 0f);
+                maskHigh = muted ? (maskHigh | bit) : (maskHigh & ~bit);
+                DevTuning.MutedSfxCuesMaskHigh = maskHigh;
+                return;
+            }
+
             int mask = (int)DevTuning.Or(DevTuning.MutedSfxCuesMask, 0f);
-            mask = muted ? (mask | (1 << (int)cue)) : (mask & ~(1 << (int)cue));
+            mask = muted ? (mask | (1 << ordinal)) : (mask & ~(1 << ordinal));
             DevTuning.MutedSfxCuesMask = mask;
         }
 
