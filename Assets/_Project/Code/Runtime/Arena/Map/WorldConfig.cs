@@ -208,6 +208,21 @@ namespace MaxWorlds.Arena
                 dialSolved.Rusher, dialSolved.Bruiser, dialSolved.Heavy, dialSolved.Brute,
                 dialSolved.Gunner, dialSolved.Launcher, dialSolved.Blinker,
                 bolter, lurker, sludger, charger, turret, dreadnought);
+
+        /// <summary>MV-1234: the inverse of <see cref="ToEngineComposition"/> — a solved
+        /// <see cref="DifficultyEngine.Composition"/> (e.g. from <see cref="WorldConfig.SolveComposition"/>'s
+        /// own <see cref="blendWithDial"/> branch) back into this shape, needed because
+        /// <see cref="MaxWorlds.Enemies.EnemyMix.AreaCadence"/>'s constructor — and so
+        /// <see cref="MaxWorlds.Enemies.EnemySpawner.ConfigureAreaComposition"/> — only ever accepts a
+        /// <see cref="WorldComposition"/>, never the solver's own type.</summary>
+        public static WorldComposition FromEngineComposition(DifficultyEngine.Composition c) =>
+            new WorldComposition
+            {
+                rusher = c.Rusher, bruiser = c.Bruiser, heavy = c.Heavy, brute = c.Brute,
+                gunner = c.Gunner, launcher = c.Launcher, blinker = c.Blinker, bolter = c.Bolter,
+                lurker = c.Lurker, turret = c.Turret, sludger = c.Sludger, charger = c.Charger,
+                dreadnought = c.Dreadnought,
+            };
     }
 
     /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
