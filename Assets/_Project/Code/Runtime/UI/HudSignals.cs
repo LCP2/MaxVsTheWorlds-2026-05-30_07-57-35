@@ -137,6 +137,16 @@ namespace MaxWorlds.UI
         /// <summary>An out-of-fuel missile bounced off the ground (MV-349 AC3). (worldPos)</summary>
         public static event Action<Vector3> MissileBounced;
 
+        /// <summary>LIGHT MISSILE (MV-1211): a ball's own contact beat — fired at the contact point
+        /// alongside the generic <see cref="DamageDealt"/> every weapon already raises, so a listener can
+        /// layer this weapon's own brief magenta burst on top of the gold hit-spark rather than replacing
+        /// it. (worldPos)</summary>
+        public static event Action<Vector3> LightMissileHit;
+
+        /// <summary>LIGHT MISSILE (MV-1211): a ball found no target before its fizzle timeout and burned
+        /// out mid-air — a small violet puff at the point it gave up, distinct from a hit. (worldPos)</summary>
+        public static event Action<Vector3> LightMissileFizzled;
+
         /// <summary>The LPPE's own 4th-hit Shock pulse landed (MV-770) — (worldPos). Fired only for the
         /// hit that actually lands Shock, never a plain pulse hit, so a listener (<c>GameFeel</c>) can
         /// wire hitstop/shake to "the punctuation hit" without re-deriving <c>PulseLaser</c>'s own
@@ -337,6 +347,12 @@ namespace MaxWorlds.UI
 
         public static void EmitShockPulseLanded(Vector3 worldPos)
             => ShockPulseLanded?.Invoke(worldPos);
+
+        public static void EmitLightMissileHit(Vector3 worldPos)
+            => LightMissileHit?.Invoke(worldPos);
+
+        public static void EmitLightMissileFizzled(Vector3 worldPos)
+            => LightMissileFizzled?.Invoke(worldPos);
 
         public static void EmitRocketImpact(Vector3 worldPos, float damage)
             => RocketImpact?.Invoke(worldPos, damage);

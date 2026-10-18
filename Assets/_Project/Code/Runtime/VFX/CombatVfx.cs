@@ -101,6 +101,13 @@ namespace MaxWorlds.VFX
         private static readonly Color RocketImpactCore = new Color(1.5f, 0.85f, 0.35f, 1f);
         private static readonly Color RocketImpactDeep = new Color(0.85f, 0.45f, 0.2f, 1f);
 
+        // LIGHT MISSILE's own ball (MV-1211): the same violet/magenta family as the ball's own look
+        // (LightMissileBall's HaloColor/SpikeColor), deliberately apart from the gold hit sparks/robot
+        // red/sentinel blue above so its own beats read as the LIGHT MISSILE rather than a re-skin.
+        private static readonly Color LightMissileHitCore = new Color(0.90f, 0.35f, 1.0f, 1f);
+        private static readonly Color LightMissileHitDeep = new Color(0.69f, 0.25f, 1.0f, 1f);
+        private static readonly Color LightMissileFizzleColor = new Color(0.55f, 0.25f, 0.85f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -127,6 +134,8 @@ namespace MaxWorlds.VFX
         private VfxBurst _rocketMuzzle;     // Shoulder Rack: one flash per rocket launched (MV-770)
         private VfxBurst _rocketImpactFlash; // Shoulder Rack: the detonation's own flash (MV-770)
         private VfxBurst _rocketImpactSparks; // Shoulder Rack: the detonation's own sparks (MV-770)
+        private VfxBurst _lightMissileHit;    // LIGHT MISSILE: a ball's own contact burst (MV-1211)
+        private VfxBurst _lightMissileFizzle; // LIGHT MISSILE: a ball's own fizzle puff (MV-1211)
 
         private void Awake()
         {
@@ -171,6 +180,9 @@ namespace MaxWorlds.VFX
             _rocketMuzzle = new VfxBurst("RocketMuzzleFlash", additive, 24, 0f, perFrameCap: 4);
             _rocketImpactFlash = new VfxBurst("RocketImpactFlash", additive, 24, 0f, perFrameCap: 4);
             _rocketImpactSparks = new VfxBurst("RocketImpactSparks", additive, 40, 0.3f, perFrameCap: 4, stretched: true);
+            // MV-1211: small budgets — a volley is at most a handful of balls landing close together.
+            _lightMissileHit = new VfxBurst("LightMissileHit", additive, 40, 0f, perFrameCap: 8);
+            _lightMissileFizzle = new VfxBurst("LightMissileFizzle", additive, 24, 0.1f, perFrameCap: 8);
         }
 
         private void OnEnable()
@@ -188,6 +200,8 @@ namespace MaxWorlds.VFX
             HudSignals.FittingDestroyed += OnFittingDestroyed;
             HudSignals.RocketMuzzle += OnRocketMuzzle;
             HudSignals.RocketImpact += OnRocketImpact;
+            HudSignals.LightMissileHit += OnLightMissileHit;
+            HudSignals.LightMissileFizzled += OnLightMissileFizzled;
         }
 
         private void OnDisable()
@@ -207,6 +221,8 @@ namespace MaxWorlds.VFX
             HudSignals.FittingDestroyed -= OnFittingDestroyed;
             HudSignals.RocketMuzzle -= OnRocketMuzzle;
             HudSignals.RocketImpact -= OnRocketImpact;
+            HudSignals.LightMissileHit -= OnLightMissileHit;
+            HudSignals.LightMissileFizzled -= OnLightMissileFizzled;
         }
 
         private void OnDestroy()
@@ -222,6 +238,7 @@ namespace MaxWorlds.VFX
             Dispose(_sentinelRecall);
             Dispose(_playerHitSpark); Dispose(_playerContactGlow);
             Dispose(_rocketMuzzle); Dispose(_rocketImpactFlash); Dispose(_rocketImpactSparks);
+            Dispose(_lightMissileHit); Dispose(_lightMissileFizzle);
         }
 
         // --- events ---
@@ -626,6 +643,28 @@ namespace MaxWorlds.VFX
                 colorA: RocketImpactCore, colorB: RocketImpactDeep);
         }
 
+        // --- LIGHT MISSILE's own ball (MV-1211) ---
+
+        /// <summary>A ball's own contact beat: a brief magenta burst at the point it struck, layered on
+        /// top of (not instead of) the generic gold hit-spark <see cref="OnDamage"/> already raises off
+        /// the same hit's <see cref="HudSignals.DamageDealt"/>.</summary>
+        private void OnLightMissileHit(Vector3 pos) => _lightMissileHit.Emit(pos, 10,
+            axis: Vector3.up, spreadDegrees: 90f,
+            speedMin: 2.2f, speedMax: 5f,
+            sizeMin: 0.08f, sizeMax: 0.18f,
+            lifeMin: 0.14f, lifeMax: 0.26f,
+            colorA: LightMissileHitCore, colorB: LightMissileHitDeep);
+
+        /// <summary>A ball gave up without finding a target: a small violet puff at the point it burned
+        /// out — deliberately smaller and slower than the hit burst above so the two read as distinct
+        /// outcomes (a miss fizzling out vs. a real contact).</summary>
+        private void OnLightMissileFizzled(Vector3 pos) => _lightMissileFizzle.Emit(pos, 6,
+            axis: Vector3.up, spreadDegrees: 100f,
+            speedMin: 0.6f, speedMax: 1.6f,
+            sizeMin: 0.12f, sizeMax: 0.24f,
+            lifeMin: 0.2f, lifeMax: 0.35f,
+            colorA: LightMissileFizzleColor, colorB: LightMissileFizzleColor);
+
         private void LateUpdate()
         {
             FrameCost.Begin(FrameCost.Bucket.Vfx);
@@ -639,6 +678,7 @@ namespace MaxWorlds.VFX
             _sentinelRecall.EndFrame();
             _playerHitSpark.EndFrame(); _playerContactGlow.EndFrame();
             _rocketMuzzle.EndFrame(); _rocketImpactFlash.EndFrame(); _rocketImpactSparks.EndFrame();
+            _lightMissileHit.EndFrame(); _lightMissileFizzle.EndFrame();
 
             FrameCost.End(FrameCost.Bucket.Vfx);
         }

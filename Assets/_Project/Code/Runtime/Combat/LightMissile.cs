@@ -158,6 +158,9 @@ namespace MaxWorlds.Combat
             int areaIndex = LightMissileBall.AreaIndexAt(origin);
             float damage = EffectiveDamagePerBall;
             float trackingBase = TrackingBaseDegPerSec;
+            // MV-1211: POWER's own visible change — the same p_dmg level EffectiveDamagePerBall already
+            // reads, clamped the same way, passed through so every ball in the volley shows it.
+            int powerLevel = Mathf.Clamp(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), 1, PowerDamageByLevel.Length);
 
             // Rule 1: "balls in one volley prefer distinct targets" — one claimed-target set shared by
             // every ball this volley, each adding its own pick to it once (LightMissileBall.Tick).
@@ -167,7 +170,8 @@ namespace MaxWorlds.Combat
             {
                 float angleOffset = (i - (count - 1) / 2f) * DefaultFanDegrees;
                 Vector3 dir = Quaternion.Euler(0f, angleOffset, 0f) * forward;
-                LightMissileBall.Spawn(origin, dir, DefaultSpeed, damage, trackingBase, areaIndex, claimed);
+                LightMissileBall.Spawn(origin, dir, DefaultSpeed, damage, trackingBase, areaIndex,
+                    powerLevel, claimed);
             }
         }
 

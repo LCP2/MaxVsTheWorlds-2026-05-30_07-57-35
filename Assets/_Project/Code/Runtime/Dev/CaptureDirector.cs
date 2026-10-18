@@ -466,6 +466,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1112GroundFillCheck());
             Add(BuildMv1113SentinelArrival());
             Add(BuildMv1196RicochetLook());
+            Add(BuildMv1211LightMissileLook());
             Add(BuildMv1205CityGroundCheck());
             Add(BuildMv1207CityBrightnessCheck());
             Add(BuildMv1215ReefKitSheet());
@@ -1933,6 +1934,54 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-1196-launcher-rate5", cam => LauncherSetup(cam, 5)),
                 },
                 Cleanup = () => RicochetDisc.DestroyPoolForTests(),
+            };
+        }
+
+        // ---- MV1211LightMissileLook (MV-1211 AC3) ---------------------------------------------
+
+        /// <summary>Two static LIGHT MISSILE balls, POWER 1 and POWER 8 side by side, one shot — AC3's
+        /// own "one capture... do not iterate on art". Spawned at zero speed purely so they hold still
+        /// for the shot, the same idiom <see cref="BuildMv1196RicochetLook"/>'s own DiscsSetup uses for
+        /// RICOCHET's discs.</summary>
+        private static CapturePreset BuildMv1211LightMissileLook()
+        {
+            const float pitch = 55f;
+            const float distance = 2.2f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + self-installing systems settle
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                focus.y = LightMissileBall.FlightHeight;
+
+                LightMissileBall.Spawn(focus + new Vector3(-0.6f, 0f, 0f), Vector3.forward, speed: 0f,
+                    damage: 0f, trackingBase: 0f, areaIndex: 0, powerLevel: 1);
+                LightMissileBall.Spawn(focus + new Vector3(0.6f, 0f, 0f), Vector3.forward, speed: 0f,
+                    damage: 0f, trackingBase: 0f, areaIndex: 0, powerLevel: 8);
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus; camFocus.y = 1.1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the spike spin settle, a frame of trail
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1211lightmissilelook",
+                LogTag = "[MV1211Capture]",
+                Flag = "-mv1211shot",
+                ArmFile = "Temp/mv1211.arm",
+                HeadlessMarker = "Temp/mv1211.headless",
+                DoneFileName = "_mv1211_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1211-balls", Setup) },
+                Cleanup = () => LightMissileBall.DestroyPoolForTests(),
             };
         }
 

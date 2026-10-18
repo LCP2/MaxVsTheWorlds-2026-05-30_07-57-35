@@ -193,6 +193,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1215ReefKit() => RunFromMenu(CapturePresets.All["mv1215reefkit"]);
         public static void CaptureMv1215ReefKit() => Run(CapturePresets.All["mv1215reefkit"]);
 
+        [MenuItem("MaxWorlds/Capture/Light Missile Look (MV-1211)")]
+        public static void MenuMv1211LightMissileLook() => RunFromMenu(CapturePresets.All["mv1211lightmissilelook"]);
+        public static void CaptureMv1211LightMissileLook() => Run(CapturePresets.All["mv1211lightmissilelook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
