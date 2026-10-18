@@ -152,7 +152,7 @@ namespace MaxWorlds.Arena
                     EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
                     if (spawner != null)
                     {
-                        spawner.ConfigureAreaComposition(ResolveShedComposition(area));
+                        spawner.ConfigureAreaComposition(ResolveShedComposition(cfg, area));
                         spawner.ConfigureWorldConfig(cfg);   // MV-701: so this shed's own spawns can resolve enemyOverrides
                         _shedSpawners.Add((area.index, spawner));
                     }
@@ -298,12 +298,22 @@ namespace MaxWorlds.Arena
         /// authored <see cref="WorldComposition"/> when it has one, else one derived from the area's
         /// authored <see cref="WorldArea.garrison"/> counts, same proportions — every World 3 area ships
         /// with a garrison but no composition, which previously left <see cref="EnemyMix.AreaCadence"/>
-        /// empty forever (the "door cycles, nothing ever comes out" report). Logs an error naming the
-        /// area when NEITHER yields anything authored — that shed's door then stays shut
+        /// empty forever (the "door cycles, nothing ever comes out" report). MV-1234: an authored
+        /// composition that opts into <see cref="WorldComposition.blendWithDial"/> resolves through
+        /// <paramref name="cfg"/>'s own <see cref="WorldConfig.SolveComposition"/> instead of being
+        /// returned verbatim — otherwise every dial-driven kind it never restated (the whole point of
+        /// blending) reads as an authored zero and starves the shed of them, exactly as it did for
+        /// MV-1218's Reef a18. Logs an error naming the area when NEITHER an authored composition nor a
+        /// garrison yields anything authored — that shed's door then stays shut
         /// (<see cref="EnemySpawner.WantsToEmit"/>) rather than silently inventing a kind nobody drew.</summary>
-        private static WorldComposition ResolveShedComposition(WorldArea area)
+        private static WorldComposition ResolveShedComposition(WorldConfig cfg, WorldArea area)
         {
-            if (area.composition != null && area.composition.IsAuthored) return area.composition;
+            if (area.composition != null && area.composition.IsAuthored)
+            {
+                return area.composition.blendWithDial
+                    ? WorldComposition.FromEngineComposition(cfg.SolveComposition(area.index))
+                    : area.composition;
+            }
 
             WorldComposition derived = CompositionFromGarrison(area);
             if (!derived.IsAuthored)
