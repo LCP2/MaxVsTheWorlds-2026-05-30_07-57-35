@@ -201,6 +201,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1215ReefKit() => RunFromMenu(CapturePresets.All["mv1215reefkit"]);
         public static void CaptureMv1215ReefKit() => Run(CapturePresets.All["mv1215reefkit"]);
 
+        [MenuItem("MaxWorlds/Capture/Ship Kit Sheet (MV-1230)")]
+        public static void MenuMv1230ShipKit() => RunFromMenu(CapturePresets.All["mv1230shipkit"]);
+        public static void CaptureMv1230ShipKit() => Run(CapturePresets.All["mv1230shipkit"]);
+
         [MenuItem("MaxWorlds/Capture/Light Missile Look (MV-1211)")]
         public static void MenuMv1211LightMissileLook() => RunFromMenu(CapturePresets.All["mv1211lightmissilelook"]);
         public static void CaptureMv1211LightMissileLook() => Run(CapturePresets.All["mv1211lightmissilelook"]);

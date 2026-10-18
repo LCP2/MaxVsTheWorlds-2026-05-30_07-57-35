@@ -38,7 +38,15 @@ namespace MaxWorlds.Arena
     /// are see-through (table in the ticket) and low-profile, same footing as <see cref="Pipe"/> above —
     /// see <see cref="Map.MapValidation.LowProfileCoverDressings"/>. <see cref="ReefCrate"/> is an
     /// explicit alternative to leaving a crate dressed <see cref="None"/> (MV-1019's own original
-    /// shortcut) now that the V8 layout ticket can author it by name.</summary>
+    /// shortcut) now that the V8 layout ticket can author it by name.
+    ///
+    /// <see cref="ShipDropship"/> through <see cref="ShipBulkheadStub"/> (MV-1230) are the Mothership's
+    /// own ship kit — built by <see cref="Rendering.ShipKit"/> and routed by
+    /// <see cref="ShipDressing.DressCover"/>. <see cref="ShipGlassCase"/>/<see cref="ShipConveyor"/> are
+    /// see-through (ticket: "shots pass"), the same table-driven exemption <see cref="Pipe"/> above
+    /// already uses; <see cref="ShipConveyor"/> is also low-profile (0.6 m, under
+    /// <see cref="Map.MapValidation.MinCoverHeight"/>) — see
+    /// <see cref="Map.MapValidation.LowProfileCoverDressings"/>.</summary>
     public enum CoverDressing
     {
         None, Tree, Hedge, Planter, Shed, Machinery, Pipe, CafeTable, PlanterBox, Bollard,
@@ -46,6 +54,8 @@ namespace MaxWorlds.Arena
         Truck, Bus, Car, Barrier, Fence, LampPost, RoadSign, Pallet, FlowerStall, FruitStall,
         ClockPost, BookCart, Lockers, ABoard, PostBox, Tub,
         ReefPillar, ReefManifold, ReefDrum, ReefConsole, ReefPlanter, ReefFloorPipe, ReefCrate,
+        ShipDropship, ShipDropPod, ShipCrate, ShipCrateLow, ShipGlassCase, ShipConveyor,
+        ShipConsoleBank, ShipBulkheadStub,
     }
 
     /// <summary>MV-917: a cover piece's behaviour, as an explicit, data-driven property rather than an
