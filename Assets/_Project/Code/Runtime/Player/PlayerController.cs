@@ -172,6 +172,12 @@ namespace MaxWorlds.Player
             // Attaching this unconditionally costs nothing before that morph — it self-gates on
             // ActivePrimary the same way Ricochet/Undertow/PulseLaser do.
             if (GetComponent<LightMissile>() == null) gameObject.AddComponent<LightMissile>();
+
+            // MV-1236: Orbitals self-attaches the same way — World 5's Weapon Core morph flips
+            // WeaponSystemState.SecondaryKind to Orbitals, but nothing else ever attaches a live
+            // Orbitals component to orbit/hit. Attaching this unconditionally costs nothing before the
+            // morph — it self-gates on SecondaryKind the same way ShoulderRack does.
+            if (GetComponent<Orbitals>() == null) gameObject.AddComponent<Orbitals>();
         }
 
         private void OnEnable()

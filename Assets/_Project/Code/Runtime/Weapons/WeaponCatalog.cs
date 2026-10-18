@@ -315,6 +315,18 @@ namespace MaxWorlds.Weapons
             _ => 1,
         };
 
+        /// <summary>The level cap for an ORBITALS-only track (MV-1236), matching
+        /// <c>rig_board.ship.json</c>'s own per-node <c>maxLevel</c> — ORBS caps at 4, REACH at 4,
+        /// POWER at 5, SPIN at 4 (all owned from level 1).</summary>
+        public static int MaxLevel(OrbitalsTrackKind kind) => kind switch
+        {
+            OrbitalsTrackKind.OrbCount => 4,
+            OrbitalsTrackKind.Reach => 4,
+            OrbitalsTrackKind.Power => 5,
+            OrbitalsTrackKind.Spin => 4,
+            _ => 1,
+        };
+
         /// <summary>The LPPE's fire interval at a given RATE (<c>p_rof</c>) level, seconds (MV-768,
         /// board comment: "fire rate 0.22s -&gt; 0.16s over these 4 levels") — linearly interpolated from
         /// <paramref name="baseInterval"/> at level 0 down to <paramref name="floorInterval"/> at

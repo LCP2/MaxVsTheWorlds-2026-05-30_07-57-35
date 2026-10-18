@@ -593,5 +593,53 @@ namespace MaxWorlds.Weapons
             float step = (atMaxLevel - atLevel1) / levelSpan;
             return atLevel1 + step * Mathf.Max(0, level - 1);
         }
+
+        // ---------------------------------------------------------------- Orbitals (MV-1236)
+
+        /// <summary>Orb count at ORBS (<c>s_orb</c>) Level 1 — the ticket's own "orbs 2,3,4,5" table.</summary>
+        public const int DefaultOrbitalsBaseOrbCount = 2;
+
+        /// <summary>One more orb each ORBS level above 1, up to the board's own cap (5 orbs total at
+        /// Level 4) — the ticket's own "Cap: At most 5 orbs".</summary>
+        public const int DefaultOrbitalsOrbCountPerLevel = 1;
+
+        /// <summary>How many orbs circle Max at a given ORBS track level — same flat base-plus-step
+        /// shape as <see cref="ShoulderRackRocketDamage"/>. Every track here is owned from level 1
+        /// (<see cref="OrbitalsTrackKind"/>'s class doc), so this does not treat level 0 specially.</summary>
+        public static int OrbitalsOrbCount(int level, int baseCount, int perLevel) =>
+            Mathf.Max(0, baseCount) + Mathf.Max(0, perLevel) * Mathf.Max(0, Mathf.Max(1, level) - 1);
+
+        /// <summary>Orbit radius, metres, at REACH (<c>s_rad</c>) Level 1 — the ticket's own
+        /// "1.8, 2.2, 2.6, 3.0 m".</summary>
+        public const float DefaultOrbitalsBaseReachMetres = 1.8f;
+
+        /// <summary>Extra orbit radius each REACH level above 1 — the ticket's own +0.4m/level.</summary>
+        public const float DefaultOrbitalsReachPerLevel = 0.4f;
+
+        /// <summary>The orbit radius at a given REACH track level, metres.</summary>
+        public static float OrbitalsReachMetres(int level, float baseMetres, float perLevel) =>
+            Mathf.Max(0f, baseMetres) + Mathf.Max(0f, perLevel) * Mathf.Max(0, Mathf.Max(1, level) - 1);
+
+        /// <summary>Damage dealt per touch at POWER (<c>s_odm</c>) Level 1 — the ticket's own
+        /// "10,14,18,22,26 a touch".</summary>
+        public const float DefaultOrbitalsBaseTouchDamage = 10f;
+
+        /// <summary>Extra touch damage each POWER level above 1 — the ticket's own +4/level.</summary>
+        public const float DefaultOrbitalsTouchDamagePerLevel = 4f;
+
+        /// <summary>Damage dealt when an orb touches an enemy, at a given POWER track level.</summary>
+        public static float OrbitalsTouchDamage(int level, float baseDamage, float perLevel) =>
+            Mathf.Max(0f, baseDamage) + Mathf.Max(0f, perLevel) * Mathf.Max(0, Mathf.Max(1, level) - 1);
+
+        /// <summary>Orbit speed, degrees/sec, at SPIN (<c>s_spd</c>) Level 1 — the ticket's own
+        /// "180,220,260,300".</summary>
+        public const float DefaultOrbitalsBaseSpinDegPerSec = 180f;
+
+        /// <summary>Extra orbit speed each SPIN level above 1 — the ticket's own +40 deg/s/level.</summary>
+        public const float DefaultOrbitalsSpinPerLevel = 40f;
+
+        /// <summary>The orbit's angular speed at a given SPIN track level, degrees/sec.</summary>
+        public static float OrbitalsSpinDegPerSec(int level, float baseDegPerSec, float perLevel) =>
+            Mathf.Max(0f, baseDegPerSec) + Mathf.Max(0f, perLevel) * Mathf.Max(0, Mathf.Max(1, level) - 1);
     }
 }
