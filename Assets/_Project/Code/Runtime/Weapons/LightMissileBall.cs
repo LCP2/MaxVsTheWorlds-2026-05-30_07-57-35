@@ -46,9 +46,35 @@ namespace MaxWorlds.Weapons
         /// <summary>Rule 4: TurnRate = TrackingBase + this much more per second airborne.</summary>
         public const float TurnRateGrowthPerSecPerSec = 60f;
 
-        public const float VisualDiameter = 0.45f;
+        /// <summary>MV-1211: POWER's own visible change — the ball's halo/core diameter at level 1.</summary>
+        public const float MinVisualDiameter = 0.45f;
 
-        private static readonly Color VioletColor = new Color(0.55f, 0.20f, 0.85f);
+        /// <summary>MV-1211: the ball's halo/core diameter at level 8.</summary>
+        public const float MaxVisualDiameter = 0.80f;
+
+        private const float CoreDiameterFraction = 0.35f;
+        private const float SpikeSpinDegPerSec = 90f;
+        private const float TrailSeconds = 0.25f;
+        private const int MaxSpikeSlots = 8;
+
+        private static readonly Color HaloColor = new Color(176f / 255f, 64f / 255f, 1f);   // #B040FF
+        private static readonly Color SpikeColor = new Color(230f / 255f, 90f / 255f, 1f);  // #E65AFF
+        private static readonly Color CoreColor = new Color(1f, 240f / 255f, 1f);           // #FFF0FF
+
+        /// <summary>MV-1211: POWER's own diameter progression — a straight lerp from
+        /// <see cref="MinVisualDiameter"/> at level 1 to <see cref="MaxVisualDiameter"/> at level 8. Pure,
+        /// so a test can assert it without a live ball instance.</summary>
+        public static float DiameterForPowerLevel(int powerLevel) =>
+            Mathf.Lerp(MinVisualDiameter, MaxVisualDiameter, (Mathf.Clamp(powerLevel, 1, 8) - 1) / 7f);
+
+        /// <summary>MV-1211: POWER's own spike-count steps — 4 spikes at levels 1-3, 6 at 4-6, 8 at 7-8.
+        /// Pure, so a test can assert it without a live ball instance.</summary>
+        public static int SpikeCountForPowerLevel(int powerLevel)
+        {
+            int level = Mathf.Clamp(powerLevel, 1, 8);
+            if (level <= 3) return 4;
+            return level <= 6 ? 6 : 8;
+        }
 
         private static readonly List<LightMissileBall> s_pool = new List<LightMissileBall>(MaxBallsInFlight);
 
@@ -69,7 +95,30 @@ namespace MaxWorlds.Weapons
         private IDamageable _target;
         private Transform _targetTransform;
 
+        // ---- MV-1211: the look — built once per pooled instance in BuildVisual, re-applied every
+        // Spawn (a pooled ball can carry a different POWER level on every reuse).
+        private Transform _halo;
+        private Transform _core;
+        private Transform _spikesRoot;
+        private Transform[] _spikes;
+        private TrailRenderer _trail;
+        private float _spikeSpinDeg;
+
         private static readonly Collider[] s_hitColliders = new Collider[16];
+
+        /// <summary>MV-1211: this ball's own resolved diameter for the current POWER level (Tier 2: the
+        /// value actually applied to the halo/core transforms, not the authored constant alone).</summary>
+        public float VisualDiameter { get; private set; }
+
+        /// <summary>MV-1211: this ball's own resolved spike count for the current POWER level.</summary>
+        public int SpikeCount { get; private set; }
+
+        /// <summary>MV-1211: the ball's own resolved world-space bounds (Tier 2) — read off the halo's
+        /// live <see cref="Renderer"/> after <see cref="ApplyPowerVisual"/> has scaled it, not the float
+        /// that produced the scale. The core sits concentric and strictly smaller, so it never grows this.</summary>
+        public Bounds ResolvedBallBounds => _halo != null
+            ? _halo.GetComponent<Renderer>().bounds
+            : new Bounds(transform.position, Vector3.zero);
 
         /// <summary>Whether this pooled instance is currently a live, flying ball.</summary>
         public bool IsActiveBall => _active;
@@ -89,11 +138,14 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Fire one ball. Reuses the first inactive pooled instance, or builds a new one while
         /// under <see cref="MaxBallsInFlight"/> — returns null, spawning nothing, once the pool is full.
-        /// <paramref name="volleyClaimed"/> (optional) is the firer's own per-volley claimed-target set
-        /// (rule 1: "balls in one volley prefer distinct targets") — this ball adds its own pick to it,
-        /// once, when it resolves its initial target at the end of its launch leg.</summary>
+        /// <paramref name="powerLevel"/> (MV-1211, default 1) is POWER's own level, 1..8 — resolves this
+        /// ball's halo/core diameter and spike count fresh every spawn, since a pooled instance can carry
+        /// a different POWER level on every reuse. <paramref name="volleyClaimed"/> (optional) is the
+        /// firer's own per-volley claimed-target set (rule 1: "balls in one volley prefer distinct
+        /// targets") — this ball adds its own pick to it, once, when it resolves its initial target at
+        /// the end of its launch leg.</summary>
         public static LightMissileBall Spawn(Vector3 origin, Vector3 direction, float speed, float damage,
-            float trackingBase, int areaIndex, HashSet<IDamageable> volleyClaimed = null)
+            float trackingBase, int areaIndex, int powerLevel = 1, HashSet<IDamageable> volleyClaimed = null)
         {
             LightMissileBall ball = null;
             for (int i = 0; i < s_pool.Count; i++)
@@ -105,8 +157,14 @@ namespace MaxWorlds.Weapons
             {
                 if (s_pool.Count >= MaxBallsInFlight) return null;
                 var go = new GameObject("LightMissileBall (stand-in)");
-                BuildVisual(go.transform);
+                BuildVisual(go.transform, out Transform halo, out Transform core, out Transform spikesRoot,
+                    out Transform[] spikes, out TrailRenderer trail);
                 ball = go.AddComponent<LightMissileBall>();
+                ball._halo = halo;
+                ball._core = core;
+                ball._spikesRoot = spikesRoot;
+                ball._spikes = spikes;
+                ball._trail = trail;
                 s_pool.Add(ball);
             }
 
@@ -129,6 +187,11 @@ namespace MaxWorlds.Weapons
             ball._target = null;
             ball._targetTransform = null;
             ball._active = true;
+            ball._spikeSpinDeg = 0f;
+            // Spec: trails are cleared on reuse, not at retire, so the LAST shot's trail doesn't still
+            // be fading when a freshly-reused pooled instance spawns somewhere else.
+            if (ball._trail != null) ball._trail.Clear();
+            ball.ApplyPowerVisual(powerLevel);
             return ball;
         }
 
@@ -156,6 +219,12 @@ namespace MaxWorlds.Weapons
         {
             if (!_active) return;
             _age += dt;
+
+            // MV-1211: the star spikes sparkle by slowly spinning, independent of the ball's own homing
+            // turns — a sibling root rotated about world up rather than a child of the heading transform.
+            _spikeSpinDeg += SpikeSpinDegPerSec * dt;
+            if (_spikeSpinDeg >= 360f) _spikeSpinDeg -= 360f;
+            if (_spikesRoot != null) _spikesRoot.localRotation = Quaternion.AngleAxis(_spikeSpinDeg, Vector3.up);
 
             bool launchLegDone = _distanceTravelled >= LaunchLegMetres;
 
@@ -198,11 +267,17 @@ namespace MaxWorlds.Weapons
                 if (hit is RobotEnemy robot && robot.IsDormant) robot.Activate();
                 hit.TakeDamage(new DamageInfo(_damage, transform.position, _direction, Team.Player,
                     source: DamageSource.PrimaryWeapon));
+                MaxWorlds.UI.HudSignals.EmitLightMissileHit(transform.position);
                 Retire();
                 return;
             }
 
-            if (_target == null && _age >= FizzleSeconds) { Retire(); return; }
+            if (_target == null && _age >= FizzleSeconds)
+            {
+                MaxWorlds.UI.HudSignals.EmitLightMissileFizzled(transform.position);
+                Retire();
+                return;
+            }
             if (_age >= MaxAirborneSeconds) { Retire(); return; }
         }
 
@@ -372,24 +447,121 @@ namespace MaxWorlds.Weapons
             gameObject.SetActive(false);
         }
 
-        /// <summary>Placeholder art only (ticket item: the real look is MV-1211) — a plain violet sphere,
-        /// 0.45 m. Collider stripped, same idiom <see cref="RicochetDisc"/> uses: this ball's own hit
-        /// test is a manual overlap, never physics collision response.</summary>
-        private static void BuildVisual(Transform parent)
+        /// <summary>MV-1211: POWER's own visible change, applied fresh every <see cref="Spawn"/> — a
+        /// violet glow halo + magenta star spikes (4/6/8 by level) + a white-hot core that brightens each
+        /// level, replacing MV-1210's placeholder fixed-size violet sphere.</summary>
+        private void ApplyPowerVisual(int powerLevel)
+        {
+            float d = DiameterForPowerLevel(powerLevel);
+            int spikeCount = SpikeCountForPowerLevel(powerLevel);
+            VisualDiameter = d;
+            SpikeCount = spikeCount;
+
+            if (_halo != null)
+            {
+                _halo.localScale = Vector3.one * d;
+                SetMaterial(_halo, VfxMaterials.AdditiveTinted(HaloColor));
+            }
+
+            if (_core != null)
+            {
+                _core.localScale = Vector3.one * (d * CoreDiameterFraction);
+                float levelT = (Mathf.Clamp(powerLevel, 1, 8) - 1) / 7f;
+                SetMaterial(_core, VfxMaterials.AdditiveTinted(CoreColor * Mathf.Lerp(1f, 1.6f, levelT)));
+            }
+
+            Material spikeMat = VfxMaterials.AdditiveTinted(SpikeColor);
+            for (int i = 0; i < _spikes.Length; i++)
+            {
+                Transform t = _spikes[i];
+                bool active = i < spikeCount;
+                t.gameObject.SetActive(active);
+                if (!active) continue;
+
+                float angle = i * (360f / spikeCount);
+                Vector3 dir = SpikeDirection(angle);
+                t.localPosition = dir * (d * 0.35f);
+                t.localRotation = Quaternion.LookRotation(dir, Vector3.up);
+                t.localScale = new Vector3(d * 0.09f, d * 0.09f, d * 1.0f);
+                SetMaterial(t, spikeMat);
+            }
+
+            if (_trail != null)
+            {
+                _trail.widthMultiplier = d * 0.4f;
+                _trail.textureScale = new Vector2(6f / Mathf.Max(d, 0.01f), 1f);
+            }
+        }
+
+        /// <summary>A unit direction radiating outward from the ball's own centre, in the local XZ plane
+        /// — the star spikes lie flat the same way <see cref="RicochetDisc"/>'s rim decorations lie flat
+        /// in its own disc plane, so they read against the fixed top-down camera.</summary>
+        private static Vector3 SpikeDirection(float angleDeg)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Cos(rad), 0f, Mathf.Sin(rad));
+        }
+
+        private static void SetMaterial(Transform t, Material mat)
+        {
+            if (t == null || mat == null) return;
+            var mr = t.GetComponent<MeshRenderer>();
+            if (mr != null) mr.sharedMaterial = mat;
+        }
+
+        /// <summary>Placeholder-free art (MV-1211) — a violet glow halo, a white-hot core, and a pool of
+        /// pre-built (initially inactive) magenta star spikes re-dressed every <see cref="Spawn"/> by
+        /// <see cref="ApplyPowerVisual"/>, plus a short sparkle trail. Collider stripped on every piece,
+        /// same idiom <see cref="RicochetDisc"/> uses: this ball's own hit test is a manual overlap, never
+        /// physics collision response.</summary>
+        private static void BuildVisual(Transform parent, out Transform halo, out Transform core,
+            out Transform spikesRoot, out Transform[] spikes, out TrailRenderer trail)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            sphere.name = "Ball";
-            var col = sphere.GetComponent<Collider>();
+            halo = BuildPrimitive(parent, "Halo", PrimitiveType.Sphere);
+            core = BuildPrimitive(parent, "Core", PrimitiveType.Sphere);
+
+            var spikesRootGo = new GameObject("SpikesRoot");
+            spikesRootGo.transform.SetParent(parent, false);
+            spikesRoot = spikesRootGo.transform;
+
+            spikes = new Transform[MaxSpikeSlots];
+            for (int i = 0; i < MaxSpikeSlots; i++)
+            {
+                Transform spike = BuildPrimitive(spikesRoot, "Spike" + i, PrimitiveType.Cube);
+                spike.gameObject.SetActive(false);
+                spikes[i] = spike;
+            }
+
+            trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = TrailSeconds;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.minVertexDistance = 0.015f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            // MV-1211: "fading violet points, not a solid ribbon" — tiling the same soft radial glow
+            // texture every other additive effect here uses (VfxMaterials.Glow) along the ribbon's own
+            // length turns it into a string of fading dots rather than a continuous band of colour.
+            trail.textureMode = LineTextureMode.Tile;
+            trail.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            Color trailColor = HaloColor;
+            trail.startColor = trailColor;
+            trailColor.a = 0f;
+            trail.endColor = trailColor;
+        }
+
+        private static Transform BuildPrimitive(Transform parent, string name, PrimitiveType shape)
+        {
+            GameObject go = GameObject.CreatePrimitive(shape);
+            go.name = name;
+            var col = go.GetComponent<Collider>();
             if (col != null)
             {
                 if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
             }
-            sphere.transform.SetParent(parent, false);
-            sphere.transform.localScale = Vector3.one * VisualDiameter;
-            Material mat = VfxMaterials.AdditiveTinted(VioletColor);
-            if (mat != null) sphere.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            go.transform.SetParent(parent, false);
+            return go.transform;
         }
     }
 }
