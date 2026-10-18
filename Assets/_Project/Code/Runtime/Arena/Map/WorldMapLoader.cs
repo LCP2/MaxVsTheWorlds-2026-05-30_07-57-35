@@ -388,6 +388,25 @@ namespace MaxWorlds.Arena
                     });
                 }
 
+                // MV-1240: plasma vents — same area-local rect resolution as sludge above, and the same
+                // overlay exemption (an overlay area shares its target's floor hazards, never building
+                // its own second copy).
+                if (!isOverlay)
+                foreach (WorldVent v in a.vents ?? Array.Empty<WorldVent>())
+                {
+                    if (v == null) continue;
+                    Rect rect = a.WorldRectOf(v.x, v.z, v.w, v.d);
+                    entities.Add(new MapEntity
+                    {
+                        id = v.id,
+                        kind = "vent",
+                        x = rect.center.x,
+                        z = rect.center.y,
+                        width = rect.width,
+                        depth = rect.height,
+                    });
+                }
+
                 var deckRects = new List<(WorldDeck deck, Rect rect, float height)>();
                 foreach (WorldDeck d in a.decks ?? Array.Empty<WorldDeck>())
                 {
