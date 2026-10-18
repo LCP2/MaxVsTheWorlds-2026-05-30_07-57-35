@@ -1,7 +1,7 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 5 \u2014 The Mothership",
-  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Tractor, Orbitals and plasma vents are later tickets and author no slots here.",
+  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor.",
   "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
@@ -4309,7 +4309,8 @@
         "bolter": 3,
         "heavy": 3,
         "skitter": 3,
-        "brute": 2
+        "brute": 2,
+        "tractor": 2
       },
       "garrison": [
         {
@@ -4533,6 +4534,18 @@
           "x": 341.0,
           "z": 231.0,
           "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 368.0,
+          "z": 225.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 368.0,
+          "z": 257.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -4715,7 +4728,8 @@
         "bolter": 2,
         "heavy": 2,
         "skitter": 3,
-        "brute": 2
+        "brute": 2,
+        "tractor": 2
       },
       "garrison": [
         {
@@ -4884,6 +4898,18 @@
           "kind": "brute",
           "x": 353.0,
           "z": 283.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 372.0,
+          "z": 289.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 342.0,
+          "z": 291.0,
           "level": 0
         }
       ],
@@ -6505,7 +6531,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 3,
-        "breaker": 2
+        "breaker": 2,
+        "tractor": 2
       },
       "garrison": [
         {
@@ -6747,6 +6774,18 @@
           "x": 477.0,
           "z": 381.0,
           "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 491.0,
+          "z": 368.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 491.0,
+          "z": 406.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -6831,7 +6870,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "breaker": 2
+        "breaker": 2,
+        "tractor": 2
       },
       "garrison": [
         {
@@ -7048,6 +7088,18 @@
           "kind": "breaker",
           "x": 547.0,
           "z": 407.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 520.0,
+          "z": 389.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 554.0,
+          "z": 389.0,
           "level": 0
         }
       ],
@@ -9296,7 +9348,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "breaker": 1
+        "breaker": 1,
+        "tractor": 2
       },
       "garrison": [
         {
@@ -9477,6 +9530,18 @@
           "kind": "breaker",
           "x": 653.0,
           "z": 531.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 675.0,
+          "z": 537.0,
+          "level": 0
+        },
+        {
+          "kind": "tractor",
+          "x": 660.0,
+          "z": 545.0,
           "level": 0
         }
       ],

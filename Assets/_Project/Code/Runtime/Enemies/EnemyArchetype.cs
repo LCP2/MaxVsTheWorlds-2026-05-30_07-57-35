@@ -12,7 +12,8 @@ namespace MaxWorlds.Enemies
     // Dreadnought (MV-1217) follows it too — a slow, hard-to-kill twin-turret platform, appended after Charger.
     // Skitter (MV-1224) follows it too — a tiny phase-hopping robot, appended after Dreadnought.
     // Breaker (MV-1228) follows it too — a chained, press-punching/ramming robot beast, appended after Skitter.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker }
+    // Tractor (MV-1238) follows it too — a stationary emitter-dish that hauls Max in on a beam, appended after Breaker.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -40,6 +41,7 @@ namespace MaxWorlds.Enemies
                 case "dreadnought": kind = EnemyKind.Dreadnought; return true;
                 case "skitter": kind = EnemyKind.Skitter; return true;
                 case "breaker": kind = EnemyKind.Breaker; return true;
+                case "tractor": kind = EnemyKind.Tractor; return true;
                 default: kind = default; return false;
             }
         }
@@ -575,6 +577,41 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 60f,    // unread — see doc comment above
             displayName: "BREAKER");
 
+        /// <summary>
+        /// Tractor (MV-1238): a stationary, Bruiser-sized body with an emitter dish — it never
+        /// chases (<see cref="MoveSpeed"/> 0, same "static emplacement" footing as <see cref="Turret"/>),
+        /// it hauls. A 0.6 s tell (<see cref="TelegraphTime"/>, the ticket's own "dish glows and a
+        /// dashed green line runs to Max"), then <see cref="RobotEnemy.TickPull"/> drives
+        /// <see cref="MaxWorlds.Player.PlayerController.ApplyForcedMove"/> at 2.5 m/s
+        /// (<see cref="LungeSpeed"/>) for <see cref="LungeTime"/> (1.2 s) — the ticket's own "pulls Max
+        /// toward itself", re-applied every tick rather than fired once, so a wall/solid cover stepping
+        /// into <see cref="RobotEnemy"/>'s own per-tick <see cref="MaxWorlds.Arena.LineOfSight"/> check
+        /// snaps it at once instead of riding out the committed duration. <see cref="LungeRange"/> (10 m)
+        /// is both the engage distance (<see cref="RobotEnemy.TickChase"/>'s shared <c>dist &lt;=
+        /// lungeRange</c> commit gate) and the pull's own max range, so the two can never drift apart —
+        /// same "one field, several doors" idiom <see cref="Launcher"/>/<see cref="Bolter"/> already use.
+        /// <see cref="RecoverTime"/> (3.2 s) is telegraph+lunge's remainder of the ticket's authored
+        /// "every 5 s" cadence (0.6 + 1.2 + 3.2 = 5). <see cref="ContactDamage"/> is 0 — the ticket's own
+        /// "No damage" — and the pull never deals any, win or break. "At most 2 awake per area" and
+        /// Sentinel immunity are enforced in <see cref="RobotEnemy"/> itself (same per-kind cap idiom as
+        /// <see cref="Breaker"/>'s own <see cref="RobotEnemy.BreakerMaxAwakePerArea"/>, and a pull simply
+        /// never targets anything but a <see cref="MaxWorlds.Player.PlayerController"/>, which a Sentinel
+        /// never carries). Drops as a Bruiser — not <see cref="EnemyKind.Rusher"/>/<see cref="EnemyKind.Skitter"/>,
+        /// so <see cref="IsLarge"/> already grants it the ordinary large-tier roll with no extra code.
+        /// </summary>
+        public static EnemyArchetype Tractor => new EnemyArchetype(
+            EnemyKind.Tractor, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
+            colliderHeight: 1.15f, colliderRadius: 0.55f,
+            moveSpeed: 0f, maxHealth: 120f,
+            contactDamage: 0f, contactRadius: 1.4f,
+            lungeRange: 10f,        // engage distance AND the pull's own max range
+            telegraphTime: 0.6f,    // the ticket's own dish-glow/beam tell
+            lungeSpeed: 2.5f,       // the pull's own speed, m/s
+            lungeTime: 1.2f,        // the pull's own duration
+            recoverTime: 3.2f,      // 0.6 + 1.2 + 3.2 = the ticket's authored 5 s cadence
+            knockbackDecay: 28f,
+            displayName: "TRACTOR");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -591,6 +628,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Dreadnought => Dreadnought,
             EnemyKind.Skitter => Skitter,
             EnemyKind.Breaker => Breaker,
+            EnemyKind.Tractor => Tractor,
             _ => Rusher,
         };
 

@@ -86,20 +86,26 @@ namespace MaxWorlds.Enemies
             /// from.</summary>
             public readonly int Breaker;
 
+            /// <summary>MV-1238: the Tractor — same "authored-composition only" footing as
+            /// <see cref="Breaker"/>/<see cref="Dreadnought"/> (no dial ever unlocks it in
+            /// <see cref="SolveComposition"/>); it appears only where a world garrisons it by name, a
+            /// stationary emplacement with no shed to be released from either.</summary>
+            public readonly int Tractor;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
                 int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0,
-                int breaker = 0)
+                int breaker = 0, int tractor = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
                 Sludger = sludger; Charger = charger; Turret = turret; Dreadnought = dreadnought;
-                Skitter = skitter; Breaker = breaker;
+                Skitter = skitter; Breaker = breaker; Tractor = tractor;
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker;
+                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -117,7 +123,7 @@ namespace MaxWorlds.Enemies
                 Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger +
                 Charger * ThreatValues.Charger + Turret * ThreatValues.Turret +
                 Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter +
-                Breaker * ThreatValues.Breaker;
+                Breaker * ThreatValues.Breaker + Tractor * ThreatValues.Tractor;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

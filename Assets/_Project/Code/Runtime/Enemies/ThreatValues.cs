@@ -61,6 +61,12 @@ namespace MaxWorlds.Enemies
         /// per-type calibration lands.</summary>
         public const float Breaker = 6.5f;
 
+        /// <summary>MV-1238: the ticket's own authored THV — a stationary, no-damage emplacement
+        /// (120 HP, same body as the Bruiser), priced below the Turret's 2.5 on the same placeholder
+        /// footing: it never deals damage of its own, only repositions Max, so it carries less threat
+        /// than any kind that can actually hurt him from range.</summary>
+        public const float Tractor = 2.2f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -77,6 +83,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Dreadnought => Dreadnought,
             EnemyKind.Skitter => Skitter,
             EnemyKind.Breaker => Breaker,
+            EnemyKind.Tractor => Tractor,
             _ => Rusher,
         };
     }

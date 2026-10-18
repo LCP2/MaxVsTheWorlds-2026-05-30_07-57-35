@@ -166,6 +166,10 @@ namespace MaxWorlds.Enemies
         /// more saturated than the shared default amber tell so it still reads at ~19px.</summary>
         private static readonly Color SkitterEyeColor = new Color(1f, 0.85f, 0.25f);
 
+        /// <summary>The Tractor's own dish glow (MV-1238, the ticket's own "the dish glows ... green") —
+        /// same "stamped over the shared idle/windup tell pair" idiom as <see cref="LurkerEyeColor"/>.</summary>
+        private static readonly Color TractorDishColor = new Color(0.2f, 0.9f, 0.35f);
+
         // --- Field-wide registry (YT-186) ---------------------------------------------------------
         // Tracked directly off OnEnable/OnDisable rather than tallied by hand, so it can never drift
         // from what is actually switched on: a normal death, being pooled back out, and a test's
@@ -332,6 +336,11 @@ namespace MaxWorlds.Enemies
             {
                 idleTell = SkitterEyeColor;
                 windupTell = SkitterEyeColor;
+            }
+            else if (Kind == EnemyKind.Tractor)
+            {
+                idleTell = TractorDishColor;
+                windupTell = TractorDishColor;
             }
             // MV-697: a pooled instance must never carry a previous spawn's deck leash into its next
             // life — the common case (Level 0, no footprint) is the correct default until whoever
@@ -2424,6 +2433,11 @@ namespace MaxWorlds.Enemies
             if (Kind == EnemyKind.Breaker && CountAwakeBreakersInArea(AreaIndex) >= BreakerMaxAwakePerArea)
                 return;
 
+            // MV-1238: the Tractor's own "at most 2 awake per area" — same held-at-cap idiom as the
+            // Breaker's above.
+            if (Kind == EnemyKind.Tractor && CountAwakeOfKindInArea(EnemyKind.Tractor, AreaIndex) >= TractorMaxAwakePerArea)
+                return;
+
             Current = State.Alert;
             _stateTimer = 0f;
             SetTell(windupTell);
@@ -2444,6 +2458,21 @@ namespace MaxWorlds.Enemies
             {
                 RobotEnemy r = _active[i];
                 if (r != null && r.Kind == EnemyKind.Breaker && r.IsAwake && r.AreaIndex == areaIndex) n++;
+            }
+            return n;
+        }
+
+        /// <summary>MV-1238: how many OTHER robots of <paramref name="kind"/> in <paramref name="areaIndex"/>
+        /// are already awake right now — same registry walk as <see cref="CountAwakeBreakersInArea"/>,
+        /// generalised since the Tractor is the second kind to need this (not folded into that one
+        /// directly, to leave its own call site untouched).</summary>
+        private static int CountAwakeOfKindInArea(EnemyKind kind, int areaIndex)
+        {
+            int n = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r != null && r.Kind == kind && r.IsAwake && r.AreaIndex == areaIndex) n++;
             }
             return n;
         }
@@ -3064,6 +3093,7 @@ namespace MaxWorlds.Enemies
                 case EnemyKind.Bolter: TickBolt(dt); break;
                 case EnemyKind.Turret: TickGlobFire(dt); break;
                 case EnemyKind.Charger: TickCharge(dt); break;
+                case EnemyKind.Tractor: TickPull(dt); break;
                 // MV-1228: the Breaker's ram reuses the Charger's own TickCharge wholesale; its punch is
                 // its own, separate one-tick strike (TickBreakerPunch), never a moving lunge.
                 case EnemyKind.Breaker: if (_breakerIsRam) TickCharge(dt); else TickBreakerPunch(dt); break;
@@ -3265,6 +3295,43 @@ namespace MaxWorlds.Enemies
 
         private const float GlobPuddleRadius = 1.5f;
         private const float GlobPuddleDuration = 3f;
+
+        /// <summary>The Tractor's haul (MV-1238): re-applies <see cref="MaxWorlds.Player.PlayerController.ApplyForcedMove"/>
+        /// toward this robot's OWN live position every single tick, rather than firing one committed
+        /// move the way <see cref="ApplyBreakerKnockbackToPlayer"/> does — the ticket's own "re-applied
+        /// each tick toward the Tractor". <see cref="_sight"/> is a fresh per-tick
+        /// <see cref="MaxWorlds.Arena.LineOfSight"/> read (<see cref="Perception.Tick"/> sets
+        /// <c>HasSight</c> unconditionally every call, no debounce), so a wall/solid cover stepping into
+        /// the line stops the pull on the very tick it breaks — the ticket's own "snaps the line at
+        /// once" — rather than riding out the rest of <see cref="lungeTime"/>. Glass is never on
+        /// <see cref="MaxWorlds.Arena.CoverLayer"/> (<see cref="MaxWorlds.Arena.Map.MapRuntime"/>'s own
+        /// <c>SeeThrough</c> exemption), so it never breaks sight and never breaks the pull either —
+        /// the ticket's own "do not re-raise". A Sentinel is never pulled: it carries no
+        /// <see cref="MaxWorlds.Player.PlayerController"/>, so the <c>TryGetComponent</c> below simply
+        /// never finds one to move.</summary>
+        private void TickPull(float dt)
+        {
+            if (target != null && target.TryGetComponent(out PlayerController player))
+            {
+                bool canPull = _sight.HasSight &&
+                    CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position);
+
+                if (canPull)
+                {
+                    Vector3 towardSelf = transform.position - target.position; towardSelf.y = 0f;
+                    if (towardSelf.sqrMagnitude > 0.0001f)
+                    {
+                        player.ApplyForcedMove(towardSelf.normalized * lungeSpeed, dt, ForcedMoveSource.Pull);
+                    }
+                }
+                else
+                {
+                    player.ClearForcedMove();
+                }
+            }
+
+            if (_stateTimer >= lungeTime) EnterRecover();
+        }
 
         // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------
 
@@ -3662,6 +3729,9 @@ namespace MaxWorlds.Enemies
         private const float BreakerRamKnockbackDistance = 4f;
 
         private const int BreakerMaxAwakePerArea = 2;
+
+        /// <summary>MV-1238: "at most 2 awake per area" — the ticket's own cap.</summary>
+        private const int TractorMaxAwakePerArea = 2;
 
         private void ApplyGravity(float dt)
         {
