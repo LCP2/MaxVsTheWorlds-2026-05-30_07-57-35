@@ -129,6 +129,10 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < composition.Sludger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Sludger));
             // MV-707: a floor-only rammer, same footing as Bolter/Sludger above.
             for (int i = 0; i < composition.Charger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Charger));
+            // MV-1217/MV-1221: a twin-turret platform, same footing as Bolter/Sludger/Charger above —
+            // it still has to be queued here or its garrison slot's exact-kind TryTakeForGarrison lookup
+            // finds nothing and substitutes the wrong kind.
+            for (int i = 0; i < composition.Dreadnought; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Dreadnought));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)
