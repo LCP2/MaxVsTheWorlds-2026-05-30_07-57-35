@@ -387,6 +387,29 @@ namespace MaxWorlds.Arena
         public string facing = "S";
     }
 
+    /// <summary>One Assembly Cradle (MV-1223/1227 behaviour+look; schema wiring is MV-1232's own —
+    /// <see cref="MaxWorlds.Factories.AssemblyCradle"/> existed with no <see cref="WorldConfig"/>
+    /// plumbing until this ticket's Hangar Bay needed to author one for real). Same shape as
+    /// <see cref="WorldReplicator"/>: a position plus which side the finished robot walks out of
+    /// ("N"|"S"|"E"|"W", default "S"), resolved onto the built <see cref="MapEntity"/> via its own
+    /// <see cref="MapEntity.facing"/> field.</summary>
+    [Serializable]
+    public sealed class WorldCradle
+    {
+        public string id;
+        public float x;
+        public float z;
+        public string facing = "S";
+
+        /// <summary>Which kinds this cradle is allowed to build, and in what ratio — its own
+        /// <see cref="MaxWorlds.Enemies.EnemySpawner.ConfigureAreaComposition"/> call, independent of
+        /// the area's own <see cref="WorldArea.composition"/> (which only governs the pre-placed
+        /// garrison). Null means "not authored" — <see cref="WorldMapLoader"/> falls back to a
+        /// single rusher, the Mothership's own Drone, so an unauthored cradle still builds SOMETHING
+        /// rather than sitting silently empty.</summary>
+        public WorldComposition composition;
+    }
+
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
     /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
     /// hand it straight to the engine that already knows how to build, validate and dress cover
@@ -505,6 +528,11 @@ namespace MaxWorlds.Arena
         /// there is no legacy single-field fallback to resolve — replicators shipped only after the
         /// array form already existed.</summary>
         public WorldReplicator[] replicators = Array.Empty<WorldReplicator>();
+
+        /// <summary>Assembly Cradles authored into this area (MV-1232) — the Mothership's own
+        /// build-a-robot machine, the Ship counterpart of a shed/replicator. Optional; most areas
+        /// (every one but the Hangar Bay, today) carry none.</summary>
+        public WorldCradle[] cradles = Array.Empty<WorldCradle>();
 
         public WorldBoss boss;
 

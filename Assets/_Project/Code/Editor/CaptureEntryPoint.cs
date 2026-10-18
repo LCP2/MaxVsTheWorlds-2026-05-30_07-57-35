@@ -213,6 +213,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1231BreakerLook() => RunFromMenu(CapturePresets.All["mv1231breakerlook"]);
         public static void CaptureMv1231BreakerLook() => Run(CapturePresets.All["mv1231breakerlook"]);
 
+        [MenuItem("MaxWorlds/Capture/Hangar Bay IN Gate (MV-1232)")]
+        public static void MenuMv1232HangarBay() => RunFromMenu(CapturePresets.All["mv1232hangarbay"]);
+        public static void CaptureMv1232HangarBay() => Run(CapturePresets.All["mv1232hangarbay"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

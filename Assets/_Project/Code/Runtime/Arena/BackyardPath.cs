@@ -273,13 +273,11 @@ namespace MaxWorlds.Arena
                 foreach (var replicator in FindObjectsByType<Replicator>(FindObjectsSortMode.None))
                     replicator.ApplyCityRelaySkin();
             }
-            // MV-1230: the Mothership's own ship kit — cover-piece dressing only (dropship, drop pod,
-            // crate, glass case, conveyor, console bank, bulkhead stub). Wall/floor dressing is wired
-            // by the Hangar Bay layout ticket (MV-1232) once real geometry exists — see ShipDressing's
-            // own header.
+            // MV-1230: the Mothership's own ship kit (cover-piece dressing). MV-1232: the Hangar Bay's
+            // own launch-pad hazard marking, now that real floor geometry exists — see ShipDressing.Dress.
             else if (world.Kit == WorldKit.Ship)
             {
-                ShipDressing.DressCover(host, cover);
+                ShipDressing.Dress(host, _cfg, cover);
             }
 
             // MV-759: a gated world re-skins its own doors into a round portal/sliding set instead of
