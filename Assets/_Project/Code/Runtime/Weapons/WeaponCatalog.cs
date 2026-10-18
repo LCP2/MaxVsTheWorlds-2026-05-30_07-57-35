@@ -29,7 +29,7 @@ namespace MaxWorlds.Weapons
         /// and UNDERTOW — World 2's Core morph grants it for the City, and the City's own bossless exit
         /// hands UNDERTOW on to the Reef in its place (an interim hand-over, until the City's own boss
         /// exists).</summary>
-        public enum PrimaryKind { Rcda, Lppe, Ricochet, Undertow }
+        public enum PrimaryKind { Rcda, Lppe, Ricochet, Undertow, LightMissile }
 
         /// <summary>World 2's primary (MV-708) — the Locked-Phase Pulse Emitter. Whether "LPPE" itself
         /// gets renamed is Lee's call; the code identifier stays <see cref="PrimaryKind.Lppe"/> either
@@ -48,12 +48,18 @@ namespace MaxWorlds.Weapons
         public const string RicochetName = "RICOCHET";
         public const string RicochetShortName = "RICOCHET";
 
+        /// <summary>World 5's own primary (MV-1210) — Lee's name, 2026-10-17. Short and long names are
+        /// the same phrase, same shape as UNDERTOW/RICOCHET's.</summary>
+        public const string LightMissileName = "LIGHT MISSILE";
+        public const string LightMissileShortName = "LIGHT MISSILE";
+
         public static string DisplayName(PrimaryKind kind) => kind switch
         {
             PrimaryKind.Rcda => PrimaryName,
             PrimaryKind.Lppe => LppeName,
             PrimaryKind.Ricochet => RicochetName,
             PrimaryKind.Undertow => UndertowName,
+            PrimaryKind.LightMissile => LightMissileName,
             _ => kind.ToString(),
         };
 
@@ -63,6 +69,7 @@ namespace MaxWorlds.Weapons
             PrimaryKind.Lppe => LppeShortName,
             PrimaryKind.Ricochet => RicochetShortName,
             PrimaryKind.Undertow => UndertowShortName,
+            PrimaryKind.LightMissile => LightMissileShortName,
             _ => kind.ToString(),
         };
 
@@ -293,6 +300,18 @@ namespace MaxWorlds.Weapons
             RicochetTrackKind.Ricochets => 6,
             RicochetTrackKind.Aiming => 4,
             RicochetTrackKind.Rate => 5,
+            _ => 1,
+        };
+
+        /// <summary>The level cap for a LIGHT MISSILE-only track (MV-1210), matching
+        /// <c>rig_board.ship.json</c>'s own per-node <c>maxLevel</c> — COUNT caps at 5 (owned from 1),
+        /// TRACKING at 4 (unowned from 0), RATE at 5 (owned from 1), CAPACITY at 5 (unowned from 0).</summary>
+        public static int MaxLevel(LightMissileTrackKind kind) => kind switch
+        {
+            LightMissileTrackKind.Count => 5,
+            LightMissileTrackKind.Tracking => 4,
+            LightMissileTrackKind.Rate => 5,
+            LightMissileTrackKind.Capacity => 5,
             _ => 1,
         };
 

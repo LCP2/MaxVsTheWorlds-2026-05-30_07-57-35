@@ -346,7 +346,9 @@ namespace MaxWorlds.Weapons
         /// so <c>GetComponentInParent</c> from the threshold could never reach it either. Falling back
         /// to <see cref="AreaGateThresholdLink"/> is what lets a disc that bounces off a closed gate's
         /// threshold still damage the gate it just bounced off, instead of bouncing for free.</summary>
-        private static bool TryResolveDamageable(Collider collider, out IDamageable target)
+        /// <summary>Internal (MV-1210): also <see cref="LightMissileBall"/>'s own gate fallback for its
+        /// hit test — the same AreaGateThresholdLink sibling lookup, never a second copy of it.</summary>
+        internal static bool TryResolveDamageable(Collider collider, out IDamageable target)
         {
             if (collider.TryGetComponent(out target)) return true;
             if (collider.TryGetComponent(out AreaGateThresholdLink link) && link.Gate != null)
