@@ -1068,6 +1068,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Charger => c.Charger,
             EnemyKind.Dreadnought => c.Dreadnought,
             EnemyKind.Skitter => c.Skitter,
+            EnemyKind.Breaker => c.Breaker,
             _ => 0,
         };
 

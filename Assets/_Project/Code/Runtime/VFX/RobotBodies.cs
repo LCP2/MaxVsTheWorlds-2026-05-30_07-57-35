@@ -8,6 +8,11 @@
 // MV-707 EXCEPTION: BuildCharger is hand-authored for the same reason.
 // MV-1217 EXCEPTION: BuildDreadnought is hand-authored for the same reason.
 // MV-1224 EXCEPTION: BuildSkitter is hand-authored for the same reason.
+// MV-1228 EXCEPTION: BuildBreaker is hand-authored for the same reason. It is also deliberately a
+// placeholder greybox, not a finished look: this ticket's own description carries no design image and
+// says explicitly "the look is a separate ticket" (MV-1231, which owns the neck collar and snapped
+// chain) — this body exists only so the roster-wide MV-535 regression guard (every kind must build a
+// geometry signature distinct from a Rusher's) stays green, not as the Breaker's final silhouette.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -96,6 +101,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Charger:  BuildCharger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Dreadnought: BuildDreadnought(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Skitter:  BuildSkitter(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Breaker:  BuildBreaker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -679,6 +685,53 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.4f, 0.05f, 0.035f, 8), p.Dark,
                 new Vector3(x, 2.2f, 0.42f), Quaternion.Euler(90f, 0f, 0f), Vector3.one, "TurretNozzle");
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(x, 2.2f, 0.63f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
+        }
+
+        /// <summary>Breaker (MV-1228) — hand-authored, same exception as <see cref="BuildCharger"/>/
+        /// <see cref="BuildDreadnought"/>/<see cref="BuildSkitter"/> above, but ALSO a deliberate
+        /// placeholder: see the file-header EXCEPTION note. A wide, bent-leg stance under a tall
+        /// two-tone torso with long hanging arms reaching almost to the ground — "animal in stance,
+        /// machine in every part" (Lee, 17 Oct) read through plain lathe/prism/beam machine parts, no
+        /// organic shaping. Legs go through <see cref="AddLeg"/> like <see cref="BuildDreadnought"/>'s
+        /// so the shared gait driver can still animate its 1.2 m/s walk; the look ticket (MV-1231) is
+        /// free to replace any part of this wholesale.</summary>
+        private static void BuildBreaker(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // Two short, thick bent legs, wide stance — hip ~0.75m up, feet splayed to ~0.5m either
+            // side, the same beam+foot+AddLeg grouping BuildDreadnought's legs use for gait.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Transform legBeam = Add(root, CharacterMeshes.Beam(0.75f, 0.24f, 0.19f, 8), p.Dark,
+                    new Vector3(side * 0.5f, 0.42f, 0.05f), Quaternion.Euler(12f, 0f, side * 10f), Vector3.one);
+                Transform legFoot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.21f, 0f), new Vector2(0.15f, 0.08f), new Vector2(0.06f, 0.14f) }, 10), p.Dark,
+                    new Vector3(side * 0.55f, 0.06f, 0.1f), Quaternion.identity, Vector3.one, "Foot");
+                legs.Add(AddLeg(root, legBeam, legFoot, 0.375f));
+            }
+
+            // The torso — p.Cool lower half, p.Warm upper half, tapering toward a short neck, the same
+            // two-lathe-half idiom as every other kind, scaled to the ticket's own ~2.2 m body height.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.5f, 0.72f), new Vector2(0.75f, 0.92f), new Vector2(0.85f, 1.12f), new Vector2(0.82f, 1.3f) }, 24), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.82f, 1.3f), new Vector2(0.78f, 1.55f), new Vector2(0.55f, 1.82f), new Vector2(0.3f, 2.0f) }, 24), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // The head — a small chamfered block riding the neck, with the one red eye lens on its
+            // forward face.
+            Add(root, CharacterMeshes.Prism(6, 0.28f, 0.22f, 0.26f, 0.2f, 0f), p.Dark, new Vector3(0f, 2.1f, 0f), Quaternion.identity, Vector3.one);
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0f, 2.12f, 0.22f), Quaternion.identity, new Vector3(0.18f, 0.18f, 0.07f)));
+
+            // Two long hanging arms — gorilla-proportioned, shoulder to a knuckle near the ground —
+            // the widest part of the body (the ticket's own 2.4 m), reaching the punch's own forward arc.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Add(root, CharacterMeshes.Prism(6, 0.32f, 0.26f, 0.42f, 0.18f, 0f), p.Warm,
+                    new Vector3(side * 0.95f, 1.62f, 0f), Quaternion.Euler(0f, 0f, side * -20f), Vector3.one, "Shoulder");
+                Add(root, CharacterMeshes.Beam(0.75f, 0.2f, 0.16f, 8), p.Dark,
+                    new Vector3(side * 1.1f, 1.2f, 0.05f), Quaternion.Euler(8f, 0f, side * 8f), Vector3.one, "UpperArm");
+                Add(root, CharacterMeshes.Beam(0.7f, 0.17f, 0.2f, 8), p.Dark,
+                    new Vector3(side * 1.2f, 0.5f, 0.1f), Quaternion.Euler(-4f, 0f, side * 4f), Vector3.one, "Forearm");
+                Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.21f, 0f), new Vector2(0.23f, 0.1f), new Vector2(0.18f, 0.2f) }, 12), p.Dark,
+                    new Vector3(side * 1.22f, 0.12f, 0.12f), Quaternion.identity, Vector3.one, "Fist");
+            }
         }
 
         // ------------------------------------------------------------------ plumbing

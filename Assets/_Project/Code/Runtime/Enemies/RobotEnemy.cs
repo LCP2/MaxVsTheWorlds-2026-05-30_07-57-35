@@ -5,6 +5,7 @@ using MaxWorlds.Arena;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -343,6 +344,10 @@ namespace MaxWorlds.Enemies
             _dreadnoughtTurretA = default;
             _dreadnoughtTurretB = default;
             _dreadnoughtTurretsInitialised = false;
+            // MV-1228: a pooled instance must not carry a previous Breaker life's attack choice or
+            // ram hit-list into this one either.
+            _breakerIsRam = false;
+            _breakerRamSentinelsHit.Clear();
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -1036,6 +1041,18 @@ namespace MaxWorlds.Enemies
         private float _verticalVel;
         private Vector3 _lungeDir;
         private bool _dealtThisLunge;
+
+        /// <summary>MV-1228: which of the Breaker's two attacks this Telegraph/Lunge/Recover cycle is —
+        /// set at commit (<see cref="TickChase"/>), read by <see cref="TickTelegraph"/>/<see cref="TickLunge"/>/
+        /// <see cref="TickRecover"/>/<see cref="HandleWallContact"/> to pick the ram's numbers (reusing
+        /// the Charger's own fields) or the punch's own constants. Meaningless for every other kind.</summary>
+        private bool _breakerIsRam;
+
+        /// <summary>MV-1228: every <see cref="Sentinel"/> the Breaker's current ram has already hit —
+        /// cleared at Telegraph completion alongside <see cref="_dealtThisLunge"/>, so a Sentinel
+        /// standing in the ram's path for several consecutive ticks takes the hit once, not once per
+        /// tick of overlap.</summary>
+        private readonly List<Sentinel> _breakerRamSentinelsHit = new List<Sentinel>(4);
 
         /// <summary>Counts down to the next contact-damage tick for a non-lunging kind (MV-428).
         /// Seeded to a full <see cref="EffectiveContactCooldown"/> on reset — same "no free first hit"
@@ -1990,7 +2007,8 @@ namespace MaxWorlds.Enemies
             if (Current == State.Dead) return;
             // MV-1217: "knockback moves it 0 m" — refused outright rather than merely decayed fast, so a
             // spray/ability hit still lands its damage but never nudges this 950 HP platform at all.
-            if (Kind == EnemyKind.Dreadnought) return;
+            // MV-1228: the Breaker refuses it the same way — "knockback refused on the Breaker itself".
+            if (Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Breaker) return;
             _knockback += impulse;
         }
 
@@ -2398,9 +2416,36 @@ namespace MaxWorlds.Enemies
         public void Activate()
         {
             if (Current != State.Dormant) return;
+
+            // MV-1228: "at most 2 awake per area" — a Breaker still at the cap stays Dormant and
+            // simply retries on the next wake check (CentralWakeCheck's own <=10 Hz pass, or the very
+            // next TakeDamage), the same "held at zero until a slot frees" idiom AssemblyCradle's own
+            // build cap already uses, rather than ever being force-woken past the limit.
+            if (Kind == EnemyKind.Breaker && CountAwakeBreakersInArea(AreaIndex) >= BreakerMaxAwakePerArea)
+                return;
+
             Current = State.Alert;
             _stateTimer = 0f;
             SetTell(windupTell);
+
+            // MV-1228: the chain snaps the instant it actually wakes (never on a refused attempt above)
+            // — the look ticket (MV-1231) owns the visual, this just fires the event.
+            if (Kind == EnemyKind.Breaker) ChainSignals.EmitChainSnapped(this);
+        }
+
+        /// <summary>MV-1228: how many OTHER Breakers in <paramref name="areaIndex"/> are already awake
+        /// right now — read by <see cref="Activate"/>'s own wake-limit gate. Walks the same field-wide
+        /// <see cref="_active"/> registry <see cref="AwakeCount"/> already does, since there is no
+        /// per-area robot registry to query instead.</summary>
+        private static int CountAwakeBreakersInArea(int areaIndex)
+        {
+            int n = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r != null && r.Kind == EnemyKind.Breaker && r.IsAwake && r.AreaIndex == areaIndex) n++;
+            }
+            return n;
         }
 
         /// <summary>The beat itself: a pulsing tell (same idiom as <see cref="TickTelegraph"/>'s
@@ -2846,6 +2891,30 @@ namespace MaxWorlds.Enemies
             if (Kind == EnemyKind.Charger && MapSlowZones.Instance.SpeedMultiplierAt(transform.position) < 1f)
                 return;
 
+            // MV-1228: the Breaker picks one of its two attacks by range, chosen here rather than
+            // falling into the generic single-attack gate below. Punch (close, <= 2.2 m) and ram
+            // (6-12 m band) are mutually exclusive by range, so distance alone decides; both still need
+            // clear sight, same as every other kind's commit. dist is measured to the GOAL (see this
+            // method's own opening comment), same quantity every other commit check below reads.
+            if (Kind == EnemyKind.Breaker)
+            {
+                if (_sight.HasSight && dist <= BreakerPunchRange)
+                {
+                    _breakerIsRam = false;
+                    Current = State.Telegraph;
+                    _stateTimer = 0f;
+                    SetTell(windupTell);
+                }
+                else if (_sight.HasSight && dist >= BreakerRamMinRange && dist <= lungeRange)
+                {
+                    _breakerIsRam = true;
+                    Current = State.Telegraph;
+                    _stateTimer = 0f;
+                    SetTell(windupTell);
+                }
+                return;
+            }
+
             // MV-1217: the Dreadnought never enters Telegraph/Lunge at all — its turrets fire
             // independently of this body's own state (see TickBody's TickDreadnoughtTurrets), so there
             // is no single body-wide commit for it to walk into here the way every other ranged kind
@@ -2965,10 +3034,17 @@ namespace MaxWorlds.Enemies
             float t = Mathf.PingPong(_stateTimer * 6f, 1f);
             SetTell(Color.Lerp(idleTell, windupTell, t));
 
-            if (_stateTimer >= telegraphTime)
+            // MV-1228: the Breaker's punch tells for 0.6 s, its ram for the shared telegraphTime (0.9 s,
+            // the same field the ram reuses from the Charger's own mechanism) — every other kind reads
+            // telegraphTime unconditionally, since _breakerIsRam is meaningless for them.
+            float effectiveTelegraphTime =
+                (Kind == EnemyKind.Breaker && !_breakerIsRam) ? BreakerPunchTelegraphSeconds : telegraphTime;
+
+            if (_stateTimer >= effectiveTelegraphTime)
             {
                 _lungeDir = transform.forward;
                 _dealtThisLunge = false;
+                _breakerRamSentinelsHit.Clear();
                 Current = State.Lunge;
                 _stateTimer = 0f;
                 SetTell(windupTell);
@@ -2988,6 +3064,9 @@ namespace MaxWorlds.Enemies
                 case EnemyKind.Bolter: TickBolt(dt); break;
                 case EnemyKind.Turret: TickGlobFire(dt); break;
                 case EnemyKind.Charger: TickCharge(dt); break;
+                // MV-1228: the Breaker's ram reuses the Charger's own TickCharge wholesale; its punch is
+                // its own, separate one-tick strike (TickBreakerPunch), never a moving lunge.
+                case EnemyKind.Breaker: if (_breakerIsRam) TickCharge(dt); else TickBreakerPunch(dt); break;
                 default:               TickMeleeLunge(dt); break;
             }
         }
@@ -3026,6 +3105,54 @@ namespace MaxWorlds.Enemies
 
             ClampBodySeparation();
             if (_stateTimer >= lungeTime) EnterRecover();   // travelled the full committed distance
+        }
+
+        /// <summary>The Breaker's press-punch (MV-1228): a stationary one-tick strike — nothing moves
+        /// here, unlike <see cref="TickCharge"/>; the body already held position throughout Telegraph.
+        /// Always resolves exactly once (there is nothing left to re-check next tick), then straight to
+        /// Recover — the punch's own "at most once every 1.8 s" cadence is the whole
+        /// Telegraph+Lunge+Recover cycle (0.6 + ~0 + 1.2 = 1.8 s), not a separate cooldown timer.</summary>
+        private void TickBreakerPunch(float dt)
+        {
+            ResolveBreakerPunchHit();
+            EnterRecover();
+        }
+
+        /// <summary>The punch's own 2.5 m-radius, 90 deg arc in front of the robot's CURRENT facing
+        /// (<see cref="BreakerPunchArcRadius"/>/<see cref="BreakerPunchArcHalfAngleDegrees"/>) — against
+        /// Max (damage + a forced-move shove) and every live <see cref="Sentinel"/> standing in it
+        /// (damage only, no knockback), same "Max and every live Sentinel are checked" idiom
+        /// <see cref="CorrosiveGlob"/>'s own area-of-effect landing already uses.</summary>
+        private void ResolveBreakerPunchHit()
+        {
+            Vector3 forward = transform.forward;
+
+            if (target != null)
+            {
+                Vector3 to = target.position - transform.position; to.y = 0f;
+                if (to.magnitude <= BreakerPunchArcRadius &&
+                    Vector3.Angle(forward, to) <= BreakerPunchArcHalfAngleDegrees)
+                {
+                    _targetDamageable ??= target.GetComponent<IDamageable>();
+                    if (_targetDamageable != null && _targetDamageable.IsAlive)
+                    {
+                        _targetDamageable.TakeDamage(
+                            new DamageInfo(BreakerPunchDamage, transform.position, to.normalized, _team));
+                        ApplyBreakerKnockbackToPlayer(target, to.normalized, BreakerPunchKnockbackDistance);
+                    }
+                }
+            }
+
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel s = sentinels[i];
+                if (s == null || !s.IsAlive) continue;
+                Vector3 toSentinel = s.transform.position - transform.position; toSentinel.y = 0f;
+                if (toSentinel.magnitude > BreakerPunchArcRadius ||
+                    Vector3.Angle(forward, toSentinel) > BreakerPunchArcHalfAngleDegrees) continue;
+                s.TakeDamage(new DamageInfo(BreakerPunchDamage, transform.position, toSentinel.normalized, _team));
+            }
         }
 
         /// <summary>Leave Telegraph/Lunge for Recover, handing back this robot's attack token
@@ -3280,7 +3407,13 @@ namespace MaxWorlds.Enemies
 
         private void TickRecover(float dt)
         {
-            if (_stateTimer >= recoverTime)
+            // MV-1228: the Breaker's punch recovers in its own, shorter beat (1.2 s) than its ram
+            // (the shared recoverTime, 1.4 s, reused from the Charger's mechanism) — every other kind
+            // reads recoverTime unconditionally, since _breakerIsRam is meaningless for them.
+            float effectiveRecoverTime =
+                (Kind == EnemyKind.Breaker && !_breakerIsRam) ? BreakerPunchRecoverSeconds : recoverTime;
+
+            if (_stateTimer >= effectiveRecoverTime)
             {
                 // MV-820 Change 1: a robot that was assigned to a Replicator mid-Telegraph/Lunge
                 // finishes that attack first (this Recover beat is the tail of it) — now that it's
@@ -3375,8 +3508,47 @@ namespace MaxWorlds.Enemies
                 {
                     _targetDamageable.TakeDamage(
                         new DamageInfo(contactDamage, transform.position, _lungeDir, _team));
+                    // MV-1228/MV-1222: the Breaker's ram also shoves Max back on the hit that ends it.
+                    if (Kind == EnemyKind.Breaker)
+                        ApplyBreakerKnockbackToPlayer(target, _lungeDir, BreakerRamKnockbackDistance);
                 }
             }
+
+            // MV-1228: "punch and ram hit sentinels too" — the ram (TickCharge is this method's only
+            // other caller) also damages every live Sentinel it passes through, each at most once per
+            // charge (_breakerRamSentinelsHit), with no knockback on them — same "no knockback on them"
+            // idiom CorrosiveGlob.DetonateAreaOfEffect already uses for Sentinel.Active. A no-op for
+            // every other kind that calls this method.
+            if (Kind == EnemyKind.Breaker) TryBreakerRamHitSentinels();
+        }
+
+        private void TryBreakerRamHitSentinels()
+        {
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel s = sentinels[i];
+                if (s == null || !s.IsAlive || _breakerRamSentinelsHit.Contains(s)) continue;
+                Vector3 toSentinel = s.transform.position - transform.position; toSentinel.y = 0f;
+                if (toSentinel.magnitude > contactRadius) continue;
+                _breakerRamSentinelsHit.Add(s);
+                s.TakeDamage(new DamageInfo(contactDamage, transform.position, _lungeDir, _team));
+            }
+        }
+
+        /// <summary>MV-1228/MV-1222: shoves Max away from this robot via
+        /// <see cref="PlayerController.ApplyForcedMove"/> — the Breaker's punch and ram are this
+        /// mechanism's first production caller (MV-1222 only built and tested it directly). Speed is
+        /// shared (<see cref="BreakerForcedMoveSpeed"/>); duration is derived from the per-move
+        /// <paramref name="distance"/> so each move's own authored knockback distance
+        /// (speed * duration) lands exactly. A no-op if <paramref name="targetTransform"/> carries no
+        /// <see cref="PlayerController"/> (a Sentinel never does — Sentinels are handled separately,
+        /// with no knockback, by <see cref="TryBreakerRamHitSentinels"/>/<see cref="ResolveBreakerPunchHit"/>).</summary>
+        private static void ApplyBreakerKnockbackToPlayer(Transform targetTransform, Vector3 direction, float distance)
+        {
+            if (!targetTransform.TryGetComponent(out PlayerController player)) return;
+            player.ApplyForcedMove(direction * BreakerForcedMoveSpeed, distance / BreakerForcedMoveSpeed,
+                ForcedMoveSource.Knockback);
         }
 
         private void FaceAndMove(Vector3 dir, float speed, float dt)
@@ -3452,10 +3624,44 @@ namespace MaxWorlds.Enemies
                 EnterRecover();
                 Stun(ChargerWallStunSeconds, ChargerWallStunDamageMultiplier);
             }
+            // MV-1228: the Breaker's own ram reuses the Charger's TickCharge wholesale (see TickLunge's
+            // dispatch) but stuns for its own, longer duration (1.5 s vs the Charger's 1.2 s) at the same
+            // damage-taken penalty — gated on _breakerIsRam so a mid-cycle punch (which never reaches
+            // Lunge via a wall) can never trip this.
+            else if (Kind == EnemyKind.Breaker && Current == State.Lunge && _breakerIsRam)
+            {
+                EnterRecover();
+                Stun(BreakerWallStunSeconds, BreakerWallStunDamageMultiplier);
+            }
         }
 
         private const float ChargerWallStunSeconds = 1.2f;
         private const float ChargerWallStunDamageMultiplier = 1.5f;
+
+        // --- MV-1228: the Breaker ----------------------------------------------------------------
+        // All of the Breaker's own attack-specific numbers live here as plain constants rather than on
+        // EnemyArchetype, the same "single-kind mechanic, not a shared stat" footing ChargerWallStunSeconds
+        // above already uses — only the fields every kind shares (body/collider, moveSpeed, maxHealth,
+        // and the ram's own telegraph/lunge/recover/contact numbers, which the Breaker reuses from the
+        // Charger's exact mechanism) live on EnemyArchetype.Breaker.
+        private const float BreakerRamMinRange = 6f;    // the ram's engage floor; lungeRange (12 m) is the ceiling
+        private const float BreakerWallStunSeconds = 1.5f;
+        private const float BreakerWallStunDamageMultiplier = 1.5f;
+
+        private const float BreakerPunchRange = 2.2f;
+        private const float BreakerPunchTelegraphSeconds = 0.6f;
+        private const float BreakerPunchRecoverSeconds = 1.2f;   // telegraph(0.6) + strike(~0) + this = 1.8 s cadence
+        private const float BreakerPunchDamage = 28f;
+        private const float BreakerPunchArcRadius = 2.5f;
+        private const float BreakerPunchArcHalfAngleDegrees = 45f;   // a 90 deg arc, 45 deg either side of facing
+
+        // MV-1222's shared push speed for both of the Breaker's knockbacks — only the duration differs,
+        // so distance (speed * duration) lands on each move's own authored number.
+        private const float BreakerForcedMoveSpeed = 10f;
+        private const float BreakerPunchKnockbackDistance = 3f;
+        private const float BreakerRamKnockbackDistance = 4f;
+
+        private const int BreakerMaxAwakePerArea = 2;
 
         private void ApplyGravity(float dt)
         {

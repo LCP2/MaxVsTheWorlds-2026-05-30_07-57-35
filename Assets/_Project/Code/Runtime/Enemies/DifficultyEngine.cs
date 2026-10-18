@@ -78,24 +78,35 @@ namespace MaxWorlds.Enemies
             /// <see cref="SolveComposition"/>).</summary>
             public readonly int Skitter;
 
+            /// <summary>MV-1228: the Breaker — same "authored-composition only" footing as
+            /// <see cref="Bolter"/>/<see cref="Lurker"/>/<see cref="Turret"/>/<see cref="Sludger"/>/
+            /// <see cref="Charger"/>/<see cref="Dreadnought"/> (no dial ever unlocks it in
+            /// <see cref="SolveComposition"/>); it appears only where a world garrisons it by name, same
+            /// footing as the <see cref="Dreadnought"/> — a chained enemy has no shed to be released
+            /// from.</summary>
+            public readonly int Breaker;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
-                int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0)
+                int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0,
+                int breaker = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
                 Sludger = sludger; Charger = charger; Turret = turret; Dreadnought = dreadnought;
-                Skitter = skitter;
+                Skitter = skitter; Breaker = breaker;
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger + Turret + Dreadnought + Skitter;
+                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
             /// rusher tier drops loot, so this is every solved count but <see cref="Rusher"/>.
-            /// MV-1224: the Skitter sits on the same small-tier footing as the Rusher — also excluded.</summary>
+            /// MV-1224: the Skitter sits on the same small-tier footing as the Rusher — also excluded.
+            /// MV-1228: the Breaker counts as large (its own drops double a <see cref="Brute"/>'s) —
+            /// included, not excluded.</summary>
             public int LargeCount => TotalCount - Rusher - Skitter;
 
             public float TotalThreatValue =>
@@ -105,7 +116,8 @@ namespace MaxWorlds.Enemies
                 Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter +
                 Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger +
                 Charger * ThreatValues.Charger + Turret * ThreatValues.Turret +
-                Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter;
+                Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter +
+                Breaker * ThreatValues.Breaker;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

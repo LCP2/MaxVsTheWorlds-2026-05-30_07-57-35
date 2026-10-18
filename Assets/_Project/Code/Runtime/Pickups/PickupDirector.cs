@@ -212,6 +212,11 @@ namespace MaxWorlds.Pickups
             _largeKills++;
 
             int cells = ResolveCellDrop();
+            // MV-1228: "as a Brute, doubled" — the ticket's own drop rule, applied to the roll before
+            // it's spawned rather than as a second guaranteed ring (unlike the Dredge Hulk/Dreadnought
+            // bonuses below, which are a FIXED top-up on top of the ordinary roll); a Breaker's own kill
+            // just drops twice as many Power Cells as the same roll would for any other large kind.
+            if (kind == EnemyKind.Breaker) cells *= 2;
             for (int i = 0; i < cells; i++)
             {
                 float ang = i * (Mathf.PI * 2f / cells);
