@@ -264,5 +264,20 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, launcher);
             Assert.AreEqual(1, blinker);
         }
+
+        // MV-1221: FillExact never queued composition.Dreadnought, so TryTakeForGarrison's exact-kind
+        // lookup found nothing and fell back to whatever else was queued for the area - a wrong-kind
+        // substitution at an authored Dreadnought garrison slot.
+        [Test]
+        public void FillExact_QueuesDreadnought_SoItsGarrisonSlotGetsADreadnoughtNotAFallback()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 100);
+            var composition = new DifficultyEngine.Composition(
+                rusher: 0, bruiser: 1, heavy: 0, brute: 0, dreadnought: 1);
+            queue.FillExact(composition, areaIndex: 1);
+
+            Assert.IsTrue(queue.TryTakeForGarrison(1, EnemyKind.Dreadnought, out EnemyKind kind));
+            Assert.AreEqual(EnemyKind.Dreadnought, kind);
+        }
     }
 }
