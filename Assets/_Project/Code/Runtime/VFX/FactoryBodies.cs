@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
@@ -393,5 +394,269 @@ namespace MaxWorlds.VFX
         private static Transform Add(Transform root, Mesh mesh, Material mat,
                                      Vector3 at, Quaternion rot, Vector3 scale, string name = "Part")
             => CharacterPart.Add(root, mesh, mat, at, rot, scale, name);
+
+        // ---------------------------------------------------------------- MV-1227: Mothership Assembly Cradle
+
+        /// <summary>MV-1227: the cradle's own reserved red — "Red is reserved for cradles in this world"
+        /// (ticket), #E2483D.</summary>
+        private static readonly Color CradleRed = new Color(0.886f, 0.282f, 0.239f);
+
+        private static readonly Color CradleGold = new Color(1.00f, 0.80f, 0.20f);
+        private static readonly Color CradlePreviewGrey = new Color(0.55f, 0.55f, 0.58f);
+
+        /// <summary>The same idle amber every live robot's own eye rests at (RobotRig's own
+        /// EyeIdle) — so a cradle's "Done, eye lit" preview reads as the exact tell the finished robot
+        /// will carry once it steps out.</summary>
+        private static readonly Color CradleEyeLit = new Color(0.90f, 0.72f, 0.22f);
+
+        private static Material s_cradleRed;
+        private static Material s_cradleGrey;
+        private static Material s_previewCool;
+        private static Material s_previewDark;
+        private static Material s_previewGold;
+
+        /// <summary>Cached per <see cref="EnemyKind"/> (MV-1227) — rebuilt every ~4 s build cycle while a
+        /// cradle is alive, so a fresh <c>Material</c> per call would leak native memory over a long
+        /// session; keyed and created once, same reasoning as <see cref="RobotRig"/>'s own
+        /// <c>s_sharedCharacterMats</c>.</summary>
+        private static readonly Dictionary<EnemyKind, Material> s_previewWarmByKind = new Dictionary<EnemyKind, Material>(16);
+
+        /// <summary>What <see cref="MaxWorlds.Factories.AssemblyCradle"/> needs back from
+        /// <see cref="BuildAssemblyCradle"/>: the two arms to swing while building, the turret housings
+        /// (MV-1227 AC1 measures their own resolved width), and the empty bay root
+        /// <see cref="BuildCradlePreview"/> populates once a build cycle's kind is known.</summary>
+        public readonly struct CradleGantry
+        {
+            public readonly Transform[] Arms;
+            public readonly Transform BayRoot;
+            public readonly Transform[] TurretHousings;
+
+            public CradleGantry(Transform[] arms, Transform bayRoot, Transform[] turretHousings)
+            {
+                Arms = arms; BayRoot = bayRoot; TurretHousings = turretHousings;
+            }
+        }
+
+        /// <summary>What one <see cref="BuildCradlePreview"/> call hands back — the three stage roots
+        /// <see cref="MaxWorlds.Factories.AssemblyCradle"/> shows one-at-a-time by toggling every
+        /// renderer's own <c>enabled</c> flag underneath (never <c>SetActive</c> — MV-1227 AC1 reads the
+        /// renderer's own resolved flag), one per <c>AssemblyCradle.BuildStage</c>.</summary>
+        public readonly struct CradlePreview
+        {
+            public readonly Transform Frame;
+            public readonly Transform Plates;
+            public readonly Transform Done;
+
+            public CradlePreview(Transform frame, Transform plates, Transform done)
+            {
+                Frame = frame; Plates = plates; Done = done;
+            }
+        }
+
+        /// <summary>Builds the cradle's static gantry (MV-1227) onto <paramref name="root"/> — a
+        /// metre-space container at the cradle's own centre, the same <see cref="MaxWorlds.Core.ParentScale.MakeMetreSpace"/>
+        /// convention every other factory body in this file uses. <paramref name="size"/> is the
+        /// ticket's 3x3x3 m footprint. The build bay itself comes back EMPTY
+        /// (<see cref="CradleGantry.BayRoot"/>) — <see cref="BuildCradlePreview"/> populates it once per
+        /// build cycle, the moment the kind being built is actually known (the cadence's own
+        /// <c>TryNextKind</c> cannot be peeked without consuming it — see
+        /// <see cref="MaxWorlds.Factories.AssemblyCradle"/>'s own doc on why).</summary>
+        public static CradleGantry BuildAssemblyCradle(Transform root, Vector3 size)
+        {
+            EnsureCradleMaterials();
+
+            float hw = size.x * 0.5f, hh = size.y * 0.5f, hd = size.z * 0.5f;
+            const float postSize = 0.22f;
+
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                foreach (float sz in new[] { -1f, 1f })
+                {
+                    Add(root, CharacterMeshes.Bevelled(new Vector3(postSize, size.y, postSize), 0.02f), s_cradleRed,
+                        new Vector3(sx * (hw - postSize * 0.5f), 0f, sz * (hd - postSize * 0.5f)), Quaternion.identity,
+                        Vector3.one, "CornerPost");
+                }
+            }
+
+            const float railSize = 0.14f;
+            Add(root, CharacterMeshes.Bevelled(new Vector3(size.x, railSize, railSize), 0.015f), s_cradleRed,
+                new Vector3(0f, hh - railSize * 0.5f, hd - postSize * 0.5f), Quaternion.identity, Vector3.one, "TopRailFront");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(size.x, railSize, railSize), 0.015f), s_cradleRed,
+                new Vector3(0f, hh - railSize * 0.5f, -(hd - postSize * 0.5f)), Quaternion.identity, Vector3.one, "TopRailBack");
+
+            // The gold lens on top (ticket).
+            MeshRenderer topLens = CharacterPart.AddLens(root, CharacterMeshes.Sphere(14),
+                new Vector3(0f, hh + 0.14f, 0f), Quaternion.identity, Vector3.one * 0.26f);
+            topLens.gameObject.name = "TopLens";
+            TintLens(topLens, CradleGold);
+
+            // Two articulated arms reaching into the bay, hinged at the top rail so AssemblyCradle can
+            // swing them while a build is in progress (ticket's own "arms move while building").
+            var arms = new Transform[2];
+            for (int i = 0; i < 2; i++)
+            {
+                float sx = i == 0 ? -1f : 1f;
+                var hinge = new GameObject($"Arm{i}").transform;
+                hinge.SetParent(root, worldPositionStays: false);
+                hinge.localPosition = new Vector3(sx * (hw - postSize), hh - railSize, -(hd - postSize) * 0.4f);
+                Add(hinge, CharacterMeshes.Beam(hh * 0.9f, 0.05f, 0.03f, 6), s_cradleRed,
+                    new Vector3(0f, -hh * 0.45f, 0f), Quaternion.Euler(0f, 0f, -sx * 35f), Vector3.one, "ArmLink");
+                arms[i] = hinge;
+            }
+
+            // The 2x2 m out pad (ticket), dashed red, flat, clear of the front face (-Z, the same
+            // player-facing convention BuildReplicator's own hatch uses).
+            BuildOutPadOutline(root, new Vector3(0f, -hh + 0.01f, -(hd + 1.3f)), 2f, 2f);
+
+            // The two front-top turrets — never plain cubes (Lee, 1/3 Oct: "the big ones looked
+            // ridiculous"): a hexagonal housing with a long visible barrel.
+            var turrets = new Transform[2];
+            const float housingSize = 0.3f; // ticket's own "about 0.3 m (10% of a side)"
+            for (int i = 0; i < 2; i++)
+            {
+                float sx = i == 0 ? -1f : 1f;
+                Vector3 at = new Vector3(sx * (hw - housingSize * 0.7f), hh - housingSize * 0.6f, -(hd - housingSize * 0.3f));
+                turrets[i] = BuildCradleTurret(root, at, housingSize, i == 0 ? "TurretLeft" : "TurretRight");
+            }
+
+            var bayRoot = new GameObject("Bay").transform;
+            bayRoot.SetParent(root, worldPositionStays: false);
+            bayRoot.localPosition = new Vector3(0f, -hh, 0f);
+
+            return new CradleGantry(arms, bayRoot, turrets);
+        }
+
+        /// <summary>The front-top turret housing plus barrel — a hexagonal drum, never a plain cube
+        /// (Lee, 1/3 Oct: "the big ones looked ridiculous"). Returns the HOUSING transform alone (not
+        /// the barrel), so MV-1227 AC1 can measure its own resolved renderer width without the barrel
+        /// skewing the bound.</summary>
+        private static Transform BuildCradleTurret(Transform root, Vector3 at, float housingSize, string name)
+        {
+            var turretRoot = new GameObject(name).transform;
+            turretRoot.SetParent(root, worldPositionStays: false);
+            turretRoot.localPosition = at;
+
+            Transform housing = Add(turretRoot, CharacterMeshes.Bevelled(Vector3.one * housingSize, housingSize * 0.15f),
+                s_cradleRed, Vector3.zero, Quaternion.identity, Vector3.one, "Housing");
+
+            const float barrelLength = 0.5f; // ticket's own "long visible barrels"
+            Add(turretRoot, CharacterMeshes.Beam(barrelLength, 0.045f, 0.035f, 8), s_cradleGrey,
+                new Vector3(0f, 0f, -(housingSize * 0.5f + barrelLength * 0.5f)), Quaternion.Euler(-90f, 0f, 0f),
+                Vector3.one, "Barrel");
+
+            return housing;
+        }
+
+        /// <summary>The out pad's dashed red outline (ticket: "2x2 m in front, dashed red outline,
+        /// flat") — same dashed-segment idiom <see cref="MaxWorlds.Rendering.CityKit.BuildBayOutline"/>
+        /// uses, just in the cradle's own reserved red rather than CityKit's road-paint white, and
+        /// self-contained here since every pad edge is axis-aligned (no need for CityKit's own
+        /// arbitrary-direction helpers).</summary>
+        private static void BuildOutPadOutline(Transform root, Vector3 centre, float width, float depth)
+        {
+            var pad = new GameObject("OutPad").transform;
+            pad.SetParent(root, worldPositionStays: false);
+            pad.localPosition = centre;
+
+            float hw = width * 0.5f, hd = depth * 0.5f;
+            Vector2 a = new Vector2(-hw, -hd), b = new Vector2(hw, -hd), c = new Vector2(hw, hd), d = new Vector2(-hw, hd);
+            AppendDashedOutline(pad, a, b);
+            AppendDashedOutline(pad, b, c);
+            AppendDashedOutline(pad, c, d);
+            AppendDashedOutline(pad, d, a);
+        }
+
+        private static void AppendDashedOutline(Transform parent, Vector2 a, Vector2 b)
+        {
+            const float dash = 0.3f, gap = 0.2f, lineWidth = 0.08f, thickness = 0.015f;
+            Vector2 delta = b - a;
+            float length = delta.magnitude;
+            if (length < 0.001f) return;
+            Vector2 dir = delta / length;
+            float pitch = dash + gap;
+            int count = Mathf.Max(1, Mathf.FloorToInt((length + gap) / pitch));
+            bool alongX = Mathf.Abs(dir.x) > Mathf.Abs(dir.y);
+
+            for (int i = 0; i < count; i++)
+            {
+                float start = i * pitch;
+                float end = Mathf.Min(start + dash, length);
+                if (end <= start) continue;
+                Vector2 mid = a + dir * ((start + end) * 0.5f);
+                float segLength = end - start;
+                Vector3 segSize = alongX
+                    ? new Vector3(segLength, thickness, lineWidth)
+                    : new Vector3(lineWidth, thickness, segLength);
+                Add(parent, CharacterMeshes.Bevelled(segSize, 0.01f), s_cradleRed,
+                    new Vector3(mid.x, 0f, mid.y), Quaternion.identity, Vector3.one, $"Dash{i}");
+            }
+        }
+
+        /// <summary>Rebuilds the bay's three build-stage bodies for <paramref name="kind"/> — called
+        /// once per build cycle, the instant the cycle's kind is chosen (MV-1227; see
+        /// <see cref="MaxWorlds.Factories.AssemblyCradle"/>'s own doc on why this can only ever run once
+        /// per cycle). Destroys whatever the previous cycle left in <paramref name="bayRoot"/> first.
+        ///
+        /// Frame = a grey skeleton of the kind's own body (ticket) — the SAME generated silhouette as
+        /// Plates/Done, just wearing one flat grey material and a dark eye, so "never a generic blob"
+        /// (ticket's own do-not-re-raise) holds even at the frame stage. Plates = the body in its own
+        /// roster colours (<see cref="MaxWorlds.VFX.CharacterSkin.ResolveBodyColor"/> — the exact colour
+        /// the finished robot will wear), eye dark. Done = the same body, eye lit
+        /// (<see cref="CradleEyeLit"/>, the same idle amber every live robot's own eye rests at). Built
+        /// through the Mothership's own silhouette skin (MV-1226, "mothership") so a Drone/Sentry
+        /// previews its ship body, not the base roster one.</summary>
+        public static CradlePreview BuildCradlePreview(Transform bayRoot, EnemyKind kind)
+        {
+            EnsureCradleMaterials();
+
+            for (int i = bayRoot.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = bayRoot.GetChild(i).gameObject;
+                // MV-464's own trap: Destroy() is a no-op outside Play mode.
+                if (Application.isPlaying) UnityEngine.Object.Destroy(child);
+                else UnityEngine.Object.DestroyImmediate(child);
+            }
+
+            var frame = new GameObject("StageFrame").transform;
+            frame.SetParent(bayRoot, worldPositionStays: false);
+            var plates = new GameObject("StagePlates").transform;
+            plates.SetParent(bayRoot, worldPositionStays: false);
+            var done = new GameObject("StageDone").transform;
+            done.SetParent(bayRoot, worldPositionStays: false);
+
+            var greyPalette = new RobotPalette(s_cradleGrey, s_cradleGrey, s_cradleGrey, s_cradleGrey);
+            RobotBodies.Body frameBody = RobotBodies.Build(kind, frame, greyPalette, skin: "mothership");
+            foreach (MeshRenderer eye in frameBody.Eyes) TintLens(eye, Color.black);
+
+            var realPalette = new RobotPalette(PreviewWarmFor(kind), s_previewCool, s_previewDark, s_previewGold);
+            RobotBodies.Body platesBody = RobotBodies.Build(kind, plates, realPalette, skin: "mothership");
+            foreach (MeshRenderer eye in platesBody.Eyes) TintLens(eye, Color.black);
+
+            RobotBodies.Body doneBody = RobotBodies.Build(kind, done, realPalette, skin: "mothership");
+            foreach (MeshRenderer eye in doneBody.Eyes) TintLens(eye, CradleEyeLit);
+
+            return new CradlePreview(frame, plates, done);
+        }
+
+        private static Material PreviewWarmFor(EnemyKind kind)
+        {
+            if (s_previewWarmByKind.TryGetValue(kind, out Material mat) && mat != null) return mat;
+            CharacterRole role = CharacterSkin.RoleFor(kind);
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            Color bodyColor = CharacterSkin.ResolveBodyColor(role, archetype.Skin, archetype.ColourRole);
+            mat = NewMaterial("CradlePreview_Warm_" + kind, bodyColor);
+            s_previewWarmByKind[kind] = mat;
+            return mat;
+        }
+
+        private static void EnsureCradleMaterials()
+        {
+            if (s_cradleRed != null) return;
+            s_cradleRed = NewMaterial("Cradle_Red", CradleRed);
+            s_cradleGrey = NewMaterial("Cradle_Grey", CradlePreviewGrey);
+            s_previewCool = NewMaterial("CradlePreview_Cool", CharacterSkin.RobotCool);
+            s_previewDark = NewMaterial("CradlePreview_Dark", CharacterSkin.RobotDark);
+            s_previewGold = NewMaterial("CradlePreview_Gold", CharacterSkin.RobotGold);
+        }
     }
 }

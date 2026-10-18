@@ -442,6 +442,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv1201CityRelay());
+            Add(BuildMv1227AssemblyCradle());
             Add(BuildMv818CoverCheck());
             Add(BuildMv819PipeCheck());
             Add(BuildMv821DeckWalkwayCheck());
@@ -3700,6 +3701,78 @@ namespace MaxWorlds.Dev
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1201-city-relay", Setup) },
                 Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
+            };
+        }
+
+        // ---- Mv1227AssemblyCradle (MV-1227 AC3) -----------------------------------------------
+
+        /// <summary>AC3's own "one capture of a cradle mid-build" — builds a real
+        /// <see cref="AssemblyCradle"/> next to the real Player-tagged Max, drives it into the Plates
+        /// stage via the actual production <see cref="AssemblyCradle.Tick"/> loop (no scripted VFX
+        /// call — the exact state a live cradle reaches 3.2 s into a build), and frames it: proof of
+        /// the actual result, not a description of one.</summary>
+        private static CapturePreset BuildMv1227AssemblyCradle()
+        {
+            const float pitch = 50f;
+            const float distance = 14f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject cradleGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                // Well clear of whatever set dressing (a gate, cover) sits close to Max's own spawn —
+                // MV1201CityRelay's 3.5-5 m offset was still inside a nearby prop's footprint here.
+                Vector3 focus = maxGo.transform.position + maxGo.transform.forward * 10f;
+
+                cradleGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cradleGo.name = "MV1227CaptureAssemblyCradle";
+                cradleGo.transform.position = focus;
+                cradleGo.transform.localScale = new Vector3(3f, 3f, 3f); // the ticket's own 3x3x3 m footprint
+                var cradle = cradleGo.AddComponent<AssemblyCradle>(); // Awake runs Build() synchronously in Play mode
+
+                var spawner = cradleGo.GetComponent<EnemySpawner>();
+                spawner.ConfigureAreaComposition(new WorldComposition { rusher = 1 });
+                cradle.SetMaxInArea(true);
+                cradle.Tick(3.2f); // 3.0 <= t < 4.0: the Plates stage — a cradle caught mid-build
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
+
+                // Weighted toward the cradle itself (the subject of this shot) — Max stays in frame for
+                // scale only. Centred 1.6 m up so the full 3 m frame (plus the gold lens on top) fits.
+                Vector3 camFocus = Vector3.Lerp(maxGo.transform.position, focus, 0.8f) + Vector3.up * 1.6f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1227assemblycradle",
+                LogTag = "[MV1227Capture]",
+                Flag = "-mv1227shot",
+                ArmFile = "Temp/mv1227.arm",
+                HeadlessMarker = "Temp/mv1227.headless",
+                DoneFileName = "_mv1227_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV1201CityRelay/MV616SentinelBeam's own presets use: on
+                    // a fresh profile HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1227-assembly-cradle", Setup) },
+                Cleanup = () => { if (cradleGo != null) Destroy(cradleGo); },
             };
         }
 
