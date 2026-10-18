@@ -850,8 +850,11 @@ namespace MaxWorlds.Enemies
                 // designed, all seven kinds, never trimmed — RusherCap only ever applies to a
                 // dial-derived solve. _rushersQueuedThisLevel still advances by an authored area's
                 // Rusher count either way, so a later dial-derived area is still capped correctly.
+                // MV-1235: a blendWithDial composition's Rusher count IS a dial-derived solve (see
+                // WorldComposition.IsAuthoredExclusive), so it must still take the ClampRusherCap
+                // branch below, not this one.
                 DifficultyEngine.Composition solved = _worldCfg.SolveComposition(areaIndex);
-                bool authored = _worldCfg.AreaByIndex(areaIndex)?.composition?.IsAuthored == true;
+                bool authored = _worldCfg.AreaByIndex(areaIndex)?.composition?.IsAuthoredExclusive == true;
                 DifficultyEngine.Composition composition = authored ? CountRushers(solved) : ClampRusherCap(solved);
                 _largeCountByArea[areaIndex] = composition.LargeCount;
                 _bruiserCountByArea[areaIndex] = composition.Bruiser;
@@ -953,7 +956,9 @@ namespace MaxWorlds.Enemies
             if (seedCount <= 0) return;
 
             DifficultyEngine.Composition solved = _worldCfg.SolveComposition(areaIndex);
-            bool authored = area.composition?.IsAuthored == true;
+            // MV-1235: a blendWithDial composition's Rusher count IS a dial-derived solve, so it must
+            // still take the RusherCap.Apply preview branch below, not the unclamped one.
+            bool authored = area.composition?.IsAuthoredExclusive == true;
             // Read-only preview of the same clamp FillArea will apply for real later — Apply() itself
             // mutates nothing (see RusherCap's own doc comment), so calling it here is safe; only
             // ClampRusherCap/CountRushers (which advance _rushersQueuedThisLevel) are ever allowed to

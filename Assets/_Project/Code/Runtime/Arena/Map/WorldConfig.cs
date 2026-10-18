@@ -195,6 +195,16 @@ namespace MaxWorlds.Arena
         /// without having to also restate every dial-driven kind's current solved count by hand.</summary>
         public bool blendWithDial;
 
+        /// <summary>MV-1235: true only when this composition's counts REPLACE the dial-derived solve
+        /// entirely rather than blending onto it — <see cref="IsAuthored"/> and NOT
+        /// <see cref="blendWithDial"/>. A <see cref="blendWithDial"/> composition's Rusher/Bruiser/Heavy/
+        /// Brute/Gunner/Launcher/Blinker counts come straight off the dial solve (<see cref="BlendOnto"/>
+        /// keeps every one of <c>dialSolved</c>'s), so callers deciding whether a count is hand-designed
+        /// or dial-derived (e.g. <see cref="RusherCap"/>'s "only ever applies to a dial-derived solve")
+        /// must ask this, not plain <see cref="IsAuthored"/> — which was the bug: <see cref="IsAuthored"/>
+        /// alone reads a blended area as hand-designed, letting its dial-derived Rushers skip the cap.</summary>
+        public bool IsAuthoredExclusive => IsAuthored && !blendWithDial;
+
         public DifficultyEngine.Composition ToEngineComposition() =>
             new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought);
 
@@ -1112,7 +1122,7 @@ namespace MaxWorlds.Arena
             // budget. MV-1220: UNLESS it explicitly opts into WorldComposition.blendWithDial, in
             // which case it blends onto the dial solve below instead — see that field's own
             // comment for why this can only ever be an explicit opt-in, never inferred.
-            if (authored != null && authored.IsAuthored && !authored.blendWithDial) return authored.ToEngineComposition();
+            if (authored != null && authored.IsAuthoredExclusive) return authored.ToEngineComposition();
 
             float baseThreat = DevTuning.Or(DevTuning.WorldBaseThreat, dials.baseThreat);
             float threatGrowth = DevTuning.Or(DevTuning.WorldThreatGrowth, dials.threatGrowth);
