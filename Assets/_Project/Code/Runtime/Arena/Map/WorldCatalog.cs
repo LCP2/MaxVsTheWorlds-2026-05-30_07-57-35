@@ -30,6 +30,9 @@ namespace MaxWorlds.Arena
         Stormdrain,
         Reef,
         City,
+        /// <summary>MV-1230: the Mothership's own ship kit — rust/teal split bulkheads, deck plating,
+        /// dropships, drop pods, crates, glass cases, a conveyor.</summary>
+        Ship,
     }
 
     /// <summary>Which gate skin a world's own doors wear (MV-1141) — read by both
@@ -699,11 +702,12 @@ namespace MaxWorlds.Arena
                 // as a one-area placeholder; the real 30-area Hangar Bay layout is MV-1232.
                 Id = WorldIds.Mothership,
                 ConfigKey = WorldLibrary.Mothership,
-                // Kit/GateSkin/Palette/Look/Music all reuse the Reef's for now (ticket's own "do not
-                // re-raise") -- the ship kit ticket (MV-1230) adds WorldKit.Ship and switches this row.
+                // GateSkin/Palette/Look/Music still reuse the Reef's (ticket's own "do not re-raise" --
+                // the 30-area Hangar Bay layout, and any gate/palette pass it needs, is MV-1232's job).
+                // MV-1230: Kit switches to the Mothership's own ship kit.
                 Palette = BiomePalette.Reef,
                 Look = BackyardLook.Default,
-                Kit = WorldKit.Reef,
+                Kit = WorldKit.Ship,
                 GateSkin = WorldGateSkin.Reef,
                 Style = new SentinelStyle(BodyColorMothership, BodyColorMothership, BoltColorMothership, emissionFactor: 0.35f,
                     boltColor: BoltColorMothership, boltThicknessScale: 1.6f),

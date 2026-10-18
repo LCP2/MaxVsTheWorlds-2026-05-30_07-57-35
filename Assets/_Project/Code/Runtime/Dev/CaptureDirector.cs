@@ -472,6 +472,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1205CityGroundCheck());
             Add(BuildMv1207CityBrightnessCheck());
             Add(BuildMv1215ReefKitSheet());
+            Add(BuildMv1230ShipKitSheet());
             return d;
         }
 
@@ -2124,6 +2125,86 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1215-reef-kit-sheet", NoSetup) },
+            };
+        }
+
+        // ---- MV1230ShipKitSheet (MV-1230 AC3) -------------------------------------------------
+
+        /// <summary>MV-1230's own AC3 capture: one instance of each of the Mothership's ship kit's
+        /// eight new pieces (dropship, drop pod, crate, low crate, glass case, conveyor, console bank,
+        /// bulkhead stub — the ticket's own table), spawned in a row on the Mothership's floor via the
+        /// SAME <see cref="ShipKit"/> builders <see cref="ShipDressing.DressCover"/> calls in
+        /// production, then framed at the fixed rig's own angle — same boot/frame idiom as
+        /// <see cref="BuildMv1215ReefKitSheet"/> one world over. The Mothership's own config
+        /// (MV-1225) ships only a one-area placeholder with none of these authored yet (the Hangar Bay
+        /// layout is MV-1232's job), so the row is built here, not loaded off the map. ONE capture
+        /// only, per the ticket's own "compare once" instruction.</summary>
+        private static CapturePreset BuildMv1230ShipKitSheet()
+        {
+            string docsPress = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press"));
+            const string mirror = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float spacing = 8f;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials/ShipKit finish
+
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 5 built no PlayerController to shoot");
+
+                var sheet = new GameObject("MV-1230 Kit Sheet").transform;
+                Vector3 rowStart = player.transform.position + Vector3.forward * 10f - Vector3.right * (3.5f * spacing);
+
+                // ShipKit's own builders take a GROUND-level centre (Y=0) and add their own
+                // half-height — see ShipDressing.BuildPiece's own doc for why this differs from
+                // ReefKit's BuildPillar-style "true centre" convention BuildMv1215ReefKitSheet's own
+                // Place helper uses.
+                void Place(int index, Func<Transform, Vector3, Vector3, GameObject> build, Vector3 size)
+                {
+                    Vector3 at = rowStart + Vector3.right * (index * spacing);
+                    build(sheet, at, size);
+                }
+
+                Place(0, ShipKit.BuildDropship, new Vector3(10f, 1.6f, 4f));
+                Place(1, ShipKit.BuildDropPod, new Vector3(1.4f, 1.2f, 1.4f));
+                Place(2, ShipKit.BuildCrate, new Vector3(3f, 1.6f, 3f));
+                Place(3, ShipKit.BuildCrate, new Vector3(3f, 1.0f, 3f));
+                Place(4, ShipKit.BuildGlassCase, new Vector3(2.2f, 1.6f, 2.2f));
+                Place(5, ShipKit.BuildConveyor, new Vector3(2f, 0.6f, 3f));
+                Place(6, ShipKit.BuildConsoleBank, new Vector3(2f, 1.0f, 1f));
+                Place(7, ShipKit.BuildBulkheadStub, new Vector3(1.4f, 1.6f, 0.4f));
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+
+                Vector3 focus = rowStart + Vector3.right * (3.5f * spacing) + Vector3.up * 2f;
+                var rotQ = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rotQ * Vector3.forward * 85f, rotQ);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1230shipkit",
+                LogTag = "[MV1230Capture]",
+                Flag = "-mv1230shot",
+                ArmFile = "Temp/mv1230.arm",
+                HeadlessMarker = "Temp/mv1230.headless",
+                DoneFileName = "_mv1230_done.txt",
+                Width = 1920,
+                Height = 1080,
+                OutputDirs = new[] { docsPress, mirror },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1215ReefKitSheet.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1230-ship-kit-sheet", NoSetup) },
             };
         }
 

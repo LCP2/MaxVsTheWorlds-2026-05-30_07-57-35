@@ -131,6 +131,9 @@ namespace MaxWorlds.Arena
             // MV-1215: the Reef's own low pieces — a planter row (~0.9 m) and a floor pipe run
             // (~0.5 m), same exemption World 2's pipes and the City's low furniture already get.
             CoverDressing.ReefPlanter, CoverDressing.ReefFloorPipe,
+            // MV-1230: the Mothership's conveyor (0.6 m) — same reasoning, it's a floor-level belt,
+            // not cover meant to break a chase.
+            CoverDressing.ShipConveyor,
         };
 
         public static bool Validate(MapData map, out string reason)
