@@ -11,3 +11,4 @@ Heavy.png
 Brute.png
 dreadnought_pair.png
 skitter_pack.png
+mothership_pair.png
