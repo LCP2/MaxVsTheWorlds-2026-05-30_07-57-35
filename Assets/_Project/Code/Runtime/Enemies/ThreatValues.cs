@@ -50,6 +50,11 @@ namespace MaxWorlds.Enemies
         /// calibration lands.</summary>
         public const float Dreadnought = 9.0f;
 
+        /// <summary>MV-1224: the ticket's own authored THV — priced below every other kind here, on
+        /// the same placeholder footing: 12 HP and no ranged payoff of its own, so even packed 4-6 to
+        /// a group it never out-prices the Sludger band.</summary>
+        public const float Skitter = 0.8f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -64,6 +69,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Sludger => Sludger,
             EnemyKind.Charger => Charger,
             EnemyKind.Dreadnought => Dreadnought,
+            EnemyKind.Skitter => Skitter,
             _ => Rusher,
         };
     }

@@ -171,6 +171,11 @@ namespace MaxWorlds.Arena
         /// composition rule <see cref="turret"/>'s own doc comment describes.</summary>
         public int dreadnought;
 
+        /// <summary>MV-1224: the tiny phase-hopper — authored-composition only, same footing as
+        /// <see cref="bolter"/>/<see cref="sludger"/>/<see cref="charger"/>, drawn by the ambient shed
+        /// cadence (it needs no grate coincidence, unlike <see cref="lurker"/>).</summary>
+        public int skitter;
+
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
         /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
         /// once ANY area in the array carries the field, even ones whose JSON omits it entirely (a
@@ -180,7 +185,7 @@ namespace MaxWorlds.Arena
         public bool IsAuthored =>
             rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
             blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0 ||
-            dreadnought > 0;
+            dreadnought > 0 || skitter > 0;
 
         /// <summary>MV-1220: explicit opt-in, default false. JsonUtility's 0-means-"not authored"
         /// idiom cannot tell "this area authors zero Rushers on purpose" (world1's a9: authored
@@ -206,7 +211,7 @@ namespace MaxWorlds.Arena
         public bool IsAuthoredExclusive => IsAuthored && !blendWithDial;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought, skitter);
 
         /// <summary>MV-1220: carries THIS composition's authored-composition-only counts (bolter/
         /// lurker/turret/sludger/charger/dreadnought) onto <paramref name="dialSolved"/>'s
@@ -217,7 +222,7 @@ namespace MaxWorlds.Arena
             new DifficultyEngine.Composition(
                 dialSolved.Rusher, dialSolved.Bruiser, dialSolved.Heavy, dialSolved.Brute,
                 dialSolved.Gunner, dialSolved.Launcher, dialSolved.Blinker,
-                bolter, lurker, sludger, charger, turret, dreadnought);
+                bolter, lurker, sludger, charger, turret, dreadnought, skitter);
 
         /// <summary>MV-1234: the inverse of <see cref="ToEngineComposition"/> — a solved
         /// <see cref="DifficultyEngine.Composition"/> (e.g. from <see cref="WorldConfig.SolveComposition"/>'s
@@ -231,7 +236,7 @@ namespace MaxWorlds.Arena
                 rusher = c.Rusher, bruiser = c.Bruiser, heavy = c.Heavy, brute = c.Brute,
                 gunner = c.Gunner, launcher = c.Launcher, blinker = c.Blinker, bolter = c.Bolter,
                 lurker = c.Lurker, turret = c.Turret, sludger = c.Sludger, charger = c.Charger,
-                dreadnought = c.Dreadnought,
+                dreadnought = c.Dreadnought, skitter = c.Skitter,
             };
     }
 
@@ -955,6 +960,9 @@ namespace MaxWorlds.Arena
         // MV-1217: same optional/fallback footing as bolter above.
         public WorldEnemyTypeEntry dreadnought;
 
+        // MV-1224: same optional/fallback footing as bolter above.
+        public WorldEnemyTypeEntry skitter;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -971,6 +979,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Charger => charger,
                 EnemyKind.Turret => turret,
                 EnemyKind.Dreadnought => dreadnought,
+                EnemyKind.Skitter => skitter,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
@@ -985,7 +994,8 @@ namespace MaxWorlds.Arena
             c.Gunner * Thv(EnemyKind.Gunner) + c.Launcher * Thv(EnemyKind.Launcher) +
             c.Blinker * Thv(EnemyKind.Blinker) + c.Bolter * Thv(EnemyKind.Bolter) +
             c.Lurker * Thv(EnemyKind.Lurker) + c.Sludger * Thv(EnemyKind.Sludger) +
-            c.Charger * Thv(EnemyKind.Charger) + c.Dreadnought * Thv(EnemyKind.Dreadnought);
+            c.Charger * Thv(EnemyKind.Charger) + c.Dreadnought * Thv(EnemyKind.Dreadnought) +
+            c.Skitter * Thv(EnemyKind.Skitter);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170

@@ -349,6 +349,7 @@ namespace MaxWorlds.Arena
                     case EnemyKind.Bolter: composition.bolter++; break;
                     case EnemyKind.Sludger: composition.sludger++; break;
                     case EnemyKind.Charger: composition.charger++; break;
+                    case EnemyKind.Skitter: composition.skitter++; break;
                     // Lurker/Turret: placed, not emitted — skipped on purpose.
                 }
             }

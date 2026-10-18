@@ -883,16 +883,18 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// MV-584: only the Blinker that actually landed reacts. <see cref="HudSignals.BlinkerTeleported"/>
-        /// is one event shared by every Blinker in the swarm, and by the time it fires
+        /// MV-584: only the Blinker (or, MV-1224, the Skitter — see <see cref="RobotEnemy.TickChase"/>'s
+        /// own "reuse its pattern") that actually landed reacts. <see cref="HudSignals.BlinkerTeleported"/>
+        /// is one event shared by every teleporting robot in the swarm, and by the time it fires
         /// <see cref="RobotEnemy.TickTeleport"/> has already snapped THIS transform to
-        /// <paramref name="to"/> if this is the robot that blinked — so a close match against
-        /// <paramref name="to"/> is how one rig tells its own blink from every other Blinker's, with no
-        /// object reference needed on the signal.
+        /// <paramref name="to"/> if this is the robot that blinked/hopped — so a close match against
+        /// <paramref name="to"/> is how one rig tells its own blink from every other teleporter's, with
+        /// no object reference needed on the signal.
         /// </summary>
         private void OnBlinkerTeleported(Vector3 from, Vector3 to)
         {
-            if (_enemy == null || _enemy.Kind != EnemyKind.Blinker || _model == null) return;
+            if (_enemy == null || _model == null) return;
+            if (_enemy.Kind != EnemyKind.Blinker && _enemy.Kind != EnemyKind.Skitter) return;
             if ((transform.position - to).sqrMagnitude > 0.01f) return;
 
             SpawnDepartureGhost(from);
