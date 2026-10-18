@@ -718,8 +718,10 @@ namespace MaxWorlds.Arena
                 RigBoardResourcePath = RigBoardLibrary.ShipResourcePath,
                 // MV-1210: World 5's own primary is LIGHT MISSILE.
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.LightMissile,
-                SecondaryWeapon = SecondaryKind.ShoulderRack,
-                // Orbitals (MV-1236) is a later ticket -- the rack is put away on arrival for now.
+                // MV-1236: World 5's own secondary is Orbitals -- the Shoulder Rack is put away on
+                // arrival, same as it was before this ticket (CarrySecondaryAcrossMorph/
+                // SecondaryMysteryLockedOnMorph below are unchanged by this switch).
+                SecondaryWeapon = SecondaryKind.Orbitals,
                 CarrySecondaryAcrossMorph = false,
                 SecondaryMysteryLockedOnMorph = true,
                 PrimarySplitSeeded = false,

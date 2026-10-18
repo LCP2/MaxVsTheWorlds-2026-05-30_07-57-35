@@ -129,6 +129,18 @@ namespace MaxWorlds.Weapons
             _ => null,
         };
 
+        /// <summary>MV-1236: World 5's Orbitals own SECONDARY-family ids — see
+        /// <see cref="OrbitalsTrackKind"/>'s class doc for how this subtree replaces Shoulder Rack's on
+        /// <c>rig_board.ship.json</c>.</summary>
+        private static string MapId(OrbitalsTrackKind kind) => kind switch
+        {
+            OrbitalsTrackKind.OrbCount => "s_orb",
+            OrbitalsTrackKind.Reach => "s_rad",
+            OrbitalsTrackKind.Power => "s_odm",
+            OrbitalsTrackKind.Spin => "s_spd",
+            _ => null,
+        };
+
         private static string MapId(AbilityKind kind) => kind switch
         {
             AbilityKind.Speed => "m_spd",
@@ -476,6 +488,11 @@ namespace MaxWorlds.Weapons
         /// <see cref="LightMissileTrackKind"/>) — same role for <see cref="MaxWorlds.Combat.LightMissile"/>
         /// that <see cref="RicochetTrackLevel"/> plays for RICOCHET.</summary>
         public static int LightMissileTrackLevel(LightMissileTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>MV-1236: an ORBITALS-only track's current level (ORBS/REACH/POWER/SPIN,
+        /// <see cref="OrbitalsTrackKind"/>) — same role for <see cref="Orbitals"/> that
+        /// <see cref="LightMissileTrackLevel"/> plays for <see cref="MaxWorlds.Combat.LightMissile"/>.</summary>
+        public static int OrbitalsTrackLevel(OrbitalsTrackKind kind) => RigState.Level(MapId(kind));
 
         /// <summary>Spend a part to raise a Shoulder Rack track by one level. Fails if its RIG node
         /// isn't reached yet or is already at its cap.</summary>
