@@ -52,6 +52,14 @@ namespace MaxWorlds.Intro
         /// planet graphic -- changing this one constant changes both.</summary>
         public static readonly Color PlanetColor = new Color(0.20f, 0.56f, 0.50f);
 
+        /// <summary>MV-1253: the planet's name (Lee, 19 Oct) -- the ONE place that names it, shared
+        /// by the end shot's own caption (<see cref="EndShotOverlay"/>) and the deck's window
+        /// label.</summary>
+        public const string PlanetName = "SOTAMI";
+
+        private const float WindowLabelWorldWidth = 2.5f;   // "small text" above the glass
+        private const float WindowLabelClearance = 0.4f;    // gap above the glass's own top edge
+
         private enum EndPhase { None, ToBeContinued, Credits, Done }
 
         private Wall _wall;
@@ -119,8 +127,48 @@ namespace MaxWorlds.Intro
             _farGlass = BuildLocalBox("Deck Far Glass", DeckLength, DeckLength + WallThickness,
                 -halfWidth, halfWidth, 0f, _wallHeight, glassMat, collide: true).transform;
 
+            BuildWindowLabel();
             BuildPlanet();
             RegisterInPlayFootprint();
+        }
+
+        /// <summary>MV-1253, change 3: "the window label reads SOTAMI in small text above the
+        /// glass". A static (non-billboard) world-space canvas is enough here -- the deck is a
+        /// straight corridor Max always approaches from the same side, unlike <see cref="WorldHealthBar"/>'s
+        /// per-frame camera-facing plate. Faces <see cref="OutwardDir"/> (same convention
+        /// <see cref="WorldHealthBar"/>'s own billboard uses: canvas forward = the direction the
+        /// camera is looking, i.e. away from the camera, which trails Max and looks the same way he
+        /// walks).</summary>
+        private void BuildWindowLabel()
+        {
+            Bounds glass = _farGlass.GetComponent<Renderer>().bounds;
+
+            var canvasGo = new GameObject("Deck Window Label", typeof(Canvas));
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var rt = (RectTransform)canvasGo.transform;
+            rt.SetParent(transform, worldPositionStays: true);
+            rt.position = new Vector3(glass.center.x, glass.max.y + WindowLabelClearance, glass.center.z);
+            rt.rotation = Quaternion.LookRotation(OutwardDir(_wall), Vector3.up);
+
+            const float pixelWidth = 400f, pixelHeight = 80f;
+            rt.sizeDelta = new Vector2(pixelWidth, pixelHeight);
+            rt.localScale = Vector3.one * WorldBar.CanvasScaleFor(WindowLabelWorldWidth, pixelWidth);
+
+            var textGo = new GameObject("Text", typeof(RectTransform));
+            textGo.transform.SetParent(rt, worldPositionStays: false);
+            var text = textGo.AddComponent<Text>();
+            text.font = HudFont.Get();
+            text.fontSize = 28;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.text = PlanetName;
+            RectTransform trt = text.rectTransform;
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
         }
 
         private void BuildPlanet()
@@ -311,6 +359,11 @@ namespace MaxWorlds.Intro
         {
             private RectTransform _root;
             private Text _text;
+            private Text _planetNameText;
+
+            /// <summary>The SOTAMI caption beside the planet -- read by the MV-1253 EditMode test
+            /// to check the end shot's resolved string, not a duplicated literal.</summary>
+            public Text PlanetNameText => _planetNameText;
 
             /// <summary>Built as a <see cref="Canvas"/> under <see cref="_root"/> itself -- exposed so
             /// <c>MaxWorlds.Dev.CaptureDirector</c>'s own MV-1245 preset can flip it to
@@ -375,12 +428,27 @@ namespace MaxWorlds.Intro
                 overlay._text.fontSize = 64;
                 PlaceFixed(overlay._text.rectTransform, new Vector2(0.5f, 0.78f), Vector2.zero, new Vector2(1700f, 140f));
 
+                // MV-1253: the SOTAMI caption beside the planet -- "about 60% of the TO BE
+                // CONTINUED size" (64 * 0.6), shown only while "TO BE CONTINUED" itself is.
+                overlay._planetNameText = BuildText(root, Color.white);
+                overlay._planetNameText.font = HudFont.Get();
+                overlay._planetNameText.fontSize = Mathf.RoundToInt(64f * 0.6f);
+                PlaceFixed(overlay._planetNameText.rectTransform, new Vector2(0.5f, 0f), new Vector2(620f, 180f), new Vector2(500f, 70f));
+
                 return overlay;
             }
 
-            public void ShowToBeContinued() => _text.text = "TO BE CONTINUED";
+            public void ShowToBeContinued()
+            {
+                _text.text = "TO BE CONTINUED";
+                _planetNameText.text = PlanetName;
+            }
 
-            public void ShowCredits() => _text.text = "MAX vs THE WORLDS\n\nA CODYNAMICS GAME";
+            public void ShowCredits()
+            {
+                _text.text = "MAX vs THE WORLDS\n\nA CODYNAMICS GAME";
+                _planetNameText.text = string.Empty;
+            }
 
             public void DestroySelf()
             {
