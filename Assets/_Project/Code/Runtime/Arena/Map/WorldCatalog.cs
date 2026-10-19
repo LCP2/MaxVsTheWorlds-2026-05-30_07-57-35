@@ -45,6 +45,9 @@ namespace MaxWorlds.Arena
         Stormdrain,
         Reef,
         City,
+        /// <summary>MV-1249: the Mothership's own doors — a property-block tint, the same non-destructive
+        /// idiom <see cref="MaxWorlds.Arena.AreaGate.ApplyReefSkin"/> uses.</summary>
+        Ship,
     }
 
     /// <summary>How a world's own finale exit works (MV-1143) — <c>Corridor</c>: a door, then a
@@ -702,14 +705,16 @@ namespace MaxWorlds.Arena
                 // as a one-area placeholder; the real 30-area Hangar Bay layout is MV-1232.
                 Id = WorldIds.Mothership,
                 ConfigKey = WorldLibrary.Mothership,
-                // GateSkin/Palette/Look still reuse the Reef's (ticket's own "do not re-raise" -- the
-                // 30-area Hangar Bay layout, and any gate/palette pass it needs, is MV-1232's job).
                 // MV-1230: Kit switches to the Mothership's own ship kit.
                 // MV-1237: Music gets its own row -- no longer reuses the Reef's.
-                Palette = BiomePalette.Reef,
-                Look = BackyardLook.Default,
+                // MV-1249: the ship's own palette and gate skin, replacing the Reef's borrowed ones.
+                // Look is the deck Max starts in (Hangar, area 1) -- the live per-deck switch as he
+                // crosses into another deck is MothershipDeckLighting's job (wired in BackyardPath.Awake),
+                // using the same MothershipDecks.LookFor lookup this row's own starting value comes from.
+                Palette = BiomePalette.Ship,
+                Look = BackyardLook.ShipHangar,
                 Kit = WorldKit.Ship,
-                GateSkin = WorldGateSkin.Reef,
+                GateSkin = WorldGateSkin.Ship,
                 Style = new SentinelStyle(BodyColorMothership, BodyColorMothership, BoltColorMothership, emissionFactor: 0.35f,
                     boltColor: BoltColorMothership, boltThicknessScale: 1.6f),
                 FiresWaterBeam = false,

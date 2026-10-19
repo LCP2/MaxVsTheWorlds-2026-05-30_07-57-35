@@ -365,6 +365,181 @@ namespace MaxWorlds.Rendering
             FilmGrain = 0.08f,
         };
 
+        /// <summary>Fields every Mothership deck preset below shares (MV-1249): a steep, dim key — the
+        /// same "daylight from directly above or not at all" reasoning <see cref="Stormdrain"/>'s own
+        /// doc gives its key angle, since a sealed hull interior has no other source — soft AO, a
+        /// neutral grade and a light vignette. Only <see cref="KeyColor"/>/<see cref="KeyIntensity"/>/
+        /// <see cref="FillColor"/>/<see cref="FillIntensity"/>/<see cref="RimColor"/>/
+        /// <see cref="RimIntensity"/>/<see cref="AmbientSky"/>/<see cref="AmbientEquator"/>/
+        /// <see cref="AmbientGround"/>/<see cref="FogColor"/>/<see cref="BloomTint"/> vary per deck —
+        /// see each preset's own doc for why its own numbers differ. Every deck's <see cref="AmbientSky"/>
+        /// stays under 0.15 Rec.709 luminance (MV-1249 AC1): "dark ship, not lavender" (ticket's own "do
+        /// not re-raise") — see <see cref="MaxWorlds.Arena.MothershipDecks"/> for the area-index ->
+        /// look lookup this feeds.</summary>
+        private static BackyardLook ShipBase => new BackyardLook
+        {
+            KeyEuler = new Vector3(62f, -30f, 0f),
+            ShadowStrength = 0.62f,
+
+            FillEuler = new Vector3(20f, 140f, 0f),
+
+            RimEuler = new Vector3(12f, 200f, 0f),
+
+            FogDensity = 0.012f,   // "light" fog — between Stormdrain's 0.018 and City's 0.010
+
+            // Sky fields copied from Stormdrain/City — unused, ApplySky nulls the skybox for this
+            // biome (BiomePalette.Ship.RemovesSkybox = true), but filled so the struct is honest.
+            SkyZenith = new Color(0.05f, 0.07f, 0.08f),
+            SkyHorizon = new Color(0.09f, 0.12f, 0.11f),
+            SkyGroundHaze = new Color(0.07f, 0.09f, 0.08f),
+            SkySun = new Color(0.4f, 0.45f, 0.5f),
+            SkyCloud = new Color(0.1f, 0.12f, 0.12f),
+            SkySunGlow = 120f,
+            SkySunIntensity = 0.2f,
+            SkyCloudAmount = 0f,
+            SkyCloudScale = 1f,
+
+            AoIntensity = 0.8f,
+            AoRadius = 0.3f,
+
+            // MV-1249 AC3's single adjustment pass: the first capture (PostExposure 0.2, the same
+            // value every other biome uses) measured every hero frame roughly half its target median
+            // (Hangar/Assembly/Vault/Bridge all ~13-15/255 against 28-55 targets) -- the whole-frame
+            // median is dominated by the still-undressed void beyond this ticket's lit deck platforms
+            // (no floor plating, no bulkheads yet -- MV-1259/MV-1260's own job), not by an authoring
+            // mistake in the per-deck colours themselves. A one-stop lift here (2^1.1 =~ 2.14x) raises
+            // every dark frame roughly proportionally without touching the AmbientSky values the AC1
+            // EditMode test already asserts stay under 0.15, or the per-deck hue balance.
+            PostExposure = 1.1f,
+            Contrast = 8f,
+            Saturation = 6f,
+            ColorFilter = Color.white,
+            ShadowTint = new Color(0.35f, 0.42f, 0.68f),
+            HighlightTint = new Color(1f, 0.9f, 0.75f),
+
+            // Ticket's own "bloom on (threshold about 0.9) so emissive strips and lamps glow".
+            BloomThreshold = 0.9f,
+            BloomIntensity = 0.6f,
+            BloomScatter = 0.6f,
+
+            VignetteIntensity = 0.14f,     // "vignette light"
+            VignetteSmoothness = 0.5f,
+            FilmGrain = 0.08f,
+        };
+
+        /// <summary>Hangar deck (areas 1-5) — cold blue with a hazard-yellow rim, the ticket's own
+        /// deck identity. Target capture median luminance 31/255 (MV-1249 AC3).</summary>
+        public static BackyardLook ShipHangar
+        {
+            get
+            {
+                BackyardLook l = ShipBase;
+                l.KeyColor = new Color(0.62f, 0.78f, 0.98f);
+                l.KeyIntensity = 0.55f;
+                l.FillColor = new Color(0.30f, 0.42f, 0.58f);
+                l.FillIntensity = 0.40f;
+                l.RimColor = new Color(1.0f, 0.85f, 0.25f);    // hazard yellow
+                l.RimIntensity = 1.0f;
+                l.AmbientSky = new Color(0.10f, 0.13f, 0.19f);        // luminance ~0.128
+                l.AmbientEquator = new Color(0.08f, 0.10f, 0.14f);
+                l.AmbientGround = new Color(0.05f, 0.07f, 0.10f);
+                l.FogColor = new Color(0.05f, 0.07f, 0.10f);
+                l.BloomTint = new Color(0.85f, 0.92f, 1.0f);
+                return l;
+            }
+        }
+
+        /// <summary>Assembly deck (areas 6-12) — amber work light, the ticket's own single-colour deck
+        /// identity (no named second accent, unlike the other four decks). Target capture median
+        /// luminance 28/255 (MV-1249 AC3).</summary>
+        public static BackyardLook ShipAssembly
+        {
+            get
+            {
+                BackyardLook l = ShipBase;
+                l.KeyColor = new Color(0.95f, 0.80f, 0.55f);
+                l.KeyIntensity = 0.60f;
+                l.FillColor = new Color(0.42f, 0.33f, 0.22f);
+                l.FillIntensity = 0.40f;
+                l.RimColor = new Color(1.0f, 0.78f, 0.42f);    // the work light itself
+                l.RimIntensity = 0.95f;
+                l.AmbientSky = new Color(0.16f, 0.12f, 0.08f);        // luminance ~0.126
+                l.AmbientEquator = new Color(0.13f, 0.10f, 0.07f);
+                l.AmbientGround = new Color(0.08f, 0.06f, 0.04f);
+                l.FogColor = new Color(0.08f, 0.06f, 0.045f);
+                l.BloomTint = new Color(1.0f, 0.85f, 0.55f);
+                return l;
+            }
+        }
+
+        /// <summary>Holds deck (areas 13-18) — teal with a gold rim, the ticket's own deck identity.
+        /// Target capture median luminance 29/255 at the Specimen Vault (MV-1249 AC3).</summary>
+        public static BackyardLook ShipHolds
+        {
+            get
+            {
+                BackyardLook l = ShipBase;
+                l.KeyColor = new Color(0.55f, 0.85f, 0.88f);
+                l.KeyIntensity = 0.50f;
+                l.FillColor = new Color(0.22f, 0.42f, 0.44f);
+                l.FillIntensity = 0.38f;
+                l.RimColor = new Color(1.0f, 0.87f, 0.55f);    // gold
+                l.RimIntensity = 0.9f;
+                l.AmbientSky = new Color(0.07f, 0.13f, 0.14f);        // luminance ~0.118
+                l.AmbientEquator = new Color(0.06f, 0.11f, 0.12f);
+                l.AmbientGround = new Color(0.04f, 0.07f, 0.08f);
+                l.FogColor = new Color(0.045f, 0.08f, 0.085f);
+                l.BloomTint = new Color(0.75f, 0.95f, 0.85f);
+                return l;
+            }
+        }
+
+        /// <summary>Engineering deck (areas 19-24) — heat orange with a cyan rim, the ticket's own deck
+        /// identity. Target capture median luminance 87/255 at the Reactor Ring (MV-1249 AC3) — far
+        /// brighter than every other hero frame because the Reactor's own emissive core (not this
+        /// struct) fills most of that frame; this look stays dark like every other deck's.</summary>
+        public static BackyardLook ShipEngineering
+        {
+            get
+            {
+                BackyardLook l = ShipBase;
+                l.KeyColor = new Color(0.98f, 0.68f, 0.45f);
+                l.KeyIntensity = 0.62f;
+                l.FillColor = new Color(0.46f, 0.28f, 0.18f);
+                l.FillIntensity = 0.42f;
+                l.RimColor = new Color(0.40f, 0.90f, 0.95f);   // cyan
+                l.RimIntensity = 1.05f;
+                l.AmbientSky = new Color(0.17f, 0.11f, 0.07f);        // luminance ~0.120
+                l.AmbientEquator = new Color(0.14f, 0.09f, 0.06f);
+                l.AmbientGround = new Color(0.09f, 0.055f, 0.035f);
+                l.FogColor = new Color(0.09f, 0.055f, 0.035f);
+                l.BloomTint = new Color(1.0f, 0.75f, 0.55f);
+                return l;
+            }
+        }
+
+        /// <summary>Command deck (areas 25-30) — gold with a deep-blue rim, the ticket's own deck
+        /// identity. Target capture median luminance 55/255 at The Bridge (MV-1249 AC3).</summary>
+        public static BackyardLook ShipCommand
+        {
+            get
+            {
+                BackyardLook l = ShipBase;
+                l.KeyColor = new Color(0.95f, 0.82f, 0.55f);
+                l.KeyIntensity = 0.58f;
+                l.FillColor = new Color(0.40f, 0.33f, 0.22f);
+                l.FillIntensity = 0.38f;
+                l.RimColor = new Color(0.25f, 0.35f, 0.75f);   // deep blue
+                l.RimIntensity = 0.9f;
+                l.AmbientSky = new Color(0.15f, 0.12f, 0.09f);        // luminance ~0.124
+                l.AmbientEquator = new Color(0.12f, 0.10f, 0.075f);
+                l.AmbientGround = new Color(0.08f, 0.065f, 0.045f);
+                l.FogColor = new Color(0.08f, 0.065f, 0.045f);
+                l.BloomTint = new Color(1.0f, 0.88f, 0.6f);
+                return l;
+            }
+        }
+
         /// <summary>Blend every field of two looks (MV-849 — the World 1 -> World 2 joining
         /// corridor). Every <c>Color</c>/<c>float</c>/<c>Vector3</c> field gets a plain
         /// linear interpolation; nothing here is hand-picked, because a field this struct grows

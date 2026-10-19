@@ -144,6 +144,16 @@ namespace MaxWorlds.Arena
             _areaDirector.ConfigureWorld(cfg, worldIndex);
             _areaDirector.Configure(_map, _build.Cover);
 
+            // MV-1249: the Mothership's own live per-deck lighting switch, as Max physically crosses
+            // into an area of another deck (0.6s blend) — see MothershipDeckLighting's own doc. Only
+            // wired for World 5; every other world keeps its single catalog Look applied once above.
+            if (WorldCatalog.Get(worldIndex).Id == WorldIds.Mothership)
+            {
+                var deckLighting = new GameObject("Mothership Deck Lighting").AddComponent<MothershipDeckLighting>();
+                deckLighting.transform.SetParent(transform, false);
+                deckLighting.Configure(_areaDirector);
+            }
+
             // MV-579 (DECISION, Lee 26 Aug 2026 playtest): sentinels now persist across an area
             // crossing by default — a wedged, unrecallable sentinel used to also vanish and refund on
             // crossing (MV-362/MV-396), which was tolerable when it merely cost a redeploy; once it
@@ -296,6 +306,10 @@ namespace MaxWorlds.Arena
                 case WorldGateSkin.City:
                     foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
                         gate.ApplyCitySkin();
+                    break;
+                case WorldGateSkin.Ship:
+                    foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                        gate.ApplyShipGateSkin();
                     break;
             }
         }

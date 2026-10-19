@@ -229,6 +229,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1245EndShot() => RunFromMenu(CapturePresets.All["mv1245endshot"]);
         public static void CaptureMv1245EndShot() => Run(CapturePresets.All["mv1245endshot"]);
 
+        [MenuItem("MaxWorlds/Capture/Mothership Look (MV-1249)")]
+        public static void MenuMv1249MothershipLook() => RunFromMenu(CapturePresets.All["mv1249mothershiplook"]);
+        public static void CaptureMv1249MothershipLook() => Run(CapturePresets.All["mv1249mothershiplook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
