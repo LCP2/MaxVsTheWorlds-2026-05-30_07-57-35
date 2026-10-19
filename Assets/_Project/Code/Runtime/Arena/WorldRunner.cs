@@ -647,6 +647,10 @@ namespace MaxWorlds.Arena
                     _supply.ShedProgressBefore(kv.Key, out int destroyed, out int total);
                     gate.SetLockProgress(destroyed, total);
                 }
+                else if (condition.Kind == GateConditionKind.CradlesDestroyed)
+                {
+                    gate.SetLockProgress("CRADLES", FactoryCensus.CradlesDestroyed, FactoryCensus.CradlesTotal);
+                }
 
                 if (condition.IsSatisfied(_supply, kv.Key))
                 {

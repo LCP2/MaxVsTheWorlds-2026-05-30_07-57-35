@@ -420,17 +420,21 @@ namespace MaxWorlds.UI
             }
 
             // Sheds (item 6), Replicators (item 6b, MV-830 — same pass order as sheds: above cover and
-            // gates, below labels), then bosses (item 7) — three passes over the same flat list rather
-            // than one switch, so none of them can end up drawn out of order just because they happened
-            // to be authored in a different sequence in the map file. All three draw through the same
-            // AddObjectiveMarker (MV-1119): a shed, a Replicator and a boss that are all still alive
-            // read identically on the map.
+            // gates, below labels), Cradles (MV-1247, World 5's own replicator-shaped machine), then
+            // bosses (item 7) — four passes over the same flat list rather than one switch, so none of
+            // them can end up drawn out of order just because they happened to be authored in a
+            // different sequence in the map file. All four draw through the same AddObjectiveMarker
+            // (MV-1119): a shed, a Replicator, a Cradle and a boss that are all still alive read
+            // identically on the map.
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Factory && entity.Dressing == CoverDressing.Shed)
                     AddObjectiveMarker(entity, ShedIsAlive(entity), "Shed");
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Replicator)
                     AddObjectiveMarker(entity, ReplicatorIsAlive(entity), "Replicator");
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.Cradle)
+                    AddObjectiveMarker(entity, CradleIsAlive(entity), "Cradle");
             foreach (MapEntity entity in _map.entities)
                 if (entity != null && entity.Kind == EntityKind.Boss)
                     AddObjectiveMarker(entity, BossIsAlive(entity), "Boss");
@@ -576,6 +580,17 @@ namespace MaxWorlds.UI
             if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
             var replicator = go.GetComponent<Replicator>();
             return replicator == null || replicator.IsAlive;
+        }
+
+        /// <summary>Resolves an Assembly Cradle entity's live/destroyed state (MV-1247) off the actual
+        /// built <see cref="AssemblyCradle"/> component for its id, via <see cref="BackyardPath.Actors"/>
+        /// — same reasoning and same "defaults alive" fallback as <see cref="ReplicatorIsAlive"/>.</summary>
+        private bool CradleIsAlive(MapEntity entity)
+        {
+            if (_backyardPath == null) return true;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
+            var cradle = go.GetComponent<AssemblyCradle>();
+            return cradle == null || cradle.IsAlive;
         }
 
         /// <summary>Resolves a boss entity's live/destroyed state off <see cref="BossCensus.IsAreaDefeated"/>

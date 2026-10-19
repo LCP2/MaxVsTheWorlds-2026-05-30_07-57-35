@@ -1452,7 +1452,10 @@ namespace MaxWorlds.Arena
             // MV-706: "REPLICATORS n/N" for a world with replicators and no sheds; "FACTORIES" wording
             // stays for a world (or a legacy fixture) that only ever has sheds — a world with neither
             // never shows this at all (HudModel's own count-driven visibility is unaffected either way).
-            bool hasReplicators = built.Replicators.Count > 0;
+            // MV-1247: Assembly Cradles are the Mothership's own replicator-shaped machine, so they take
+            // the same branch — map.replicatorNoun ("CRADLES") is what actually picks the word, this
+            // bool only decides "REPLICATORS-style wording" vs. "FACTORIES".
+            bool hasReplicators = built.Replicators.Count > 0 || built.Cradles.Count > 0;
             bool hasSheds = built.Factories.Count > 0;
             HudSignals.EmitWorldFactoryWording(hasReplicators && !hasSheds, map.replicatorNoun);
 

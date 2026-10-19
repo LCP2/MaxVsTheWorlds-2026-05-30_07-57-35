@@ -5,6 +5,7 @@
   "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
+  "replicatorNoun": "CRADLES",
   "pressureNoun": "",
   "pressureCaption": "",
   "dials": {
@@ -512,7 +513,7 @@
         "pos": 0.5
       },
       "width": 3,
-      "opensWith": "primary"
+      "opensWith": "cradles-destroyed:all"
     }
   ],
   "areas": [
