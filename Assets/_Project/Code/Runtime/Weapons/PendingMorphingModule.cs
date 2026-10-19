@@ -38,6 +38,17 @@ namespace MaxWorlds.Weapons
         /// ceremony every other ability family already waits for.</summary>
         private static bool s_rackModulePending;
 
+        /// <summary>MV-1248: World 5's 2nd Assembly Cradle destroyed banked the Secondary (Orbitals)
+        /// family, waiting for THE RIG's next open to unlock SECONDARY and grant every <c>s_orb</c>
+        /// node for free. Same shape as <see cref="s_rackModulePending"/> — not a pick between
+        /// candidates, it always resolves the same single way (see <c>WeaponsScreen.Open</c>).</summary>
+        private static bool s_secondaryFamilyPending;
+
+        /// <summary>MV-1248: World 5's 4th Assembly Cradle destroyed banked the Sentinel (SUPPORT)
+        /// family, waiting for THE RIG's next open to unlock SUPPORT and grant <c>u_sen</c> for free.
+        /// Same shape as <see cref="s_secondaryFamilyPending"/>.</summary>
+        private static bool s_sentinelFamilyPending;
+
         /// <summary>At least one draft is banked and waiting for the player to open WEAPONS.</summary>
         public static bool HasPending => s_queue.Count > 0;
 
@@ -46,6 +57,14 @@ namespace MaxWorlds.Weapons
 
         /// <summary>MV-1090: a Rack Module is banked and waiting for THE RIG's next open.</summary>
         public static bool RackModulePending => s_rackModulePending;
+
+        /// <summary>MV-1248: the Secondary (Orbitals) family is banked and waiting for THE RIG's next
+        /// open.</summary>
+        public static bool SecondaryFamilyPending => s_secondaryFamilyPending;
+
+        /// <summary>MV-1248: the Sentinel (SUPPORT) family is banked and waiting for THE RIG's next
+        /// open.</summary>
+        public static bool SentinelFamilyPending => s_sentinelFamilyPending;
 
         /// <summary>How many separate draws are banked right now — test-only access, same idiom as
         /// <see cref="HasPending"/>.</summary>
@@ -136,13 +155,75 @@ namespace MaxWorlds.Weapons
             Changed?.Invoke();
         }
 
+        /// <summary>Bank a collected Secondary family unlock (MV-1248, World 5's 2nd cradle destroyed) —
+        /// the next THE RIG open unlocks SECONDARY and grants Orbitals for free. Idempotent, same shape
+        /// as <see cref="SetRackModule"/>.</summary>
+        public static void SetSecondaryFamily()
+        {
+            if (s_secondaryFamilyPending) return;
+            s_secondaryFamilyPending = true;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Consumes the banked Secondary family flag — <c>WeaponsScreen.Open</c>'s own entry
+        /// point. Returns false if nothing was pending.</summary>
+        public static bool TakeSecondaryFamily()
+        {
+            if (!s_secondaryFamilyPending) return false;
+            s_secondaryFamilyPending = false;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Restore the banked-Secondary-family flag from a captured checkpoint (MV-1248) — same
+        /// reasoning as <see cref="RestoreRackModulePending"/>: a cold-boot RESUME between destroying the
+        /// 2nd cradle and opening THE RIG must not silently lose the banked unlock.</summary>
+        public static void RestoreSecondaryFamilyPending(bool pending)
+        {
+            if (s_secondaryFamilyPending == pending) return;
+            s_secondaryFamilyPending = pending;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Bank a collected Sentinel family unlock (MV-1248, World 5's 4th cradle destroyed) —
+        /// the next THE RIG open unlocks SUPPORT and grants <c>u_sen</c> for free. Idempotent, same shape
+        /// as <see cref="SetRackModule"/>.</summary>
+        public static void SetSentinelFamily()
+        {
+            if (s_sentinelFamilyPending) return;
+            s_sentinelFamilyPending = true;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Consumes the banked Sentinel family flag — <c>WeaponsScreen.Open</c>'s own entry
+        /// point. Returns false if nothing was pending.</summary>
+        public static bool TakeSentinelFamily()
+        {
+            if (!s_sentinelFamilyPending) return false;
+            s_sentinelFamilyPending = false;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Restore the banked-Sentinel-family flag from a captured checkpoint (MV-1248) — same
+        /// reasoning as <see cref="RestoreSecondaryFamilyPending"/>.</summary>
+        public static void RestoreSentinelFamilyPending(bool pending)
+        {
+            if (s_sentinelFamilyPending == pending) return;
+            s_sentinelFamilyPending = pending;
+            Changed?.Invoke();
+        }
+
         /// <summary>Back to a fresh run's baseline: nothing pending. Test isolation and a new run.</summary>
         public static void Reset()
         {
-            if (s_queue.Count == 0 && !s_weaponCorePending && !s_rackModulePending) return;
+            if (s_queue.Count == 0 && !s_weaponCorePending && !s_rackModulePending &&
+                !s_secondaryFamilyPending && !s_sentinelFamilyPending) return;
             s_queue.Clear();
             s_weaponCorePending = false;
             s_rackModulePending = false;
+            s_secondaryFamilyPending = false;
+            s_sentinelFamilyPending = false;
             Changed?.Invoke();
         }
     }

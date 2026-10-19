@@ -81,7 +81,9 @@ namespace MaxWorlds.Weapons
         {
             if (_orbitals == null) _orbitals = GetComponent<Orbitals>();
 
-            if (WeaponSystemState.SecondaryKind != SecondaryKind.Orbitals)
+            // MV-1248: same SECONDARY-unlock gate as Orbitals.Tick — the visuals must not show orbs
+            // circling before the family is actually revealed.
+            if (WeaponSystemState.SecondaryKind != SecondaryKind.Orbitals || !RigState.IsCategoryUnlocked("SECONDARY"))
             {
                 if (_built) HideAll();
                 return;

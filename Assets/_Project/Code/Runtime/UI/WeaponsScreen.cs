@@ -831,6 +831,21 @@ namespace MaxWorlds.UI
                 return;
             }
 
+            // MV-1248: World 5's cradle-destroyed unlock schedule — same priority tier as the Rack
+            // Module reveal above (resolved before any ordinary draft), Secondary (2nd cradle) ahead of
+            // Sentinel (4th cradle) since that is the order the schedule itself banks them in.
+            if (PendingMorphingModule.SecondaryFamilyPending)
+            {
+                OpenSecondaryFamilyReveal();
+                return;
+            }
+
+            if (PendingMorphingModule.SentinelFamilyPending)
+            {
+                OpenSentinelFamilyReveal();
+                return;
+            }
+
             if (PendingMorphingModule.HasPending)
             {
                 OpenMorphingModuleDraft(PendingMorphingModule.Take());
@@ -965,6 +980,61 @@ namespace MaxWorlds.UI
             Refresh();
             _screenRoot.gameObject.SetActive(true);
             StartCeremony("SECONDARY");
+        }
+
+        /// <summary>MV-1248: resolves a banked Secondary family reveal
+        /// (<see cref="PendingMorphingModule.SecondaryFamilyPending"/>, World 5's 2nd Assembly Cradle
+        /// destroyed) — unlocks SECONDARY and grants every <c>s_orb</c> node (ORBS/REACH/POWER/SPIN) at
+        /// level 1, since Orbitals is "always on once owned, nothing to press" (<c>OrbitalsTrackKind</c>'s
+        /// own class doc) rather than a single root grant the player levels up themselves the way
+        /// <see cref="OpenRackModuleReveal"/>'s <c>s_rkt</c> is. Same ceremony shape otherwise.</summary>
+        private void OpenSecondaryFamilyReveal()
+        {
+            PendingMorphingModule.TakeSecondaryFamily();
+            RigState.UnlockCategory("SECONDARY");
+            WeaponSystemState.AcquireById("s_orb");
+            WeaponSystemState.AcquireById("s_rad");
+            WeaponSystemState.AcquireById("s_odm");
+            WeaponSystemState.AcquireById("s_spd");
+
+            if (_canvas == null) Build();
+            if (!_open)
+            {
+                _open = true;
+                _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
+                Time.timeScale = 0f;
+                ModalFrameRateGate.Enter();
+            }
+
+            Refresh();
+            _screenRoot.gameObject.SetActive(true);
+            StartCeremony("SECONDARY");
+        }
+
+        /// <summary>MV-1248: resolves a banked Sentinel family reveal
+        /// (<see cref="PendingMorphingModule.SentinelFamilyPending"/>, World 5's 4th Assembly Cradle
+        /// destroyed) — unlocks SUPPORT and grants <c>u_sen</c> at level 1 for free, the same
+        /// "unlock + root grant" shape <see cref="OpenRackModuleReveal"/> uses for SECONDARY/<c>s_rkt</c>.
+        /// MV-1095's own remembered-levels restore fires for free inside <see cref="RigState.UnlockCategory"/>
+        /// itself if this family was ever owned before.</summary>
+        private void OpenSentinelFamilyReveal()
+        {
+            PendingMorphingModule.TakeSentinelFamily();
+            RigState.UnlockCategory("SUPPORT");
+            WeaponSystemState.AcquireById("u_sen");
+
+            if (_canvas == null) Build();
+            if (!_open)
+            {
+                _open = true;
+                _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
+                Time.timeScale = 0f;
+                ModalFrameRateGate.Enter();
+            }
+
+            Refresh();
+            _screenRoot.gameObject.SetActive(true);
+            StartCeremony("SUPPORT");
         }
 
         // ------------------------------------------------------------------ live state

@@ -93,6 +93,11 @@ namespace MaxWorlds.Weapons
         public void Tick(float dt)
         {
             if (WeaponSystemState.SecondaryKind != SecondaryKind.Orbitals) return;
+            // MV-1248: SECONDARY stays locked until World 5's 2nd cradle destroyed banks and reveals it
+            // (WeaponsScreen.OpenSecondaryFamilyReveal) — without this, the orbit/hit math ran from the
+            // moment the world loaded regardless, since every s_orb/s_rad/s_odm/s_spd node here starts
+            // owned at level 1 (OrbitalsTrackKind's own class doc) with no level-based gate of its own.
+            if (!RigState.IsCategoryUnlocked("SECONDARY")) return;
 
             int count = OrbCount;
             if (count <= 0) return;

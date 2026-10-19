@@ -6,6 +6,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Factories
 {
@@ -87,6 +88,18 @@ namespace MaxWorlds.Factories
         public int AreaIndex { get; private set; }
 
         public void SetAreaIndex(int area) => AreaIndex = area;
+
+        /// <summary>MV-1248: this cradle's own stable id (the <c>"{area.id}_cradleN"</c> fallback
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/> already computes to look itself up in the built
+        /// scene, now also stamped onto the component) — same reasoning as <see cref="Replicator.Id"/>/
+        /// <see cref="MowerHutch.Id"/>: a checkpoint persists and restores "which cradles are destroyed"
+        /// by id, never by a C# reference that dies with the scene. Empty until <see cref="SetId"/> is
+        /// called.</summary>
+        public string Id { get; private set; } = string.Empty;
+
+        /// <summary>Public so an EditMode test can drive identity directly, same reasoning as every other
+        /// post-build configure call in this file.</summary>
+        public void SetId(string id) => Id = id ?? string.Empty;
 
         /// <summary>The nearest cradle below full health, in <paramref name="areaIndex"/>, within
         /// <paramref name="maxRange"/> of <paramref name="from"/> — what a Welder's repair tick asks for
@@ -399,6 +412,18 @@ namespace MaxWorlds.Factories
             _health.TakeDamage(info.Amount);
         }
 
+        /// <summary>MV-1248: everything a death does to this cradle EXCEPT the pickup drop/HUD signal/
+        /// unlock-schedule bank (<see cref="OnDestroyed"/>'s own remainder) — pulled out so
+        /// <see cref="ApplyCheckpointDestroyed"/> can silently re-apply a checkpoint's already-recorded
+        /// destruction (a resume rebuilding the level from scratch) without re-granting loot or a second
+        /// family reveal the player already banked on the run that actually earned it. Same split
+        /// <see cref="Replicator.ApplyDestructionEffects"/> uses.</summary>
+        private void ApplyDestructionEffects() =>
+            // MV-1247: report to the census synchronously with the kill — same reasoning as
+            // Replicator.ApplyDestructionEffects (a caller reacting to this same death needs this cradle
+            // already counted, not one WorldRunner poll tick later). Idempotent.
+            FactoryCensus.ReportCradleDestroyed(this);
+
         /// <summary>Scrap (a build was in progress — <see cref="_buildTimer"/> &gt; 0, read before this
         /// cycle ever reaches <see cref="BuildSeconds"/> and resets it): that robot is never spawned, and
         /// <see cref="ScrapParts"/> Parts drop at the bay instead. Idle (no build running, including the
@@ -406,10 +431,7 @@ namespace MaxWorlds.Factories
         /// <see cref="PayoutParts"/> destroy payout.</summary>
         private void OnDestroyed()
         {
-            // MV-1247: report to the census and the HUD synchronously with the kill — same reasoning as
-            // Replicator.ApplyDestructionEffects (a caller reacting to this same death needs this cradle
-            // already counted, not one WorldRunner poll tick later). Idempotent.
-            FactoryCensus.ReportCradleDestroyed(this);
+            ApplyDestructionEffects();
             HudSignals.EmitFactoryDestroyed(transform.position);
 
             PickupDirector director = PickupDirector.EnsureInstalled();
@@ -426,6 +448,48 @@ namespace MaxWorlds.Factories
                     director.PlacePickupAt(PickupKind.PowerCell, transform.position + ScatterOffset(i, PayoutParts));
             }
             _buildTimer = 0f;
+
+            // MV-1248: the unlock schedule — a LIVE kill only, never replayed on a checkpoint restore
+            // (ApplyCheckpointDestroyed calls ApplyDestructionEffects alone), same "pay nothing again"
+            // rule as the pickup drops just above.
+            ApplyUnlockSchedule(FactoryCensus.CradlesDestroyed, director);
+        }
+
+        /// <summary>MV-1248: 2nd/4th cradle destroyed in World 5 banks SECONDARY's Orbitals family / the
+        /// Sentinel family for THE RIG's next open (<see cref="MaxWorlds.Weapons.PendingMorphingModule.SetSecondaryFamily"/>/
+        /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.SetSentinelFamily"/>) — the same
+        /// banked-and-revealed-at-RIG-open ceremony MV-1090's Rack Module already uses, never granted on
+        /// the spot. Every even count from 6 on drops a bonus Supercell instead — there is no third
+        /// family left to bank.</summary>
+        private void ApplyUnlockSchedule(int cradlesDestroyed, PickupDirector director)
+        {
+            switch (cradlesDestroyed)
+            {
+                case 2:
+                    PendingMorphingModule.SetSecondaryFamily();
+                    break;
+                case 4:
+                    PendingMorphingModule.SetSentinelFamily();
+                    break;
+                default:
+                    if (cradlesDestroyed >= 6 && cradlesDestroyed % 2 == 0)
+                        director.PlacePickupAt(PickupKind.Supercell, transform.position);
+                    break;
+            }
+        }
+
+        /// <summary>MV-1248: a mid-run checkpoint's own re-application of this cradle's already-recorded
+        /// destruction (<see cref="FactoryCensus.ApplyCheckpointDestroyedCradleIds"/>) — the exact
+        /// "silent restore" split <see cref="Replicator.ApplyCheckpointDestroyed"/>/
+        /// <see cref="MowerHutch.ApplyCheckpointDestroyed"/> use via
+        /// <see cref="DestructibleHealth.SilentlyDestroy"/> instead of <see cref="TakeDamage"/>: a resume
+        /// is restoring history, not scoring a new kill, so no pickup drop, HUD signal, or unlock-schedule
+        /// bank fires a second time for a kill the player already banked on the run that earned it.</summary>
+        public void ApplyCheckpointDestroyed()
+        {
+            if (_health == null || !_health.IsAlive) return;
+            _health.SilentlyDestroy();
+            ApplyDestructionEffects();
         }
 
         private static Vector3 ScatterOffset(int index, int total)

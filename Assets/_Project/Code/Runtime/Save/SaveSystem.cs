@@ -267,6 +267,7 @@ namespace MaxWorlds.Save
             data.CheckpointKills = RunProgressState.Kills;
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
+            data.CheckpointDestroyedCradleIds = FactoryCensus.DestroyedCradleIds();
             data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
 
             // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
@@ -289,6 +290,10 @@ namespace MaxWorlds.Save
             // MV-1090: same reasoning as WeaponCorePending above — a cold-boot RESUME between collecting
             // a Rack Module and opening THE RIG must not silently lose the banked unlock.
             data.RackModulePending = PendingMorphingModule.RackModulePending;
+            // MV-1248: same reasoning again — a cold-boot RESUME between destroying World 5's 2nd/4th
+            // cradle and opening THE RIG must not silently lose the banked family reveal.
+            data.SecondaryFamilyPending = PendingMorphingModule.SecondaryFamilyPending;
+            data.SentinelFamilyPending = PendingMorphingModule.SentinelFamilyPending;
 
             // MV-951: MapRuntime.Build unconditionally zeroes the Invasion Level clock on every cold
             // boot (a new scene build) — a resumed run must not appear back at area 5 fighting area-1
@@ -343,6 +348,7 @@ namespace MaxWorlds.Save
             RunProgressState.Restore(data.CheckpointElapsedSeconds, data.CheckpointKills);
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
+            FactoryCensus.ApplyCheckpointDestroyedCradleIds(data.CheckpointDestroyedCradleIds);
             BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
 
             // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
@@ -355,6 +361,8 @@ namespace MaxWorlds.Save
             UpgradeState.RestoreInstalled(installedParts);
             PendingMorphingModule.RestoreWeaponCorePending(data.WeaponCorePending);
             PendingMorphingModule.RestoreRackModulePending(data.RackModulePending);
+            PendingMorphingModule.RestoreSecondaryFamilyPending(data.SecondaryFamilyPending);
+            PendingMorphingModule.RestoreSentinelFamilyPending(data.SentinelFamilyPending);
             MaxWorlds.Enemies.DifficultyDirector.RestoreClock(
                 data.CheckpointEscalationElapsed, data.CheckpointEscalationShedSkipSeconds, data.CheckpointEscalationShedsDestroyed);
 
@@ -463,6 +471,7 @@ namespace MaxWorlds.Save
             data.CheckpointKills = 0;
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
+            data.CheckpointDestroyedCradleIds = Array.Empty<string>();
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();
             data.CheckpointFinaleWeaponGranted = false;
             data.CheckpointFinaleExitOpen = false;
