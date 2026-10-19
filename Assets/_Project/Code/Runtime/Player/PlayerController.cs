@@ -178,6 +178,11 @@ namespace MaxWorlds.Player
             // Orbitals component to orbit/hit. Attaching this unconditionally costs nothing before the
             // morph — it self-gates on SecondaryKind the same way ShoulderRack does.
             if (GetComponent<Orbitals>() == null) gameObject.AddComponent<Orbitals>();
+
+            // MV-1241: Orbitals' own look self-attaches the same way — it self-gates on SecondaryKind
+            // via its own Tick's early return, so attaching it unconditionally costs nothing before
+            // the morph either.
+            if (GetComponent<OrbitalsVisuals>() == null) gameObject.AddComponent<OrbitalsVisuals>();
         }
 
         private void OnEnable()
