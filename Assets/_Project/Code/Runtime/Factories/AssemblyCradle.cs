@@ -65,6 +65,12 @@ namespace MaxWorlds.Factories
         private float _buildTimer;
         private bool _maxInArea;
 
+        /// <summary>MV-1252: found once in <see cref="Start"/> (never by an EditMode test — see that
+        /// method's own doc comment) so this cradle can unsubscribe from
+        /// <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> in <see cref="OnDestroy"/>. Same
+        /// field <see cref="Replicator"/> keeps for the same reason.</summary>
+        private AreaAccumulationDirector _areaDirector;
+
         // --- MV-1246: the two turret housings fire, reusing World 1's own ShedFitting behaviour
         // (MV-547/1073's already-tuned range/cadence/HP table) rather than inventing a new weapon. ---
         private ShedFitting[] _turretFittings;
@@ -188,7 +194,11 @@ namespace MaxWorlds.Factories
             HudSignals.EmitFactoryRegistered();
         }
 
-        private void OnDestroy() => _active.Remove(this);
+        private void OnDestroy()
+        {
+            _active.Remove(this);
+            if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnAreaEntered;
+        }
 
         /// <summary>MV-1244: a Welder's own repair tick — restores HP toward the ceiling, never past it,
         /// and never revives a cradle already destroyed. Delegates straight to <see cref="DestructibleHealth.Heal"/>,
@@ -255,9 +265,42 @@ namespace MaxWorlds.Factories
 
         private void Awake() => Build();
 
+        /// <summary>MV-1252: wires this cradle to the real area-crossing signal and primes immediately
+        /// for whatever area Max already physically occupies — the exact <see cref="Replicator.Start"/>
+        /// shape (see that method's own doc for why priming matters, not just subscribing). Never called
+        /// by an EditMode test (which drives <see cref="OnAreaEntered"/>/<see cref="PrimeFromCurrentPhysicalArea"/>
+        /// directly instead), so the <c>FindFirstObjectByType</c> lookup never runs there either.</summary>
+        private void Start()
+        {
+            _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            if (_areaDirector != null)
+            {
+                _areaDirector.PlayerCrossedIntoArea += OnAreaEntered;
+                PrimeFromCurrentPhysicalArea(_areaDirector);
+            }
+        }
+
+        /// <summary>MV-1252: same reasoning as <see cref="Replicator.PrimeFromCurrentPhysicalArea"/> —
+        /// <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> is a pure crossing/delta signal
+        /// that never fires for the area Max already occupies when this cradle's own <see cref="Start"/>
+        /// runs (map build) or resumes into (a checkpoint RESUME). Without this, every cradle in the area
+        /// Max starts or resumes into would stay permanently unbuilt. Public so an EditMode test can
+        /// drive it directly, same convention as every other post-build call in this file.</summary>
+        public void PrimeFromCurrentPhysicalArea(AreaAccumulationDirector director)
+        {
+            if (director != null) OnAreaEntered(director.PhysicalArea);
+        }
+
+        /// <summary>MV-1252: the real area-crossing signal (wired in <see cref="Start"/>; public so an
+        /// EditMode test can drive it directly) — the sole production path onto <see cref="_maxInArea"/>
+        /// now. <see cref="SetMaxInArea"/> remains for tests only; nothing in shipped gameplay may call
+        /// it by hand (this ticket's own "do not re-raise").</summary>
+        public void OnAreaEntered(int enteredArea) => SetMaxInArea(enteredArea == AreaIndex);
+
         /// <summary>Whether Max is standing in this cradle's own area — the sole gate on production.
-        /// Public so an EditMode test can drive it directly, same reasoning as every other post-build
-        /// configure call in this file's sibling factories.</summary>
+        /// Test-only: shipped gameplay drives <see cref="_maxInArea"/> exclusively through
+        /// <see cref="OnAreaEntered"/> (MV-1252); this setter is kept so an EditMode test can still drive
+        /// it directly without a real <see cref="AreaAccumulationDirector"/> in the scene.</summary>
         public void SetMaxInArea(bool present) => _maxInArea = present;
 
         private void Update() => Tick(Time.deltaTime);
