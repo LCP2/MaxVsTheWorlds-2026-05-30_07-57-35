@@ -478,6 +478,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1241OrbitalsLook());
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
+            Add(BuildMv1249MothershipLookCheck());
             return d;
         }
 
@@ -4598,6 +4599,154 @@ namespace MaxWorlds.Dev
                 {
                     new CaptureShot("MV-1207-a1", NoSetup),
                     new CaptureShot("MV-1207-a8", SetupA8),
+                },
+            };
+        }
+
+        /// <summary>MV-1249 AC3: captures the Mothership's five hero areas (one per deck) through the
+        /// production camera and the production world look, and measures each frame's median and 90th-
+        /// percentile luminance — "same shape as <see cref="BuildMv1207CityBrightnessCheck"/>" (one
+        /// <see cref="CapturePreset"/>, each shot framing a named zone via <c>FrameZone</c>'s own
+        /// idiom), plus a <see cref="CaptureShot.Measure"/>/<see cref="CapturePreset.ExtraReport"/> pair
+        /// the City check didn't need (MV-1207's own brightness assertion lived entirely in its EditMode
+        /// test, not its capture — this ticket's AC3 explicitly wants the numbers IN the report).
+        ///
+        /// Each shot applies its own deck's <see cref="MothershipDecks.LookFor"/> result directly,
+        /// rather than simulating Max walking the ship to trigger <see cref="MothershipDeckLighting"/>'s
+        /// live crossing blend — the same "teleport the camera, not the player" shortcut
+        /// <c>BuildMv1207CityBrightnessCheck</c>'s own <c>FrameZone</c> already takes.
+        ///
+        /// The zone id is NOT the config's own <c>WorldArea.id</c> ("a1"/"a8"/...) — same gotcha
+        /// <see cref="BuildMv1205CityGroundCheck"/>'s own doc names: <c>WorldMapLoader</c> rewrites it to
+        /// <c>"area" + index</c> for every area, which is what burned this capture's first run (logged
+        /// "Mothership map carries no zone 'a1'").</summary>
+        private static CapturePreset BuildMv1249MothershipLookCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            // (areaIndex, zone id, label, target median luminance per the ticket's own AC3).
+            var heroAreas = new (int area, string zoneId, string label, float targetMedian)[]
+            {
+                (1, "area1", "Hangar", 31f),
+                (8, "area8", "Assembly", 28f),
+                (15, "area15", "Vault", 29f),
+                (22, "area22", "Reactor", 87f),
+                (30, "area30", "Bridge", 55f),
+            };
+
+            var medianByShot = new Dictionary<string, float>();
+            var p90ByShot = new Dictionary<string, float>();
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameArea(Camera cam, int areaIndex, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"Mothership map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Mothership built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var lighting = FindFirstObjectByType<BackyardLighting>();
+                if (lighting == null) throw new CaptureAbortException("Mothership built no BackyardLighting");
+                lighting.Apply(MothershipDecks.LookFor(areaIndex));   // the production look this area's deck resolves to
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + relighting + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameArea(cam, heroAreas[0].area, heroAreas[0].zoneId);
+            }
+
+            float Percentile(List<float> sorted, float p)
+            {
+                if (sorted.Count == 0) return 0f;
+                if (sorted.Count == 1) return sorted[0];
+                float idx = p * (sorted.Count - 1);
+                int lo = Mathf.FloorToInt(idx);
+                int hi = Mathf.CeilToInt(idx);
+                return lo == hi ? sorted[lo] : Mathf.Lerp(sorted[lo], sorted[hi], idx - lo);
+            }
+
+            void Measure(string shotName, Texture2D tex)
+            {
+                // Rec. 709 luma, 0-255 — the same formula FrameContrastGate.Check already uses
+                // elsewhere in this file, sampled every 4th pixel (its own default step) across the
+                // WHOLE frame: AC3 wants each hero frame's own overall median/p90, not a patch.
+                var lumas = new List<float>((tex.width / 4 + 1) * (tex.height / 4 + 1));
+                for (int y = 0; y < tex.height; y += 4)
+                    for (int x = 0; x < tex.width; x += 4)
+                    {
+                        Color c = tex.GetPixel(x, y);
+                        lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+                    }
+                lumas.Sort();
+                medianByShot[shotName] = Percentile(lumas, 0.5f);
+                p90ByShot[shotName] = Percentile(lumas, 0.9f);
+            }
+
+            var shots = new List<CaptureShot>();
+            foreach (var hero in heroAreas)
+            {
+                var h = hero;   // per-iteration copy for the closures below
+                string name = $"MV-1249-{h.label}";
+                Func<Camera, IEnumerator> setup;
+                if (h.area == heroAreas[0].area) setup = NoSetup;   // Prepare already framed the first hero area
+                else setup = cam => FrameArea(cam, h.area, h.zoneId);
+                shots.Add(new CaptureShot(name, setup, measure: tex => Measure(name, tex)));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1249mothershiplook",
+                LogTag = "[MV1249Capture]",
+                Flag = "-mv1249shot",
+                ArmFile = "Temp/mv1249.arm",
+                HeadlessMarker = "Temp/mv1249.headless",
+                DoneFileName = "_mv1249_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 150,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
+                ExtraReport = () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    foreach (var h in heroAreas)
+                    {
+                        string name = $"MV-1249-{h.label}";
+                        medianByShot.TryGetValue(name, out float median);
+                        p90ByShot.TryGetValue(name, out float p90);
+                        bool within = Mathf.Abs(median - h.targetMedian) <= 10f;
+                        sb.Append($"{h.label} (a{h.area}): median={median:F1}/255 p90={p90:F1}/255 " +
+                                  $"(target {h.targetMedian:F0} +/-10 -- {(within ? "PASS" : "OUT OF RANGE")})\n");
+                    }
+                    return sb.ToString();
                 },
             };
         }

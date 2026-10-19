@@ -362,6 +362,53 @@ namespace MaxWorlds.Rendering
             RemovesSkybox = true,          // a night street has no daylight dome either
         };
 
+        /// <summary>
+        /// Ship — World 5's Mothership interior (MV-1249). Colours read straight off
+        /// <see cref="MaxWorlds.Arena.ShipDressing"/>'s own kit (<c>ShipKit</c>'s deck plate/seam/
+        /// near-black/rust-orange tones), so the procedural biome sweep and the kit's own fixed
+        /// materials agree, the same discipline <see cref="Reef"/>'s own doc follows for World 3.
+        ///
+        /// No timber or stone on a ship, so <see cref="Wood"/>/<see cref="Stone"/> reuse the bulkhead
+        /// tone (same "a ship has neither" reasoning <see cref="Reef"/> gives); <see cref="Foliage"/>
+        /// has nothing organic to be either, so it reuses the kit's own gold lamp tone — the one warm
+        /// accent material a ship interior actually has, the same "the one material this biome actually
+        /// has" role <see cref="Reef"/>'s bio-glow plays for <c>Foliage</c> there.
+        ///
+        /// No wind, no clump relief, same as <see cref="Stormdrain"/>'s concrete and <see cref="Reef"/>'s
+        /// deck plating — a riveted hull plate doesn't sway and doesn't tuft.
+        /// </summary>
+        public static BiomePalette Ship => new BiomePalette
+        {
+            Tint = Color.white,
+            GroundBase = new Color(0.2275f, 0.2510f, 0.2980f),     // #3A404C — == ShipKit's deck plate
+            GroundAccent = new Color(0.2745f, 0.3020f, 0.3569f),   // a touch lighter — the panel seams catching light
+            GroundDry = new Color(0.1569f, 0.1765f, 0.2118f),      // #282D36 — == ShipKit's deck seam, the worn/dark tone
+            Wall = new Color(0.20f, 0.22f, 0.26f),                 // bulkhead — a shade darker/cooler than the deck
+            Prop = new Color(0.0706f, 0.0706f, 0.0863f),           // #121216 — == ShipKit's near-black machinery
+
+            Wood = new Color(0.20f, 0.22f, 0.26f),                 // no timber on a ship — reuse the bulkhead tone
+            Stone = new Color(0.20f, 0.22f, 0.26f),                // no stone either — same bulkhead tone
+            Dirt = new Color(0.1569f, 0.1765f, 0.2118f),           // == GroundDry, the worn deck-seam tone
+            Metal = new Color(0.0706f, 0.0706f, 0.0863f),          // == ShipKit's near-black machinery
+            Foliage = new Color(0.9529f, 0.8235f, 0.4784f),        // #F3D27A — == ShipKit's GoldLamp, the one warm accent
+
+            GroundDetailScale = 0.45f,     // deck plate seams, same coarseness as Stormdrain's/Reef's
+            GroundMacroScale = 0.05f,
+            GroundMacroStrength = 0.25f,
+            GroundLushShade = 0.65f,
+            GroundNormalStrength = 0.7f,   // riveted plate — more relief than wet concrete, less than Reef's deck
+            GroundClumpScale = 0.5f,
+            GroundClumpDepth = 0f,         // no tufting — this is a deck, not a lawn
+
+            GroundWindLean = 0f,           // sealed hull interior — nothing blows
+            GroundWindSpeed = 0f,
+            GroundWindShimmer = 0f,
+
+            GroundTiling = 5f,
+            Smoothness = 0.2f,             // worn riveted metal
+            RemovesSkybox = true,          // sealed hull interior — never the Backyard's daylight dome
+        };
+
         /// <summary>Value equality over every field EXCEPT <see cref="RemovesSkybox"/> — see that
         /// field's own doc for why. Everything else keeps the default struct semantics every existing
         /// caller (<c>WorldCatalog.ForActivePalette</c>, <c>PickupArtDirector</c>'s ring-alpha lookup,

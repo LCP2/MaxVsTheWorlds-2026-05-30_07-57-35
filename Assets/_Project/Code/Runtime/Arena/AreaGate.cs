@@ -140,6 +140,21 @@ namespace MaxWorlds.Arena
             rend.SetPropertyBlock(_reefMpb);
         }
 
+        /// <summary>MV-1249: re-skins this gate for World 5's Mothership — the same MaterialPropertyBlock
+        /// tint idiom <see cref="ApplyReefSkin"/> uses, tinted with <c>ShipKit</c>'s own rust-orange
+        /// (the split-panel kit's warm half, the colour every other piece of ship dressing already
+        /// wears). Touches no health, no collider and no hinge geometry, same guarantee
+        /// <see cref="ApplyReefSkin"/>'s own doc gives.</summary>
+        public void ApplyShipGateSkin()
+        {
+            var rend = GetComponent<Renderer>();
+            if (rend == null) return;
+            if (_reefMpb == null) _reefMpb = new MaterialPropertyBlock();
+            rend.GetPropertyBlock(_reefMpb);
+            _reefMpb.SetColor("_BaseColor", MaxWorlds.Rendering.ShipKit.RustOrange);
+            rend.SetPropertyBlock(_reefMpb);
+        }
+
         // --- MV-1178: the City's own gate art — a roller shutter, built as REAL geometry (unlike
         // ApplyReefSkin's property-block tint) because a shutter's horizontal slats are its whole
         // identity. Unlike ApplyStormdrainGateSkin's art, this is parented directly under THIS gate's

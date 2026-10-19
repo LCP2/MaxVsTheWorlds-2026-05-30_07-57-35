@@ -65,8 +65,14 @@ namespace MaxWorlds.Tests.EditMode
         /// this ticket asks for — <c>if (_field == null) _field = FindFirstObjectByType&lt;T&gt;();</c>,
         /// a one-time cached singleton lookup, not a per-frame scan. Allowlisted because a text scan
         /// can't see the guard; not a regression to fix.
+        ///
+        /// MothershipDeckLighting.cs (MV-1249): same idiom — <c>if (_lighting == null) _lighting =
+        /// FindFirstObjectByType&lt;BackyardLighting&gt;();</c>, called once per deck-crossing blend, cached
+        /// for the rest of that blend and never cleared while it holds a live reference. Its own Update
+        /// early-outs before reaching the lookup once a blend has settled (<c>_t &gt;= 1f</c>), so this
+        /// is the same one-time cached lookup the two entries above already cover, not a per-frame scan.
         /// </summary>
-        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs", "GroundAnchorVfx.cs" };
+        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs", "GroundAnchorVfx.cs", "MothershipDeckLighting.cs" };
 
         /// <summary>
         /// MV-553 — this test intermittently failed in CI (~1 run in 3) with no offender ever seen in
