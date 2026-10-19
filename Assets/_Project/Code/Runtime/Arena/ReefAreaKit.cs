@@ -78,7 +78,20 @@ namespace MaxWorlds.Arena
                         ? new Vector3(runLength, wallHeight * WindowHeightFraction, match.transform.lossyScale.z)
                         : new Vector3(match.transform.lossyScale.x, wallHeight * WindowHeightFraction, runLength);
 
-                    ReefKit.BuildObservationWindow(host, position, size);
+                    GameObject window = ReefKit.BuildObservationWindow(host, position, size);
+
+                    // MV-1257, Change item 3: "beyond the window walls ... animated fish shoals
+                    // crossing the deep, and roughly every 60-90 s one large whale silhouette gliding
+                    // past one visible window". MV-1171's own anchor idiom (see
+                    // WorldJoinDressing.DressObservationWindows) — a plain, unscaled anchor at the
+                    // window's own world position, never parented straight onto the window itself: the
+                    // backdrop's four layers are authored at a flat local scale (6x3) against an
+                    // unscaled parent, and the window above carries its own non-uniform
+                    // (runLength, height, thickness) local scale that would otherwise balloon them.
+                    var backdropAnchor = new GameObject("Ocean Backdrop Anchor");
+                    backdropAnchor.transform.SetParent(host, false);
+                    backdropAnchor.transform.position = window.transform.position;
+                    ReefKit.BuildOceanBackdrop(backdropAnchor.transform);
                 }
             }
         }
