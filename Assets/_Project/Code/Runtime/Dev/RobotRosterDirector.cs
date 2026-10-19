@@ -69,6 +69,13 @@ namespace MaxWorlds.Dev
         private const float MothershipPairDistance = 4.2f;
         private const float MothershipPairSpacing = 1.6f;   // metres between the two robots' centres
 
+        /// <summary>MV-1243 AC3's own framing — pulled back a little further than MothershipPair's
+        /// above, since the 1.7 m Lensman and the 1.25 m-wide Hauler are both bigger than the
+        /// Drone/Sentry pair that framing was tuned for.</summary>
+        private const float MothershipPair2Pitch = 58f;
+        private const float MothershipPair2Distance = 5.4f;
+        private const float MothershipPair2Spacing = 2.2f;   // metres between the two robots' centres
+
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
 
@@ -148,6 +155,7 @@ namespace MaxWorlds.Dev
             yield return CaptureDreadnoughtPair(cam, focusBase);
             yield return CaptureSkitterPack(cam, focusBase);
             yield return CaptureMothershipPair(cam, focusBase);
+            yield return CaptureMothershipPair2(cam, focusBase);
 
             Finish();
         }
@@ -260,6 +268,42 @@ namespace MaxWorlds.Dev
             finally
             {
                 foreach (GameObject go in pack) if (go != null) Destroy(go);
+            }
+        }
+
+        /// <summary>MV-1243 AC3 — the Lensman and the Hauler side by side, at this director's own
+        /// Mothership-pair-2 framing. Built from <see cref="EnemyArchetype.For"/> against the
+        /// Mothership's real <c>mothership_config.json</c> (not <see cref="EnemyArchetype.Of"/>) — the
+        /// only way either kind resolves to its "mothership" skin tag and so its own body rather than
+        /// the base roster's tripod Gunner / wide Brute. The ticket's own "one capture only" (AC3): a
+        /// single new shot, same technique as <see cref="CaptureMothershipPair"/> above.</summary>
+        private IEnumerator CaptureMothershipPair2(Camera cam, Vector3 focusBase)
+        {
+            GameObject lensman = null, hauler = null;
+            try
+            {
+                WorldConfig mothershipConfig = WorldLibrary.Load(WorldLibrary.Mothership);
+                if (mothershipConfig == null) { LogWarn("mothership_pair_lensman_hauler capture skipped: mothership_config.json failed to load"); yield break; }
+
+                Vector3 lensmanPos = focusBase + Vector3.left * (MothershipPair2Spacing * 0.5f);
+                Vector3 haulerPos = focusBase + Vector3.right * (MothershipPair2Spacing * 0.5f);
+
+                lensman = BuildRobot(EnemyArchetype.For(EnemyKind.Gunner, mothershipConfig), lensmanPos);
+                hauler = BuildRobot(EnemyArchetype.For(EnemyKind.Brute, mothershipConfig), haulerPos);
+                for (int i = 0; i < 3; i++) yield return null;   // let both rigs' build settle on screen
+
+                var rot = Quaternion.Euler(MothershipPair2Pitch, 0f, 0f);
+                Vector3 focus = (lensmanPos + haulerPos) * 0.5f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * MothershipPair2Distance, rot);
+
+                yield return null;
+                yield return null;
+                Capture(cam, "mothership_pair_lensman_hauler");
+            }
+            finally
+            {
+                if (lensman != null) Destroy(lensman);
+                if (hauler != null) Destroy(hauler);
             }
         }
 

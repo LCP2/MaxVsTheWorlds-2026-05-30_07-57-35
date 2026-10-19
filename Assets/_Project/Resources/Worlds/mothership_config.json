@@ -51,6 +51,16 @@
       "kind": "turret",
       "displayName": "SENTRY",
       "skin": "mothership"
+    },
+    {
+      "kind": "gunner",
+      "displayName": "LENSMAN",
+      "skin": "mothership"
+    },
+    {
+      "kind": "brute",
+      "displayName": "HAULER",
+      "skin": "mothership"
     }
   ],
   "gates": [
