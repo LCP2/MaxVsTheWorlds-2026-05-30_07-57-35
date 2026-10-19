@@ -47,7 +47,8 @@ namespace MaxWorlds.Arena
         /// <paramref name="wallHeight"/> — decoration only; the wall's own collider/sight-blocking is
         /// untouched (<see cref="ReefKit.BuildObservationWindow"/> is collider-free by construction).
         /// </summary>
-        public static void BuildWindows(Transform host, WorldConfig cfg, List<StructuralWall> walls, float wallHeight)
+        public static void BuildWindows(Transform host, WorldConfig cfg, List<StructuralWall> walls, float wallHeight,
+            float wallThickness)
         {
             if (host == null || cfg?.areas == null) return;
 
@@ -74,9 +75,14 @@ namespace MaxWorlds.Arena
                     Vector3 position = runsAlongX
                         ? new Vector3(along, sillY, coord)
                         : new Vector3(coord, sillY, along);
+                    // MV-1262: the matched wall's own thickness, not its transform — MapRuntime.Build's
+                    // ApplyBevelledBoxMesh (MV-778) bakes the wall's true size into its mesh and resets
+                    // localScale to Vector3.one, so transform.lossyScale no longer carries it. Every real
+                    // wall shares one map-wide thickness (MapGeometry.Walls' own single `t`), so the
+                    // caller's wallThickness is this wall's thickness too — no per-wall lookup needed.
                     Vector3 size = runsAlongX
-                        ? new Vector3(runLength, wallHeight * WindowHeightFraction, match.transform.lossyScale.z)
-                        : new Vector3(match.transform.lossyScale.x, wallHeight * WindowHeightFraction, runLength);
+                        ? new Vector3(runLength, wallHeight * WindowHeightFraction, wallThickness)
+                        : new Vector3(wallThickness, wallHeight * WindowHeightFraction, runLength);
 
                     GameObject window = ReefKit.BuildObservationWindow(host, position, size);
 
@@ -194,21 +200,40 @@ namespace MaxWorlds.Arena
             {
                 if (w == null) continue;
                 if (requireOuterEdge && !w.IsOuterEdge) continue;
-                Transform wt = w.transform;
-                Vector3 scale = wt.lossyScale;
-                bool alongX = scale.x >= scale.z;
+                if (!ResolveWallExtent(w.transform, out bool alongX, out float length)) continue;
                 if (alongX != wantsAlongX) continue;
 
+                Transform wt = w.transform;
                 float wallCoord = alongX ? wt.position.z : wt.position.x;
                 if (Mathf.Abs(wallCoord - coord) > EdgeMatchTolerance) continue;
 
                 float along = alongX ? wt.position.x : wt.position.z;
-                float length = alongX ? scale.x : scale.z;
                 float overlap = Mathf.Min(span.Max, along + length * 0.5f) - Mathf.Max(span.Min, along - length * 0.5f);
                 if (overlap > bestOverlap) { bestOverlap = overlap; best = w; }
             }
 
             return bestOverlap > 0f ? best : null;
+        }
+
+        /// <summary>MV-1262: a built wall's real world-space length/orientation, read off its
+        /// <see cref="BoxCollider"/> (<see cref="Transform.lossyScale"/> alone no longer carries it —
+        /// <c>MapRuntime.Build</c>'s own <c>ApplyBevelledBoxMesh</c>, MV-778, bakes the wall's true size
+        /// into its mesh and resets <c>localScale</c> to <see cref="Vector3.one"/> once it does, which is
+        /// exactly why area2's own authored S+W window silently matched nothing: every merged hull run
+        /// spanning more than one area collapsed to a 1 m "length" centred nowhere near area2's own span).
+        /// Same body <c>ShipAreaKit.ResolveWallExtent</c> already uses for the Mothership's sibling kit —
+        /// that class's own header names this as a bug it deliberately routes around rather than shares,
+        /// so this is duplicated rather than factored out, matching that precedent. Falls back to plain
+        /// <c>lossyScale</c> for a hand-built fixture that carries no collider.</summary>
+        private static bool ResolveWallExtent(Transform wt, out bool alongX, out float length)
+        {
+            Vector3 size = wt.lossyScale;
+            var collider = wt.GetComponent<BoxCollider>();
+            if (collider != null) size = Vector3.Scale(collider.size, wt.lossyScale);
+
+            alongX = size.x >= size.z;
+            length = alongX ? size.x : size.z;
+            return length > 0.01f;
         }
 
         /// <summary>MV-1255, "Strip lights": a magenta top strip on every area's own NORTH wall (the

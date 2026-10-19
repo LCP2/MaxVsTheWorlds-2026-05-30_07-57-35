@@ -363,7 +363,7 @@ namespace MaxWorlds.Arena
             float wallHeight = map != null ? map.wallHeight : MapData.DefaultWallHeight;
             float wallThickness = map != null ? map.wallThickness : MapData.DefaultWallThickness;
             ReefAreaKit.BuildDecor(host, cfg);
-            ReefAreaKit.BuildWindows(host, cfg, walls, wallHeight);
+            ReefAreaKit.BuildWindows(host, cfg, walls, wallHeight, wallThickness);
             ReefAreaKit.BuildWallDressing(host, cfg, walls, wallHeight, wallThickness);
             // MV-1255: the per-area magenta far-wall strip — needs WorldArea data to know which built
             // wall IS a given room's own north side, same reason the three calls above already live
