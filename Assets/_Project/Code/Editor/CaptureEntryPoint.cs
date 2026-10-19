@@ -225,6 +225,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1242HelmsmanLook() => RunFromMenu(CapturePresets.All["mv1242helmsmanlook"]);
         public static void CaptureMv1242HelmsmanLook() => Run(CapturePresets.All["mv1242helmsmanlook"]);
 
+        [MenuItem("MaxWorlds/Capture/End Shot (MV-1245)")]
+        public static void MenuMv1245EndShot() => RunFromMenu(CapturePresets.All["mv1245endshot"]);
+        public static void CaptureMv1245EndShot() => Run(CapturePresets.All["mv1245endshot"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

@@ -5,6 +5,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Pickups
@@ -872,11 +873,14 @@ namespace MaxWorlds.Pickups
                         MaxWorlds.VFX.WeaponPartArt.RackModuleGlow);
                     break;
                 case PickupKind.HelmKey:
-                    // MV-1239: the Helmsman's drop. MV-1245 owns what collecting it actually DOES (the
-                    // viewport exit) -- this toast only confirms the pickup so it can't silently fall
-                    // into the Supercell default below and wrongly grant cells; the finale ticket wires
-                    // the real effect on top of this case.
+                    // MV-1245: collecting World 5's own finale orb resolves the whole Bridge finale in
+                    // one call -- see WorldFinaleGate.OnHelmKeyCollected (destroys the rest of area 30,
+                    // opens the north viewport, "THE SHIP IS YOURS", builds the Observation Deck beyond
+                    // it). Not routed through HudSignals.WeaponCoreCollected -- that signal also drives
+                    // the "Weapon Core fanfare" SFX cue and RunTracker's own Victory/Result-screen seal,
+                    // neither of which belongs to the game's true ending.
                     HudSignals.EmitPickup(p.transform.position, "HELM KEY", new Color(0.98f, 0.80f, 0.14f));
+                    WorldFinaleGate.Active?.OnHelmKeyCollected();
                     break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
