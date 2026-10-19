@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Rendering
 {
@@ -411,19 +412,63 @@ namespace MaxWorlds.Rendering
         // idiom CircuitStripProud uses for a strip against its wall.
         private const float CrateCapProud = 0.01f;
 
+        /// <summary>0.5/cos(45deg) == cos(45deg) (the two happen to be numerically identical, both
+        /// sqrt(2)/2): a 4-sided <see cref="CharacterMeshes.Prism"/> built at this radius, height 1,
+        /// lands its flat faces exactly +-0.5 from the axis on every side and spans -0.5..+0.5 in
+        /// height too — a UNIT mesh matching Unity's own primitive cube convention exactly (a cube
+        /// primitive is also -0.5..+0.5 on every axis). <see cref="ApplyCrateSkin"/> uses it so the
+        /// crate's own <c>transform.localScale</c> can carry the real metres directly, on all three
+        /// axes independently, the same way a bare <c>CreatePrimitive(Cube)</c> + <c>localScale = size</c>
+        /// always did — which is what makes a non-square crate (most of World 3's are rectangular, not
+        /// square) still read at its own full authored footprint rather than an averaged square.
+        /// </summary>
+        private const float CrateMeshUnitRadius = 0.70710678f;
+
+        /// <summary>MV-1251: the fraction of a crate body's own height the Prism chamfer eats at each
+        /// end — bevels only the horizontal top/bottom rim, keeping the four vertical corners sharp,
+        /// the same "machined housing" read <see cref="BuildPillar"/> and <see cref="BuildConsole"/>'s
+        /// own Prism bodies already carry.</summary>
+        private const float CrateBodyChamfer = 0.08f;
+
         /// <summary>Recolours a bare "crate" cover piece with its own Reef material (MV-1019) — a
         /// blue-grey steel body plus orange accent caps at its four vertical edges. Runs in place of
         /// leaving the piece to the general shape-classified sweep, which painted it
         /// <see cref="BiomePalette.Reef"/>'s Prop tone (#0C1622) — darker than the floor it sits on.
-        /// Collider and geometry are untouched: only the body's renderer is re-pointed, and the four
-        /// caps are new, collider-free children, same "collider stays, art swaps" contract every
-        /// other Reef dressing case keeps. <paramref name="addCornerCaps"/> is the caller's own
+        ///
+        /// MV-1251: the body's own mesh is rebuilt as a chamfered 4-sided <see cref="CharacterMeshes.Prism"/>
+        /// (ticket: "a Prism with 4 sides and a chamfer ... instead of a sharp cube") rather than left
+        /// at whatever <c>MaxWorlds.Arena.Map.MapRuntime.ApplyBevelledBoxMesh</c> (MV-778) already gave
+        /// it. That mesh is built UNIT-sized (<see cref="CrateMeshUnitRadius"/>) and the body's own
+        /// <c>transform.localScale</c> is set back to its real metres — read off its live
+        /// <see cref="BoxCollider"/>, which MV-778 had set to those metres while leaving the GameObject's
+        /// own scale at <see cref="Vector3.one"/> — with the collider's own <c>size</c> correspondingly
+        /// reset to <see cref="Vector3.one"/>, so the collider's WORLD-SPACE extent
+        /// (<c>transform.localScale * collider.size</c>) is bit-identical before and after: this
+        /// ticket's own "colliders ... unchanged" contract holds on the only thing that actually matters
+        /// for gameplay (what Max can stand on/behind), even though which field carries the metres
+        /// flips. A single Prism radius can only ever describe a SQUARE cross-section, so the mesh must
+        /// get its rectangular footprint from a non-uniform scale, not from the radius itself — most of
+        /// World 3's crates are rectangular, not square (MV-1052's own a10 fixture caught the earlier,
+        /// averaged-square version of this undercovering an elongated crate's footprint and failing its
+        /// gate). Collider and geometry are otherwise untouched: only the body's renderer is re-pointed,
+        /// and the four caps are new, collider-free children, same "collider stays, art swaps" contract
+        /// every other Reef dressing case keeps. <paramref name="addCornerCaps"/> is the caller's own
         /// <c>CoverShape.Box</c> check (a bool, not the enum itself — <c>MaxWorlds.Rendering</c> has no
-        /// reference to the assembly <c>CoverShape</c> lives in) — a box's corners have edges to
-        /// accent, a cylinder has none.</summary>
+        /// reference to the assembly <c>CoverShape</c> lives in) — a box's corners have edges to accent,
+        /// a cylinder has none.</summary>
         public static void ApplyCrateSkin(GameObject crateBody, bool addCornerCaps)
         {
             if (crateBody == null) return;
+
+            var meshFilter = crateBody.GetComponent<MeshFilter>();
+            if (meshFilter != null)
+            {
+                var bodyCollider = crateBody.GetComponent<BoxCollider>();
+                Vector3 realSize = bodyCollider != null ? bodyCollider.size : crateBody.transform.localScale;
+                meshFilter.sharedMesh = CharacterMeshes.Prism(4, CrateMeshUnitRadius, CrateMeshUnitRadius, 1f, CrateBodyChamfer);
+                crateBody.transform.localScale = realSize;
+                if (bodyCollider != null) bodyCollider.size = Vector3.one;
+            }
 
             var rend = crateBody.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = WorldMaterials.M_CrateBody;
@@ -441,35 +486,33 @@ namespace MaxWorlds.Rendering
             var caps = new GameObject("Corner Caps");
             caps.transform.SetParent(crateBody.transform, false);
 
+            // Same "fraction of the parent's own local unit cube" idiom the cube primitive these caps
+            // used to be relied on: crateBody's own cumulative scale does the metric conversion, so the
+            // mesh itself only needs to be the generated-mesh substitute for that unit cube.
+            Mesh capMesh = CharacterMeshes.Bevelled(Vector3.one, CrateCapProud * 4f);
             foreach (int sx in new[] { -1, 1 })
             foreach (int sz in new[] { -1, 1 })
             {
-                var cap = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                cap.name = "CrateCap";
-                cap.transform.SetParent(caps.transform, false);
-                // Positions/scales are expressed as fractions of the parent's own local unit cube
-                // (-0.5..0.5) — the parent's cumulative scale (== size) does the metric conversion,
-                // same idiom BuildCircuitSpine's strips use against their wall.
-                cap.transform.localPosition = new Vector3(
-                    sx * (0.5f - (capX / size.x) * 0.5f),
-                    0f,
-                    sz * (0.5f - (capZ / size.z) * 0.5f));
-                cap.transform.localScale = new Vector3(
-                    capX / size.x + CrateCapProud, 1f + CrateCapProud, capZ / size.z + CrateCapProud);
-                StripColliders(cap);
-
-                var capRend = cap.GetComponent<Renderer>();
-                if (capRend != null) capRend.sharedMaterial = WorldMaterials.M_CrateCap;
+                MeshPart(caps.transform, "CrateCap", capMesh,
+                    new Vector3(
+                        sx * (0.5f - (capX / size.x) * 0.5f),
+                        0f,
+                        sz * (0.5f - (capZ / size.z) * 0.5f)),
+                    WorldMaterials.M_CrateCap,
+                    localScale: new Vector3(
+                        capX / size.x + CrateCapProud, 1f + CrateCapProud, capZ / size.z + CrateCapProud));
             }
         }
 
-        // MV-1215: the Reef's own structure kit (Lee's 17 Oct 2026 concept-frame approval). Each
-        // builder below is called by MaxWorlds.Arena.ReefDressing with the cover piece's own authored
-        // centre/size, in place of a hidden body renderer — the same "collider stays, art swaps"
-        // contract BuildCoolantTurret already keeps. Every child here is built UNSCALED, under an
-        // identity-scale piece root, at literal metre offsets — not as a child of a scaled body the way
-        // CrateCap's own fraction-of-parent trick works — so none of these need that division-by-size
-        // arithmetic to stay a fixed metre thickness regardless of the piece's own authored footprint.
+        // MV-1215: the Reef's own structure kit (Lee's 17 Oct 2026 concept-frame approval). MV-1251
+        // rebuilt every builder below from MaxWorlds.VFX.CharacterMeshes' generated-mesh vocabulary
+        // (Lathe/Prism/Beam/Ring/Sphere/Bevelled) — ZERO GameObject.CreatePrimitive calls remain in
+        // this section (Lee, 19 Aug 2026: primitives read "glued together from cardboard boxes and
+        // tubes"). Each builder is called by MaxWorlds.Arena.ReefDressing with the cover piece's own
+        // authored centre/size, in place of a hidden body renderer — the same "collider stays, art
+        // swaps" contract BuildCoolantTurret already keeps. Every piece here is a fresh, collider-free
+        // GameObject tree (no CreatePrimitive ever ran on it, so there is nothing to strip), built at
+        // literal metre offsets under an identity-scale piece root exactly as before.
 
         private const float PillarSeamWidth = 0.08f;
         private const float ManifoldPipeRadius = 0.12f;
@@ -477,9 +520,45 @@ namespace MaxWorlds.Rendering
         private const float PlanterRimHeight = 0.5f;   // fraction of the piece's own authored height
         private const float FloorPipeBracketWidth = 0.06f;
 
-        /// <summary>P — a heavy structural column, <see cref="WorldMaterials.M_MetalDark"/> with a
-        /// <see cref="WorldMaterials.M_Circuit_Cyan"/> seam light running its full height on one face
-        /// (ticket table: 2x2, solid).</summary>
+        /// <summary>1/cos(45deg): <see cref="CharacterMeshes.Prism"/>'s own "+PI/sides" rotation for a
+        /// 4-sided prism lands its flat faces exactly <c>radius * cos(45deg)</c> from the axis on each
+        /// side — the same figure <c>MaxWorlds.VFX.FactoryBodies.BuildReplicator</c>'s own "Hull" uses
+        /// to turn a unit square into a non-uniformly-scaled rectangle. <see cref="BuildConsole"/>'s
+        /// desk body is the one piece in this file that still needs a rectangular footprint from a
+        /// 4-sided Prism.</summary>
+        private const float Diag = 1.41421356f;
+
+        /// <summary>A collider-free generated-mesh part — the replacement for every
+        /// <c>GameObject.CreatePrimitive</c> call this file used to make. Never carries a collider (no
+        /// primitive ever ran here to add one), so there is nothing for <see cref="StripColliders"/>
+        /// to strip.</summary>
+        private static GameObject MeshPart(Transform parent, string name, Mesh mesh, Vector3 localPosition,
+            Material material, Quaternion? localRotation = null, Vector3? localScale = null)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPosition;
+            go.transform.localRotation = localRotation ?? Quaternion.identity;
+            go.transform.localScale = localScale ?? Vector3.one;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var rend = go.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = material;
+            return go;
+        }
+
+        /// <summary>A collider-free chamfered box at literal metre <paramref name="size"/> — the
+        /// generated-mesh substitute for <c>CreatePrimitive(PrimitiveType.Cube)</c> plus a
+        /// <c>localScale = size</c>. Same mesh <see cref="StormdrainKit.Box"/> already builds for
+        /// World 2's own kit.</summary>
+        private static GameObject MeshBox(Transform parent, string name, Vector3 localPosition, Vector3 size,
+            Material material)
+            => MeshPart(parent, name, CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size)),
+                localPosition, material);
+
+        /// <summary>P — a chamfered 8-sided <see cref="CharacterMeshes.Prism"/> column: a recessed
+        /// shaft between a heavier base and cap, three rib bands (<see cref="CharacterMeshes.Ring"/>)
+        /// at even heights, and a recessed cyan seam light (<see cref="CharacterMeshes.Beam"/>) running
+        /// the full height on one face (ticket table: 2x2, solid).</summary>
         public static GameObject BuildPillar(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefPillar");
@@ -487,30 +566,51 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "Body";
-            body.transform.SetParent(root.transform, false);
-            body.transform.localScale = size;
-            StripColliders(body);
-            var bodyRend = body.GetComponent<Renderer>();
-            if (bodyRend != null) bodyRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            float radius = Mathf.Min(size.x, size.z) * 0.5f;
 
-            var seam = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            seam.name = "Seam Light";
-            seam.transform.SetParent(root.transform, false);
-            seam.transform.localPosition = new Vector3(0f, 0f, size.z * 0.5f + CircuitStripProud);
-            seam.transform.localScale = new Vector3(PillarSeamWidth, size.y + CircuitStripProud, PillarSeamWidth);
-            StripColliders(seam);
-            var seamRend = seam.GetComponent<Renderer>();
-            if (seamRend != null) seamRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            Mesh shaft = CharacterMeshes.Prism(8, radius * 0.82f, radius * 0.82f, size.y * 0.84f, 0.12f);
+            MeshPart(root.transform, "Body", shaft, Vector3.zero, WorldMaterials.M_MetalDark);
+
+            Mesh baseCap = CharacterMeshes.Prism(8, radius, radius, size.y * 0.10f, 0.22f);
+            MeshPart(root.transform, "Base", baseCap, new Vector3(0f, -size.y * 0.45f, 0f), WorldMaterials.M_MetalDark);
+
+            Mesh topCap = CharacterMeshes.Prism(8, radius, radius, size.y * 0.08f, 0.22f);
+            MeshPart(root.transform, "Cap", topCap, new Vector3(0f, size.y * 0.46f, 0f), WorldMaterials.M_MetalDark);
+
+            Mesh rib = CharacterMeshes.Ring(radius * 0.8f, radius * 0.88f, 0.05f, 8);
+            for (int i = 0; i < 3; i++)
+            {
+                float t = (i + 1f) / 4f - 0.5f;
+                MeshPart(root.transform, $"Rib {i}", rib, new Vector3(0f, t * size.y * 0.7f, 0f), WorldMaterials.M_MetalDark);
+            }
+
+            float seamR = PillarSeamWidth * 0.5f;
+            Mesh seam = CharacterMeshes.Beam(size.y * 0.92f, seamR, seamR, 6);
+            MeshPart(root.transform, "Seam Light", seam, new Vector3(0f, 0f, radius * 0.82f + seamR), WorldMaterials.M_Circuit_Cyan);
 
             return root;
         }
 
-        /// <summary>K — a row of pipes on a base, each capped with a small cyan "U-bend" accent
-        /// (ticket table: 4x2, solid). Pipe count follows the piece's own authored width, same
-        /// "ask the authored footprint, never a hardcoded guess" idiom <see cref="ApplyDeckTiling"/>
-        /// already keeps for the deck's own tiling.</summary>
+        /// <summary>A lathed rounded flange bulb capping a manifold pipe's own end — the generated-mesh
+        /// "U-bend" accent <see cref="BuildManifold"/> mounts at each pipe end.</summary>
+        private static Mesh ManifoldFlangeMesh()
+        {
+            float r = ManifoldPipeRadius;
+            return CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, -r),
+                new Vector2(r, -r * 0.6f),
+                new Vector2(r * 1.25f, 0f),
+                new Vector2(r, r * 0.6f),
+                new Vector2(0f, r),
+            }, 12);
+        }
+
+        /// <summary>K — a low base housing plus a row of real pipes (<see cref="CharacterMeshes.Beam"/>),
+        /// each capped at both ends with a lathed flanged "U-bend" collar (ticket table: 4x2, solid).
+        /// Pipe count follows the piece's own authored width, same "ask the authored footprint, never a
+        /// hardcoded guess" idiom <see cref="ApplyDeckTiling"/> already keeps for the deck's own tiling.
+        /// </summary>
         public static GameObject BuildManifold(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefManifold");
@@ -519,52 +619,56 @@ namespace MaxWorlds.Rendering
             MarkDressed(root);
 
             float baseHeight = size.y * 0.3f;
-            var baseBox = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            baseBox.name = "Base";
-            baseBox.transform.SetParent(root.transform, false);
-            baseBox.transform.localPosition = new Vector3(0f, -size.y * 0.5f + baseHeight * 0.5f, 0f);
-            baseBox.transform.localScale = new Vector3(size.x, baseHeight, size.z);
-            StripColliders(baseBox);
-            var baseRend = baseBox.GetComponent<Renderer>();
-            if (baseRend != null) baseRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshBox(root.transform, "Base", new Vector3(0f, -size.y * 0.5f + baseHeight * 0.5f, 0f),
+                new Vector3(size.x, baseHeight, size.z), WorldMaterials.M_MetalDark);
 
             int pipes = Mathf.Max(1, Mathf.FloorToInt(size.x / 1f));
             float pipeLength = size.z * 0.8f;
             float pipeY = -size.y * 0.5f + baseHeight + ManifoldPipeRadius;
+            Mesh pipeMesh = CharacterMeshes.Beam(pipeLength, ManifoldPipeRadius, ManifoldPipeRadius, 10);
+            Mesh flangeMesh = ManifoldFlangeMesh();
 
             for (int i = 0; i < pipes; i++)
             {
                 float t = (i + 0.5f) / pipes - 0.5f;
                 float px = t * size.x;
 
-                var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                pipe.name = $"Pipe {i}";
-                pipe.transform.SetParent(root.transform, false);
-                pipe.transform.localPosition = new Vector3(px, pipeY, 0f);
-                pipe.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                pipe.transform.localScale = new Vector3(ManifoldPipeRadius * 2f, pipeLength * 0.5f, ManifoldPipeRadius * 2f);
-                StripColliders(pipe);
-                var pipeRend = pipe.GetComponent<Renderer>();
-                if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+                MeshPart(root.transform, $"Pipe {i}", pipeMesh, new Vector3(px, pipeY, 0f),
+                    WorldMaterials.M_MetalDark, Quaternion.Euler(90f, 0f, 0f));
 
                 foreach (int sz in new[] { -1, 1 })
-                {
-                    var bend = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    bend.name = "U-Bend";
-                    bend.transform.SetParent(root.transform, false);
-                    bend.transform.localPosition = new Vector3(px, pipeY, sz * pipeLength * 0.5f);
-                    bend.transform.localScale = Vector3.one * ManifoldPipeRadius * 2.2f;
-                    StripColliders(bend);
-                    var bendRend = bend.GetComponent<Renderer>();
-                    if (bendRend != null) bendRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
-                }
+                    MeshPart(root.transform, "U-Bend", flangeMesh, new Vector3(px, pipeY, sz * pipeLength * 0.5f),
+                        WorldMaterials.M_Circuit_Cyan);
             }
 
             return root;
         }
 
-        /// <summary>D — a round tank with a glowing cyan core, <see cref="CoverShape.Cylinder"/> (ticket
-        /// table: 3x3, solid). <paramref name="size"/>'s X/Z is the tank's own diameter, same convention
+        /// <summary>A single continuous lathed tank profile: a flat base, two raised ribbed bands and a
+        /// tapered domed top — one <see cref="CharacterMeshes.Lathe"/> call builds the whole silhouette
+        /// as one turned form, with no seam anywhere along it.</summary>
+        private static Mesh DrumTankProfile(float radius, float height)
+        {
+            float bandR = radius * 1.03f;
+            return CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(radius, 0f),
+                new Vector2(radius, height * 0.12f),
+                new Vector2(bandR, height * 0.15f),
+                new Vector2(radius, height * 0.18f),
+                new Vector2(radius, height * 0.55f),
+                new Vector2(bandR, height * 0.58f),
+                new Vector2(radius, height * 0.61f),
+                new Vector2(radius, height * 0.82f),
+                new Vector2(radius * 0.82f, height * 0.94f),
+                new Vector2(0f, height),
+            }, 20);
+        }
+
+        /// <summary>D — a <see cref="CharacterMeshes.Lathe"/> tank with a domed top, two ribbed bands
+        /// and a glowing cyan core window set into the dome (ticket table: 3x3, solid).
+        /// <paramref name="size"/>'s X/Z is the tank's own diameter, same convention
         /// <see cref="ArenaCover"/> already uses for a cylinder's footprint.</summary>
         public static GameObject BuildDrum(Transform parent, Vector3 center, Vector3 size)
         {
@@ -573,29 +677,28 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            var tank = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            tank.name = "Tank";
-            tank.transform.SetParent(root.transform, false);
-            tank.transform.localScale = new Vector3(size.x, size.y * 0.5f, size.z);
-            StripColliders(tank);
-            var tankRend = tank.GetComponent<Renderer>();
-            if (tankRend != null) tankRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            float radius = Mathf.Min(size.x, size.z) * 0.5f;
+            Mesh tank = DrumTankProfile(radius, size.y);
+            MeshPart(root.transform, "Tank", tank, new Vector3(0f, -size.y * 0.5f, 0f), WorldMaterials.M_MetalDark);
 
-            var core = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            core.name = "Core";
-            core.transform.SetParent(root.transform, false);
-            core.transform.localScale = new Vector3(size.x * 0.35f, size.y * 0.5f + CircuitStripProud, size.x * 0.35f);
-            StripColliders(core);
-            var coreRend = core.GetComponent<Renderer>();
-            if (coreRend != null) coreRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            float coreRadius = radius * 0.35f;
+            Mesh core = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(coreRadius, 0f),
+                new Vector2(coreRadius, size.y * 0.05f),
+                new Vector2(0f, size.y * 0.08f),
+            }, 16);
+            MeshPart(root.transform, "Core", core, new Vector3(0f, size.y * 0.47f, 0f), WorldMaterials.M_Circuit_Cyan);
 
             return root;
         }
 
-        /// <summary>N — an angled control desk with a glowing screen (ticket table: 2x1, solid). The
-        /// "angle" reads from a stepped silhouette (low front desk, taller rear screen riser) rather
-        /// than an arbitrary rotation — every other box piece in this file stays axis-aligned too.
-        /// </summary>
+        /// <summary>N — an angled control desk (ticket table: 2x1, solid): a chamfered 4-sided
+        /// <see cref="CharacterMeshes.Prism"/> body with a glowing cyan screen riser and a small rim of
+        /// key lights along its front edge. The "angle" reads from a stepped silhouette (low front
+        /// desk, taller rear screen riser) rather than an arbitrary rotation — every other box piece in
+        /// this file stays axis-aligned too.</summary>
         public static GameObject BuildConsole(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefConsole");
@@ -604,32 +707,43 @@ namespace MaxWorlds.Rendering
             MarkDressed(root);
 
             float deskHeight = size.y * 0.5f;
-            var desk = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            desk.name = "Desk";
-            desk.transform.SetParent(root.transform, false);
-            desk.transform.localPosition = new Vector3(0f, -size.y * 0.5f + deskHeight * 0.5f, 0f);
-            desk.transform.localScale = new Vector3(size.x, deskHeight, size.z);
-            StripColliders(desk);
-            var deskRend = desk.GetComponent<Renderer>();
-            if (deskRend != null) deskRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            Mesh desk = CharacterMeshes.Prism(4, Diag, Diag, deskHeight, 0.1f);
+            MeshPart(root.transform, "Desk", desk, new Vector3(0f, -size.y * 0.5f + deskHeight * 0.5f, 0f),
+                WorldMaterials.M_MetalDark, localScale: new Vector3(size.x * 0.5f, 1f, size.z * 0.5f));
 
             float screenHeight = size.y - deskHeight;
-            var screen = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            screen.name = "Screen";
-            screen.transform.SetParent(root.transform, false);
-            screen.transform.localPosition = new Vector3(0f, -size.y * 0.5f + deskHeight + screenHeight * 0.5f,
-                -size.z * 0.5f + size.z * 0.2f);
-            screen.transform.localScale = new Vector3(size.x * 0.85f, screenHeight, size.z * 0.4f + ConsoleScreenProud);
-            StripColliders(screen);
-            var screenRend = screen.GetComponent<Renderer>();
-            if (screenRend != null) screenRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            MeshBox(root.transform, "Screen",
+                new Vector3(0f, -size.y * 0.5f + deskHeight + screenHeight * 0.5f, -size.z * 0.5f + size.z * 0.2f),
+                new Vector3(size.x * 0.85f, screenHeight, size.z * 0.4f + ConsoleScreenProud), WorldMaterials.M_Circuit_Cyan);
+
+            Mesh lamp = CharacterMeshes.Sphere(8);
+            int lamps = Mathf.Max(2, Mathf.FloorToInt(size.x / 0.3f));
+            for (int i = 0; i < lamps; i++)
+            {
+                float t = (i + 0.5f) / lamps - 0.5f;
+                MeshPart(root.transform, $"Lamp {i}", lamp,
+                    new Vector3(t * size.x * 0.8f, -size.y * 0.5f + deskHeight + 0.02f, size.z * 0.3f),
+                    WorldMaterials.M_Circuit_Cyan, localScale: Vector3.one * 0.06f);
+            }
 
             return root;
         }
 
-        /// <summary>T — a low, see-through row of pots with bioluminescent green plants (ticket table:
-        /// 1xN, see-through). Runs along whichever of the footprint's two axes is longer — the "N" the
-        /// ticket's own glyph leaves open.</summary>
+        /// <summary>A lathed plant pot: a narrow foot flaring to a wide lip.</summary>
+        private static Mesh PlanterPotProfile(float radius, float height)
+        {
+            return CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(radius * 0.55f, 0f),
+                new Vector2(radius * 0.7f, height * 0.08f),
+                new Vector2(radius, height * 0.9f),
+                new Vector2(radius * 1.08f, height),
+            }, 10);
+        }
+
+        /// <summary>T — a low row of lathed pots in a chamfered trough, each carrying a faceted
+        /// bioluminescent green plant spike (ticket table: 1xN, see-through). Runs along whichever of
+        /// the footprint's two axes is longer — the "N" the ticket's own glyph leaves open.</summary>
         public static GameObject BuildPlanterRow(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefPlanter");
@@ -638,46 +752,40 @@ namespace MaxWorlds.Rendering
             MarkDressed(root);
 
             float rimHeight = size.y * PlanterRimHeight;
-            var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            rim.name = "Trough";
-            rim.transform.SetParent(root.transform, false);
-            rim.transform.localPosition = new Vector3(0f, -size.y * 0.5f + rimHeight * 0.5f, 0f);
-            rim.transform.localScale = new Vector3(size.x, rimHeight, size.z);
-            StripColliders(rim);
-            var rimRend = rim.GetComponent<Renderer>();
-            if (rimRend != null) rimRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshBox(root.transform, "Trough", new Vector3(0f, -size.y * 0.5f + rimHeight * 0.5f, 0f),
+                new Vector3(size.x, rimHeight, size.z), WorldMaterials.M_MetalDark);
 
             bool alongX = size.x >= size.z;
             float runLength = alongX ? size.x : size.z;
             int plants = Mathf.Max(1, Mathf.FloorToInt(runLength / 0.5f));
             float plantHeight = size.y - rimHeight;
+            float potRadius = Mathf.Min(0.18f, (alongX ? size.z : size.x) * 0.4f);
+            float potHeight = plantHeight * 0.4f;
+            Mesh pot = PlanterPotProfile(potRadius, potHeight);
+            Mesh plant = CharacterMeshes.Prism(5, potRadius * 0.5f, 0.02f, plantHeight * 0.75f, 0.1f);
 
             for (int i = 0; i < plants; i++)
             {
                 float t = (i + 0.5f) / plants - 0.5f;
                 float offset = t * runLength;
+                Vector3 potPos = alongX
+                    ? new Vector3(offset, -size.y * 0.5f + rimHeight, 0f)
+                    : new Vector3(0f, -size.y * 0.5f + rimHeight, offset);
 
-                var plant = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                plant.name = $"Plant {i}";
-                plant.transform.SetParent(root.transform, false);
-                Vector3 pos = alongX
-                    ? new Vector3(offset, -size.y * 0.5f + rimHeight + plantHeight * 0.5f, 0f)
-                    : new Vector3(0f, -size.y * 0.5f + rimHeight + plantHeight * 0.5f, offset);
-                plant.transform.localPosition = pos;
-                plant.transform.localRotation = Quaternion.Euler(0f, i * 47f, 0f);
-                plant.transform.localScale = new Vector3(size.x >= size.z ? 0.12f : size.x * 0.4f, plantHeight,
-                    size.x >= size.z ? size.z * 0.4f : 0.12f);
-                StripColliders(plant);
-                var plantRend = plant.GetComponent<Renderer>();
-                if (plantRend != null) plantRend.sharedMaterial = WorldMaterials.M_BioGlow;
+                MeshPart(root.transform, $"Pot {i}", pot, potPos, WorldMaterials.M_MetalDark);
+                MeshPart(root.transform, $"Plant {i}", plant,
+                    potPos + new Vector3(0f, potHeight + plantHeight * 0.375f, 0f),
+                    WorldMaterials.M_BioGlow, Quaternion.Euler(0f, i * 47f, 0f));
             }
 
             return root;
         }
 
-        /// <summary>L — a low, see-through pipe run on brackets (ticket table: 1xN, see-through). The
-        /// pipe is built lying along whichever axis is the footprint's longer one, same rotate-the-
-        /// mesh idiom <see cref="BuildWallLamps"/> already uses for "along X or along Z".</summary>
+        /// <summary>L — a tapered <see cref="CharacterMeshes.Beam"/> pipe run on small chamfered
+        /// bracket saddles, with a thin cyan highlight beam along the top (ticket table: 1xN,
+        /// see-through). The pipe lies along whichever axis is the footprint's longer one, same
+        /// rotate-the-mesh idiom <see cref="BuildWallPipes"/> already uses for "along X or along Z".
+        /// </summary>
         public static GameObject BuildFloorPipe(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefFloorPipe");
@@ -687,17 +795,15 @@ namespace MaxWorlds.Rendering
 
             bool alongX = size.x >= size.z;
             float runLength = alongX ? size.x : size.z;
-            float diameter = size.y;
+            float radius = size.y * 0.5f;
+            Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
 
-            var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pipe.name = "Pipe";
-            pipe.transform.SetParent(root.transform, false);
-            pipe.transform.localPosition = new Vector3(0f, 0f, 0f);
-            pipe.transform.localRotation = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
-            pipe.transform.localScale = new Vector3(diameter, runLength * 0.5f, diameter);
-            StripColliders(pipe);
-            var pipeRend = pipe.GetComponent<Renderer>();
-            if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            Mesh pipe = CharacterMeshes.Beam(runLength, radius * 1.05f, radius * 0.9f, 10);
+            MeshPart(root.transform, "Pipe", pipe, Vector3.zero, WorldMaterials.M_MetalDark, lie);
+
+            Mesh highlight = CharacterMeshes.Beam(runLength * 0.96f, radius * 0.12f, radius * 0.12f, 6);
+            MeshPart(root.transform, "Highlight", highlight, new Vector3(0f, radius * 0.75f, 0f),
+                WorldMaterials.M_Circuit_Cyan, lie);
 
             int brackets = Mathf.Max(2, Mathf.FloorToInt(runLength / 1f) + 1);
             for (int i = 0; i < brackets; i++)
@@ -705,20 +811,14 @@ namespace MaxWorlds.Rendering
                 float t = brackets <= 1 ? 0f : (float)i / (brackets - 1) - 0.5f;
                 float offset = t * runLength;
 
-                var bracket = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                bracket.name = $"Bracket {i}";
-                bracket.transform.SetParent(root.transform, false);
                 Vector3 pos = alongX
-                    ? new Vector3(offset, -diameter * 0.5f, 0f)
-                    : new Vector3(0f, -diameter * 0.5f, offset);
-                bracket.transform.localPosition = pos;
-                bracket.transform.localScale = new Vector3(
-                    alongX ? FloorPipeBracketWidth : diameter * 0.8f,
-                    diameter,
-                    alongX ? diameter * 0.8f : FloorPipeBracketWidth);
-                StripColliders(bracket);
-                var bracketRend = bracket.GetComponent<Renderer>();
-                if (bracketRend != null) bracketRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+                    ? new Vector3(offset, -radius * 0.5f, 0f)
+                    : new Vector3(0f, -radius * 0.5f, offset);
+                Vector3 bracketSize = new Vector3(
+                    alongX ? FloorPipeBracketWidth : radius * 1.6f,
+                    radius,
+                    alongX ? radius * 1.6f : FloorPipeBracketWidth);
+                MeshBox(root.transform, $"Bracket {i}", pos, bracketSize, WorldMaterials.M_Circuit_Cyan);
             }
 
             return root;
@@ -731,9 +831,10 @@ namespace MaxWorlds.Rendering
         private const float HatchRimThickness = 0.04f;
         private const float HatchRimProud = 0.1f;
 
-        /// <summary>H — a recessed floor hatch with a cyan glow rim, <paramref name="w"/> x
-        /// <paramref name="d"/> (ticket: 2x2). Collider-free and walkable — a decoration, not an
-        /// obstacle.</summary>
+        /// <summary>H — a recessed floor hatch: a chamfered panel, a cyan octagonal rim ring
+        /// (<see cref="CharacterMeshes.Ring"/>) and a flat cyan glow disc inside it, with a cross-brace
+        /// of two <see cref="CharacterMeshes.Beam"/> struts, <paramref name="w"/> x <paramref name="d"/>
+        /// (ticket: 2x2). Collider-free and walkable — a decoration, not an obstacle.</summary>
         public static GameObject BuildGlowHatch(Transform parent, Vector3 center, float w, float d)
         {
             var root = new GameObject("ReefGlowHatch");
@@ -741,23 +842,25 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            panel.name = "Panel";
-            panel.transform.SetParent(root.transform, false);
-            panel.transform.localPosition = new Vector3(0f, -HatchRecess * 0.5f, 0f);
-            panel.transform.localScale = new Vector3(w, HatchRecess, d);
-            StripColliders(panel);
-            var panelRend = panel.GetComponent<Renderer>();
-            if (panelRend != null) panelRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshBox(root.transform, "Panel", new Vector3(0f, -HatchRecess * 0.5f, 0f),
+                new Vector3(w, HatchRecess, d), WorldMaterials.M_MetalDark);
 
-            var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            rim.name = "Rim";
-            rim.transform.SetParent(root.transform, false);
-            rim.transform.localPosition = new Vector3(0f, -HatchRecess - HatchRimThickness * 0.5f, 0f);
-            rim.transform.localScale = new Vector3(w + HatchRimProud, HatchRimThickness, d + HatchRimProud);
-            StripColliders(rim);
-            var rimRend = rim.GetComponent<Renderer>();
-            if (rimRend != null) rimRend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
+            float outerR = Mathf.Min(w, d) * 0.5f + HatchRimProud * 0.5f;
+            float innerR = Mathf.Max(0.02f, outerR - HatchRimThickness);
+            Mesh rim = CharacterMeshes.Ring(innerR, outerR, HatchRecess, 8);
+            MeshPart(root.transform, "Rim", rim, new Vector3(0f, -HatchRecess * 0.5f, 0f), WorldMaterials.M_Circuit_Cyan);
+
+            Mesh glow = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f), new Vector2(innerR * 0.9f, 0f), new Vector2(innerR * 0.9f, 0.01f), new Vector2(0f, 0.01f),
+            }, 8);
+            MeshPart(root.transform, "Glow", glow, new Vector3(0f, -HatchRecess - 0.005f, 0f), WorldMaterials.M_Circuit_Cyan);
+
+            Mesh brace = CharacterMeshes.Beam(Mathf.Max(w, d) * 0.9f, 0.03f, 0.03f, 6);
+            MeshPart(root.transform, "Cross Brace A", brace, new Vector3(0f, -HatchRecess * 0.5f, 0f),
+                WorldMaterials.M_MetalDark, Quaternion.Euler(0f, 0f, 90f));
+            MeshPart(root.transform, "Cross Brace B", brace, new Vector3(0f, -HatchRecess * 0.5f, 0f),
+                WorldMaterials.M_MetalDark, Quaternion.Euler(90f, 0f, 0f));
 
             return root;
         }
@@ -776,13 +879,7 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            var backing = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            backing.name = "Backing";
-            backing.transform.SetParent(root.transform, false);
-            backing.transform.localScale = size;
-            StripColliders(backing);
-            var backingRend = backing.GetComponent<Renderer>();
-            if (backingRend != null) backingRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshBox(root.transform, "Backing", Vector3.zero, size, WorldMaterials.M_MetalDark);
 
             bool alongX = size.x >= size.z;
             float runLength = alongX ? size.x : size.z;
@@ -791,25 +888,19 @@ namespace MaxWorlds.Rendering
             {
                 float t = (i + 0.5f) / crates - 0.5f;
                 float offset = t * runLength;
-
-                var crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                crate.name = $"Crate {i}";
-                crate.transform.SetParent(root.transform, false);
-                crate.transform.localPosition = alongX ? new Vector3(offset, 0f, 0f) : new Vector3(0f, 0f, offset);
-                crate.transform.localScale = new Vector3(
+                Vector3 pos = alongX ? new Vector3(offset, 0f, 0f) : new Vector3(0f, 0f, offset);
+                Vector3 crateSize = new Vector3(
                     alongX ? size.x / crates * 0.7f : size.x * 0.8f,
                     size.y * 0.6f,
                     alongX ? size.z * 0.8f : size.z / crates * 0.7f);
-                StripColliders(crate);
-                var crateRend = crate.GetComponent<Renderer>();
-                if (crateRend != null) crateRend.sharedMaterial = WorldMaterials.M_CrateBody;
+                MeshBox(root.transform, $"Crate {i}", pos, crateSize, WorldMaterials.M_CrateBody);
             }
 
             return root;
         }
 
-        /// <summary>Wall-hung planters with bioluminescent green plants, for a window-gallery/crew/
-        /// hydroponics area's own <c>wallDressing: "planters"</c>.</summary>
+        /// <summary>Wall-hung planters with a faceted bioluminescent green plant, for a window-gallery/
+        /// crew/hydroponics area's own <c>wallDressing: "planters"</c>.</summary>
         public static GameObject BuildWallPlanters(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefWallPlanters");
@@ -817,28 +908,16 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            box.name = "Box";
-            box.transform.SetParent(root.transform, false);
-            box.transform.localScale = new Vector3(size.x, size.y * 0.4f, size.z);
-            StripColliders(box);
-            var boxRend = box.GetComponent<Renderer>();
-            if (boxRend != null) boxRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshBox(root.transform, "Box", Vector3.zero, new Vector3(size.x, size.y * 0.4f, size.z), WorldMaterials.M_MetalDark);
 
-            var plant = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            plant.name = "Plant";
-            plant.transform.SetParent(root.transform, false);
-            plant.transform.localPosition = new Vector3(0f, size.y * 0.3f, 0f);
-            plant.transform.localScale = new Vector3(size.x * 0.3f, size.y * 0.6f, size.z * 0.3f);
-            StripColliders(plant);
-            var plantRend = plant.GetComponent<Renderer>();
-            if (plantRend != null) plantRend.sharedMaterial = WorldMaterials.M_BioGlow;
+            Mesh plant = CharacterMeshes.Prism(5, size.x * 0.22f, 0.015f, size.y * 0.6f, 0.12f);
+            MeshPart(root.transform, "Plant", plant, new Vector3(0f, size.y * 0.3f, 0f), WorldMaterials.M_BioGlow);
 
             return root;
         }
 
-        /// <summary>Horizontal pipe runs with brackets, for an engine-room/reactor-bay/pressure-lock
-        /// area's own <c>wallDressing: "pipes"</c>.</summary>
+        /// <summary>Horizontal <see cref="CharacterMeshes.Beam"/> pipe runs, for an engine-room/
+        /// reactor-bay/pressure-lock area's own <c>wallDressing: "pipes"</c>.</summary>
         public static GameObject BuildWallPipes(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefWallPipes");
@@ -850,35 +929,20 @@ namespace MaxWorlds.Rendering
             float runLength = alongX ? size.x : size.z;
             float diameter = Mathf.Min(size.y * 0.3f, size.z);
 
-            var pipe = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pipe.name = "Pipe";
-            pipe.transform.SetParent(root.transform, false);
-            pipe.transform.localRotation = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
-            pipe.transform.localScale = new Vector3(diameter, runLength * 0.5f, diameter);
-            StripColliders(pipe);
-            var pipeRend = pipe.GetComponent<Renderer>();
-            if (pipeRend != null) pipeRend.sharedMaterial = WorldMaterials.M_MetalDark;
+            Mesh pipe = CharacterMeshes.Beam(runLength, diameter * 0.5f, diameter * 0.5f, 10);
+            MeshPart(root.transform, "Pipe", pipe, Vector3.zero, WorldMaterials.M_MetalDark,
+                alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f));
 
             return root;
         }
 
-        /// <summary>An observation window panel — new geometry with no World 1 predecessor (the ticket
-        /// names it without a "was X" annotation, unlike the other five reskins), wearing
-        /// <see cref="WorldMaterials.M_GlassOcean"/>'s near/far gradient. Collider-free: it is a wall
-        /// dressing piece, not a thing that blocks Max.</summary>
+        /// <summary>An observation window panel — a chamfered <see cref="CharacterMeshes.Bevelled"/>
+        /// pane wearing <see cref="WorldMaterials.M_GlassOcean"/>'s near/far gradient. Collider-free: it
+        /// is a wall dressing piece, not a thing that blocks Max.</summary>
         public static GameObject BuildObservationWindow(Transform parent, Vector3 localPosition, Vector3 size)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "ObservationWindow";
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = localPosition;
-            go.transform.localScale = size;
-            StripColliders(go);
-
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = WorldMaterials.M_GlassOcean;
+            GameObject go = MeshBox(parent, "ObservationWindow", localPosition, size, WorldMaterials.M_GlassOcean);
             MarkDressed(go);
-
             return go;
         }
 
