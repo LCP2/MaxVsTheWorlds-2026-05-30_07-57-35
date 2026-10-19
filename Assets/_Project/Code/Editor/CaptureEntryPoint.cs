@@ -233,6 +233,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1249MothershipLook() => RunFromMenu(CapturePresets.All["mv1249mothershiplook"]);
         public static void CaptureMv1249MothershipLook() => Run(CapturePresets.All["mv1249mothershiplook"]);
 
+        [MenuItem("MaxWorlds/Capture/Reef Ambient Life a2 (MV-1257)")]
+        public static void MenuMv1257ReefAmbient() => RunFromMenu(CapturePresets.All["mv1257reefambient"]);
+        public static void CaptureMv1257ReefAmbient() => Run(CapturePresets.All["mv1257reefambient"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

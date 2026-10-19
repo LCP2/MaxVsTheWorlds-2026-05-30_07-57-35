@@ -19,6 +19,96 @@ namespace MaxWorlds.Rendering
         public OceanLayerKind Kind;
     }
 
+    /// <summary>
+    /// Animates one <see cref="ReefKit.BuildOceanBackdrop"/> group (MV-1257, Change item 3: "animated
+    /// fish shoals crossing the deep, and roughly every 60-90 s one large whale silhouette gliding past
+    /// one visible window"). Drifts the FishSchool/Jellyfish/Manta layers gently side-to-side/up-down in
+    /// place, and keeps the Whale layer disabled except for a brief glide across the window on its own
+    /// seeded 60-90 s cycle — hidden rather than just parked off to the side, since a static silhouette
+    /// sitting in frame the other 98% of the time would read as a fixture, not a passing animal.
+    ///
+    /// Lives here, not in <c>MaxWorlds.VFX</c>, because <c>MaxWorlds.Rendering.asmdef</c> references
+    /// only Core and the render pipeline packages (see this file's own header comment on the
+    /// WHERE/WHAT split) — it cannot see anything under <c>Runtime/VFX</c>, so this carries its own
+    /// tiny hash rather than reusing <c>MaxWorlds.VFX.SludgeBubbles</c>'s private one.
+    /// Visual only: <c>Update</c> never runs outside Play mode, so nothing here is EditMode-tested
+    /// (testing policy Rule 2 — motion over time is a Tier 3 rendered-pixel concern, not a resolved
+    /// value).
+    /// </summary>
+    [MaxWorlds.Core.PerfSection("rendering")]
+    public sealed class OceanBackdropLife : MonoBehaviour
+    {
+        private const float WhaleCycleMinSeconds = 60f;
+        private const float WhaleCycleMaxSeconds = 90f;
+        private const float WhalePassSeconds = 7f;
+
+        private Transform _fish, _jelly, _manta, _whale;
+        private Vector3 _fishBase, _jellyBase, _mantaBase;
+        private float _whaleCycleSeconds;
+        private float _whalePhase;
+        private bool _whaleActive;
+
+        public void Configure(Transform fish, Transform jelly, Transform manta, Transform whale, int seed)
+        {
+            _fish = fish;
+            _jelly = jelly;
+            _manta = manta;
+            _whale = whale;
+
+            if (_fish != null) _fishBase = _fish.localPosition;
+            if (_jelly != null) _jellyBase = _jelly.localPosition;
+            if (_manta != null) _mantaBase = _manta.localPosition;
+
+            _whaleCycleSeconds = Mathf.Lerp(WhaleCycleMinSeconds, WhaleCycleMaxSeconds, Hash01(seed, 0));
+            _whalePhase = Hash01(seed, 1) * _whaleCycleSeconds;
+
+            if (_whale != null) _whale.gameObject.SetActive(false);
+        }
+
+        private void Update()
+        {
+            float t = Time.time;
+
+            if (_fish != null)
+                _fish.localPosition = _fishBase + Vector3.right * Mathf.Sin(t * 0.18f) * 1.4f;
+            if (_jelly != null)
+                _jelly.localPosition = _jellyBase + Vector3.up * Mathf.Sin(t * 0.25f + 1.3f) * 0.3f;
+            if (_manta != null)
+                _manta.localPosition = _mantaBase + Vector3.right * Mathf.Sin(t * 0.12f + 2.1f) * 1.8f;
+
+            if (_whale == null) return;
+
+            float u = Mathf.Repeat((t + _whalePhase) / _whaleCycleSeconds, 1f);
+            float passFraction = WhalePassSeconds / _whaleCycleSeconds;
+            bool shouldBeActive = u < passFraction;
+
+            if (shouldBeActive != _whaleActive)
+            {
+                _whaleActive = shouldBeActive;
+                _whale.gameObject.SetActive(shouldBeActive);
+            }
+
+            if (shouldBeActive)
+            {
+                float p = u / passFraction;
+                Vector3 pos = _whale.localPosition;
+                pos.x = Mathf.Lerp(-6f, 6f, p);
+                _whale.localPosition = pos;
+            }
+        }
+
+        private static float Hash01(int seed, int i)
+        {
+            unchecked
+            {
+                int h = seed * 374761393 + i * 668265263;
+                h = (h ^ (h >> 13)) * 1274126177;
+                h ^= h >> 16;
+                return (h & 0xFFFF) / 65535f;
+            }
+        }
+    }
+
     /// <summary>Marks one hydroponic bed (MV-1055) so an EditMode test — or any future gameplay
     /// query — can find every one <c>MaxWorlds.Arena.ReefHydroponics</c> placed without walking the
     /// whole scene by name. Carries no data of its own: a bed's shape and position are baked into
@@ -1547,15 +1637,25 @@ namespace MaxWorlds.Rendering
             root.transform.SetParent(parent, false);
             MarkDressed(root);
 
-            BuildLayer(root.transform, OceanLayerKind.FishSchool, WorldMaterials.ReefCircuitCyan, 0f * LayerDepthStep, instanced: true);
-            BuildLayer(root.transform, OceanLayerKind.Jellyfish, WorldMaterials.ReefBioGlow, 1f * LayerDepthStep, instanced: false);
-            BuildLayer(root.transform, OceanLayerKind.Manta, WorldMaterials.ReefCircuitPurple, 2f * LayerDepthStep, instanced: false);
-            BuildLayer(root.transform, OceanLayerKind.Whale, WorldMaterials.ReefMetalDark, 3f * LayerDepthStep, instanced: false);
+            GameObject fish = BuildLayer(root.transform, OceanLayerKind.FishSchool, WorldMaterials.ReefCircuitCyan, 0f * LayerDepthStep, instanced: true);
+            GameObject jelly = BuildLayer(root.transform, OceanLayerKind.Jellyfish, WorldMaterials.ReefBioGlow, 1f * LayerDepthStep, instanced: false);
+            GameObject manta = BuildLayer(root.transform, OceanLayerKind.Manta, WorldMaterials.ReefCircuitPurple, 2f * LayerDepthStep, instanced: false);
+            GameObject whale = BuildLayer(root.transform, OceanLayerKind.Whale, WorldMaterials.ReefMetalDark, 3f * LayerDepthStep, instanced: false);
+
+            // MV-1257, Change item 3: "animated fish shoals ... roughly every 60-90 s one large whale
+            // silhouette gliding past" — the parent's own InstanceID seeds each window's cycle so two
+            // windows in the same room don't all pass their whale at once.
+            root.AddComponent<OceanBackdropLife>().Configure(
+                fish != null ? fish.transform : null,
+                jelly != null ? jelly.transform : null,
+                manta != null ? manta.transform : null,
+                whale != null ? whale.transform : null,
+                parent.GetInstanceID());
 
             return root;
         }
 
-        private static void BuildLayer(Transform parent, OceanLayerKind kind, Color tint, float depth, bool instanced)
+        private static GameObject BuildLayer(Transform parent, OceanLayerKind kind, Color tint, float depth, bool instanced)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
             go.name = $"Ocean_{kind}";
@@ -1566,10 +1666,10 @@ namespace MaxWorlds.Rendering
             go.AddComponent<OceanLayer>().Kind = kind;
 
             var rend = go.GetComponent<Renderer>();
-            if (rend == null) return;
+            if (rend == null) return go;
 
             Shader shader = MaterialLibrary.SurfaceShader;
-            if (shader == null) return;
+            if (shader == null) return go;
 
             var mat = new Material(shader)
             {
@@ -1580,6 +1680,7 @@ namespace MaxWorlds.Rendering
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
             if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
             rend.sharedMaterial = mat;
+            return go;
         }
 
         // MV-1055, change item 1: low hexagonal hydroponic beds. WHERE each bed stands is decided by

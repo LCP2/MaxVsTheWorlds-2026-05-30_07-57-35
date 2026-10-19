@@ -483,6 +483,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1251ReefStructureKitCheck());
             Add(BuildMv1255ReefWallDetailCheck());
             Add(BuildMv1256ReefFloorDetailCheck());
+            Add(BuildMv1257ReefAmbientCheck());
             return d;
         }
 
@@ -5107,6 +5108,101 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1256-a2", NoSetup) },
+            };
+        }
+
+        // ---- MV1257ReefAmbientCheck (MV-1257 AC2) ----------------------------------------------
+
+        /// <summary>MV-1257 AC2: "ONE real-world capture (same technique as MV-1250's) of zone a2,
+        /// which has a window wall." Same real-world "load the world, frame it through the production
+        /// <see cref="FixedAngleCameraRig"/>" technique as <see cref="BuildMv1250ReefLookCheck"/> and
+        /// <see cref="BuildMv1256ReefFloorDetailCheck"/> — but unlike those, the ticket names zone a2
+        /// specifically BECAUSE of its window wall, so the focus point here is the nearest
+        /// <c>ObservationWindow</c> actually inside area2's bounds, not the zone's bare centroid: a
+        /// centroid-framed shot of this room (28x28, window set back on its S/W walls per
+        /// <c>world3_config.json</c>) left the window itself outside the frame, which defeats what AC2
+        /// asks for — comparing the window/ocean-backdrop dressing against the design reference. A
+        /// single still frame still can't show motion (the ticket says so itself: "Motion can't be
+        /// judged from one frame; Lee judges it on staging"), so this shot exists to let a comment
+        /// compare the static dressing once, not to gate anything numeric.</summary>
+        private static CapturePreset BuildMv1257ReefAmbientCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            MapZone FindZone(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                MapZone zone = FindZone(zoneId);
+                if (zone == null) throw new CaptureAbortException($"Reef map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Reef built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Prefer the window actually inside this zone over the zone's own centroid — see the
+                // method doc comment on why a centroid shot misses the one feature AC2 names a2 for.
+                Vector3 focusPoint = zone.Center;
+                var backyardPath = FindFirstObjectByType<BackyardPath>();
+                if (backyardPath != null)
+                {
+                    float nearestDistSqr = float.MaxValue;
+                    foreach (Transform t in backyardPath.transform.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (t.name != "ObservationWindow") continue;
+                        if (!zone.Contains(t.position.x, t.position.z)) continue;
+                        float d = (t.position - zone.Center).sqrMagnitude;
+                        if (d < nearestDistSqr) { nearestDistSqr = d; focusPoint = t.position; }
+                    }
+                }
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = focusPoint + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area2");
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1257reefambient",
+                LogTag = "[MV1257Capture]",
+                Flag = "-mv1257shot",
+                ArmFile = "Temp/mv1257.arm",
+                HeadlessMarker = "Temp/mv1257.headless",
+                DoneFileName = "_mv1257_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1257-a2", NoSetup) },
             };
         }
 

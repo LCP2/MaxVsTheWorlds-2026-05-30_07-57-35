@@ -369,6 +369,11 @@ namespace MaxWorlds.Arena
             // wall IS a given room's own north side, same reason the three calls above already live
             // here rather than inside ReefKit.DressHull itself.
             ReefAreaKit.BuildFarWallLight(host, cfg, walls, wallHeight);
+
+            // MV-1257: marine snow, bubble streams, light flicker/pulse and the steam/spark hazard
+            // flavour — runs last, after every drum/manifold/console/lamp/strip it reads back by name
+            // has already been built by the calls above.
+            ReefAmbientLife.Build(host);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

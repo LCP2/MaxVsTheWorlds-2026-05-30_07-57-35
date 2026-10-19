@@ -71,8 +71,17 @@ namespace MaxWorlds.Tests.EditMode
         /// for the rest of that blend and never cleared while it holds a live reference. Its own Update
         /// early-outs before reaching the lookup once a blend has settled (<c>_t &gt;= 1f</c>), so this
         /// is the same one-time cached lookup the two entries above already cover, not a per-frame scan.
+        ///
+        /// ReefAmbientLife.cs (MV-1257): <c>ReefMarineSnow.Update</c> uses the identical
+        /// <c>if (_player == null) ... = FindFirstObjectByType&lt;PlayerController&gt;();</c> idiom,
+        /// deliberately copied from AmbienceVfx's own pollen-motes-follow-the-player behaviour (see that
+        /// file's doc comment) so the marine-snow volume is guaranteed to always cover the camera without
+        /// needing a whole-map-sized fixed volume. One name covers two files (<c>Runtime/Arena/
+        /// ReefAmbientLife.cs</c> and <c>Runtime/VFX/ReefAmbientLife.cs</c> — the WHERE/WHAT split both
+        /// files' own header comments describe); the Arena one is a static builder with no Update method,
+        /// so allowlisting the shared filename hides nothing there.
         /// </summary>
-        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs", "GroundAnchorVfx.cs", "MothershipDeckLighting.cs" };
+        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs", "GroundAnchorVfx.cs", "MothershipDeckLighting.cs", "ReefAmbientLife.cs" };
 
         /// <summary>
         /// MV-553 — this test intermittently failed in CI (~1 run in 3) with no offender ever seen in
