@@ -64,6 +64,12 @@ namespace MaxWorlds.Factories
         private float _buildTimer;
         private bool _maxInArea;
 
+        // --- MV-1246: the two turret housings fire, reusing World 1's own ShedFitting behaviour
+        // (MV-547/1073's already-tuned range/cadence/HP table) rather than inventing a new weapon. ---
+        private ShedFitting[] _turretFittings;
+        private ShedFittingKind _turretKind = ShedFittingKind.None;
+        private Transform _maxTransform;
+
         // --- MV-1244: a field-wide registry of every built cradle, so a Welder
         // (RobotEnemy.TickWelderRepair) can find "the nearest damaged cradle in its own area" without a
         // map-wide scene query — same reasoning as RobotEnemy's own _active registry. ---
@@ -189,6 +195,43 @@ namespace MaxWorlds.Factories
             _arms = gantry.Arms;
             _bayRoot = gantry.BayRoot;
             TurretHousings = gantry.TurretHousings;
+            BuildTurretFittings();
+        }
+
+        /// <summary>MV-1246: one <see cref="ShedFitting"/> per housing, sitting exactly at the housing's
+        /// own position (never the barrel's far tip — the ticket's own 0.3 m "near a turret housing"
+        /// tolerance is sized to the housing itself, not a half-metre barrel's length further out) so
+        /// every shot's <see cref="DamageInfo.Point"/> reads as coming from that housing. Starts inert
+        /// (<see cref="ShedFittingKind.None"/>) until <see cref="SetTurretKind"/> authors a real tier —
+        /// built with no visual (<see cref="ShedFitting.Bind"/>'s own doc) since the look is MV-1227's,
+        /// and <c>enabled = false</c> so this fitting's own <c>Update()</c> can never double-tick its
+        /// cooldown alongside the explicit <see cref="TickTurrets"/> call below.</summary>
+        private void BuildTurretFittings()
+        {
+            _turretFittings = new ShedFitting[TurretHousings.Length];
+            for (int i = 0; i < TurretHousings.Length; i++)
+            {
+                var fittingGo = new GameObject(TurretHousings[i].name + "Fitting");
+                fittingGo.transform.SetParent(TurretHousings[i], worldPositionStays: false);
+                fittingGo.transform.localPosition = Vector3.zero;
+
+                var fitting = fittingGo.AddComponent<ShedFitting>();
+                fitting.enabled = false;
+                fitting.Bind(null, ShedFittingKind.None, buildVisual: false);
+                _turretFittings[i] = fitting;
+            }
+        }
+
+        /// <summary>MV-1246: the tier both turret housings fire at — the SAME per-area mechanism
+        /// (<see cref="ShedFittingKind"/>) World 1 sheds already resolve from <c>WorldArea.shedFittings</c>,
+        /// applied here by <see cref="MaxWorlds.Arena.MapRuntime"/> from the cradle's own authored area.
+        /// Public so an EditMode test can drive it directly, same reasoning as <see cref="SetMaxInArea"/>.</summary>
+        public void SetTurretKind(ShedFittingKind kind)
+        {
+            _turretKind = kind;
+            if (_turretFittings == null) return;
+            for (int i = 0; i < _turretFittings.Length; i++)
+                _turretFittings[i]?.Bind(null, kind, buildVisual: false);
         }
 
         private void Awake() => Build();
@@ -206,6 +249,7 @@ namespace MaxWorlds.Factories
         public void Tick(float dt)
         {
             if (!IsAlive || !_maxInArea) return;
+            TickTurrets(dt); // MV-1246: independent of the build cadence below — gated only by the same IsAlive/_maxInArea this method already checked, so a destroyed cradle fires no further shots and an empty area never fires at all
             if (_spawner.LiveCount >= MaxAliveSpawned) return; // at the cap: held at zero, not merely paused
 
             if (_buildTimer <= 0f)
@@ -228,6 +272,48 @@ namespace MaxWorlds.Factories
             _buildTimer = 0f;
             List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true);
             PlaceOnOutPad(spawned);
+        }
+
+        /// <summary>MV-1246: drives both turret fittings at whatever <see cref="ResolveTurretTarget"/>
+        /// hands back — Max by default, or the nearest in-range Sentinel, the same proximity-only swap
+        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss.RetargetIfNeeded"/> already applies. A no-op while
+        /// unauthored (<see cref="ShedFittingKind.None"/>): the housings stay drawn but silent, exactly
+        /// today's bug, until a real tier is set.</summary>
+        private void TickTurrets(float dt)
+        {
+            if (_turretFittings == null || _turretKind == ShedFittingKind.None) return;
+
+            if (_maxTransform == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p != null) _maxTransform = p.transform;
+            }
+
+            Transform target = ResolveTurretTarget();
+            for (int i = 0; i < _turretFittings.Length; i++)
+            {
+                ShedFitting fitting = _turretFittings[i];
+                if (fitting == null) continue;
+                fitting.SetTarget(target);
+                fitting.Tick(dt);
+            }
+        }
+
+        /// <summary>Max, unless a Sentinel is both nearer than Max and within
+        /// <see cref="SentinelTargeting.AggroRadius"/> — the exact rule
+        /// <see cref="SentinelTargeting.ShouldEngageSentinel"/> already encodes for every other
+        /// Max-or-Sentinel swap in this codebase.</summary>
+        private Transform ResolveTurretTarget()
+        {
+            if (_maxTransform == null) return null;
+
+            Sentinel nearest = SentinelTargeting.Nearest(transform.position);
+            if (nearest == null) return _maxTransform;
+
+            float distToMax = Vector3.Distance(transform.position, _maxTransform.position);
+            float distToSentinel = Vector3.Distance(transform.position, nearest.transform.position);
+            bool engageSentinel = SentinelTargeting.ShouldEngageSentinel(distToMax, distToSentinel, SentinelTargeting.AggroRadius);
+            return engageSentinel ? nearest.transform : _maxTransform;
         }
 
         /// <summary>MV-1227: rebuilds the bay's three build-stage bodies for <paramref name="kind"/> —

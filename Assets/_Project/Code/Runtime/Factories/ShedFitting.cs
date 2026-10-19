@@ -186,13 +186,17 @@ namespace MaxWorlds.Factories
 
         /// <summary>Wire this fitting to the shed it rides on and its authored kind (MV-547). Public and
         /// explicit — like <see cref="MowerHutch.Build"/> — so an EditMode test can drive it directly
-        /// outside Play mode, with no reliance on Awake (which AddComponent never fires in Edit mode).</summary>
-        public void Bind(MowerHutch hutch, ShedFittingKind kind)
+        /// outside Play mode, with no reliance on Awake (which AddComponent never fires in Edit mode).
+        /// <paramref name="buildVisual"/> is false for MV-1246's Assembly Cradle turrets: their look is
+        /// already built by MV-1227's own gantry housings, so a second <see cref="ShedTurretRig"/> body
+        /// on top would double it up — every caller that owns a visual already (the shed case) keeps the
+        /// default true.</summary>
+        public void Bind(MowerHutch hutch, ShedFittingKind kind, bool buildVisual = true)
         {
             _hutch = hutch;
             _kind = kind;
             _health = new DestructibleHealth(StatsFor(kind).Hp);
-            _turretRig = BuildTurretVisual(gameObject, kind);
+            _turretRig = buildVisual ? BuildTurretVisual(gameObject, kind) : null;
         }
 
         /// <summary>Point this fitting at what it should shoot — a test's synthetic Max, or (via

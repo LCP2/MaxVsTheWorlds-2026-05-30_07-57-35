@@ -252,6 +252,11 @@ namespace MaxWorlds.Arena
             foreach (WorldArea a in cfg.areas)
             {
                 WorldCradle[] cradles = a.cradles ?? Array.Empty<WorldCradle>();
+                if (cradles.Length == 0) continue;
+                // MV-1246: a cradle's two turrets tier the SAME way a shed's corners do — one
+                // per-area ShedFittingKind, resolved from the identical WorldArea.shedFittings field
+                // ("tiered... exactly as those machines tier"), not a cradle-only duplicate of it.
+                ShedFittingKind cradleFittingKind = ShedFittingKindEnums.Parse(a.shedFittings);
                 for (int i = 0; i < cradles.Length; i++)
                 {
                     WorldCradle cr = cradles[i];
@@ -267,6 +272,7 @@ namespace MaxWorlds.Arena
                         depth = CradleSize,
                         facing = string.IsNullOrEmpty(cr.facing) ? "S" : cr.facing,
                         cradleComposition = cr.composition,
+                        fittingKind = cradleFittingKind.ToString().ToLowerInvariant(),
                     });
                 }
             }
