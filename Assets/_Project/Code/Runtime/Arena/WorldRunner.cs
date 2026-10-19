@@ -202,6 +202,22 @@ namespace MaxWorlds.Arena
                     replicator.SetAreaIndex(replicatorArea);
                     _replicators.Add(replicator);
                 }
+
+                // MV-1244: stamp this area's own Assembly Cradles the same way — a Welder's repair tick
+                // (RobotEnemy.TickWelderRepair) asks AssemblyCradle.NearestDamagedInArea for "the nearest
+                // damaged cradle in its own area", which means nothing if every cradle is stuck at the
+                // default AreaIndex 0 regardless of which of the 30 areas actually built it.
+                WorldCradle[] cradles = area.cradles ?? Array.Empty<WorldCradle>();
+                for (int i = 0; i < cradles.Length; i++)
+                {
+                    WorldCradle crCfg = cradles[i];
+                    if (crCfg == null) continue;
+                    string cradleId = string.IsNullOrEmpty(crCfg.id) ? $"{area.id}_cradle{i + 1}" : crCfg.id;
+                    if (!build.Actors.TryGetValue(cradleId, out GameObject cradleGo) || cradleGo == null) continue;
+
+                    AssemblyCradle cradle = cradleGo.GetComponent<AssemblyCradle>();
+                    if (cradle != null) cradle.SetAreaIndex(area.index);
+                }
             }
 
             BuildGateIntoAreaMap(build);

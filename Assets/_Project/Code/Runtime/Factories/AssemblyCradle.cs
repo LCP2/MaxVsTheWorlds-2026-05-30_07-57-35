@@ -64,6 +64,43 @@ namespace MaxWorlds.Factories
         private float _buildTimer;
         private bool _maxInArea;
 
+        // --- MV-1244: a field-wide registry of every built cradle, so a Welder
+        // (RobotEnemy.TickWelderRepair) can find "the nearest damaged cradle in its own area" without a
+        // map-wide scene query — same reasoning as RobotEnemy's own _active registry. ---
+        private static readonly List<AssemblyCradle> _active = new List<AssemblyCradle>(8);
+
+        /// <summary>Test-only reset (MV-465 idiom, same as RobotEnemy.ResetRegistry/PickupWallet.Reset) —
+        /// an EditMode suite shares one physics scene for the whole cc-verify run with no per-test reset,
+        /// so a cradle left behind by an earlier test would otherwise leak into a later test's "nearest"
+        /// search.</summary>
+        public static void ResetRegistry() => _active.Clear();
+
+        /// <summary>MV-820-style stamp: which 1-based area this cradle was placed into — set once by
+        /// whoever built the world (<see cref="WorldMapLoader"/>), not re-derived live from position. 0
+        /// until stamped, same default every unplaced <see cref="RobotEnemy.AreaIndex"/> starts at.</summary>
+        public int AreaIndex { get; private set; }
+
+        public void SetAreaIndex(int area) => AreaIndex = area;
+
+        /// <summary>The nearest cradle below full health, in <paramref name="areaIndex"/>, within
+        /// <paramref name="maxRange"/> of <paramref name="from"/> — what a Welder's repair tick asks for
+        /// every frame. Null if nothing in range qualifies.</summary>
+        public static AssemblyCradle NearestDamagedInArea(Vector3 from, int areaIndex, float maxRange)
+        {
+            AssemblyCradle best = null;
+            float bestDistSqr = maxRange * maxRange;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                AssemblyCradle c = _active[i];
+                if (c == null || !c.IsAlive) continue;
+                if (c.AreaIndex != areaIndex) continue;
+                if (c.Normalized >= 1f) continue; // not damaged — nothing to repair
+                float distSqr = (c.transform.position - from).sqrMagnitude;
+                if (distSqr <= bestDistSqr) { bestDistSqr = distSqr; best = c; }
+            }
+            return best;
+        }
+
         // --- MV-1227: the gantry's own moving/measurable parts, built once in Build(). ---
         private Transform[] _arms;
         private Transform _bayRoot;
@@ -122,7 +159,17 @@ namespace MaxWorlds.Factories
             BuildVisual();
             WorldHealthBar.Attach(gameObject, this, BarHeightAboveCentre, BarWorldWidth,
                 alwaysShow: true, showNumber: false);
+
+            if (!_active.Contains(this)) _active.Add(this); // MV-1244: see the registry's own doc comment
         }
+
+        private void OnDestroy() => _active.Remove(this);
+
+        /// <summary>MV-1244: a Welder's own repair tick — restores HP toward the ceiling, never past it,
+        /// and never revives a cradle already destroyed. Delegates straight to <see cref="DestructibleHealth.Heal"/>,
+        /// the same one-shot-destroyed semantics every other healer in this codebase (a Sentinel's own
+        /// passive regen, MV-398) already relies on.</summary>
+        public void Heal(float amount) => _health?.Heal(amount);
 
         /// <summary>MV-1227: the gantry frame, arms, turrets and out-pad outline — the primitive cube
         /// this component sits on stays as the collider (the Water Blaster's hitbox), but its own

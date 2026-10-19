@@ -40,12 +40,14 @@ namespace MaxWorlds.Tests.EditMode
         // Areas tab (MVW_World5_Design.xlsx) column G, areas 1-30 in order — the per-area robot
         // count every area's built garrison must match exactly. MV-1238 hand-added 2 Tractor
         // garrison entries each to a15 (index 14), a16 (15), a22 (21), a23 (22) and a30 (29) — the
-        // only five counts below that differ from the Areas tab's own pre-Tractor column G.
+        // only five counts that differed from the Areas tab's own pre-Tractor column G. MV-1244
+        // hand-added 2 Welder garrison entries each to a8 (index 7), a12 (11), a22 (21) and a24 (23) —
+        // a22 already carries a Tractor pair, so its own +2 stacks onto that ticket's own total.
         private static readonly int[] ExpectedRobotCounts =
         {
-            14, 18, 16, 22, 24, 26, 22, 34, 28, 26,
-            24, 30, 30, 26, 39, 30, 32, 34, 32, 28,
-            36, 42, 38, 38, 32, 40, 40, 40, 40, 32,
+            14, 18, 16, 22, 24, 26, 22, 36, 28, 26,
+            24, 32, 30, 26, 39, 30, 32, 34, 32, 28,
+            36, 44, 38, 40, 32, 40, 40, 40, 40, 32,
         };
 
         private const int ExpectedAreaCount = 30;
