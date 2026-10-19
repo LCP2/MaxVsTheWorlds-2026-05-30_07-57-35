@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Rendering
 {
@@ -139,14 +140,116 @@ namespace MaxWorlds.Rendering
 
         // ---------------------------------------------------------------- wall / floor dressing
 
-        /// <summary>Bulkhead wall dressing (ticket, change item 2): plating with a hard rust/teal split
-        /// line, near-black ribs every ~2 m, a small gold lamp every 6 m. A reusable per-segment
-        /// builder, same "axis-aligned run in XZ" assumption <see cref="CityKit.BuildShopfrontRun"/>
-        /// already makes — ready for the Hangar Bay layout ticket (MV-1232) to call once real wall
-        /// segments exist; this ticket's own one-area placeholder has none worth dressing yet.</summary>
-        public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward, float wallHeight)
+        // ---------------------------------------------------------------- bulkhead wall dressing (MV-1260)
+
+        private const float BulkheadPanelPitch = 3f;          // ticket: "Panels every ~3 m"
+        private const float BulkheadBackingDepth = 0.04f;
+        private const float BulkheadPanelProud = 0.08f;       // how far the diagonal face stands off the backing
+        private const float BulkheadKickHeight = 0.16f;
+        private const float BulkheadRibRadius = 0.05f;
+        private const float BulkheadPipeRadius = 0.045f;
+        private const float BulkheadTopTrimHeight = 0.09f;
+        private const float BulkheadLampSize = 0.2f;
+        private const float BulkheadLightPoolRadius = 1.0f;
+        private const float BulkheadWindowHeightFraction = 0.42f;
+        private const float BulkheadWindowSillFraction = 0.32f;
+        private const float BulkheadWindowSpillRadius = 1.3f;
+        private const float RobotRackPitch = 6.5f;            // ticket: "every ~6.5 m on long walls"
+        private const float RobotRackMinWallLength = 5f;      // "long walls" only — skip a short stub
+        private const float RobotRackWidth = 1.9f;
+        private const float RobotRackDepth = 0.55f;
+        private const float ClutterPitch = 4.5f;
+        private const float HullMassDepth = 8f;               // ticket: "solid dark hull masses" outside the hull
+
+        private static readonly Color SteelPipe = Rgb(150, 155, 162);
+        private static readonly Color CopperPipe = Rgb(176, 108, 68);
+
+        /// <summary>The ticket's own explicit "red standby eye" ask — the one sanctioned exception to
+        /// <see cref="IsReservedColour"/>'s cradle-red band (same exemption shape <see cref="GoldLamp"/>'s
+        /// own doc already carries): the rack tells the player these are dormant units from the same
+        /// cradle line, so its eye deliberately echoes cradle red rather than avoiding it. Never used by
+        /// anything <see cref="MV1230ShipKitTests"/>'s reserved-colour sweep scans (that sweep only ever
+        /// walks the "Ship Kit" cover-dressing host, not this wall-dressing host).</summary>
+        private static readonly Color StandbyEyeRed = Rgb(214, 62, 52);
+
+        private static readonly Color HullMassTone = Rgb(10, 11, 14);
+        private static readonly Color WindowGlassTone = Rgb(60, 150, 160);
+        private static readonly Color SotamiTone = Rgb(70, 190, 185);
+
+        /// <summary>A collider-free box in a flat tinted, lit material — the generated-mesh substitute
+        /// for <see cref="StormdrainKit.Box"/> that never calls <see cref="GameObject.CreatePrimitive"/>
+        /// even transiently (Lee, 19 Aug 2026, quoted on <see cref="ReefKit"/>'s own structure-kit
+        /// section: primitives read "glued together from cardboard boxes and tubes"). Routed through
+        /// <see cref="StormdrainKit.AddMeshPart"/>'s existing cached-material helper so every tone here
+        /// still batches the same way a <see cref="StormdrainKit.Box"/> call would have.</summary>
+        private static GameObject MeshBox(Transform parent, string name, Vector3 pos, Vector3 size, Color tone)
+            => StormdrainKit.AddMeshPart(parent, name, CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size)), pos, SurfaceKind.Metal, tone);
+
+        /// <summary>A collider-free part built directly from a <see cref="CharacterMeshes"/> mesh — the
+        /// turned-form counterpart to <see cref="MeshBox"/>, for a rib/pipe/rack piece that is prism- or
+        /// lathe-shaped rather than a chamfered box.</summary>
+        private static GameObject MeshPart(Transform parent, string name, Mesh mesh, Vector3 pos, Color tone, Quaternion? rot = null)
         {
-            Transform root = NewRoot(parent, "Bulkhead Panel");
+            GameObject go = StormdrainKit.AddMeshPart(parent, name, mesh, pos, SurfaceKind.Metal, tone);
+            if (rot.HasValue) go.transform.localRotation = rot.Value;
+            return go;
+        }
+
+        /// <summary>An unlit, flat-tinted box — the lamp lens/light-pool/glow-line counterpart to
+        /// <see cref="MeshBox"/>, same "generated mesh, no primitive" contract.</summary>
+        private static GameObject EmissiveBox(Transform parent, string name, Vector3 pos, Vector3 size, Color tone)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, 0f);
+            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(tone, name);
+            return go;
+        }
+
+        /// <summary>A single flat triangle standing <paramref name="proud"/> metres off the wall along
+        /// <paramref name="depthAxis"/> — the generated-mesh substitute for carving a diagonal seam into
+        /// a panel's own face (ticket: "split by ONE hard diagonal line"). <paramref name="p0"/>/
+        /// <paramref name="p1"/>/<paramref name="p2"/> are local (along, height) coordinates relative to
+        /// the panel's own origin corner. Winding self-corrects (the dot-product check below) so the one
+        /// face a player standing in the room ever sees — the one facing <paramref name="depthAxis"/> —
+        /// is always front-facing, regardless of which world axis <paramref name="alongAxis"/> happens to
+        /// be for this particular wall.</summary>
+        private static Mesh FlatTriMesh(Vector3 alongAxis, Vector3 depthAxis, Vector2 p0, Vector2 p1, Vector2 p2, float proud)
+        {
+            Vector3 V(Vector2 p) => alongAxis * p.x + Vector3.up * p.y + depthAxis * proud;
+            Vector3 vA = V(p0), vB = V(p1), vC = V(p2);
+
+            bool flip = Vector3.Dot(Vector3.Cross(vB - vA, vC - vA), depthAxis) < 0f;
+            var verts = new[] { vA, vB, vC };
+            int[] tris = flip ? new[] { 0, 2, 1 } : new[] { 0, 1, 2 };
+
+            var mesh = new Mesh { name = "BulkheadPanelTri" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>Bulkhead wall dressing (MV-1260, wiring up MV-1230's own never-called builder): split
+        /// rust/teal panels every ~3 m with a diagonal seam that alternates direction panel to panel, a
+        /// near-black rib between panels, a dark kick plate with a thin emissive line in
+        /// <paramref name="deckGlow"/>, two top pipes (steel + copper) and a top trim the wall's full
+        /// length, a lamp plus a floor light-pool every other panel, a framed window onto Sotami plus a
+        /// floor spill on every alternate panel of an OUTER wall only, a robot rack every ~6.5 m on a
+        /// long wall, seeded side clutter, and — outer walls only — a solid hull mass standing just
+        /// beyond it. <paramref name="a"/>/<paramref name="b"/> are the wall run's own resolved endpoints
+        /// in world XZ; <paramref name="inward"/> points INTO the room this call is dressing — an
+        /// interior wall gets one call per side, same "no single front face" reasoning
+        /// <see cref="ReefKit.BuildWallFaceDetail"/> already documents for the Reef's own wall ribs.
+        /// Called by <see cref="MaxWorlds.Arena.ShipAreaKit"/>, which resolves the real
+        /// <see cref="StructuralWall"/>/<see cref="MaxWorlds.Arena.WorldArea"/> data this Rendering-
+        /// assembly method never sees — same WHERE/WHAT split every other kit in this namespace keeps.</summary>
+        public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward,
+            float wallHeight, Color deckGlow, bool isOuterEdge, int wallSeed)
+        {
+            Transform root = NewRoot(parent, "Bulkhead Wall");
             Vector2 d = b - a;
             float length = d.magnitude;
             if (length < 0.01f) { StormdrainKit.Strip(root.gameObject); return root.gameObject; }
@@ -155,36 +258,258 @@ namespace MaxWorlds.Rendering
             Vector3 n = new Vector3(inward.x, 0f, inward.z);
             n = n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.forward;
             float h = Mathf.Max(0.1f, wallHeight);
-            Vector3 mid = new Vector3((a.x + b.x) * 0.5f, 0f, (a.y + b.y) * 0.5f);
 
-            float lowerH = h * 0.5f;
-            StormdrainKit.Box(root, "Lower Plate", mid + n * 0.06f + Vector3.up * (lowerH * 0.5f),
-                new Vector3(length, lowerH, 0.12f).Oriented(dir), RustOrange, SurfaceKind.Metal);
-            StormdrainKit.Box(root, "Upper Plate", mid + n * 0.06f + Vector3.up * (lowerH + (h - lowerH) * 0.5f),
-                new Vector3(length, h - lowerH, 0.12f).Oriented(dir), Teal, SurfaceKind.Metal);
-            StormdrainKit.Box(root, "Seam Rib", mid + n * 0.07f + Vector3.up * lowerH,
-                new Vector3(length, h * 0.04f, 0.14f).Oriented(dir), NearBlack, SurfaceKind.Metal);
-
-            int ribCount = Mathf.Max(1, Mathf.FloorToInt(length / 2f));
-            for (int i = 0; i <= ribCount; i++)
+            int panels = Mathf.Max(1, Mathf.CeilToInt(length / BulkheadPanelPitch));
+            for (int i = 0; i < panels; i++)
             {
-                float t = (float)i / ribCount;
-                Vector2 at = Vector2.Lerp(a, b, t);
-                StormdrainKit.Box(root, $"Rib{i}", new Vector3(at.x, 0f, at.y) + n * 0.065f + Vector3.up * (h * 0.5f),
-                    new Vector3(0.08f, h * 0.98f, 0.1f).Oriented(dir), NearBlack, SurfaceKind.Metal);
+                Vector2 pa = Vector2.Lerp(a, b, (float)i / panels);
+                Vector2 pb = Vector2.Lerp(a, b, (float)(i + 1) / panels);
+                BuildPanelCell(root, pa, pb, dir, n, h, deckGlow, flip: (i % 2) == 1);
+
+                if (i % 2 == 0)
+                    BuildWallLamp(root, Vector2.Lerp(pa, pb, 0.5f), n, h, deckGlow);
+                else if (isOuterEdge)
+                    BuildWindowPanel(root, pa, pb, dir, n, h);
             }
 
-            int lampCount = Mathf.Max(1, Mathf.FloorToInt(length / 6f));
-            for (int i = 0; i < lampCount; i++)
+            for (int i = 0; i <= panels; i++)
+                BuildRib(root, Vector2.Lerp(a, b, (float)i / panels), n, h);
+
+            BuildTopPipes(root, a, b, dir, n, h);
+            BuildTopTrim(root, a, b, dir, n, h);
+
+            if (length >= RobotRackMinWallLength)
             {
-                float t = (i + 0.5f) / lampCount;
-                Vector2 at = Vector2.Lerp(a, b, t);
-                Vector3 lampPos = new Vector3(at.x, h * 0.78f, at.y) + n * 0.09f;
-                AddGoldLamp(root, $"Lamp{i}", lampPos, n);
+                int racks = Mathf.Max(1, Mathf.FloorToInt(length / RobotRackPitch));
+                for (int i = 0; i < racks; i++)
+                {
+                    float t = (i + 0.5f) / racks;
+                    BuildRobotRack(root, Vector2.Lerp(a, b, t), dir, n, h, wallSeed * 101 + i);
+                }
             }
+
+            BuildSideClutter(root, a, b, dir, n, wallSeed);
+
+            if (isOuterEdge)
+                BuildHullMass(root, a, b, dir, n, h);
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
+        }
+
+        /// <summary>One ~3 m panel cell: a near-black backing plate, the diagonal rust/teal split
+        /// standing proud of it (direction alternates with <paramref name="flip"/> — "alternating the
+        /// diagonal"), and a dark kick plate with a thin emissive line in <paramref name="deckGlow"/>.
+        /// Wrapped in its own "Bulkhead Panel" root so a test (or a future pass) can count panel cells
+        /// directly rather than re-deriving the count from wall length.</summary>
+        private static void BuildPanelCell(Transform root, Vector2 pa, Vector2 pb, Vector2 dir, Vector3 n,
+            float wallHeight, Color deckGlow, bool flip)
+        {
+            float w = (pb - pa).magnitude;
+            if (w < 0.01f) return;
+
+            Transform cell = NewRoot(root, "Bulkhead Panel");
+            Vector2 mid = (pa + pb) * 0.5f;
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+            Vector3 origin = new Vector3(pa.x, 0f, pa.y);
+
+            MeshBox(cell, "Panel Backing", new Vector3(mid.x, wallHeight * 0.5f, mid.y) + n * (BulkheadBackingDepth * 0.5f),
+                new Vector3(w * 0.98f, wallHeight * 0.92f, BulkheadBackingDepth).Oriented(dir), NearBlack);
+
+            // "Alternating the diagonal" (ticket): the split direction itself flips panel to panel —
+            // (w,0)-(0,h) one panel, (0,0)-(w,h) the next — rather than just swapping which colour sits
+            // on a fixed diagonal, so the wall reads as a genuine zigzag rather than a flat repeat.
+            float proud = BulkheadBackingDepth + BulkheadPanelProud;
+            var bl = new Vector2(0f, 0f);
+            var br = new Vector2(w, 0f);
+            var tr = new Vector2(w, wallHeight);
+            var tl = new Vector2(0f, wallHeight);
+
+            Mesh rustTri, tealTri;
+            if (!flip)
+            {
+                rustTri = FlatTriMesh(dir3, n, bl, br, tl, proud);   // lower-left triangle
+                tealTri = FlatTriMesh(dir3, n, br, tr, tl, proud);   // upper-right triangle
+            }
+            else
+            {
+                rustTri = FlatTriMesh(dir3, n, bl, br, tr, proud);   // lower-right triangle
+                tealTri = FlatTriMesh(dir3, n, bl, tr, tl, proud);   // upper-left triangle
+            }
+            MeshPart(cell, "Panel Diagonal Rust", rustTri, origin, RustOrange);
+            MeshPart(cell, "Panel Diagonal Teal", tealTri, origin, Teal);
+
+            MeshBox(cell, "Kick Plate", new Vector3(mid.x, BulkheadKickHeight * 0.5f, mid.y) + n * (proud + 0.01f),
+                new Vector3(w * 0.96f, BulkheadKickHeight, 0.03f).Oriented(dir), NearBlack);
+            EmissiveBox(cell, "Kick Glow", new Vector3(mid.x, 0.02f, mid.y) + n * (proud + 0.02f),
+                new Vector3(w * 0.9f, 0.02f, 0.01f).Oriented(dir), deckGlow);
+        }
+
+        /// <summary>A near-black rib between panels (chamfered 4-sided <see cref="CharacterMeshes.Prism"/>,
+        /// standing vertical the full wall height) — ticket: "a near-black rib between panels".</summary>
+        private static void BuildRib(Transform root, Vector2 at, Vector3 n, float wallHeight)
+        {
+            Vector3 pos = new Vector3(at.x, wallHeight * 0.5f, at.y) + n * (BulkheadBackingDepth + BulkheadPanelProud * 0.5f);
+            Mesh rib = CharacterMeshes.Prism(4, BulkheadRibRadius, BulkheadRibRadius, wallHeight * 0.96f, 0.12f);
+            MeshPart(root, "Bulkhead Rib", rib, pos, NearBlack);
+        }
+
+        /// <summary>Two pipes along the top of the wall's full run (ticket: "two pipes along the top
+        /// (steel and copper)") — one <see cref="CharacterMeshes.Beam"/> mesh shared by both instances.</summary>
+        private static void BuildTopPipes(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n, float wallHeight)
+        {
+            float length = (b - a).magnitude;
+            Vector2 mid = (a + b) * 0.5f;
+            bool alongX = Mathf.Abs(dir.x) >= Mathf.Abs(dir.y);
+            Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+
+            Mesh pipe = CharacterMeshes.Beam(length * 0.96f, BulkheadPipeRadius, BulkheadPipeRadius, 8);
+            Vector3 steelPos = new Vector3(mid.x, wallHeight * 0.9f, mid.y) + n * (BulkheadBackingDepth + BulkheadPipeRadius + 0.02f);
+            Vector3 copperPos = steelPos + Vector3.up * (BulkheadPipeRadius * 2.2f);
+            MeshPart(root, "Top Pipe Steel", pipe, steelPos, SteelPipe, lie);
+            MeshPart(root, "Top Pipe Copper", pipe, copperPos, CopperPipe, lie);
+        }
+
+        /// <summary>A top trim the wall's full length (ticket: "a top trim").</summary>
+        private static void BuildTopTrim(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n, float wallHeight)
+        {
+            float length = (b - a).magnitude;
+            Vector2 mid = (a + b) * 0.5f;
+            Vector3 pos = new Vector3(mid.x, wallHeight - BulkheadTopTrimHeight * 0.5f, mid.y) + n * (BulkheadBackingDepth * 0.5f);
+            MeshBox(root, "Top Trim", pos, new Vector3(length, BulkheadTopTrimHeight, BulkheadBackingDepth + 0.02f).Oriented(dir), NearBlack);
+        }
+
+        /// <summary>A lamp near the top in <paramref name="deckGlow"/>, with an additive floor light-pool
+        /// just inside the wall (ticket, change item 2) — the pool is <see cref="CityKit.BuildPool"/>'s
+        /// own generated disc, not a primitive quad.</summary>
+        private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow)
+        {
+            Vector3 lampPos = new Vector3(at.x, wallHeight * 0.72f, at.y) + n * (BulkheadBackingDepth + BulkheadLampSize * 0.5f + 0.02f);
+            EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow);
+
+            Vector3 poolPos = new Vector3(at.x, 0f, at.y) + n * (BulkheadLightPoolRadius * 0.9f);
+            CityKit.BuildPool(root, poolPos, BulkheadLightPoolRadius, BulkheadLightPoolRadius, deckGlow, 0.6f);
+        }
+
+        /// <summary>A framed window onto stars and the limb of the planet Sotami, plus a faint additive
+        /// floor spill in front (ticket, change item 3) — outer walls only, called by the caller's own
+        /// <paramref name="isOuterEdge"/> gate in <see cref="BuildBulkheadPanel"/>.</summary>
+        private static void BuildWindowPanel(Transform root, Vector2 pa, Vector2 pb, Vector2 dir, Vector3 n, float wallHeight)
+        {
+            float w = (pb - pa).magnitude;
+            Vector2 mid = (pa + pb) * 0.5f;
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+            float sill = wallHeight * BulkheadWindowSillFraction;
+            float winH = wallHeight * BulkheadWindowHeightFraction;
+
+            Vector3 paneCentre = new Vector3(mid.x, sill + winH * 0.5f, mid.y) + n * (BulkheadBackingDepth + 0.015f);
+            MeshBox(root, "Window Frame", paneCentre, new Vector3(w * 0.8f, winH, 0.05f).Oriented(dir), NearBlack);
+            MeshBox(root, "Window Pane", paneCentre + n * 0.03f, new Vector3(w * 0.68f, winH * 0.82f, 0.02f).Oriented(dir), WindowGlassTone);
+
+            Vector3 limbCentre = paneCentre + n * 0.035f + dir3 * (w * 0.12f) + Vector3.up * (winH * 0.12f);
+            EmissiveBox(root, "Sotami Limb", limbCentre, new Vector3(w * 0.3f, winH * 0.3f, 0.01f).Oriented(dir), SotamiTone);
+
+            Vector3 spillPos = new Vector3(mid.x, 0f, mid.y) + n * (BulkheadWindowSpillRadius * 0.9f);
+            CityKit.BuildPool(root, spillPos, BulkheadWindowSpillRadius, BulkheadWindowSpillRadius, SotamiTone, 0.35f);
+        }
+
+        /// <summary>A robot rack every ~6.5 m on a long wall (ticket, change item 4): an alcove frame
+        /// holding three dormant robot shells, inside the 1 m wall band.</summary>
+        private static void BuildRobotRack(Transform root, Vector2 at, Vector2 dir, Vector3 n, float wallHeight, int seed)
+        {
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+            Vector3 basePos = new Vector3(at.x, 0f, at.y);
+            float frameH = wallHeight * 0.55f;
+
+            Vector3 frameCentre = basePos + Vector3.up * (frameH * 0.5f + 0.1f) + n * (RobotRackDepth * 0.5f + 0.02f);
+            MeshBox(root, "Robot Rack Frame", frameCentre, new Vector3(RobotRackWidth, frameH, RobotRackDepth).Oriented(dir), NearBlack);
+
+            for (int i = 0; i < 3; i++)
+            {
+                float t = (i + 0.5f) / 3f - 0.5f;
+                Vector3 shellPos = basePos + dir3 * (t * RobotRackWidth * 0.78f) + Vector3.up * 0.1f + n * (RobotRackDepth * 0.35f);
+                BuildDormantRobotShell(root, shellPos, n, frameH * 0.82f, seed + i * 7);
+            }
+        }
+
+        /// <summary>One dormant robot shell (dark, kind-neutral) with a small red standby eye — a
+        /// tapered <see cref="CharacterMeshes.Prism"/> torso and head, never a primitive.</summary>
+        private static void BuildDormantRobotShell(Transform root, Vector3 basePos, Vector3 n, float height, int seed)
+        {
+            float torsoH = height * 0.62f, headH = height * 0.22f;
+            float torsoR = height * 0.16f;
+
+            Mesh torso = CharacterMeshes.Prism(6, torsoR, torsoR * 0.78f, torsoH, 0.14f);
+            Vector3 torsoPos = basePos + Vector3.up * (torsoH * 0.5f);
+            MeshPart(root, "Robot Shell Torso", torso, torsoPos, DeckPlate);
+
+            Mesh head = CharacterMeshes.Prism(6, torsoR * 0.6f, torsoR * 0.5f, headH, 0.2f);
+            Vector3 headPos = torsoPos + Vector3.up * (torsoH * 0.5f + headH * 0.5f);
+            MeshPart(root, "Robot Shell Head", head, headPos, NearBlack);
+
+            Vector3 eyePos = headPos + n * (torsoR * 0.55f) + Vector3.up * (headH * 0.1f);
+            EmissiveBox(root, "Standby Eye", eyePos, new Vector3(0.05f, 0.05f, 0.02f), StandbyEyeRed);
+        }
+
+        /// <summary>Small crates, canisters, consoles and cable loops seeded by <paramref name="wallSeed"/>
+        /// (ticket, change item 5) — placed in the wall's own 1 m band, never a play lane (the band this
+        /// runs in is purely decorative floor space the map's own cover/lane solver never claims).</summary>
+        private static void BuildSideClutter(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n, int wallSeed)
+        {
+            float length = (b - a).magnitude;
+            int slots = Mathf.Max(0, Mathf.FloorToInt(length / ClutterPitch) - 1);
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+
+            for (int i = 0; i < slots; i++)
+            {
+                float t = (i + 1f) / (slots + 1f);
+                Vector2 at = Vector2.Lerp(a, b, t);
+                float roll = Hash01($"shipclutter_{wallSeed}_{i}");
+                Vector3 basePos = new Vector3(at.x, 0f, at.y) + n * 0.4f;
+
+                if (roll < 0.34f) BuildClutterCrate(root, basePos);
+                else if (roll < 0.6f) BuildClutterCanister(root, basePos);
+                else if (roll < 0.82f) BuildClutterConsole(root, basePos, n);
+                else BuildClutterCableLoop(root, basePos);
+            }
+        }
+
+        private static void BuildClutterCrate(Transform root, Vector3 at)
+        {
+            Vector3 size = new Vector3(0.5f, 0.5f, 0.45f);
+            MeshBox(root, "Clutter Crate", at + Vector3.up * (size.y * 0.5f), size, NearBlack);
+            MeshBox(root, "Clutter Crate Band", at + Vector3.up * (size.y * 0.82f), new Vector3(size.x * 1.01f, 0.06f, size.z * 1.01f), HazardYellow);
+        }
+
+        private static void BuildClutterCanister(Transform root, Vector3 at)
+        {
+            Mesh canister = CharacterMeshes.Prism(8, 0.18f, 0.16f, 0.6f, 0.2f);
+            MeshPart(root, "Clutter Canister", canister, at + Vector3.up * 0.3f, Teal);
+        }
+
+        private static void BuildClutterConsole(Transform root, Vector3 at, Vector3 n)
+        {
+            Vector3 size = new Vector3(0.6f, 0.55f, 0.4f);
+            MeshBox(root, "Clutter Console", at + Vector3.up * (size.y * 0.5f), size, NearBlack);
+            EmissiveBox(root, "Clutter Console Light", at + Vector3.up * (size.y * 0.82f) + n * (size.z * 0.3f),
+                new Vector3(0.08f, 0.08f, 0.02f), GoldLamp);
+        }
+
+        private static void BuildClutterCableLoop(Transform root, Vector3 at)
+        {
+            Mesh loop = CharacterMeshes.Ring(0.16f, 0.22f, 0.05f, 10);
+            MeshPart(root, "Clutter Cable Loop", loop, at + Vector3.up * 0.04f, NearBlack);
+        }
+
+        /// <summary>Solid dark hull mass standing just beyond an outer wall (ticket, change item 6):
+        /// "outside the outer walls: solid dark hull masses, never open space".</summary>
+        private static void BuildHullMass(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n, float wallHeight)
+        {
+            float length = (b - a).magnitude;
+            Vector2 mid = (a + b) * 0.5f;
+            Vector3 outward = -n;
+            Vector3 pos = new Vector3(mid.x, wallHeight * 0.5f, mid.y) + outward * (HullMassDepth * 0.5f + 0.1f);
+            MeshBox(root, "Hull Mass", pos, new Vector3(length * 1.05f, wallHeight * 3f, HullMassDepth).Oriented(dir), HullMassTone);
         }
 
         /// <summary>Deck floor (ticket, change item 2): dark blue-grey plates in 4 m panels with faint

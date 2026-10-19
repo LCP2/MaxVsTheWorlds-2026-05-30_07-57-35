@@ -485,6 +485,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1256ReefFloorDetailCheck());
             Add(BuildMv1257ReefAmbientCheck());
             Add(BuildMv1258ReefSetPiecesCheck());
+            Add(BuildMv1260ShipWallDressingCheck());
             return d;
         }
 
@@ -5280,6 +5281,91 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1258-a3", NoSetup) },
+            };
+        }
+
+        // ---- MV1260ShipWallDressingCheck (MV-1260 AC3) -----------------------------------------
+
+        /// <summary>MV-1260 AC3: "one capture of area 8 near its north wall from the MV-1249 preset."
+        /// Same real-world "load the world, frame one zone through the production
+        /// <see cref="FixedAngleCameraRig"/>" technique the Reef's own capture checks already use
+        /// (<see cref="BuildMv1255ReefWallDetailCheck"/> is the closest precedent — wall-dressing art,
+        /// one still frame, no numeric measurement), applied under the Mothership's own production look
+        /// (<see cref="MothershipDecks.LookFor"/>, same resolve <see cref="BuildMv1249MothershipLookCheck"/>
+        /// already uses) rather than Reef's. The focus point is biased toward area 8's own north edge
+        /// (<see cref="MapZone.Footprint"/>'s <c>yMax</c>, a few metres in) rather than its bare centroid
+        /// — AC3 asks for "near its north wall" specifically, since that is where this ticket's own
+        /// robot rack sits, and area 8 (56 x 34 m) is too large for a centroid shot to also frame its own
+        /// edge.</summary>
+        private static CapturePreset BuildMv1260ShipWallDressingCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            MapZone FindZone(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z;
+                return null;
+            }
+
+            IEnumerator FrameNorthWall(Camera cam, int areaIndex, string zoneId)
+            {
+                MapZone zone = FindZone(zoneId);
+                if (zone == null) throw new CaptureAbortException($"Mothership map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Mothership built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var lighting = FindFirstObjectByType<BackyardLighting>();
+                if (lighting == null) throw new CaptureAbortException("Mothership built no BackyardLighting");
+                lighting.Apply(MothershipDecks.LookFor(areaIndex));   // the production look this area's deck resolves to
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                Rect fp = zone.Footprint;
+                Vector3 focusPoint = new Vector3(fp.center.x, 0f, fp.yMax - 5f);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = focusPoint + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + relighting + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameNorthWall(cam, 8, "area8");
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1260shipwalldressing",
+                LogTag = "[MV1260Capture]",
+                Flag = "-mv1260shot",
+                ArmFile = "Temp/mv1260.arm",
+                HeadlessMarker = "Temp/mv1260.headless",
+                DoneFileName = "_mv1260_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1260-a8", NoSetup) },
             };
         }
 
