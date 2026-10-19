@@ -277,6 +277,10 @@ namespace MaxWorlds.VFX
         /// kind; see <see cref="UpdatePullVfx"/>.</summary>
         private LineRenderer _pullLine;
 
+        /// <summary>The Welder's repair beam (MV-1244) — built lazily, and only ever for that one kind;
+        /// see <see cref="UpdateWelderBeamVfx"/>.</summary>
+        private LineRenderer _welderBeamLine;
+
         /// <summary>The colour the eye is currently burning — the tell, in one value. What a test looks
         /// at to prove the wind-up actually reaches the screen.</summary>
         public Color TellColor => _tellColor;
@@ -818,6 +822,7 @@ namespace MaxWorlds.VFX
             SpinWheels();
             UpdateBeamVfx();
             UpdatePullVfx();
+            UpdateWelderBeamVfx();
             UpdateTeleportExpand();
             UpdateReefInflate();
 
@@ -1284,6 +1289,58 @@ namespace MaxWorlds.VFX
             lr.receiveShadows = false;
             lr.material = new Material(VfxMaterials.Additive(VfxMaterials.Glow()));
             lr.textureMode = LineTextureMode.Tile;
+            lr.enabled = false;
+            return lr;
+        }
+
+        /// <summary>White-cyan, the ticket's own authored beam colour ("a white-cyan beam from the
+        /// torch to the cradle").</summary>
+        private static readonly Color WelderBeamColor = new Color(0.75f, 1f, 1f);
+
+        private const float WelderBeamWidth = 0.035f;
+
+        /// <summary>
+        /// The Welder's repair beam (MV-1244) — solid (not dashed, unlike the Tractor's pull beam: a
+        /// weld torch reads as a continuous arc, not a tow line), drawn from this robot's own root to
+        /// <see cref="RobotEnemy.WelderRepairTarget"/>'s live position every frame while it is non-null,
+        /// hidden the instant it goes null (the ticket's own "idle ... when none is damaged").
+        /// </summary>
+        private void UpdateWelderBeamVfx()
+        {
+            if (_enemy.Kind != EnemyKind.Welder) return;
+
+            AssemblyCradle cradle = _enemy.WelderRepairTarget;
+            if (cradle == null)
+            {
+                if (_welderBeamLine != null) _welderBeamLine.enabled = false;
+                return;
+            }
+
+            if (_welderBeamLine == null) _welderBeamLine = BuildWelderBeamLine();
+            _welderBeamLine.enabled = true;
+            _welderBeamLine.widthMultiplier = WelderBeamWidth;
+            _welderBeamLine.startColor = WelderBeamColor;
+            _welderBeamLine.endColor = WelderBeamColor;
+            _welderBeamLine.SetPosition(0, transform.position);
+            _welderBeamLine.SetPosition(1, cradle.transform.position);
+        }
+
+        /// <summary>The repair beam's LineRenderer, built once and reused — same lifetime/parenting
+        /// idiom as <see cref="BuildPullLine"/>, solid rather than tiled/dashed (see
+        /// <see cref="UpdateWelderBeamVfx"/>'s own doc comment for why).</summary>
+        private LineRenderer BuildWelderBeamLine()
+        {
+            var go = new GameObject("WelderBeam");
+            go.transform.SetParent(_model, worldPositionStays: false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 0;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
             lr.enabled = false;
             return lr;
         }

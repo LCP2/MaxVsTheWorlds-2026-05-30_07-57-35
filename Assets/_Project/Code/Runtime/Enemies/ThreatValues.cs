@@ -67,6 +67,11 @@ namespace MaxWorlds.Enemies
         /// than any kind that can actually hurt him from range.</summary>
         public const float Tractor = 2.2f;
 
+        /// <summary>MV-1244: the ticket's own authored THV — a 50 HP repair drone that deals no damage
+        /// of its own, priced below the Tractor's 2.2 on the same placeholder footing: it never even
+        /// repositions Max, only heals a structure, so it carries less threat than any kind here.</summary>
+        public const float Welder = 1.2f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -84,6 +89,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Skitter => Skitter,
             EnemyKind.Breaker => Breaker,
             EnemyKind.Tractor => Tractor,
+            EnemyKind.Welder => Welder,
             _ => Rusher,
         };
     }

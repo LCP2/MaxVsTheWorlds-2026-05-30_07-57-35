@@ -348,6 +348,7 @@ namespace MaxWorlds.Enemies
             Level = 0;
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
+            WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
             // MV-1217: a pooled instance must not carry a previous Dreadnought life's turret cycle
             // phase/aim into this one — re-seeded by TickDreadnoughtTurrets on its first tick either way.
             _dreadnoughtTurretA = default;
@@ -1947,7 +1948,11 @@ namespace MaxWorlds.Enemies
                 {
                     case State.Emerging: TickEmerge(dt);   break;
                     case State.Mustering: TickMuster(dt);  break;
-                    case State.Chase:    TickChase(dt);    break;
+                    // MV-1244: the Welder never chases Max at all — once awake it repairs the nearest
+                    // damaged Assembly Cradle in its own area instead, replacing Chase/Telegraph/Lunge
+                    // entirely (there is nothing here to wind up or commit to, per the ticket's own
+                    // "never attacks Max or sentinels"). See EnemyArchetype.Welder's own doc comment.
+                    case State.Chase:    if (Kind == EnemyKind.Welder) TickWelderRepair(dt); else TickChase(dt); break;
                     case State.Search:   TickSearch(dt);   break;
                     case State.Telegraph: TickTelegraph(dt); break;
                     case State.Lunge:    TickLunge(dt);    break;
@@ -2436,6 +2441,11 @@ namespace MaxWorlds.Enemies
             // MV-1238: the Tractor's own "at most 2 awake per area" — same held-at-cap idiom as the
             // Breaker's above.
             if (Kind == EnemyKind.Tractor && CountAwakeOfKindInArea(EnemyKind.Tractor, AreaIndex) >= TractorMaxAwakePerArea)
+                return;
+
+            // MV-1244: the Welder's own "at most 3 awake per area" — same held-at-cap idiom as the
+            // Breaker/Tractor above.
+            if (Kind == EnemyKind.Welder && CountAwakeOfKindInArea(EnemyKind.Welder, AreaIndex) >= WelderMaxAwakePerArea)
                 return;
 
             Current = State.Alert;
@@ -3333,6 +3343,48 @@ namespace MaxWorlds.Enemies
             if (_stateTimer >= lungeTime) EnterRecover();
         }
 
+        // --- MV-1244: Welder repair -----------------------------------------------------------
+
+        /// <summary>The Welder's own cradle, right now — null while idle (nothing in range needs it).
+        /// Last-set value only, same "meaningless outside the relevant state" footing as
+        /// <see cref="ReplicatorSeekTarget"/>; read by <see cref="MaxWorlds.VFX.RobotRig"/> to draw the
+        /// repair beam.</summary>
+        public AssemblyCradle WelderRepairTarget { get; private set; }
+
+        /// <summary>Replaces the whole Chase/Telegraph/Lunge pipeline for <see cref="EnemyKind.Welder"/>
+        /// (dispatched from <see cref="TickBody"/>'s own switch instead of <see cref="TickChase"/>) —
+        /// this kind never attacks Max or a Sentinel, so there is nothing here to wind up or commit to.
+        /// Finds the nearest damaged <see cref="AssemblyCradle"/> in this robot's own
+        /// <see cref="AreaIndex"/> within <see cref="lungeRange"/> (the archetype's own "one field,
+        /// several doors" detection/repair range, see <see cref="EnemyArchetype.Welder"/>'s doc comment)
+        /// and heals it at <see cref="WelderRepairPerSecond"/> HP/s for every tick it stays in range —
+        /// the ticket's own AC1 ticks this with the Welder merely "within 20 m", with no extra arrival
+        /// distance to cross first, so the heal is unconditional on range alone, not on having closed
+        /// the gap. It still flies toward the cradle while healing it (the ticket's own "flies to ...
+        /// and repairs it"), gliding straight at it rather than routing around cover
+        /// (<see cref="TickChase"/>'s own waypoint/wall-latch machinery is built around chasing Max room
+        /// to room; a Welder's own cradle sits in the same room it was garrisoned in, per the ticket's
+        /// own placements). Idle (no movement, no heal) once nothing in range needs it — the ticket's
+        /// own "idle near its cradle when none is damaged".</summary>
+        private void TickWelderRepair(float dt)
+        {
+            AssemblyCradle cradle = AssemblyCradle.NearestDamagedInArea(transform.position, AreaIndex, lungeRange);
+            WelderRepairTarget = cradle;
+            if (cradle == null) return;
+
+            cradle.Heal(WelderRepairPerSecond * dt);
+
+            Vector3 to = cradle.transform.position - transform.position;
+            to.y = 0f;
+            float dist = to.magnitude;
+            if (dist <= 0.001f) return;
+
+            Vector3 dir = to / dist;
+            RotateToward(dir, dt);
+            float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
+            CharacterControllerMotion.SafeMove(_cc, dir * step);
+        }
+
         // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------
 
         /// <summary>One shoulder turret's own independent cycle (MV-1217) — tracked yaw (world-space
@@ -3732,6 +3784,13 @@ namespace MaxWorlds.Enemies
 
         /// <summary>MV-1238: "at most 2 awake per area" — the ticket's own cap.</summary>
         private const int TractorMaxAwakePerArea = 2;
+
+        /// <summary>MV-1244: "at most 3 awake per area" — the ticket's own cap.</summary>
+        private const int WelderMaxAwakePerArea = 3;
+
+        /// <summary>MV-1244: how much HP/s a Welder restores to the cradle it is currently repairing —
+        /// the ticket's own authored rate.</summary>
+        private const float WelderRepairPerSecond = 15f;
 
         private void ApplyGravity(float dt)
         {

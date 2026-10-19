@@ -13,7 +13,8 @@ namespace MaxWorlds.Enemies
     // Skitter (MV-1224) follows it too — a tiny phase-hopping robot, appended after Dreadnought.
     // Breaker (MV-1228) follows it too — a chained, press-punching/ramming robot beast, appended after Skitter.
     // Tractor (MV-1238) follows it too — a stationary emitter-dish that hauls Max in on a beam, appended after Breaker.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor }
+    // Welder (MV-1244) follows it too — a small repair drone that never attacks, appended after Tractor.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -42,6 +43,7 @@ namespace MaxWorlds.Enemies
                 case "skitter": kind = EnemyKind.Skitter; return true;
                 case "breaker": kind = EnemyKind.Breaker; return true;
                 case "tractor": kind = EnemyKind.Tractor; return true;
+                case "welder": kind = EnemyKind.Welder; return true;
                 default: kind = default; return false;
             }
         }
@@ -612,6 +614,33 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "TRACTOR");
 
+        /// <summary>
+        /// Welder (MV-1244): a small repair drone (0.7 m) that never attacks Max or a Sentinel at all —
+        /// its whole threat is the repair, per the ticket's own "do not re-raise". <see cref="ContactDamage"/>
+        /// is 0 and <see cref="RobotEnemy.TickBody"/> never dispatches this kind into the ordinary
+        /// Chase/Telegraph/Lunge pipeline at all (see <see cref="RobotEnemy.TickWelderRepair"/>) — there is
+        /// nothing here to wind up or commit to. <see cref="LungeRange"/> does double duty, the same "one
+        /// field, several doors" idiom <see cref="Launcher"/>/<see cref="Bolter"/>/<see cref="Tractor"/>
+        /// already use: it is both the ticket's own "within 20 m" detection range for the nearest damaged
+        /// Assembly Cradle (MV-1223) in this robot's own area, AND the repair beam's own max range — so the
+        /// two numbers can never drift apart. <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/
+        /// <see cref="LungeTime"/>/<see cref="RecoverTime"/> are unread — this body never reaches
+        /// Telegraph/Lunge/Recover — kept at nominal values rather than 0 only for readability, the same
+        /// footing <see cref="Dreadnought"/>'s own doc comment explains. "At most 3 awake per area" is
+        /// enforced in <see cref="RobotEnemy.Activate"/> itself (same per-kind cap idiom as
+        /// <see cref="Breaker"/>/<see cref="Tractor"/>). Drops as a Rusher — <see cref="IsLarge"/> already
+        /// excludes it, per the ticket's own "Drops: As a Rusher".
+        /// </summary>
+        public static EnemyArchetype Welder => new EnemyArchetype(
+            EnemyKind.Welder, EnemyShape.Capsule, new Vector3(0.7f, 0.7f, 0.7f),
+            colliderHeight: 0.7f, colliderRadius: 0.35f,
+            moveSpeed: 1.8f, maxHealth: 50f,
+            contactDamage: 0f, contactRadius: 0.5f,
+            lungeRange: 20f,        // doubles as the repair range — see doc comment above
+            telegraphTime: 0.3f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
+            knockbackDecay: 28f,
+            displayName: "WELDER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -629,6 +658,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Skitter => Skitter,
             EnemyKind.Breaker => Breaker,
             EnemyKind.Tractor => Tractor,
+            EnemyKind.Welder => Welder,
             _ => Rusher,
         };
 
@@ -636,8 +666,10 @@ namespace MaxWorlds.Enemies
         /// recut spec §5, MV-224): the bruiser, heavy and brute tiers all drop the large-kill loot
         /// and count toward the parts cadence — only the rusher is the small tier that drops
         /// nothing (WV-226). MV-1224: the Skitter sits on the same small-tier footing as the Rusher
-        /// (the ticket's own "Drops: as a Rusher") — also excluded.</summary>
-        public static bool IsLarge(EnemyKind kind) => kind != EnemyKind.Rusher && kind != EnemyKind.Skitter;
+        /// (the ticket's own "Drops: as a Rusher") — also excluded. MV-1244: the Welder is excluded
+        /// the same way, per its own "Drops: As a Rusher".</summary>
+        public static bool IsLarge(EnemyKind kind) =>
+            kind != EnemyKind.Rusher && kind != EnemyKind.Skitter && kind != EnemyKind.Welder;
 
         /// <summary>The same archetype, tougher (YT-181 Invasion Level): health and contact damage
         /// scaled by <paramref name="multiplier"/>, everything else — speed, silhouette, timing —

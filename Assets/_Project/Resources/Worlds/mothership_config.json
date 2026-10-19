@@ -1,7 +1,7 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 5 \u2014 The Mothership",
-  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor.",
+  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor. MV-1244: added 2 Welder garrison entries each to areas 8/12/22/24 beside cradle 1, and \"welder\": 1 onto every cradle's own composition in areas 8 onward.",
   "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
@@ -2268,7 +2268,8 @@
         "blinker": 3,
         "bolter": 3,
         "heavy": 3,
-        "skitter": 3
+        "skitter": 3,
+        "welder": 2
       },
       "garrison": [
         {
@@ -2474,6 +2475,18 @@
           "x": 159.0,
           "z": 150.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 145.5,
+          "z": 138.0,
+          "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 156.05,
+          "z": 140.57,
+          "level": 0
         }
       ],
       "cradles": [
@@ -2483,7 +2496,8 @@
           "z": 138.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -2492,7 +2506,8 @@
           "z": 146.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         },
         {
@@ -2501,7 +2516,8 @@
           "z": 154.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -2778,7 +2794,8 @@
           "z": 148.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -2787,7 +2804,8 @@
           "z": 156.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -3035,7 +3053,8 @@
           "z": 180.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -3354,7 +3373,8 @@
           "z": 171.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -3430,7 +3450,8 @@
         "bolter": 2,
         "heavy": 2,
         "skitter": 3,
-        "brute": 2
+        "brute": 2,
+        "welder": 2
       },
       "garrison": [
         {
@@ -3612,6 +3633,18 @@
           "x": 259.0,
           "z": 201.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 249.5,
+          "z": 207.0,
+          "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 260.5,
+          "z": 207.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -3621,7 +3654,8 @@
           "z": 207.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -3630,7 +3664,8 @@
           "z": 215.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -3985,7 +4020,8 @@
           "z": 205.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -3994,7 +4030,8 @@
           "z": 213.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -4215,7 +4252,8 @@
           "z": 239.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -4581,7 +4619,8 @@
           "z": 233.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -4590,7 +4629,8 @@
           "z": 241.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -4946,7 +4986,8 @@
           "z": 271.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -5247,7 +5288,8 @@
           "z": 275.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -5256,7 +5298,8 @@
           "z": 283.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -5547,7 +5590,8 @@
           "z": 309.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -5556,7 +5600,8 @@
           "z": 317.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -5841,7 +5886,8 @@
           "z": 323.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -5850,7 +5896,8 @@
           "z": 323.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -6084,7 +6131,8 @@
           "z": 343.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -6476,7 +6524,8 @@
           "z": 337.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -6485,7 +6534,8 @@
           "z": 345.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -6632,7 +6682,8 @@
         "skitter": 3,
         "brute": 3,
         "breaker": 2,
-        "tractor": 2
+        "tractor": 2,
+        "welder": 2
       },
       "garrison": [
         {
@@ -6886,6 +6937,18 @@
           "x": 491.0,
           "z": 406.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 467.5,
+          "z": 379.0,
+          "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 476.5,
+          "z": 379.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -6895,7 +6958,8 @@
           "z": 379.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -6904,7 +6968,8 @@
           "z": 387.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -7226,7 +7291,8 @@
           "z": 401.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -7235,7 +7301,8 @@
           "z": 401.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -7312,7 +7379,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 2,
-        "breaker": 2
+        "breaker": 2,
+        "welder": 2
       },
       "garrison": [
         {
@@ -7542,6 +7610,18 @@
           "x": 533.0,
           "z": 425.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 521.5,
+          "z": 427.0,
+          "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 532.5,
+          "z": 427.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -7551,7 +7631,8 @@
           "z": 427.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -7560,7 +7641,8 @@
           "z": 435.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -7928,7 +8010,8 @@
           "z": 431.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         }
       ]
@@ -8278,7 +8361,8 @@
           "z": 463.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -8287,7 +8371,8 @@
           "z": 471.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         },
         {
@@ -8296,7 +8381,8 @@
           "z": 463.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -8712,7 +8798,8 @@
           "z": 459.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -8721,7 +8808,8 @@
           "z": 467.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -9054,7 +9142,8 @@
           "z": 503.0,
           "facing": "S",
           "composition": {
-            "rusher": 1
+            "rusher": 1,
+            "welder": 1
           }
         },
         {
@@ -9063,7 +9152,8 @@
           "z": 503.0,
           "facing": "S",
           "composition": {
-            "turret": 1
+            "turret": 1,
+            "welder": 1
           }
         }
       ]
@@ -9383,7 +9473,10 @@
         "id": "helmsman",
         "x": 675.0,
         "z": 552.0,
-        "size": { "w": 4.5, "d": 4.5 }
+        "size": {
+          "w": 4.5,
+          "d": 4.5
+        }
       },
       "cover": [
         {

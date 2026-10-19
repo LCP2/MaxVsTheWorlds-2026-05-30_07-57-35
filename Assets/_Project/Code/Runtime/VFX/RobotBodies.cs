@@ -15,6 +15,7 @@
 // geometry signature distinct from a Rusher's) stays green, not as the Breaker's final silhouette.
 // MV-1238 EXCEPTION: BuildTractor is hand-authored for the same reason (robot-gen-mesh.html is an
 // interactive browser tool this worker cannot drive headlessly).
+// MV-1244 EXCEPTION: BuildWelder is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -115,6 +116,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Breaker:  BuildBreaker(visualRoot, p, eyes, wheels, legs,
                                               out breakerChainPivot, out breakerChainEnd, out breakerWallAnchor); break;
                 case EnemyKind.Tractor:  BuildTractor(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Welder:   BuildWelder(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -582,6 +584,29 @@ namespace MaxWorlds.VFX
 
             // The single green status lens at the dish's hub.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0f, 0.5f, 0.14f), Quaternion.Euler(-20f, 0f, 0f), new Vector3(0.1f, 0.1f, 0.05f)));
+        }
+
+        /// <summary>Welder (MV-1244) — hand-authored, same exception as <see cref="BuildTractor"/>
+        /// above. A small 0.7 m hull (the ticket's own silhouette) — same "cool lower / warm upper"
+        /// shell idiom every other kind uses — with one torch arm swept forward-down off its right
+        /// flank (the ticket's own "torch arm"), tipped with a small gold nozzle. One eye lens, per the
+        /// roster's one-eye rule. The repair beam itself (<see cref="MaxWorlds.VFX.RobotRig.UpdateWelderBeamVfx"/>)
+        /// is drawn from the robot's own root, not from this arm, so its exact mount position is
+        /// cosmetic only.</summary>
+        private static void BuildWelder(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // The hull — two lathe halves, same "cool lower / warm upper" idiom as every other kind,
+            // scaled to the ticket's own 0.7 m silhouette.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.26f, 0.08f), new Vector2(0.3f, 0.3f), new Vector2(0.24f, 0.42f) }, 18), p.Cool, Vector3.zero, Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.24f, 0.42f), new Vector2(0.18f, 0.54f), new Vector2(0.09f, 0.62f), new Vector2(0.03f, 0.66f) }, 18), p.Warm, Vector3.zero, Quaternion.identity, Vector3.one);
+
+            // The torch arm — swept forward-down off the right flank, tipped with a small gold nozzle.
+            Add(root, CharacterMeshes.Beam(0.32f, 0.035f, 0.028f, 6), p.Dark, new Vector3(0.2f, 0.32f, 0.12f), Quaternion.Euler(55f, -15f, 0f), Vector3.one, "TorchArm");
+            Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(0.33f, 0.14f, 0.32f), Quaternion.identity, new Vector3(0.05f, 0.05f, 0.05f));
+
+            // The one eye lens, per the roster's one-eye rule.
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0f, 0.5f, 0.24f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.12f, 0.12f, 0.055f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>

@@ -1073,6 +1073,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Skitter => c.Skitter,
             EnemyKind.Breaker => c.Breaker,
             EnemyKind.Tractor => c.Tractor,
+            EnemyKind.Welder => c.Welder,
             _ => 0,
         };
 
