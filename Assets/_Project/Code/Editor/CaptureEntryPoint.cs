@@ -241,6 +241,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1258ReefSetPieces() => RunFromMenu(CapturePresets.All["mv1258reefsetpieces"]);
         public static void CaptureMv1258ReefSetPieces() => Run(CapturePresets.All["mv1258reefsetpieces"]);
 
+        [MenuItem("MaxWorlds/Capture/Ship Wall Dressing a8 (MV-1260)")]
+        public static void MenuMv1260ShipWallDressing() => RunFromMenu(CapturePresets.All["mv1260shipwalldressing"]);
+        public static void CaptureMv1260ShipWallDressing() => Run(CapturePresets.All["mv1260shipwalldressing"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

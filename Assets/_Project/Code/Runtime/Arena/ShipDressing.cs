@@ -12,25 +12,33 @@ namespace MaxWorlds.Arena
     /// box, build the kit piece at its own footprint" contract every dressing pass in this namespace
     /// keeps: the cover entry's own collider is untouched, only its renderer is swapped out.
     ///
-    /// Wall/floor dressing (<see cref="ShipKit.BuildBulkheadPanel"/>/<see cref="ShipKit.BuildDeckFloor"/>)
-    /// is left for the Hangar Bay layout ticket (MV-1232) to call directly once real wall/floor geometry
-    /// exists — this ticket's own one-area placeholder (MV-1225) has no real wall run worth dressing
-    /// yet. Same order <see cref="CityKit"/> (MV-1175) shipped in: the kit landed a ticket ahead of
-    /// <see cref="CityDressing"/> (MV-1177), which wired it into a real layout once one existed.
+    /// Floor dressing (<see cref="ShipKit.BuildDeckFloor"/>) landed with the Hangar Bay layout ticket
+    /// (MV-1232) once real floor geometry existed. Wall dressing (<see cref="ShipKit.BuildBulkheadPanel"/>)
+    /// landed later still, MV-1260, once every area's own walls existed to dress — see
+    /// <see cref="ShipAreaKit.BuildWallDressing"/>. Same order <see cref="CityKit"/> (MV-1175) shipped
+    /// in: the kit landed a ticket ahead of <see cref="CityDressing"/> (MV-1177), which wired it into a
+    /// real layout once one existed.
     /// </summary>
     public static class ShipDressing
     {
-        /// <summary>The full Ship pass for a real layout (MV-1232, the Hangar Bay ticket this class's
-        /// own header named as the one to call wall/floor dressing directly): cover dressing, the
-        /// ticket's own "launch-pad hazard marking", and MV-1259's own generated atlas floor for every
-        /// real combat area — everything <see cref="DressCover"/> alone left out. Wall dressing is still
-        /// left for a later ticket; a plain structural wall reads fine at this camera angle and the
-        /// tie-breaker order (readability over visual richness) does not need it to ship this one.</summary>
+        /// <summary>The full Ship pass for a real layout: cover dressing, the Hangar Bay's own
+        /// "launch-pad hazard marking" (MV-1232), MV-1259's own generated atlas floor for every real
+        /// combat area, and MV-1260's own wall dressing (panels, lamps, windows, robot racks, clutter,
+        /// hull masses) for every room-facing wall face in all 30 areas.</summary>
         public static int Dress(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
             int dressed = DressCover(host, cover);
             BuildFloors(host, map);
             BuildLaunchPad(host, cfg);
+
+            // MV-1260: walls collected AFTER the passes above (not before) — a wall one of them already
+            // touched carries KeepsOwnMaterial, which WorldMaterials.IsWorldSurface would wrongly
+            // exclude (the same MV-1063 trap ReefKit.CollectStructuralWalls's own doc documents); its
+            // tag-based collector sidesteps that regardless of which world built the wall.
+            List<StructuralWall> walls = ReefKit.CollectStructuralWalls(host);
+            float wallHeight = map != null ? map.wallHeight : MapData.DefaultWallHeight;
+            ShipAreaKit.BuildWallDressing(host, cfg, walls, wallHeight);
+
             return dressed;
         }
 
