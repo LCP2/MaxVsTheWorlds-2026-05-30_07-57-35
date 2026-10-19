@@ -1409,6 +1409,332 @@ namespace MaxWorlds.Rendering
                 new Vector3(BulkheadInlayWidth, 0.01f, size.z * 0.9f), WorldMaterials.M_Circuit_Cyan);
         }
 
+        // MV-1258 (Lee, 19 Oct 2026: "I want interest"): one hero set piece per Reef room type, built
+        // once per landmark area by MaxWorlds.Arena.ReefSetPieces (WHERE) and standing in the chosen
+        // cover piece's or wall's own footprint, same "collider stays, art swaps" contract every other
+        // builder above keeps. Every builder here is pure geometry only, same as the structure kit
+        // above it — the Rendering assembly has no reference to MaxWorlds.Gameplay (where the VFX
+        // motion components live), so ReefSetPieces itself finds the named "Ring N"/"Coupling Collar"/
+        // "Hook Pivot" children by hierarchy AFTER calling these and attaches
+        // MaxWorlds.VFX.ReefSetPieceSpin/Sway to them — the same "Rendering builds it, Gameplay finds
+        // it by name and animates it" split ReefAmbientLife already keeps for ReefDrumCorePulse.
+
+        private const float ReactorHousingRadiusFraction = 0.46f;
+        private const float ReactorCoreRadiusFraction = 0.3f;
+        private const int ReactorRingCount = 3;
+
+        /// <summary>The reactor bay's own landmark (Change item 1): a glowing cyan core cylinder
+        /// (<see cref="CharacterMeshes.Lathe"/>) in a ribbed octagonal housing (<see cref="CharacterMeshes.Prism"/>),
+        /// three "Ring N" rings (<see cref="CharacterMeshes.Ring"/> — <see cref="MaxWorlds.Arena.ReefSetPieces"/>
+        /// spins them in alternating directions) and four coolant pipes radiating to the housing's own
+        /// edge. Stands in whichever cover piece's own footprint the caller hands it — the area's
+        /// largest hull-fill mass (ticket), the a3 central octagon among them.</summary>
+        public static GameObject BuildReactorCore(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefReactorCore");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float footprint = Mathf.Min(size.x, size.z);
+            float housingRadius = footprint * ReactorHousingRadiusFraction;
+            float coreRadius = footprint * ReactorCoreRadiusFraction;
+
+            Mesh housing = CharacterMeshes.Prism(8, housingRadius, housingRadius * 0.9f, size.y, 0.12f);
+            MeshPart(root.transform, "Housing", housing, Vector3.zero, WorldMaterials.M_MetalDark);
+
+            Mesh core = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, -size.y * 0.48f),
+                new Vector2(coreRadius, -size.y * 0.4f),
+                new Vector2(coreRadius, size.y * 0.4f),
+                new Vector2(0f, size.y * 0.48f),
+            }, 16);
+            MeshPart(root.transform, "Core", core, Vector3.zero, WorldMaterials.M_Circuit_Cyan);
+
+            Mesh ring = CharacterMeshes.Ring(housingRadius * 0.68f, housingRadius * 0.8f, 0.05f, 20);
+            for (int i = 0; i < ReactorRingCount; i++)
+            {
+                float y = (i - (ReactorRingCount - 1) * 0.5f) * size.y * 0.3f;
+                MeshPart(root.transform, $"Ring {i}", ring, new Vector3(0f, y, 0f),
+                    WorldMaterials.M_Circuit_Purple, Quaternion.Euler(90f, 0f, 0f));
+            }
+
+            Mesh pipe = CharacterMeshes.Beam(footprint * 0.35f, 0.07f, 0.07f, 8);
+            foreach (float yaw in new[] { 0f, 90f, 180f, 270f })
+            {
+                Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+                MeshPart(root.transform, "Coolant Pipe", pipe,
+                    dir * (housingRadius + footprint * 0.2f), WorldMaterials.M_Circuit_Cyan,
+                    Quaternion.Euler(0f, yaw, 90f));
+            }
+
+            return root;
+        }
+
+        private const float PropellerShaftRadiusFraction = 0.32f;
+
+        /// <summary>The engine room's own landmark (Change item 2): a giant propeller-shaft section —
+        /// a tapered <see cref="CharacterMeshes.Beam"/> shaft, a "Coupling Collar" ring
+        /// (<see cref="CharacterMeshes.Ring"/> — <see cref="MaxWorlds.Arena.ReefSetPieces"/> spins it),
+        /// two bearing-housing drums (<see cref="CharacterMeshes.Prism"/>) and a dark, glossy oil-sheen
+        /// patch on the floor beneath — along <paramref name="alongX"/>, the area's own longest wall.
+        /// </summary>
+        public static GameObject BuildPropellerShaft(Transform parent, Vector3 center, Vector3 size, bool alongX)
+        {
+            var root = new GameObject("ReefPropellerShaft");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float shaftLength = alongX ? size.x : size.z;
+            float radius = Mathf.Min(size.y, alongX ? size.z : size.x) * PropellerShaftRadiusFraction;
+            Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+
+            Mesh shaft = CharacterMeshes.Beam(shaftLength, radius, radius * 0.92f, 14);
+            MeshPart(root.transform, "Shaft", shaft, Vector3.zero, WorldMaterials.M_MetalDark, lie);
+
+            Mesh collar = CharacterMeshes.Ring(radius * 1.05f, radius * 1.4f, radius * 0.5f, 18);
+            MeshPart(root.transform, "Coupling Collar", collar, Vector3.zero, WorldMaterials.M_Circuit_Cyan, lie);
+
+            Mesh bearing = CharacterMeshes.Prism(10, radius * 1.6f, radius * 1.5f, radius * 1.1f, 0.14f);
+            foreach (float t in new[] { -0.32f, 0.32f })
+            {
+                Vector3 offset = alongX ? new Vector3(t * shaftLength, 0f, 0f) : new Vector3(0f, 0f, t * shaftLength);
+                MeshPart(root.transform, "Bearing Housing", bearing, offset, WorldMaterials.M_MetalDark, lie);
+            }
+
+            float sheenY = -size.y * 0.5f + 0.01f;
+            Vector3 sheenSize = alongX
+                ? new Vector3(shaftLength * 0.9f, 0.02f, radius * 3.2f)
+                : new Vector3(radius * 3.2f, 0.02f, shaftLength * 0.9f);
+            MeshBox(root.transform, "Oil Sheen", new Vector3(0f, sheenY, 0f), sheenSize, WorldMaterials.M_OilSheen);
+
+            return root;
+        }
+
+        private const float ContainerUnitHeightFraction = 0.32f;
+        private const float CraneRailHeight = 3.2f;
+        private const float CraneHookDrop = 1.6f;
+
+        /// <summary>The cargo hold's own landmark (Change item 3): a stacked wall of containers in
+        /// varied widths — chamfered <see cref="CharacterMeshes.Bevelled"/> boxes two rows high,
+        /// alternating <see cref="WorldMaterials.M_CrateBody"/>/<see cref="WorldMaterials.M_Hazard"/>
+        /// so no run of same-coloured boxes reads as one slab.</summary>
+        public static GameObject BuildContainerWall(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefContainerWall");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            bool alongX = size.x >= size.z;
+            float runLength = alongX ? size.x : size.z;
+            float depth = alongX ? size.z : size.x;
+            float rowHeight = size.y * ContainerUnitHeightFraction;
+
+            int columns = Mathf.Max(2, Mathf.FloorToInt(runLength / 1.8f));
+            int variant = 0;
+            for (int row = 0; row < 2; row++)
+            {
+                float y = -size.y * 0.5f + rowHeight * (row + 0.5f);
+                for (int i = 0; i < columns; i++)
+                {
+                    float t = (i + 0.5f) / columns - 0.5f;
+                    float along = t * runLength;
+                    float width = runLength / columns * 0.86f;
+
+                    Vector3 pos = alongX ? new Vector3(along, y, 0f) : new Vector3(0f, y, along);
+                    Vector3 boxSize = alongX
+                        ? new Vector3(width, rowHeight * 0.92f, depth * 0.9f)
+                        : new Vector3(depth * 0.9f, rowHeight * 0.92f, width);
+
+                    Material mat = variant % 3 == 0 ? WorldMaterials.M_Hazard : WorldMaterials.M_CrateBody;
+                    MeshBox(root.transform, $"Container {row}-{i}", pos, boxSize, mat);
+                    variant++;
+                }
+            }
+
+            return root;
+        }
+
+        /// <summary>A ceiling crane rail with a hook and chain hanging over the open floor (Change item
+        /// 3) — one per cargo-hold area, independent of the container wall's own footprint (it spans
+        /// the room, not one cover piece). The chain/hook sit under their own "Hook Pivot" child, which
+        /// <see cref="MaxWorlds.Arena.ReefSetPieces"/> finds by name and swings slowly via
+        /// <see cref="MaxWorlds.VFX.ReefSetPieceSway"/>. <paramref name="span"/> is how long the rail
+        /// runs.</summary>
+        public static GameObject BuildCraneRig(Transform parent, Vector3 center, float span)
+        {
+            var root = new GameObject("ReefCraneRig");
+            root.transform.SetParent(parent, false);
+            root.transform.position = new Vector3(center.x, CraneRailHeight, center.z);
+            MarkDressed(root);
+
+            Mesh rail = CharacterMeshes.Beam(span, 0.12f, 0.12f, 8);
+            MeshPart(root.transform, "Crane Rail", rail, Vector3.zero, WorldMaterials.M_MetalDark,
+                Quaternion.Euler(0f, 0f, 90f));
+
+            var chainRoot = new GameObject("Hook Pivot");
+            chainRoot.transform.SetParent(root.transform, false);
+
+            Mesh link = CharacterMeshes.Ring(0.05f, 0.09f, 0.04f, 8);
+            int links = Mathf.Max(2, Mathf.FloorToInt(CraneHookDrop / 0.25f));
+            for (int i = 0; i < links; i++)
+            {
+                float y = -(i + 0.5f) * (CraneHookDrop / links);
+                MeshPart(chainRoot.transform, $"Chain Link {i}", link, new Vector3(0f, y, 0f),
+                    WorldMaterials.M_MetalDark, Quaternion.Euler(i % 2 == 0 ? 0f : 90f, 0f, 0f));
+            }
+
+            Mesh hook = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0.1f), new Vector2(0.1f, 0.06f), new Vector2(0.12f, -0.04f),
+                new Vector2(0.07f, -0.12f), new Vector2(0f, -0.1f),
+            }, 10);
+            MeshPart(chainRoot.transform, "Hook", hook, new Vector3(0f, -CraneHookDrop, 0f), WorldMaterials.M_MetalDark);
+
+            return root;
+        }
+
+        private const float AnchorChainLinkSpacing = 0.5f;
+
+        /// <summary>a30's own background drama (Change item 7, Anchorhead's Cargo Hold): a giant lathed
+        /// anchor plus a chain of <see cref="CharacterMeshes.Ring"/> links coiling across the floor and
+        /// up one wall. Decoration only — background silhouette for the boss arena, no collider.</summary>
+        public static GameObject BuildAnchorChain(Transform parent, Vector3 center, float span)
+        {
+            var root = new GameObject("ReefAnchorChain");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float anchorScale = span * 0.5f;
+            Mesh anchor = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f), new Vector2(0.12f, 0.02f), new Vector2(0.1f, 0.5f),
+                new Vector2(0.16f, 0.55f), new Vector2(0.05f, 0.62f),
+            }, 14);
+            MeshPart(root.transform, "Anchor Shank", anchor, new Vector3(0f, 0f, 0f), WorldMaterials.M_MetalDark,
+                localScale: Vector3.one * anchorScale);
+
+            Mesh fluke = CharacterMeshes.Prism(4, anchorScale * 0.5f, 0.02f, anchorScale * 0.18f, 0.1f);
+            foreach (float yaw in new[] { -35f, 35f })
+                MeshPart(root.transform, "Anchor Fluke", fluke, new Vector3(0f, -anchorScale * 0.05f, 0f),
+                    WorldMaterials.M_MetalDark, Quaternion.Euler(0f, yaw, 90f));
+
+            Mesh link = CharacterMeshes.Ring(0.1f, 0.18f, 0.08f, 10);
+            int links = Mathf.Max(3, Mathf.FloorToInt(span / AnchorChainLinkSpacing));
+            for (int i = 0; i < links; i++)
+            {
+                float t = (i + 1f) / links;
+                Vector3 pos = new Vector3(t * span * 0.5f, 0f, t * t * span * 0.2f);
+                MeshPart(root.transform, $"Floor Chain Link {i}", link, pos, WorldMaterials.M_MetalDark,
+                    Quaternion.Euler(i % 2 == 0 ? 0f : 90f, 30f, 0f));
+            }
+
+            return root;
+        }
+
+        private const float DomeRadiusFraction = 0.5f;
+
+        /// <summary>The gallery's own landmark (Change item 4): the room's own window wall widened into
+        /// a curved observation dome section — a lathed hemisphere (<see cref="CharacterMeshes.Sphere"/>)
+        /// bulging out past the wall's own face, glazed the same <see cref="WorldMaterials.M_GlassOcean"/>
+        /// gradient <see cref="BuildObservationWindow"/> already wears. MV-1257's own ambient-life pass
+        /// supplies the fish/whale beyond it via <see cref="BuildOceanBackdrop"/>, already anchored at
+        /// every authored window by <see cref="MaxWorlds.Arena.ReefAreaKit.BuildWindows"/> — this builder
+        /// only widens the glass itself, it does not duplicate that backdrop.</summary>
+        public static GameObject BuildObservationDome(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefObservationDome");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            float width = Mathf.Max(size.x, size.z);
+            float radius = width * DomeRadiusFraction;
+            float bulgeDepth = Mathf.Max(width * 0.35f, 0.6f);
+
+            Mesh dome = CharacterMeshes.Sphere(18);   // unit (diameter-1) sphere -- localScale carries real metres
+            MeshPart(root.transform, "Dome", dome, Vector3.zero, WorldMaterials.M_GlassOcean,
+                localScale: new Vector3(width, size.y, bulgeDepth));
+
+            Mesh rim = CharacterMeshes.Ring(radius * 0.98f, radius * 1.08f, 0.08f, 24);
+            MeshPart(root.transform, "Rim", rim, Vector3.zero, WorldMaterials.M_MetalDark, Quaternion.Euler(90f, 0f, 0f));
+
+            return root;
+        }
+
+        private const float VaultFrameRadiusFraction = 0.62f;
+        private const int VaultBoltCount = 8;
+        private const float VaultBoltLength = 0.22f;
+
+        /// <summary>The pressure lock's own landmark (Change item 5): a massive circular vault-door
+        /// frame around a gate opening — a <see cref="CharacterMeshes.Ring"/> seal plus
+        /// <see cref="VaultBoltCount"/> radial locking bolts (<see cref="CharacterMeshes.Beam"/>), built
+        /// in the caller's own already-cancelled local space exactly like <see cref="BuildGateFrame"/>
+        /// (so <paramref name="width"/>/<paramref name="height"/>/<paramref name="depth"/> are the
+        /// doorway's own real metres regardless of which wall the gate sits on). Returns the bolts, so
+        /// the caller (<see cref="MaxWorlds.Arena.ReefSetPieces"/>) can wire
+        /// <see cref="MaxWorlds.Arena.ReefVaultDoorBolts"/> to retract them the instant the gate opens.
+        /// </summary>
+        public static GameObject[] BuildVaultDoorFrame(Transform parent, float width, float height, float depth)
+        {
+            float radius = Mathf.Min(width, height) * VaultFrameRadiusFraction;
+
+            Mesh seal = CharacterMeshes.Ring(radius * 0.82f, radius, 0.1f, 28);
+            MeshPart(parent, "Vault Seal", seal, Vector3.zero, WorldMaterials.M_MetalDark);
+
+            Mesh hazardRing = CharacterMeshes.Ring(radius * 1.02f, radius * 1.1f, 0.06f, 28);
+            MeshPart(parent, "Vault Hazard Ring", hazardRing, Vector3.zero, WorldMaterials.M_Hazard);
+
+            Mesh bolt = CharacterMeshes.Beam(VaultBoltLength, 0.06f, 0.05f, 8);
+            var bolts = new GameObject[VaultBoltCount];
+            for (int i = 0; i < VaultBoltCount; i++)
+            {
+                float angle = (i / (float)VaultBoltCount) * 360f;
+                Quaternion spin = Quaternion.Euler(0f, 0f, angle);
+                Vector3 pos = spin * new Vector3(radius * 0.91f, 0f, 0f);
+                GameObject boltGo = MeshPart(parent, $"Vault Bolt {i}", bolt, pos,
+                    WorldMaterials.M_Circuit_Cyan, spin * Quaternion.Euler(0f, 0f, 90f));
+                bolts[i] = boltGo;
+            }
+
+            return bolts;
+        }
+
+        private const float CanopyLampHeight = 0.12f;
+        private const float CanopyPoolRadiusFraction = 0.7f;
+
+        /// <summary>A crew/hydroponics area's own landmark (Change item 6): a grow-lamp canopy hanging
+        /// over one planter rack, casting a soft magenta-violet light pool (a flat
+        /// <see cref="WorldMaterials.M_LampViolet"/> disc) onto the plants beneath it.</summary>
+        public static GameObject BuildGrowLampCanopy(Transform parent, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefGrowLampCanopy");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            Vector3 fixtureSize = new Vector3(size.x * 0.9f, CanopyLampHeight, Mathf.Max(size.z * 0.9f, 0.3f));
+            MeshBox(root.transform, "Fixture", Vector3.zero, fixtureSize, WorldMaterials.M_MetalDark);
+
+            Mesh glowStrip = CharacterMeshes.Beam(fixtureSize.x * 0.85f, 0.02f, 0.02f, 6);
+            MeshPart(root.transform, "Glow Strip", glowStrip, new Vector3(0f, -CanopyLampHeight * 0.55f, 0f),
+                WorldMaterials.M_LampViolet, Quaternion.Euler(0f, 0f, 90f));
+
+            float poolRadius = Mathf.Max(size.x, size.z) * CanopyPoolRadiusFraction;
+            Mesh pool = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f), new Vector2(poolRadius, 0f), new Vector2(poolRadius, 0.01f), new Vector2(0f, 0.01f),
+            }, 16);
+            MeshPart(root.transform, "Light Pool", pool, new Vector3(0f, -CanopyLampHeight * 0.5f - 0.6f, 0f),
+                WorldMaterials.M_LampViolet);
+
+            return root;
+        }
+
         // MV-1215, Change item 2: the glow hatch — a recessed, collider-free floor decal. Walkable by
         // construction: nothing built here ever gets a collider, same contract every other Reef
         // dressing piece keeps for its own visual-only overlays.

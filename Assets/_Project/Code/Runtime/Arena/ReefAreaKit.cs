@@ -175,8 +175,10 @@ namespace MaxWorlds.Arena
         /// "far wall" (<see cref="BuildFarWallLight"/>) is frequently an interior partition shared with
         /// the room to its north, which <see cref="FindEdgeWall"/>'s own <c>IsOuterEdge</c> requirement
         /// would never match. Same position-matching body as <see cref="FindEdgeWall"/>, factored out
-        /// so the two never drift apart, with that one filter made optional.</summary>
-        private static StructuralWall FindAreaWall(List<StructuralWall> walls, WorldArea area, Wall wall,
+        /// so the two never drift apart, with that one filter made optional. Internal (MV-1258): also
+        /// called directly by <see cref="ReefSetPieces"/> to anchor a gallery area's observation dome
+        /// on the same north wall <see cref="BuildFarWallLight"/> already uses.</summary>
+        internal static StructuralWall FindAreaWall(List<StructuralWall> walls, WorldArea area, Wall wall,
             bool requireOuterEdge)
         {
             if (walls == null) return null;

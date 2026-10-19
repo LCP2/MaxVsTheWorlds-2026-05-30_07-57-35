@@ -156,6 +156,11 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefGrateGlowCyan = HexColor(0x1B7A8C);
         public static readonly Color ReefFloodWaterTeal = HexColor(0x0C3A42);
 
+        // MV-1258: the engine room's own propeller-shaft landmark — a dark, non-emissive oil-sheen
+        // patch on the floor beneath it. Its own material rather than reusing M_MetalDark (shared by
+        // every other dark steel body on the Reef) so a future tint pass can darken the sheen alone.
+        public static readonly Color ReefOilSheen = HexColor(0x080C10);
+
         /// <summary>World size, in metres, of one deck plate (MV-1053 ticket: "2 m square plates").
         /// Shared with <see cref="MaxWorlds.Rendering.ReefKit.DressHull"/>, which uses it to turn the
         /// floor's own resolved world size into the material's mesh-UV tiling — one authored number
@@ -194,6 +199,11 @@ namespace MaxWorlds.Rendering
         /// reusing <see cref="M_Circuit_Cyan"/>: that one is shared by the wall-base circuit spine and
         /// the coolant turret, and dimming it for a grate would dim every one of those too.</summary>
         public static Material M_GrateGlow => ReefMaterial("M_GrateGlow", ReefGrateGlowCyan, emissive: true);
+
+        /// <summary>MV-1258: the propeller shaft's own oil-sheen floor patch — dark and non-emissive,
+        /// its own material rather than <see cref="M_MetalDark"/> (shared by every other dark steel
+        /// body on the Reef).</summary>
+        public static Material M_OilSheen => ReefMaterial("M_OilSheen", ReefOilSheen);
 
         /// <summary>The Reef's own flooded-deck water (MV-1256, Change item 5) — replaces
         /// <c>MapRuntime.BuildSludge</c>'s shared Stormdrain acid-green tint for this biome only. See

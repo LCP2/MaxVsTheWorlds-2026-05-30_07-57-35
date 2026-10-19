@@ -26,6 +26,16 @@ namespace MaxWorlds.Arena
     /// leaving it to <see cref="WorldMaterials"/>'s ordinary shape-classified sweep, which painted it
     /// darker than the floor it sits on.
     /// </summary>
+    /// <summary>Tags the root GameObject <see cref="ReefDressing.BuildStructureKitPiece"/> built for one
+    /// authored cover piece, carrying that piece's own <see cref="ArenaCover.Name"/> (e.g. the hull-fill
+    /// id <c>"a3_h1"</c>). MV-1258's own hero set pieces (<see cref="ReefSetPieces"/>) read this back to
+    /// find and hide the generic structure-kit visual a room's chosen "largest hull-fill mass" already
+    /// got, so a reactor core/container wall never doubles up geometry at the same footprint.</summary>
+    public sealed class ReefSourcePiece : MonoBehaviour
+    {
+        public string PieceId;
+    }
+
     public static class ReefDressing
     {
         /// <summary>A machinery piece wider than this on either horizontal axis (MV-1051) keeps its
@@ -128,16 +138,20 @@ namespace MaxWorlds.Arena
 
         private static void BuildStructureKitPiece(Transform kit, ArenaCover cover)
         {
-            switch (cover.Dressing)
+            GameObject built = cover.Dressing switch
             {
-                case CoverDressing.ReefPillar: ReefKit.BuildPillar(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefManifold: ReefKit.BuildManifold(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefDrum: ReefKit.BuildDrum(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefConsole: ReefKit.BuildConsole(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefPlanter: ReefKit.BuildPlanterRow(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefFloorPipe: ReefKit.BuildFloorPipe(kit, cover.Center, cover.Size); break;
-                case CoverDressing.ReefBulkhead: ReefKit.BuildBulkhead(kit, cover.Name, cover.Center, cover.Size); break;
-            }
+                CoverDressing.ReefPillar => ReefKit.BuildPillar(kit, cover.Center, cover.Size),
+                CoverDressing.ReefManifold => ReefKit.BuildManifold(kit, cover.Center, cover.Size),
+                CoverDressing.ReefDrum => ReefKit.BuildDrum(kit, cover.Center, cover.Size),
+                CoverDressing.ReefConsole => ReefKit.BuildConsole(kit, cover.Center, cover.Size),
+                CoverDressing.ReefPlanter => ReefKit.BuildPlanterRow(kit, cover.Center, cover.Size),
+                CoverDressing.ReefFloorPipe => ReefKit.BuildFloorPipe(kit, cover.Center, cover.Size),
+                CoverDressing.ReefBulkhead => ReefKit.BuildBulkhead(kit, cover.Name, cover.Center, cover.Size),
+                _ => null,
+            };
+
+            if (built != null && !string.IsNullOrEmpty(cover.Name))
+                built.AddComponent<ReefSourcePiece>().PieceId = cover.Name;
         }
     }
 }

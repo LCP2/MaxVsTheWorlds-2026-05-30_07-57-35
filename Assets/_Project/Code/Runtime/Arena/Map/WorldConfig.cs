@@ -617,6 +617,15 @@ namespace MaxWorlds.Arena
         /// <see cref="WorldConfig.pressureNoun"/> already uses.</summary>
         public string wallDressing = "";
 
+        /// <summary>This area's room-type landmark (MV-1258, Lee's 17 Oct table): one of
+        /// <c>"cargo_hold"</c>, <c>"engine_room"</c>, <c>"reactor_bay"</c>, <c>"gallery"</c>,
+        /// <c>"pressure_lock"</c> or <c>"crew_hydroponics"</c>, read by <see cref="ReefSetPieces"/> to
+        /// build one hero set piece per area so every room type reads as a landmark the player
+        /// remembers. Empty (unauthored — The Anchor Chain Well, a15, is the one area Lee's table
+        /// leaves out) means none, the same "empty means not authored" idiom <see cref="wallDressing"/>
+        /// already uses.</summary>
+        public string roomType = "";
+
         /// <summary>This area's garrison entries for ONE VISIT (MV-711): when an area's own id appears
         /// twice in <see cref="WorldConfig.route"/> at two different levels (The Reef's under/over
         /// bridge pass), each visit seeds only the entries authored at its own <see cref="WorldGarrisonEntry.level"/> —
