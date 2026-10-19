@@ -24,10 +24,9 @@ namespace MaxWorlds.Arena
     /// comment), and for a non-square wall it also makes every "along X vs along Z" orientation check
     /// resolve to the same answer regardless of the wall's real orientation, which would have silently
     /// skipped every E/W wall in all 30 areas. <see cref="ResolveWallExtent"/> below reads the collider
-    /// when one is present and only falls back to <c>lossyScale</c> for a fixture that has none — this is
-    /// a wall-matching bug that also affects <see cref="ReefAreaKit"/>'s own real-map callers, but fixing
-    /// shared World 3 code is outside this ticket's own tight slice; this class simply does not depend on
-    /// the broken path.
+    /// when one is present and only falls back to <c>lossyScale</c> for a fixture that has none — this
+    /// class simply does not depend on the broken path. (MV-1262 later gave <see cref="ReefAreaKit"/>'s
+    /// own <c>FindAreaWall</c> the same fix, duplicated rather than shared — see that method's own doc.)
     /// </summary>
     public static class ShipAreaKit
     {

@@ -47,7 +47,7 @@ namespace MaxWorlds.Tests.EditMode
                 float wallHeight = map.wallHeight;
                 float wallThickness = map.wallThickness;
                 ReefAreaKit.BuildDecor(host.transform, cfg);
-                ReefAreaKit.BuildWindows(host.transform, cfg, walls, wallHeight);
+                ReefAreaKit.BuildWindows(host.transform, cfg, walls, wallHeight, wallThickness);
                 ReefAreaKit.BuildWallDressing(host.transform, cfg, walls, wallHeight, wallThickness);
                 ReefAreaKit.BuildFarWallLight(host.transform, cfg, walls, wallHeight);
 
