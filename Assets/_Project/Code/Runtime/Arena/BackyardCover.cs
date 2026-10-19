@@ -40,6 +40,11 @@ namespace MaxWorlds.Arena
     /// explicit alternative to leaving a crate dressed <see cref="None"/> (MV-1019's own original
     /// shortcut) now that the V8 layout ticket can author it by name.
     ///
+    /// <see cref="ReefBulkhead"/> (MV-1254) is the V9 layout's word for the 281 <c>aN_hM</c> hull-fill
+    /// pieces that shape every Reef room — raised from a plain 1.8 m "none" slab to a 3 m wall-height
+    /// ribbed machinery wall, built by <see cref="Rendering.ReefKit.BuildBulkhead"/>. Full height, solid,
+    /// same "collider stays, art swaps" contract as every other structure-kit piece.
+    ///
     /// <see cref="ShipDropship"/> through <see cref="ShipBulkheadStub"/> (MV-1230) are the Mothership's
     /// own ship kit — built by <see cref="Rendering.ShipKit"/> and routed by
     /// <see cref="ShipDressing.DressCover"/>. <see cref="ShipGlassCase"/>/<see cref="ShipConveyor"/> are
@@ -54,6 +59,7 @@ namespace MaxWorlds.Arena
         Truck, Bus, Car, Barrier, Fence, LampPost, RoadSign, Pallet, FlowerStall, FruitStall,
         ClockPost, BookCart, Lockers, ABoard, PostBox, Tub,
         ReefPillar, ReefManifold, ReefDrum, ReefConsole, ReefPlanter, ReefFloorPipe, ReefCrate,
+        ReefBulkhead,
         ShipDropship, ShipDropPod, ShipCrate, ShipCrateLow, ShipGlassCase, ShipConveyor,
         ShipConsoleBank, ShipBulkheadStub,
     }

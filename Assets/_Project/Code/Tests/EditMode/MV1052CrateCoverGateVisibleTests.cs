@@ -48,10 +48,13 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-1216: nine of a10's 19 pieces (a10_c11-19) now author the explicit
     /// <see cref="CoverDressing.ReefCrate"/> word instead of the old bare <see cref="CoverDressing.None"/>
     /// (the V8 layout's rename, MV-1215) — the other ten (the unconverted hull-fill pieces, a10_h1-10)
-    /// stay <see cref="CoverDressing.None"/>. <see cref="ReefDressing.DressCover"/> already treats both
-    /// words identically (both call <see cref="ReefKit.ApplyCrateSkin"/>), so this test's own filter
-    /// just needs to keep catching all 19 by either word — the gate-tracking behaviour under test is
-    /// unchanged.
+    /// stayed <see cref="CoverDressing.None"/> until MV-1254's V9 layout raised every hull-fill piece
+    /// to <see cref="CoverDressing.ReefBulkhead"/> instead: a10's crate count drops from 19 to the
+    /// nine real c11-19 crates, since a10_h1-10 were never standalone crates — they just happened to
+    /// share the bare "none" word before every piece carried an explicit one. <see cref="ReefDressing.DressCover"/>
+    /// still treats <see cref="CoverDressing.None"/> and <see cref="CoverDressing.ReefCrate"/> identically
+    /// (both call <see cref="ReefKit.ApplyCrateSkin"/>), so this test's own filter is unchanged — only
+    /// the count it proves against is, and the gate-tracking behaviour under test is unaffected.
     /// </summary>
     public sealed class MV1052CrateCoverGateVisibleTests
     {
@@ -95,8 +98,8 @@ namespace MaxWorlds.Tests.EditMode
                     .Where(p => p.Cover.Name.StartsWith("a10_") &&
                                 (p.Cover.Dressing == CoverDressing.None || p.Cover.Dressing == CoverDressing.ReefCrate))
                     .ToList();
-                Assert.AreEqual(19, a10Crates.Count,
-                    "World 3 area 10 should still author exactly its 19 crate cover pieces for this test to mean anything");
+                Assert.AreEqual(9, a10Crates.Count,
+                    "World 3 area 10 should still author exactly its 9 crate cover pieces (a10_c11-19) for this test to mean anything");
 
                 Renderer floor = FindNamed(host.transform, "Map Floor");
                 Assert.IsNotNull(floor, "expected World 3's built map to include its floor slab");

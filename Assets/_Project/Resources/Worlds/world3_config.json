@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 4 \u2014 The Reef",
- "revision": "WORLD 4 Reef V8 2026-10-17: interiors re-authored with the Reef structure kit (MV-1215) from MVW_World4_Reef_Level_Design_V8; footprints, route, gates, garrison, sheds, hull fill and dials unchanged; a15 and stub unchanged. Previous: WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
+ "revision": "WORLD 4 Reef V9 2026-10-19: hull-fill pieces (aN_hM) dressed as reef_bulkhead and raised to wall height 3.0 (were plain 1.8 m 'none' slabs); nothing else changed. Previous: WORLD 4 Reef V8 2026-10-17: interiors re-authored with the Reef structure kit (MV-1215) from MVW_World4_Reef_Level_Design_V8; footprints, route, gates, garrison, sheds, hull fill and dials unchanged; a15 and stub unchanged. Previous: WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 3,
@@ -739,10 +739,10 @@
      "x": 25.0,
      "z": 28.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -750,10 +750,10 @@
      "x": 25.5,
      "z": 29.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -761,10 +761,10 @@
      "x": 26.0,
      "z": 30.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -772,10 +772,10 @@
      "x": 26.5,
      "z": 31.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -783,10 +783,10 @@
      "x": 27.0,
      "z": 32.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -794,10 +794,10 @@
      "x": 27.5,
      "z": 33.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -805,10 +805,10 @@
      "x": 14.0,
      "z": 47.0,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -816,10 +816,10 @@
      "x": 27.5,
      "z": 59.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -827,10 +827,10 @@
      "x": 26.5,
      "z": 59.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -838,10 +838,10 @@
      "x": 25.5,
      "z": 60.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -849,10 +849,10 @@
      "x": 24.5,
      "z": 60.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -860,10 +860,10 @@
      "x": 23.5,
      "z": 61.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -871,10 +871,10 @@
      "x": 22.5,
      "z": 61.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1115,10 +1115,10 @@
      "x": 6.0,
      "z": 0.5,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1126,10 +1126,10 @@
      "x": 5.5,
      "z": 1.5,
      "width": 11,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1137,10 +1137,10 @@
      "x": 5.0,
      "z": 2.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1148,10 +1148,10 @@
      "x": 4.5,
      "z": 3.5,
      "width": 9,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1159,10 +1159,10 @@
      "x": 4.0,
      "z": 4.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1170,10 +1170,10 @@
      "x": 3.5,
      "z": 5.5,
      "width": 7,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1181,10 +1181,10 @@
      "x": 3.0,
      "z": 6.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1192,10 +1192,10 @@
      "x": 2.5,
      "z": 7.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1203,10 +1203,10 @@
      "x": 2.0,
      "z": 8.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1214,10 +1214,10 @@
      "x": 1.5,
      "z": 9.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1225,10 +1225,10 @@
      "x": 1.0,
      "z": 10.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1236,10 +1236,10 @@
      "x": 0.5,
      "z": 11.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1555,10 +1555,10 @@
      "x": 45.0,
      "z": 14.0,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1566,10 +1566,10 @@
      "x": 41.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1577,10 +1577,10 @@
      "x": 48.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1588,10 +1588,10 @@
      "x": 40.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1599,10 +1599,10 @@
      "x": 49.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1610,10 +1610,10 @@
      "x": 39.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -1621,10 +1621,10 @@
      "x": 50.5,
      "z": 14.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2131,10 +2131,10 @@
      "x": 104.0,
      "z": 3.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2142,10 +2142,10 @@
      "x": 132.0,
      "z": 3.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2153,10 +2153,10 @@
      "x": 104.0,
      "z": 24.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2164,10 +2164,10 @@
      "x": 132.0,
      "z": 24.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2838,10 +2838,10 @@
      "x": 194.0,
      "z": 0.5,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2849,10 +2849,10 @@
      "x": 194.5,
      "z": 1.5,
      "width": 11,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2860,10 +2860,10 @@
      "x": 195.0,
      "z": 2.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2871,10 +2871,10 @@
      "x": 195.5,
      "z": 3.5,
      "width": 9,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2882,10 +2882,10 @@
      "x": 196.0,
      "z": 4.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2893,10 +2893,10 @@
      "x": 196.5,
      "z": 5.5,
      "width": 7,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2904,10 +2904,10 @@
      "x": 197.0,
      "z": 6.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2915,10 +2915,10 @@
      "x": 197.5,
      "z": 7.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2926,10 +2926,10 @@
      "x": 198.0,
      "z": 8.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2937,10 +2937,10 @@
      "x": 198.5,
      "z": 9.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2948,10 +2948,10 @@
      "x": 199.0,
      "z": 10.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -2959,10 +2959,10 @@
      "x": 199.5,
      "z": 11.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3275,10 +3275,10 @@
      "x": 180.0,
      "z": 44.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3286,10 +3286,10 @@
      "x": 192.0,
      "z": 44.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3297,10 +3297,10 @@
      "x": 178.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3308,10 +3308,10 @@
      "x": 181.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3319,10 +3319,10 @@
      "x": 190.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3330,10 +3330,10 @@
      "x": 193.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3341,10 +3341,10 @@
      "x": 177.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3352,10 +3352,10 @@
      "x": 182.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3363,10 +3363,10 @@
      "x": 189.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3374,10 +3374,10 @@
      "x": 194.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3385,10 +3385,10 @@
      "x": 176.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3396,10 +3396,10 @@
      "x": 183.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3407,10 +3407,10 @@
      "x": 188.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3418,10 +3418,10 @@
      "x": 195.5,
      "z": 44.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3429,10 +3429,10 @@
      "x": 180.0,
      "z": 54.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3440,10 +3440,10 @@
      "x": 192.0,
      "z": 54.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3451,10 +3451,10 @@
      "x": 178.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3462,10 +3462,10 @@
      "x": 181.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3473,10 +3473,10 @@
      "x": 190.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3484,10 +3484,10 @@
      "x": 193.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3495,10 +3495,10 @@
      "x": 177.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3506,10 +3506,10 @@
      "x": 182.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3517,10 +3517,10 @@
      "x": 189.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3528,10 +3528,10 @@
      "x": 194.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3539,10 +3539,10 @@
      "x": 176.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3550,10 +3550,10 @@
      "x": 183.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3561,10 +3561,10 @@
      "x": 188.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3572,10 +3572,10 @@
      "x": 195.5,
      "z": 54.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3583,10 +3583,10 @@
      "x": 180.0,
      "z": 64.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3594,10 +3594,10 @@
      "x": 192.0,
      "z": 64.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3605,10 +3605,10 @@
      "x": 178.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3616,10 +3616,10 @@
      "x": 181.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3627,10 +3627,10 @@
      "x": 190.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3638,10 +3638,10 @@
      "x": 193.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3649,10 +3649,10 @@
      "x": 177.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3660,10 +3660,10 @@
      "x": 182.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3671,10 +3671,10 @@
      "x": 189.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3682,10 +3682,10 @@
      "x": 194.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3693,10 +3693,10 @@
      "x": 176.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3704,10 +3704,10 @@
      "x": 183.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3715,10 +3715,10 @@
      "x": 188.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -3726,10 +3726,10 @@
      "x": 195.5,
      "z": 64.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4321,10 +4321,10 @@
      "x": 199.5,
      "z": 137.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4332,10 +4332,10 @@
      "x": 198.5,
      "z": 137.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 9,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4343,10 +4343,10 @@
      "x": 197.5,
      "z": 138.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4354,10 +4354,10 @@
      "x": 196.5,
      "z": 138.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4365,10 +4365,10 @@
      "x": 195.5,
      "z": 139.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4376,10 +4376,10 @@
      "x": 194.5,
      "z": 139.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4387,10 +4387,10 @@
      "x": 193.5,
      "z": 140.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4398,10 +4398,10 @@
      "x": 192.5,
      "z": 140.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4409,10 +4409,10 @@
      "x": 191.5,
      "z": 141.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4420,10 +4420,10 @@
      "x": 190.5,
      "z": 141.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4786,10 +4786,10 @@
      "x": 151.0,
      "z": 121.0,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4797,10 +4797,10 @@
      "x": 147.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4808,10 +4808,10 @@
      "x": 154.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4819,10 +4819,10 @@
      "x": 146.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -4830,10 +4830,10 @@
      "x": 155.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5165,10 +5165,10 @@
      "x": 109.0,
      "z": 103.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5176,10 +5176,10 @@
      "x": 109.0,
      "z": 120.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 19,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5187,10 +5187,10 @@
      "x": 115.0,
      "z": 121.0,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5198,10 +5198,10 @@
      "x": 125.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5209,10 +5209,10 @@
      "x": 109.0,
      "z": 139.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5542,10 +5542,10 @@
      "x": 45.0,
      "z": 121.0,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 14,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5553,10 +5553,10 @@
      "x": 71.0,
      "z": 121.0,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 14,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5564,10 +5564,10 @@
      "x": 41.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5575,10 +5575,10 @@
      "x": 48.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5586,10 +5586,10 @@
      "x": 67.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5597,10 +5597,10 @@
      "x": 74.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5608,10 +5608,10 @@
      "x": 40.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5619,10 +5619,10 @@
      "x": 49.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5630,10 +5630,10 @@
      "x": 66.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5641,10 +5641,10 @@
      "x": 75.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5652,10 +5652,10 @@
      "x": 39.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5663,10 +5663,10 @@
      "x": 50.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5674,10 +5674,10 @@
      "x": 65.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5685,10 +5685,10 @@
      "x": 76.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5696,10 +5696,10 @@
      "x": 38.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5707,10 +5707,10 @@
      "x": 51.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5718,10 +5718,10 @@
      "x": 64.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -5729,10 +5729,10 @@
      "x": 77.5,
      "z": 121.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6040,10 +6040,10 @@
      "x": 62.0,
      "z": 62.0,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6051,10 +6051,10 @@
      "x": 94.0,
      "z": 62.0,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6062,10 +6062,10 @@
      "x": 62.0,
      "z": 92.0,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6073,10 +6073,10 @@
      "x": 94.0,
      "z": 94.0,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 12,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6084,10 +6084,10 @@
      "x": 61.0,
      "z": 98.0,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6513,10 +6513,10 @@
      "x": 105.5,
      "z": 56.5,
      "width": 11,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6524,10 +6524,10 @@
      "x": 138.5,
      "z": 56.5,
      "width": 11,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6535,10 +6535,10 @@
      "x": 105.0,
      "z": 57.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6546,10 +6546,10 @@
      "x": 139.0,
      "z": 57.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6557,10 +6557,10 @@
      "x": 104.5,
      "z": 58.5,
      "width": 9,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6568,10 +6568,10 @@
      "x": 139.5,
      "z": 58.5,
      "width": 9,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6579,10 +6579,10 @@
      "x": 104.0,
      "z": 59.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6590,10 +6590,10 @@
      "x": 140.0,
      "z": 59.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6601,10 +6601,10 @@
      "x": 103.5,
      "z": 60.5,
      "width": 7,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6612,10 +6612,10 @@
      "x": 140.5,
      "z": 60.5,
      "width": 7,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6623,10 +6623,10 @@
      "x": 103.0,
      "z": 61.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6634,10 +6634,10 @@
      "x": 141.0,
      "z": 61.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6645,10 +6645,10 @@
      "x": 102.5,
      "z": 62.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6656,10 +6656,10 @@
      "x": 141.5,
      "z": 62.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6667,10 +6667,10 @@
      "x": 102.0,
      "z": 63.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6678,10 +6678,10 @@
      "x": 142.0,
      "z": 63.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6689,10 +6689,10 @@
      "x": 101.5,
      "z": 64.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6700,10 +6700,10 @@
      "x": 142.5,
      "z": 64.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6711,10 +6711,10 @@
      "x": 101.0,
      "z": 65.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6722,10 +6722,10 @@
      "x": 143.0,
      "z": 65.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6733,10 +6733,10 @@
      "x": 100.5,
      "z": 66.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6744,10 +6744,10 @@
      "x": 143.5,
      "z": 66.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6755,10 +6755,10 @@
      "x": 113.5,
      "z": 69.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6766,10 +6766,10 @@
      "x": 130.5,
      "z": 69.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6777,10 +6777,10 @@
      "x": 113.5,
      "z": 86.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6788,10 +6788,10 @@
      "x": 130.5,
      "z": 86.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6799,10 +6799,10 @@
      "x": 100.5,
      "z": 94.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 11,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6810,10 +6810,10 @@
      "x": 143.5,
      "z": 94.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 11,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6821,10 +6821,10 @@
      "x": 101.5,
      "z": 95.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6832,10 +6832,10 @@
      "x": 142.5,
      "z": 95.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6843,10 +6843,10 @@
      "x": 102.5,
      "z": 95.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 9,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6854,10 +6854,10 @@
      "x": 141.5,
      "z": 95.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 9,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6865,10 +6865,10 @@
      "x": 103.5,
      "z": 96.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6876,10 +6876,10 @@
      "x": 140.5,
      "z": 96.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6887,10 +6887,10 @@
      "x": 104.5,
      "z": 96.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6898,10 +6898,10 @@
      "x": 139.5,
      "z": 96.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6909,10 +6909,10 @@
      "x": 105.5,
      "z": 97.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6920,10 +6920,10 @@
      "x": 138.5,
      "z": 97.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6931,10 +6931,10 @@
      "x": 106.5,
      "z": 97.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6942,10 +6942,10 @@
      "x": 137.5,
      "z": 97.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6953,10 +6953,10 @@
      "x": 107.5,
      "z": 98.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6964,10 +6964,10 @@
      "x": 136.5,
      "z": 98.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6975,10 +6975,10 @@
      "x": 108.5,
      "z": 98.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6986,10 +6986,10 @@
      "x": 135.5,
      "z": 98.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -6997,10 +6997,10 @@
      "x": 109.5,
      "z": 99.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -7008,10 +7008,10 @@
      "x": 134.5,
      "z": 99.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -7019,10 +7019,10 @@
      "x": 110.5,
      "z": 99.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -7030,10 +7030,10 @@
      "x": 133.5,
      "z": 99.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     }
    ],
@@ -8628,10 +8628,10 @@
      "x": 73.0,
      "z": 45.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8639,10 +8639,10 @@
      "x": 82.0,
      "z": 45.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8650,10 +8650,10 @@
      "x": 91.0,
      "z": 45.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8661,10 +8661,10 @@
      "x": 64.5,
      "z": 51.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8672,10 +8672,10 @@
      "x": 73.5,
      "z": 51.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8683,10 +8683,10 @@
      "x": 82.5,
      "z": 51.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8694,10 +8694,10 @@
      "x": 91.5,
      "z": 51.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8911,10 +8911,10 @@
      "x": 32.0,
      "z": 28.5,
      "width": 8,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8922,10 +8922,10 @@
      "x": 31.5,
      "z": 29.5,
      "width": 7,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8933,10 +8933,10 @@
      "x": 31.0,
      "z": 30.5,
      "width": 6,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8944,10 +8944,10 @@
      "x": 30.5,
      "z": 31.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8955,10 +8955,10 @@
      "x": 30.0,
      "z": 32.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8966,10 +8966,10 @@
      "x": 29.5,
      "z": 33.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8977,10 +8977,10 @@
      "x": 29.0,
      "z": 34.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -8988,10 +8988,10 @@
      "x": 28.5,
      "z": 35.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10073,10 +10073,10 @@
      "x": 8.0,
      "z": 71.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10084,10 +10084,10 @@
      "x": 20.0,
      "z": 71.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10095,10 +10095,10 @@
      "x": 5.5,
      "z": 71.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10106,10 +10106,10 @@
      "x": 10.5,
      "z": 71.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10117,10 +10117,10 @@
      "x": 17.5,
      "z": 71.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10128,10 +10128,10 @@
      "x": 22.5,
      "z": 71.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10139,10 +10139,10 @@
      "x": 8.0,
      "z": 82.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10150,10 +10150,10 @@
      "x": 20.0,
      "z": 82.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10161,10 +10161,10 @@
      "x": 5.5,
      "z": 82.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10172,10 +10172,10 @@
      "x": 10.5,
      "z": 82.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10183,10 +10183,10 @@
      "x": 17.5,
      "z": 82.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10194,10 +10194,10 @@
      "x": 22.5,
      "z": 82.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10205,10 +10205,10 @@
      "x": 8.0,
      "z": 93.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10216,10 +10216,10 @@
      "x": 20.0,
      "z": 93.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10227,10 +10227,10 @@
      "x": 5.5,
      "z": 93.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10238,10 +10238,10 @@
      "x": 10.5,
      "z": 93.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10249,10 +10249,10 @@
      "x": 17.5,
      "z": 93.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10260,10 +10260,10 @@
      "x": 22.5,
      "z": 93.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10667,10 +10667,10 @@
      "x": 11.0,
      "z": 112.0,
      "width": 22,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10678,10 +10678,10 @@
      "x": 27.5,
      "z": 112.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10689,10 +10689,10 @@
      "x": 0.5,
      "z": 122.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10700,10 +10700,10 @@
      "x": 17.0,
      "z": 122.0,
      "width": 22,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10711,10 +10711,10 @@
      "x": 1.5,
      "z": 131.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10722,10 +10722,10 @@
      "x": 16.5,
      "z": 131.5,
      "width": 11,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10733,10 +10733,10 @@
      "x": 27.5,
      "z": 132.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10744,10 +10744,10 @@
      "x": 1.0,
      "z": 132.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -10755,10 +10755,10 @@
      "x": 17.0,
      "z": 132.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11317,10 +11317,10 @@
      "x": 0.5,
      "z": 170.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 11,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11328,10 +11328,10 @@
      "x": 1.5,
      "z": 171.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11339,10 +11339,10 @@
      "x": 2.5,
      "z": 171.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 9,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11350,10 +11350,10 @@
      "x": 3.5,
      "z": 172.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11361,10 +11361,10 @@
      "x": 4.5,
      "z": 172.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11372,10 +11372,10 @@
      "x": 5.5,
      "z": 173.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11383,10 +11383,10 @@
      "x": 6.5,
      "z": 173.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11394,10 +11394,10 @@
      "x": 7.5,
      "z": 174.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11405,10 +11405,10 @@
      "x": 8.5,
      "z": 174.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11416,10 +11416,10 @@
      "x": 9.5,
      "z": 175.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -11427,10 +11427,10 @@
      "x": 10.5,
      "z": 175.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12121,10 +12121,10 @@
      "x": 40.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12132,10 +12132,10 @@
      "x": 46.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12143,10 +12143,10 @@
      "x": 52.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12154,10 +12154,10 @@
      "x": 58.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12165,10 +12165,10 @@
      "x": 64.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12176,10 +12176,10 @@
      "x": 70.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12187,10 +12187,10 @@
      "x": 40.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12198,10 +12198,10 @@
      "x": 46.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12209,10 +12209,10 @@
      "x": 52.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12220,10 +12220,10 @@
      "x": 58.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12231,10 +12231,10 @@
      "x": 64.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12242,10 +12242,10 @@
      "x": 70.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12829,10 +12829,10 @@
      "x": 84.0,
      "z": 158.5,
      "width": 12,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12840,10 +12840,10 @@
      "x": 99.0,
      "z": 158.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -12851,10 +12851,10 @@
      "x": 113.0,
      "z": 158.5,
      "width": 10,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13005,10 +13005,10 @@
      "x": 152.5,
      "z": 153.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13016,10 +13016,10 @@
      "x": 151.5,
      "z": 153.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13027,10 +13027,10 @@
      "x": 153.5,
      "z": 155.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13038,10 +13038,10 @@
      "x": 154.5,
      "z": 156.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13049,10 +13049,10 @@
      "x": 157.5,
      "z": 155.5,
      "width": 5,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13060,10 +13060,10 @@
      "x": 157.0,
      "z": 156.5,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13071,10 +13071,10 @@
      "x": 156.5,
      "z": 157.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13082,10 +13082,10 @@
      "x": 142.0,
      "z": 166.0,
      "width": 4,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13093,10 +13093,10 @@
      "x": 139.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13104,10 +13104,10 @@
      "x": 144.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13115,10 +13115,10 @@
      "x": 138.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13126,10 +13126,10 @@
      "x": 145.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13137,10 +13137,10 @@
      "x": 137.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13148,10 +13148,10 @@
      "x": 146.5,
      "z": 166.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13799,10 +13799,10 @@
      "x": 199.5,
      "z": 171.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 10,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13810,10 +13810,10 @@
      "x": 198.5,
      "z": 171.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 9,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13821,10 +13821,10 @@
      "x": 197.5,
      "z": 172.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 8,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13832,10 +13832,10 @@
      "x": 196.5,
      "z": 172.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 7,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13843,10 +13843,10 @@
      "x": 195.5,
      "z": 173.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 6,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13854,10 +13854,10 @@
      "x": 194.5,
      "z": 173.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 5,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13865,10 +13865,10 @@
      "x": 193.5,
      "z": 174.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13876,10 +13876,10 @@
      "x": 192.5,
      "z": 174.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13887,10 +13887,10 @@
      "x": 191.5,
      "z": 175.0,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 2,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -13898,10 +13898,10 @@
      "x": 190.5,
      "z": 175.5,
      "width": 1,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 1,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -14837,10 +14837,10 @@
      "x": 209.0,
      "z": 154.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 25,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -14848,10 +14848,10 @@
      "x": 224.0,
      "z": 144.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -14859,10 +14859,10 @@
      "x": 224.0,
      "z": 163.5,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 25,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -14870,10 +14870,10 @@
      "x": 209.0,
      "z": 174.0,
      "width": 2,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 4,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -15831,10 +15831,10 @@
      "x": 245.5,
      "z": 141.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -15842,10 +15842,10 @@
      "x": 262.5,
      "z": 141.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -15853,10 +15853,10 @@
      "x": 245.5,
      "z": 170.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
@@ -15864,10 +15864,10 @@
      "x": 262.5,
      "z": 170.5,
      "width": 3,
-     "height": 1.8,
+     "height": 3.0,
      "depth": 3,
      "shape": "box",
-     "dressing": "none",
+     "dressing": "reef_bulkhead",
      "coverKind": "solid"
     },
     {
