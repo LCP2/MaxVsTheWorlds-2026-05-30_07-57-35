@@ -216,7 +216,13 @@ namespace MaxWorlds.Arena
                     if (!build.Actors.TryGetValue(cradleId, out GameObject cradleGo) || cradleGo == null) continue;
 
                     AssemblyCradle cradle = cradleGo.GetComponent<AssemblyCradle>();
-                    if (cradle != null) cradle.SetAreaIndex(area.index);
+                    if (cradle == null) continue;
+                    cradle.SetAreaIndex(area.index);
+                    // MV-1248: stamps this cradle's stable id onto the component itself, the same
+                    // "already computed to look itself up in build.Actors, used to be discarded"
+                    // treatment the Replicator loop above gives replicatorId — so a mid-run checkpoint
+                    // can persist and restore "which cradles are destroyed" by id.
+                    cradle.SetId(cradleId);
                 }
             }
 

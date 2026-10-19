@@ -69,6 +69,18 @@ namespace MaxWorlds.Save
         /// <see cref="WeaponCorePending"/>.</summary>
         public bool RackModulePending;
 
+        /// <summary>True once World 5's 2nd Assembly Cradle has been destroyed but THE RIG hasn't been
+        /// opened yet to unlock SECONDARY and grant Orbitals (MV-1248) — the persisted twin of
+        /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.SecondaryFamilyPending"/>, same reasoning
+        /// as <see cref="RackModulePending"/>.</summary>
+        public bool SecondaryFamilyPending;
+
+        /// <summary>True once World 5's 4th Assembly Cradle has been destroyed but THE RIG hasn't been
+        /// opened yet to unlock SUPPORT and grant <c>u_sen</c> (MV-1248) — the persisted twin of
+        /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.SentinelFamilyPending"/>, same reasoning as
+        /// <see cref="RackModulePending"/>.</summary>
+        public bool SentinelFamilyPending;
+
         /// <summary>SUPPORT family node ids remembered from the last time it was LOCKED on a new-world
         /// arrival (MV-1095), parallel to <see cref="SupportRememberedLevels"/> — the persisted twin of
         /// <see cref="MaxWorlds.Weapons.RigState.SnapshotRememberedSupportLevels"/>; <c>JsonUtility</c>
@@ -168,6 +180,15 @@ namespace MaxWorlds.Save
         /// resume even though <c>FactoryCensus</c> itself was correct. MV-950 seeds those two off
         /// <c>FactoryCensus.CheckpointRestored</c> so every counter now agrees.</summary>
         public string[] CheckpointDestroyedShedIds = Array.Empty<string>();
+
+        /// <summary>Stable ids (<c>AssemblyCradle.Id</c>) of every World 5 Assembly Cradle destroyed by
+        /// the time this checkpoint was captured (MV-1248) — the Mothership's equivalent of
+        /// <see cref="CheckpointDestroyedReplicatorIds"/>/<see cref="CheckpointDestroyedShedIds"/>,
+        /// restored the same way: silently re-destroying whichever of the freshly-rebuilt level's
+        /// cradles carry a matching id, so a resume never resurrects a cradle the player already
+        /// destroyed, pays nothing again, and <c>FactoryCensus.CradlesDestroyed</c> restores intact
+        /// instead of restarting from zero.</summary>
+        public string[] CheckpointDestroyedCradleIds = Array.Empty<string>();
 
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt

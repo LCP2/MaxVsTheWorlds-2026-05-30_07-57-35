@@ -275,5 +275,42 @@ namespace MaxWorlds.Factories
         /// cleared, just never had a source" convention as <see cref="AllDown"/>/<see cref="AllReplicatorsDestroyed"/>.</summary>
         public static bool AllCradlesDestroyed =>
             CradlesRegistered.Count > 0 && CradlesStanding.Count == 0;
+
+        /// <summary>The stable ids (<see cref="AssemblyCradle.Id"/>) of every registered cradle this run
+        /// has already reported destroyed (MV-1248) — what a mid-run checkpoint capture persists so a
+        /// resume can re-apply the exact same destroyed set onto the fresh instances a level rebuild
+        /// creates. Same shape as <see cref="DestroyedReplicatorIds"/>. A cradle whose
+        /// <see cref="AssemblyCradle.Id"/> was never stamped (a hand-built test fixture that skips
+        /// <see cref="AssemblyCradle.SetId"/>) is simply left out.</summary>
+        public static string[] DestroyedCradleIds()
+        {
+            var ids = new List<string>();
+            foreach (AssemblyCradle c in CradlesRegistered)
+                if (c != null && !CradlesStanding.Contains(c) && !string.IsNullOrEmpty(c.Id))
+                    ids.Add(c.Id);
+            return ids.ToArray();
+        }
+
+        /// <summary>Re-applies a checkpoint's already-recorded cradle destruction (MV-1248) onto
+        /// whichever currently-registered, still-alive cradles carry a matching
+        /// <see cref="AssemblyCradle.Id"/> — called once by <see cref="MaxWorlds.Save.SaveSystem.RestoreCheckpoint"/>
+        /// on RESUME, after the level's own cradles have already registered themselves alive (the
+        /// ordinary build). Same shape as <see cref="ApplyCheckpointDestroyedIds"/>. A no-op for an
+        /// empty/null set.</summary>
+        public static void ApplyCheckpointDestroyedCradleIds(IReadOnlyList<string> destroyedIds)
+        {
+            if (destroyedIds == null || destroyedIds.Count == 0) return;
+
+            foreach (AssemblyCradle c in CradlesRegistered)
+            {
+                if (c == null || !c.IsAlive || string.IsNullOrEmpty(c.Id)) continue;
+                for (int i = 0; i < destroyedIds.Count; i++)
+                {
+                    if (destroyedIds[i] != c.Id) continue;
+                    c.ApplyCheckpointDestroyed();
+                    break;
+                }
+            }
+        }
     }
 }

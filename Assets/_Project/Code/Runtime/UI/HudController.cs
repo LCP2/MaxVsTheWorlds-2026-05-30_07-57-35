@@ -669,9 +669,13 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-950: a checkpoint restore just moved every already-destroyed shed/Replicator
         /// out of <see cref="FactoryCensus"/>'s standing lists — catch the banner up to that count
-        /// directly, never via <see cref="OnFactoryDestroyed"/> (which would replay loot/VFX).</summary>
+        /// directly, never via <see cref="OnFactoryDestroyed"/> (which would replay loot/VFX). MV-1248:
+        /// also sums in <see cref="FactoryCensus.CradlesDestroyed"/> — without it, a resume into World 5
+        /// seeded the "CRADLES n/47" banner from sheds+Replicators only, ignoring whatever cradle count
+        /// the checkpoint actually restored.</summary>
         private void OnCheckpointRestored() =>
-            _model.RestoreFactoriesDestroyed(FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed);
+            _model.RestoreFactoriesDestroyed(
+                FactoryCensus.Destroyed + FactoryCensus.ReplicatorsDestroyed + FactoryCensus.CradlesDestroyed);
 
         private void OnWorldFactoryWording(bool isReplicatorWorld, string noun) => _model.Arena.SetReplicatorWorld(isReplicatorWorld, noun);
 
