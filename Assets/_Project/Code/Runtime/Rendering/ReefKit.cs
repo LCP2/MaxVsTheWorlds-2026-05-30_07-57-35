@@ -824,6 +824,270 @@ namespace MaxWorlds.Rendering
             return root;
         }
 
+        // MV-1254: the bulkhead — ribbed machinery wall dressing for the 281 aN_hM hull-fill pieces
+        // the V9 layout raised from a plain 1.8 m "none" slab to a 3 m wall-height block (Lee, 19 Oct
+        // 2026: "I want beautiful, detailed areas ... make it amazing"). Unlike every other structure
+        // kit piece above, a bulkhead's own footprint is whatever the hull fill happens to need to
+        // shape a room (the a3 octagon, a1's stepped corners) — from 1 m stubs to an 18 m run — so its
+        // ribs/conduits/detail modules are spaced along the piece's own longer axis rather than
+        // authored as a fixed N, the same "ask the authored footprint, never a hardcoded guess" idiom
+        // ApplyDeckTiling/BuildManifold already keep.
+        private const float BulkheadRibPitch = 1.5f;          // ticket: "vertical structural ribs about every 1.5 m"
+        private const float BulkheadRibRadius = 0.09f;
+        private const float BulkheadRibProud = 0.05f;         // how far a rib stands proud of its panel face
+        private const int BulkheadConduitCount = 3;           // ticket: "2-3 pipes"
+        private const float BulkheadConduitRadius = 0.045f;
+        private const float BulkheadSeamThickness = 0.05f;
+        private const float BulkheadSeamProud = 0.015f;       // same anti-z-fight idiom as CircuitStripProud
+        private const float BulkheadTopPlateThickness = 0.05f;
+        private const float BulkheadInlayWidth = 0.035f;
+        private const float BulkheadBoltRadius = 0.025f;
+        private const float BulkheadDetailPitch = 4f;         // ticket: "every few metres a detail module"
+        private const float BulkheadDetailSize = 0.4f;
+
+        /// <summary>A stable, cross-platform string hash (FNV-1a) — <see cref="string.GetHashCode"/> is
+        /// explicitly process-randomised by .NET for security and must never drive anything that needs
+        /// to look the same from one run to the next, which "deterministically chosen from the piece
+        /// id" (ticket, Change §4 "Variety") requires: the same <c>aN_hM</c> id must pick the same
+        /// detail module in the Editor, in a WebGL build, and in CI, every time.</summary>
+        private static uint StableHash(string s)
+        {
+            uint hash = 2166136261u;
+            if (s != null)
+                foreach (char c in s)
+                {
+                    hash ^= c;
+                    hash *= 16777619u;
+                }
+            return hash;
+        }
+
+        /// <summary>B — a ribbed machinery bulkhead wall (ticket table: full-height, solid), replacing
+        /// one of the 281 hull-fill blocks the V9 layout raised to wall height. A chamfered body at the
+        /// piece's own authored footprint, carrying on its two long faces: vertical ribs every
+        /// <see cref="BulkheadRibPitch"/>, a bolt row in each recessed panel between them, and a
+        /// horizontal conduit bundle running the face's full length; a cyan emissive seam frames the
+        /// top edge, the top surface (what the fixed ~72° camera mostly sees) carries a thin cyan
+        /// circuit inlay cross, and every <see cref="BulkheadDetailPitch"/> along each long face a vent
+        /// grille / junction box / pressure gauge module appears, chosen by <paramref name="pieceId"/>'s
+        /// own <see cref="StableHash"/> (ticket: "chosen deterministically from the piece id").
+        /// <paramref name="pieceId"/> is <see cref="ArenaCover.Name"/> — the authored <c>aN_hM</c> id,
+        /// unique per piece, so no two adjacent bulkheads ever roll the same module by coincidence of
+        /// position. Every mesh here depends only on its own fixed parameters, never on
+        /// <paramref name="size"/> beyond the body/top plate — ribs, conduits, bolts, seam and detail
+        /// modules are each built once and shared by every bulkhead on the map (ticket: "meshes are
+        /// built once per segment type and shared").</summary>
+        public static GameObject BuildBulkhead(Transform parent, string pieceId, Vector3 center, Vector3 size)
+        {
+            var root = new GameObject("ReefBulkhead");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            MeshBox(root.transform, "Body", Vector3.zero, size, WorldMaterials.M_MetalDark);
+
+            bool alongX = size.x >= size.z;
+            float faceLength = alongX ? size.x : size.z;
+            float faceDepth = alongX ? size.z : size.x;
+
+            foreach (int side in new[] { -1, 1 })
+                BuildBulkheadFace(root.transform, pieceId, size, alongX, faceLength, faceDepth, side);
+
+            BuildBulkheadTopSeam(root.transform, size);
+            BuildBulkheadTopPlate(root.transform, size);
+
+            return root;
+        }
+
+        /// <summary>One long face's own ribs, bolt rows, conduit bundle and detail modules, mounted
+        /// <paramref name="side"/> (-1/+1) of the piece's shorter axis — the two faces
+        /// <see cref="BuildBulkhead"/> calls this for are the "long face" the ticket's conduit-bundle
+        /// line means; the two short end caps keep the plain chamfered body only, same as a rib's own
+        /// un-dressed end.</summary>
+        private static void BuildBulkheadFace(Transform root, string pieceId, Vector3 size, bool alongX,
+            float faceLength, float faceDepth, int side)
+        {
+            float faceOffset = faceDepth * 0.5f + BulkheadRibProud;
+            Vector3 faceNormal = alongX ? new Vector3(0f, 0f, side) : new Vector3(side, 0f, 0f);
+
+            int ribs = Mathf.Max(2, Mathf.FloorToInt(faceLength / BulkheadRibPitch) + 1);
+            Mesh ribMesh = CharacterMeshes.Prism(4, BulkheadRibRadius, BulkheadRibRadius, size.y, 0.1f);
+            Mesh boltMesh = CharacterMeshes.Sphere(8);
+            Quaternion ribRotation = alongX ? Quaternion.identity : Quaternion.Euler(0f, 90f, 0f);
+
+            for (int i = 0; i < ribs; i++)
+            {
+                float t = ribs <= 1 ? 0f : (float)i / (ribs - 1) - 0.5f;
+                float along = t * faceLength;
+                Vector3 ribPos = faceNormal * faceOffset + (alongX ? new Vector3(along, 0f, 0f) : new Vector3(0f, 0f, along));
+                MeshPart(root, "Bulkhead Rib", ribMesh, ribPos, WorldMaterials.M_MetalDark, ribRotation);
+
+                // A bolt row in the recessed panel between this rib and the next.
+                if (i < ribs - 1)
+                {
+                    float nextAlong = (ribs <= 1 ? 0f : (float)(i + 1) / (ribs - 1) - 0.5f) * faceLength;
+                    float mid = (along + nextAlong) * 0.5f;
+                    for (int b = 0; b < 2; b++)
+                    {
+                        float by = (b == 0 ? 0.3f : -0.3f) * size.y;
+                        Vector3 boltPos = faceNormal * (faceOffset - BulkheadRibProud * 0.4f)
+                            + (alongX ? new Vector3(mid, by, 0f) : new Vector3(0f, by, mid));
+                        MeshPart(root, "Bulkhead Bolt", boltMesh, boltPos, WorldMaterials.M_MetalDark,
+                            localScale: Vector3.one * (BulkheadBoltRadius * 2f));
+                    }
+                }
+            }
+
+            BuildBulkheadConduits(root, pieceId, size, alongX, faceLength, faceNormal, faceOffset);
+            BuildBulkheadDetails(root, pieceId, size, alongX, faceLength, faceNormal, faceOffset, side);
+        }
+
+        /// <summary>A bundle of 2-3 horizontal pipes (ticket: "a horizontal conduit bundle (2-3 pipes)
+        /// running the length of each long face"), count chosen from <paramref name="pieceId"/>'s own
+        /// <see cref="StableHash"/> so neighbouring bulkheads don't all read identically.</summary>
+        private static void BuildBulkheadConduits(Transform root, string pieceId, Vector3 size, bool alongX,
+            float faceLength, Vector3 faceNormal, float faceOffset)
+        {
+            int count = 2 + (int)(StableHash(pieceId + "_conduits") % (BulkheadConduitCount - 1));
+            Mesh pipe = CharacterMeshes.Beam(faceLength * 0.92f, BulkheadConduitRadius, BulkheadConduitRadius, 8);
+            Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (i + 1f) / (count + 1f) - 0.5f;
+                float y = t * size.y * 0.6f;
+                Vector3 pos = faceNormal * faceOffset + new Vector3(0f, y, 0f);
+                MeshPart(root, "Bulkhead Conduit", pipe, pos, WorldMaterials.M_MetalDark, lie);
+            }
+        }
+
+        /// <summary>One vent grille / junction box / pressure gauge every
+        /// <see cref="BulkheadDetailPitch"/> along the face, picked by <paramref name="pieceId"/>'s own
+        /// <see cref="StableHash"/> combined with the module's own index along the run, so a long
+        /// bulkhead's several modules don't all roll the same kind.</summary>
+        private static void BuildBulkheadDetails(Transform root, string pieceId, Vector3 size, bool alongX,
+            float faceLength, Vector3 faceNormal, float faceOffset, int side)
+        {
+            int modules = Mathf.FloorToInt(faceLength / BulkheadDetailPitch);
+            if (modules <= 0) return;
+
+            for (int i = 0; i < modules; i++)
+            {
+                float t = (i + 0.5f) / modules - 0.5f;
+                float along = t * faceLength;
+                Vector3 pos = faceNormal * (faceOffset + 0.01f) + (alongX ? new Vector3(along, 0f, 0f) : new Vector3(0f, 0f, along));
+
+                uint variant = StableHash($"{pieceId}_detail{side}_{i}") % 3;
+                Quaternion face = alongX
+                    ? Quaternion.Euler(0f, side > 0 ? 180f : 0f, 0f)
+                    : Quaternion.Euler(0f, side > 0 ? -90f : 90f, 0f);
+
+                switch (variant)
+                {
+                    case 0: BuildVentGrille(root, pos, face); break;
+                    case 1: BuildJunctionBox(root, pos, face); break;
+                    default: BuildPressureGauge(root, pos, face); break;
+                }
+            }
+        }
+
+        /// <summary>A recessed grille of thin horizontal slats over a faint cyan glow backing (ticket:
+        /// "a vent grille with a faint cyan glow"). Every mesh built here goes through
+        /// <see cref="CharacterMeshes"/>' own parameter cache (its class doc: "built once ... and
+        /// shared by every instance of that kind"), same as every other builder in this file — no local
+        /// caching needed, and none added, since a hand-rolled cache here would go stale the moment
+        /// <see cref="CharacterMeshes.ClearCache"/> destroys the mesh it was still holding onto.</summary>
+        private static void BuildVentGrille(Transform root, Vector3 pos, Quaternion rotation)
+        {
+            var go = new GameObject("Bulkhead Vent Grille");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = rotation;
+
+            Mesh backing = CharacterMeshes.Bevelled(new Vector3(BulkheadDetailSize, BulkheadDetailSize, 0.02f), 0.01f);
+            MeshPart(go.transform, "Backing", backing, new Vector3(0f, 0f, -0.01f), WorldMaterials.M_Circuit_Cyan);
+
+            Mesh slat = CharacterMeshes.Bevelled(new Vector3(BulkheadDetailSize * 0.85f, 0.04f, 0.02f), 0.005f);
+            for (int i = 0; i < 4; i++)
+            {
+                float y = (i - 1.5f) * (BulkheadDetailSize / 4f);
+                MeshPart(go.transform, $"Slat {i}", slat, new Vector3(0f, y, 0f), WorldMaterials.M_MetalDark);
+            }
+        }
+
+        /// <summary>A small proud housing with a single lit indicator (ticket: "a junction box").</summary>
+        private static void BuildJunctionBox(Transform root, Vector3 pos, Quaternion rotation)
+        {
+            var go = new GameObject("Bulkhead Junction Box");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = rotation;
+
+            Mesh shell = CharacterMeshes.Bevelled(
+                new Vector3(BulkheadDetailSize * 0.7f, BulkheadDetailSize * 0.7f, 0.08f), 0.015f);
+            MeshPart(go.transform, "Shell", shell, Vector3.zero, WorldMaterials.M_MetalDark);
+
+            Mesh lamp = CharacterMeshes.Sphere(8);
+            MeshPart(go.transform, "Indicator", lamp, new Vector3(0f, 0f, -0.06f), WorldMaterials.M_Circuit_Purple,
+                localScale: Vector3.one * 0.06f);
+        }
+
+        /// <summary>A round lathed gauge face with a small cyan dial centre (ticket: "a pressure
+        /// gauge").</summary>
+        private static void BuildPressureGauge(Transform root, Vector3 pos, Quaternion rotation)
+        {
+            var go = new GameObject("Bulkhead Pressure Gauge");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = pos;
+            go.transform.localRotation = rotation * Quaternion.Euler(90f, 0f, 0f);
+
+            float r = BulkheadDetailSize * 0.4f;
+            Mesh face = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, -0.02f), new Vector2(r, -0.02f), new Vector2(r, 0.02f), new Vector2(0f, 0.02f),
+            }, 16);
+            MeshPart(go.transform, "Face", face, Vector3.zero, WorldMaterials.M_MetalDark);
+
+            Mesh dial = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f), new Vector2(r * 0.45f, 0f), new Vector2(r * 0.45f, 0.01f), new Vector2(0f, 0.015f),
+            }, 12);
+            MeshPart(go.transform, "Dial", dial, new Vector3(0f, 0.025f, 0f), WorldMaterials.M_Circuit_Cyan);
+        }
+
+        /// <summary>A thin cyan emissive seam hugging the top edge's full perimeter (ticket: "a cyan
+        /// emissive seam line") — four strips rather than a <see cref="CharacterMeshes.Ring"/> since the
+        /// footprint is rectangular, not circular, the same "four edge strips" idiom
+        /// <see cref="BuildObservationGlass"/> already uses per-wall.</summary>
+        private static void BuildBulkheadTopSeam(Transform root, Vector3 size)
+        {
+            float y = size.y * 0.5f - BulkheadSeamThickness * 0.5f;
+            MeshBox(root, "Seam North", new Vector3(0f, y, size.z * 0.5f - BulkheadSeamThickness * 0.5f),
+                new Vector3(size.x + BulkheadSeamProud, BulkheadSeamThickness, BulkheadSeamThickness), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Seam South", new Vector3(0f, y, -size.z * 0.5f + BulkheadSeamThickness * 0.5f),
+                new Vector3(size.x + BulkheadSeamProud, BulkheadSeamThickness, BulkheadSeamThickness), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Seam East", new Vector3(size.x * 0.5f - BulkheadSeamThickness * 0.5f, y, 0f),
+                new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Seam West", new Vector3(-size.x * 0.5f + BulkheadSeamThickness * 0.5f, y, 0f),
+                new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
+        }
+
+        /// <summary>The top surface — what the fixed ~72° top-down camera mostly sees (ticket: "This is
+        /// what the camera mostly sees"): a dark plate proud of the body, with a thin cyan circuit
+        /// inlay cross.</summary>
+        private static void BuildBulkheadTopPlate(Transform root, Vector3 size)
+        {
+            float y = size.y * 0.5f + BulkheadTopPlateThickness * 0.5f;
+            MeshBox(root, "Top Plate", new Vector3(0f, y, 0f),
+                new Vector3(size.x * 0.96f, BulkheadTopPlateThickness, size.z * 0.96f), WorldMaterials.M_MetalDark);
+
+            float inlayY = y + BulkheadTopPlateThickness * 0.5f + 0.005f;
+            MeshBox(root, "Top Inlay X", new Vector3(0f, inlayY, 0f),
+                new Vector3(size.x * 0.9f, 0.01f, BulkheadInlayWidth), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Top Inlay Z", new Vector3(0f, inlayY, 0f),
+                new Vector3(BulkheadInlayWidth, 0.01f, size.z * 0.9f), WorldMaterials.M_Circuit_Cyan);
+        }
+
         // MV-1215, Change item 2: the glow hatch — a recessed, collider-free floor decal. Walkable by
         // construction: nothing built here ever gets a collider, same contract every other Reef
         // dressing piece keeps for its own visual-only overlays.

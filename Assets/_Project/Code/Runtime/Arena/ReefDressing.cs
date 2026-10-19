@@ -114,11 +114,15 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>The ticket's own table: every <see cref="CoverDressing"/> value MV-1215 adds other
-        /// than <see cref="CoverDressing.ReefCrate"/> (handled above, alongside <see cref="CoverDressing.None"/>).</summary>
+        /// than <see cref="CoverDressing.ReefCrate"/> (handled above, alongside <see cref="CoverDressing.None"/>),
+        /// plus MV-1254's <see cref="CoverDressing.ReefBulkhead"/> — the same "hide the body, build the
+        /// kit piece at its footprint" contract, just for the 281 hull-fill pieces instead of an
+        /// authored prop.</summary>
         private static bool IsStructureKitDressing(CoverDressing dressing) => dressing switch
         {
             CoverDressing.ReefPillar or CoverDressing.ReefManifold or CoverDressing.ReefDrum or
-                CoverDressing.ReefConsole or CoverDressing.ReefPlanter or CoverDressing.ReefFloorPipe => true,
+                CoverDressing.ReefConsole or CoverDressing.ReefPlanter or CoverDressing.ReefFloorPipe or
+                CoverDressing.ReefBulkhead => true,
             _ => false,
         };
 
@@ -132,6 +136,7 @@ namespace MaxWorlds.Arena
                 case CoverDressing.ReefConsole: ReefKit.BuildConsole(kit, cover.Center, cover.Size); break;
                 case CoverDressing.ReefPlanter: ReefKit.BuildPlanterRow(kit, cover.Center, cover.Size); break;
                 case CoverDressing.ReefFloorPipe: ReefKit.BuildFloorPipe(kit, cover.Center, cover.Size); break;
+                case CoverDressing.ReefBulkhead: ReefKit.BuildBulkhead(kit, cover.Name, cover.Center, cover.Size); break;
             }
         }
     }

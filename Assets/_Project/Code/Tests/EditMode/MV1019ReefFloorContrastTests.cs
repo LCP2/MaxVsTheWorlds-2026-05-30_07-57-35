@@ -56,10 +56,18 @@ namespace MaxWorlds.Tests.EditMode
                     $"floor resolved luminance ({floorLuma:F4}) must be >= 0.022 — the near-black void MV-1019 fixes");
 
                 // --- AC1b/AC1c: every crate body must be clearly lighter than, never darker than, the floor. ---
+                // MV-1254: the V9 layout gives every World 3 cover piece an explicit dressing word —
+                // "crate" (the bare/implicit CoverDressing.None this test originally checked) is now
+                // always authored as the explicit CoverDressing.ReefCrate (MV-1215's own alternative
+                // word for the same skinned crate), so a filter on None alone now matches zero pieces.
+                // Both words still read as the identical crate skin (ReefDressing.DressCover's own
+                // "MV-1215" comment), so checking both is what keeps this test meaning what it always
+                // meant, not a scope change.
                 int crateCount = 0;
                 foreach (CoverPiece piece in built3.Cover)
                 {
-                    if (piece.Cover.Dressing != CoverDressing.None || piece.Body == null) continue;
+                    bool isCrate = piece.Cover.Dressing == CoverDressing.None || piece.Cover.Dressing == CoverDressing.ReefCrate;
+                    if (!isCrate || piece.Body == null) continue;
                     crateCount++;
 
                     var crateRenderer = piece.Body.GetComponent<Renderer>();
