@@ -54,14 +54,19 @@ namespace MaxWorlds.Tests.EditMode
 
                 // The world-space period of one plate: the floor's own resolved world size divided
                 // by the material's own resolved mesh-UV tiling count (ReefKit.DressHull sets this
-                // from the floor's real bounds — never a hardcoded guess).
+                // from the floor's real bounds — never a hardcoded guess). MV-1256 changed what one
+                // texture repeat covers: the baked image is now a ReefDeckGridCells-square "supertile"
+                // of individually varied plates rather than a single plate, so one UV repeat spans
+                // ReefDeckGridCells plates, not one — dividing that span back down by ReefDeckGridCells
+                // is what still measures ONE plate's own resolved size, the thing this test actually
+                // claims (ReefKit.ApplyDeckTiling's own doc comment explains the same math).
                 Vector3 worldSize = floor.bounds.size;
                 Vector2 tiling = mat.GetTextureScale("_BaseMap");
                 Assert.Greater(tiling.x, 0f, "precondition: the floor's tiling must have been set at all");
                 Assert.Greater(tiling.y, 0f, "precondition: the floor's tiling must have been set at all");
 
-                float periodX = worldSize.x / tiling.x;
-                float periodZ = worldSize.z / tiling.y;
+                float periodX = worldSize.x / tiling.x / WorldMaterials.ReefDeckGridCells;
+                float periodZ = worldSize.z / tiling.y / WorldMaterials.ReefDeckGridCells;
                 Assert.That(periodX, Is.EqualTo(WorldMaterials.ReefDeckPlateSizeMetres).Within(0.05f),
                     $"the deck's X-axis plate period ({periodX:F3} m) must be 2 m +/- 0.05, from the floor's " +
                     $"own world size ({worldSize.x:F2} m) against its own resolved tiling ({tiling.x:F2})");

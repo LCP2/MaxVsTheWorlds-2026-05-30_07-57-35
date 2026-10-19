@@ -149,11 +149,30 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefKelpMagenta = HexColor(0xFF4FD8);
         public static readonly Color ReefLampViolet = HexColor(0xC45CFF);
 
+        // MV-1256: the floor-detail pass's own two new surfaces — a DIM drainage-grate glow (its own
+        // instance, separate from M_Circuit_Cyan/M_Circuit_Purple above, which are shared by renderers
+        // this ticket never touches) and the Reef's own flooded-deck water, replacing the Stormdrain-
+        // shared acid-green sludge tint for this biome only (see ReefFloorDetail.DressFlood).
+        public static readonly Color ReefGrateGlowCyan = HexColor(0x1B7A8C);
+        public static readonly Color ReefFloodWaterTeal = HexColor(0x0C3A42);
+
         /// <summary>World size, in metres, of one deck plate (MV-1053 ticket: "2 m square plates").
         /// Shared with <see cref="MaxWorlds.Rendering.ReefKit.DressHull"/>, which uses it to turn the
         /// floor's own resolved world size into the material's mesh-UV tiling — one authored number
         /// instead of two that have to be kept in step by hand.</summary>
         public const float ReefDeckPlateSizeMetres = 2f;
+
+        /// <summary>How many plates across/down one baked deck "supertile" spans (MV-1256) — the
+        /// repeating unit <see cref="StylizedTextures.ReefDeckAlbedo"/>/<see cref="StylizedTextures.ReefDeckEmission"/>
+        /// now bake, instead of baking a single plate with no plate-to-plate variation at all (MV-1053's
+        /// own "reads as a uniform tile grid" gap). <see cref="MaxWorlds.Rendering.ReefKit.ApplyDeckTiling"/>
+        /// tiles the floor's material at <c>ReefDeckPlateSizeMetres * ReefDeckGridCells</c>, so the
+        /// floor's own world-space repeat period grows from 2 m to 8 m.</summary>
+        public const int ReefDeckGridCells = 4;
+
+        /// <summary>How many distinct circuit-inlay patterns <see cref="StylizedTextures.ReefDeckPatternIndexAt"/>
+        /// picks between (MV-1256 ticket: "at least 4 inlay patterns").</summary>
+        public const int ReefDeckInlayPatternCount = 4;
 
         public static Material M_ShipFloor => ReefDeckFloorMaterial();
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
@@ -170,6 +189,16 @@ namespace MaxWorlds.Rendering
         public static Material M_KelpGreen => ReefMaterial("M_KelpGreen", ReefKelpGreen, emissive: true);
         public static Material M_KelpMagenta => ReefMaterial("M_KelpMagenta", ReefKelpMagenta, emissive: true);
         public static Material M_LampViolet => ReefMaterial("M_LampViolet", ReefLampViolet, emissive: true);
+
+        /// <summary>A grate's own dim under-glow (MV-1256) — deliberately its own material rather than
+        /// reusing <see cref="M_Circuit_Cyan"/>: that one is shared by the wall-base circuit spine and
+        /// the coolant turret, and dimming it for a grate would dim every one of those too.</summary>
+        public static Material M_GrateGlow => ReefMaterial("M_GrateGlow", ReefGrateGlowCyan, emissive: true);
+
+        /// <summary>The Reef's own flooded-deck water (MV-1256, Change item 5) — replaces
+        /// <c>MapRuntime.BuildSludge</c>'s shared Stormdrain acid-green tint for this biome only. See
+        /// <c>MaxWorlds.Arena.ReefFloorDetail.DressFlood</c>.</summary>
+        public static Material M_FloodWater => ReefFloodWaterMaterial();
 
         /// <summary>The observation-window glass — a two-stop vertical gradient (near/far) rather than a
         /// flat colour, built the same way <see cref="MaterialLibrary"/> bakes its own two-tone surfaces
@@ -306,6 +335,52 @@ namespace MaxWorlds.Rendering
 
             Texture2D emission = StylizedTextures.ReefDeckEmission();
             if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", emission);
+        }
+
+        /// <summary>(MV-1256) A dark-teal, high-smoothness surface standing in for "reflective" water
+        /// the same way <see cref="ReefGlassMaterial"/> stands in for glass: this project bakes a look
+        /// into the texture/shader rather than reaching for real-time reflections or alpha transparency
+        /// — an engine feature nothing else in this stylised-surface chain uses, and not one this
+        /// ticket's floor-detail slice needs to be the one to introduce. <c>_BaseColor</c> carries
+        /// the teal tone; <see cref="StylizedTextures.ReefFloodWaterAlbedo"/> is a MULTIPLIER texture
+        /// (mean ~1) for the slow caustic shimmer, same idiom as <see cref="ReefDeckAlbedo"/>'s own
+        /// plate noise — <see cref="MaxWorlds.Arena.ReefFloorDetail.DressFlood"/> scrolls it via the
+        /// tile's own existing <c>SludgeFlow</c>. Same MV-1103 unconditional re-point as
+        /// <see cref="ReefDeckFloorMaterial"/>'s own cache-hit path, for the same reason.</summary>
+        private static Material ReefFloodWaterMaterial()
+        {
+            const string key = "M_FloodWater";
+            if (s_reefCache.TryGetValue(key, out var cached) && cached != null)
+            {
+                RefreshReefFloodWaterTexture(cached);
+                return cached;
+            }
+
+            Shader shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader)
+            {
+                name = key,
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true,
+            };
+
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ReefFloodWaterTeal);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", ReefFloodWaterTeal);
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.8f);   // wetter/more reflective than M_GlassOcean's 0.6
+
+            RefreshReefFloodWaterTexture(m);
+
+            s_reefCache[key] = m;
+            return m;
+        }
+
+        private static void RefreshReefFloodWaterTexture(Material m)
+        {
+            Texture2D caustics = StylizedTextures.ReefFloodWaterAlbedo();
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", caustics);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", caustics);
         }
 
         private static Material ReefGlassMaterial()

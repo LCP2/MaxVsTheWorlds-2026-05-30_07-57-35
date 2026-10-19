@@ -201,10 +201,40 @@ namespace MaxWorlds.Rendering
         private const int ReefDeckGrateBars = 5;
         private const float ReefDeckGrateBarMultiplier = 0.50f;
 
-        /// <summary>The deck's one 2 m plate, as a greyscale MULTIPLIER against <c>M_ShipFloor</c>'s
-        /// own _BaseColor: ~1 across the face with a little tileable per-plate value noise (the
-        /// ticket's "±5% per-plate value variation"), a dark border at the plate's own seam, a small
-        /// full-value rivet disc ringed darker at each corner, and one grate inset.</summary>
+        /// <summary>MV-1256: deterministic per-plate tint jitter ("about +/-6% value") so the deck's own
+        /// supertile never repeats as a visually uniform grid once <see cref="ReefDeckAlbedo"/> is
+        /// tiled across the floor — the fine FBM noise above varies WITHIN a plate; this varies plate
+        /// to plate, which the old one-image-per-whole-floor bake had no cell to carry at all.</summary>
+        private const float ReefDeckTintJitterMax = 0.06f;
+
+        private static float ReefDeckTintJitterAt(int gx, int gy)
+        {
+            uint h = ReefHash($"decktint_{gx}_{gy}");
+            float t01 = (h % 2000u) / 1999f;
+            return (t01 * 2f - 1f) * ReefDeckTintJitterMax;
+        }
+
+        /// <summary>Which of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> circuit-inlay
+        /// layouts cell (<paramref name="gx"/>, <paramref name="gy"/>) of the deck's own baked
+        /// supertile resolves to (MV-1256, Change item 2: "at least 4 inlay patterns ... picked per
+        /// plate from a seeded hash"). Pure and cheap enough that <see cref="ReefDeckEmission"/>'s own
+        /// bake and <see cref="MaxWorlds.Rendering.ReefKit.ApplyDeckTiling"/>'s resolved-value
+        /// <see cref="ReefDeckPlateField"/> both call it directly, rather than keeping two copies of
+        /// the same hash in step by hand.</summary>
+        public static int ReefDeckPatternIndexAt(int gx, int gy)
+        {
+            uint h = ReefHash($"deckpattern_{gx}_{gy}");
+            return (int)(h % (uint)WorldMaterials.ReefDeckInlayPatternCount);
+        }
+
+        /// <summary>The deck's baked "supertile" — <see cref="WorldMaterials.ReefDeckGridCells"/> square
+        /// plates, each its own greyscale MULTIPLIER against <c>M_ShipFloor</c>'s own _BaseColor: ~1
+        /// across the face with a little tileable per-plate value noise (the ticket's "±5% per-plate
+        /// value variation"), a dark border at the plate's own seam, a small full-value rivet disc
+        /// ringed darker at each corner, one grate inset, and (MV-1256) a further deterministic tint
+        /// jitter unique to THIS cell (<see cref="ReefDeckTintJitterAt"/>) — the ticket's own fix for
+        /// MV-1053's "reads as a uniform tile grid" gap, since a single repeating plate image had no
+        /// cell for plate-to-plate variation to live in at all.</summary>
         public static Texture2D ReefDeckAlbedo(int size = 256)
         {
             const string key = "reefDeckAlbedo";
@@ -213,27 +243,44 @@ namespace MaxWorlds.Rendering
             var t = NewTexture(key, size, linear: true);
             var px = new Color32[size * size];
 
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
+            int cells = WorldMaterials.ReefDeckGridCells;
+            int cellSize = Mathf.Max(1, size / cells);
+
+            for (int gy = 0; gy < cells; gy++)
+            for (int gx = 0; gx < cells; gx++)
             {
-                float u = (x + 0.5f) / size;
-                float v = (y + 0.5f) / size;
+                float jitterMul = 1f + ReefDeckTintJitterAt(gx, gy);
+                int originX = gx * cellSize;
+                int originY = gy * cellSize;
 
-                float variation = (Fbm(u, v, baseFreq: 5, octaves: 2) - 0.5f) * 0.10f;
-                float m = 1f + variation;
+                for (int ly = 0; ly < cellSize; ly++)
+                for (int lx = 0; lx < cellSize; lx++)
+                {
+                    int x = originX + lx;
+                    int y = originY + ly;
+                    if (x >= size || y >= size) continue;
 
-                float edge = Mathf.Max(Mathf.Abs(u - 0.5f) / 0.5f, Mathf.Abs(v - 0.5f) / 0.5f);
-                float seam = Curve(1f - ReefDeckSeamFraction, 1f, edge);
-                m = Mathf.Lerp(m, ReefDeckSeamMultiplier, seam);
+                    float u = (lx + 0.5f) / cellSize;
+                    float v = (ly + 0.5f) / cellSize;
 
-                float rivet = ReefDeckRivetMultiplier(u, v);
-                if (rivet >= 0f) m = rivet;
+                    float variation = (Fbm(u, v, baseFreq: 5, octaves: 2) - 0.5f) * 0.10f;
+                    float m = 1f + variation;
 
-                float grate = ReefDeckGrateMultiplier(u, v);
-                if (grate >= 0f) m = Mathf.Min(m, grate);
+                    float edge = Mathf.Max(Mathf.Abs(u - 0.5f) / 0.5f, Mathf.Abs(v - 0.5f) / 0.5f);
+                    float seam = Curve(1f - ReefDeckSeamFraction, 1f, edge);
+                    m = Mathf.Lerp(m, ReefDeckSeamMultiplier, seam);
 
-                byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
-                px[y * size + x] = new Color32(g, g, g, 255);
+                    float rivet = ReefDeckRivetMultiplier(u, v);
+                    if (rivet >= 0f) m = rivet;
+
+                    float grate = ReefDeckGrateMultiplier(u, v);
+                    if (grate >= 0f) m = Mathf.Min(m, grate);
+
+                    m *= jitterMul;
+
+                    byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
+                    px[y * size + x] = new Color32(g, g, g, 255);
+                }
             }
 
             t.SetPixels32(px);
@@ -277,11 +324,15 @@ namespace MaxWorlds.Rendering
             return Mathf.Lerp(0.85f, ReefDeckGrateBarMultiplier, bar);
         }
 
-        /// <summary>The deck's emissive mask: sparse cyan circuit traces along two of the plate's
-        /// four seams (never all four — the ticket's own "running along SOME seams"), small brighter
-        /// nodes along them, and one violet node. Baked as a real colour, not a multiplier —
-        /// <see cref="WorldMaterials.M_ShipFloor"/> leaves _EmissionColor white so this paints the
-        /// floor's glow directly.</summary>
+        /// <summary>The deck's emissive mask (MV-1256 rework of MV-1053's own single-pattern bake):
+        /// each cell of the <see cref="WorldMaterials.ReefDeckGridCells"/>-square supertile draws one
+        /// of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> circuit-inlay layouts, chosen by
+        /// <see cref="ReefDeckPatternIndexAt"/>'s own seeded hash (ticket, Change item 2) — denser than
+        /// MV-1053's original two-seam/three-node bake, per the ticket's own "density of the frames".
+        /// Cyan is the dominant colour; <see cref="DrawDeckInlayPattern"/>'s own per-element hash swaps
+        /// roughly 1 trace/node in 8 to violet or magenta (ticket: "about 1 in 8 traces is magenta or
+        /// violet"). Baked as a real colour, not a multiplier — <see cref="WorldMaterials.M_ShipFloor"/>
+        /// leaves _EmissionColor white so this paints the floor's glow directly.</summary>
         public static Texture2D ReefDeckEmission(int size = 256)
         {
             const string key = "reefDeckEmission";
@@ -290,24 +341,185 @@ namespace MaxWorlds.Rendering
             var t = NewTexture(key, size, linear: false);
             var px = new Color32[size * size];
             var black = new Color32(0, 0, 0, 255);
-            var cyan = (Color32)WorldMaterials.ReefFloorCircuitCyan;
-            var violet = (Color32)WorldMaterials.ReefFloorCircuitViolet;
-
             for (int i = 0; i < px.Length; i++) px[i] = black;
 
-            float traceHalfWidth = ReefDeckSeamFraction * 0.5f;
-            DrawTraceAlongV(px, size, u: traceHalfWidth, cyan);
-            DrawTraceAlongU(px, size, v: 1f - traceHalfWidth, cyan);
+            int cells = WorldMaterials.ReefDeckGridCells;
+            int cellSize = Mathf.Max(1, size / cells);
 
-            PutNode(px, size, traceHalfWidth, 0.30f, cyan, radius: 0.02f);
-            PutNode(px, size, traceHalfWidth, 0.70f, cyan, radius: 0.02f);
-            PutNode(px, size, 0.40f, 1f - traceHalfWidth, cyan, radius: 0.02f);
-            PutNode(px, size, 0.75f, 1f - traceHalfWidth, violet, radius: 0.022f);   // the odd violet node
+            for (int gy = 0; gy < cells; gy++)
+            for (int gx = 0; gx < cells; gx++)
+            {
+                int pattern = ReefDeckPatternIndexAt(gx, gy);
+                DrawDeckInlayPattern(px, size, gx * cellSize, gy * cellSize, cellSize, gx, gy, pattern);
+            }
 
             t.SetPixels32(px);
             t.Apply(updateMipmaps: true);
             s_cache[key] = t;
             return t;
+        }
+
+        /// <summary>One cell's own circuit-inlay layout (MV-1256) — four hand-authored variants (edge
+        /// traces + nodes in different combinations, pattern 2 being the densest "full frame" layout)
+        /// so <see cref="ReefDeckEmission"/> never bakes the same look into every cell. Every
+        /// trace/node asks <paramref name="gx"/>/<paramref name="gy"/>'s own per-element hash for its
+        /// colour, so the same cell always rolls the same accents (deterministic across Editor/WebGL/
+        /// CI, same reasoning as every other seeded-hash pick in this project).</summary>
+        private static void DrawDeckInlayPattern(Color32[] px, int texSize, int originX, int originY,
+            int cellSize, int gx, int gy, int pattern)
+        {
+            float half = ReefDeckSeamFraction * 0.5f;
+            int elementIndex = 0;
+
+            Color32 NextColor()
+            {
+                uint h = ReefHash($"deckaccent_{gx}_{gy}_{elementIndex}");
+                elementIndex++;
+                if ((h % 8u) != 0u) return (Color32)WorldMaterials.ReefFloorCircuitCyan;
+                return (h % 16u) < 8u
+                    ? (Color32)WorldMaterials.ReefFloorCircuitViolet
+                    : (Color32)WorldMaterials.ReefKelpMagenta;
+            }
+
+            switch (pattern)
+            {
+                case 0:
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
+                    DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.30f, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.30f, half, NextColor(), 0.05f);
+                    break;
+                case 1:
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
+                    DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.68f, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.68f, 1f - half, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.045f);
+                    break;
+                case 2:
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
+                    DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
+                    DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, half, NextColor(), 0.045f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 1f - half, NextColor(), 0.045f);
+                    break;
+                default:
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
+                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.5f, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.5f, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.04f);
+                    break;
+            }
+        }
+
+        /// <summary>A vertical trace confined to one cell's own sub-rectangle of the texture, at local
+        /// U <paramref name="localU"/> (0..1 within the cell) — the supertile-scoped counterpart to
+        /// <see cref="DrawTraceAlongV"/>, which draws across the WHOLE image and so can't be reused
+        /// once a bake holds several independently-patterned cells.</summary>
+        private static void DrawCellTraceV(Color32[] px, int texSize, int originX, int originY, int cellSize,
+            float localU, Color32 c)
+        {
+            int x = originX + Mathf.Clamp(Mathf.RoundToInt(localU * cellSize), 0, cellSize - 1);
+            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * 0.03f));
+            for (int ly = 0; ly < cellSize; ly++)
+            {
+                int y = originY + ly;
+                if (y >= texSize) continue;
+                for (int dx = -half; dx <= half; dx++)
+                {
+                    int xx = x + dx;
+                    if (xx < originX || xx >= originX + cellSize || xx >= texSize) continue;
+                    px[y * texSize + xx] = c;
+                }
+            }
+        }
+
+        private static void DrawCellTraceH(Color32[] px, int texSize, int originX, int originY, int cellSize,
+            float localV, Color32 c)
+        {
+            int y = originY + Mathf.Clamp(Mathf.RoundToInt(localV * cellSize), 0, cellSize - 1);
+            if (y >= texSize) return;
+            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * 0.03f));
+            for (int lx = 0; lx < cellSize; lx++)
+            {
+                int x = originX + lx;
+                if (x >= texSize) continue;
+                for (int dy = -half; dy <= half; dy++)
+                {
+                    int yy = y + dy;
+                    if (yy < originY || yy >= originY + cellSize || yy >= texSize) continue;
+                    px[yy * texSize + x] = c;
+                }
+            }
+        }
+
+        private static void PutCellNode(Color32[] px, int texSize, int originX, int originY, int cellSize,
+            float localU, float localV, Color32 c, float radiusFraction)
+        {
+            int cx = originX + Mathf.RoundToInt(localU * cellSize);
+            int cy = originY + Mathf.RoundToInt(localV * cellSize);
+            int r = Mathf.Max(1, Mathf.RoundToInt(radiusFraction * cellSize));
+            for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                if (dx * dx + dy * dy > r * r) continue;
+                int x = cx + dx, y = cy + dy;
+                if (x < originX || x >= originX + cellSize || y < originY || y >= originY + cellSize) continue;
+                if (x < 0 || x >= texSize || y < 0 || y >= texSize) continue;
+                px[y * texSize + x] = c;
+            }
+        }
+
+        private const float ReefFloodCausticAmplitude = 0.18f;   // MV-1256: "slow caustic shimmer" — a soft tileable multiplier, same mean-1 idiom as ReefDeckAlbedo
+
+        /// <summary>The Reef's own flooded-deck water (MV-1256, Change item 5): a soft, tileable
+        /// caustic-shimmer MULTIPLIER (mean ~1) against <see cref="WorldMaterials.M_FloodWater"/>'s own
+        /// _BaseColor — never a colour in its own right, same "texture over shader" idiom
+        /// <see cref="ReefDeckAlbedo"/> already uses for the deck. <c>MaxWorlds.Arena.ReefFloorDetail.DressFlood</c>
+        /// scrolls it slowly via the tile's own existing <c>SludgeFlow</c>, which is what reads as the
+        /// shimmer actually moving.</summary>
+        public static Texture2D ReefFloodWaterAlbedo(int size = 128)
+        {
+            const string key = "reefFloodWaterAlbedo";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var t = NewTexture(key, size, linear: true);
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size;
+                float v = (y + 0.5f) / size;
+                float blotch = Fbm(u, v, baseFreq: 3, octaves: 3);
+                float m = 1f + (blotch - 0.5f) * 2f * ReefFloodCausticAmplitude;
+                byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
+                px[y * size + x] = new Color32(g, g, g, 255);
+            }
+
+            t.SetPixels32(px);
+            t.Apply(updateMipmaps: true);
+            s_cache[key] = t;
+            return t;
+        }
+
+        /// <summary>Stable, cross-platform string hash (FNV-1a) — same algorithm and "never
+        /// <c>string.GetHashCode</c>, which .NET process-randomises" reasoning as
+        /// <c>ReefKit.StableHash</c>, which this can't call directly (a private member of a different
+        /// class in a different file); kept as its own small copy rather than widening that one's
+        /// visibility for a single pure function.</summary>
+        private static uint ReefHash(string s)
+        {
+            uint hash = 2166136261u;
+            if (s != null)
+                foreach (char c in s)
+                {
+                    hash ^= c;
+                    hash *= 16777619u;
+                }
+            return hash;
         }
 
         /// <summary>World 3's ocean void backdrop (MV-1054, change item 1): a baked radial gradient —
@@ -379,37 +591,6 @@ namespace MaxWorlds.Rendering
             if (spar < 1f) delta -= new Color(0.07f, 0.07f, 0.07f) * (1f - spar);
 
             return delta;
-        }
-
-        private static void DrawTraceAlongV(Color32[] px, int size, float u, Color32 c)
-        {
-            int x = Mathf.Clamp(Mathf.RoundToInt(u * size), 0, size - 1);
-            int half = Mathf.Max(1, Mathf.RoundToInt(size * 0.006f));
-            for (int y = 0; y < size; y++)
-            for (int dx = -half; dx <= half; dx++)
-                px[y * size + Wrap(x + dx, size)] = c;
-        }
-
-        private static void DrawTraceAlongU(Color32[] px, int size, float v, Color32 c)
-        {
-            int y = Mathf.Clamp(Mathf.RoundToInt(v * size), 0, size - 1);
-            int half = Mathf.Max(1, Mathf.RoundToInt(size * 0.006f));
-            for (int x = 0; x < size; x++)
-            for (int dy = -half; dy <= half; dy++)
-                px[Wrap(y + dy, size) * size + x] = c;
-        }
-
-        private static void PutNode(Color32[] px, int size, float u, float v, Color32 c, float radius)
-        {
-            int cx = Mathf.RoundToInt(u * size);
-            int cy = Mathf.RoundToInt(v * size);
-            int r = Mathf.Max(1, Mathf.RoundToInt(radius * size));
-            for (int dy = -r; dy <= r; dy++)
-            for (int dx = -r; dx <= r; dx++)
-            {
-                if (dx * dx + dy * dy > r * r) continue;
-                px[Wrap(cy + dy, size) * size + Wrap(cx + dx, size)] = c;
-            }
         }
 
         // ------------------------------------------------------------------ YT-77: the materials

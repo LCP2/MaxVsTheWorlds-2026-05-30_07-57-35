@@ -27,6 +27,17 @@ namespace MaxWorlds.Rendering
     {
     }
 
+    /// <summary>Records the resolved circuit-inlay pattern layout <see cref="ReefKit.ApplyDeckTiling"/>
+    /// baked into the floor it's attached to (MV-1256, AC1) — a RESOLVED value (testing policy Tier 2)
+    /// an EditMode test can read straight off the built floor, rather than re-deriving
+    /// <see cref="StylizedTextures.ReefDeckPatternIndexAt"/>'s own hash a second time in test code.
+    /// One entry per cell of the baked supertile, row-major (<c>gy * ReefDeckGridCells + gx</c>).
+    /// </summary>
+    public sealed class ReefDeckPlateField : MonoBehaviour
+    {
+        public int[] PatternIndices;
+    }
+
     /// <summary>
     /// World 3's Reef ship kit (MV-713) — the pieces the ticket's material/prefab pass adds that don't
     /// already fall out of the existing per-world plumbing.
@@ -141,14 +152,25 @@ namespace MaxWorlds.Rendering
         /// reads as 2 m plates rather than stretched or shrunk ones. The floor is a single Box
         /// primitive scaled to its footprint, and a Unity cube's default face UVs already span 0..1
         /// across that exact footprint, so this tiling count is the real one, not an approximation.
-        /// </summary>
+        ///
+        /// MV-1256: the baked image is no longer one plate but a <see cref="WorldMaterials.ReefDeckGridCells"/>-
+        /// square "supertile" of individually varied plates (<see cref="StylizedTextures.ReefDeckAlbedo"/>/
+        /// <see cref="StylizedTextures.ReefDeckEmission"/>), so the repeat period this sets is
+        /// <c>ReefDeckPlateSizeMetres * ReefDeckGridCells</c>, not one plate's own size — the floor
+        /// still reads as 2 m plates (the mesh is just as fine-grained as before), only the texture
+        /// that no longer repeats every single one of them. Also attaches a
+        /// <see cref="ReefDeckPlateField"/> recording the supertile's own resolved pattern layout
+        /// (AC1) — same real hash <see cref="StylizedTextures.ReefDeckPatternIndexAt"/> the texture
+        /// bake itself used, read back rather than re-derived.</summary>
         private static void ApplyDeckTiling(Renderer floorRenderer)
         {
             Vector3 size = floorRenderer.bounds.size;
             float plate = WorldMaterials.ReefDeckPlateSizeMetres;
+            int gridCells = WorldMaterials.ReefDeckGridCells;
+            float supertile = plate * gridCells;
             Vector2 tiling = new Vector2(
-                Mathf.Max(1f, size.x / plate),
-                Mathf.Max(1f, size.z / plate));
+                Mathf.Max(1f, size.x / supertile),
+                Mathf.Max(1f, size.z / supertile));
 
             // SetTextureScale("_BaseMap", ...), not the mainTextureScale shortcut: that shortcut
             // targets whichever property carries the shader's [MainTexture] tag (or _MainTex if none
@@ -156,6 +178,15 @@ namespace MaxWorlds.Rendering
             // silently no-ops on this shader. Naming the property directly is what actually reaches
             // the _BaseMap_ST the shader samples through.
             floorRenderer.sharedMaterial.SetTextureScale("_BaseMap", tiling);
+
+            var patterns = new int[gridCells * gridCells];
+            for (int gy = 0; gy < gridCells; gy++)
+            for (int gx = 0; gx < gridCells; gx++)
+                patterns[gy * gridCells + gx] = StylizedTextures.ReefDeckPatternIndexAt(gx, gy);
+
+            var field = floorRenderer.GetComponent<ReefDeckPlateField>();
+            if (field == null) field = floorRenderer.gameObject.AddComponent<ReefDeckPlateField>();
+            field.PatternIndices = patterns;
         }
 
         /// <summary>One strip per built wall, hugging its base, plus the single driver that scrolls
@@ -1325,6 +1356,96 @@ namespace MaxWorlds.Rendering
                 WorldMaterials.M_MetalDark, Quaternion.Euler(0f, 0f, 90f));
             MeshPart(root.transform, "Cross Brace B", brace, new Vector3(0f, -HatchRecess * 0.5f, 0f),
                 WorldMaterials.M_MetalDark, Quaternion.Euler(90f, 0f, 0f));
+
+            return root;
+        }
+
+        // MV-1256, Change item 3: drainage grates on the open floor — geometry/material only. WHERE
+        // a grate goes (density, clearance of cover/gates/garrison) is MaxWorlds.Arena.ReefFloorDetail's
+        // own concern, in the Gameplay assembly, which this one (MaxWorlds.Rendering.asmdef) cannot
+        // reference back — so the sparse rising-particulate dressing (MaxWorlds.VFX.SludgeBubbles,
+        // also Gameplay-side) is attached by that caller, onto the root this method returns.
+
+        private const float FloorGrateSize = 1f;          // ticket gives no explicit footprint; reads clearly against the 2 m deck plate
+        private const float FloorGrateRecess = 0.03f;
+        private const float FloorGrateRimThickness = 0.08f;
+
+        /// <summary>A floor grate (MV-1256, Change item 3): a shallow recessed panel, a thin rim and a
+        /// DIM cyan under-glow disc (<see cref="WorldMaterials.M_GrateGlow"/> — its own, dimmer
+        /// instance, never <see cref="WorldMaterials.M_Circuit_Cyan"/>, which other renderers share).
+        /// Same panel/rim/glow shape as <see cref="BuildGlowHatch"/> without its cross braces (a hatch
+        /// reads as a hull panel; a grate reads as an opening).</summary>
+        public static GameObject BuildFloorGrate(Transform parent, Vector3 center)
+        {
+            var root = new GameObject("ReefFloorGrate");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            MarkDressed(root);
+
+            MeshBox(root.transform, "Panel", new Vector3(0f, -FloorGrateRecess * 0.5f, 0f),
+                new Vector3(FloorGrateSize, FloorGrateRecess, FloorGrateSize), WorldMaterials.M_MetalDark);
+
+            float outerR = FloorGrateSize * 0.5f;
+            float innerR = Mathf.Max(0.02f, outerR - FloorGrateRimThickness);
+            Mesh rim = CharacterMeshes.Ring(innerR, outerR, FloorGrateRecess, 8);
+            MeshPart(root.transform, "Rim", rim, new Vector3(0f, -FloorGrateRecess * 0.5f, 0f), WorldMaterials.M_GrateGlow);
+
+            Mesh glow = CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, 0f), new Vector2(innerR * 0.9f, 0f), new Vector2(innerR * 0.9f, 0.01f), new Vector2(0f, 0.01f),
+            }, 8);
+            MeshPart(root.transform, "Glow", glow, new Vector3(0f, -FloorGrateRecess - 0.005f, 0f), WorldMaterials.M_GrateGlow);
+
+            return root;
+        }
+
+        // MV-1256, Change item 4: loose decal clutter — a cable run and two small debris variants, flat
+        // and collider-free (MeshBox/MeshPart never add one — see each helper's own doc). Placement
+        // (sparse, clear of cover) is MaxWorlds.Arena.ReefFloorDetail's own concern, same split as the
+        // grate above.
+
+        private const float CableRunWidth = 0.05f;
+        private const float CableRunHeight = 0.02f;
+        private const float DebrisScrapHeight = 0.02f;
+        private const float DebrisScrapSize = 0.18f;
+
+        /// <summary>A loose cable lying flat on the deck between two points (MV-1256, Change item 4:
+        /// "loose cable runs ... flat with no collision").</summary>
+        public static GameObject BuildCableRunDecal(Transform parent, Vector3 from, Vector3 to)
+        {
+            Vector3 mid = (from + to) * 0.5f;
+            float length = Vector3.Distance(from, to);
+            Vector3 dir = to - from;
+            float yaw = length > 0.001f ? Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg : 0f;
+
+            var root = new GameObject("ReefCableRun");
+            root.transform.SetParent(parent, false);
+            root.transform.position = mid + Vector3.up * (CableRunHeight * 0.5f);
+            root.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            MarkDressed(root);
+
+            MeshBox(root.transform, "Cable", Vector3.zero, new Vector3(CableRunWidth, CableRunHeight, length),
+                WorldMaterials.M_MetalDark);
+
+            return root;
+        }
+
+        /// <summary>A small scrap of debris lying on the deck (MV-1256, Change item 4: "small debris
+        /// (bolts, panel scraps)") — <paramref name="variant"/> picks bolt (small block) or panel
+        /// scrap (a flat rectangle), <paramref name="yaw"/> gives each piece its own resting
+        /// rotation.</summary>
+        public static GameObject BuildDebrisScrap(Transform parent, Vector3 position, int variant, float yaw)
+        {
+            var root = new GameObject("ReefDebrisScrap");
+            root.transform.SetParent(parent, false);
+            root.transform.position = position + Vector3.up * (DebrisScrapHeight * 0.5f);
+            root.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            MarkDressed(root);
+
+            Vector3 size = (variant % 2 == 0)
+                ? new Vector3(DebrisScrapSize * 0.4f, DebrisScrapHeight, DebrisScrapSize * 0.4f)
+                : new Vector3(DebrisScrapSize, DebrisScrapHeight, DebrisScrapSize * 0.55f);
+            MeshBox(root.transform, "Scrap", Vector3.zero, size, WorldMaterials.M_MetalDark);
 
             return root;
         }
