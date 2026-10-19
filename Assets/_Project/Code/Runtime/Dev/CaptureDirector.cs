@@ -475,6 +475,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1230ShipKitSheet());
             Add(BuildMv1231BreakerLook());
             Add(BuildMv1232HangarBayCheck());
+            Add(BuildMv1241OrbitalsLook());
             return d;
         }
 
@@ -5551,6 +5552,104 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-1231-breaker-woken", WakeSetup),
                 },
                 Cleanup = () => { if (breakerGo != null) Destroy(breakerGo); },
+            };
+        }
+
+        // ---- MV1241OrbitalsLook (MV-1241) -----------------------------------------------------
+
+        /// <summary>The ticket's own AC3: "one capture with ORBS 5 ... compared with the image" —
+        /// the design image's own right-most panel (ORBS 5 · REACH 4 · POWER 5). A live
+        /// <see cref="Orbitals"/>+<see cref="OrbitalsVisuals"/> pair stands in for Max the same bare-
+        /// GameObject way <see cref="BuildMv1025RocketFireEvent"/>'s own rackGo stands in for him, and
+        /// one <see cref="BuildClusterRobot"/> sits inside REACH (3.0 m at level 4) so the dashed reach
+        /// ring — "only while at least one robot is within it" — actually reads in the one capture,
+        /// not just the orbs themselves.</summary>
+        private static CapturePreset BuildMv1241OrbitalsLook()
+        {
+            const float pitch = 75f;
+            const float distance = 6f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject orbGo = null;
+            GameObject robotGo = null;
+            Orbitals orbitals = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                // MV-1241 root cause: HomeScreen's own "fresh run start" WeaponSystemState.Reset() fires
+                // during this same boot window (after BeforeSceneLoad, before this coroutine resumes) and
+                // silently wiped a BeforeSceneLoad-set SecondaryKind/RigState override back to World 1's
+                // WaterBalloon defaults — caught by opening the written PNG (SecondaryKind=WaterBalloon,
+                // OrbCount=2 in ExtraReport, not the ORBS 5 asked for) rather than any EditMode-visible
+                // defect. Setting these here, after the reset has already run, is what makes it stick.
+                RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Mothership));   // s_orb/s_rad/s_odm live only on rig_board.ship.json
+                WeaponSystemState.SecondaryKind = SecondaryKind.Orbitals;
+                RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_orb", 4 }, { "s_rad", 4 }, { "s_odm", 5 } },
+                    new[] { "SECONDARY" });
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var realPlayerGo = GameObject.FindGameObjectWithTag("Player");
+                if (realPlayerGo != null) realPlayerGo.SetActive(false);   // same "hide the real Max" dodge BuildMv1025RocketFireEvent uses — avoids a second, off-frame Orbitals rig confusing the shot
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                orbGo = new GameObject("MV1241CaptureOrbitals");
+                orbGo.transform.position = focus;
+                orbGo.AddComponent<CharacterController>();
+                orbitals = orbGo.AddComponent<Orbitals>();
+                orbGo.AddComponent<OrbitalsVisuals>();
+
+                robotGo = BuildClusterRobot(EnemyKind.Skitter, focus + new Vector3(1.6f, 0f, 1.6f));
+
+                for (int i = 0; i < 10; i++) yield return null;   // let the orbit spin, the trails build, the ring resolve
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * Orbitals.OrbitHeight;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1241orbitalslook",
+                LogTag = "[MV1241Capture]",
+                Flag = "-mv1241shot",
+                ArmFile = "Temp/mv1241.arm",
+                HeadlessMarker = "Temp/mv1241.headless",
+                DoneFileName = "_mv1241_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding idiom as BuildMv1230ShipKitSheet/BuildMv1232HangarBayCheck —
+                    // without it Max spawns in whichever world the save defaults to, not the Mothership.
+                    // SecondaryKind/RigState are deliberately NOT set here — see Setup's own comment for
+                    // why that has to happen after HomeScreen's own run-start reset instead.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1241-orbitals-look", Setup) },
+                Cleanup = () =>
+                {
+                    if (orbGo != null) Destroy(orbGo);
+                    if (robotGo != null) Destroy(robotGo);
+                },
+                // Diagnostic numbers behind the one capture (MV-465 Tier 2) — so a framing mismatch is
+                // provably a camera problem, not an "is Orbitals even live" problem, without re-opening
+                // the Editor to check by hand.
+                ExtraReport = () => orbitals == null ? "orbitals null\n" :
+                    $"SecondaryKind={WeaponSystemState.SecondaryKind} OrbCount={orbitals.OrbCount} " +
+                    $"Reach={orbitals.Reach:0.00}m camFOV={(Camera.main != null ? Camera.main.fieldOfView : -1f):0.0}\n",
             };
         }
     }
