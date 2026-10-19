@@ -88,7 +88,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 MapBuild built = MapRuntime.Build(map, root.transform);
-                ShipDressing.Dress(root.transform, cfg, built.Cover);
+                ShipDressing.Dress(root.transform, map, cfg, built.Cover);
                 Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
 
                 // ---- cover: exactly the drawn pieces, at their drawn rects, +/-1 cm ----
