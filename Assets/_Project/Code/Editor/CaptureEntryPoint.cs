@@ -221,6 +221,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1241OrbitalsLook() => RunFromMenu(CapturePresets.All["mv1241orbitalslook"]);
         public static void CaptureMv1241OrbitalsLook() => Run(CapturePresets.All["mv1241orbitalslook"]);
 
+        [MenuItem("MaxWorlds/Capture/Helmsman Look (MV-1242)")]
+        public static void MenuMv1242HelmsmanLook() => RunFromMenu(CapturePresets.All["mv1242helmsmanlook"]);
+        public static void CaptureMv1242HelmsmanLook() => Run(CapturePresets.All["mv1242helmsmanlook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

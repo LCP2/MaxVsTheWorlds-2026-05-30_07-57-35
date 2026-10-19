@@ -6,6 +6,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Bosses
 {
@@ -70,9 +71,23 @@ namespace MaxWorlds.Bosses
         /// test reads instead of the private phase enum.</summary>
         public bool IsWalking => _phase == Phase.Walking;
 
+        /// <summary>The lens-sweep's tell is drawn and visible right now (MV-1242) — <see cref="HelmsmanRig"/>'s
+        /// cue to glow the lens brighter, straight off <see cref="LensSweepTelegraph.IsTelling"/>.</summary>
+        public bool LensTelling => _sweep.IsTelling;
+
         /// <summary>Hands this boss its own authoring area's floor, same convention as
         /// <see cref="SludgequeenBoss.SetWakeArea"/>.</summary>
         public void SetWakeArea(Rect area) => _wakeArea = area;
+
+        /// <summary>Same MV-613 reasoning as <see cref="SludgequeenBoss.FitColliderTo"/> — called once
+        /// <see cref="HelmsmanRig"/>'s own combined body bounds are known.</summary>
+        public void FitColliderTo(Bounds localBounds)
+        {
+            if (_cc == null) return;
+            _cc.center = localBounds.center;
+            _cc.height = Mathf.Max(0.01f, localBounds.size.y);
+            _cc.radius = Mathf.Max(0.01f, Mathf.Max(localBounds.extents.x, localBounds.extents.z));
+        }
 
         private void Awake()
         {

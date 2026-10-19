@@ -72,12 +72,12 @@ namespace MaxWorlds.Bosses
 
             [Helmsman] = new Row("HELMSMAN", (body, e, map) =>
             {
-                // MV-1239: behaviour and placement only — the look (seated-then-torn-free body) is
-                // MV-1242's own ticket, so unlike the rows above this builds no rig yet and rides the
-                // greybox cube every boss starts as (same "bare fixture with no rig bound" fallback
-                // SludgequeenBoss's own cannon-mouth/chute-foot transforms already degrade to).
                 var helmsman = body.AddComponent<HelmsmanBoss>(); // RequireComponent adds the CharacterController
                 helmsman.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
+                // MV-1242: the seated-then-torn-free body, bound the same per-instance way every other
+                // boss's own rig is (MV-573) — see HelmsmanRig's own doc for why its AuthoredBodyWidth
+                // needs no edit to a30's shipped boss size.
+                HelmsmanRig.CreateFor(helmsman);
                 return helmsman;
             }),
         };
