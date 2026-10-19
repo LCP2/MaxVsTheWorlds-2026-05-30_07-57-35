@@ -734,11 +734,12 @@ namespace MaxWorlds.Arena
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
-                // MV-1225: a DoorOnly row with no exit door built yet -- the Bridge finale (a later
-                // ticket) is what actually wires this gate; ExitWall/ExitDoorPos only need to resolve a
-                // valid doorway against this ticket's own one-area placeholder config.
+                // MV-1245: the Bridge finale (area 30, "The Bridge") -- the north viewport shutter,
+                // centred on the boss's own throne (helmsman at x:675, area spans x:[645,705]) --
+                // replacing MV-1225's placeholder east wall now that the real 30-area layout (MV-1233)
+                // and the Helmsman (MV-1239) are both in place.
                 ExitMode = WorldExitMode.DoorOnly,
-                ExitWall = Wall.E,
+                ExitWall = Wall.N,
                 ExitDoorPos = 0.5f,
                 Entry = null,
                 ExitDressing = ExitCorridorDressingKind.None,

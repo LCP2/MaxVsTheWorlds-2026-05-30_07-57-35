@@ -49,6 +49,15 @@ namespace MaxWorlds.Save
         /// <see cref="WorldIndex"/> on its first call for such a save.</summary>
         public int FurthestWorldIndex;
 
+        /// <summary>True once this profile has reached the real end of the game -- the Mothership's own
+        /// Observation Deck end shot (MV-1245) -- as opposed to merely finishing a world's ordinary
+        /// Victory. A profile-level flag (same tier as <see cref="FurthestWorldIndex"/>, never cleared by
+        /// a fresh run) rather than a checkpoint field: the ending clears its own checkpoint on completion
+        /// (<see cref="SaveSystem.MarkEndingSeen"/>), so there is never a run left to resume into once
+        /// this is true -- the Home screen simply offers no RESUME button for the slot, which is the
+        /// whole of "a resume after the ending returns to the home screen" (the ticket's own words).</summary>
+        public bool EndingSeen;
+
         /// <summary>True once a Weapon Core has been collected but THE RIG hasn't been opened yet to
         /// play the morph (MV-689) — the persisted twin of <see cref="MaxWorlds.Weapons.PendingMorphingModule.WeaponCorePending"/>,
         /// which lives only in memory and would otherwise lose the banked core across an app restart.</summary>

@@ -369,6 +369,37 @@ namespace MaxWorlds.VFX
             BeginWeaponBeat();
         }
 
+        /// <summary>MV-1245: World 5's own finale orb -- the Helm Key is the Mothership's equivalent of
+        /// the Weapon Core (see <see cref="PickupKind.HelmKey"/>'s own doc comment). Collecting it runs
+        /// the SAME shared step <see cref="OnWeaponCoreCollected"/> uses (<see cref="DestroyRestAndOpenDoor"/>)
+        /// but never <see cref="BeginWeaponBeat"/> -- the Mothership is the last world, so there is no
+        /// next weapon to morph into (the ticket's own "no new weapon" rule) -- and shows "THE SHIP IS
+        /// YOURS" instead of "NEW WEAPON", reusing the same interim-banner hold
+        /// <see cref="TryApplyCityToReefHandover"/> already uses for its own one-off hand-over banner.
+        /// Called directly from <see cref="PickupDirector"/>'s own HelmKey case (there is no generic
+        /// <c>HudSignals.WeaponCoreCollected</c>-style signal for this -- that event also drives the
+        /// "Weapon Core fanfare" SFX cue and <c>RunTracker</c>'s own Victory/Result-screen seal, neither
+        /// of which applies to the game's true ending; see <see cref="ObservationDeckSequence"/> for what
+        /// happens once Max actually walks through the now-open viewport instead).</summary>
+        public void OnHelmKeyCollected()
+        {
+            if (!_finalBossDefeated || IsOpen) return;
+
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
+            int finalAreaIndex = cfg?.dials != null ? cfg.dials.areaCount : 0;
+
+            DestroyRestAndOpenDoor(finalAreaIndex);
+
+            if (_banner == null) _banner = FinaleBanner.Create();
+            _banner.Show("THE SHIP IS YOURS", string.Empty, string.Empty, 1f);
+            _interimBannerActive = true;
+            _interimBannerTime = 0f;
+
+            if (_map?.exitDoorway != null)
+                MaxWorlds.Intro.ObservationDeckSequence.Build(_map.exitDoorway.Value);
+        }
+
         /// <summary>MV-1179: the bossless finale's own trigger — the City's Market Street (a1) has no
         /// boss to die and drop a Core, so there is no <see cref="OnWeaponCoreCollected"/> to hang the
         /// finale off. Hooked to every robot death field-wide (<see cref="HudSignals.EnemyKilled"/>),

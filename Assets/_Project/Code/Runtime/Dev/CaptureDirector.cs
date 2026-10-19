@@ -477,6 +477,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1232HangarBayCheck());
             Add(BuildMv1241OrbitalsLook());
             Add(BuildMv1242HelmsmanLook());
+            Add(BuildMv1245EndShotCheck());
             return d;
         }
 
@@ -5747,6 +5748,57 @@ namespace MaxWorlds.Dev
                     if (rig != null) Destroy(rig.gameObject);
                     if (bossGo != null) Destroy(bossGo);
                 },
+            };
+        }
+
+        // ---- MV1245EndShotCheck (MV-1245 AC3) ------------------------------------------------
+
+        /// <summary>MV-1245 AC3: one capture of the finale's own end shot. The overlay is a pure
+        /// screen-space composition (<see cref="ObservationDeckSequence.EndShotOverlay"/>) with no
+        /// dependency on world geometry/camera framing, so this builds it directly rather than replaying
+        /// the whole Bridge-to-Observation-Deck finale (kill the Helmsman, collect the Helm Key, walk the
+        /// 30 m deck, dwell 1 s) just to reach it.</summary>
+        private static CapturePreset BuildMv1245EndShotCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            ObservationDeckSequence.EndShotOverlay overlay = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 2; i++) yield return null;
+
+                overlay = ObservationDeckSequence.EndShotOverlay.Create();
+                overlay.ShowToBeContinued();
+
+                // The overlay's own ScreenSpaceOverlay canvas draws straight to the display and is
+                // invisible to this director's cam.Render()-to-RenderTexture capture -- flip it to
+                // ScreenSpaceCamera for the shot, same fix the MV-585/HUD presets already apply to
+                // HudController's own canvas.
+                Canvas canvas = overlay.Canvas;
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera = cam;
+                canvas.planeDistance = 1f;
+
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1245endshot",
+                LogTag = "[MV1245Capture]",
+                Flag = "-mv1245shot",
+                ArmFile = "Temp/mv1245.arm",
+                HeadlessMarker = "Temp/mv1245.headless",
+                DoneFileName = "_mv1245_done.txt",
+                Width = 1920,
+                Height = 1080,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 60,
+                BeforeSceneLoad = () => { SaveSystem.ActiveSlot = 0; },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1245-end-shot", NoSetup) },
+                Cleanup = () => overlay?.DestroySelf(),
             };
         }
     }

@@ -425,6 +425,21 @@ namespace MaxWorlds.Save
             Save(slot, data);
         }
 
+        /// <summary>MV-1245: the Mothership's Observation Deck end shot has finished -- stamp this
+        /// profile's own <see cref="SaveSlotData.EndingSeen"/> flag and wipe any mid-run checkpoint
+        /// (<see cref="ResetCheckpointFields"/>, same fields <see cref="ClearCheckpoint"/> resets): the
+        /// game is genuinely over for this profile, so there must be nothing left for RESUME to restore
+        /// into. A no-op for <paramref name="slot"/> &lt; 0 (a capture/press-kit/perf-capture run, or a
+        /// test with no active slot) -- same guard <see cref="CaptureActiveCheckpoint"/> already uses.</summary>
+        public static void MarkEndingSeen(int slot)
+        {
+            if (slot < 0) return;
+            SaveSlotData data = Load(slot);
+            data.EndingSeen = true;
+            ResetCheckpointFields(data);
+            Save(slot, data);
+        }
+
         /// <summary>Every Checkpoint* field (MV-776) back to "no run in progress" — shared by
         /// <see cref="ClearCheckpoint"/> (PLAY starting fresh) and <see cref="RecordResult"/> (a Victory,
         /// which must wipe the checkpoint outright, not just <see cref="SaveSlotData.CheckpointAreaIndex"/>
