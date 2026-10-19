@@ -1093,7 +1093,8 @@
      "to": 0.4118
     }
    ],
-   "wallDressing": "racks"
+   "wallDressing": "racks",
+   "roomType": "cargo_hold"
   },
   {
    "id": "a2",
@@ -1533,7 +1534,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "gallery"
   },
   {
    "id": "a3",
@@ -1832,7 +1834,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "reactor_bay"
   },
   {
    "id": "a4",
@@ -2109,7 +2112,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "gallery"
   },
   {
    "id": "a5",
@@ -2417,7 +2421,8 @@
      "to": 0.7778
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "pressure_lock"
   },
   {
    "id": "a6",
@@ -2813,6 +2818,7 @@
     }
    ],
    "wallDressing": "pipes",
+   "roomType": "engine_room",
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
@@ -3253,7 +3259,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "racks"
+   "wallDressing": "racks",
+   "roomType": "cargo_hold"
   },
   {
    "id": "a8",
@@ -3980,7 +3987,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "pressure_lock"
   },
   {
    "id": "a9",
@@ -4299,7 +4307,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "racks"
+   "wallDressing": "racks",
+   "roomType": "cargo_hold"
   },
   {
    "id": "a10",
@@ -4764,7 +4773,8 @@
      "to": 0.7222
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "crew_hydroponics"
   },
   {
    "id": "a11",
@@ -5143,7 +5153,8 @@
      "d": 2
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "engine_room"
   },
   {
    "id": "a12",
@@ -5517,6 +5528,7 @@
     }
    ],
    "wallDressing": "pipes",
+   "roomType": "pressure_lock",
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
@@ -6018,7 +6030,8 @@
      "d": 2
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "engine_room"
   },
   {
    "id": "a14",
@@ -6491,7 +6504,8 @@
      "d": 2
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "reactor_bay"
   },
   {
    "id": "a15",
@@ -7525,7 +7539,8 @@
      "z": 57.5
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "gallery"
   },
   {
    "id": "a17",
@@ -8046,7 +8061,8 @@
      "d": 2
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "engine_room"
   },
   {
    "id": "a18",
@@ -8603,6 +8619,7 @@
     }
    ],
    "wallDressing": "planters",
+   "roomType": "crew_hydroponics",
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
@@ -8889,7 +8906,8 @@
      "d": 2
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "crew_hydroponics"
   },
   {
    "id": "a20",
@@ -9503,7 +9521,8 @@
      "z": 54.5
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "gallery"
   },
   {
    "id": "a21",
@@ -10051,7 +10070,8 @@
      "z": 98.5
     }
    ],
-   "wallDressing": "planters"
+   "wallDressing": "planters",
+   "roomType": "gallery"
   },
   {
    "id": "a22",
@@ -10645,7 +10665,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "reactor_bay"
   },
   {
    "id": "a23",
@@ -11295,7 +11316,8 @@
      "to": 0.225
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "pressure_lock"
   },
   {
    "id": "a24",
@@ -12096,6 +12118,7 @@
     }
    ],
    "wallDressing": "racks",
+   "roomType": "cargo_hold",
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
@@ -12807,7 +12830,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "pressure_lock"
   },
   {
    "id": "a26",
@@ -12983,7 +13007,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "engine_room"
   },
   {
    "id": "a27",
@@ -13777,7 +13802,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "reactor_bay"
   },
   {
    "id": "a28",
@@ -14812,6 +14838,7 @@
     }
    ],
    "wallDressing": "planters",
+   "roomType": "crew_hydroponics",
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
@@ -15809,7 +15836,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "pipes"
+   "wallDressing": "pipes",
+   "roomType": "pressure_lock"
   },
   {
    "id": "a30",
@@ -16098,7 +16126,8 @@
      "to": 1.0
     }
    ],
-   "wallDressing": "racks"
+   "wallDressing": "racks",
+   "roomType": "cargo_hold"
   }
  ]
 }

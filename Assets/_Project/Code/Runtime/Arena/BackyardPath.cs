@@ -370,6 +370,11 @@ namespace MaxWorlds.Arena
             // here rather than inside ReefKit.DressHull itself.
             ReefAreaKit.BuildFarWallLight(host, cfg, walls, wallHeight);
 
+            // MV-1258: one hero set piece per room type (Lee's 17 Oct table) — needs every structure-kit/
+            // wall/gate pass above to have already run, since a room's landmark either stands in its
+            // largest already-dressed hull-fill piece's footprint or wraps an already-built AreaGate.
+            ReefSetPieces.Build(host, cfg, cover, walls, wallHeight, wallThickness);
+
             // MV-1257: marine snow, bubble streams, light flicker/pulse and the steam/spark hazard
             // flavour — runs last, after every drum/manifold/console/lamp/strip it reads back by name
             // has already been built by the calls above.

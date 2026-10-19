@@ -484,6 +484,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1255ReefWallDetailCheck());
             Add(BuildMv1256ReefFloorDetailCheck());
             Add(BuildMv1257ReefAmbientCheck());
+            Add(BuildMv1258ReefSetPiecesCheck());
             return d;
         }
 
@@ -5203,6 +5204,82 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1257-a2", NoSetup) },
+            };
+        }
+
+        // ---- MV1258ReefSetPiecesCheck (MV-1258 AC2) --------------------------------------------
+
+        /// <summary>MV-1258 AC2: "ONE real-world capture (same technique as MV-1250's) of zone a3.
+        /// Compare it once and list the differences." Same real-world "load the world, frame one zone
+        /// through the production <see cref="FixedAngleCameraRig"/>" technique as
+        /// <see cref="BuildMv1250ReefLookCheck"/> — zone a3 is the reactor-bay area whose own hero set
+        /// piece (<see cref="MaxWorlds.Arena.ReefSetPieces"/>'s reactor core) stands in its largest
+        /// hull-fill piece's footprint, which <c>world3_config.json</c>'s own "a3 octagon" authors at
+        /// the area's own centre — so the zone's bare centroid (same focus <see cref="BuildMv1250ReefLookCheck"/>
+        /// already uses for this zone) already frames it. No measurement: this AC is a single human-eye
+        /// comparison against the ticket's own design frame, not a numeric target.</summary>
+        private static CapturePreset BuildMv1258ReefSetPiecesCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"Reef map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Reef built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area3");
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1258reefsetpieces",
+                LogTag = "[MV1258Capture]",
+                Flag = "-mv1258shot",
+                ArmFile = "Temp/mv1258.arm",
+                HeadlessMarker = "Temp/mv1258.headless",
+                DoneFileName = "_mv1258_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1258-a3", NoSetup) },
             };
         }
 
