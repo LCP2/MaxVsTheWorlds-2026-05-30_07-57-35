@@ -476,6 +476,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1231BreakerLook());
             Add(BuildMv1232HangarBayCheck());
             Add(BuildMv1241OrbitalsLook());
+            Add(BuildMv1242HelmsmanLook());
             return d;
         }
 
@@ -5650,6 +5651,102 @@ namespace MaxWorlds.Dev
                 ExtraReport = () => orbitals == null ? "orbitals null\n" :
                     $"SecondaryKind={WeaponSystemState.SecondaryKind} OrbCount={orbitals.OrbCount} " +
                     $"Reach={orbitals.Reach:0.00}m camFOV={(Camera.main != null ? Camera.main.fieldOfView : -1f):0.0}\n",
+            };
+        }
+
+        // ---- MV1242HelmsmanLook (MV-1242 AC3) -------------------------------------------------
+
+        /// <summary>The ticket's own AC3: "one capture of each phase ... compared with the image" — a
+        /// live <see cref="HelmsmanBoss"/>+<see cref="HelmsmanRig"/> pair, forced into Phase 1 (seated,
+        /// reflection — same idiom <see cref="BuildMv1018Anchorhead"/>'s own Wake-by-reflection uses) for
+        /// the first shot, then into Phase 2 for the second. Two shots, one capture pass, never iterated
+        /// (DECISIONS.md "cap capture loops at one").</summary>
+        private static CapturePreset BuildMv1242HelmsmanLook()
+        {
+            const float pitch = 55f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            // The Mothership's own shipped a30 boss size (mothership_config.json's "boss":{"size":
+            // {"w":4.5}}) — HelmsmanRig's own AuthoredBodyWidth reference, so this capture's body
+            // resolves at rigScale 1, same as the real boss does in-game.
+            const float authoredBodyWidth = 4.5f;
+
+            GameObject bossGo = null;
+            HelmsmanRig rig = null;
+
+            void SetPhase(string phaseName) =>
+                typeof(HelmsmanBoss).GetField("_phase", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .SetValue(bossGo.GetComponent<HelmsmanBoss>(), Enum.Parse(
+                        typeof(HelmsmanBoss).GetNestedType("Phase", BindingFlags.NonPublic), phaseName));
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                bossGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bossGo.name = "MV1242CaptureHelmsman";
+                bossGo.transform.position = focus;
+                bossGo.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+                bossGo.transform.localScale = Vector3.one * authoredBodyWidth;
+                var boss = bossGo.AddComponent<HelmsmanBoss>();
+
+                rig = HelmsmanRig.CreateFor(boss);
+                SetPhase("Seated");
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle, the rig re-tick
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = bossGo.transform.position + Vector3.up * 1.8f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * 11f, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            IEnumerator Phase2Setup(Camera cam)
+            {
+                SetPhase("Walking");
+                for (int i = 0; i < 3; i++) yield return null;   // let the rig's own LateUpdate swap throne for legs
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = bossGo.transform.position + Vector3.up * 2.2f;   // taller, standing on its legs
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * 12f, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 2; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1242helmsmanlook",
+                LogTag = "[MV1242Capture]",
+                Flag = "-mv1242shot",
+                ArmFile = "Temp/mv1242.arm",
+                HeadlessMarker = "Temp/mv1242.headless",
+                DoneFileName = "_mv1242_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard every other preset in this file uses: on a fresh profile
+                    // (no slot picked yet) HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1242-phase1-seated", NoSetup),
+                    new CaptureShot("MV-1242-phase2-walking", Phase2Setup),
+                },
+                Cleanup = () =>
+                {
+                    if (rig != null) Destroy(rig.gameObject);
+                    if (bossGo != null) Destroy(bossGo);
+                },
             };
         }
     }
