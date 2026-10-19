@@ -72,7 +72,11 @@ namespace MaxWorlds.Arena
             return placed;
         }
 
-        private static bool ClearsEverything(
+        /// <summary>Internal, not private (MV-1256): <see cref="MaxWorlds.Arena.ReefFloorDetail.PlaceGrates"/>
+        /// reuses this directly rather than re-deriving the same cover/gate/garrison/already-placed
+        /// clearance check a second time — the ticket's own "using the existing ReefHydroponics
+        /// clearance helper or an equivalent".</summary>
+        internal static bool ClearsEverything(
             Vector2 candidate, IReadOnlyList<CoverPiece> cover, List<Vector2> pointObstacles, List<Vector2> placedBeds)
         {
             foreach (CoverPiece piece in cover)
@@ -92,7 +96,9 @@ namespace MaxWorlds.Arena
         /// entity, and a factory/Replicator's entity position IS its body), plus every authored
         /// garrison point (<see cref="WorldArea.garrison"/> — never built as a <see cref="MapEntity"/>
         /// at all, since a garrison slot is a spawn position, not a built object).</summary>
-        private static List<Vector2> PointObstacles(MapData map, WorldConfig cfg)
+        /// <summary>Internal, not private (MV-1256) — see <see cref="ClearsEverything"/>'s own
+        /// doc.</summary>
+        internal static List<Vector2> PointObstacles(MapData map, WorldConfig cfg)
         {
             var list = new List<Vector2>();
 

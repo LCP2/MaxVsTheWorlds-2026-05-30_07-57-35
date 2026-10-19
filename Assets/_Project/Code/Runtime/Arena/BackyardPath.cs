@@ -346,6 +346,13 @@ namespace MaxWorlds.Arena
             ReefDressing.DressCover(host, cover);
             ReefHydroponics.PlaceBeds(host, map, cfg, cover);
 
+            // MV-1256, Change items 3-5: grates/decals on the open floor and the flooded-deck water
+            // re-skin — needs the already-built cover/sludge tiles the calls above produced, same
+            // reason ReefHydroponics.PlaceBeds itself runs here rather than inside ReefKit.DressHull.
+            ReefFloorDetail.PlaceGrates(host, map, cfg, cover);
+            ReefFloorDetail.PlaceDecals(host, map, cfg, cover);
+            ReefFloorDetail.DressFlood(host);
+
             // MV-1215, Change items 2/3/6: the glow hatch, window wall and wall-mounted dressing —
             // optional per-area vocabulary no shipped config authors yet. Walls are collected AFTER
             // DressHull (not before): a wall DressHull has already dressed carries KeepsOwnMaterial,
