@@ -365,6 +365,112 @@ namespace MaxWorlds.Rendering
             FilmGrain = 0.08f,
         };
 
+        /// <summary>
+        /// Reef — World 4's flooded ship interior, its own dark look (MV-1250). World 3/4 has shipped
+        /// lit by <see cref="Default"/> since MV-713 (MV-745/MV-1141's own "a different ticket's, not
+        /// this one's" deferral) — the Backyard's 1.8-intensity golden key and warm ambient gradient
+        /// over the Reef's own navy hull palette (<see cref="MaxWorlds.Rendering.BiomePalette.Reef"/>)
+        /// measured median luminance 74/255, flat lavender-grey (#656c81 etc) on a live TestFlight
+        /// screenshot — against the design frames' 27-36/255 dark navy. Same "daylight from directly
+        /// above or not at all" steep key angle every sealed-hull interior above uses, since nothing
+        /// down here has a sky.
+        ///
+        /// The whole room stays cool and dark on purpose: <see cref="KeyColor"/>/<see cref="FillColor"/>/
+        /// <see cref="AmbientSky"/>/<see cref="AmbientEquator"/>/<see cref="AmbientGround"/>/
+        /// <see cref="FogColor"/> are all blue, none warm. The one warm light left is
+        /// <see cref="RimColor"/> — hazard orange, the ticket's own exception ("no warm light anywhere,
+        /// except hazard orange where it already exists for danger or interaction") and also the exact
+        /// hue Max and the Reef's own robots already wear, so the rim reads as the readability tool it
+        /// is rather than a second light source warming the room. The cyan/magenta strips, window glass
+        /// and bio-glow growth are <see cref="MaxWorlds.Rendering.WorldMaterials"/>'s own emissive
+        /// materials, untouched by this struct — <see cref="BloomThreshold"/> stays low enough (0.9,
+        /// matching <see cref="City"/>/<see cref="ShipBase"/>) that they bloom against the dark room
+        /// instead of needing this grade to brighten anything.
+        ///
+        /// Lee, 29 Sep 2026: keep the Reef robots' own colouring; if contrast is a problem, change the
+        /// floor and the light, not the robots (this ticket's own "Do not re-raise") — the readability
+        /// floor route if a capture ever comes back with Max or a robot lost in the dark is a brighter
+        /// <see cref="RimIntensity"/>, never a brighter room.
+        /// </summary>
+        public static BackyardLook Reef => new BackyardLook
+        {
+            // Cool cyan-blue, not neutral white — a shaft through flooded machinery, not a sun.
+            // Dimmer than Stormdrain's 0.62: the Reef's own palette (GroundBase #1D2C3B) already sits
+            // brighter than Stormdrain's near-black concrete, so matching Stormdrain's key would
+            // re-create the same "washed out" complaint one step down instead of fixing it.
+            KeyColor = new Color(0.45f, 0.68f, 0.85f),
+            KeyIntensity = 0.42f,
+            KeyEuler = new Vector3(62f, -30f, 0f),
+            ShadowStrength = 0.68f,
+
+            // Teal bounce off the hull plating, not Stormdrain's sludge-green and not Default's sky-blue
+            // — this is what keeps the shadow side of a pipe or bulkhead from crushing to pure black.
+            FillColor = new Color(0.14f, 0.28f, 0.36f),
+            FillIntensity = 0.36f,
+            FillEuler = new Vector3(20f, 140f, 0f),
+
+            // The only warm light anywhere (see class doc) — hazard orange, matching Max's own body
+            // colour, so it reads as "the thing that separates Max from the floor" rather than mood
+            // lighting. Brighter than the key/fill on purpose: a dark biome needs ITS rim doing more of
+            // the readability work than a bright one does.
+            RimColor = new Color(1f, 0.56f, 0.26f),
+            RimIntensity = 1.05f,
+            RimEuler = new Vector3(12f, 200f, 0f),
+
+            // Near-black navy, every term — sky, equator AND ground — per the ticket's own "a near-black
+            // navy ambient gradient" line. No green/sludge equator band like Stormdrain's: the Reef has
+            // no sludge, only hull plate and bio-glow.
+            AmbientSky = new Color(0.045f, 0.075f, 0.115f),
+            AmbientEquator = new Color(0.035f, 0.06f, 0.095f),
+            AmbientGround = new Color(0.022f, 0.04f, 0.07f),
+
+            // Dense dark-teal fog — thicker than Stormdrain's 0.018 and City's 0.010, per the ticket's
+            // own "dense dark-teal fog so far walls fall off into the deep": a flooded hull's far walls
+            // should vanish into the dark, not just dim.
+            FogColor = new Color(0.025f, 0.06f, 0.08f),
+            FogDensity = 0.022f,
+
+            // Unused — ApplySky nulls the skybox for this biome (BiomePalette.Reef.RemovesSkybox =
+            // true) — but filled so the struct is honest (same reasoning Stormdrain's own doc gives).
+            SkyZenith = new Color(0.05f, 0.07f, 0.08f),
+            SkyHorizon = new Color(0.09f, 0.12f, 0.11f),
+            SkyGroundHaze = new Color(0.07f, 0.09f, 0.08f),
+            SkySun = new Color(0.4f, 0.45f, 0.5f),
+            SkyCloud = new Color(0.1f, 0.12f, 0.12f),
+            SkySunGlow = 120f,
+            SkySunIntensity = 0.2f,
+            SkyCloudAmount = 0f,
+            SkyCloudScale = 1f,
+
+            // Firmer contact darkening than the yard — everything down here sits in a flooded,
+            // riveted hull, same reasoning Stormdrain's own doc gives for its own AO.
+            AoIntensity = 0.85f,
+            AoRadius = 0.32f,
+
+            // MV-1250 AC3's single adjustment pass: the first capture (PostExposure 0.15, matching
+            // Stormdrain's) measured area 3's median luminance at 16.5/255, under the 25-45 target —
+            // same "one-stop lift" idiom ShipBase's own doc uses for the same symptom. +1.1 stops
+            // (2^1.1 =~ 2.14x) targets the middle of the range without touching hue/saturation (a pure
+            // exposure lift moves V, not H/S) or any other field this ticket's EditMode test asserts.
+            PostExposure = 0.15f + 1.1f,
+            Contrast = 10f,
+            Saturation = 4f,     // low — the only saturated colour left is the kit's own cyan/magenta emissives
+            ColorFilter = Color.white,
+            ShadowTint = new Color(0.30f, 0.46f, 0.66f),    // cool shadows lean navy
+            HighlightTint = new Color(0.55f, 0.85f, 0.9f),  // cool highlights too — no warm grade anywhere
+
+            // Bloom threshold low enough that the kit's own cyan/magenta strips and the bio-glow growth
+            // read as glowing against this dark room, same idiom City/ShipBase already use.
+            BloomThreshold = 0.9f,
+            BloomIntensity = 0.6f,
+            BloomScatter = 0.6f,
+            BloomTint = new Color(0.6f, 0.9f, 1f),
+
+            VignetteIntensity = 0.2f,
+            VignetteSmoothness = 0.5f,
+            FilmGrain = 0.1f,
+        };
+
         /// <summary>Fields every Mothership deck preset below shares (MV-1249): a steep, dim key — the
         /// same "daylight from directly above or not at all" reasoning <see cref="Stormdrain"/>'s own
         /// doc gives its key angle, since a sealed hull interior has no other source — soft AO, a

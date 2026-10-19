@@ -479,6 +479,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
+            Add(BuildMv1250ReefLookCheck());
             return d;
         }
 
@@ -4748,6 +4749,134 @@ namespace MaxWorlds.Dev
                     }
                     return sb.ToString();
                 },
+            };
+        }
+
+        // ---- Mv1250ReefLookCheck (MV-1250 AC2/AC3) --------------------------------------------
+
+        /// <summary>The ticket's own one-shot capture check: the real Reef world's area 3, framed
+        /// through the production <see cref="FixedAngleCameraRig"/> under the production
+        /// <see cref="BackyardLook.Reef"/>, launched directly against the standalone .exe (no Editor
+        /// involved) — same "player pixels, not Editor pixels" reasoning <see cref="BuildMv1063ReefFixCheck"/>
+        /// gives for its own standalone launch, and the same zone-framing idiom
+        /// <see cref="BuildMv1207CityBrightnessCheck"/> already uses (<c>FrameZone</c> looks up the
+        /// zone by its RUNTIME id — <c>WorldMapLoader</c> rewrites "a3" to "area3" the same way
+        /// <see cref="BuildMv1249MothershipLookCheck"/>'s own doc names for "a1"/"a8" — not the
+        /// config's own "a3" <c>WorldArea.id</c>). HUD hidden so the measured pixels are the room, not
+        /// the HUD (the ticket's own "with the HUD excluded").</summary>
+        private static CapturePreset BuildMv1250ReefLookCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            float medianLuminance = -1f;
+            float dominantHueDegrees = -1f;
+            float dominantSaturation = -1f;
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"Reef map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Reef built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area3");
+            }
+
+            void Measure(Texture2D tex)
+            {
+                // AC3: median luminance (Rec.709, 0-255), sampled every 4th pixel across the whole
+                // frame — same formula/step as BuildMv1249MothershipLookCheck's own Measure.
+                var lumas = new List<float>((tex.width / 4 + 1) * (tex.height / 4 + 1));
+
+                // AC3's "hue and saturation of the most common colour": bin every sampled pixel's HSV
+                // into coarse (hue, saturation, value) buckets and report the HSV at the centre of the
+                // most-populated bucket — a literal per-value histogram (16.7M distinct floats) never
+                // has a usefully "most common" entry, so this bins the way a human eyeballing a
+                // thumbnail would (similar hues/sats read as "the same colour").
+                var buckets = new Dictionary<(int h, int s, int v), int>();
+                const int hueBuckets = 36;   // 10 degrees each
+                const int satValBuckets = 10; // 0.1 each
+
+                for (int y = 0; y < tex.height; y += 4)
+                {
+                    for (int x = 0; x < tex.width; x += 4)
+                    {
+                        Color c = tex.GetPixel(x, y);
+                        lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+
+                        Color.RGBToHSV(c, out float h, out float s, out float v);
+                        var key = (Mathf.Clamp(Mathf.FloorToInt(h * hueBuckets), 0, hueBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(s * satValBuckets), 0, satValBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(v * satValBuckets), 0, satValBuckets - 1));
+                        buckets.TryGetValue(key, out int count);
+                        buckets[key] = count + 1;
+                    }
+                }
+
+                lumas.Sort();
+                medianLuminance = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+
+                (int h, int s, int v) bestKey = (0, 0, 0);
+                int bestCount = -1;
+                foreach (var kv in buckets)
+                    if (kv.Value > bestCount) { bestCount = kv.Value; bestKey = kv.Key; }
+
+                dominantHueDegrees = (bestKey.h + 0.5f) * (360f / hueBuckets);
+                dominantSaturation = (bestKey.s + 0.5f) / satValBuckets;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1250reeflook",
+                LogTag = "[MV1250Capture]",
+                Flag = "-mv1250shot",
+                ArmFile = "Temp/mv1250.arm",
+                HeadlessMarker = "Temp/mv1250.headless",
+                DoneFileName = "_mv1250_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1250-a3", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    $"median luminance={medianLuminance:F1}/255 dominant hue={dominantHueDegrees:F0}deg " +
+                    $"dominant saturation={dominantSaturation:F2} " +
+                    $"(target: median 25-45, hue 190-225)\n",
             };
         }
 

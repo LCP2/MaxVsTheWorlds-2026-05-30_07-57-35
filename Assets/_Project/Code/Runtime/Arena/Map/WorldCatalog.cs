@@ -647,9 +647,10 @@ namespace MaxWorlds.Arena
                 Id = WorldIds.Reef,
                 ConfigKey = WorldLibrary.World3,
                 Palette = BiomePalette.Reef,
-                // MV-745/MV-1141: World 3 keeps the Backyard's own Default look for now — re-lighting it
-                // is a different ticket's, not this one's (CLAUDE.md "Do not re-raise").
-                Look = BackyardLook.Default,
+                // MV-1250: the Reef's own dark look — navy hull, cyan/magenta accents, dense teal fog.
+                // Replaces the Backyard's Default look it shipped with since MV-713 (MV-745/MV-1141's
+                // own deferral); see BackyardLook.Reef's doc for the measured before/after.
+                Look = BackyardLook.Reef,
                 Kit = WorldKit.Reef,
                 GateSkin = WorldGateSkin.Reef,
                 Style = new SentinelStyle(BodyColorWorld3, BodyAccentWorld3, EyeColorWorld3, emissionFactor: 0.35f,
