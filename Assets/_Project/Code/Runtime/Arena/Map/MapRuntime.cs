@@ -2740,7 +2740,10 @@ namespace MaxWorlds.Arena
         /// the ticket's own "composition for the cradle" is authored) is handed straight to the
         /// cradle's own <see cref="EnemySpawner.ConfigureAreaComposition"/> — falling back to a single
         /// rusher (the Mothership's own Drone) so an unauthored cradle still builds something rather
-        /// than sitting silently empty.</summary>
+        /// than sitting silently empty. MV-1246: <see cref="MapEntity.fittingKind"/> (the area's own
+        /// <c>shedFittings</c>, resolved by <see cref="WorldMapLoader"/>) is handed to
+        /// <see cref="AssemblyCradle.SetTurretKind"/> so the two turret housings MV-1227 built actually
+        /// fire — "none" leaves them drawn but silent, same as an unauthored shed corner.</summary>
         private static AssemblyCradle BuildCradle(MapData map, MapEntity e, Transform root, MapBuild built,
             Dictionary<Renderer, List<string>> rendererZones)
         {
@@ -2749,6 +2752,7 @@ namespace MaxWorlds.Arena
             body.transform.rotation = CradleFacingRotation(e.facing);
 
             var cradle = body.AddComponent<AssemblyCradle>();
+            cradle.SetTurretKind(ShedFittingKindEnums.Parse(e.fittingKind)); // MV-1246
             body.GetComponent<EnemySpawner>().ConfigureAreaComposition(
                 e.cradleComposition ?? new WorldComposition { rusher = 1 });
 
