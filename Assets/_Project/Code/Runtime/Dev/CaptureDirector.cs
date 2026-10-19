@@ -481,6 +481,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1249MothershipLookCheck());
             Add(BuildMv1250ReefLookCheck());
             Add(BuildMv1251ReefStructureKitCheck());
+            Add(BuildMv1255ReefWallDetailCheck());
             return d;
         }
 
@@ -4955,6 +4956,81 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1251-a4", NoSetup) },
+            };
+        }
+
+        // ---- MV1255ReefWallDetailCheck (MV-1255 AC2) ------------------------------------------
+
+        /// <summary>The ticket's own one-shot capture check: zone a1 (runtime zone id "area1" —
+        /// <see cref="MapData.AreaIndexOf"/>'s own convention, same "a3"/"a4" -&gt; "area3"/"area4"
+        /// rewrite <see cref="BuildMv1250ReefLookCheck"/>/<see cref="BuildMv1251ReefStructureKitCheck"/>
+        /// already document) through the production <see cref="FixedAngleCameraRig"/>, after
+        /// <see cref="ReefKit.DressHull"/>'s own upgraded wall dressing has run — same "no measurement,
+        /// just the PNG for a side-by-side with the design frame" shape
+        /// <see cref="BuildMv1251ReefStructureKitCheck"/> already uses, since AC2 asks for a one-off
+        /// visual compare, not a numeric gate.</summary>
+        private static CapturePreset BuildMv1255ReefWallDetailCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            Vector3? ZoneCenter(string zoneId)
+            {
+                var path = FindFirstObjectByType<BackyardPath>();
+                if (path == null || path.Map == null || path.Map.zones == null) return null;
+                foreach (MapZone z in path.Map.zones)
+                    if (z != null && z.id == zoneId) return z.Center;
+                return null;
+            }
+
+            IEnumerator FrameZone(Camera cam, string zoneId)
+            {
+                Vector3? center = ZoneCenter(zoneId);
+                if (center == null) throw new CaptureAbortException($"Reef map carries no zone '{zoneId}'");
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("Reef built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = center.Value + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;   // let the gate + renderer swap settle
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+                yield return FrameZone(cam, "area1");
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1255reefwalldetail",
+                LogTag = "[MV1255Capture]",
+                Flag = "-mv1255shot",
+                ArmFile = "Temp/mv1255.arm",
+                HeadlessMarker = "Temp/mv1255.headless",
+                DoneFileName = "_mv1255_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1255-a1", NoSetup) },
             };
         }
 

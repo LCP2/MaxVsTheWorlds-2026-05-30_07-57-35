@@ -156,6 +156,15 @@ namespace MaxWorlds.Arena
         /// genuine hull wall (the ticket's own "edge wall" wording), never an interior partition between
         /// two rooms.</summary>
         private static StructuralWall FindEdgeWall(List<StructuralWall> walls, WorldArea area, Wall wall)
+            => FindAreaWall(walls, area, wall, requireOuterEdge: true);
+
+        /// <summary>MV-1255: every area HAS a north wall, hull-adjacent or not — an interior room's own
+        /// "far wall" (<see cref="BuildFarWallLight"/>) is frequently an interior partition shared with
+        /// the room to its north, which <see cref="FindEdgeWall"/>'s own <c>IsOuterEdge</c> requirement
+        /// would never match. Same position-matching body as <see cref="FindEdgeWall"/>, factored out
+        /// so the two never drift apart, with that one filter made optional.</summary>
+        private static StructuralWall FindAreaWall(List<StructuralWall> walls, WorldArea area, Wall wall,
+            bool requireOuterEdge)
         {
             if (walls == null) return null;
 
@@ -168,7 +177,8 @@ namespace MaxWorlds.Arena
 
             foreach (StructuralWall w in walls)
             {
-                if (w == null || !w.IsOuterEdge) continue;
+                if (w == null) continue;
+                if (requireOuterEdge && !w.IsOuterEdge) continue;
                 Transform wt = w.transform;
                 Vector3 scale = wt.lossyScale;
                 bool alongX = scale.x >= scale.z;
@@ -184,6 +194,24 @@ namespace MaxWorlds.Arena
             }
 
             return bestOverlap > 0f ? best : null;
+        }
+
+        /// <summary>MV-1255, "Strip lights": a magenta top strip on every area's own NORTH wall (the
+        /// far wall the fixed top-down camera faces most) — interior partition or outer hull alike
+        /// (<see cref="FindAreaWall"/>'s own <c>requireOuterEdge:false</c>), one per area rather than
+        /// one per built wall, since a wall shared by two areas is "north" for only one of them.</summary>
+        public static void BuildFarWallLight(Transform host, WorldConfig cfg, List<StructuralWall> walls, float wallHeight)
+        {
+            if (host == null || cfg?.areas == null) return;
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area == null) continue;
+                StructuralWall match = FindAreaWall(walls, area, Wall.N, requireOuterEdge: false);
+                if (match == null) continue;
+
+                ReefKit.BuildFarWallStrip(host, match.transform, wallHeight);
+            }
         }
     }
 }

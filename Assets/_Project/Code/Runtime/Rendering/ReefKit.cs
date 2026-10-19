@@ -116,6 +116,8 @@ namespace MaxWorlds.Rendering
             BuildCircuitSpine(host, walls);
             BuildObservationGlass(host, walls);
             BuildWallLamps(host, walls);
+            BuildWallDetail(host, walls);
+            BuildCornerColumns(host, walls);
         }
 
         /// <summary>Stops <see cref="MaxWorlds.VFX.RuntimeSurfaceDirector"/>'s own later, generic
@@ -173,16 +175,9 @@ namespace MaxWorlds.Rendering
                 Transform wt = wall.transform;
                 Vector3 scale = wt.lossyScale;
 
-                GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                strip.name = $"{wt.name} Circuit";
-                strip.transform.SetParent(root.transform, false);
+                Vector3 size = new Vector3(scale.x + CircuitStripProud, CircuitStripHeight, scale.z + CircuitStripProud);
+                GameObject strip = MeshBox(root.transform, $"{wt.name} Circuit", Vector3.zero, size, WorldMaterials.M_Circuit_Cyan);
                 strip.transform.position = new Vector3(wt.position.x, CircuitStripHeight * 0.5f, wt.position.z);
-                strip.transform.localScale = new Vector3(
-                    scale.x + CircuitStripProud, CircuitStripHeight, scale.z + CircuitStripProud);
-                StripColliders(strip);
-
-                var rend = strip.GetComponent<Renderer>();
-                if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
             }
 
             root.AddComponent<ReefCircuitFlow>().Configure(WorldMaterials.M_Circuit_Cyan, CircuitScrollSpeed);
@@ -246,14 +241,9 @@ namespace MaxWorlds.Rendering
         private static void GlassBar(Transform parent, string name, Vector3 wallPosition, Vector3 wallScale,
             float barHeight, float yOffset, Material material)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            go.transform.SetParent(parent, false);
+            Vector3 size = new Vector3(wallScale.x + GlassProud, barHeight, wallScale.z + GlassProud);
+            GameObject go = MeshBox(parent, name, Vector3.zero, size, material);
             go.transform.position = new Vector3(wallPosition.x, wallPosition.y + yOffset, wallPosition.z);
-            go.transform.localScale = new Vector3(wallScale.x + GlassProud, barHeight, wallScale.z + GlassProud);
-            StripColliders(go);
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = material;
         }
 
         // MV-1055, change item 2: small violet accent lamps mounted along the top of every hull
@@ -311,6 +301,216 @@ namespace MaxWorlds.Rendering
                     if (rend != null) rend.sharedMaterial = WorldMaterials.M_LampViolet;
                 }
             }
+        }
+
+        // MV-1255: the room walls' own ribs/panels/conduit, a per-room magenta far-wall strip and
+        // heavy corner columns — upgrades DressHull's own edge-wall dressing past the plain slab +
+        // base trim it used to leave a 3 m Reef wall as (Lee, 19 Oct 2026: "make it amazing").
+        // Generated meshes only (ticket: "Do not re-raise ... primitives for visible parts"), same
+        // vocabulary as MV-1251's bulkhead rebuild.
+        private const float WallRibPitch = 3f;          // ticket: "structural ribs every 3 m"
+        private const float WallRibRadius = 0.09f;
+        private const float WallRibProud = 0.05f;       // how far a rib stands proud of its wall face
+        private const float WallPanelSeamWidth = 0.04f;
+        private const float WallPanelSeamProud = 0.015f; // same anti-z-fight idiom as CircuitStripProud
+        private const float WallConduitHeightFraction = 0.6f; // ticket: "about 60% of wall height"
+        private const float WallConduitRadius = 0.05f;
+        private const float CornerColumnDiameterFactor = 1.6f; // column footprint, relative to wall thickness
+        private const float CornerClusterTolerance = 0.6f;     // metres - endpoints this close share one corner
+
+        /// <summary>Ribs, recessed-panel seams and a conduit run on BOTH long faces of every built
+        /// wall — an interior partition borders two rooms, and the design frames show the dressed
+        /// read from inside either one, so there is no single "front" face to pick.</summary>
+        private static void BuildWallDetail(Transform host, List<StructuralWall> walls)
+        {
+            foreach (StructuralWall wall in walls)
+            {
+                Transform wt = wall.transform;
+                Vector3 scale = wt.lossyScale;
+                bool alongX = scale.x >= scale.z;
+                float faceLength = alongX ? scale.x : scale.z;
+                float faceDepth = alongX ? scale.z : scale.x;
+
+                var root = new GameObject($"{wt.name} Wall Detail");
+                root.transform.SetParent(host, false);
+                root.transform.position = wt.position;
+                MarkDressed(root);
+
+                foreach (int side in new[] { -1, 1 })
+                    BuildWallFaceDetail(root.transform, alongX, faceLength, faceDepth, scale.y, side);
+            }
+        }
+
+        /// <summary>One face's own ribs (standing proud, chamfered), the seam line down the centre of
+        /// each recessed bay between them, and one horizontal conduit crossing the face at
+        /// <see cref="WallConduitHeightFraction"/> of the wall's own height — all local to
+        /// <paramref name="root"/>, which <see cref="BuildWallDetail"/> already positioned at the
+        /// wall's own world centre, same "root carries the position, children are pure local offsets"
+        /// idiom <see cref="BuildBulkheadFace"/> already uses for the hull-fill blocks.</summary>
+        private static void BuildWallFaceDetail(Transform root, bool alongX, float faceLength, float faceDepth,
+            float height, int side)
+        {
+            Vector3 faceNormal = alongX ? new Vector3(0f, 0f, side) : new Vector3(side, 0f, 0f);
+            float faceOffset = faceDepth * 0.5f + WallRibProud;
+
+            int ribs = Mathf.Max(2, Mathf.FloorToInt(faceLength / WallRibPitch) + 1);
+            Mesh ribMesh = CharacterMeshes.Prism(4, WallRibRadius, WallRibRadius, height, 0.12f);
+
+            for (int i = 0; i < ribs; i++)
+            {
+                float t = ribs <= 1 ? 0f : (float)i / (ribs - 1) - 0.5f;
+                float along = t * faceLength;
+                Vector3 ribPos = faceNormal * faceOffset + (alongX ? new Vector3(along, 0f, 0f) : new Vector3(0f, 0f, along));
+                MeshPart(root, "Wall Rib", ribMesh, ribPos, WorldMaterials.M_MetalDark);
+
+                if (i < ribs - 1)
+                {
+                    float nextAlong = (ribs <= 1 ? 0f : (float)(i + 1) / (ribs - 1) - 0.5f) * faceLength;
+                    float mid = (along + nextAlong) * 0.5f;
+                    BuildWallPanelSeam(root, alongX, faceNormal, faceDepth, mid, height);
+                }
+            }
+
+            BuildWallConduit(root, alongX, faceNormal, faceOffset, faceLength, height);
+        }
+
+        /// <summary>A thin seam line flush with the wall's own face, down the centre of the recessed
+        /// bay between two ribs (ticket: "recessed panels between the ribs, with seam lines") — the
+        /// generated-mesh substitute for carving the panel itself, which the wall's own single body
+        /// mesh has no geometry budget to do per-ticket ("keep everything within the wall's own
+        /// footprint").</summary>
+        private static void BuildWallPanelSeam(Transform root, bool alongX, Vector3 faceNormal, float faceDepth,
+            float along, float height)
+        {
+            float seamOffset = faceDepth * 0.5f + WallPanelSeamProud;
+            Vector3 pos = faceNormal * seamOffset + (alongX ? new Vector3(along, 0f, 0f) : new Vector3(0f, 0f, along));
+            Vector3 size = alongX
+                ? new Vector3(WallPanelSeamWidth, height * 0.86f, WallPanelSeamProud * 2f)
+                : new Vector3(WallPanelSeamProud * 2f, height * 0.86f, WallPanelSeamWidth);
+            MeshBox(root, "Wall Panel Seam", pos, size, WorldMaterials.M_MetalDark);
+        }
+
+        /// <summary>One horizontal conduit run the full length of the face (ticket: "one horizontal
+        /// conduit run at about 60% of wall height").</summary>
+        private static void BuildWallConduit(Transform root, bool alongX, Vector3 faceNormal, float faceOffset,
+            float faceLength, float height)
+        {
+            float y = height * (WallConduitHeightFraction - 0.5f);
+            Vector3 pos = faceNormal * faceOffset + new Vector3(0f, y, 0f);
+            Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
+            Mesh pipe = CharacterMeshes.Beam(faceLength * 0.94f, WallConduitRadius, WallConduitRadius, 8);
+            MeshPart(root, "Wall Conduit", pipe, pos, WorldMaterials.M_MetalDark, lie);
+        }
+
+        /// <summary>A heavy column at every point where two or more DISTINCT built walls' own
+        /// endpoints meet (ticket: "every inner corner gets a heavy column") — found by clustering
+        /// every wall's two endpoints rather than threaded in as authored room-adjacency data, the
+        /// same "ask the built geometry, not the author data" idiom <see cref="ApplyDeckTiling"/>
+        /// already uses. Reuses <see cref="BuildPillar"/> outright: "a chamfered 8-sided Prism column
+        /// ... with banding" is exactly what it already builds.</summary>
+        private static void BuildCornerColumns(Transform host, List<StructuralWall> walls)
+        {
+            var endpoints = new List<(Vector3 pos, float thickness, float height, StructuralWall wall)>();
+            foreach (StructuralWall wall in walls)
+            {
+                Transform wt = wall.transform;
+                Vector3 scale = wt.lossyScale;
+                bool alongX = scale.x >= scale.z;
+                float length = alongX ? scale.x : scale.z;
+                float thickness = alongX ? scale.z : scale.x;
+
+                Vector3 a = alongX
+                    ? new Vector3(wt.position.x - length * 0.5f, wt.position.y, wt.position.z)
+                    : new Vector3(wt.position.x, wt.position.y, wt.position.z - length * 0.5f);
+                Vector3 b = alongX
+                    ? new Vector3(wt.position.x + length * 0.5f, wt.position.y, wt.position.z)
+                    : new Vector3(wt.position.x, wt.position.y, wt.position.z + length * 0.5f);
+
+                endpoints.Add((a, thickness, scale.y, wall));
+                endpoints.Add((b, thickness, scale.y, wall));
+            }
+
+            var placed = new List<Vector3>();
+            foreach (var ep in endpoints)
+            {
+                var meeting = new HashSet<StructuralWall>();
+                foreach (var other in endpoints)
+                    if (FlatDistance(ep.pos, other.pos) <= CornerClusterTolerance) meeting.Add(other.wall);
+                if (meeting.Count < 2) continue;
+
+                bool already = false;
+                foreach (Vector3 p in placed)
+                    if (FlatDistance(p, ep.pos) <= CornerClusterTolerance) { already = true; break; }
+                if (already) continue;
+
+                placed.Add(ep.pos);
+                float diameter = ep.thickness * CornerColumnDiameterFactor;
+                BuildPillar(host, ep.pos, new Vector3(diameter, ep.height, diameter));
+            }
+        }
+
+        private static float FlatDistance(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x, dz = a.z - b.z;
+            return Mathf.Sqrt(dx * dx + dz * dz);
+        }
+
+        private const float FarWallStripHeight = 0.12f;
+        private const float FarWallStripProud = 0.02f;
+
+        /// <summary>A magenta emissive strip along the TOP of ONE specific wall (ticket: "a magenta
+        /// emissive strip along the TOP of each room's far wall (the north wall, the one the camera
+        /// faces most)"). Per-ROOM, not per-map: <see cref="MaxWorlds.Arena.ReefAreaKit"/> is the
+        /// caller, since picking "this room's own north wall" needs <c>WorldArea</c> data this
+        /// Rendering-assembly class has no reference to — the same WHERE/WHAT split
+        /// <see cref="BuildGlowHatch"/>/<see cref="BuildObservationWindow"/> already keep with
+        /// <c>ReefAreaKit</c>. Distinct from <see cref="BuildObservationGlass"/>'s cyan top strip
+        /// (outer-hull walls only) and <see cref="BuildCircuitSpine"/>'s cyan BASE trim (every wall):
+        /// this one is magenta, top-mounted, and per-room.</summary>
+        public static void BuildFarWallStrip(Transform host, Transform wall, float wallHeight)
+        {
+            if (host == null || wall == null) return;
+
+            Vector3 scale = wall.lossyScale;
+            Vector3 size = new Vector3(scale.x + FarWallStripProud, FarWallStripHeight, scale.z + FarWallStripProud);
+            GameObject strip = MeshBox(host, $"{wall.name} Far Wall Strip", Vector3.zero, size, WorldMaterials.M_KelpMagenta);
+            strip.transform.position = new Vector3(
+                wall.position.x, wall.position.y + wallHeight * 0.5f - FarWallStripHeight * 0.5f, wall.position.z);
+            MarkDressed(strip);
+        }
+
+        private const float GateFrameThickness = 0.14f;
+        private const float GateFrameProud = 0.03f;
+        private const float GateFrameEdgeMarkWidth = 0.06f;
+
+        /// <summary>A reinforced surround for a gate opening (ticket: "a reinforced frame (thick
+        /// ribbed surround plus hazard-orange edge marks) around each gate opening, consistent with
+        /// the existing Reef gate skin") — two ribbed posts (chamfered 4-sided Prism, same "ribbed"
+        /// vocabulary <see cref="BuildPillar"/>/<see cref="BuildBulkheadFace"/> already use) plus a
+        /// header, with a hazard-orange edge mark down each post's outer edge. Built in the caller's
+        /// own already-cancelled local space (<see cref="MaxWorlds.Arena.AreaGate"/>'s own inverse-
+        /// scale root, the same idiom its <c>ApplyCitySkin</c> uses — see that method's own doc), so
+        /// <paramref name="width"/>/<paramref name="height"/>/<paramref name="depth"/> are the
+        /// doorway's own real metres regardless of which wall the gate sits on.</summary>
+        public static void BuildGateFrame(Transform parent, float width, float height, float depth)
+        {
+            Mesh post = CharacterMeshes.Prism(4, GateFrameThickness * 0.5f, GateFrameThickness * 0.5f, height, 0.15f);
+
+            foreach (int side in new[] { -1, 1 })
+            {
+                float x = side * (width * 0.5f + GateFrameThickness * 0.5f - GateFrameProud);
+                MeshPart(parent, "Gate Frame Post", post, new Vector3(x, 0f, 0f), WorldMaterials.M_MetalDark);
+
+                Vector3 markSize = new Vector3(GateFrameEdgeMarkWidth, height * 0.92f, depth + GateFrameProud);
+                MeshBox(parent, "Gate Frame Edge Mark", new Vector3(x + side * GateFrameThickness * 0.5f, 0f, 0f),
+                    markSize, WorldMaterials.M_Hazard);
+            }
+
+            Mesh header = CharacterMeshes.Prism(4, GateFrameThickness * 0.5f, GateFrameThickness * 0.5f,
+                width + GateFrameThickness, 0.15f);
+            MeshPart(parent, "Gate Frame Header", header,
+                new Vector3(0f, height * 0.5f + GateFrameThickness * 0.5f - GateFrameProud, 0f),
+                WorldMaterials.M_MetalDark, Quaternion.Euler(0f, 0f, 90f));
         }
 
         // MV-1054, change item 1: the ocean pressing in beyond the map's own edge.

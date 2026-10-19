@@ -358,6 +358,10 @@ namespace MaxWorlds.Arena
             ReefAreaKit.BuildDecor(host, cfg);
             ReefAreaKit.BuildWindows(host, cfg, walls, wallHeight);
             ReefAreaKit.BuildWallDressing(host, cfg, walls, wallHeight, wallThickness);
+            // MV-1255: the per-area magenta far-wall strip — needs WorldArea data to know which built
+            // wall IS a given room's own north side, same reason the three calls above already live
+            // here rather than inside ReefKit.DressHull itself.
+            ReefAreaKit.BuildFarWallLight(host, cfg, walls, wallHeight);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

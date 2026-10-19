@@ -138,6 +138,34 @@ namespace MaxWorlds.Arena
             rend.GetPropertyBlock(_reefMpb);
             _reefMpb.SetColor("_BaseColor", WorldMaterials.ReefHazard);
             rend.SetPropertyBlock(_reefMpb);
+
+            BuildReefGateFrame();
+        }
+
+        private GameObject _reefFrameRoot;
+
+        /// <summary>MV-1255: a reinforced frame — thick ribbed surround plus hazard-orange edge marks
+        /// — around this gate's own opening (ticket: "consistent with the existing Reef gate skin").
+        /// Same "inverse-scale child root cancels the gate's own (width,height,depth) scale" idiom
+        /// <see cref="ApplyCitySkin"/>'s own doc comment explains (MV-1203): <see cref="ReefKit.BuildGateFrame"/>
+        /// builds in real metres, and this root's local scale undoes the gate's scale so those metres
+        /// land correctly regardless of doorway size or which wall (N/S vs E/W) the gate sits on.
+        /// Idempotent, same contract <see cref="ApplyCitySkin"/> keeps.</summary>
+        private void BuildReefGateFrame()
+        {
+            if (_reefFrameRoot != null) return;
+
+            float width = transform.localScale.x;
+            float height = transform.localScale.y;
+            float depth = transform.localScale.z;
+            if (width <= 0f || height <= 0f || depth <= 0f) return;
+
+            _reefFrameRoot = new GameObject(gameObject.name + " (Reef Frame)");
+            _reefFrameRoot.transform.SetParent(transform, worldPositionStays: false);
+            _reefFrameRoot.transform.localScale = new Vector3(1f / width, 1f / height, 1f / depth);
+            _reefFrameRoot.AddComponent<KeepsOwnMaterial>();
+
+            ReefKit.BuildGateFrame(_reefFrameRoot.transform, width, height, depth);
         }
 
         /// <summary>MV-1249: re-skins this gate for World 5's Mothership — the same MaterialPropertyBlock
