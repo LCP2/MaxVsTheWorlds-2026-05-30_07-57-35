@@ -84,7 +84,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 MapBuild built = MapRuntime.Build(map, root.transform);
-                ShipDressing.Dress(root.transform, cfg, built.Cover);
+                ShipDressing.Dress(root.transform, map, cfg, built.Cover);
                 Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
 
                 var cradlePadByArea = new Dictionary<string, List<Vector2>>();

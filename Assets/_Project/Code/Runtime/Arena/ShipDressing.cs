@@ -21,16 +21,47 @@ namespace MaxWorlds.Arena
     public static class ShipDressing
     {
         /// <summary>The full Ship pass for a real layout (MV-1232, the Hangar Bay ticket this class's
-        /// own header named as the one to call wall/floor dressing directly): cover dressing plus the
-        /// ticket's own "launch-pad hazard marking" — everything <see cref="DressCover"/> alone left
-        /// out. Wall dressing is still left for a later ticket; a plain structural wall reads fine at
-        /// this camera angle and the tie-breaker order (readability over visual richness) does not
-        /// need it to ship this one.</summary>
-        public static int Dress(Transform host, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
+        /// own header named as the one to call wall/floor dressing directly): cover dressing, the
+        /// ticket's own "launch-pad hazard marking", and MV-1259's own generated atlas floor for every
+        /// real combat area — everything <see cref="DressCover"/> alone left out. Wall dressing is still
+        /// left for a later ticket; a plain structural wall reads fine at this camera angle and the
+        /// tie-breaker order (readability over visual richness) does not need it to ship this one.</summary>
+        public static int Dress(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
             int dressed = DressCover(host, cover);
+            BuildFloors(host, map);
             BuildLaunchPad(host, cfg);
             return dressed;
+        }
+
+        /// <summary>MV-1259: one <see cref="ShipKit.BuildAtlasFloor"/> per real combat area —
+        /// <see cref="MapZone.level"/> == 0 (skips a deck overlay, which shares its floor zone's own
+        /// footprint already) and <see cref="MapZone.AreaIndex"/> &gt; 0 (skips the entry stub, which
+        /// never matches the "area&lt;N&gt;" id convention). <see cref="MothershipDecks.LookFor"/> is the
+        /// one per-area lookup <see cref="ShipKit"/> itself cannot make (Rendering assembly, can't see
+        /// Arena/Gameplay) — resolved here and handed down as a plain <see cref="Color"/>, same contract
+        /// every other ShipKit builder keeps. Every area's floor is built under one shared root so a
+        /// single <see cref="StaticBatchingUtility.Combine"/> call covers the whole batch, same pattern
+        /// <see cref="MaxWorlds.Arena.BackyardBackdrop"/>/<see cref="MaxWorlds.Arena.BackyardDressing"/>
+        /// already use for their own placed pieces.</summary>
+        private static void BuildFloors(Transform host, MapData map)
+        {
+            if (map?.zones == null) return;
+
+            var floors = new GameObject("Ship Floors").transform;
+            floors.SetParent(host, false);
+
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.level != 0) continue;
+                int areaIndex = zone.AreaIndex;
+                if (areaIndex <= 0) continue;
+
+                Color seamGlow = MothershipDecks.LookFor(areaIndex).RimColor;
+                ShipKit.BuildAtlasFloor(floors, zone.Footprint, areaIndex, seamGlow);
+            }
+
+            StaticBatchingUtility.Combine(floors.gameObject);
         }
 
         /// <summary>MV-1232: the launch-pad hazard marking drawn in the ticket's own design image — a

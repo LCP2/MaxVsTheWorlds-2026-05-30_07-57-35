@@ -287,7 +287,7 @@ namespace MaxWorlds.Arena
             // own launch-pad hazard marking, now that real floor geometry exists — see ShipDressing.Dress.
             else if (world.Kit == WorldKit.Ship)
             {
-                ShipDressing.Dress(host, _cfg, cover);
+                ShipDressing.Dress(host, _map, _cfg, cover);
             }
 
             // MV-759: a gated world re-skins its own doors into a round portal/sliding set instead of
