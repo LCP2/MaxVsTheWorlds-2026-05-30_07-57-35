@@ -1143,5 +1143,390 @@ namespace MaxWorlds.Rendering
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
         }
+
+        // ---------------------------------------------------------------- hero set pieces & template dressing (MV-1261)
+
+        // Lee, 19 Oct 2026 ("I want interest ... make this incredible"): one signature set piece for
+        // every hero area (Hangar Bay a1, Assembly Line a8, Specimen Vault a15, Reactor Ring a22, The
+        // Bridge a30) plus a themed dressing pass for every other ("template") area, so no two adjacent
+        // areas read alike. A "stencilled" label (the ticket's own "01"/"LINE"/"THE COLLECTION") is
+        // built as an abstract painted roundel/plaque, never a literal glyph: this kit has no text-
+        // rasterising primitive, every other builder in this file already paints an abstract motif the
+        // same way (e.g. BuildPlateMesh's own "corner mark"/"ring rivet" atlas cells), and the ticket's
+        // own BUILD MODE: INDICATIVE makes its reference image, not its prose, authoritative on exact
+        // appearance. WHERE each piece lands is decided by MaxWorlds.Arena.ShipSetPieces (the WorldArea/
+        // CoverPiece/StructuralWall data this Rendering-assembly kit cannot see); every method below only
+        // ever takes plain positions/sizes, same contract every other builder in this file keeps.
+
+        private static readonly Color HangarFieldTone = Rgb(120, 200, 235);
+        private static readonly Color StarTone = Rgb(235, 240, 250);
+        private static readonly Color AmberWork = Rgb(230, 160, 40);
+        private static readonly Color WeldSpark = Rgb(255, 235, 180);
+        private static readonly Color TrophyBronze = Rgb(196, 150, 80);
+        private static readonly Color VentChannelOrange = Rgb(255, 120, 40);
+        private static readonly Color CarpetRed = Rgb(90, 20, 24);
+        private static readonly Color HoloTeal = Rgb(90, 220, 215);
+
+        /// <summary>Hangar Bay (a1, ticket Change item 1): the north wall's own hangar mouth — a
+        /// shimmering force-field pane framed in near-black, a scatter of stars and a glimpse of the
+        /// planet Sotami beyond. <paramref name="a"/>/<paramref name="b"/> are the opening's own
+        /// endpoints in world XZ, <paramref name="inward"/> points into the room (same convention as
+        /// <see cref="BuildBulkheadPanel"/>).</summary>
+        public static GameObject BuildHangarMouth(Transform parent, Vector2 a, Vector2 b, Vector3 inward, float wallHeight)
+        {
+            Transform root = NewRoot(parent, "Hangar Mouth");
+            Vector2 mid = (a + b) * 0.5f;
+            float w = Mathf.Max(0.5f, (b - a).magnitude);
+            Vector2 dir = (b - a).normalized;
+            Vector3 n = new Vector3(inward.x, 0f, inward.z);
+            n = n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.forward;
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+
+            MeshBox(root, "Mouth Frame", new Vector3(mid.x, wallHeight * 0.5f, mid.y) - n * 0.02f,
+                new Vector3(w, wallHeight, 0.1f).Oriented(dir), NearBlack);
+            EmissiveBox(root, "Force Field", new Vector3(mid.x, wallHeight * 0.52f, mid.y) + n * 0.04f,
+                new Vector3(w * 0.94f, wallHeight * 0.9f, 0.02f).Oriented(dir), HangarFieldTone);
+
+            for (int i = 0; i < 5; i++)
+            {
+                float along = Hash01($"hangarstar_{i}") - 0.5f;
+                float up = Hash01($"hangarstar_h_{i}");
+                Vector3 starPos = new Vector3(mid.x, wallHeight * (0.55f + up * 0.5f), mid.y)
+                    + n * (0.3f + up * 0.2f) + dir3 * (along * w * 0.85f);
+                EmissiveBox(root, $"Star {i}", starPos, new Vector3(0.06f, 0.06f, 0.015f), StarTone);
+            }
+
+            EmissiveBox(root, "Sotami Glimpse", new Vector3(mid.x, wallHeight * 0.8f, mid.y) + n * 0.5f,
+                new Vector3(w * 0.2f, w * 0.2f, 0.02f).Oriented(dir), SotamiTone);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Hangar Bay (a1, ticket Change item 1): the painted launch ring on the deck — a gold
+        /// outer ring, a cyan inner ring, and a bright roundel at the centre standing in for the
+        /// ticket's own stencilled "01" (see this section's own header on why).</summary>
+        public static GameObject BuildLaunchRingMarking(Transform parent, Vector3 groundCenter, float radius)
+        {
+            Transform root = NewRoot(parent, "Launch Ring");
+            Mesh outer = CharacterMeshes.Ring(radius * 0.92f, radius, 0.03f, 32);
+            Mesh inner = CharacterMeshes.Ring(radius * 0.74f, radius * 0.82f, 0.03f, 32);
+
+            MeshPart(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, GoldLamp);
+            MeshPart(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, HangarFieldTone);
+            EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
+                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), GoldLamp);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Assembly Line (a8, ticket Change item 2): amber edge-light strips flanking the
+        /// conveyor's own run, 4 slow-riding part silhouettes along its top, overhead-rail shadow stripes
+        /// across the floor, and yellow lane lines either side of the belt (the ticket's own "LINE"
+        /// stencil — see this section's header — is these lane lines, not a separate glyph).
+        /// <paramref name="conveyorGroundCenter"/>/<paramref name="conveyorSize"/> are the authored
+        /// <c>ship_conveyor</c> cover's own ground-level centre/size.</summary>
+        public static GameObject BuildAssemblyLineHero(Transform parent, Vector3 conveyorGroundCenter, Vector3 conveyorSize, Rect areaFootprint)
+        {
+            Transform root = NewRoot(parent, "Assembly Line Hero");
+            float beltTop = conveyorSize.y * 0.94f;
+            bool alongX = conveyorSize.x >= conveyorSize.z;
+
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 edgePos = conveyorGroundCenter + new Vector3(0f, beltTop, 0f) +
+                    (alongX ? new Vector3(0f, 0f, side * conveyorSize.z * 0.52f) : new Vector3(side * conveyorSize.x * 0.52f, 0f, 0f));
+                Vector3 edgeSize = alongX
+                    ? new Vector3(conveyorSize.x * 0.96f, 0.03f, 0.04f)
+                    : new Vector3(0.04f, 0.03f, conveyorSize.z * 0.96f);
+                EmissiveBox(root, $"Edge Light {(side < 0 ? "A" : "B")}", edgePos, edgeSize, AmberWork);
+            }
+
+            const int parts = 4;
+            for (int i = 0; i < parts; i++)
+            {
+                float t = (i + 0.5f) / parts - 0.5f;
+                Vector3 along = alongX ? new Vector3(t * conveyorSize.x * 0.8f, 0f, 0f) : new Vector3(0f, 0f, t * conveyorSize.z * 0.8f);
+                Vector3 partPos = conveyorGroundCenter + Vector3.up * (beltTop + 0.1f) + along;
+                Mesh part = CharacterMeshes.Prism(5, 0.16f, 0.12f, 0.22f, 0.05f);
+                MeshPart(root, $"Riding Part {i}", part, partPos, i % 2 == 0 ? RustOrange : Teal);
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                float t = (i + 1f) / 4f;
+                Vector3 stripePos = alongX
+                    ? new Vector3(Mathf.Lerp(areaFootprint.xMin, areaFootprint.xMax, t), 0.01f, areaFootprint.center.y)
+                    : new Vector3(areaFootprint.center.x, 0.01f, Mathf.Lerp(areaFootprint.yMin, areaFootprint.yMax, t));
+                Vector3 stripeSize = alongX
+                    ? new Vector3(0.6f, 0.004f, areaFootprint.height * 0.9f)
+                    : new Vector3(areaFootprint.width * 0.9f, 0.004f, 0.6f);
+                MeshBox(root, $"Overhead Shadow {i}", stripePos, stripeSize, NearBlack);
+            }
+
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 lanePos = conveyorGroundCenter + Vector3.up * 0.015f +
+                    (alongX ? new Vector3(0f, 0f, side * conveyorSize.z * 0.7f) : new Vector3(side * conveyorSize.x * 0.7f, 0f, 0f));
+                Vector3 laneSize = alongX
+                    ? new Vector3(conveyorSize.x * 1.1f, 0.006f, 0.12f)
+                    : new Vector3(0.12f, 0.006f, conveyorSize.z * 1.1f);
+                MeshBox(root, $"Lane Line {(side < 0 ? "A" : "B")}", lanePos, laneSize, HazardYellow);
+            }
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Assembly Line (a8, ticket Change item 2): welding sparks and light at one assembly
+        /// cradle — a bright spark glint plus a dim additive floor pool.</summary>
+        public static GameObject BuildCradleWeldSpark(Transform parent, Vector3 cradleGroundCenter)
+        {
+            Transform root = NewRoot(parent, "Cradle Weld Spark");
+            EmissiveBox(root, "Spark", cradleGroundCenter + Vector3.up * 1.1f, new Vector3(0.1f, 0.14f, 0.02f), WeldSpark);
+            CityKit.BuildPool(root, cradleGroundCenter, 0.9f, 0.9f, AmberWork, 0.5f);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Specimen Vault (a15, ticket Change item 3): the two inlaid floor rings around the
+        /// room's own centre, plus the empty centre case's own slowly-spinning floating gold ring.</summary>
+        public static GameObject BuildVaultFloorRings(Transform parent, Vector3 groundCenter, float radius)
+        {
+            Transform root = NewRoot(parent, "Vault Floor Rings");
+
+            Mesh outer = CharacterMeshes.Ring(radius * 0.9f, radius, 0.03f, 36);
+            Mesh inner = CharacterMeshes.Ring(radius * 0.55f, radius * 0.62f, 0.03f, 36);
+            MeshPart(root, "Inlaid Ring Outer", outer, groundCenter + Vector3.up * 0.02f, GoldLamp);
+            MeshPart(root, "Inlaid Ring Inner", inner, groundCenter + Vector3.up * 0.021f, GoldLamp);
+
+            // "Floating Gold Ring" is left for the caller (MaxWorlds.Arena.ShipSetPieces) to find by
+            // name and spin — the Rendering assembly has no reference to MaxWorlds.VFX's motion
+            // components, same "Rendering builds it, Arena finds it by name and animates it" split
+            // ReefKit.BuildReactorCore's own doc comment documents for its own spinning rings.
+            Mesh floatingRing = CharacterMeshes.Ring(0.32f, 0.4f, 0.05f, 24);
+            MeshPart(root, "Floating Gold Ring", floatingRing, groundCenter + Vector3.up * 1.4f, GoldLamp);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Specimen Vault (a15, ticket Change item 3): one glass case's own warm spotlight pool
+        /// and a small trophy standing on its plinth — <paramref name="trophyIndex"/> just varies the
+        /// silhouette (the ticket's own 8-trophy list) so the 4 authored cases don't read identically.
+        /// <paramref name="caseCenter"/> is the case cover's own mid-height centre (its authored
+        /// convention, same as every other ShipKit caller that reads a cover piece's <c>Cover.Center</c>
+        /// directly).</summary>
+        public static GameObject BuildVaultTrophyCase(Transform parent, Vector3 caseCenter, Vector3 caseSize, int trophyIndex)
+        {
+            Transform root = NewRoot(parent, "Vault Trophy");
+            CityKit.BuildPool(root, new Vector3(caseCenter.x, 0f, caseCenter.z), caseSize.x * 0.9f, caseSize.z * 0.9f, GoldLamp, 0.5f);
+
+            Vector3 plinthTop = caseCenter + Vector3.up * (caseSize.y * 0.3f + 0.02f);
+            bool tall = trophyIndex % 2 == 0;
+            Mesh trophy = tall
+                ? CharacterMeshes.Prism(6, 0.14f, 0.05f, 0.4f, 0.05f)
+                : CharacterMeshes.Sphere(12);
+            GameObject go = MeshPart(root, "Trophy", trophy, plinthTop + Vector3.up * (tall ? 0.2f : 0.14f), TrophyBronze);
+            if (!tall) go.transform.localScale = Vector3.one * 0.28f;
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Reactor Ring (a22, ticket Change item 4): the reactor core itself — a dark housing, a
+        /// cyan-glowing core, 8 radial light slits on its lid, a cyan outer ring line on the floor, and 3
+        /// heavy cables snaking away from its base.</summary>
+        public static GameObject BuildShipReactorCore(Transform parent, Vector3 groundCenter, float radius, float height)
+        {
+            Transform root = NewRoot(parent, "Reactor Core");
+            Mesh housing = CharacterMeshes.Prism(10, radius, radius * 0.88f, height, 0.15f);
+            MeshPart(root, "Housing", housing, groundCenter + Vector3.up * (height * 0.5f), NearBlack);
+
+            Mesh core = CharacterMeshes.Beam(height * 0.8f, radius * 0.45f, radius * 0.45f, 16);
+            MeshPart(root, "Core Glow", core, groundCenter + Vector3.up * (height * 0.5f), HangarFieldTone);
+
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i / 8f * Mathf.PI * 2f;
+                Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                Mesh slit = CharacterMeshes.Beam(radius * 0.7f, 0.025f, 0.025f, 6);
+                Quaternion rot = Quaternion.FromToRotation(Vector3.up, dir);
+                Vector3 pos = groundCenter + Vector3.up * (height * 1.01f) + dir * (radius * 0.35f);
+                MeshPart(root, $"Lid Slit {i}", slit, pos, HangarFieldTone, rot);
+            }
+
+            Mesh ring = CharacterMeshes.Ring(radius * 1.3f, radius * 1.38f, 0.04f, 32);
+            MeshPart(root, "Outer Ring Line", ring, groundCenter + Vector3.up * 0.015f, HangarFieldTone);
+
+            for (int i = 0; i < 3; i++)
+            {
+                float a = (i + 0.5f) / 3f * Mathf.PI * 2f;
+                Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                Mesh cable = CharacterMeshes.Beam(radius * 1.1f, 0.06f, 0.06f, 8);
+                Quaternion rot = Quaternion.FromToRotation(Vector3.up, dir);
+                Vector3 pos = groundCenter + dir * (radius * 0.9f) + Vector3.up * 0.04f;
+                MeshPart(root, $"Cable {i}", cable, pos, SteelPipe, rot);
+            }
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Reactor Ring (a22, ticket Change item 4): one glowing orange channel running from the
+        /// core to an authored plasma vent — a flat emissive beam, the cheapest "the reactor feeds this
+        /// vent" readable line. Null when <paramref name="ventGroundCenter"/> sits on top of
+        /// <paramref name="coreGroundCenter"/> (nothing to draw).</summary>
+        public static GameObject BuildReactorVentChannel(Transform parent, Vector3 coreGroundCenter, Vector3 ventGroundCenter)
+        {
+            Vector3 delta = ventGroundCenter - coreGroundCenter;
+            float length = delta.magnitude;
+            if (length < 0.05f) return null;
+
+            Transform root = NewRoot(parent, "Reactor Vent Channel");
+            Vector3 mid = (coreGroundCenter + ventGroundCenter) * 0.5f;
+            Vector2 dir2 = new Vector2(delta.x, delta.z).normalized;
+            MeshBox(root, "Channel", mid + Vector3.up * 0.012f, new Vector3(length, 0.01f, 0.18f).Oriented(dir2), VentChannelOrange);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>The Bridge (a30, ticket Change item 5): the full-width viewport onto Sotami behind
+        /// the throne, a glowing teal holo star-map table with a small spinning planet hologram, and a
+        /// dark red carpet stripe up the middle flanked by gold lane lines. <paramref name="viewportA"/>/
+        /// <paramref name="viewportB"/> are the throne wall's own endpoints in world XZ, same convention
+        /// as <see cref="BuildHangarMouth"/>.</summary>
+        public static GameObject BuildBridgeHero(Transform parent, Vector2 viewportA, Vector2 viewportB,
+            Vector3 inward, float wallHeight, Vector3 tableGroundCenter, Rect areaFootprint)
+        {
+            Transform root = NewRoot(parent, "Bridge Hero");
+            Vector2 mid = (viewportA + viewportB) * 0.5f;
+            float w = Mathf.Max(0.5f, (viewportB - viewportA).magnitude);
+            Vector2 dir = (viewportB - viewportA).normalized;
+            Vector3 n = new Vector3(inward.x, 0f, inward.z);
+            n = n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.forward;
+
+            MeshBox(root, "Viewport Frame", new Vector3(mid.x, wallHeight * 0.55f, mid.y) - n * 0.02f,
+                new Vector3(w, wallHeight * 0.8f, 0.08f).Oriented(dir), NearBlack);
+            EmissiveBox(root, "Viewport Pane", new Vector3(mid.x, wallHeight * 0.56f, mid.y) + n * 0.04f,
+                new Vector3(w * 0.95f, wallHeight * 0.72f, 0.02f).Oriented(dir), SotamiTone);
+
+            Mesh tableBase = CharacterMeshes.Ring(0f, 1.1f, 0.06f, 24);
+            MeshPart(root, "Holo Table Base", tableBase, tableGroundCenter + Vector3.up * 0.9f, NearBlack);
+            EmissiveBox(root, "Holo Glow", tableGroundCenter + Vector3.up * 0.95f, new Vector3(1.8f, 0.02f, 1.8f), HoloTeal);
+            // "Planet Hologram" is left for the caller (MaxWorlds.Arena.ShipSetPieces) to find by name
+            // and spin — same Rendering/VFX split as "Floating Gold Ring" above.
+            GameObject planet = MeshPart(root, "Planet Hologram", CharacterMeshes.Sphere(16), tableGroundCenter + Vector3.up * 1.35f, HoloTeal);
+            planet.transform.localScale = Vector3.one * 0.5f;
+
+            float carpetLength = areaFootprint.height * 0.9f;
+            MeshBox(root, "Carpet Stripe", new Vector3(areaFootprint.center.x, 0.01f, areaFootprint.center.y),
+                new Vector3(2.2f, 0.006f, carpetLength), CarpetRed);
+            foreach (float side in new[] { -1f, 1f })
+                MeshBox(root, $"Carpet Lane {(side < 0 ? "A" : "B")}",
+                    new Vector3(areaFootprint.center.x + side * 1.3f, 0.012f, areaFootprint.center.y),
+                    new Vector3(0.1f, 0.006f, carpetLength), GoldLamp);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>The Bridge (a30, ticket Change item 5): one console's own small lit-screen accent on
+        /// top of an already-built <c>ship_console_bank</c> cover piece.</summary>
+        public static GameObject BuildConsoleScreen(Transform parent, Vector3 consoleGroundCenter, Vector3 consoleSize)
+        {
+            Transform root = NewRoot(parent, "Console Screen");
+            EmissiveBox(root, "Screen", consoleGroundCenter + Vector3.up * (consoleSize.y * 0.86f),
+                new Vector3(consoleSize.x * 0.5f, consoleSize.y * 0.22f, 0.02f), HoloTeal);
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        // ---------------------------------------------------------------- template area theming (MV-1261)
+
+        /// <summary>One of the ticket's own 6 template-area themes (Change item 6). A cheap, visually
+        /// distinct 2-3 element accent dropped at a non-hero area's own centre; the caller
+        /// (<see cref="MaxWorlds.Arena.ShipSetPieces"/>) cycles through all 6 by area index, so "no two
+        /// consecutive areas share a theme colour" (ticket) holds by construction — two distinct enum
+        /// values 1 apart in a 6-long cycle are never equal.</summary>
+        public enum TemplateTheme { Spine, CargoBay, Junction, CrewQuarters, PodRacks, VentHall }
+
+        public static GameObject BuildTemplateTheme(Transform parent, TemplateTheme theme, Vector3 groundCenter, Rect areaFootprint)
+        {
+            Transform root = NewRoot(parent, $"Template Theme {theme}");
+            switch (theme)
+            {
+                case TemplateTheme.Spine: BuildSpineTheme(root, groundCenter, areaFootprint); break;
+                case TemplateTheme.CargoBay: BuildCargoBayTheme(root, groundCenter); break;
+                case TemplateTheme.Junction: BuildJunctionTheme(root, groundCenter); break;
+                case TemplateTheme.CrewQuarters: BuildCrewQuartersTheme(root, groundCenter); break;
+                case TemplateTheme.PodRacks: BuildPodRacksTheme(root, groundCenter); break;
+                default: BuildVentHallTheme(root, groundCenter); break;
+            }
+
+            StormdrainKit.Strip(root.gameObject);
+            return root.gameObject;
+        }
+
+        /// <summary>Spine: hazard-striped bulkhead stubs and lane lines (ticket, Change item 6).</summary>
+        private static void BuildSpineTheme(Transform root, Vector3 groundCenter, Rect areaFootprint)
+        {
+            bool alongX = areaFootprint.width >= areaFootprint.height;
+            Vector3 laneSize = alongX
+                ? new Vector3(areaFootprint.width * 0.7f, 0.006f, 0.1f)
+                : new Vector3(0.1f, 0.006f, areaFootprint.height * 0.7f);
+            MeshBox(root, "Lane Line", groundCenter + Vector3.up * 0.01f, laneSize, HazardYellow);
+            MeshBox(root, "Bulkhead Stub Accent", groundCenter + Vector3.up * 0.4f, new Vector3(0.7f, 0.8f, 0.2f), NearBlack);
+        }
+
+        /// <summary>Cargo Bay: crate stencils and floor numbers (ticket, Change item 6).</summary>
+        private static void BuildCargoBayTheme(Transform root, Vector3 groundCenter)
+        {
+            MeshBox(root, "Crate Stencil", groundCenter + Vector3.up * 0.25f, new Vector3(0.5f, 0.5f, 0.45f), RustOrange);
+            EmissiveBox(root, "Floor Number", groundCenter + Vector3.up * 0.011f, new Vector3(0.4f, 0.01f, 0.4f), Teal);
+        }
+
+        /// <summary>Junction: a centre ring and directional arrows (ticket, Change item 6) — the 4
+        /// arrows are axis-aligned bars (N/E/S/W) rather than an arbitrary rotation, so no custom
+        /// transform maths is needed to keep them flat on the floor.</summary>
+        private static void BuildJunctionTheme(Transform root, Vector3 groundCenter)
+        {
+            Mesh ring = CharacterMeshes.Ring(0.8f, 0.95f, 0.04f, 24);
+            MeshPart(root, "Centre Ring", ring, groundCenter + Vector3.up * 0.015f, GoldLamp);
+
+            MeshBox(root, "Arrow N", groundCenter + new Vector3(0f, 0.012f, 1.3f), new Vector3(0.18f, 0.03f, 0.6f), GoldLamp);
+            MeshBox(root, "Arrow S", groundCenter + new Vector3(0f, 0.012f, -1.3f), new Vector3(0.18f, 0.03f, 0.6f), GoldLamp);
+            MeshBox(root, "Arrow E", groundCenter + new Vector3(1.3f, 0.012f, 0f), new Vector3(0.6f, 0.03f, 0.18f), GoldLamp);
+            MeshBox(root, "Arrow W", groundCenter + new Vector3(-1.3f, 0.012f, 0f), new Vector3(0.6f, 0.03f, 0.18f), GoldLamp);
+        }
+
+        /// <summary>Crew Quarters: bunk lights and lockers along walls (ticket, Change item 6).</summary>
+        private static void BuildCrewQuartersTheme(Transform root, Vector3 groundCenter)
+        {
+            MeshBox(root, "Locker", groundCenter + Vector3.up * 0.7f, new Vector3(0.6f, 1.4f, 0.4f), NearBlack);
+            foreach (float side in new[] { -1f, 1f })
+                EmissiveBox(root, $"Bunk Light {(side < 0 ? "A" : "B")}", groundCenter + new Vector3(side * 0.9f, 1.3f, 0f),
+                    new Vector3(0.18f, 0.04f, 0.04f), Teal);
+        }
+
+        /// <summary>Pod Racks: pod status lights (ticket, Change item 6).</summary>
+        private static void BuildPodRacksTheme(Transform root, Vector3 groundCenter)
+        {
+            MeshBox(root, "Pod Accent", groundCenter + Vector3.up * 0.6f, new Vector3(1.2f, 1.2f, 1.2f), RustOrange);
+            EmissiveBox(root, "Status Light", groundCenter + Vector3.up * 1.25f, new Vector3(0.12f, 0.12f, 0.02f), GoldLamp);
+        }
+
+        /// <summary>Vent Hall: grate glow (ticket, Change item 6).</summary>
+        private static void BuildVentHallTheme(Transform root, Vector3 groundCenter)
+        {
+            Color dim = HangarFieldTone * 0.4f;
+            dim.a = 1f;
+            EmissiveBox(root, "Grate Glow", groundCenter + Vector3.up * 0.011f, new Vector3(0.9f, 0.01f, 0.9f), HangarFieldTone);
+            EmissiveBox(root, "Grate Glow Dim", groundCenter + Vector3.up * 0.012f, new Vector3(1.3f, 0.005f, 1.3f), dim);
+        }
     }
 }

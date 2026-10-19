@@ -39,6 +39,11 @@ namespace MaxWorlds.Arena
             float wallHeight = map != null ? map.wallHeight : MapData.DefaultWallHeight;
             ShipAreaKit.BuildWallDressing(host, cfg, walls, wallHeight);
 
+            // MV-1261: one hero set piece per hero area (needs the cover/wall dressing above already
+            // built, to find a conveyor/glass-case/console footprint or a resolved wall run to stand on)
+            // plus a themed dressing pass for every other area.
+            ShipSetPieces.Build(host, cfg, cover, walls, wallHeight);
+
             return dressed;
         }
 
