@@ -83,21 +83,29 @@ namespace MaxWorlds.Arena
 
         private int _lockDestroyed;
         private int _lockTotal;
+        private string _lockLabel = "SHEDS";
 
         /// <summary>How many of the sheds this gate is waiting on are down (MV-571). Pushed in by
         /// <see cref="MaxWorlds.Arena.WorldRunner"/>, which already polls the condition every tick —
-        /// the gate does not reach into the supply line itself.</summary>
-        public void SetLockProgress(int destroyed, int total)
+        /// the gate does not reach into the supply line itself. Defaults the label to "SHEDS" — the
+        /// only noun this call used before MV-1247 gave it a sibling.</summary>
+        public void SetLockProgress(int destroyed, int total) => SetLockProgress("SHEDS", destroyed, total);
+
+        /// <summary>MV-1247: same as the two-arg overload, but naming which noun the progress count is
+        /// in — "CRADLES" for the Command Spine's own 47/47 gate, "SHEDS" for the legacy shed kinds.</summary>
+        public void SetLockProgress(string label, int destroyed, int total)
         {
+            _lockLabel = label;
             _lockDestroyed = destroyed;
             _lockTotal = total;
         }
 
         /// <summary>What the gate's floating label reads (MV-571). A condition-locked gate has no HP
-        /// worth showing, but it still owes the player a reason it won't open — the shed count while
-        /// locked, its ordinary name once the condition resolves.</summary>
+        /// worth showing, but it still owes the player a reason it won't open — the progress count
+        /// (whichever noun <see cref="SetLockProgress"/> last named) while locked, its ordinary name
+        /// once the condition resolves.</summary>
         public string ReadoutName =>
-            Locked && _lockTotal > 0 ? $"SHEDS  {_lockDestroyed} / {_lockTotal}"
+            Locked && _lockTotal > 0 ? $"{_lockLabel}  {_lockDestroyed} / {_lockTotal}"
             : Locked                 ? "LOCKED"
                                      : GateReadoutName;
 

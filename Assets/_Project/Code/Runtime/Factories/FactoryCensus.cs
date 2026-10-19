@@ -32,6 +32,12 @@ namespace MaxWorlds.Factories
         private static readonly List<Replicator> ReplicatorsRegistered = new List<Replicator>(4);
         private static readonly Dictionary<Replicator, string> ReplicatorArea = new Dictionary<Replicator, string>(4);
 
+        // Assembly Cradles (MV-1247, World 5's own replicator-shaped machine) — a world total only, no
+        // per-area tracking: unlike Replicators, no gate here ever needs to ask "destroyed in THESE
+        // areas", only "destroyed world-wide" (the Command Spine's own 47/47 gate).
+        private static readonly List<AssemblyCradle> CradlesStanding = new List<AssemblyCradle>(50);
+        private static readonly List<AssemblyCradle> CradlesRegistered = new List<AssemblyCradle>(50);
+
         /// <summary>Every factory in the run, in the order the map placed them. The first is the one
         /// nearest the start of the level, which is what the tyre tracks and the mission line want.</summary>
         public static IReadOnlyList<MowerHutch> All => Registered;
@@ -78,6 +84,8 @@ namespace MaxWorlds.Factories
             ReplicatorsRegistered.Clear();
             ReplicatorsStanding.Clear();
             ReplicatorArea.Clear();
+            CradlesRegistered.Clear();
+            CradlesStanding.Clear();
         }
 
         public static void Register(MowerHutch hutch)
@@ -237,5 +245,35 @@ namespace MaxWorlds.Factories
                 }
             }
         }
+
+        /// <summary>Register a built <see cref="AssemblyCradle"/> (MV-1247) — called from the cradle's
+        /// own <c>Build()</c>, the same direct self-registration <see cref="MowerHutch"/> uses (never a
+        /// per-area id like <see cref="RegisterReplicator"/>, since nothing here needs "which area").</summary>
+        public static void RegisterCradle(AssemblyCradle cradle)
+        {
+            if (cradle == null || CradlesRegistered.Contains(cradle)) return;
+            CradlesRegistered.Add(cradle);
+            CradlesStanding.Add(cradle);
+        }
+
+        /// <summary>Report a cradle destroyed. Idempotent, same shape as <see cref="ReportReplicatorDestroyed"/>.</summary>
+        public static void ReportCradleDestroyed(AssemblyCradle cradle)
+        {
+            if (cradle == null) return;
+            CradlesStanding.Remove(cradle);
+        }
+
+        /// <summary>How many registered cradles this run has, total — what backs the "CRADLES n/47" HUD
+        /// counter and the Command Spine gate's own label.</summary>
+        public static int CradlesTotal => CradlesRegistered.Count;
+
+        /// <summary>How many registered cradles are down (MV-1247) — the Cradle counterpart to
+        /// <see cref="ReplicatorsDestroyed"/>.</summary>
+        public static int CradlesDestroyed => CradlesRegistered.Count - CradlesStanding.Count;
+
+        /// <summary>True once every cradle this run has is down. False in a run with none — same "never
+        /// cleared, just never had a source" convention as <see cref="AllDown"/>/<see cref="AllReplicatorsDestroyed"/>.</summary>
+        public static bool AllCradlesDestroyed =>
+            CradlesRegistered.Count > 0 && CradlesStanding.Count == 0;
     }
 }

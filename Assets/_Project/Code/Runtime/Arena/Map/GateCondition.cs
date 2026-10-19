@@ -15,6 +15,7 @@ namespace MaxWorlds.Arena
         ShedsDestroyedBefore,
         AllShedsDestroyed,
         ReplicatorsDestroyed,
+        CradlesDestroyed,
         AreaEntered,
         Never,
     }
@@ -36,6 +37,7 @@ namespace MaxWorlds.Arena
     public readonly struct GateCondition
     {
         public const string ReplicatorsDestroyedPrefix = "replicators-destroyed:";
+        public const string CradlesDestroyedPrefix = "cradles-destroyed:";
         public const string AreaEnteredPrefix = "area-entered:";
         private const string AllToken = "all";
 
@@ -70,6 +72,7 @@ namespace MaxWorlds.Arena
             Kind == GateConditionKind.ShedsDestroyedBefore ||
             Kind == GateConditionKind.AllShedsDestroyed ||
             Kind == GateConditionKind.ReplicatorsDestroyed ||
+            Kind == GateConditionKind.CradlesDestroyed ||
             Kind == GateConditionKind.AreaEntered ||
             Kind == GateConditionKind.Never;
 
@@ -144,6 +147,24 @@ namespace MaxWorlds.Arena
                 return true;
             }
 
+            if (token.StartsWith(CradlesDestroyedPrefix, StringComparison.Ordinal))
+            {
+                // MV-1247: world total only — "47 is the world total, not per area" (the ticket's own
+                // instruction), so this grammar deliberately has no per-area list form, unlike
+                // replicators-destroyed above.
+                string list = token.Substring(CradlesDestroyedPrefix.Length);
+                if (list != AllToken)
+                {
+                    reason = $"opensWith '{opensWith}' only supports 'cradles-destroyed:all' — " +
+                             "cradles are a world total, not per-area";
+                    return false;
+                }
+
+                condition = new GateCondition(GateConditionKind.CradlesDestroyed, false, null);
+                reason = null;
+                return true;
+            }
+
             if (token.StartsWith(AreaEnteredPrefix, StringComparison.Ordinal))
             {
                 string id = token.Substring(AreaEnteredPrefix.Length).Trim();
@@ -178,6 +199,8 @@ namespace MaxWorlds.Arena
                     return ReplicatorsAll
                         ? FactoryCensus.AllReplicatorsDestroyed
                         : FactoryCensus.ReplicatorsDestroyedInAreas(ReplicatorAreaIds);
+                case GateConditionKind.CradlesDestroyed:
+                    return FactoryCensus.AllCradlesDestroyed;
                 case GateConditionKind.AreaEntered:
                     return AreaVisitCensus.HasEntered(AreaEnteredId);
                 case GateConditionKind.Never:

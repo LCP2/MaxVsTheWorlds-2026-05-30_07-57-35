@@ -167,6 +167,12 @@ namespace MaxWorlds.Factories
                 alwaysShow: true, showNumber: false);
 
             if (!_active.Contains(this)) _active.Add(this); // MV-1244: see the registry's own doc comment
+
+            // MV-1247: self-register with the HUD counter's own census (as Replicator/MowerHutch do) so
+            // "CRADLES destroyed/47" reads correctly from the first frame instead of HudModel's own
+            // one-factory placeholder default never being overwritten.
+            FactoryCensus.RegisterCradle(this);
+            HudSignals.EmitFactoryRegistered();
         }
 
         private void OnDestroy() => _active.Remove(this);
@@ -400,6 +406,12 @@ namespace MaxWorlds.Factories
         /// <see cref="PayoutParts"/> destroy payout.</summary>
         private void OnDestroyed()
         {
+            // MV-1247: report to the census and the HUD synchronously with the kill — same reasoning as
+            // Replicator.ApplyDestructionEffects (a caller reacting to this same death needs this cradle
+            // already counted, not one WorldRunner poll tick later). Idempotent.
+            FactoryCensus.ReportCradleDestroyed(this);
+            HudSignals.EmitFactoryDestroyed(transform.position);
+
             PickupDirector director = PickupDirector.EnsureInstalled();
             if (_buildTimer > 0f)
             {
