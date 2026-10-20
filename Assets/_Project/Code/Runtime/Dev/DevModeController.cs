@@ -33,6 +33,11 @@ namespace MaxWorlds.Dev
     /// MV-450 adds the same live-and-read-off idiom for pitch: hold <c>;</c> / <c>'</c> to sweep the
     /// angle, the overlay reports it to one decimal. The shipped 72° default doesn't move — this is
     /// purely so Lee can find the number he wants before a follow-up ticket bakes it in.
+    ///
+    /// MV-1270 adds <c>?hud=0</c> (or <c>?hud=off</c>): hides the HUD so a browser-driven WebGL look
+    /// capture isn't contaminated by the Screen-Space-Overlay chrome — the same exclusion
+    /// <c>CaptureDirector</c>'s in-editor presets already apply with <c>hud.gameObject.SetActive(false)</c>.
+    /// Independent of DevMode.Enabled, same reasoning as the MV-940 perf log/jump-to-area params below.
     /// </summary>
     [DisallowMultipleComponent]
     [MaxWorlds.Core.PerfSection("overlay")]
@@ -54,6 +59,11 @@ namespace MaxWorlds.Dev
             // idiom as DevMode itself above — see PerfLogEnabled/TryJumpToArea's own doc comments.
             if (UrlRequestsPerfLog()) PerfLogEnabled = true;
             if (TryGetUrlAreaParam(out string area)) _mv940PendingAreaSpec = area;
+
+            // MV-1270: the HudController this needs to hide may not exist yet at this Awake — it is
+            // applied every frame in TickMv940PerfDebug below, not just once here, so a HUD that
+            // appears later still gets hidden.
+            _mv1270HudHideRequested = UrlRequestsHudHidden();
         }
 
         private void OnDestroy() => DevMode.Reset();
@@ -72,6 +82,28 @@ namespace MaxWorlds.Dev
         {
             DevMode.Enabled = true;
             Debug.Log($"[DevMode] ON ({why}) — Max is invincible, blaster energy is infinite.");
+        }
+
+        /// <summary>MV-1270: lets a WebGL page URL request a HUD-excluded capture — see the class
+        /// doc comment.</summary>
+        private static bool UrlRequestsHudHidden()
+        {
+            string url = Application.absoluteURL;
+            if (string.IsNullOrEmpty(url)) return false;
+            url = url.ToLowerInvariant();
+            return url.Contains("hud=0") || url.Contains("hud=off");
+        }
+
+        /// <summary>Hides <paramref name="hud"/>'s own GameObject when <paramref name="hudHideRequested"/>
+        /// is true — the same exclusion CaptureDirector's own presets already apply in-editor
+        /// (<c>hud.gameObject.SetActive(false)</c>). Public, not internal: this project carries no
+        /// <c>InternalsVisibleTo</c> back to the EditMode test assembly (same reasoning
+        /// <c>WorldCatalog</c>/<c>MusicDirector</c>/etc. already give for their own test seams), so this
+        /// is the seam <c>MV1270HudHideParamTests</c> drives directly.</summary>
+        public static void ApplyHudHide(HudController hud, bool hudHideRequested)
+        {
+            if (!hudHideRequested || hud == null) return;
+            if (hud.gameObject.activeSelf) hud.gameObject.SetActive(false);
         }
 
         private void Update()
@@ -220,6 +252,11 @@ namespace MaxWorlds.Dev
         private float _mv940PerfLogLoggedAt = float.NegativeInfinity;
         private string _mv940PendingAreaSpec;
 
+        /// <summary>MV-1270: true for the rest of this page load once <c>?hud=0</c>/<c>?hud=off</c> is
+        /// seen on the URL. Re-applied every frame in <see cref="TickMv940PerfDebug"/> rather than once
+        /// in Awake, because the HUD this needs to hide is not guaranteed to exist yet.</summary>
+        private bool _mv1270HudHideRequested;
+
         /// <summary>The world (map, player) isn't necessarily built yet the instant this installs —
         /// retries every frame, silently, until both exist, then jumps exactly once. A malformed spec or
         /// an unresolvable zone logs a warning at that point and is never retried again.</summary>
@@ -233,6 +270,8 @@ namespace MaxWorlds.Dev
                     _mv940PendingAreaSpec = null;
                 }
             }
+
+            if (_mv1270HudHideRequested) ApplyHudHide(FindFirstObjectByType<HudController>(), true);
 
             if (!PerfLogEnabled) return;
 
