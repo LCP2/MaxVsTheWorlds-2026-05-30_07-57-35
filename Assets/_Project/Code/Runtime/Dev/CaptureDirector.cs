@@ -69,6 +69,17 @@ namespace MaxWorlds.Dev
         public string HeadlessMarker;
         public string DoneFileName;
         public string Scene = "Assets/_Project/Scenes/Backyard_Slice.unity";
+
+        /// <summary>MV-1263: the name of the <see cref="QualitySettings"/> level this preset must
+        /// render under (e.g. "Mobile"), resolved by <see cref="CaptureDirector.ApplyQualityLevel"/>
+        /// against <see cref="QualitySettings.names"/> rather than a hard-coded index -- a capture
+        /// launched against the standalone .exe otherwise renders under whatever quality level
+        /// Standalone defaults to (<c>ProjectSettings/QualitySettings.asset</c>'s own
+        /// <c>m_PerPlatformDefaultQuality.Standalone</c>, "PC"/HDR-on), never the LDR tier the real
+        /// iPhone/WebGL build ships under. Null/empty leaves the active quality level untouched, same as
+        /// every preset before this one.</summary>
+        public string QualityLevelName;
+
         public int Width;
         public int Height;
         public int SuperSample = 2;
@@ -104,6 +115,13 @@ namespace MaxWorlds.Dev
     {
         private CapturePreset _preset;
         private string _failReason;
+
+        /// <summary>MV-1263: the quality level index <see cref="Run"/> switched FROM, so
+        /// <see cref="Finish"/>/<see cref="Fail"/> can put it back. Null when <see cref="CapturePreset.QualityLevelName"/>
+        /// is unset, or once it has already been restored -- restoring exactly once matters for
+        /// <see cref="CaptureEntryPoint.RunFromMenu"/>, the one capture path that keeps the live Editor
+        /// session running afterward instead of exiting the process.</summary>
+        private int? _prevQualityLevel;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void RunBeforeSceneLoadHooks()
@@ -196,6 +214,13 @@ namespace MaxWorlds.Dev
             if (cam == null) { Fail(preset, liveDirs, "no Camera.main in the scene"); yield break; }
             if (preset.DisableBrain && cam.TryGetComponent<CinemachineBrain>(out var brain)) brain.enabled = false;
             cam.aspect = (float)preset.Width / preset.Height;
+
+            if (!string.IsNullOrEmpty(preset.QualityLevelName))
+            {
+                try { _prevQualityLevel = ApplyQualityLevel(preset.QualityLevelName); }
+                catch (CaptureAbortException ex) { Fail(preset, liveDirs, ex.Message); yield break; }
+                Log(preset, $"quality level set to '{preset.QualityLevelName}'");
+            }
 
             if (preset.Prepare != null)
             {
@@ -302,6 +327,7 @@ namespace MaxWorlds.Dev
         {
             if (_done) return;
             _done = true;
+            if (_prevQualityLevel.HasValue) { RestoreQualityLevel(_prevQualityLevel.Value); _prevQualityLevel = null; }
             var manifest = new System.Text.StringBuilder();
             foreach (var shot in preset.Shots) manifest.Append(shot.Name).Append(".png\n");
             string report = "ok\n" + manifest + (preset.ExtraReport?.Invoke() ?? "");
@@ -314,6 +340,7 @@ namespace MaxWorlds.Dev
         {
             if (_done) return;
             _done = true;
+            if (_prevQualityLevel.HasValue) { RestoreQualityLevel(_prevQualityLevel.Value); _prevQualityLevel = null; }
             LogWarn(preset, preset.Key + " capture aborted: " + why);
             try
             {
@@ -342,6 +369,32 @@ namespace MaxWorlds.Dev
 
         private static void Log(CapturePreset preset, string m) => Debug.Log($"{preset.LogTag} {m}");
         private static void LogWarn(CapturePreset preset, string m) => Debug.LogWarning($"{preset.LogTag} {m}");
+
+        /// <summary>MV-1263: resolves <paramref name="levelName"/> against <see cref="QualitySettings.names"/>
+        /// -- never a hard-coded index, since index 0/1 flip meaning the moment a level is added or
+        /// reordered in <c>ProjectSettings/QualitySettings.asset</c> -- and switches the active quality
+        /// level to it. Public (this project carries no <c>InternalsVisibleTo</c> back to the EditMode
+        /// test assembly, same reasoning <c>WorldCatalog</c>/<c>MusicDirector</c>/etc. already give for
+        /// their own test seams) so both <see cref="Run"/> and the MV-1263 EditMode test drive the exact
+        /// same resolution instead of the test re-deriving it independently.</summary>
+        /// <returns>The quality level index that was active before the switch, for
+        /// <see cref="RestoreQualityLevel"/>.</returns>
+        /// <exception cref="CaptureAbortException"><paramref name="levelName"/> isn't a name in
+        /// <see cref="QualitySettings.names"/>.</exception>
+        public static int ApplyQualityLevel(string levelName)
+        {
+            int idx = Array.IndexOf(QualitySettings.names, levelName);
+            if (idx < 0)
+                throw new CaptureAbortException($"quality level '{levelName}' not found in " +
+                    $"QualitySettings.names ({string.Join(", ", QualitySettings.names)})");
+            int prev = QualitySettings.GetQualityLevel();
+            QualitySettings.SetQualityLevel(idx, applyExpensiveChanges: true);
+            return prev;
+        }
+
+        /// <summary>Puts back the quality level <see cref="ApplyQualityLevel"/> switched away from.</summary>
+        public static void RestoreQualityLevel(int previousLevel) =>
+            QualitySettings.SetQualityLevel(previousLevel, applyExpensiveChanges: true);
 
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded. Shared by any preset that wants to frame a shot away from the
@@ -4868,6 +4921,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1250_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
@@ -4949,6 +5003,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1251_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
@@ -4969,13 +5024,56 @@ namespace MaxWorlds.Dev
         /// <see cref="MapData.AreaIndexOf"/>'s own convention, same "a3"/"a4" -&gt; "area3"/"area4"
         /// rewrite <see cref="BuildMv1250ReefLookCheck"/>/<see cref="BuildMv1251ReefStructureKitCheck"/>
         /// already document) through the production <see cref="FixedAngleCameraRig"/>, after
-        /// <see cref="ReefKit.DressHull"/>'s own upgraded wall dressing has run — same "no measurement,
-        /// just the PNG for a side-by-side with the design frame" shape
-        /// <see cref="BuildMv1251ReefStructureKitCheck"/> already uses, since AC2 asks for a one-off
-        /// visual compare, not a numeric gate.</summary>
+        /// <see cref="ReefKit.DressHull"/>'s own upgraded wall dressing has run.
+        ///
+        /// MV-1263 AC3 ("report the numbers from EACH capture") adds the same median-luminance/dominant-
+        /// hue/saturation <see cref="CaptureShot.Measure"/> <see cref="BuildMv1250ReefLookCheck"/> already
+        /// uses for a3 — this preset is also this ticket's own required a1 capture, so it needs the same
+        /// numeric report, not just the PNG a side-by-side compare would settle for.</summary>
         private static CapturePreset BuildMv1255ReefWallDetailCheck()
         {
             const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            float medianLuminance = -1f;
+            float dominantHueDegrees = -1f;
+            float dominantSaturation = -1f;
+
+            void Measure(Texture2D tex)
+            {
+                // Same formula/step as BuildMv1250ReefLookCheck's own Measure — see its own comment for
+                // why: sampled every 4th pixel, HSV-bucketed for "most common colour".
+                var lumas = new List<float>((tex.width / 4 + 1) * (tex.height / 4 + 1));
+                var buckets = new Dictionary<(int h, int s, int v), int>();
+                const int hueBuckets = 36;
+                const int satValBuckets = 10;
+
+                for (int y = 0; y < tex.height; y += 4)
+                {
+                    for (int x = 0; x < tex.width; x += 4)
+                    {
+                        Color c = tex.GetPixel(x, y);
+                        lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+
+                        Color.RGBToHSV(c, out float h, out float s, out float v);
+                        var key = (Mathf.Clamp(Mathf.FloorToInt(h * hueBuckets), 0, hueBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(s * satValBuckets), 0, satValBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(v * satValBuckets), 0, satValBuckets - 1));
+                        buckets.TryGetValue(key, out int count);
+                        buckets[key] = count + 1;
+                    }
+                }
+
+                lumas.Sort();
+                medianLuminance = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+
+                (int h, int s, int v) bestKey = (0, 0, 0);
+                int bestCount = -1;
+                foreach (var kv in buckets)
+                    if (kv.Value > bestCount) { bestCount = kv.Value; bestKey = kv.Key; }
+
+                dominantHueDegrees = (bestKey.h + 0.5f) * (360f / hueBuckets);
+                dominantSaturation = (bestKey.s + 0.5f) / satValBuckets;
+            }
 
             Vector3? ZoneCenter(string zoneId)
             {
@@ -5024,6 +5122,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1255_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
@@ -5034,7 +5133,11 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Prepare = Prepare,
-                Shots = new List<CaptureShot> { new CaptureShot("MV-1255-a1", NoSetup) },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1255-a1", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    $"median luminance={medianLuminance:F1}/255 dominant hue={dominantHueDegrees:F0}deg " +
+                    $"dominant saturation={dominantSaturation:F2} " +
+                    $"(target: median 25-45, hue 190-225)\n",
             };
         }
 
@@ -5099,6 +5202,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1256_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
@@ -5194,6 +5298,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1257_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
@@ -5270,6 +5375,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1258_done.txt",
                 Width = 1600,
                 Height = 1000,
+                QualityLevelName = "Mobile",
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 90,
                 BeforeSceneLoad = () =>
