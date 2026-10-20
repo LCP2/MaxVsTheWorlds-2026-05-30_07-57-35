@@ -70,6 +70,14 @@ namespace MaxWorlds.Arena
                     GameObject wallGo = ShipKit.BuildBulkheadPanel(
                         root.transform, a, b, inward, wallHeight, deckGlow, match.IsOuterEdge, wallSeed);
                     wallGo.name = $"Wall {area.id} {wall}";
+
+                    // MV-1264: the panel backing (ShipKit.BuildPanelCell) stands with its own back face
+                    // flush on the real wall's face — same z-fight the floor had (MapGeometry.Floor vs
+                    // ShipKit.BuildAtlasFloor), so the bare wall won on a real device and every panel
+                    // MV-1260 built was invisible. Same "hide the box, keep its collider" contract
+                    // DressCover uses for cover art.
+                    var wallRenderer = match.GetComponent<Renderer>();
+                    if (wallRenderer != null) wallRenderer.enabled = false;
                 }
             }
 
