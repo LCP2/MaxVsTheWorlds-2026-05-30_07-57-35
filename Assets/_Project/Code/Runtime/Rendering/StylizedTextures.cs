@@ -190,6 +190,12 @@ namespace MaxWorlds.Rendering
         private const float ReefDeckSeamFraction = 0.03f;    // ~6 cm seam / 2 m plate, ticket's own number
         private const float ReefDeckSeamMultiplier = 0.46f;  // how much darker the seam reads than the plate
 
+        // MV-1265: the circuit-inlay trace was 5 texels wide (cellSize * 0.03, rounded) - ~7.5 screen px
+        // at play distance, under DECISIONS.md §3's ~10 px legibility floor, and mip-averaging crushed it
+        // further. Widened so the resolved bake is >=12 texels (actually 13 at the shipped 256px/4-cell
+        // bake) - the EditMode test measures the resolved bake, not this constant.
+        private const float ReefDeckTraceHalfWidthFraction = 0.1f;
+
         private const float ReefDeckRivetInset = 0.09f;      // how far a rivet sits from the plate's corner
         private const float ReefDeckRivetRadius = 0.045f;
         private const float ReefDeckRivetRingMultiplier = 0.7f;
@@ -368,7 +374,12 @@ namespace MaxWorlds.Rendering
         private static void DrawDeckInlayPattern(Color32[] px, int texSize, int originX, int originY,
             int cellSize, int gx, int gy, int pattern)
         {
-            float half = ReefDeckSeamFraction * 0.5f;
+            // MV-1265: this used to be ReefDeckSeamFraction * 0.5f (~0.015, right against the cell's own
+            // edge) - fine while the edge trace/node were only a couple of texels thick, but the
+            // widened stroke and node now clip almost entirely off the cell at that inset. 0.13 leaves
+            // enough margin for the widest node (ReefDeckTraceHalfWidthFraction-scaled, up to 8 texels
+            // at the shipped 64 px cell) to sit fully inside the cell while still reading as edge-hugging.
+            float half = Mathf.Max(ReefDeckSeamFraction * 0.5f, 0.13f);
             int elementIndex = 0;
 
             Color32 NextColor()
@@ -386,30 +397,30 @@ namespace MaxWorlds.Rendering
                 case 0:
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
                     DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.30f, NextColor(), 0.05f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.30f, half, NextColor(), 0.05f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.30f, NextColor(), 0.12f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.30f, half, NextColor(), 0.12f);
                     break;
                 case 1:
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
                     DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.68f, NextColor(), 0.05f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.68f, 1f - half, NextColor(), 0.05f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.045f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.68f, NextColor(), 0.12f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.68f, 1f - half, NextColor(), 0.12f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.108f);
                     break;
                 case 2:
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
                     DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
                     DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, half, NextColor(), 0.045f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 1f - half, NextColor(), 0.045f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, half, NextColor(), 0.108f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 1f - half, NextColor(), 0.108f);
                     break;
                 default:
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
                     DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.5f, NextColor(), 0.05f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.5f, NextColor(), 0.05f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.04f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.5f, NextColor(), 0.12f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.5f, NextColor(), 0.12f);
+                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.096f);
                     break;
             }
         }
@@ -422,7 +433,7 @@ namespace MaxWorlds.Rendering
             float localU, Color32 c)
         {
             int x = originX + Mathf.Clamp(Mathf.RoundToInt(localU * cellSize), 0, cellSize - 1);
-            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * 0.03f));
+            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * ReefDeckTraceHalfWidthFraction));
             for (int ly = 0; ly < cellSize; ly++)
             {
                 int y = originY + ly;
@@ -441,7 +452,7 @@ namespace MaxWorlds.Rendering
         {
             int y = originY + Mathf.Clamp(Mathf.RoundToInt(localV * cellSize), 0, cellSize - 1);
             if (y >= texSize) return;
-            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * 0.03f));
+            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * ReefDeckTraceHalfWidthFraction));
             for (int lx = 0; lx < cellSize; lx++)
             {
                 int x = originX + lx;
