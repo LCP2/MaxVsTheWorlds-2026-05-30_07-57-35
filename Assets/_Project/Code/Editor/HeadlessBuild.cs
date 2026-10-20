@@ -74,6 +74,61 @@ namespace MaxWorlds.Editor
             EditorApplication.Exit(0);
         }
 
+        /// <summary>
+        /// Local WebGL build entry point (MV-1267):
+        /// <c>-executeMethod MaxWorlds.Editor.HeadlessBuild.WebGLBootstrap -buildOutput &lt;dir&gt;</c>.
+        /// Only the worker's platform-colour investigation needs this — Windows standalone captures
+        /// have measured navy on the same commit/camera/tier that WebGL and iOS read mauve, so the
+        /// Reef look now has to be checked on an actual WebGL player, not inferred from Windows.
+        /// Same scene list and build options as <see cref="WindowsBootstrap"/>, targeting WebGL instead.
+        /// </summary>
+        public static void WebGLBootstrap()
+        {
+            string output = GetArg("-buildOutput") ?? "Builds/cc-webgl";
+            Directory.CreateDirectory(output);
+
+            var scenes = new List<string>();
+            foreach (var s in EditorBuildSettings.scenes)
+            {
+                if (s.enabled)
+                {
+                    scenes.Add(s.path);
+                }
+            }
+            if (scenes.Count == 0 && File.Exists(BootstrapScene))
+            {
+                scenes.Add(BootstrapScene);
+            }
+            if (scenes.Count == 0)
+            {
+                Debug.LogError("[HeadlessBuild] No scenes to build.");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = scenes.ToArray(),
+                locationPathName = output,
+                target = BuildTarget.WebGL,
+                targetGroup = BuildTargetGroup.WebGL,
+                options = BuildOptions.None
+            };
+
+            BuildReport report = BuildPipeline.BuildPlayer(options);
+            BuildSummary summary = report.summary;
+
+            if (summary.result != BuildResult.Succeeded)
+            {
+                Debug.LogError($"[HeadlessBuild] WebGL build FAILED: {summary.result} ({summary.totalErrors} errors)");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            Debug.Log($"[HeadlessBuild] WebGL build OK -> {output} ({summary.totalSize} bytes)");
+            EditorApplication.Exit(0);
+        }
+
         private static string GetArg(string name)
         {
             string[] args = Environment.GetCommandLineArgs();
