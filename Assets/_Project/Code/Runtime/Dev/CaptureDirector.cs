@@ -396,6 +396,27 @@ namespace MaxWorlds.Dev
         public static void RestoreQualityLevel(int previousLevel) =>
             QualitySettings.SetQualityLevel(previousLevel, applyExpensiveChanges: true);
 
+        /// <summary>MV-1266: the production <see cref="FixedAngleCameraRig"/>'s own resolved play
+        /// distance/pitch, built fresh off a probe component rather than copied as a literal — the
+        /// same "read off the built rig, not a constant" seam
+        /// <c>CameraFramingTests.CommittedDistance</c> already uses for the rig itself. Public so
+        /// <see cref="BuildMv1266ReefPlayCameraCheck"/>'s own report and its EditMode test read the
+        /// SAME resolution instead of the test re-deriving it independently.</summary>
+        public static (float Distance, float Pitch) ResolveProductionCameraPose()
+        {
+            var go = new GameObject("Mv1266RigProbe");
+            try
+            {
+                var rig = go.AddComponent<FixedAngleCameraRig>();
+                rig.ApplyDeviceDefault();
+                return (rig.Distance, rig.Pitch);
+            }
+            finally
+            {
+                if (Application.isPlaying) Destroy(go); else DestroyImmediate(go);
+            }
+        }
+
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded. Shared by any preset that wants to frame a shot away from the
         /// Entry room's hedges/flower beds (previously duplicated per-director).</summary>
@@ -539,6 +560,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1257ReefAmbientCheck());
             Add(BuildMv1258ReefSetPiecesCheck());
             Add(BuildMv1260ShipWallDressingCheck());
+            Add(BuildMv1266ReefPlayCameraCheck());
             return d;
         }
 
@@ -4937,6 +4959,132 @@ namespace MaxWorlds.Dev
                     $"median luminance={medianLuminance:F1}/255 dominant hue={dominantHueDegrees:F0}deg " +
                     $"dominant saturation={dominantSaturation:F2} " +
                     $"(target: median 25-45, hue 190-225)\n",
+            };
+        }
+
+        // ---- Mv1266ReefPlayCameraCheck (MV-1266 AC1-AC3) ---------------------------------------
+
+        /// <summary>MV-1266's own one-shot capture: the real Reef world, framed through the LIVE
+        /// production camera path — <see cref="CinemachineBrain"/> left enabled, no manual
+        /// <c>cam.transform</c> override, no zone-framing distance/pitch substitute. Every earlier
+        /// Reef capture (<see cref="BuildMv1250ReefLookCheck"/> included) disables the brain before
+        /// its first LateUpdate ever runs (<see cref="Run"/>'s own ordering: <c>DisableBrain</c>
+        /// happens synchronously in the same <c>Start()</c> frame the brain is created, before any
+        /// LateUpdate) and manually poses the camera at a standalone zone-framing distance — which
+        /// never picks up the production <c>CinemachineCamera</c> Lens' 40° FieldOfView (the base
+        /// Camera component's own scene-serialized 60° default, <c>Backyard_Slice.unity</c>'s "Main
+        /// Camera", survives untouched instead) and never runs <see cref="MaxWorlds.CameraRig.CameraTargetRig"/>'s
+        /// look-ahead or lets <see cref="Unity.Cinemachine.CinemachineFollow"/>'s position damping
+        /// settle. A wide, manually-posed capture dilutes the frame with far more distant,
+        /// heavily-fogged background than the real near play camera ever shows — which is why every
+        /// earlier Reef capture measured dark navy (the design target) while Lee's own iPhone, and
+        /// the chat's own WebGL staging playthrough, read mauve: the earlier captures were measuring
+        /// the fog, not the room. This preset instead reproduces the real play sequence verbatim:
+        /// boot into World 3 (Reef), let <see cref="MaxWorlds.Dev.DevModeController.TryJumpToArea"/>
+        /// teleport Max to "a1" — the SAME entry point the Settings-panel jump widget and
+        /// <c>?area=</c> URL param use, not a bespoke teleport — then wait for the live Cinemachine
+        /// rig to actually settle onto its production pose before the shot, rather than asserting one
+        /// immediately. From now on, any Reef look number is measured from this preset (MV-1266's own
+        /// "Change" §1) — the zone-framing presets above stay for layout, never for colour.</summary>
+        private static CapturePreset BuildMv1266ReefPlayCameraCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            float medianLuminance = -1f;
+            float dominantHueDegrees = -1f;
+            float dominantSaturation = -1f;
+            float resolvedDistance = -1f;
+            float resolvedPitch = -1f;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (rig != null) { resolvedDistance = rig.Distance; resolvedPitch = rig.Pitch; }
+
+                // Let CameraTargetRig's look-ahead decay and CinemachineFollow's position damping
+                // (Backyard_Slice.unity's TrackerSettings.PositionDamping = 0.6s) actually converge —
+                // this preset's whole point is the camera's SETTLED play pose, not a mid-teleport one.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                // Same formula/step as BuildMv1250ReefLookCheck's own Measure — median luminance
+                // (Rec.709, 0-255) and the HSV-bucketed dominant hue/saturation, every 4th pixel.
+                var lumas = new List<float>((tex.width / 4 + 1) * (tex.height / 4 + 1));
+                var buckets = new Dictionary<(int h, int s, int v), int>();
+                const int hueBuckets = 36;   // 10 degrees each
+                const int satValBuckets = 10; // 0.1 each
+
+                for (int y = 0; y < tex.height; y += 4)
+                {
+                    for (int x = 0; x < tex.width; x += 4)
+                    {
+                        Color c = tex.GetPixel(x, y);
+                        lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+
+                        Color.RGBToHSV(c, out float h, out float s, out float v);
+                        var key = (Mathf.Clamp(Mathf.FloorToInt(h * hueBuckets), 0, hueBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(s * satValBuckets), 0, satValBuckets - 1),
+                                   Mathf.Clamp(Mathf.FloorToInt(v * satValBuckets), 0, satValBuckets - 1));
+                        buckets.TryGetValue(key, out int count);
+                        buckets[key] = count + 1;
+                    }
+                }
+
+                lumas.Sort();
+                medianLuminance = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+
+                (int h, int s, int v) bestKey = (0, 0, 0);
+                int bestCount = -1;
+                foreach (var kv in buckets)
+                    if (kv.Value > bestCount) { bestCount = kv.Value; bestKey = kv.Key; }
+
+                dominantHueDegrees = (bestKey.h + 0.5f) * (360f / hueBuckets);
+                dominantSaturation = (bestKey.s + 0.5f) / satValBuckets;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1266reefplaycam",
+                LogTag = "[MV1266Capture]",
+                Flag = "-mv1266shot",
+                ArmFile = "Temp/mv1266.arm",
+                HeadlessMarker = "Temp/mv1266.headless",
+                DoneFileName = "_mv1266_done.txt",
+                Width = 1600,
+                Height = 1000,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // MV-1266: the whole point — the LIVE production camera, never a manual pose
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1266-a1-playcam", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                {
+                    var (expectedDistance, expectedPitch) = CaptureDirector.ResolveProductionCameraPose();
+                    return $"median luminance={medianLuminance:F1}/255 dominant hue={dominantHueDegrees:F0}deg " +
+                           $"dominant saturation={dominantSaturation:F2} " +
+                           $"(target: median 25-45, hue 190-225)\n" +
+                           $"resolved camera: distance={resolvedDistance:F2}m pitch={resolvedPitch:F1}deg " +
+                           $"(production rig default: distance={expectedDistance:F2}m pitch={expectedPitch:F1}deg)\n";
+                },
             };
         }
 
