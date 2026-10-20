@@ -387,8 +387,11 @@ namespace MaxWorlds.Rendering
             Vector3 lampPos = new Vector3(at.x, wallHeight * 0.72f, at.y) + n * (BulkheadBackingDepth + BulkheadLampSize * 0.5f + 0.02f);
             EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow);
 
+            // MV-1264: was 0.6 — well outside CityKit's own 0.12-0.26 pool-strength range, which is why
+            // these painted as large flat solid discs on a real device (no bloom falloff left to read as
+            // a light pool rather than a dyed patch of deck). 0.18 sits inside that range.
             Vector3 poolPos = new Vector3(at.x, 0f, at.y) + n * (BulkheadLightPoolRadius * 0.9f);
-            CityKit.BuildPool(root, poolPos, BulkheadLightPoolRadius, BulkheadLightPoolRadius, deckGlow, 0.6f);
+            CityKit.BuildPool(root, poolPos, BulkheadLightPoolRadius, BulkheadLightPoolRadius, deckGlow, 0.18f);
         }
 
         /// <summary>A framed window onto stars and the limb of the planet Sotami, plus a faint additive
@@ -556,7 +559,15 @@ namespace MaxWorlds.Rendering
         // floor must read as the base layer everywhere EXCEPT the Hangar Bay's launch-pad patch, where
         // the hazard slab already built on top of it hides it without either one needing to know about
         // the other.
-        private const float FloorY = 0.001f, DecalY = 0.0016f, SeamY = 0.0022f, GlowY = 0.0028f;
+        //
+        // MV-1264: raised from 0.001/0.0016/0.0022/0.0028 (same relative spacing, +0.009 across the
+        // board) — at 0.001 the atlas floor sat essentially flush with the single map-spanning "Map
+        // Floor" slab (MapGeometry.Floor's top is exactly y = 0), so the two coplanar-enough surfaces
+        // z-fought and the map floor's own flat GroundBase tone won on a real device, hiding every
+        // plate/seam/decal this kit draws. ShipDressing.BuildFloors now also disables the Map Floor's
+        // renderer under a built atlas floor, but the margin here is kept regardless — belt and braces
+        // for any area a future pass adds without that disable (e.g. a non-"area&lt;N&gt;" zone).
+        private const float FloorY = 0.01f, DecalY = 0.0106f, SeamY = 0.0112f, GlowY = 0.0118f;
 
         // MV-1259 fix-pass 1 (verifier subagent, capture read): the first-pass tones read as a near-
         // uniform dark grey under the Mothership's own already-shipped, deliberately-dim per-deck

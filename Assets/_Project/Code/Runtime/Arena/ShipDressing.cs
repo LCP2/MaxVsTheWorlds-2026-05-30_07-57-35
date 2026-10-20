@@ -64,6 +64,7 @@ namespace MaxWorlds.Arena
             var floors = new GameObject("Ship Floors").transform;
             floors.SetParent(host, false);
 
+            var atlasFootprints = new List<Rect>();
             foreach (MapZone zone in map.zones)
             {
                 if (zone == null || zone.level != 0) continue;
@@ -72,9 +73,43 @@ namespace MaxWorlds.Arena
 
                 Color seamGlow = MothershipDecks.LookFor(areaIndex).RimColor;
                 ShipKit.BuildAtlasFloor(floors, zone.Footprint, areaIndex, seamGlow);
+                atlasFootprints.Add(zone.Footprint);
             }
 
             StaticBatchingUtility.Combine(floors.gameObject);
+
+            HideMapFloorUnderAtlas(host, atlasFootprints);
+        }
+
+        /// <summary>MV-1264: the single map-spanning "Map Floor" slab (<see cref="MapGeometry.Floor"/>)
+        /// sits right under every atlas floor this pass just built, top-to-top within a millimetre on
+        /// the base commit — on a real device the map floor's own flat <c>Palette.GroundBase</c> won
+        /// the z-fight and every plate/seam/decal MV-1259 drew was invisible. Same "hide the box, keep
+        /// its collider" contract <see cref="DressCover"/> already uses, applied here to whichever real
+        /// <see cref="StructuralFloor"/>'s own XZ footprint overlaps a built atlas floor — never a blind
+        /// "always disable the map floor", so a future area with no atlas floor over it (the entry stub)
+        /// keeps its own ground visible.</summary>
+        private static void HideMapFloorUnderAtlas(Transform host, List<Rect> atlasFootprints)
+        {
+            if (atlasFootprints.Count == 0) return;
+
+            foreach (StructuralFloor floor in host.GetComponentsInChildren<StructuralFloor>(true))
+            {
+                var renderer = floor.GetComponent<Renderer>();
+                if (renderer == null) continue;
+
+                Bounds b = renderer.bounds;
+                var floorXz = new Rect(b.min.x, b.min.z, b.size.x, b.size.z);
+
+                bool overlaps = false;
+                foreach (Rect atlas in atlasFootprints)
+                {
+                    if (floorXz.Overlaps(atlas)) { overlaps = true; break; }
+                }
+                if (!overlaps) continue;
+
+                renderer.enabled = false;
+            }
         }
 
         /// <summary>MV-1232: the launch-pad hazard marking drawn in the ticket's own design image — a

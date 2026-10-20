@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.UI;
 using MaxWorlds.Player;
 
@@ -59,6 +61,13 @@ namespace MaxWorlds.VFX
 
         private ParticleSystem _motes;
         private Transform _player;
+
+        // MV-1264: resolved once the active world is known — null until then, since the world config
+        // this reads (AreaAccumulationDirector.ActiveWorldConfig, the same "which world am I in" idiom
+        // BossVictoryPayoff/WorldFinaleGate/SettingsPanel already use from a MonoBehaviour with no direct
+        // world reference) is not guaranteed set yet at this component's own Awake — it self-installs via
+        // RuntimeInitializeOnLoadMethod, ahead of whichever director sets it up for the level just loaded.
+        private bool? _motesOffForWorld;
 
         private readonly List<Decal> _decals = new List<Decal>(32);
 
@@ -261,6 +270,23 @@ namespace MaxWorlds.VFX
         private void Update()
         {
             float dt = Time.deltaTime;
+
+            if (_motesOffForWorld == null)
+            {
+                var director = FindFirstObjectByType<AreaAccumulationDirector>();
+                WorldConfig cfg = director != null ? director.ActiveWorldConfig : null;
+                if (cfg != null)
+                {
+                    // MV-1264: "a sealed hull has no drifting dust at this density" — the Mothership is
+                    // the one world this layer never checked against before installing motes everywhere.
+                    // WorldConfig itself carries no Kit (that's WorldCatalog's own per-row field, MV-1141)
+                    // so the active world's catalog row is looked up off the director's own world index.
+                    WorldKit kit = WorldCatalog.Get(director.ActiveWorldIndex).Kit;
+                    _motesOffForWorld = kit == WorldKit.Ship;
+                    if (_motesOffForWorld.Value && _motes != null)
+                        _motes.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                }
+            }
 
             if (_player == null)
             {
