@@ -57,7 +57,6 @@ namespace MaxWorlds.Rendering
         public static readonly Color GoldLamp = Rgb(243, 210, 122);
 
         private static readonly Color DeckPlate = Rgb(58, 64, 76);
-        private static readonly Color DeckSeam = Rgb(40, 45, 54);
         private static readonly Color HazardYellow = Rgb(224, 182, 48);
         private static readonly Color GlassPane = Rgb(150, 205, 210);
 
@@ -515,30 +514,15 @@ namespace MaxWorlds.Rendering
             MeshBox(root, "Hull Mass", pos, new Vector3(length * 1.05f, wallHeight * 3f, HullMassDepth).Oriented(dir), HullMassTone);
         }
 
-        /// <summary>Deck floor (ticket, change item 2): dark blue-grey plates in 4 m panels with faint
-        /// seams, yellow hazard stripes along the north/south edges for launch markings. Flat and
-        /// walkable — same reusable, layout-agnostic contract as <see cref="BuildBulkheadPanel"/>.</summary>
-        public static GameObject BuildDeckFloor(Transform parent, Rect area)
+        /// <summary>Launch-pad hazard marking (MV-1268): yellow hazard stripes along the area's north/south
+        /// edges only, with no underlying slab or seams — the atlas floor (<see cref="BuildAtlasFloor"/>)
+        /// shows through everywhere else in the pad's footprint. Was <c>BuildDeckFloor</c>, a full dark
+        /// blue-grey slab + seams + stripes; the slab sat flush over the atlas floor and hid it under the
+        /// player's own start point (ticket's own "Also in area 1"). Flat and walkable — same reusable,
+        /// layout-agnostic contract as <see cref="BuildBulkheadPanel"/>.</summary>
+        public static GameObject BuildLaunchPadHazardStripes(Transform parent, Rect area)
         {
-            Transform root = NewRoot(parent, "Deck Floor");
-            StormdrainKit.Box(root, "Slab", new Vector3(area.center.x, 0.006f, area.center.y),
-                new Vector3(area.width, 0.012f, area.height), DeckPlate, SurfaceKind.Metal);
-
-            bool alongX = area.width >= area.height;
-            float longExtent = alongX ? area.width : area.height;
-            int seams = Mathf.Max(0, Mathf.FloorToInt(longExtent / 4f));
-            for (int i = 1; i <= seams; i++)
-            {
-                float t = i * 4f;
-                if (t >= longExtent) break;
-                Vector3 pos = alongX
-                    ? new Vector3(area.xMin + t, 0.014f, area.center.y)
-                    : new Vector3(area.center.x, 0.014f, area.yMin + t);
-                Vector3 size = alongX
-                    ? new Vector3(0.03f, 0.004f, area.height)
-                    : new Vector3(area.width, 0.004f, 0.03f);
-                StormdrainKit.Box(root, $"Seam{i}", pos, size, DeckSeam, SurfaceKind.Metal);
-            }
+            Transform root = NewRoot(parent, "Launch Pad Hazard Stripes");
 
             const float stripe = 0.3f;
             StormdrainKit.Box(root, "Hazard N", new Vector3(area.center.x, 0.016f, area.yMax - stripe * 0.5f),
@@ -664,8 +648,12 @@ namespace MaxWorlds.Rendering
 
                     normals.Add(Vector3.up); normals.Add(Vector3.up); normals.Add(Vector3.up); normals.Add(Vector3.up);
 
-                    tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
-                    tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
+                    // MV-1268: (x0,z0)->(x1,z0)->(x1,z1) winds counter-clockwise seen from above (x
+                    // right, z up), which Unity's clockwise-front convention culls as back-facing under
+                    // URP/Lit's cull-back default. b,b+2,b+1 / b,b+3,b+2 is the same two triangles with
+                    // the opposite winding, so the quad faces up instead of down.
+                    tris.Add(b); tris.Add(b + 2); tris.Add(b + 1);
+                    tris.Add(b); tris.Add(b + 3); tris.Add(b + 2);
                 }
             }
 
@@ -823,8 +811,10 @@ namespace MaxWorlds.Rendering
 
             uvs.Add(Vector2.zero); uvs.Add(Vector2.right); uvs.Add(Vector2.one); uvs.Add(Vector2.up);
 
-            tris.Add(b); tris.Add(b + 1); tris.Add(b + 2);
-            tris.Add(b); tris.Add(b + 2); tris.Add(b + 3);
+            // MV-1268: same up-facing winding fix as BuildPlateMesh above — this quad was wound
+            // identically and was being culled by the same URP/Lit cull-back default.
+            tris.Add(b); tris.Add(b + 2); tris.Add(b + 1);
+            tris.Add(b); tris.Add(b + 3); tris.Add(b + 2);
         }
 
         /// <summary>The shared atlas material (<see cref="MaterialLibrary.SurfaceShader"/>, lit, so the

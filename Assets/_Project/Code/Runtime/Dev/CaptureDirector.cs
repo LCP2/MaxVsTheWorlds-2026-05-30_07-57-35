@@ -4693,68 +4693,52 @@ namespace MaxWorlds.Dev
         /// the City check didn't need (MV-1207's own brightness assertion lived entirely in its EditMode
         /// test, not its capture — this ticket's AC3 explicitly wants the numbers IN the report).
         ///
-        /// Each shot applies its own deck's <see cref="MothershipDecks.LookFor"/> result directly,
-        /// rather than simulating Max walking the ship to trigger <see cref="MothershipDeckLighting"/>'s
-        /// live crossing blend — the same "teleport the camera, not the player" shortcut
-        /// <c>BuildMv1207CityBrightnessCheck</c>'s own <c>FrameZone</c> already takes.
-        ///
-        /// The zone id is NOT the config's own <c>WorldArea.id</c> ("a1"/"a8"/...) — same gotcha
-        /// <see cref="BuildMv1205CityGroundCheck"/>'s own doc names: <c>WorldMapLoader</c> rewrites it to
-        /// <c>"area" + index</c> for every area, which is what burned this capture's first run (logged
-        /// "Mothership map carries no zone 'a1'").</summary>
+        /// MV-1268: re-pointed at the same production-camera route <see cref="BuildMv1266ReefPlayCameraCheck"/>
+        /// added for the Reef — <see cref="DevModeController.TryJumpToArea"/> teleports Max (the SAME
+        /// entry point the Settings jump widget uses), <see cref="CinemachineBrain"/> stays enabled, and
+        /// each shot waits for the live rig to settle, rather than manually posing <c>cam.transform</c>
+        /// at a standalone zone-framing distance. The deck relight and area gate are no longer applied by
+        /// hand either: jumping fires <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/>, which
+        /// both <see cref="MothershipDeckLighting"/> (0.6s blend) and <see cref="MapStaticBatchRoot"/>'s
+        /// own gate self-heal already pick up on their own — the same settle window below covers both.</summary>
         private static CapturePreset BuildMv1249MothershipLookCheck()
         {
             const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
 
-            // (areaIndex, zone id, label, target median luminance per the ticket's own AC3).
-            var heroAreas = new (int area, string zoneId, string label, float targetMedian)[]
+            // (areaIndex, label, target median luminance per the ticket's own AC3).
+            var heroAreas = new (int area, string label, float targetMedian)[]
             {
-                (1, "area1", "Hangar", 31f),
-                (8, "area8", "Assembly", 28f),
-                (15, "area15", "Vault", 29f),
-                (22, "area22", "Reactor", 87f),
-                (30, "area30", "Bridge", 55f),
+                (1, "Hangar", 31f),
+                (8, "Assembly", 28f),
+                (15, "Vault", 29f),
+                (22, "Reactor", 87f),
+                (30, "Bridge", 55f),
             };
 
             var medianByShot = new Dictionary<string, float>();
             var p90ByShot = new Dictionary<string, float>();
 
-            Vector3? ZoneCenter(string zoneId)
+            IEnumerator FrameArea(Camera cam, int areaIndex)
             {
-                var path = FindFirstObjectByType<BackyardPath>();
-                if (path == null || path.Map == null || path.Map.zones == null) return null;
-                foreach (MapZone z in path.Map.zones)
-                    if (z != null && z.id == zoneId) return z.Center;
-                return null;
-            }
+                if (!DevModeController.TryJumpToArea($"a{areaIndex}"))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"a{areaIndex}\") found no map/player to jump");
 
-            IEnumerator FrameArea(Camera cam, int areaIndex, string zoneId)
-            {
-                Vector3? center = ZoneCenter(zoneId);
-                if (center == null) throw new CaptureAbortException($"Mothership map carries no zone '{zoneId}'");
-
-                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
-                if (batchRoot == null) throw new CaptureAbortException("Mothership built no MapStaticBatchRoot");
-                batchRoot.ApplyAreaGate(zoneId);   // enable that zone's own combined mesh for the shot
-
-                var lighting = FindFirstObjectByType<BackyardLighting>();
-                if (lighting == null) throw new CaptureAbortException("Mothership built no BackyardLighting");
-                lighting.Apply(MothershipDecks.LookFor(areaIndex));   // the production look this area's deck resolves to
-
-                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
-                float pitch = rig != null ? rig.Pitch : 60f;
-                float distance = rig != null ? rig.Distance : 20f;
-
-                Vector3 focus = center.Value + Vector3.up * 1f;
-                var rot = Quaternion.Euler(pitch, 0f, 0f);
-                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
-                for (int i = 0; i < 3; i++) yield return null;   // let the gate + relighting + renderer swap settle
+                // Let MothershipDeckLighting's 0.6s crossing blend, MapStaticBatchRoot's gate self-heal
+                // and the live Cinemachine rig's own follow damping all settle onto the production pose
+                // — same "wait for the rig to settle" shape BuildMv1266ReefPlayCameraCheck's own Prepare
+                // already uses, rather than asserting a shot immediately after the jump.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
             }
 
             IEnumerator Prepare(Camera cam)
             {
                 for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
-                yield return FrameArea(cam, heroAreas[0].area, heroAreas[0].zoneId);
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                yield return FrameArea(cam, heroAreas[0].area);
             }
 
             float Percentile(List<float> sorted, float p)
@@ -4791,7 +4775,7 @@ namespace MaxWorlds.Dev
                 string name = $"MV-1249-{h.label}";
                 Func<Camera, IEnumerator> setup;
                 if (h.area == heroAreas[0].area) setup = NoSetup;   // Prepare already framed the first hero area
-                else setup = cam => FrameArea(cam, h.area, h.zoneId);
+                else setup = cam => FrameArea(cam, h.area);
                 shots.Add(new CaptureShot(name, setup, measure: tex => Measure(name, tex)));
             }
 
@@ -4805,6 +4789,7 @@ namespace MaxWorlds.Dev
                 DoneFileName = "_mv1249_done.txt",
                 Width = 1600,
                 Height = 1000,
+                DisableBrain = false,   // MV-1268: the live production camera, never a manual pose
                 OutputDirs = new[] { outDir },
                 TimeoutSeconds = 150,
                 BeforeSceneLoad = () =>

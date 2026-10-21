@@ -12,7 +12,7 @@ namespace MaxWorlds.Arena
     /// box, build the kit piece at its own footprint" contract every dressing pass in this namespace
     /// keeps: the cover entry's own collider is untouched, only its renderer is swapped out.
     ///
-    /// Floor dressing (<see cref="ShipKit.BuildDeckFloor"/>) landed with the Hangar Bay layout ticket
+    /// Floor dressing (<see cref="ShipKit.BuildLaunchPadHazardStripes"/>) landed with the Hangar Bay layout ticket
     /// (MV-1232) once real floor geometry existed. Wall dressing (<see cref="ShipKit.BuildBulkheadPanel"/>)
     /// landed later still, MV-1260, once every area's own walls existed to dress — see
     /// <see cref="ShipAreaKit.BuildWallDressing"/>. Same order <see cref="CityKit"/> (MV-1175) shipped
@@ -112,18 +112,20 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>MV-1232: the launch-pad hazard marking drawn in the ticket's own design image — a
-        /// patch of deck floor (yellow hazard stripes along its own N/S edges, <see cref="ShipKit.BuildDeckFloor"/>)
-        /// in the open ground between the two dropship covers and the drop-pod rack. Purely cosmetic
-        /// (<see cref="ShipKit.BuildDeckFloor"/> strips its own colliders), so it can never affect
-        /// walkability — only the Hangar Bay's own base floor does that.</summary>
+        /// <summary>MV-1232: the launch-pad hazard marking drawn in the ticket's own design image — yellow
+        /// hazard stripes along the pad's own N/S edges only (<see cref="ShipKit.BuildLaunchPadHazardStripes"/>)
+        /// in the open ground between the two dropship covers and the drop-pod rack. MV-1268: no longer a
+        /// solid slab underneath — that hid the atlas floor (<see cref="ShipKit.BuildAtlasFloor"/>) right
+        /// where the player starts. Purely cosmetic (<see cref="ShipKit.BuildLaunchPadHazardStripes"/>
+        /// strips its own colliders), so it can never affect walkability — only the Hangar Bay's own base
+        /// floor does that.</summary>
         private static void BuildLaunchPad(Transform host, WorldConfig cfg)
         {
             WorldArea hangarBay = cfg?.Area("a1");
             if (hangarBay == null) return;
 
             var pad = new Rect(hangarBay.XMin + 20f, hangarBay.ZMin + 15f, 16f, 11f);
-            ShipKit.BuildDeckFloor(host, pad);
+            ShipKit.BuildLaunchPadHazardStripes(host, pad);
         }
 
         /// <summary>Builds the matching <see cref="ShipKit"/> piece over every cover entry whose

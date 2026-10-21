@@ -9,8 +9,8 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-1259 AC1: the Mothership's deck floor used to be a flat, unwired slab
-    /// (<see cref="ShipKit.BuildDeckFloor"/>, called only for the Hangar Bay's own 16x11 m launch-pad
-    /// patch, per <see cref="ShipDressing"/>'s own header) — never a real per-area floor. Fails on the
+    /// (<see cref="ShipKit.BuildLaunchPadHazardStripes"/>, called only for the Hangar Bay's own 16x11 m
+    /// launch-pad patch, per <see cref="ShipDressing"/>'s own header) — never a real per-area floor. Fails on the
     /// base commit: <see cref="ShipKit.BuildAtlasFloor"/> and <see cref="ShipDressing"/>'s 4-argument
     /// <c>Dress</c> overload do not exist there yet.
     ///
