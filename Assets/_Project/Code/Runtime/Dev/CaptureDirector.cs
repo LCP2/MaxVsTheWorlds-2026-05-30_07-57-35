@@ -495,17 +495,36 @@ namespace MaxWorlds.Dev
         /// <see cref="IsUnoccludedSample"/> uses, but tests each <paramref name="candidates"/> renderer's
         /// engine-resolved <see cref="Renderer.bounds"/> AABB (MV-465 Tier 2 -- a resolved value, not an
         /// authored constant) instead of a physics collider. Returns the nearest candidate whose bounds
-        /// the ray crosses strictly before reaching <paramref name="worldPos"/> (same
-        /// <see cref="OcclusionTolerance"/> budget), or <c>null</c> when none do -- i.e. <paramref name="worldPos"/>
-        /// has a clear bearing from <paramref name="cam"/>. An AABB test is coarser than the mesh itself,
-        /// but is enough to name the specific piece a differential culling-mask capture already proved is
-        /// (or isn't) sitting between the camera and a sample point -- it never has to carry the merge on
-        /// its own.</summary>
+        /// the ray crosses strictly before reaching <paramref name="worldPos"/> (a millimetre-scale
+        /// epsilon, NOT <see cref="OcclusionTolerance"/> -- that 0.1 m budget was tuned for
+        /// <see cref="Physics.Raycast"/>'s own box-collider slop, and is far too generous here: at a
+        /// shallow camera angle a thin occluder can sit only centimetres nearer, in straight-line camera
+        /// distance, than the floor point it visually hides), or <c>null</c> when none do -- i.e.
+        /// <paramref name="worldPos"/> has a clear bearing from <paramref name="cam"/>. An AABB test is
+        /// coarser than the mesh itself, but is enough to name the specific piece a differential
+        /// culling-mask capture already proved is (or isn't) sitting between the camera and a sample
+        /// point -- it never has to carry the merge on its own.</summary>
         public static Renderer FindColliderFreeOccluder(Camera cam, Vector3 worldPos, IEnumerable<Renderer> candidates)
         {
-            // MV-1277 WIP stub -- base commit for MV1277ColliderFreeOccluderTests' fail-first proof.
-            // Real bounds-ray implementation lands in the very next commit.
-            return null;
+            const float BoundsEpsilon = 1e-3f;
+            Vector3 origin = cam.transform.position;
+            Vector3 delta = worldPos - origin;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f) return null;
+            var ray = new Ray(origin, delta / dist);
+
+            Renderer nearest = null;
+            float nearestDist = dist - BoundsEpsilon;
+            foreach (Renderer r in candidates)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (r.bounds.IntersectRay(ray, out float hitDist) && hitDist < nearestDist)
+                {
+                    nearest = r;
+                    nearestDist = hitDist;
+                }
+            }
+            return nearest;
         }
 
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
@@ -4949,6 +4968,108 @@ namespace MaxWorlds.Dev
             var falloffRejections = new List<string>();
             var robotRejections = new List<string>();
 
+            // MV-1277: AC4's own six falloff-step world positions, filled by the first (dressing-included)
+            // shot's Measure regardless of accept/reject, so the second (dressing-excluded) shot re-samples
+            // the IDENTICAL points rather than re-deriving the lamp/pool geometry a second time.
+            var mv1277SamplePositions = new Vector3[6];
+            bool mv1277SamplesResolved = false;
+            var mv1277FalloffNoDressing = new List<float>();
+            Renderer mv1277OccluderSample2 = null, mv1277OccluderSample5 = null;
+            var mv1277ExcludedCounts = new Dictionary<string, int>();
+            Vector3 mv1277CamPos = default;
+            Quaternion mv1277CamRot = default;
+            float mv1277CamFov = 0f;
+            string mv1277PoseCheck = "not run (second shot never fired)";
+
+            List<Renderer> Mv1277FindDressingRenderers()
+            {
+                var list = new List<Renderer>();
+                int dressingLayer = LayerMask.NameToLayer(ShipKit.DressingLayerName);
+                if (dressingLayer < 0) return list;
+                foreach (Renderer r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    if (r.gameObject.layer == dressingLayer) list.Add(r);
+                return list;
+            }
+
+            // MV-1277 AC3/AC4: re-samples the SAME six AC4 world positions against a different texture
+            // (the dressing-excluded shot's own render) -- a small deliberate duplicate of Measure()'s own
+            // ToPixel/SampleMeanLuma rather than a refactor of it, so AC1/AC2/AC3/AC5's existing, already-
+            // triaged logic is untouched by this ticket's tight slice.
+            List<float> Mv1277SampleFalloffLuma(Texture2D tex)
+            {
+                var result = new List<float>();
+                if (!mv1277SamplesResolved) return result;
+
+                Camera cam = Camera.main;
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                Vector2Int ToPixel(Vector3 worldPos)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return new Vector2Int(Mathf.RoundToInt(vp.x * w), Mathf.RoundToInt(vp.y * h));
+                }
+
+                float SampleMeanLuma(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double sum = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            sum += Luma(px[y * w + x]);
+                            count++;
+                        }
+                    }
+                    return count > 0 ? (float)(sum / count) : -1f;
+                }
+
+                foreach (Vector3 pos in mv1277SamplePositions) result.Add(SampleMeanLuma(pos, 2));
+                return result;
+            }
+
+            string Mv1277Verdict()
+            {
+                if (falloffProfile.Count < 6 || mv1277FalloffNoDressing.Count < 6)
+                    return "AC4 VERDICT: incomplete falloff profile (an occlusion rejection or a missing " +
+                        "wall lamp/pool) -- cannot settle samples 2/5 from this capture.";
+
+                // One 8-bit luma step: a deterministic re-render of the identical frame, with only the
+                // Dressing layer's visibility changed, draws either the exact same pixel (delta 0, modulo
+                // float/AA slop well under 1 unit) or a genuinely different one (an occluder actually
+                // removed) -- there is no real-valued noise floor between those two outcomes at this
+                // 5x5-px sample box size to tune a bigger threshold against.
+                const float Threshold = 1.0f;
+                float d2 = falloffProfile[2] - mv1277FalloffNoDressing[2];
+                float d5 = falloffProfile[5] - mv1277FalloffNoDressing[5];
+                bool moved2 = Mathf.Abs(d2) > Threshold;
+                bool moved5 = Mathf.Abs(d5) > Threshold;
+
+                if (!moved2 && !moved5)
+                    return $"AC4 VERDICT: samples 2/5 are genuine floor luminance and MV-1274's AC4 is a " +
+                        $"lighting defect, not a measurement one (delta s2={d2:F1} s5={d5:F1}, both under " +
+                        $"the {Threshold:F1}-luma threshold).";
+
+                var who = new List<string>();
+                if (moved2 && mv1277OccluderSample2 != null) who.Add(mv1277OccluderSample2.name);
+                if (moved5 && mv1277OccluderSample5 != null) who.Add(mv1277OccluderSample5.name);
+                if (who.Count > 0)
+                    return $"AC4 VERDICT: samples 2/5 were occluded by {string.Join(", ", who)} " +
+                        $"(delta s2={d2:F1} s5={d5:F1}, threshold {Threshold:F1}).";
+
+                return $"AC4 VERDICT: ambiguous -- sample(s) moved when dressing was excluded (delta " +
+                    $"s2={d2:F1} s5={d5:F1}) but the bounds-based classifier named no specific occluder. " +
+                    $"A number that would settle it: re-run with a wider candidate set than the Dressing " +
+                    $"layer (the classifier only ever sees what MV-1277 tagged), or inspect " +
+                    $"rig-mv1274hangarcheck PNGs side by side at sample 2/5's own screen position.";
+            }
+
             Transform FindNamed(string name)
             {
                 foreach (Transform t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
@@ -5213,15 +5334,36 @@ namespace MaxWorlds.Dev
                     // unmoved by halving the pool or changing which lamp was probed: not reading the
                     // pool at all). A rejected step is omitted from the profile and named in the report,
                     // never silently measured as if it were the floor.
+                    int mv1277StepIndex = 0;
                     for (float d = 0.1f; d <= 2.0f; d += 0.33f)
                     {
                         Vector3 samplePos = poolCentre + toCentre * d;
+                        if (mv1277StepIndex < mv1277SamplePositions.Length) mv1277SamplePositions[mv1277StepIndex] = samplePos;
                         if (CaptureDirector.IsUnoccludedSample(cam, samplePos, IsFloorCollider, out string reason))
                             falloffProfile.Add(SampleMeanLuma(samplePos, 2));
                         else
                             falloffRejections.Add($"d={d:F2}:{reason}");
+                        mv1277StepIndex++;
+                    }
+                    mv1277SamplesResolved = mv1277StepIndex >= mv1277SamplePositions.Length;
+
+                    // MV-1277: name whatever collider-free dressing/VFX sits between cam and samples 2/5
+                    // specifically (MV-1274's own two stuck falloff samples) -- found HERE, with every
+                    // dressing renderer still visible, so the classifier sees exactly what this very
+                    // capture actually drew at that screen position.
+                    if (mv1277SamplesResolved)
+                    {
+                        var mv1277Dressing = Mv1277FindDressingRenderers();
+                        mv1277OccluderSample2 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[2], mv1277Dressing);
+                        mv1277OccluderSample5 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[5], mv1277Dressing);
                     }
                 }
+
+                // MV-1277 AC2: the pose this capture actually rendered from, so the second (dressing-
+                // excluded) shot can assert identity against it rather than assume it.
+                mv1277CamPos = cam.transform.position;
+                mv1277CamRot = cam.transform.rotation;
+                mv1277CamFov = cam.fieldOfView;
 
                 // AC5: per-robot body-vs-floor-ring luminance ratio for every robot in frame.
                 foreach (RobotEnemy robot in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
@@ -5280,6 +5422,42 @@ namespace MaxWorlds.Dev
                 }
             }
 
+            // MV-1277: the second shot of the differential pair -- identical pose to the first (asserted
+            // below, not assumed), the Dressing layer's own renderers excluded from cam.cullingMask.
+            // Nothing in this Setup yields a frame (no `yield return null`), so no Update/Cinemachine tick
+            // runs between the two Capture() calls in CaptureDirector.Run's own shot loop -- the pose
+            // really is bit-identical before the assertion below ever has to reject anything.
+            IEnumerator Mv1277SetupExcludeDressing(Camera cam)
+            {
+                int dressingLayer = LayerMask.NameToLayer(ShipKit.DressingLayerName);
+                if (dressingLayer < 0)
+                    throw new CaptureAbortException("MV-1277: 'Dressing' layer not found in TagManager.asset -- cannot build the exclusion mask");
+
+                // AC1: the excluded set, reported by name and count -- never silently applied.
+                foreach (Renderer r in Mv1277FindDressingRenderers())
+                {
+                    mv1277ExcludedCounts.TryGetValue(r.name, out int n);
+                    mv1277ExcludedCounts[r.name] = n + 1;
+                }
+
+                // AC2: assert pose identity rather than assume it -- a pose difference between the two
+                // frames would fake a differential (ticket's own wording).
+                float posDelta = Vector3.Distance(cam.transform.position, mv1277CamPos);
+                float rotDelta = Quaternion.Angle(cam.transform.rotation, mv1277CamRot);
+                float fovDelta = Mathf.Abs(cam.fieldOfView - mv1277CamFov);
+                mv1277PoseCheck = $"posΔ={posDelta:F4}m rotΔ={rotDelta:F4}deg fovΔ={fovDelta:F4}deg";
+                if (posDelta > 1e-3f || rotDelta > 1e-2f || fovDelta > 1e-2f)
+                    throw new CaptureAbortException($"MV-1277: camera pose drifted between the two differential captures ({mv1277PoseCheck}) -- the differential cannot be trusted");
+
+                cam.cullingMask &= ~(1 << dressingLayer);
+                yield break;
+            }
+
+            void Mv1277MeasureExcludeDressing(Texture2D tex)
+            {
+                mv1277FalloffNoDressing.AddRange(Mv1277SampleFalloffLuma(tex));
+            }
+
             return new CapturePreset
             {
                 Key = "mv1274hangarcheck",
@@ -5302,7 +5480,13 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Prepare = Prepare,
-                Shots = new List<CaptureShot> { new CaptureShot("MV-1274-windows-a1", NoSetup, measure: Measure) },
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1274-windows-a1", NoSetup, measure: Measure),
+                    // MV-1277: same pose, Dressing layer excluded -- the differential this ticket exists
+                    // to take. See Mv1277SetupExcludeDressing's own doc for why no frame passes in between.
+                    new CaptureShot("MV-1277-windows-a1-no-dressing", Mv1277SetupExcludeDressing, measure: Mv1277MeasureExcludeDressing),
+                },
                 ExtraReport = () =>
                 {
                     var sb = new System.Text.StringBuilder();
@@ -5317,6 +5501,32 @@ namespace MaxWorlds.Dev
                     if (robotRejections.Count > 0) sb.AppendLine($"AC5 rejected samples: {string.Join(", ", robotRejections)}");
                     Camera diagCam = Camera.main;
                     sb.AppendLine($"DIAG: allowHDR={diagCam?.allowHDR} qualityLevel={QualitySettings.names[QualitySettings.GetQualityLevel()]} pipeline={UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.name} maxBrightestPixel={brightestPixelDiag:F3}");
+
+                    // ---- MV-1277: differential culling-mask capture (AC1-AC4) -------------------------
+                    sb.AppendLine("--- MV-1277 differential (dressing/VFX culling-mask exclusion) ---");
+                    if (mv1277ExcludedCounts.Count == 0)
+                    {
+                        sb.AppendLine("AC1 excluded set: EMPTY -- no renderer found on the Dressing layer (see fix comment before trusting the differential below)");
+                    }
+                    else
+                    {
+                        int totalExcluded = 0;
+                        var names = new List<string>();
+                        foreach (var kv in mv1277ExcludedCounts) { totalExcluded += kv.Value; names.Add($"{kv.Key} x{kv.Value}"); }
+                        sb.AppendLine($"AC1 excluded set ({totalExcluded} renderers): {string.Join(", ", names)}");
+                    }
+                    sb.AppendLine($"AC2 camera pose identity: {mv1277PoseCheck}");
+                    sb.AppendLine($"AC3 AC4 falloff WITH dressing   : {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    sb.AppendLine($"AC3 AC4 falloff WITHOUT dressing: {string.Join(", ", mv1277FalloffNoDressing.ConvertAll(v => v.ToString("F1")))}");
+                    if (falloffProfile.Count == mv1277FalloffNoDressing.Count)
+                    {
+                        var deltas = new List<string>();
+                        for (int i = 0; i < falloffProfile.Count; i++) deltas.Add($"s{i}:{falloffProfile[i] - mv1277FalloffNoDressing[i]:F1}");
+                        sb.AppendLine($"AC3 per-sample delta (with - without): {string.Join(", ", deltas)}");
+                    }
+                    sb.AppendLine($"sample 2 occluder (dressing-included capture): {mv1277OccluderSample2?.name ?? "none"}");
+                    sb.AppendLine($"sample 5 occluder (dressing-included capture): {mv1277OccluderSample5?.name ?? "none"}");
+                    sb.AppendLine(Mv1277Verdict());
                     return sb.ToString();
                 },
             };
