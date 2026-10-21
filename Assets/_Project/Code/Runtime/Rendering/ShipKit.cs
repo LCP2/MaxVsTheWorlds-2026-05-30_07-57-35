@@ -260,7 +260,7 @@ namespace MaxWorlds.Rendering
         /// this Rendering-assembly method never sees — same WHERE/WHAT split every other kit in this
         /// namespace keeps.</summary>
         public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward,
-            float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed)
+            float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed, bool capVisible = true)
         {
             Transform root = NewRoot(parent, "Bulkhead Wall");
             Vector2 d = b - a;
@@ -291,7 +291,17 @@ namespace MaxWorlds.Rendering
 
             BuildTopPipes(root, a, b, dir, n, h);
             BuildTopTrim(root, a, b, dir, n, h);
-            BuildWallTopCap(root, a, b, dir, n, h, wt, deckGlow, panels);
+            // MV-1272: a wall shared by two neighbouring areas (A's east IS B's west) gets this call
+            // once per area per side — see ShipAreaKit.BuildWallDressing. a/b/wallThickness/panels are
+            // all resolved off the matched StructuralWall's own geometry, so both calls land the
+            // identical cap at the identical Y with their own independent rust/teal alternation,
+            // depth-fighting on a real device. The second visit still builds the same "Wall Top Cap"/
+            // "Cap Lamp Strip"/"Cap Rib" children (so a per-side structural check, e.g.
+            // MV1269ShipWallTopCapTests, still finds them under EVERY area's own wall root) but with
+            // their renderers disabled — same "hide the box, keep the structure" contract this file
+            // already uses on the wall's own backing renderer two lines below — so only one copy is
+            // ever actually drawn.
+            BuildWallTopCap(root, a, b, dir, n, h, wt, deckGlow, panels, capVisible);
             BuildFloorKickStrip(root, a, b, dir, n, deckGlow);
 
             if (length >= RobotRackMinWallLength)
@@ -402,11 +412,32 @@ namespace MaxWorlds.Rendering
         /// detail to where the play camera can actually see it". Built from the same <paramref name="panels"/>
         /// count the face loop already computed, so the cap's own coverage tracks the wall's real length
         /// exactly (each section just under its own share of the run, for a hairline seam between
-        /// sections) rather than being derived separately.</summary>
+        /// sections) rather than being derived separately.
+        ///
+        /// MV-1272: <paramref name="visible"/> is false for the second of a shared wall's two dressing
+        /// calls (<see cref="MaxWorlds.Arena.ShipAreaKit.BuildWallDressing"/>) — every piece below still
+        /// gets built, so a per-side structural check still finds a "Wall Top Cap"/"Cap Lamp Strip"/
+        /// "Cap Rib" under every area's own wall root, but its renderer is disabled so the duplicate
+        /// never actually draws (and so never depth-fights the first copy).
+        ///
+        /// MV-1272 also found a SECOND, distinct defect the same way: at an L-corner two perpendicular
+        /// walls meet at, each wall's cap spans its own full run end to end, and each run's full span
+        /// already reaches that shared corner point — so the two caps' thickness-wide footprints overlap
+        /// in a wallThickness x wallThickness square right over the corner, each with whatever colour its
+        /// own alternation landed there. <paramref name="a"/>/<paramref name="b"/> are inset by half the
+        /// wall's own thickness at each end before tiling, below, so the cap's footprint stays within its
+        /// own wall's run and never reaches into the corner the perpendicular wall's own cap already
+        /// owns — not a "lift one 0.01 m" patch, since the actual duplicate geometry here is removed
+        /// rather than hidden behind an offset.</summary>
         private static void BuildWallTopCap(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n,
-            float wallHeight, float wallThickness, Color deckGlow, int panels)
+            float wallHeight, float wallThickness, Color deckGlow, int panels, bool visible)
         {
             float capY = wallHeight + BulkheadCapThickness * 0.5f;
+
+            float fullLength = (b - a).magnitude;
+            float inset = Mathf.Min(wallThickness + BulkheadCapRibWidth, fullLength * 0.4f);
+            a += dir * inset;
+            b -= dir * inset;
 
             for (int i = 0; i < panels; i++)
             {
@@ -418,20 +449,35 @@ namespace MaxWorlds.Rendering
                 Vector2 mid = (pa + pb) * 0.5f;
                 bool flip = (i % 2) == 1;
                 Vector3 pos = new Vector3(mid.x, capY, mid.y);
-                MeshBox(root, "Wall Top Cap", pos,
+                GameObject cap = MeshBox(root, "Wall Top Cap", pos,
                     new Vector3(w * 0.99f, BulkheadCapThickness, wallThickness).Oriented(dir), flip ? Teal : RustOrange);
+                if (!visible) HideRenderer(cap);
 
                 if (i % 2 == 0)
-                    EmissiveBox(root, "Cap Lamp Strip", pos + Vector3.up * (BulkheadCapThickness * 0.5f + 0.008f),
+                {
+                    GameObject lamp = EmissiveBox(root, "Cap Lamp Strip", pos + Vector3.up * (BulkheadCapThickness * 0.5f + 0.008f),
                         new Vector3(w * 0.5f, 0.012f, wallThickness * 0.3f).Oriented(dir), deckGlow);
+                    if (!visible) HideRenderer(lamp);
+                }
             }
 
             for (int i = 0; i <= panels; i++)
             {
                 Vector2 at = Vector2.Lerp(a, b, (float)i / panels);
-                MeshBox(root, "Cap Rib", new Vector3(at.x, capY, at.y),
+                GameObject rib = MeshBox(root, "Cap Rib", new Vector3(at.x, capY, at.y),
                     new Vector3(BulkheadCapRibWidth, BulkheadCapThickness * 1.4f, wallThickness * 1.05f).Oriented(dir), NearBlack);
+                if (!visible) HideRenderer(rib);
             }
+        }
+
+        /// <summary>MV-1272: disables a built piece's own renderer without removing it — same "hide the
+        /// box, keep the structure" contract this file already uses on a dressed wall's own backing
+        /// renderer, applied to a wall-top-cap piece that structurally exists (for a per-side test, e.g.
+        /// MV1269ShipWallTopCapTests) but must not actually draw a second time.</summary>
+        private static void HideRenderer(GameObject go)
+        {
+            var renderer = go != null ? go.GetComponent<Renderer>() : null;
+            if (renderer != null) renderer.enabled = false;
         }
 
         /// <summary>MV-1269: a floor-edge kick strip along the base of this wall, extending
@@ -1340,9 +1386,15 @@ namespace MaxWorlds.Rendering
             for (int i = 0; i < 3; i++)
             {
                 float t = (i + 1f) / 4f;
+                // MV-1272: 0.01 put this at the same height as the Mothership's own floor-atlas seam
+                // grid (ShipKit.BuildSeams' SeamY/GlowY, 0.0112-0.0162) — a different, unrelated kit
+                // pass that also runs across every area including this one's, so a shadow stripe and a
+                // seam line could land coplanar and overlapping right across an area's own middle.
+                // +0.01 clears that band with margin (MV-1272's own EditMode test, which scans every
+                // pair of ship-dressing renderers for exactly this).
                 Vector3 stripePos = alongX
-                    ? new Vector3(Mathf.Lerp(areaFootprint.xMin, areaFootprint.xMax, t), 0.01f, areaFootprint.center.y)
-                    : new Vector3(areaFootprint.center.x, 0.01f, Mathf.Lerp(areaFootprint.yMin, areaFootprint.yMax, t));
+                    ? new Vector3(Mathf.Lerp(areaFootprint.xMin, areaFootprint.xMax, t), 0.02f, areaFootprint.center.y)
+                    : new Vector3(areaFootprint.center.x, 0.02f, Mathf.Lerp(areaFootprint.yMin, areaFootprint.yMax, t));
                 Vector3 stripeSize = alongX
                     ? new Vector3(0.6f, 0.004f, areaFootprint.height * 0.9f)
                     : new Vector3(areaFootprint.width * 0.9f, 0.004f, 0.6f);
@@ -1507,7 +1559,9 @@ namespace MaxWorlds.Rendering
             planet.transform.localScale = Vector3.one * 0.5f;
 
             float carpetLength = areaFootprint.height * 0.9f;
-            MeshBox(root, "Carpet Stripe", new Vector3(areaFootprint.center.x, 0.01f, areaFootprint.center.y),
+            // MV-1272: +0.01 (was 0.01) clears the floor-atlas seam grid's own Y band — see the matching
+            // comment on BuildAssemblyLineHero's "Overhead Shadow" above.
+            MeshBox(root, "Carpet Stripe", new Vector3(areaFootprint.center.x, 0.02f, areaFootprint.center.y),
                 new Vector3(2.2f, 0.006f, carpetLength), CarpetRed);
             foreach (float side in new[] { -1f, 1f })
                 MeshBox(root, $"Carpet Lane {(side < 0 ? "A" : "B")}",
@@ -1563,7 +1617,9 @@ namespace MaxWorlds.Rendering
             Vector3 laneSize = alongX
                 ? new Vector3(areaFootprint.width * 0.7f, 0.006f, 0.1f)
                 : new Vector3(0.1f, 0.006f, areaFootprint.height * 0.7f);
-            MeshBox(root, "Lane Line", groundCenter + Vector3.up * 0.01f, laneSize, HazardYellow);
+            // MV-1272: +0.01 clears the floor-atlas seam grid's own Y band — see BuildAssemblyLineHero's
+            // "Overhead Shadow" comment.
+            MeshBox(root, "Lane Line", groundCenter + Vector3.up * 0.02f, laneSize, HazardYellow);
             MeshBox(root, "Bulkhead Stub Accent", groundCenter + Vector3.up * 0.4f, new Vector3(0.7f, 0.8f, 0.2f), NearBlack);
         }
 
@@ -1571,7 +1627,9 @@ namespace MaxWorlds.Rendering
         private static void BuildCargoBayTheme(Transform root, Vector3 groundCenter)
         {
             MeshBox(root, "Crate Stencil", groundCenter + Vector3.up * 0.25f, new Vector3(0.5f, 0.5f, 0.45f), RustOrange);
-            EmissiveBox(root, "Floor Number", groundCenter + Vector3.up * 0.011f, new Vector3(0.4f, 0.01f, 0.4f), Teal);
+            // MV-1272: +0.01 clears the floor-atlas seam grid's own Y band — see BuildAssemblyLineHero's
+            // "Overhead Shadow" comment.
+            EmissiveBox(root, "Floor Number", groundCenter + Vector3.up * 0.021f, new Vector3(0.4f, 0.01f, 0.4f), Teal);
         }
 
         /// <summary>Junction: a centre ring and directional arrows (ticket, Change item 6) — the 4
@@ -1609,8 +1667,10 @@ namespace MaxWorlds.Rendering
         {
             Color dim = HangarFieldTone * 0.4f;
             dim.a = 1f;
-            EmissiveBox(root, "Grate Glow", groundCenter + Vector3.up * 0.011f, new Vector3(0.9f, 0.01f, 0.9f), HangarFieldTone);
-            EmissiveBox(root, "Grate Glow Dim", groundCenter + Vector3.up * 0.012f, new Vector3(1.3f, 0.005f, 1.3f), dim);
+            // MV-1272: +0.01 clears the floor-atlas seam grid's own Y band — see BuildAssemblyLineHero's
+            // "Overhead Shadow" comment.
+            EmissiveBox(root, "Grate Glow", groundCenter + Vector3.up * 0.021f, new Vector3(0.9f, 0.01f, 0.9f), HangarFieldTone);
+            EmissiveBox(root, "Grate Glow Dim", groundCenter + Vector3.up * 0.022f, new Vector3(1.3f, 0.005f, 1.3f), dim);
         }
     }
 }
