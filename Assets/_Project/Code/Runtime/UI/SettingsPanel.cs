@@ -759,8 +759,8 @@ namespace MaxWorlds.UI
             // Mobile URP tier GPU-bandwidth knobs (MV-662) — applied LIVE to whichever
             // UniversalRenderPipelineAsset is currently active (Mobile_RPAsset on iOS/WebGL), so Lee
             // can bisect the iOS thermal issue on-device without a rebuild. Defaults mirror that
-            // asset's authored values; the asset itself keeps them unchanged (only supportsHDR was
-            // dropped outright — see MobileRenderTuning).
+            // asset's authored values; supportsHDR is authored directly on the asset (MV-1273) and has
+            // no dev-panel knob at all.
             Add("Render scale", "x", 0.5f, 1f, MobileRenderTuning.DefaultRenderScale,
                 () => DevTuning.Or(DevTuning.MobileRenderScale, MobileRenderTuning.DefaultRenderScale),
                 v => { DevTuning.MobileRenderScale = v; MobileRenderTuning.ApplyRenderScale(v); }, tab: TabWeapons);

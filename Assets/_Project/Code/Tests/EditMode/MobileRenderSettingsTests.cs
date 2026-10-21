@@ -38,9 +38,10 @@ namespace MaxWorlds.Tests.EditMode
                 "Mobile render scale must not exceed 1 — supersampling a phone drops it below 60fps.");
         }
 
-        // MV-662 — HDR forces a wide colour buffer to serve grading this LDR-graded tier never uses,
-        // pure bandwidth cost on a tile-based iOS GPU with no visible benefit. Same reflection idiom
-        // as MV660ShieldStrengthKnobTests: builds the panel's private knob table and drives the found
+        // MV-1273 withdrew MV-662's HDR-off call — with HDR off no pixel can exceed 1.0, so
+        // BackyardLighting's Bloom/Neutral tonemapping can never fire on iPhone or WebGL and every
+        // neon/emissive glow tuned on Windows (HDR on) was dead on the phone. Same reflection idiom as
+        // MV660ShieldStrengthKnobTests: builds the panel's private knob table and drives the found
         // knob's own setter, then asserts what the ACTIVE UniversalRenderPipelineAsset resolves to
         // actually changed — never a literal in SettingsPanel.cs (Rule 2).
         [SetUp]
@@ -70,10 +71,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void MobileTier_HasHdrDisabled_AndRenderScaleKnobDrivesTheActiveAsset()
+        public void MobileTier_HasHdrEnabled_AndRenderScaleKnobDrivesTheActiveAsset()
         {
-            Assert.IsFalse(Load().supportsHDR,
-                "Mobile URP tier must not support HDR — bandwidth cost for grading this LDR tier never does.");
+            Assert.IsTrue(Load().supportsHDR,
+                "Mobile URP tier must support HDR (MV-1273) — with HDR off no pixel can exceed 1.0, " +
+                "so bloom and neon glow can never fire on iPhone or WebGL.");
 
             var go = new GameObject("SettingsPanel Knob Probe");
             try
