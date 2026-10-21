@@ -417,6 +417,116 @@ namespace MaxWorlds.Dev
             }
         }
 
+        /// <summary>Tolerance for <see cref="IsUnoccludedSample"/>'s own "did the ray actually reach the
+        /// sample point" distance check -- metres of float/collider-geometry slop to absorb, not a
+        /// deliberately generous margin. The map floor and every <c>MapRuntime</c> wall are exact boxes
+        /// (<c>GameObject.CreatePrimitive</c>'s own collider, resized to the authored dimensions), so an
+        /// unoccluded ray should land within millimetres of the sample's own distance from the camera.</summary>
+        private const float OcclusionTolerance = 0.1f;
+
+        /// <summary>MV-1276: the ground-truth answer to "is the first thing the camera actually draws at
+        /// <paramref name="worldPos"/> really there, or is something nearer occluding it" -- a real
+        /// <see cref="Physics.Raycast"/> aimed FROM the camera toward the sample point. Before this,
+        /// every <c>BuildMv1274HangarCheck</c> sample trusted <c>cam.WorldToViewportPoint</c> plus a raw
+        /// pixel index with no occlusion test at all (zero <see cref="Physics.Raycast"/> calls existed
+        /// anywhere in this file) -- every sample reported whatever was DRAWN at that screen pixel, never
+        /// confirmed against what was actually at that world point. Two of AC4's six falloff samples sat
+        /// pinned within 5 luma of the frame's own brightest pixel across three relighting rounds, unmoved
+        /// by halving the lamp pool or changing which lamp was probed: the probe was reading the Hangar's
+        /// wall-top cap neon drawn over the floor at that screen position, never the floor itself.
+        ///
+        /// Public so <c>BuildMv1274HangarCheck</c>'s own AC3/AC4/AC5 probes and the MV-1276 EditMode test
+        /// drive the exact same resolution instead of the test re-deriving it independently (same
+        /// "test and production share one seam" contract <see cref="ApplyQualityLevel"/> and
+        /// <see cref="ResolveProductionCameraPose"/> already use). <paramref name="accept"/> decides
+        /// whether the first thing the ray actually hits counts -- the floor
+        /// (<c>c => c.GetComponentInParent&lt;StructuralFloor&gt;() != null</c>) for a floor sample, or a
+        /// specific robot's own collider for a body sample -- checked BEFORE the distance-to-target
+        /// comparison, not after: an AC5 body sample (<c>robot.position + up * 0.4</c>) sits inside that
+        /// same robot's own collider, not on its surface, so the ray reaches that collider's near face a
+        /// little short of <paramref name="worldPos"/>'s own distance even with nothing else in the way.
+        /// Gating on distance first would reject a robot's own body sample as occluded by itself.</summary>
+        /// <param name="rejectionReason">Human-readable cause when this returns false: "camera-at-target"
+        /// (degenerate zero-length ray), "no-collider-hit" (nothing was hit within range at all),
+        /// "occluded-by:&lt;name&gt;" (something that fails <paramref name="accept"/>, hit well short of
+        /// <paramref name="worldPos"/>'s own distance), or "unexpected-hit:&lt;name&gt;" (something that
+        /// fails <paramref name="accept"/>, hit at ~that same distance -- overlapping geometry, not a
+        /// nearer occluder). <c>null</c> when this returns true.</param>
+        public static bool IsUnoccludedSample(Camera cam, Vector3 worldPos, Func<Collider, bool> accept,
+            out string rejectionReason)
+        {
+            Vector3 origin = cam.transform.position;
+            Vector3 delta = worldPos - origin;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f)
+            {
+                rejectionReason = "camera-at-target";
+                return false;
+            }
+
+            if (!Physics.Raycast(origin, delta / dist, out RaycastHit hit, dist + OcclusionTolerance, ~0,
+                    QueryTriggerInteraction.Ignore))
+            {
+                rejectionReason = "no-collider-hit";
+                return false;
+            }
+            // Accept-first, not distance-first: an AC5 body sample (robot.position + up * 0.4) sits
+            // INSIDE that same robot's own collider, not on its surface, so the ray hits that collider's
+            // own near face a little short of worldPos's own distance even when nothing else is in the
+            // way -- gating on distance before accept would reject a robot's own body sample as
+            // "occluded by itself". Whatever the ray hits first still has to pass accept(), so a genuine
+            // occluder (something else, nearer) is still rejected -- only the "it's the right thing, just
+            // not sitting exactly at worldPos's own distance" case is let through.
+            if (accept(hit.collider))
+            {
+                rejectionReason = null;
+                return true;
+            }
+            rejectionReason = hit.distance < dist - OcclusionTolerance
+                ? $"occluded-by:{hit.collider.name}"
+                : $"unexpected-hit:{hit.collider.name}";
+            return false;
+        }
+
+        /// <summary>MV-1277: <see cref="IsUnoccludedSample"/>'s own counterpart for an occluder that
+        /// carries no <see cref="Collider"/> at all -- <see cref="Physics.Raycast"/> can never see one,
+        /// which is exactly the gap <c>ShipKit</c>'s dressing/VFX sits in (its own class doc: "nothing
+        /// here carries a collider"). Casts the identical camera-to-<paramref name="worldPos"/> ray
+        /// <see cref="IsUnoccludedSample"/> uses, but tests each <paramref name="candidates"/> renderer's
+        /// engine-resolved <see cref="Renderer.bounds"/> AABB (MV-465 Tier 2 -- a resolved value, not an
+        /// authored constant) instead of a physics collider. Returns the nearest candidate whose bounds
+        /// the ray crosses strictly before reaching <paramref name="worldPos"/> (a millimetre-scale
+        /// epsilon, NOT <see cref="OcclusionTolerance"/> -- that 0.1 m budget was tuned for
+        /// <see cref="Physics.Raycast"/>'s own box-collider slop, and is far too generous here: at a
+        /// shallow camera angle a thin occluder can sit only centimetres nearer, in straight-line camera
+        /// distance, than the floor point it visually hides), or <c>null</c> when none do -- i.e.
+        /// <paramref name="worldPos"/> has a clear bearing from <paramref name="cam"/>. An AABB test is
+        /// coarser than the mesh itself, but is enough to name the specific piece a differential
+        /// culling-mask capture already proved is (or isn't) sitting between the camera and a sample
+        /// point -- it never has to carry the merge on its own.</summary>
+        public static Renderer FindColliderFreeOccluder(Camera cam, Vector3 worldPos, IEnumerable<Renderer> candidates)
+        {
+            const float BoundsEpsilon = 1e-3f;
+            Vector3 origin = cam.transform.position;
+            Vector3 delta = worldPos - origin;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f) return null;
+            var ray = new Ray(origin, delta / dist);
+
+            Renderer nearest = null;
+            float nearestDist = dist - BoundsEpsilon;
+            foreach (Renderer r in candidates)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (r.bounds.IntersectRay(ray, out float hitDist) && hitDist < nearestDist)
+                {
+                    nearest = r;
+                    nearestDist = hitDist;
+                }
+            }
+            return nearest;
+        }
+
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded. Shared by any preset that wants to frame a shot away from the
         /// Entry room's hedges/flower beds (previously duplicated per-director).</summary>
@@ -553,6 +663,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
+            Add(BuildMv1274HangarCheck());
             Add(BuildMv1250ReefLookCheck());
             Add(BuildMv1251ReefStructureKitCheck());
             Add(BuildMv1255ReefWallDetailCheck());
@@ -4813,6 +4924,662 @@ namespace MaxWorlds.Dev
                         sb.Append($"{h.label} (a{h.area}): median={median:F1}/255 p90={p90:F1}/255 " +
                                   $"(target {h.targetMedian:F0} +/-10 -- {(within ? "PASS" : "OUT OF RANGE")})\n");
                     }
+                    return sb.ToString();
+                },
+            };
+        }
+
+        // ---- Mv1274HangarCheck (MV-1274 AC1-6) ------------------------------------------------
+
+        /// <summary>MV-1274's own one-shot capture + measurement check for the Hangar deck relight
+        /// (areas 1-5): launched directly against the standalone .exe (no Editor involved — same
+        /// "player pixels, not Editor pixels" route <see cref="BuildMv1250ReefLookCheck"/>/
+        /// <see cref="BuildMv1063ReefFixCheck"/> already use), jumps to area a1 via
+        /// <see cref="DevModeController.TryJumpToArea"/> (the same production entry point
+        /// <see cref="BuildMv1249MothershipLookCheck"/> uses), hides the HUD, and measures every
+        /// pixel-level AC the ticket gates the merge on: whole-frame luminance percentiles (AC1), a
+        /// bare-floor patch's own mean RGB (AC2), a bloom pixel count plus a near-hazard-stripe
+        /// brightness delta (AC3), a radial falloff profile from a wall lamp pool (AC4), and a
+        /// per-robot body-vs-floor-ring luminance ratio for every robot in frame (AC5). Every world
+        /// position it samples is found LIVE off the actual built scene graph (a "Wall Lamp"/"Launch
+        /// Pad Hazard Stripes" GameObject under the real "Wall a1 *"/world dressing roots), not a
+        /// guessed offset, so the measurements track whatever MV-1274's own dressing pass actually
+        /// built. Reads the frame once via <see cref="Texture2D.GetPixels32"/> (not a
+        /// <see cref="Texture2D.GetPixel"/> call per sample) — the bloom count alone touches every one
+        /// of a 1600x1000 frame's 1.6M pixels, and GetPixel's per-call marshalling cost at that volume
+        /// risks the preset's own 150s watchdog.</summary>
+        private static CapturePreset BuildMv1274HangarCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            float p10 = -1f, median = -1f, p90 = -1f;
+            float brightestPixelDiag = -1f;   // MV-1274 diagnostic only, see ExtraReport
+            Color floorPatchRgb = new Color(-1f, -1f, -1f);
+            int bloomPixelCount = -1;
+            float hazardDelta = float.NaN;
+            var falloffProfile = new List<float>();
+            var robotRatios = new List<(string name, float ratio)>();
+
+            // MV-1276: every sample this Measure() takes used to trust cam.WorldToViewportPoint plus a
+            // raw pixel index with no occlusion test -- whatever was DRAWN at that pixel, never confirmed
+            // against what was actually AT that world point. These three collect what IsUnoccludedSample
+            // rejects, per AC, so a rejected sample is reported, never silently dropped or silently kept.
+            var hazardRejections = new List<string>();
+            var falloffRejections = new List<string>();
+            var robotRejections = new List<string>();
+
+            // MV-1277: AC4's own six falloff-step world positions, filled by the first (dressing-included)
+            // shot's Measure regardless of accept/reject, so the second (dressing-excluded) shot re-samples
+            // the IDENTICAL points rather than re-deriving the lamp/pool geometry a second time.
+            var mv1277SamplePositions = new Vector3[6];
+            bool mv1277SamplesResolved = false;
+            var mv1277FalloffNoDressing = new List<float>();
+            Renderer mv1277OccluderSample2 = null, mv1277OccluderSample5 = null;
+            var mv1277ExcludedCounts = new Dictionary<string, int>();
+            Vector3 mv1277CamPos = default;
+            Quaternion mv1277CamRot = default;
+            float mv1277CamFov = 0f;
+            string mv1277PoseCheck = "not run (second shot never fired)";
+
+            List<Renderer> Mv1277FindDressingRenderers()
+            {
+                var list = new List<Renderer>();
+                int dressingLayer = LayerMask.NameToLayer(ShipKit.DressingLayerName);
+                if (dressingLayer < 0) return list;
+                foreach (Renderer r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    if (r.gameObject.layer == dressingLayer) list.Add(r);
+                return list;
+            }
+
+            // MV-1277 AC3/AC4: re-samples the SAME six AC4 world positions against a different texture
+            // (the dressing-excluded shot's own render) -- a small deliberate duplicate of Measure()'s own
+            // ToPixel/SampleMeanLuma rather than a refactor of it, so AC1/AC2/AC3/AC5's existing, already-
+            // triaged logic is untouched by this ticket's tight slice.
+            List<float> Mv1277SampleFalloffLuma(Texture2D tex)
+            {
+                var result = new List<float>();
+                if (!mv1277SamplesResolved) return result;
+
+                Camera cam = Camera.main;
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                Vector2Int ToPixel(Vector3 worldPos)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return new Vector2Int(Mathf.RoundToInt(vp.x * w), Mathf.RoundToInt(vp.y * h));
+                }
+
+                float SampleMeanLuma(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double sum = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            sum += Luma(px[y * w + x]);
+                            count++;
+                        }
+                    }
+                    return count > 0 ? (float)(sum / count) : -1f;
+                }
+
+                foreach (Vector3 pos in mv1277SamplePositions) result.Add(SampleMeanLuma(pos, 2));
+                return result;
+            }
+
+            string Mv1277Verdict()
+            {
+                if (falloffProfile.Count < 6 || mv1277FalloffNoDressing.Count < 6)
+                    return "AC4 VERDICT: incomplete falloff profile (an occlusion rejection or a missing " +
+                        "wall lamp/pool) -- cannot settle samples 2/5 from this capture.";
+
+                // One 8-bit luma step: a deterministic re-render of the identical frame, with only the
+                // Dressing layer's visibility changed, draws either the exact same pixel (delta 0, modulo
+                // float/AA slop well under 1 unit) or a genuinely different one (an occluder actually
+                // removed) -- there is no real-valued noise floor between those two outcomes at this
+                // 5x5-px sample box size to tune a bigger threshold against.
+                const float Threshold = 1.0f;
+                float d2 = falloffProfile[2] - mv1277FalloffNoDressing[2];
+                float d5 = falloffProfile[5] - mv1277FalloffNoDressing[5];
+                bool moved2 = Mathf.Abs(d2) > Threshold;
+                bool moved5 = Mathf.Abs(d5) > Threshold;
+
+                if (!moved2 && !moved5)
+                    return $"AC4 VERDICT: samples 2/5 are genuine floor luminance and MV-1274's AC4 is a " +
+                        $"lighting defect, not a measurement one (delta s2={d2:F1} s5={d5:F1}, both under " +
+                        $"the {Threshold:F1}-luma threshold).";
+
+                var who = new List<string>();
+                if (moved2 && mv1277OccluderSample2 != null) who.Add(mv1277OccluderSample2.name);
+                if (moved5 && mv1277OccluderSample5 != null) who.Add(mv1277OccluderSample5.name);
+                if (who.Count > 0)
+                    return $"AC4 VERDICT: samples 2/5 were occluded by {string.Join(", ", who)} " +
+                        $"(delta s2={d2:F1} s5={d5:F1}, threshold {Threshold:F1}).";
+
+                return $"AC4 VERDICT: ambiguous -- sample(s) moved when dressing was excluded (delta " +
+                    $"s2={d2:F1} s5={d5:F1}) but the bounds-based classifier named no specific occluder. " +
+                    $"A number that would settle it: re-run with a wider candidate set than the Dressing " +
+                    $"layer (the classifier only ever sees what MV-1277 tagged), or inspect " +
+                    $"rig-mv1274hangarcheck PNGs side by side at sample 2/5's own screen position.";
+            }
+
+            Transform FindNamed(string name)
+            {
+                foreach (Transform t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                    if (t.name == name) return t;
+                return null;
+            }
+
+            // MV-1274 round 3: the first "Wall Lamp" found on any wall is always panel index 0 --
+            // the lamp nearest that wall's own start endpoint, i.e. right at a room CORNER. Two
+            // perpendicular walls' corner lamps sit only ~2.1 m apart there (each wall's first lamp
+            // is ~1.5 m from the shared corner along its own run), well inside their own 1.6 m pool
+            // radius of each other -- so a corner lamp's "outward into the room" probe walks straight
+            // through the ADJACENT wall's own pool, not its own far-side neighbour along the same
+            // wall (lamps on the SAME wall are a full 6 m apart by construction, see
+            // ShipKit.BuildBulkheadPanel's "i % 2 == 0" placement on a 3 m panel pitch -- well clear
+            // of a 2 m probe). That is the real cause of comment 6's rise-then-fall-then-rise profile,
+            // not a same-wall neighbour. Pick the lamp with the LARGEST minimum distance to every
+            // other lamp instead, so the probe only ever walks through its own pool's true falloff.
+            // MV-1277 settled AC4's samples 2/5 (previously pinned within 5 luma of the frame's own
+            // brightest pixel across three rounds): they were occluded by the Hangar Bay's own painted
+            // launch ring ("Ring Outer Gold"/"Ring Inner Cyan", ShipKit.BuildLaunchRingMarking) -- a
+            // collider-free dressing element a Physics.Raycast can never see (ShipKit is deliberately
+            // collider-free, see IsUnoccludedSample's own doc), confirmed by a culling-mask differential
+            // capture (delta s2=175.9 s5=198.6 with the ring excluded). Not a lighting defect -- the
+            // isolation-ranked lamp this used to always pick happens to sit close enough to the ring
+            // (ring radius 6 m, centred near one wall) that its own 2 m outward probe line walks across
+            // it. Rather than report that occluded reading as the floor's own falloff, walk the
+            // isolation-ranked candidates and skip any whose six falloff points the ring (or any other
+            // collider-free dressing) draws over, using the same FindColliderFreeOccluder MV-1277 built
+            // to confirm this.
+            Transform FindWallLamp()
+            {
+                var lamps = new List<Transform>();
+                foreach (string side in new[] { "N", "E", "S", "W" })
+                {
+                    Transform wall = FindNamed($"Wall a1 {side}");
+                    if (wall == null) continue;
+                    foreach (Transform child in wall.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "Wall Lamp") lamps.Add(child);
+                }
+                if (lamps.Count == 0) return null;
+
+                var byIsolation = new List<(Transform lamp, float minDist)>();
+                foreach (Transform candidate in lamps)
+                {
+                    float minDist = float.MaxValue;
+                    foreach (Transform other in lamps)
+                    {
+                        if (other == candidate) continue;
+                        minDist = Mathf.Min(minDist, Vector3.Distance(candidate.position, other.position));
+                    }
+                    byIsolation.Add((candidate, minDist));
+                }
+                byIsolation.Sort((a, b) => b.minDist.CompareTo(a.minDist));
+
+                Camera cam = Camera.main;
+                var dressing = Mv1277FindDressingRenderers();
+                foreach (var (candidate, _) in byIsolation)
+                {
+                    Transform step0 = candidate.parent.Find("Pool Step 0");
+                    if (step0 == null) continue;
+                    Vector3 lampGround = new Vector3(candidate.position.x, 0f, candidate.position.z);
+                    Vector3 poolCentre = new Vector3(step0.position.x, 0f, step0.position.z);
+                    Vector3 dir = (poolCentre - lampGround).sqrMagnitude > 0.0001f
+                        ? (poolCentre - lampGround).normalized
+                        : Vector3.forward;
+
+                    bool clear = true;
+                    for (float d = 0.1f; d <= 2.0f; d += 0.33f)
+                    {
+                        if (CaptureDirector.FindColliderFreeOccluder(cam, poolCentre + dir * d, dressing) != null)
+                        {
+                            clear = false;
+                            break;
+                        }
+                    }
+                    if (clear) return candidate;
+                }
+
+                // No candidate's line is fully clear of collider-free dressing -- fall back to the most
+                // isolated lamp (the old behaviour), so Measure() still reports whatever it finds rather
+                // than returning null outright. falloffRejections/the occlusion-validated loop below still
+                // name and drop any sample this lamp's own line is occluded at, rather than silently
+                // measuring the occluder.
+                return byIsolation[0].lamp;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                float until = Time.time + 3f;   // same settle window BuildMv1249MothershipLookCheck uses
+                while (Time.time < until) yield return null;
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+            }
+
+            float Percentile(List<float> sorted, float p)
+            {
+                if (sorted.Count == 0) return 0f;
+                if (sorted.Count == 1) return sorted[0];
+                float idx = p * (sorted.Count - 1);
+                int lo = Mathf.FloorToInt(idx);
+                int hi = Mathf.CeilToInt(idx);
+                return lo == hi ? sorted[lo] : Mathf.Lerp(sorted[lo], sorted[hi], idx - lo);
+            }
+
+            void Measure(Texture2D tex)
+            {
+                Camera cam = Camera.main;
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                // MV-1276: AC3/AC4/AC5's own occlusion gate -- the floor's own StructuralFloor marker,
+                // same identity MapRuntime.Build and StormdrainKit.MakeWalkable already tag the real
+                // floor/walkable-floor colliders with, so this never has to re-derive "what counts as
+                // floor" from shape or name.
+                bool IsFloorCollider(Collider c) => c.GetComponentInParent<StructuralFloor>() != null;
+
+                Vector2Int ToPixel(Vector3 worldPos)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return new Vector2Int(Mathf.RoundToInt(vp.x * w), Mathf.RoundToInt(vp.y * h));
+                }
+
+                Color SampleMeanRgb(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double r = 0, g = 0, b = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            Color32 c = px[y * w + x];
+                            r += c.r; g += c.g; b += c.b; count++;
+                        }
+                    }
+                    return count > 0 ? new Color((float)(r / count) / 255f, (float)(g / count) / 255f, (float)(b / count) / 255f) : new Color(-1f, -1f, -1f);
+                }
+
+                float SampleMeanLuma(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double sum = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            sum += Luma(px[y * w + x]);
+                            count++;
+                        }
+                    }
+                    return count > 0 ? (float)(sum / count) : -1f;
+                }
+
+                bool InFrame(Vector3 worldPos, float margin)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return vp.z > 0f && vp.x >= margin && vp.x <= 1f - margin && vp.y >= margin && vp.y <= 1f - margin;
+                }
+
+                // AC1: whole-frame luminance percentiles (every 4th pixel, same step BuildMv1249MothershipLookCheck uses).
+                var lumas = new List<float>((w / 4 + 1) * (h / 4 + 1));
+                for (int y = 0; y < h; y += 4)
+                    for (int x = 0; x < w; x += 4)
+                        lumas.Add(Luma(px[y * w + x]));
+                lumas.Sort();
+                p10 = Percentile(lumas, 0.10f);
+                median = Percentile(lumas, 0.50f);
+                p90 = Percentile(lumas, 0.90f);
+
+                // AC2: a bare floor patch, >= 2 m from any found wall lamp and off the launch pad --
+                // both found live off the built scene, not assumed.
+                BackyardPath path = FindFirstObjectByType<BackyardPath>();
+                MapZone area1 = null;
+                if (path != null && path.Map != null && path.Map.zones != null)
+                    foreach (MapZone z in path.Map.zones) if (z != null && z.id == "area1") { area1 = z; break; }
+
+                var lampPositions = new List<Vector3>();
+                foreach (string side in new[] { "N", "E", "S", "W" })
+                {
+                    Transform wall = FindNamed($"Wall a1 {side}");
+                    if (wall == null) continue;
+                    foreach (Transform child in wall.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "Wall Lamp") lampPositions.Add(child.position);
+                }
+
+                Transform hazard = FindNamed("Launch Pad Hazard Stripes");
+                Rect? padRect = null;
+                Renderer hazardRenderer = hazard != null ? hazard.GetComponentInChildren<Renderer>() : null;
+                if (hazardRenderer != null)
+                {
+                    Bounds hb = hazardRenderer.bounds;
+                    padRect = new Rect(hb.min.x - 4f, hb.min.z - 4f, hb.size.x + 8f, hb.size.z + 8f);
+                }
+
+                Vector3 floorPatchPos = default;
+                if (area1 != null)
+                {
+                    Rect fp = area1.Footprint;
+                    float bestScore = -1f;
+                    for (float fx = fp.xMin + 2f; fx <= fp.xMax - 2f; fx += 2f)
+                    {
+                        for (float fz = fp.yMin + 2f; fz <= fp.yMax - 2f; fz += 2f)
+                        {
+                            if (padRect.HasValue && padRect.Value.Contains(new Vector2(fx, fz))) continue;
+
+                            float minDist = lampPositions.Count > 0 ? float.MaxValue : 999f;
+                            foreach (Vector3 lamp in lampPositions)
+                                minDist = Mathf.Min(minDist, Vector2.Distance(new Vector2(fx, fz), new Vector2(lamp.x, lamp.z)));
+
+                            if (minDist > bestScore) { bestScore = minDist; floorPatchPos = new Vector3(fx, 0f, fz); }
+                        }
+                    }
+                }
+                floorPatchRgb = SampleMeanRgb(floorPatchPos, 6);
+                float floorPatchLuma = Luma(new Color32(
+                    (byte)Mathf.RoundToInt(floorPatchRgb.r * 255f),
+                    (byte)Mathf.RoundToInt(floorPatchRgb.g * 255f),
+                    (byte)Mathf.RoundToInt(floorPatchRgb.b * 255f), 255));
+
+                // AC3: bloom pixel count across the whole frame, plus the near-hazard-stripe delta.
+                int bloomCount = 0;
+                float brightest = 0f;
+                for (int i = 0; i < px.Length; i++)
+                {
+                    float lm = Luma(px[i]);
+                    if (lm > 230f) bloomCount++;
+                    if (lm > brightest) brightest = lm;
+                }
+                bloomPixelCount = bloomCount;
+                brightestPixelDiag = brightest;
+
+                if (hazardRenderer != null)
+                {
+                    // MV-1276: MV-1274's AC3 asks about "pixels within 0.3 m outside the hazard stripe"
+                    // -- a band, all round -- not the single north-edge point this used to read alone.
+                    // Round 3 widened the stripe chasing that one number and reported the result reads
+                    // as a solid garish bar, not a neon accent: the single-point probe was steering the
+                    // build away from the look, not measuring it. Each edge point is occlusion-validated
+                    // the same way AC4/AC5 now are, and a rejected edge is reported, never dropped silently.
+                    Bounds hb = hazardRenderer.bounds;
+                    var edgeSamples = new (string label, Vector3 pos)[]
+                    {
+                        ("N", new Vector3(hb.center.x, 0.02f, hb.max.z + 0.15f)),
+                        ("S", new Vector3(hb.center.x, 0.02f, hb.min.z - 0.15f)),
+                        ("E", new Vector3(hb.max.x + 0.15f, 0.02f, hb.center.z)),
+                        ("W", new Vector3(hb.min.x - 0.15f, 0.02f, hb.center.z)),
+                    };
+
+                    float deltaSum = 0f; int deltaCount = 0;
+                    foreach (var (label, pos) in edgeSamples)
+                    {
+                        if (CaptureDirector.IsUnoccludedSample(cam, pos, IsFloorCollider, out string reason))
+                        {
+                            deltaSum += SampleMeanLuma(pos, 2) - floorPatchLuma;
+                            deltaCount++;
+                        }
+                        else
+                        {
+                            hazardRejections.Add($"{label}:{reason}");
+                        }
+                    }
+                    hazardDelta = deltaCount > 0 ? deltaSum / deltaCount : float.NaN;
+                }
+
+                // AC4: falloff profile from a wall lamp pool centre outward 2 m toward the room.
+                // The pool itself (ShipKit.BuildGraduatedPool's "Pool Step 0"..4) sits ~1.44 m inset
+                // from the wall under HangarLightPoolRadius*0.9 -- NOT at the wall-mounted "Wall Lamp"
+                // fixture's own position. Sampling outward from the wall lamp instead of the pool's own
+                // built centre starts the profile well short of the light and walks INTO it before
+                // walking back out, which reads as a false rise-then-fall rather than a falloff.
+                Transform wallLamp = FindWallLamp();
+                Transform poolStep0 = wallLamp != null ? wallLamp.parent.Find("Pool Step 0") : null;
+                if (wallLamp != null && poolStep0 != null)
+                {
+                    Vector3 wallLampGround = new Vector3(wallLamp.position.x, 0f, wallLamp.position.z);
+                    Vector3 poolCentre = new Vector3(poolStep0.position.x, 0f, poolStep0.position.z);
+                    // Sample straight on along the wall-to-pool line (the pool's own build direction,
+                    // ShipKit.BuildWallLamp's "n") rather than toward the room's geometric centre --
+                    // "toward room centre" can run near-parallel to the wall on a short end wall and
+                    // wander into a NEIGHBOURING lamp pool spaced "every 4-6 m" along the same run,
+                    // which reads as a false rise after the fall rather than this pool's own gradient.
+                    Vector3 toCentre = (poolCentre - wallLampGround).sqrMagnitude > 0.0001f
+                        ? (poolCentre - wallLampGround).normalized
+                        : Vector3.forward;
+                    // MV-1276: every step used to read whatever pixel ToPixel landed on with no check
+                    // that it was the floor -- this is the defect two of AC4's six samples pinned on
+                    // across three relighting rounds (within 5 luma of the frame's own brightest pixel,
+                    // unmoved by halving the pool or changing which lamp was probed: not reading the
+                    // pool at all). A rejected step is omitted from the profile and named in the report,
+                    // never silently measured as if it were the floor.
+                    //
+                    // MV-1277 settled that those two samples were never a lighting defect at all: they
+                    // were occluded by the Hangar Bay's own collider-free launch-ring dressing, which
+                    // IsUnoccludedSample's Physics.Raycast can never see. FindWallLamp above now already
+                    // skips any lamp whose own line crosses collider-free dressing -- this check is the
+                    // same guarantee, asserted rather than assumed, so a future dressing change that
+                    // creeps back across every remaining lamp's line is still caught and named here
+                    // instead of silently measured as if it were the floor.
+                    var mv1277Dressing = Mv1277FindDressingRenderers();
+                    int mv1277StepIndex = 0;
+                    for (float d = 0.1f; d <= 2.0f; d += 0.33f)
+                    {
+                        Vector3 samplePos = poolCentre + toCentre * d;
+                        if (mv1277StepIndex < mv1277SamplePositions.Length) mv1277SamplePositions[mv1277StepIndex] = samplePos;
+                        Renderer freeOccluder = CaptureDirector.FindColliderFreeOccluder(cam, samplePos, mv1277Dressing);
+                        if (freeOccluder != null)
+                            falloffRejections.Add($"d={d:F2}:occluded-by:{freeOccluder.name}");
+                        else if (CaptureDirector.IsUnoccludedSample(cam, samplePos, IsFloorCollider, out string reason))
+                            falloffProfile.Add(SampleMeanLuma(samplePos, 2));
+                        else
+                            falloffRejections.Add($"d={d:F2}:{reason}");
+                        mv1277StepIndex++;
+                    }
+                    mv1277SamplesResolved = mv1277StepIndex >= mv1277SamplePositions.Length;
+
+                    // MV-1277: name whatever collider-free dressing/VFX sits between cam and samples 2/5
+                    // specifically (MV-1274's own two stuck falloff samples) -- found HERE, with every
+                    // dressing renderer still visible, so the classifier sees exactly what this very
+                    // capture actually drew at that screen position.
+                    if (mv1277SamplesResolved)
+                    {
+                        mv1277OccluderSample2 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[2], mv1277Dressing);
+                        mv1277OccluderSample5 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[5], mv1277Dressing);
+                    }
+                }
+
+                // MV-1277 AC2: the pose this capture actually rendered from, so the second (dressing-
+                // excluded) shot can assert identity against it rather than assume it.
+                mv1277CamPos = cam.transform.position;
+                mv1277CamRot = cam.transform.rotation;
+                mv1277CamFov = cam.fieldOfView;
+
+                // AC5: per-robot body-vs-floor-ring luminance ratio for every robot in frame.
+                foreach (RobotEnemy robot in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+                {
+                    if (robot == null || !robot.isActiveAndEnabled) continue;
+
+                    // MV-1276 (triage, AC2): robot.transform.position is the CharacterController's own
+                    // CENTRE, not its feet -- EnemyArchetype.Of(robot.Kind).SpawnHeight is the exact
+                    // "ground clearance" every spawn path adds on top of floor height (same idiom
+                    // RobotRig.BuildModel uses to drop its model's feet pivot to the floor). Without this,
+                    // every ring/body sample floated SpawnHeight above the real StructuralFloor surface --
+                    // for a1's Turret garrison (colliderHeight 1.0 m -> SpawnHeight 0.5 m) that put the
+                    // ring points 0.5 m above the floor, well outside IsUnoccludedSample's tight
+                    // dist+OcclusionTolerance raycast budget, so every sample reported "no-collider-hit".
+                    Vector3 feetPos = robot.transform.position;
+                    feetPos.y -= EnemyArchetype.Of(robot.Kind).SpawnHeight;
+
+                    Vector3 bodyPos = feetPos + Vector3.up * 0.4f;
+                    if (!InFrame(bodyPos, 0.02f)) continue;
+
+                    // MV-1276: confirm the body sample actually lands on THIS robot, not on whatever
+                    // else the camera draws over it (another robot standing nearer, say).
+                    if (!CaptureDirector.IsUnoccludedSample(cam, bodyPos,
+                            c => c.GetComponentInParent<RobotEnemy>() == robot, out string bodyReason))
+                    {
+                        robotRejections.Add($"{robot.name}:body:{bodyReason}");
+                        continue;
+                    }
+
+                    float bodyLuma = SampleMeanLuma(bodyPos, 4);
+                    if (bodyLuma < 0f) continue;
+
+                    float ringSum = 0f; int ringCount = 0;
+                    for (int a = 0; a < 8; a++)
+                    {
+                        float ang = a / 8f * Mathf.PI * 2f;
+                        Vector3 ringPos = feetPos + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
+                        if (!InFrame(ringPos, 0f)) continue;
+
+                        // MV-1276: a1's garrison stands two turrets 1.6 m apart, so each turret's own
+                        // 0.75 m ring passes within 0.05 m of its neighbour's -- a ring point can land
+                        // on the NEIGHBOURING robot instead of the floor. Reject that point rather than
+                        // average a robot's own brightness into its neighbour's floor-ring denominator.
+                        if (!CaptureDirector.IsUnoccludedSample(cam, ringPos, IsFloorCollider, out string ringReason))
+                        {
+                            robotRejections.Add($"{robot.name}:ring{a}:{ringReason}");
+                            continue;
+                        }
+                        ringSum += SampleMeanLuma(ringPos, 2);
+                        ringCount++;
+                    }
+                    if (ringCount == 0) continue;
+                    float ringMean = ringSum / ringCount;
+                    if (ringMean <= 0.5f) continue;
+                    robotRatios.Add((robot.name, bodyLuma / ringMean));
+                }
+            }
+
+            // MV-1277: the second shot of the differential pair -- identical pose to the first (asserted
+            // below, not assumed), the Dressing layer's own renderers excluded from cam.cullingMask.
+            // Nothing in this Setup yields a frame (no `yield return null`), so no Update/Cinemachine tick
+            // runs between the two Capture() calls in CaptureDirector.Run's own shot loop -- the pose
+            // really is bit-identical before the assertion below ever has to reject anything.
+            IEnumerator Mv1277SetupExcludeDressing(Camera cam)
+            {
+                int dressingLayer = LayerMask.NameToLayer(ShipKit.DressingLayerName);
+                if (dressingLayer < 0)
+                    throw new CaptureAbortException("MV-1277: 'Dressing' layer not found in TagManager.asset -- cannot build the exclusion mask");
+
+                // AC1: the excluded set, reported by name and count -- never silently applied.
+                foreach (Renderer r in Mv1277FindDressingRenderers())
+                {
+                    mv1277ExcludedCounts.TryGetValue(r.name, out int n);
+                    mv1277ExcludedCounts[r.name] = n + 1;
+                }
+
+                // AC2: assert pose identity rather than assume it -- a pose difference between the two
+                // frames would fake a differential (ticket's own wording).
+                float posDelta = Vector3.Distance(cam.transform.position, mv1277CamPos);
+                float rotDelta = Quaternion.Angle(cam.transform.rotation, mv1277CamRot);
+                float fovDelta = Mathf.Abs(cam.fieldOfView - mv1277CamFov);
+                mv1277PoseCheck = $"posΔ={posDelta:F4}m rotΔ={rotDelta:F4}deg fovΔ={fovDelta:F4}deg";
+                if (posDelta > 1e-3f || rotDelta > 1e-2f || fovDelta > 1e-2f)
+                    throw new CaptureAbortException($"MV-1277: camera pose drifted between the two differential captures ({mv1277PoseCheck}) -- the differential cannot be trusted");
+
+                cam.cullingMask &= ~(1 << dressingLayer);
+                yield break;
+            }
+
+            void Mv1277MeasureExcludeDressing(Texture2D tex)
+            {
+                mv1277FalloffNoDressing.AddRange(Mv1277SampleFalloffLuma(tex));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1274hangarcheck",
+                LogTag = "[MV1274Capture]",
+                Flag = "-mv1274shot",
+                ArmFile = "Temp/mv1274.arm",
+                HeadlessMarker = "Temp/mv1274.headless",
+                DoneFileName = "_mv1274_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,   // the live production camera, same route as MV-1249/MV-1250
+                QualityLevelName = "Mobile",   // MV-1273 only turned HDR (hence bloom) on for the Mobile tier
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 150,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1274-windows-a1", NoSetup, measure: Measure),
+                    // MV-1277: same pose, Dressing layer excluded -- the differential this ticket exists
+                    // to take. See Mv1277SetupExcludeDressing's own doc for why no frame passes in between.
+                    new CaptureShot("MV-1277-windows-a1-no-dressing", Mv1277SetupExcludeDressing, measure: Mv1277MeasureExcludeDressing),
+                },
+                ExtraReport = () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"AC1 percentiles: p10={p10:F1} (target <=22) median={median:F1} (target 31+/-10) p90={p90:F1} (target >=60)");
+                    sb.AppendLine($"AC2 floor patch RGB: {Mathf.RoundToInt(floorPatchRgb.r * 255f)}/{Mathf.RoundToInt(floorPatchRgb.g * 255f)}/{Mathf.RoundToInt(floorPatchRgb.b * 255f)} (target 26/34/50 +/-12 per channel)");
+                    sb.AppendLine($"AC3 bloom pixel count: {bloomPixelCount} (target >=1500); near-hazard-stripe band delta: {hazardDelta:F1} (target >=25, mean of occlusion-validated N/S/E/W edge points)");
+                    if (hazardRejections.Count > 0) sb.AppendLine($"AC3 rejected band samples: {string.Join(", ", hazardRejections)}");
+                    sb.AppendLine($"AC4 falloff profile (lamp pool outward, 0.33 m steps, luma 0-255, occlusion-validated): {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    if (falloffRejections.Count > 0) sb.AppendLine($"AC4 rejected falloff samples: {string.Join(", ", falloffRejections)}");
+                    sb.AppendLine($"AC5 robot body/floor-ring ratios ({robotRatios.Count} robots in frame, target >=2.5x each):");
+                    foreach (var r in robotRatios) sb.AppendLine($"  {r.name}: {r.ratio:F2}x");
+                    if (robotRejections.Count > 0) sb.AppendLine($"AC5 rejected samples: {string.Join(", ", robotRejections)}");
+                    Camera diagCam = Camera.main;
+                    sb.AppendLine($"DIAG: allowHDR={diagCam?.allowHDR} qualityLevel={QualitySettings.names[QualitySettings.GetQualityLevel()]} pipeline={UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.name} maxBrightestPixel={brightestPixelDiag:F3}");
+
+                    // ---- MV-1277: differential culling-mask capture (AC1-AC4) -------------------------
+                    sb.AppendLine("--- MV-1277 differential (dressing/VFX culling-mask exclusion) ---");
+                    if (mv1277ExcludedCounts.Count == 0)
+                    {
+                        sb.AppendLine("AC1 excluded set: EMPTY -- no renderer found on the Dressing layer (see fix comment before trusting the differential below)");
+                    }
+                    else
+                    {
+                        int totalExcluded = 0;
+                        var names = new List<string>();
+                        foreach (var kv in mv1277ExcludedCounts) { totalExcluded += kv.Value; names.Add($"{kv.Key} x{kv.Value}"); }
+                        sb.AppendLine($"AC1 excluded set ({totalExcluded} renderers): {string.Join(", ", names)}");
+                    }
+                    sb.AppendLine($"AC2 camera pose identity: {mv1277PoseCheck}");
+                    sb.AppendLine($"AC3 AC4 falloff WITH dressing   : {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    sb.AppendLine($"AC3 AC4 falloff WITHOUT dressing: {string.Join(", ", mv1277FalloffNoDressing.ConvertAll(v => v.ToString("F1")))}");
+                    if (falloffProfile.Count == mv1277FalloffNoDressing.Count)
+                    {
+                        var deltas = new List<string>();
+                        for (int i = 0; i < falloffProfile.Count; i++) deltas.Add($"s{i}:{falloffProfile[i] - mv1277FalloffNoDressing[i]:F1}");
+                        sb.AppendLine($"AC3 per-sample delta (with - without): {string.Join(", ", deltas)}");
+                    }
+                    sb.AppendLine($"sample 2 occluder (dressing-included capture): {mv1277OccluderSample2?.name ?? "none"}");
+                    sb.AppendLine($"sample 5 occluder (dressing-included capture): {mv1277OccluderSample5?.name ?? "none"}");
+                    sb.AppendLine(Mv1277Verdict());
                     return sb.ToString();
                 },
             };

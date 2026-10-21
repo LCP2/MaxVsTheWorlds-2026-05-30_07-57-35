@@ -73,7 +73,8 @@ namespace MaxWorlds.Arena
                 if (areaIndex <= 0) continue;
 
                 Color seamGlow = MothershipDecks.LookFor(areaIndex).RimColor;
-                ShipKit.BuildAtlasFloor(floors, zone.Footprint, areaIndex, seamGlow);
+                bool darkBase = MothershipDecks.ForArea(areaIndex) == MothershipDeck.Hangar;    // MV-1274
+                ShipKit.BuildAtlasFloor(floors, zone.Footprint, areaIndex, seamGlow, darkBase);
                 atlasFootprints.Add(zone.Footprint);
             }
 
