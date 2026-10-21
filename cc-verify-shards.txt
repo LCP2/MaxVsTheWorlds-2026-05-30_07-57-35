@@ -1,0 +1,10 @@
+MV-ticket-300s	^MaxWorlds\.Tests(?>(\.EditMode)?)\.MV(?:[3-6][0-9]{2})(?!\d)
+MV-ticket-700s	^MaxWorlds\.Tests(?>(\.EditMode)?)\.MV(?:[78][0-9]{2})(?!\d)
+MV-ticket-900s	^MaxWorlds\.Tests(?>(\.EditMode)?)\.MV(?:9[0-9]{2}|10[0-9]{2})(?!\d)
+MV-ticket-1100-plus	^MaxWorlds\.Tests(?>(\.EditMode)?)\.MV(?:1[1-9][0-9]{2}|[2-9][0-9]{3})(?!\d)
+Legacy-A-H	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])[A-H]
+Legacy-I-S	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])[I-S]
+Legacy-T-V	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])[T-V]
+Legacy-Wa-Wi	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])W[A-Ia-i]
+Legacy-Wo-Wz	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])W[J-Zj-z]
+Legacy-X-Z-other	^MaxWorlds\.Tests(?>(\.EditMode)?)\.(?!MV[0-9])[X-Z_]
