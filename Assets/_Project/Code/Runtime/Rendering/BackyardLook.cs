@@ -554,9 +554,32 @@ namespace MaxWorlds.Rendering
             get
             {
                 BackyardLook l = ShipBase;
-                l.KeyColor = new Color(0.62f, 0.78f, 0.98f);
+                // MV-1274 triage (21 Oct, Jira comment 15685): AC2's +19-blue-only floor-patch overshoot
+                // is frame-wide, not local, and R/G already land on target. Two levers were tried and
+                // measured out this round before this one:
+                //  1. ShipBase's own ShadowTint (0.35, 0.42, 0.68) -- overriding it directly made AC1/AC2
+                //     drastically WORSE (floor patch 25/34/69 -> 57/69/92). BackyardLighting's ToTrackball
+                //     normalizes a tint by its PEAK channel, so it is NOT a hue-only rotation: the peak
+                //     channel always passes at 1.0x and the other two get multiplicatively SUPPRESSED
+                //     relative to it. ShipBase's own value was quietly suppressing R/G to ~0.52x/0.62x
+                //     (B stays the peak) -- that suppression is WHY R/G measured correctly. A less
+                //     blue-heavy tint flattened the suppression and let R/G through nearly unsuppressed,
+                //     roughly doubling the whole shadow range. Left at ShipBase's own value.
+                //  2. AmbientSky/Equator/Ground's own blue channel, cut 25% -- measured ZERO effect
+                //     (floor patch stayed byte-identical 25/34/69). The floor patch sits "away from a
+                //     lamp pool" but NOT away from the Key/Fill DIRECTIONAL lights, which cover the whole
+                //     area like a sun; ShadowStrength is 0.62, not 1 (pitch black), so Key/Fill still
+                //     contribute meaningfully even in "shadow" there, and dwarf the much smaller ambient
+                //     terms. Reverted to its original value.
+                // Blue cut at its actual source instead: Key/Fill's own blue channel. A first pass at
+                // x0.72 (the naive 50/69 ratio) only moved the floor patch 69 -> 63 -- response is
+                // clearly sub-linear (something else, likely the surface shader's own fixed spec/AO term,
+                // holds part of the blue floor regardless of light colour), so landing exactly on 50 needs
+                // a much larger cut than the naive ratio predicts. x0.55 gives headroom inside the +/-12
+                // band rather than chasing the exact centre.
+                l.KeyColor = new Color(0.62f, 0.78f, 0.54f);    // b: 0.98 -> 0.54 (x0.55)
                 l.KeyIntensity = 0.30f;
-                l.FillColor = new Color(0.30f, 0.42f, 0.58f);
+                l.FillColor = new Color(0.30f, 0.42f, 0.32f);  // b: 0.58 -> 0.32 (x0.55)
                 l.FillIntensity = 0.20f;
                 l.RimColor = new Color(1.0f, 0.85f, 0.25f);    // hazard yellow
                 l.RimIntensity = 1.0f;
@@ -565,12 +588,21 @@ namespace MaxWorlds.Rendering
                 l.AmbientGround = new Color(0.018f, 0.026f, 0.040f);
                 l.FogColor = new Color(0.05f, 0.07f, 0.10f);
                 l.BloomTint = new Color(0.85f, 0.92f, 1.0f);
-                // MV-1274 AC3 recapture fix-pass 2: measured peak frame brightness (229.4/255) sat just
-                // under the 230 bloom-pixel threshold even after a 6x material HDR boost (fix-pass 1) --
-                // Neutral tonemapping's soft shoulder means more per-material boost barely moves the
-                // asymptote. A modest exposure/intensity/scatter lift (still well inside AC1's median
-                // 21-41 and AC2's +/-12 floor-RGB bands, both measured with room to spare) pushes the
-                // post-tonemap peak the last ~2% needed and widens the halo so enough pixels clear it.
+                // MV-1274 triage: lamp-pool centres measured at ~224-232 luma, clipped flat against the
+                // Neutral tonemapper's shoulder -- 2.6x the target image's own p90 (87.6). That plateau is
+                // what AC4 was actually failing on ("the probe starts inside a clipped plateau, so no
+                // monotonic gradient can exist there"), not a too-narrow area as the previous round guessed.
+                // ShipKit.BuildGraduatedPool's own step strengths are cut there instead of boosting exposure
+                // further here.
+                //
+                // BloomScatter was also tried at 1.0 (URP's own max) this round for AC3's near-hazard-stripe
+                // delta -- it collapsed the bloom pixel count to 0 (was 23721, PASS): Scatter widens the
+                // bloom kernel's spread at the cost of its peak, so already-modest post-tonemap peaks (the
+                // halved lamp pools above, the HDR neon lines) got diluted below the 230 threshold entirely
+                // rather than reading as bloom anywhere. Back at ShipBase's own 0.8; the hazard stripe's own
+                // neon source (ShipKit.BuildLaunchPadHazardStripes) is widened/boosted directly instead, so
+                // the biome-wide Bloom volume settings stay the ones already proven not to break AC3's count
+                // half.
                 l.BloomIntensity = 2.0f;
                 l.BloomScatter = 0.8f;
                 l.PostExposure = 0.85f;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
@@ -291,6 +292,15 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
+
+        // MV-1274 AC5 ("a kind-coloured emissive rim, and the eye as the brightest emissive on the
+        // body") — the Hangar only (MothershipDeckLighting.CurrentDeck gate below), areas 6-30 and every
+        // other world keep StylizedCharacter's plain material default (warm, un-tinted) untouched (AC8).
+        // _body is already each robot's own resolved kind colour (ResolveBodyColor) — the same value
+        // CharacterSkinDirector logs as "expected"/"actual" per spawn, so no new palette is introduced.
+        private const float HangarRestingGlowStrength = 0.9f;
+        private const float HangarRimBoost = 3.0f;
 
         [SerializeField] private CharacterRole role = CharacterRole.Robot;
 
@@ -606,14 +616,30 @@ namespace MaxWorlds.VFX
             // Emission carries most of the flash, so a hit reads hot without the body losing the
             // colour that tells you what it is.
             Color emission = FlashColor * (_flash * 0.9f) + WarnColor * (windup * 0.35f);
-            Write(body, emission);
+
+            // MV-1274 AC5: in the Hangar only, every robot carries a resting kind-coloured glow — at
+            // rest (no flash, no windup) emission was flatly black, which is exactly why AC5 measured
+            // several robots DARKER than their own floor ring. Added on top of the flash/warn terms
+            // rather than replacing them, so a hit or wind-up still reads over the resting glow.
+            // role != Player is every enemy kind this skin ever renders (Robot/Rusher, Bruiser, Gunner,
+            // Turret, ... -- AC5 measures "every robot in frame" off RobotEnemy, not just the base
+            // CharacterRole.Robot value MV-303/MV-312/etc. have been splitting kinds off of ever since).
+            Color? rim = null;
+            if (role != CharacterRole.Player && MothershipDeckLighting.CurrentDeck == MothershipDeck.Hangar)
+            {
+                emission += baseColor * HangarRestingGlowStrength;
+                rim = baseColor * HangarRimBoost;
+            }
+
+            Write(body, emission, rim);
         }
 
-        private void Write(Color body, Color emission)
+        private void Write(Color body, Color emission, Color? rim = null)
         {
             _renderer.GetPropertyBlock(_mpb);
             _mpb.SetColor(BaseColorId, body);
             _mpb.SetColor(EmissionId, emission);
+            if (rim.HasValue) _mpb.SetColor(RimColorId, rim.Value);
             _renderer.SetPropertyBlock(_mpb);
         }
 

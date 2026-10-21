@@ -620,13 +620,18 @@ namespace MaxWorlds.Rendering
         /// test measures ("at least 4 distinct steps, each step at least 5 apart").</summary>
         private static void BuildGraduatedPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
         {
+            // MV-1274 triage (21 Oct, Jira comment 15685): the original strengths put the pool centre at
+            // ~224-232 luma, clipped flat against the Neutral tonemapper's shoulder -- AC4's own falloff
+            // probe starts inside that plateau, so no monotonic gradient can exist there at any sampling
+            // distance. Cut roughly in half so the brightest step lands in the tonemapper's still-responsive
+            // range instead of its ceiling.
             var steps = new (float outerFraction, float strength)[]
             {
-                (0.22f, 0.95f),
-                (0.42f, 0.55f),
-                (0.62f, 0.32f),
-                (0.82f, 0.17f),
-                (1.00f, 0.08f),
+                (0.22f, 0.42f),
+                (0.42f, 0.24f),
+                (0.62f, 0.14f),
+                (0.82f, 0.075f),
+                (1.00f, 0.035f),
             };
 
             float innerR = 0f;
@@ -788,7 +793,9 @@ namespace MaxWorlds.Rendering
         {
             Transform root = NewRoot(parent, "Launch Pad Hazard Stripes");
 
-            const float stripe = 0.3f, neonWidth = 0.05f;
+            // MV-1274 triage: neonWidth widened 0.05 -> 0.12 so the HDR source itself has more physical
+            // extent for the bloom kernel to spread from, same AC3 fix as the 9.0x boost above.
+            const float stripe = 0.3f, neonWidth = 0.12f;
             StormdrainKit.Box(root, "Hazard N", new Vector3(area.center.x, 0.016f, area.yMax - stripe * 0.5f),
                 new Vector3(area.width, 0.006f, stripe), HazardYellow, SurfaceKind.Metal);
             StormdrainKit.Box(root, "Hazard S", new Vector3(area.center.x, 0.016f, area.yMin + stripe * 0.5f),
@@ -796,10 +803,14 @@ namespace MaxWorlds.Rendering
 
             // MV-1274 ("Neon... on: the hazard stripe"): a thin HDR centreline on top of the walkable lit
             // stripe above — the stripe itself stays readable/walkable-lit, the centreline is what blooms.
+            // MV-1274 triage: AC3's near-hazard-stripe delta (0.15 m past the stripe's own outer edge,
+            // so ~0.3 m past this centreline) is in Neutral's near-linear mid-range, which triage read as
+            // reachable with more spill, not a brighter clamped source -- widened and boosted here rather
+            // than touching BloomIntensity/PostExposure again (both already tuned against AC1/AC2's bands).
             EmissiveBox(root, "Hazard N Neon", new Vector3(area.center.x, 0.019f, area.yMax - stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 6.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 9.0f));
             EmissiveBox(root, "Hazard S Neon", new Vector3(area.center.x, 0.019f, area.yMin + stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 6.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 9.0f));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
