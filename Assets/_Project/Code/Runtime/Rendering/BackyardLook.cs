@@ -399,14 +399,16 @@ namespace MaxWorlds.Rendering
             // brighter than Stormdrain's near-black concrete, so matching Stormdrain's key would
             // re-create the same "washed out" complaint one step down instead of fixing it.
             KeyColor = new Color(0.45f, 0.68f, 0.85f),
-            KeyIntensity = 0.42f,
+            // MV-1275: x2.14 (the +1.1 stops this ticket moves out of PostExposure) off the MV-1250
+            // value — see PostExposure's own comment below for why the lift moved here instead.
+            KeyIntensity = 0.90f,
             KeyEuler = new Vector3(62f, -30f, 0f),
             ShadowStrength = 0.68f,
 
             // Teal bounce off the hull plating, not Stormdrain's sludge-green and not Default's sky-blue
             // — this is what keeps the shadow side of a pipe or bulkhead from crushing to pure black.
             FillColor = new Color(0.14f, 0.28f, 0.36f),
-            FillIntensity = 0.36f,
+            FillIntensity = 0.77f,  // MV-1275: x2.14, same as KeyIntensity above
             FillEuler = new Vector3(20f, 140f, 0f),
 
             // The only warm light anywhere (see class doc) — hazard orange, matching Max's own body
@@ -414,15 +416,16 @@ namespace MaxWorlds.Rendering
             // lighting. Brighter than the key/fill on purpose: a dark biome needs ITS rim doing more of
             // the readability work than a bright one does.
             RimColor = new Color(1f, 0.56f, 0.26f),
-            RimIntensity = 1.05f,
+            RimIntensity = 2.25f,  // MV-1275: x2.14, same as KeyIntensity above
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // Near-black navy, every term — sky, equator AND ground — per the ticket's own "a near-black
             // navy ambient gradient" line. No green/sludge equator band like Stormdrain's: the Reef has
-            // no sludge, only hull plate and bio-glow.
-            AmbientSky = new Color(0.045f, 0.075f, 0.115f),
-            AmbientEquator = new Color(0.035f, 0.06f, 0.095f),
-            AmbientGround = new Color(0.022f, 0.04f, 0.07f),
+            // no sludge, only hull plate and bio-glow. MV-1275: all three x2.14, same factor as the
+            // lights above, to hold the same dark-navy ratios the MV-1250 values established.
+            AmbientSky = new Color(0.096f, 0.160f, 0.246f),
+            AmbientEquator = new Color(0.075f, 0.128f, 0.203f),
+            AmbientGround = new Color(0.047f, 0.086f, 0.150f),
 
             // Dense dark-teal fog — thicker than Stormdrain's 0.018 and City's 0.010, per the ticket's
             // own "dense dark-teal fog so far walls fall off into the deep": a flooded hull's far walls
@@ -447,12 +450,14 @@ namespace MaxWorlds.Rendering
             AoIntensity = 0.85f,
             AoRadius = 0.32f,
 
-            // MV-1250 AC3's single adjustment pass: the first capture (PostExposure 0.15, matching
-            // Stormdrain's) measured area 3's median luminance at 16.5/255, under the 25-45 target —
-            // same "one-stop lift" idiom ShipBase's own doc uses for the same symptom. +1.1 stops
-            // (2^1.1 =~ 2.14x) targets the middle of the range without touching hue/saturation (a pure
-            // exposure lift moves V, not H/S) or any other field this ticket's EditMode test asserts.
-            PostExposure = 0.15f + 1.1f,
+            // MV-1275: PostExposure back to 0.15f, Stormdrain's value — the +1.1 stops MV-1250 put here
+            // read mauve on GLES/Metal (WebGL Mobile tier, iPhone) while reading navy on D3D12, because
+            // a +1.25-stop lift on a near-black LDR buffer (Mobile tier has no HDR) hits the two APIs'
+            // post colour paths differently. Every other biome lights the SCENE and takes little or no
+            // post lift; the fix is to do the same here instead of depending on a lift with a platform-
+            // dependent result. The 2.14x this removes from post is now baked into KeyIntensity/
+            // FillIntensity/RimIntensity/AmbientSky/AmbientEquator/AmbientGround above instead.
+            PostExposure = 0.15f,
             Contrast = 10f,
             Saturation = 4f,     // low — the only saturated colour left is the kit's own cyan/magenta emissives
             ColorFilter = Color.white,
