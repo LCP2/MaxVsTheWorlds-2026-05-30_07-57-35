@@ -323,9 +323,22 @@ namespace MaxWorlds.Rendering
             RefreshReefDeckTextures(m);
 
             // Circuitry reads as LIT, not just coloured — same idiom ReefMaterial's own emissive
-            // branch uses. _EmissionColor is left white: the mask already carries the real cyan/
-            // violet hues, so tinting it here would just multiply them a second time.
-            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.white);
+            // branch uses. The mask already carries the real cyan/violet/magenta hues, so this is a
+            // brightness multiplier only, not a tint.
+            //
+            // MV-1275: 2.14x (not white/1x) — the same factor this ticket removed from PostExposure.
+            // The emission mask's own colours (WorldMaterials.ReefFloorCircuitCyan etc.) are baked at
+            // full value (255), so on the Mobile tier's LDR buffer they were already clipped to 1.0
+            // and rode PostExposure's old +1.1-stop lift with no visible change — the lift did nothing
+            // for them. Losing that lift still mattered: on an LDR target the emissive trace's OWN
+            // antialiased edge texels and the ReefDeckAlbedo multiplier under it sit well under 1.0,
+            // and at those partial values 8-bit quantization rounds a now-dimmer trace toward
+            // grey/black, collapsing its hue/saturation along with its brightness — measured on the
+            // local WebGL capture: zero trace pixels within 2 m of Max read saturation >= 0.5 at
+            // PostExposure 0.15/_EmissionColor white (AC3 fail by inspection, not just by the band).
+            // Baking the same 2.14x into _EmissionColor restores those edge/multiplied texels to
+            // their pre-fix brightness without touching the mask's own hues.
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(2.14f, 2.14f, 2.14f));
             m.EnableKeyword("_EMISSION");
             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 

@@ -416,7 +416,17 @@ namespace MaxWorlds.Rendering
             // lighting. Brighter than the key/fill on purpose: a dark biome needs ITS rim doing more of
             // the readability work than a bright one does.
             RimColor = new Color(1f, 0.56f, 0.26f),
-            RimIntensity = 2.25f,  // MV-1275: x2.14, same as KeyIntensity above
+            // MV-1275 round 2: x2.14 (1.05*2.14=2.25) measured hue=235deg on the D3D/Mobile-tier
+            // recheck (mv1266reefplaycam, MV-1266-a1-playcam.png) — 10deg over the 225 upper bound,
+            // even though every authored light/ambient colour above resolves to hue 201-214deg on its
+            // own (RimColor is the only warm one). Moving the Reef's "2.14x" from a uniform POST
+            // multiply to per-light SCENE intensities is not hue-neutral the way a pure post exposure
+            // lift is: Contrast/Saturation grading (both unchanged here) apply after lighting, so the
+            // same total brightness reached via a stronger ambient/key vs a stronger rim shifts the
+            // blend's dominant bucket. Rim is this biome's only warm counterweight (doc above); nudged
+            // from 2.25 to 2.65 (RimIntensity alone, no hue changed) to pull the blend back toward 225
+            // without re-opening PostExposure.
+            RimIntensity = 2.65f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // Near-black navy, every term — sky, equator AND ground — per the ticket's own "a near-black
