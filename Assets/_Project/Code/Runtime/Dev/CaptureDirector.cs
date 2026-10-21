@@ -5207,7 +5207,19 @@ namespace MaxWorlds.Dev
                 foreach (RobotEnemy robot in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
                 {
                     if (robot == null || !robot.isActiveAndEnabled) continue;
-                    Vector3 bodyPos = robot.transform.position + Vector3.up * 0.4f;
+
+                    // MV-1276 (triage, AC2): robot.transform.position is the CharacterController's own
+                    // CENTRE, not its feet -- EnemyArchetype.Of(robot.Kind).SpawnHeight is the exact
+                    // "ground clearance" every spawn path adds on top of floor height (same idiom
+                    // RobotRig.BuildModel uses to drop its model's feet pivot to the floor). Without this,
+                    // every ring/body sample floated SpawnHeight above the real StructuralFloor surface --
+                    // for a1's Turret garrison (colliderHeight 1.0 m -> SpawnHeight 0.5 m) that put the
+                    // ring points 0.5 m above the floor, well outside IsUnoccludedSample's tight
+                    // dist+OcclusionTolerance raycast budget, so every sample reported "no-collider-hit".
+                    Vector3 feetPos = robot.transform.position;
+                    feetPos.y -= EnemyArchetype.Of(robot.Kind).SpawnHeight;
+
+                    Vector3 bodyPos = feetPos + Vector3.up * 0.4f;
                     if (!InFrame(bodyPos, 0.02f)) continue;
 
                     // MV-1276: confirm the body sample actually lands on THIS robot, not on whatever
@@ -5226,7 +5238,7 @@ namespace MaxWorlds.Dev
                     for (int a = 0; a < 8; a++)
                     {
                         float ang = a / 8f * Mathf.PI * 2f;
-                        Vector3 ringPos = robot.transform.position + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
+                        Vector3 ringPos = feetPos + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
                         if (!InFrame(ringPos, 0f)) continue;
 
                         // MV-1276: a1's garrison stands two turrets 1.6 m apart, so each turret's own
