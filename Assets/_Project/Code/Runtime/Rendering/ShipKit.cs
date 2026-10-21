@@ -485,12 +485,14 @@ namespace MaxWorlds.Rendering
                 GameObject cap = MeshBox(root, "Wall Top Cap", pos,
                     new Vector3(w * 0.99f, BulkheadCapThickness, wallThickness).Oriented(dir), flip ? Teal : RustOrange);
                 if (!visible) HideRenderer(cap);
+                TagDressing(cap);
 
                 if (i % 2 == 0)
                 {
                     GameObject lamp = EmissiveBox(root, "Cap Lamp Strip", pos + Vector3.up * (BulkheadCapThickness * 0.5f + 0.008f),
                         new Vector3(w * 0.5f, 0.012f, wallThickness * 0.3f).Oriented(dir), deckGlow);
                     if (!visible) HideRenderer(lamp);
+                    TagDressing(lamp);
                 }
             }
 
@@ -500,6 +502,7 @@ namespace MaxWorlds.Rendering
                 GameObject rib = MeshBox(root, "Cap Rib", new Vector3(at.x, capY, at.y),
                     new Vector3(BulkheadCapRibWidth, BulkheadCapThickness * 1.4f, wallThickness * 1.05f).Oriented(dir), NearBlack);
                 if (!visible) HideRenderer(rib);
+                TagDressing(rib);
             }
         }
 
@@ -519,11 +522,13 @@ namespace MaxWorlds.Rendering
 
             GameObject frame = StormdrainKit.AddMeshPart(root, "Wall Top Cap", CharacterMeshes.Bevelled(frameSize, HangarCapFrameBevel), pos, SurfaceKind.Metal, GunmetalTone);
             if (!visible) HideRenderer(frame);
+            TagDressing(frame);
 
             Vector3 insetSize = new Vector3(w * HangarCapInsetFraction, BulkheadCapThickness * 0.55f, wallThickness * HangarCapInsetFraction).Oriented(dir);
             Vector3 insetPos = pos + Vector3.down * (BulkheadCapThickness * 0.5f - insetSize.y * 0.5f - 0.004f);
             GameObject inset = MeshBox(root, "Wall Top Cap Inset", insetPos, insetSize, flip ? Teal : RustOrange);
             if (!visible) HideRenderer(inset);
+            TagDressing(inset);
 
             float bumperLen = Mathf.Min(w * HangarCapBumperFraction, 0.16f);
             Vector3 bumperSize = new Vector3(bumperLen, BulkheadCapThickness * 1.5f, wallThickness * 0.92f).Oriented(dir);
@@ -532,6 +537,7 @@ namespace MaxWorlds.Rendering
                 Vector3 bumperPos = pos + dir3 * (side * (w * 0.5f - bumperLen * 0.5f)) + Vector3.up * (BulkheadCapThickness * 0.2f);
                 GameObject bumper = MeshBox(root, "Wall Top Cap Bumper", bumperPos, bumperSize, GunmetalTone);
                 if (!visible) HideRenderer(bumper);
+                TagDressing(bumper);
             }
 
             int studs = Mathf.Clamp(Mathf.FloorToInt(w / HangarCapStudPitch), 2, 8);
@@ -542,12 +548,14 @@ namespace MaxWorlds.Rendering
                 Vector3 studPos = pos + dir3 * (t * w * 0.9f) - n * (wallThickness * 0.32f) + Vector3.up * (BulkheadCapThickness * 0.5f + 0.001f);
                 GameObject rivet = MeshPart(root, "Wall Top Cap Rivet", studMesh, studPos, GunmetalTone);
                 if (!visible) HideRenderer(rivet);
+                TagDressing(rivet);
             }
 
             Vector3 neonPos = pos + n * (wallThickness * 0.5f - 0.01f) + Vector3.up * (BulkheadCapThickness * 0.5f + 0.003f);
             Vector3 neonSize = new Vector3(w * 0.96f, 0.012f, 0.02f).Oriented(dir);
             GameObject neon = EmissiveBox(root, "Wall Top Cap Neon Edge", neonPos, neonSize, Hdr(deckGlow, HangarCapNeonBoost));
             if (!visible) HideRenderer(neon);
+            TagDressing(neon);
         }
 
         /// <summary>MV-1272: disables a built piece's own renderer without removing it — same "hide the
@@ -558,6 +566,25 @@ namespace MaxWorlds.Rendering
         {
             var renderer = go != null ? go.GetComponent<Renderer>() : null;
             if (renderer != null) renderer.enabled = false;
+        }
+
+        /// <summary>MV-1277: the Unity layer <see cref="CaptureDirector"/>'s differential capture
+        /// clears from <c>cam.cullingMask</c> to exclude a collider-free dressing/VFX piece from a
+        /// frame -- the renderer-side exclusion idiom named by this file's own class doc ("nothing here
+        /// carries a collider ... colliders come from the map's own cover entries"), reused rather than
+        /// invented a third mechanism (ticket's own "Method"). Never applied to <see cref="BuildAtlasFloor"/>'s
+        /// own floor tiles or <see cref="BuildGraduatedPool"/>'s light-pool rings -- those are the
+        /// measurement SUBJECT, not a candidate occluder of it.</summary>
+        public const string DressingLayerName = "Dressing";
+
+        /// <summary>Tags <paramref name="go"/>'s own layer as <see cref="DressingLayerName"/> so a
+        /// differential capture can exclude it via <c>cam.cullingMask</c>. A no-op if that layer hasn't
+        /// been added to <c>ProjectSettings/TagManager.asset</c> (defensive only -- MV-1277 adds it).</summary>
+        private static void TagDressing(GameObject go)
+        {
+            if (go == null) return;
+            int layer = LayerMask.NameToLayer(DressingLayerName);
+            if (layer >= 0) go.layer = layer;
         }
 
         /// <summary>MV-1269: a floor-edge kick strip along the base of this wall, extending
@@ -591,7 +618,7 @@ namespace MaxWorlds.Rendering
         private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow, bool hangarStyle = false)
         {
             Vector3 lampPos = new Vector3(at.x, wallHeight * 0.72f, at.y) + n * (BulkheadBackingDepth + BulkheadLampSize * 0.5f + 0.02f);
-            EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow);
+            TagDressing(EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow));
 
             if (hangarStyle)
             {
@@ -1548,10 +1575,10 @@ namespace MaxWorlds.Rendering
             Mesh outer = CharacterMeshes.Ring(radius * 0.92f, radius, 0.03f, 32);
             Mesh inner = CharacterMeshes.Ring(radius * 0.74f, radius * 0.82f, 0.03f, 32);
 
-            MeshPartGlow(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, Hdr(GoldLamp, 5.0f));
-            MeshPartGlow(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, Hdr(HangarFieldTone, 5.0f));
-            EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
-                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), Hdr(GoldLamp, 6.0f));
+            TagDressing(MeshPartGlow(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, Hdr(GoldLamp, 5.0f)));
+            TagDressing(MeshPartGlow(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, Hdr(HangarFieldTone, 5.0f)));
+            TagDressing(EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
+                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), Hdr(GoldLamp, 6.0f)));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
