@@ -488,6 +488,26 @@ namespace MaxWorlds.Dev
             return false;
         }
 
+        /// <summary>MV-1277: <see cref="IsUnoccludedSample"/>'s own counterpart for an occluder that
+        /// carries no <see cref="Collider"/> at all -- <see cref="Physics.Raycast"/> can never see one,
+        /// which is exactly the gap <c>ShipKit</c>'s dressing/VFX sits in (its own class doc: "nothing
+        /// here carries a collider"). Casts the identical camera-to-<paramref name="worldPos"/> ray
+        /// <see cref="IsUnoccludedSample"/> uses, but tests each <paramref name="candidates"/> renderer's
+        /// engine-resolved <see cref="Renderer.bounds"/> AABB (MV-465 Tier 2 -- a resolved value, not an
+        /// authored constant) instead of a physics collider. Returns the nearest candidate whose bounds
+        /// the ray crosses strictly before reaching <paramref name="worldPos"/> (same
+        /// <see cref="OcclusionTolerance"/> budget), or <c>null</c> when none do -- i.e. <paramref name="worldPos"/>
+        /// has a clear bearing from <paramref name="cam"/>. An AABB test is coarser than the mesh itself,
+        /// but is enough to name the specific piece a differential culling-mask capture already proved is
+        /// (or isn't) sitting between the camera and a sample point -- it never has to carry the merge on
+        /// its own.</summary>
+        public static Renderer FindColliderFreeOccluder(Camera cam, Vector3 worldPos, IEnumerable<Renderer> candidates)
+        {
+            // MV-1277 WIP stub -- base commit for MV1277ColliderFreeOccluderTests' fail-first proof.
+            // Real bounds-ray implementation lands in the very next commit.
+            return null;
+        }
+
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded. Shared by any preset that wants to frame a shot away from the
         /// Entry room's hedges/flower beds (previously duplicated per-director).</summary>
