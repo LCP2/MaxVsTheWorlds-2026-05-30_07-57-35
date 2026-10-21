@@ -4857,16 +4857,42 @@ namespace MaxWorlds.Dev
                 return null;
             }
 
+            // MV-1274 round 3: the first "Wall Lamp" found on any wall is always panel index 0 --
+            // the lamp nearest that wall's own start endpoint, i.e. right at a room CORNER. Two
+            // perpendicular walls' corner lamps sit only ~2.1 m apart there (each wall's first lamp
+            // is ~1.5 m from the shared corner along its own run), well inside their own 1.6 m pool
+            // radius of each other -- so a corner lamp's "outward into the room" probe walks straight
+            // through the ADJACENT wall's own pool, not its own far-side neighbour along the same
+            // wall (lamps on the SAME wall are a full 6 m apart by construction, see
+            // ShipKit.BuildBulkheadPanel's "i % 2 == 0" placement on a 3 m panel pitch -- well clear
+            // of a 2 m probe). That is the real cause of comment 6's rise-then-fall-then-rise profile,
+            // not a same-wall neighbour. Pick the lamp with the LARGEST minimum distance to every
+            // other lamp instead, so the probe only ever walks through its own pool's true falloff.
             Transform FindWallLamp()
             {
+                var lamps = new List<Transform>();
                 foreach (string side in new[] { "N", "E", "S", "W" })
                 {
                     Transform wall = FindNamed($"Wall a1 {side}");
                     if (wall == null) continue;
                     foreach (Transform child in wall.GetComponentsInChildren<Transform>(true))
-                        if (child.name == "Wall Lamp") return child;
+                        if (child.name == "Wall Lamp") lamps.Add(child);
                 }
-                return null;
+                if (lamps.Count == 0) return null;
+
+                Transform best = lamps[0];
+                float bestMinDist = -1f;
+                foreach (Transform candidate in lamps)
+                {
+                    float minDist = float.MaxValue;
+                    foreach (Transform other in lamps)
+                    {
+                        if (other == candidate) continue;
+                        minDist = Mathf.Min(minDist, Vector3.Distance(candidate.position, other.position));
+                    }
+                    if (minDist > bestMinDist) { bestMinDist = minDist; best = candidate; }
+                }
+                return best;
             }
 
             IEnumerator Prepare(Camera cam)

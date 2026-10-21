@@ -795,7 +795,11 @@ namespace MaxWorlds.Rendering
 
             // MV-1274 triage: neonWidth widened 0.05 -> 0.12 so the HDR source itself has more physical
             // extent for the bloom kernel to spread from, same AC3 fix as the 9.0x boost above.
-            const float stripe = 0.3f, neonWidth = 0.12f;
+            // MV-1274 round 3: 0.12/9.0x left the near-stripe delta at 19.2 against the >=25 gate.
+            // 0.22/15.0x moved it to 23.6 (close) but read as a solid garish bar rather than a neon
+            // line at this width -- pulled back partway, trading some of AC3's margin for a look that
+            // still reads as a thin accent.
+            const float stripe = 0.3f, neonWidth = 0.16f;
             StormdrainKit.Box(root, "Hazard N", new Vector3(area.center.x, 0.016f, area.yMax - stripe * 0.5f),
                 new Vector3(area.width, 0.006f, stripe), HazardYellow, SurfaceKind.Metal);
             StormdrainKit.Box(root, "Hazard S", new Vector3(area.center.x, 0.016f, area.yMin + stripe * 0.5f),
@@ -808,9 +812,9 @@ namespace MaxWorlds.Rendering
             // reachable with more spill, not a brighter clamped source -- widened and boosted here rather
             // than touching BloomIntensity/PostExposure again (both already tuned against AC1/AC2's bands).
             EmissiveBox(root, "Hazard N Neon", new Vector3(area.center.x, 0.019f, area.yMax - stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 9.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
             EmissiveBox(root, "Hazard S Neon", new Vector3(area.center.x, 0.019f, area.yMin + stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 9.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;

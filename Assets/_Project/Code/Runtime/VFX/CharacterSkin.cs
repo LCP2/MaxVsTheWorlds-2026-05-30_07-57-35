@@ -299,8 +299,15 @@ namespace MaxWorlds.VFX
         // other world keep StylizedCharacter's plain material default (warm, un-tinted) untouched (AC8).
         // _body is already each robot's own resolved kind colour (ResolveBodyColor) — the same value
         // CharacterSkinDirector logs as "expected"/"actual" per spawn, so no new palette is introduced.
-        private const float HangarRestingGlowStrength = 0.9f;
-        private const float HangarRimBoost = 3.0f;
+        // MV-1274 round 3: 0.9/3.0 topped out at 1.83x against the >=2.5x gate. A first attempt at
+        // 1.8/5.5 made it measurably WORSE (best robot 1.75x) and visually broke the look -- the
+        // RimBoost term is a Fresnel edge glow (StylizedCharacter.shader's _RimColor/_RimPower), so
+        // boosting IT blooms hardest at the silhouette EDGE and spreads straight onto the surrounding
+        // floor ring, raising AC5's denominator in near lockstep with its numerator. Rebalanced
+        // toward the flat body term instead (HangarRestingGlowStrength lights the whole body evenly,
+        // no edge concentration to bloom outward from) and pulled RimBoost back below the overshoot.
+        private const float HangarRestingGlowStrength = 2.2f;
+        private const float HangarRimBoost = 3.2f;
 
         [SerializeField] private CharacterRole role = CharacterRole.Robot;
 
