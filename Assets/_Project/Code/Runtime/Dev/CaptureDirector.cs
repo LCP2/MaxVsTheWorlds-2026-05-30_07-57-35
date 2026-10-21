@@ -5088,6 +5088,18 @@ namespace MaxWorlds.Dev
             // of a 2 m probe). That is the real cause of comment 6's rise-then-fall-then-rise profile,
             // not a same-wall neighbour. Pick the lamp with the LARGEST minimum distance to every
             // other lamp instead, so the probe only ever walks through its own pool's true falloff.
+            // MV-1277 settled AC4's samples 2/5 (previously pinned within 5 luma of the frame's own
+            // brightest pixel across three rounds): they were occluded by the Hangar Bay's own painted
+            // launch ring ("Ring Outer Gold"/"Ring Inner Cyan", ShipKit.BuildLaunchRingMarking) -- a
+            // collider-free dressing element a Physics.Raycast can never see (ShipKit is deliberately
+            // collider-free, see IsUnoccludedSample's own doc), confirmed by a culling-mask differential
+            // capture (delta s2=175.9 s5=198.6 with the ring excluded). Not a lighting defect -- the
+            // isolation-ranked lamp this used to always pick happens to sit close enough to the ring
+            // (ring radius 6 m, centred near one wall) that its own 2 m outward probe line walks across
+            // it. Rather than report that occluded reading as the floor's own falloff, walk the
+            // isolation-ranked candidates and skip any whose six falloff points the ring (or any other
+            // collider-free dressing) draws over, using the same FindColliderFreeOccluder MV-1277 built
+            // to confirm this.
             Transform FindWallLamp()
             {
                 var lamps = new List<Transform>();
@@ -5100,8 +5112,7 @@ namespace MaxWorlds.Dev
                 }
                 if (lamps.Count == 0) return null;
 
-                Transform best = lamps[0];
-                float bestMinDist = -1f;
+                var byIsolation = new List<(Transform lamp, float minDist)>();
                 foreach (Transform candidate in lamps)
                 {
                     float minDist = float.MaxValue;
@@ -5110,9 +5121,40 @@ namespace MaxWorlds.Dev
                         if (other == candidate) continue;
                         minDist = Mathf.Min(minDist, Vector3.Distance(candidate.position, other.position));
                     }
-                    if (minDist > bestMinDist) { bestMinDist = minDist; best = candidate; }
+                    byIsolation.Add((candidate, minDist));
                 }
-                return best;
+                byIsolation.Sort((a, b) => b.minDist.CompareTo(a.minDist));
+
+                Camera cam = Camera.main;
+                var dressing = Mv1277FindDressingRenderers();
+                foreach (var (candidate, _) in byIsolation)
+                {
+                    Transform step0 = candidate.parent.Find("Pool Step 0");
+                    if (step0 == null) continue;
+                    Vector3 lampGround = new Vector3(candidate.position.x, 0f, candidate.position.z);
+                    Vector3 poolCentre = new Vector3(step0.position.x, 0f, step0.position.z);
+                    Vector3 dir = (poolCentre - lampGround).sqrMagnitude > 0.0001f
+                        ? (poolCentre - lampGround).normalized
+                        : Vector3.forward;
+
+                    bool clear = true;
+                    for (float d = 0.1f; d <= 2.0f; d += 0.33f)
+                    {
+                        if (CaptureDirector.FindColliderFreeOccluder(cam, poolCentre + dir * d, dressing) != null)
+                        {
+                            clear = false;
+                            break;
+                        }
+                    }
+                    if (clear) return candidate;
+                }
+
+                // No candidate's line is fully clear of collider-free dressing -- fall back to the most
+                // isolated lamp (the old behaviour), so Measure() still reports whatever it finds rather
+                // than returning null outright. falloffRejections/the occlusion-validated loop below still
+                // name and drop any sample this lamp's own line is occluded at, rather than silently
+                // measuring the occluder.
+                return byIsolation[0].lamp;
             }
 
             IEnumerator Prepare(Camera cam)
@@ -5334,12 +5376,24 @@ namespace MaxWorlds.Dev
                     // unmoved by halving the pool or changing which lamp was probed: not reading the
                     // pool at all). A rejected step is omitted from the profile and named in the report,
                     // never silently measured as if it were the floor.
+                    //
+                    // MV-1277 settled that those two samples were never a lighting defect at all: they
+                    // were occluded by the Hangar Bay's own collider-free launch-ring dressing, which
+                    // IsUnoccludedSample's Physics.Raycast can never see. FindWallLamp above now already
+                    // skips any lamp whose own line crosses collider-free dressing -- this check is the
+                    // same guarantee, asserted rather than assumed, so a future dressing change that
+                    // creeps back across every remaining lamp's line is still caught and named here
+                    // instead of silently measured as if it were the floor.
+                    var mv1277Dressing = Mv1277FindDressingRenderers();
                     int mv1277StepIndex = 0;
                     for (float d = 0.1f; d <= 2.0f; d += 0.33f)
                     {
                         Vector3 samplePos = poolCentre + toCentre * d;
                         if (mv1277StepIndex < mv1277SamplePositions.Length) mv1277SamplePositions[mv1277StepIndex] = samplePos;
-                        if (CaptureDirector.IsUnoccludedSample(cam, samplePos, IsFloorCollider, out string reason))
+                        Renderer freeOccluder = CaptureDirector.FindColliderFreeOccluder(cam, samplePos, mv1277Dressing);
+                        if (freeOccluder != null)
+                            falloffRejections.Add($"d={d:F2}:occluded-by:{freeOccluder.name}");
+                        else if (CaptureDirector.IsUnoccludedSample(cam, samplePos, IsFloorCollider, out string reason))
                             falloffProfile.Add(SampleMeanLuma(samplePos, 2));
                         else
                             falloffRejections.Add($"d={d:F2}:{reason}");
@@ -5353,7 +5407,6 @@ namespace MaxWorlds.Dev
                     // capture actually drew at that screen position.
                     if (mv1277SamplesResolved)
                     {
-                        var mv1277Dressing = Mv1277FindDressingRenderers();
                         mv1277OccluderSample2 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[2], mv1277Dressing);
                         mv1277OccluderSample5 = CaptureDirector.FindColliderFreeOccluder(cam, mv1277SamplePositions[5], mv1277Dressing);
                     }

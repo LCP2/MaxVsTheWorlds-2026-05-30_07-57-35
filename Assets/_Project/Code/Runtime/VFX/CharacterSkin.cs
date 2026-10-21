@@ -304,9 +304,22 @@ namespace MaxWorlds.VFX
         // RimBoost term is a Fresnel edge glow (StylizedCharacter.shader's _RimColor/_RimPower), so
         // boosting IT blooms hardest at the silhouette EDGE and spreads straight onto the surrounding
         // floor ring, raising AC5's denominator in near lockstep with its numerator. Rebalanced
-        // toward the flat body term instead (HangarRestingGlowStrength lights the whole body evenly,
-        // no edge concentration to bloom outward from) and pulled RimBoost back below the overshoot.
-        private const float HangarRestingGlowStrength = 2.2f;
+        // toward the flat body term instead (no edge concentration to bloom outward from) and pulled
+        // RimBoost back below the overshoot.
+        //
+        // MV-1274 round 4: a flat per-kind MULTIPLIER (the old HangarRestingGlowStrength = 2.2) hits a
+        // structural ceiling a single constant can't clear for every kind at once. BackyardLook.ShipHangar
+        // inherits ShipBase's BloomThreshold = 1.0, and the roster's base colours span a wide luma range
+        // -- TurretBody (0.34/0.37/0.40, luma ~0.365) at 2.2x reaches emission luma ~0.80, well short of
+        // the threshold and barely lifted off the floor; RobotGold (0.847/0.647/0.227, luma ~0.659) at
+        // the SAME 2.2x already reaches ~1.45, past the threshold, blooming and spilling onto its own
+        // floor ring (AC5's denominator) in lockstep with its numerator, exactly round 3's finding. A
+        // dark kind can't be lifted further without also pushing every bright kind deeper into that
+        // self-defeating bloom spill. Normalized instead: every kind's resting glow targets the SAME
+        // luma, comfortably under the threshold, regardless of how dark or bright its own base colour
+        // is -- so a dark kind (the one AC5 was actually failing hardest on) gets the full available
+        // headroom instead of a fixed fraction of a colour that was never the limiting factor.
+        private const float HangarRestingGlowTargetLuma = 0.92f;
         private const float HangarRimBoost = 3.2f;
 
         [SerializeField] private CharacterRole role = CharacterRole.Robot;
@@ -634,7 +647,9 @@ namespace MaxWorlds.VFX
             Color? rim = null;
             if (role != CharacterRole.Player && MothershipDeckLighting.CurrentDeck == MothershipDeck.Hangar)
             {
-                emission += baseColor * HangarRestingGlowStrength;
+                float baseLuma = 0.2126f * baseColor.r + 0.7152f * baseColor.g + 0.0722f * baseColor.b;
+                float glowBoost = baseLuma > 0.01f ? HangarRestingGlowTargetLuma / baseLuma : 0f;
+                emission += baseColor * glowBoost;
                 rim = baseColor * HangarRimBoost;
             }
 
