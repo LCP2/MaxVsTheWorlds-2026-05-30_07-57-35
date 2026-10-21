@@ -534,23 +534,46 @@ namespace MaxWorlds.Rendering
         };
 
         /// <summary>Hangar deck (areas 1-5) — cold blue with a hazard-yellow rim, the ticket's own
-        /// deck identity. Target capture median luminance 31/255 (MV-1249 AC3).</summary>
+        /// deck identity. Target capture median luminance 31/255 (MV-1249 AC3).
+        ///
+        /// MV-1274: cuts the global key/fill well below MV-1249's own 0.55/0.40 and drops
+        /// <see cref="PostExposure"/> back down from <see cref="ShipBase"/>'s shared 1.1x — that lift
+        /// was ShipBase's own one-stop compensation for the "still-undressed void" every Mothership
+        /// deck had at MV-1249 (its own doc comment on <see cref="ShipBase"/>, above). MV-1259/1260/1269
+        /// have since dressed the Hangar's own floor/walls, and this ticket darkens them further still
+        /// (target floor-plate albedo 26/34/50 — see <see cref="ShipKit.BuildAtlasFloor"/>'s own
+        /// <c>darkBase</c> palette), so the Hangar no longer needs — and actively overshoots under —
+        /// that shared lift. ONLY this deck's own override changes: <see cref="ShipBase"/> itself, and
+        /// every other deck built on it (Assembly/Holds/Engineering/Command, areas 6-30), keeps its own
+        /// exact PostExposure/Key/Fill/Ambient values unchanged (MV-1274 AC8's own "areas 6-30
+        /// unchanged" gate). The ticket's own "darkness plus local light is the target" (its "Do not
+        /// re-raise" list) — the lamp pools/neon <see cref="ShipKit"/> now builds carry the brightness
+        /// instead of this flat global wash.</summary>
         public static BackyardLook ShipHangar
         {
             get
             {
                 BackyardLook l = ShipBase;
                 l.KeyColor = new Color(0.62f, 0.78f, 0.98f);
-                l.KeyIntensity = 0.55f;
+                l.KeyIntensity = 0.30f;
                 l.FillColor = new Color(0.30f, 0.42f, 0.58f);
-                l.FillIntensity = 0.40f;
+                l.FillIntensity = 0.20f;
                 l.RimColor = new Color(1.0f, 0.85f, 0.25f);    // hazard yellow
                 l.RimIntensity = 1.0f;
-                l.AmbientSky = new Color(0.10f, 0.13f, 0.19f);        // luminance ~0.128
-                l.AmbientEquator = new Color(0.08f, 0.10f, 0.14f);
-                l.AmbientGround = new Color(0.05f, 0.07f, 0.10f);
+                l.AmbientSky = new Color(0.045f, 0.058f, 0.085f);      // luminance ~0.058
+                l.AmbientEquator = new Color(0.032f, 0.042f, 0.062f);
+                l.AmbientGround = new Color(0.018f, 0.026f, 0.040f);
                 l.FogColor = new Color(0.05f, 0.07f, 0.10f);
                 l.BloomTint = new Color(0.85f, 0.92f, 1.0f);
+                // MV-1274 AC3 recapture fix-pass 2: measured peak frame brightness (229.4/255) sat just
+                // under the 230 bloom-pixel threshold even after a 6x material HDR boost (fix-pass 1) --
+                // Neutral tonemapping's soft shoulder means more per-material boost barely moves the
+                // asymptote. A modest exposure/intensity/scatter lift (still well inside AC1's median
+                // 21-41 and AC2's +/-12 floor-RGB bands, both measured with room to spare) pushes the
+                // post-tonemap peak the last ~2% needed and widens the halo so enough pixels clear it.
+                l.BloomIntensity = 2.0f;
+                l.BloomScatter = 0.8f;
+                l.PostExposure = 0.85f;
                 return l;
             }
         }

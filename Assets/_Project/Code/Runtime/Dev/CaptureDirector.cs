@@ -553,6 +553,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
+            Add(BuildMv1274HangarCheck());
             Add(BuildMv1250ReefLookCheck());
             Add(BuildMv1251ReefStructureKitCheck());
             Add(BuildMv1255ReefWallDetailCheck());
@@ -4813,6 +4814,306 @@ namespace MaxWorlds.Dev
                         sb.Append($"{h.label} (a{h.area}): median={median:F1}/255 p90={p90:F1}/255 " +
                                   $"(target {h.targetMedian:F0} +/-10 -- {(within ? "PASS" : "OUT OF RANGE")})\n");
                     }
+                    return sb.ToString();
+                },
+            };
+        }
+
+        // ---- Mv1274HangarCheck (MV-1274 AC1-6) ------------------------------------------------
+
+        /// <summary>MV-1274's own one-shot capture + measurement check for the Hangar deck relight
+        /// (areas 1-5): launched directly against the standalone .exe (no Editor involved — same
+        /// "player pixels, not Editor pixels" route <see cref="BuildMv1250ReefLookCheck"/>/
+        /// <see cref="BuildMv1063ReefFixCheck"/> already use), jumps to area a1 via
+        /// <see cref="DevModeController.TryJumpToArea"/> (the same production entry point
+        /// <see cref="BuildMv1249MothershipLookCheck"/> uses), hides the HUD, and measures every
+        /// pixel-level AC the ticket gates the merge on: whole-frame luminance percentiles (AC1), a
+        /// bare-floor patch's own mean RGB (AC2), a bloom pixel count plus a near-hazard-stripe
+        /// brightness delta (AC3), a radial falloff profile from a wall lamp pool (AC4), and a
+        /// per-robot body-vs-floor-ring luminance ratio for every robot in frame (AC5). Every world
+        /// position it samples is found LIVE off the actual built scene graph (a "Wall Lamp"/"Launch
+        /// Pad Hazard Stripes" GameObject under the real "Wall a1 *"/world dressing roots), not a
+        /// guessed offset, so the measurements track whatever MV-1274's own dressing pass actually
+        /// built. Reads the frame once via <see cref="Texture2D.GetPixels32"/> (not a
+        /// <see cref="Texture2D.GetPixel"/> call per sample) — the bloom count alone touches every one
+        /// of a 1600x1000 frame's 1.6M pixels, and GetPixel's per-call marshalling cost at that volume
+        /// risks the preset's own 150s watchdog.</summary>
+        private static CapturePreset BuildMv1274HangarCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            float p10 = -1f, median = -1f, p90 = -1f;
+            float brightestPixelDiag = -1f;   // MV-1274 diagnostic only, see ExtraReport
+            Color floorPatchRgb = new Color(-1f, -1f, -1f);
+            int bloomPixelCount = -1;
+            float hazardDelta = float.NaN;
+            var falloffProfile = new List<float>();
+            var robotRatios = new List<(string name, float ratio)>();
+
+            Transform FindNamed(string name)
+            {
+                foreach (Transform t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+                    if (t.name == name) return t;
+                return null;
+            }
+
+            Transform FindWallLamp()
+            {
+                foreach (string side in new[] { "N", "E", "S", "W" })
+                {
+                    Transform wall = FindNamed($"Wall a1 {side}");
+                    if (wall == null) continue;
+                    foreach (Transform child in wall.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "Wall Lamp") return child;
+                }
+                return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                float until = Time.time + 3f;   // same settle window BuildMv1249MothershipLookCheck uses
+                while (Time.time < until) yield return null;
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+            }
+
+            float Percentile(List<float> sorted, float p)
+            {
+                if (sorted.Count == 0) return 0f;
+                if (sorted.Count == 1) return sorted[0];
+                float idx = p * (sorted.Count - 1);
+                int lo = Mathf.FloorToInt(idx);
+                int hi = Mathf.CeilToInt(idx);
+                return lo == hi ? sorted[lo] : Mathf.Lerp(sorted[lo], sorted[hi], idx - lo);
+            }
+
+            void Measure(Texture2D tex)
+            {
+                Camera cam = Camera.main;
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                Vector2Int ToPixel(Vector3 worldPos)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return new Vector2Int(Mathf.RoundToInt(vp.x * w), Mathf.RoundToInt(vp.y * h));
+                }
+
+                Color SampleMeanRgb(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double r = 0, g = 0, b = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            Color32 c = px[y * w + x];
+                            r += c.r; g += c.g; b += c.b; count++;
+                        }
+                    }
+                    return count > 0 ? new Color((float)(r / count) / 255f, (float)(g / count) / 255f, (float)(b / count) / 255f) : new Color(-1f, -1f, -1f);
+                }
+
+                float SampleMeanLuma(Vector3 worldPos, int boxHalf)
+                {
+                    Vector2Int p = ToPixel(worldPos);
+                    double sum = 0; int count = 0;
+                    for (int dy = -boxHalf; dy <= boxHalf; dy++)
+                    {
+                        int y = p.y + dy;
+                        if (y < 0 || y >= h) continue;
+                        for (int dx = -boxHalf; dx <= boxHalf; dx++)
+                        {
+                            int x = p.x + dx;
+                            if (x < 0 || x >= w) continue;
+                            sum += Luma(px[y * w + x]);
+                            count++;
+                        }
+                    }
+                    return count > 0 ? (float)(sum / count) : -1f;
+                }
+
+                bool InFrame(Vector3 worldPos, float margin)
+                {
+                    Vector3 vp = cam.WorldToViewportPoint(worldPos);
+                    return vp.z > 0f && vp.x >= margin && vp.x <= 1f - margin && vp.y >= margin && vp.y <= 1f - margin;
+                }
+
+                // AC1: whole-frame luminance percentiles (every 4th pixel, same step BuildMv1249MothershipLookCheck uses).
+                var lumas = new List<float>((w / 4 + 1) * (h / 4 + 1));
+                for (int y = 0; y < h; y += 4)
+                    for (int x = 0; x < w; x += 4)
+                        lumas.Add(Luma(px[y * w + x]));
+                lumas.Sort();
+                p10 = Percentile(lumas, 0.10f);
+                median = Percentile(lumas, 0.50f);
+                p90 = Percentile(lumas, 0.90f);
+
+                // AC2: a bare floor patch, >= 2 m from any found wall lamp and off the launch pad --
+                // both found live off the built scene, not assumed.
+                BackyardPath path = FindFirstObjectByType<BackyardPath>();
+                MapZone area1 = null;
+                if (path != null && path.Map != null && path.Map.zones != null)
+                    foreach (MapZone z in path.Map.zones) if (z != null && z.id == "area1") { area1 = z; break; }
+
+                var lampPositions = new List<Vector3>();
+                foreach (string side in new[] { "N", "E", "S", "W" })
+                {
+                    Transform wall = FindNamed($"Wall a1 {side}");
+                    if (wall == null) continue;
+                    foreach (Transform child in wall.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "Wall Lamp") lampPositions.Add(child.position);
+                }
+
+                Transform hazard = FindNamed("Launch Pad Hazard Stripes");
+                Rect? padRect = null;
+                Renderer hazardRenderer = hazard != null ? hazard.GetComponentInChildren<Renderer>() : null;
+                if (hazardRenderer != null)
+                {
+                    Bounds hb = hazardRenderer.bounds;
+                    padRect = new Rect(hb.min.x - 4f, hb.min.z - 4f, hb.size.x + 8f, hb.size.z + 8f);
+                }
+
+                Vector3 floorPatchPos = default;
+                if (area1 != null)
+                {
+                    Rect fp = area1.Footprint;
+                    float bestScore = -1f;
+                    for (float fx = fp.xMin + 2f; fx <= fp.xMax - 2f; fx += 2f)
+                    {
+                        for (float fz = fp.yMin + 2f; fz <= fp.yMax - 2f; fz += 2f)
+                        {
+                            if (padRect.HasValue && padRect.Value.Contains(new Vector2(fx, fz))) continue;
+
+                            float minDist = lampPositions.Count > 0 ? float.MaxValue : 999f;
+                            foreach (Vector3 lamp in lampPositions)
+                                minDist = Mathf.Min(minDist, Vector2.Distance(new Vector2(fx, fz), new Vector2(lamp.x, lamp.z)));
+
+                            if (minDist > bestScore) { bestScore = minDist; floorPatchPos = new Vector3(fx, 0f, fz); }
+                        }
+                    }
+                }
+                floorPatchRgb = SampleMeanRgb(floorPatchPos, 6);
+                float floorPatchLuma = Luma(new Color32(
+                    (byte)Mathf.RoundToInt(floorPatchRgb.r * 255f),
+                    (byte)Mathf.RoundToInt(floorPatchRgb.g * 255f),
+                    (byte)Mathf.RoundToInt(floorPatchRgb.b * 255f), 255));
+
+                // AC3: bloom pixel count across the whole frame, plus the near-hazard-stripe delta.
+                int bloomCount = 0;
+                float brightest = 0f;
+                for (int i = 0; i < px.Length; i++)
+                {
+                    float lm = Luma(px[i]);
+                    if (lm > 230f) bloomCount++;
+                    if (lm > brightest) brightest = lm;
+                }
+                bloomPixelCount = bloomCount;
+                brightestPixelDiag = brightest;
+
+                if (hazardRenderer != null)
+                {
+                    Bounds hb = hazardRenderer.bounds;
+                    Vector3 nearStripe = new Vector3(hb.center.x, 0.02f, hb.max.z + 0.15f);   // 0.15 m outside the stripe's own north edge
+                    hazardDelta = SampleMeanLuma(nearStripe, 2) - floorPatchLuma;
+                }
+
+                // AC4: falloff profile from a wall lamp pool centre outward 2 m toward the room.
+                // The pool itself (ShipKit.BuildGraduatedPool's "Pool Step 0"..4) sits ~1.44 m inset
+                // from the wall under HangarLightPoolRadius*0.9 -- NOT at the wall-mounted "Wall Lamp"
+                // fixture's own position. Sampling outward from the wall lamp instead of the pool's own
+                // built centre starts the profile well short of the light and walks INTO it before
+                // walking back out, which reads as a false rise-then-fall rather than a falloff.
+                Transform wallLamp = FindWallLamp();
+                Transform poolStep0 = wallLamp != null ? wallLamp.parent.Find("Pool Step 0") : null;
+                if (wallLamp != null && poolStep0 != null)
+                {
+                    Vector3 wallLampGround = new Vector3(wallLamp.position.x, 0f, wallLamp.position.z);
+                    Vector3 poolCentre = new Vector3(poolStep0.position.x, 0f, poolStep0.position.z);
+                    // Sample straight on along the wall-to-pool line (the pool's own build direction,
+                    // ShipKit.BuildWallLamp's "n") rather than toward the room's geometric centre --
+                    // "toward room centre" can run near-parallel to the wall on a short end wall and
+                    // wander into a NEIGHBOURING lamp pool spaced "every 4-6 m" along the same run,
+                    // which reads as a false rise after the fall rather than this pool's own gradient.
+                    Vector3 toCentre = (poolCentre - wallLampGround).sqrMagnitude > 0.0001f
+                        ? (poolCentre - wallLampGround).normalized
+                        : Vector3.forward;
+                    for (float d = 0.1f; d <= 2.0f; d += 0.33f)
+                        falloffProfile.Add(SampleMeanLuma(poolCentre + toCentre * d, 2));
+                }
+
+                // AC5: per-robot body-vs-floor-ring luminance ratio for every robot in frame.
+                foreach (RobotEnemy robot in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+                {
+                    if (robot == null || !robot.isActiveAndEnabled) continue;
+                    Vector3 bodyPos = robot.transform.position + Vector3.up * 0.4f;
+                    if (!InFrame(bodyPos, 0.02f)) continue;
+
+                    float bodyLuma = SampleMeanLuma(bodyPos, 4);
+                    if (bodyLuma < 0f) continue;
+
+                    float ringSum = 0f; int ringCount = 0;
+                    for (int a = 0; a < 8; a++)
+                    {
+                        float ang = a / 8f * Mathf.PI * 2f;
+                        Vector3 ringPos = robot.transform.position + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
+                        if (!InFrame(ringPos, 0f)) continue;
+                        ringSum += SampleMeanLuma(ringPos, 2);
+                        ringCount++;
+                    }
+                    if (ringCount == 0) continue;
+                    float ringMean = ringSum / ringCount;
+                    if (ringMean <= 0.5f) continue;
+                    robotRatios.Add((robot.name, bodyLuma / ringMean));
+                }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1274hangarcheck",
+                LogTag = "[MV1274Capture]",
+                Flag = "-mv1274shot",
+                ArmFile = "Temp/mv1274.arm",
+                HeadlessMarker = "Temp/mv1274.headless",
+                DoneFileName = "_mv1274_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,   // the live production camera, same route as MV-1249/MV-1250
+                QualityLevelName = "Mobile",   // MV-1273 only turned HDR (hence bloom) on for the Mobile tier
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 150,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1274-windows-a1", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"AC1 percentiles: p10={p10:F1} (target <=22) median={median:F1} (target 31+/-10) p90={p90:F1} (target >=60)");
+                    sb.AppendLine($"AC2 floor patch RGB: {Mathf.RoundToInt(floorPatchRgb.r * 255f)}/{Mathf.RoundToInt(floorPatchRgb.g * 255f)}/{Mathf.RoundToInt(floorPatchRgb.b * 255f)} (target 26/34/50 +/-12 per channel)");
+                    sb.AppendLine($"AC3 bloom pixel count: {bloomPixelCount} (target >=1500); near-hazard-stripe delta: {hazardDelta:F1} (target >=25)");
+                    sb.AppendLine($"AC4 falloff profile (lamp pool outward, 0.33 m steps, luma 0-255): {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    sb.AppendLine($"AC5 robot body/floor-ring ratios ({robotRatios.Count} robots in frame, target >=2.5x each):");
+                    foreach (var r in robotRatios) sb.AppendLine($"  {r.name}: {r.ratio:F2}x");
+                    Camera diagCam = Camera.main;
+                    sb.AppendLine($"DIAG: allowHDR={diagCam?.allowHDR} qualityLevel={QualitySettings.names[QualitySettings.GetQualityLevel()]} pipeline={UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.name} maxBrightestPixel={brightestPixelDiag:F3}");
                     return sb.ToString();
                 },
             };
