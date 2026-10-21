@@ -417,6 +417,77 @@ namespace MaxWorlds.Dev
             }
         }
 
+        /// <summary>Tolerance for <see cref="IsUnoccludedSample"/>'s own "did the ray actually reach the
+        /// sample point" distance check -- metres of float/collider-geometry slop to absorb, not a
+        /// deliberately generous margin. The map floor and every <c>MapRuntime</c> wall are exact boxes
+        /// (<c>GameObject.CreatePrimitive</c>'s own collider, resized to the authored dimensions), so an
+        /// unoccluded ray should land within millimetres of the sample's own distance from the camera.</summary>
+        private const float OcclusionTolerance = 0.1f;
+
+        /// <summary>MV-1276: the ground-truth answer to "is the first thing the camera actually draws at
+        /// <paramref name="worldPos"/> really there, or is something nearer occluding it" -- a real
+        /// <see cref="Physics.Raycast"/> aimed FROM the camera toward the sample point. Before this,
+        /// every <c>BuildMv1274HangarCheck</c> sample trusted <c>cam.WorldToViewportPoint</c> plus a raw
+        /// pixel index with no occlusion test at all (zero <see cref="Physics.Raycast"/> calls existed
+        /// anywhere in this file) -- every sample reported whatever was DRAWN at that screen pixel, never
+        /// confirmed against what was actually at that world point. Two of AC4's six falloff samples sat
+        /// pinned within 5 luma of the frame's own brightest pixel across three relighting rounds, unmoved
+        /// by halving the lamp pool or changing which lamp was probed: the probe was reading the Hangar's
+        /// wall-top cap neon drawn over the floor at that screen position, never the floor itself.
+        ///
+        /// Public so <c>BuildMv1274HangarCheck</c>'s own AC3/AC4/AC5 probes and the MV-1276 EditMode test
+        /// drive the exact same resolution instead of the test re-deriving it independently (same
+        /// "test and production share one seam" contract <see cref="ApplyQualityLevel"/> and
+        /// <see cref="ResolveProductionCameraPose"/> already use). <paramref name="accept"/> decides
+        /// whether the first thing the ray actually hits counts -- the floor
+        /// (<c>c => c.GetComponentInParent&lt;StructuralFloor&gt;() != null</c>) for a floor sample, or a
+        /// specific robot's own collider for a body sample -- checked BEFORE the distance-to-target
+        /// comparison, not after: an AC5 body sample (<c>robot.position + up * 0.4</c>) sits inside that
+        /// same robot's own collider, not on its surface, so the ray reaches that collider's near face a
+        /// little short of <paramref name="worldPos"/>'s own distance even with nothing else in the way.
+        /// Gating on distance first would reject a robot's own body sample as occluded by itself.</summary>
+        /// <param name="rejectionReason">Human-readable cause when this returns false: "camera-at-target"
+        /// (degenerate zero-length ray), "no-collider-hit" (nothing was hit within range at all),
+        /// "occluded-by:&lt;name&gt;" (something that fails <paramref name="accept"/>, hit well short of
+        /// <paramref name="worldPos"/>'s own distance), or "unexpected-hit:&lt;name&gt;" (something that
+        /// fails <paramref name="accept"/>, hit at ~that same distance -- overlapping geometry, not a
+        /// nearer occluder). <c>null</c> when this returns true.</param>
+        public static bool IsUnoccludedSample(Camera cam, Vector3 worldPos, Func<Collider, bool> accept,
+            out string rejectionReason)
+        {
+            Vector3 origin = cam.transform.position;
+            Vector3 delta = worldPos - origin;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f)
+            {
+                rejectionReason = "camera-at-target";
+                return false;
+            }
+
+            if (!Physics.Raycast(origin, delta / dist, out RaycastHit hit, dist + OcclusionTolerance, ~0,
+                    QueryTriggerInteraction.Ignore))
+            {
+                rejectionReason = "no-collider-hit";
+                return false;
+            }
+            // Accept-first, not distance-first: an AC5 body sample (robot.position + up * 0.4) sits
+            // INSIDE that same robot's own collider, not on its surface, so the ray hits that collider's
+            // own near face a little short of worldPos's own distance even when nothing else is in the
+            // way -- gating on distance before accept would reject a robot's own body sample as
+            // "occluded by itself". Whatever the ray hits first still has to pass accept(), so a genuine
+            // occluder (something else, nearer) is still rejected -- only the "it's the right thing, just
+            // not sitting exactly at worldPos's own distance" case is let through.
+            if (accept(hit.collider))
+            {
+                rejectionReason = null;
+                return true;
+            }
+            rejectionReason = hit.distance < dist - OcclusionTolerance
+                ? $"occluded-by:{hit.collider.name}"
+                : $"unexpected-hit:{hit.collider.name}";
+            return false;
+        }
+
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded. Shared by any preset that wants to frame a shot away from the
         /// Entry room's hedges/flower beds (previously duplicated per-director).</summary>
@@ -4850,6 +4921,14 @@ namespace MaxWorlds.Dev
             var falloffProfile = new List<float>();
             var robotRatios = new List<(string name, float ratio)>();
 
+            // MV-1276: every sample this Measure() takes used to trust cam.WorldToViewportPoint plus a
+            // raw pixel index with no occlusion test -- whatever was DRAWN at that pixel, never confirmed
+            // against what was actually AT that world point. These three collect what IsUnoccludedSample
+            // rejects, per AC, so a rejected sample is reported, never silently dropped or silently kept.
+            var hazardRejections = new List<string>();
+            var falloffRejections = new List<string>();
+            var robotRejections = new List<string>();
+
             Transform FindNamed(string name)
             {
                 foreach (Transform t in FindObjectsByType<Transform>(FindObjectsSortMode.None))
@@ -4926,6 +5005,12 @@ namespace MaxWorlds.Dev
                 Color32[] px = tex.GetPixels32();
 
                 float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                // MV-1276: AC3/AC4/AC5's own occlusion gate -- the floor's own StructuralFloor marker,
+                // same identity MapRuntime.Build and StormdrainKit.MakeWalkable already tag the real
+                // floor/walkable-floor colliders with, so this never has to re-derive "what counts as
+                // floor" from shape or name.
+                bool IsFloorCollider(Collider c) => c.GetComponentInParent<StructuralFloor>() != null;
 
                 Vector2Int ToPixel(Vector3 worldPos)
                 {
@@ -5051,9 +5136,35 @@ namespace MaxWorlds.Dev
 
                 if (hazardRenderer != null)
                 {
+                    // MV-1276: MV-1274's AC3 asks about "pixels within 0.3 m outside the hazard stripe"
+                    // -- a band, all round -- not the single north-edge point this used to read alone.
+                    // Round 3 widened the stripe chasing that one number and reported the result reads
+                    // as a solid garish bar, not a neon accent: the single-point probe was steering the
+                    // build away from the look, not measuring it. Each edge point is occlusion-validated
+                    // the same way AC4/AC5 now are, and a rejected edge is reported, never dropped silently.
                     Bounds hb = hazardRenderer.bounds;
-                    Vector3 nearStripe = new Vector3(hb.center.x, 0.02f, hb.max.z + 0.15f);   // 0.15 m outside the stripe's own north edge
-                    hazardDelta = SampleMeanLuma(nearStripe, 2) - floorPatchLuma;
+                    var edgeSamples = new (string label, Vector3 pos)[]
+                    {
+                        ("N", new Vector3(hb.center.x, 0.02f, hb.max.z + 0.15f)),
+                        ("S", new Vector3(hb.center.x, 0.02f, hb.min.z - 0.15f)),
+                        ("E", new Vector3(hb.max.x + 0.15f, 0.02f, hb.center.z)),
+                        ("W", new Vector3(hb.min.x - 0.15f, 0.02f, hb.center.z)),
+                    };
+
+                    float deltaSum = 0f; int deltaCount = 0;
+                    foreach (var (label, pos) in edgeSamples)
+                    {
+                        if (CaptureDirector.IsUnoccludedSample(cam, pos, IsFloorCollider, out string reason))
+                        {
+                            deltaSum += SampleMeanLuma(pos, 2) - floorPatchLuma;
+                            deltaCount++;
+                        }
+                        else
+                        {
+                            hazardRejections.Add($"{label}:{reason}");
+                        }
+                    }
+                    hazardDelta = deltaCount > 0 ? deltaSum / deltaCount : float.NaN;
                 }
 
                 // AC4: falloff profile from a wall lamp pool centre outward 2 m toward the room.
@@ -5076,16 +5187,49 @@ namespace MaxWorlds.Dev
                     Vector3 toCentre = (poolCentre - wallLampGround).sqrMagnitude > 0.0001f
                         ? (poolCentre - wallLampGround).normalized
                         : Vector3.forward;
+                    // MV-1276: every step used to read whatever pixel ToPixel landed on with no check
+                    // that it was the floor -- this is the defect two of AC4's six samples pinned on
+                    // across three relighting rounds (within 5 luma of the frame's own brightest pixel,
+                    // unmoved by halving the pool or changing which lamp was probed: not reading the
+                    // pool at all). A rejected step is omitted from the profile and named in the report,
+                    // never silently measured as if it were the floor.
                     for (float d = 0.1f; d <= 2.0f; d += 0.33f)
-                        falloffProfile.Add(SampleMeanLuma(poolCentre + toCentre * d, 2));
+                    {
+                        Vector3 samplePos = poolCentre + toCentre * d;
+                        if (CaptureDirector.IsUnoccludedSample(cam, samplePos, IsFloorCollider, out string reason))
+                            falloffProfile.Add(SampleMeanLuma(samplePos, 2));
+                        else
+                            falloffRejections.Add($"d={d:F2}:{reason}");
+                    }
                 }
 
                 // AC5: per-robot body-vs-floor-ring luminance ratio for every robot in frame.
                 foreach (RobotEnemy robot in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
                 {
                     if (robot == null || !robot.isActiveAndEnabled) continue;
-                    Vector3 bodyPos = robot.transform.position + Vector3.up * 0.4f;
+
+                    // MV-1276 (triage, AC2): robot.transform.position is the CharacterController's own
+                    // CENTRE, not its feet -- EnemyArchetype.Of(robot.Kind).SpawnHeight is the exact
+                    // "ground clearance" every spawn path adds on top of floor height (same idiom
+                    // RobotRig.BuildModel uses to drop its model's feet pivot to the floor). Without this,
+                    // every ring/body sample floated SpawnHeight above the real StructuralFloor surface --
+                    // for a1's Turret garrison (colliderHeight 1.0 m -> SpawnHeight 0.5 m) that put the
+                    // ring points 0.5 m above the floor, well outside IsUnoccludedSample's tight
+                    // dist+OcclusionTolerance raycast budget, so every sample reported "no-collider-hit".
+                    Vector3 feetPos = robot.transform.position;
+                    feetPos.y -= EnemyArchetype.Of(robot.Kind).SpawnHeight;
+
+                    Vector3 bodyPos = feetPos + Vector3.up * 0.4f;
                     if (!InFrame(bodyPos, 0.02f)) continue;
+
+                    // MV-1276: confirm the body sample actually lands on THIS robot, not on whatever
+                    // else the camera draws over it (another robot standing nearer, say).
+                    if (!CaptureDirector.IsUnoccludedSample(cam, bodyPos,
+                            c => c.GetComponentInParent<RobotEnemy>() == robot, out string bodyReason))
+                    {
+                        robotRejections.Add($"{robot.name}:body:{bodyReason}");
+                        continue;
+                    }
 
                     float bodyLuma = SampleMeanLuma(bodyPos, 4);
                     if (bodyLuma < 0f) continue;
@@ -5094,8 +5238,18 @@ namespace MaxWorlds.Dev
                     for (int a = 0; a < 8; a++)
                     {
                         float ang = a / 8f * Mathf.PI * 2f;
-                        Vector3 ringPos = robot.transform.position + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
+                        Vector3 ringPos = feetPos + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.75f;
                         if (!InFrame(ringPos, 0f)) continue;
+
+                        // MV-1276: a1's garrison stands two turrets 1.6 m apart, so each turret's own
+                        // 0.75 m ring passes within 0.05 m of its neighbour's -- a ring point can land
+                        // on the NEIGHBOURING robot instead of the floor. Reject that point rather than
+                        // average a robot's own brightness into its neighbour's floor-ring denominator.
+                        if (!CaptureDirector.IsUnoccludedSample(cam, ringPos, IsFloorCollider, out string ringReason))
+                        {
+                            robotRejections.Add($"{robot.name}:ring{a}:{ringReason}");
+                            continue;
+                        }
                         ringSum += SampleMeanLuma(ringPos, 2);
                         ringCount++;
                     }
@@ -5134,10 +5288,13 @@ namespace MaxWorlds.Dev
                     var sb = new System.Text.StringBuilder();
                     sb.AppendLine($"AC1 percentiles: p10={p10:F1} (target <=22) median={median:F1} (target 31+/-10) p90={p90:F1} (target >=60)");
                     sb.AppendLine($"AC2 floor patch RGB: {Mathf.RoundToInt(floorPatchRgb.r * 255f)}/{Mathf.RoundToInt(floorPatchRgb.g * 255f)}/{Mathf.RoundToInt(floorPatchRgb.b * 255f)} (target 26/34/50 +/-12 per channel)");
-                    sb.AppendLine($"AC3 bloom pixel count: {bloomPixelCount} (target >=1500); near-hazard-stripe delta: {hazardDelta:F1} (target >=25)");
-                    sb.AppendLine($"AC4 falloff profile (lamp pool outward, 0.33 m steps, luma 0-255): {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    sb.AppendLine($"AC3 bloom pixel count: {bloomPixelCount} (target >=1500); near-hazard-stripe band delta: {hazardDelta:F1} (target >=25, mean of occlusion-validated N/S/E/W edge points)");
+                    if (hazardRejections.Count > 0) sb.AppendLine($"AC3 rejected band samples: {string.Join(", ", hazardRejections)}");
+                    sb.AppendLine($"AC4 falloff profile (lamp pool outward, 0.33 m steps, luma 0-255, occlusion-validated): {string.Join(", ", falloffProfile.ConvertAll(v => v.ToString("F1")))}");
+                    if (falloffRejections.Count > 0) sb.AppendLine($"AC4 rejected falloff samples: {string.Join(", ", falloffRejections)}");
                     sb.AppendLine($"AC5 robot body/floor-ring ratios ({robotRatios.Count} robots in frame, target >=2.5x each):");
                     foreach (var r in robotRatios) sb.AppendLine($"  {r.name}: {r.ratio:F2}x");
+                    if (robotRejections.Count > 0) sb.AppendLine($"AC5 rejected samples: {string.Join(", ", robotRejections)}");
                     Camera diagCam = Camera.main;
                     sb.AppendLine($"DIAG: allowHDR={diagCam?.allowHDR} qualityLevel={QualitySettings.names[QualitySettings.GetQualityLevel()]} pipeline={UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.name} maxBrightestPixel={brightestPixelDiag:F3}");
                     return sb.ToString();
