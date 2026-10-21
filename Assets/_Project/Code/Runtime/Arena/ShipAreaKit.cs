@@ -55,6 +55,13 @@ namespace MaxWorlds.Arena
             root.transform.SetParent(host, false);
             root.AddComponent<KeepsOwnMaterial>();
 
+            // MV-1272: a structural wall shared by two neighbouring areas (A's east IS B's west) is
+            // matched and dressed once per side — the second side's cap/lamp-strip/rib would otherwise
+            // land on the identical plate the first side already drew (the wall-top strobe bug). This
+            // set is scoped to one BuildWallDressing call, so every wall's cap renders exactly once per
+            // real build, not once ever.
+            var cappedWalls = new HashSet<StructuralWall>();
+
             foreach (WorldArea area in cfg.areas)
             {
                 if (area == null) continue;
@@ -68,9 +75,10 @@ namespace MaxWorlds.Arena
                     Vector3 inward = InwardNormal(wall);
                     Color deckGlow = MothershipDecks.LookFor(area.index).RimColor;
                     int wallSeed = area.index * 4 + (int)wall;
+                    bool capVisible = cappedWalls.Add(match);
 
                     GameObject wallGo = ShipKit.BuildBulkheadPanel(
-                        root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed);
+                        root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed, capVisible);
                     wallGo.name = $"Wall {area.id} {wall}";
 
                     // MV-1264: the panel backing (ShipKit.BuildPanelCell) stands with its own back face
