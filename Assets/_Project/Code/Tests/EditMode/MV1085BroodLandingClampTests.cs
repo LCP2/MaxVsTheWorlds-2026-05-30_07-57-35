@@ -172,6 +172,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(area30, "world1_config.json has no area30 zone");
 
             var root = new GameObject("MV1085 Root");
+            Transform addsRoot = null;
             try
             {
                 MapBuild built = MapRuntime.Build(map, root.transform);
@@ -208,7 +209,7 @@ namespace MaxWorlds.Tests.EditMode
                     + BossTuning.VolleyArcTime + 1f;
                 RunTicks(boss, fiveVolleysBudget);
 
-                Transform addsRoot = InvokeAddsRoot(boss);
+                addsRoot = InvokeAddsRoot(boss);
                 List<RobotEnemy> firstWave = LandedLiveAdds(addsRoot);
                 Assert.Greater(firstWave.Count, 0, "no add ever landed across 5 volleys — the fixture itself is broken");
 
@@ -269,6 +270,12 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                // AddsRoot() is "top-level and unit-scaled ON PURPOSE" (see its own doc comment) so it is
+                // never a descendant of `root` - destroying `root` alone leaves this test's deliberately
+                // stranded-but-alive adds (AC1 part 3) live in the scene for every later EditMode test in
+                // the same process to trip over (MV-1271 fix comment: confirmed via bisection against
+                // MV951/MV966 failing only when this fixture ran shortly before them in a filtered run).
+                if (addsRoot != null) Object.DestroyImmediate(addsRoot.gameObject);
                 Object.DestroyImmediate(root);
                 BossCensus.Reset();
             }
