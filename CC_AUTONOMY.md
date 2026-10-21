@@ -77,22 +77,57 @@ See CLAUDE.md — Testing policy (MV-465). That file is authoritative; this cont
 
 ## Self-verify
 
+**`cc-verify.bat` runs in parts now (MV-1271).** EditMode alone now takes ~600s unfiltered - at or past
+the worker's 600s-per-tool-call Bash cap, so a single `cc-verify.bat` call can no longer complete inside
+one turn. Run the parts **one per tool call, in this order**, reading each one's real exit code before
+moving to the next:
+
 ```
-./cc-verify.bat
+cc-verify.bat compile
+cc-verify.bat editmode 1
+cc-verify.bat editmode 2
+...
+cc-verify.bat editmode <N>
+cc-verify.bat build
+cc-verify.bat finish
 ```
 
-Captures: editor compile; EditMode tests, failing if `Logs\editmode-results.xml` is missing after the run or its `<test-run total="...">` is 0; a headless Windows standalone build against a freshly-deleted `Logs\build.log`; and a log assertion that that file contains `targetFrameRate=60` and `VSyncCount=0`. Every Unity invocation's exit code is captured into a variable and compared to `0` explicitly (not `if errorlevel 1`, which treats a negative crash code as passing), so a hard crash fails the gate instead of printing `ok`. Exit 0 = pass.
+* `compile` — editor compile check (old step 1).
+* `editmode <n>` — EditMode shard n of N, filtered via the regex on `cc-verify-shards.txt` line `n`. Every
+  shard is an explicit, exact-length pattern; there is no synthesized "catch everything else" shard - a
+  negative-lookahead complement is semantically correct but makes Unity's `-testFilter` silently run the
+  WHOLE suite unfiltered (see `cc-verify-shard-filter.ps1`'s header comment). Instead the file's patterns
+  jointly partition every MV-ticket number up to 9999 and the full A-Z + `_` first-character space, so a
+  test in a new namespace or fixture still always lands in exactly one shard. Find `N` by counting
+  non-empty lines in `cc-verify-shards.txt`; run every shard 1..N. Writes `Logs\editmode-results-<n>.xml`.
+* `build` — the old steps 3-6 (Windows standalone build, log assertions, frame-time gate, UI conformance).
+* `finish` — the merge verdict. Exits 0 only when every part above has a stamp matching the exact current
+  tree (HEAD sha + a hash of `git status --porcelain` and `git diff`, excluding `docs/press/` and
+  `ProjectSettings/ProjectSettings.asset` - both are regenerated OUTPUTS of the `build` part itself
+  (screenshot/report PNGs, and Unity's own timestamp-stamped `bundleVersion`), not source, and including
+  them made every earlier part go stale the instant `build` ran, see MV-1271's fix comment), every shard's
+  results file has `total > 0` and `failed == 0`, and no test full name appears in two shards. Exits 1 and
+  names the missing, stale, or failing part otherwise. **`cc-verify.bat finish` exiting 0 is what gates
+  every merge** — not the individual parts passing.
 
-**Run `cc-verify.bat` synchronously in the foreground and WAIT for it to finish within this turn (use a long bash timeout).** You run in one-shot `-p` mode — there are NO background notifications, so if the build gets backgrounded and you end your turn to "wait for it", the run ends with no commit and the ticket stalls. **This is why MAX tickets have not been completing.** Never pipe `cc-verify` through `| tail`; read its real exit code directly.
+Each part is still synchronous, foreground, one call, real exit code read directly — unchanged rules, just
+sharded. **Still never background, pipe through `| tail`, or wait on any part across turns.** If a part
+gets backgrounded or hits the cap anyway, kill it, say so plainly, and treat it as a structural failure
+(see Decide), not something to retry in a loop.
 
-If it fails on a transient/flake, retry once. If it fails structurally, stop and report.
+The bare `cc-verify.bat` (no argument) still runs the whole thing in one call, unchanged, for humans and
+anything else that calls it — it is not sharded and is not what the worker runs.
 
-### When to run what (MV-1138)
+If a part fails on a transient/flake, retry that one part once. If it fails structurally, stop and report.
 
-* Rule 1 fail-first proof: run `cc-test.bat <the new test's class name>` on base-plus-test-only and quote its failing output. Do not run the whole of `cc-verify.bat` for this.
-* When step 2 of `cc-verify.bat` fails: fix, confirm with `cc-test.bat` on the failed tests, then run `cc-verify.bat` again.
-* To find out whether a failing test was already failing before your change: run `cc-test.bat <that test>` on the base commit. Never run the full suite on base for this.
-* Unchanged: the whole of `cc-verify.bat` must exit 0 on the final tree before every merge. `cc-test.bat` never replaces it.
+### When to run what (MV-1138, updated MV-1271)
+
+* Rule 1 fail-first proof: run `cc-test.bat <the new test's class name>` on base-plus-test-only and quote its failing output. Do not run a `cc-verify.bat` part for this.
+* When an `editmode <n>` part fails: fix, confirm with `cc-test.bat` on the failed tests, then re-run that `editmode <n>` part (not the whole sequence) before moving on to `finish`.
+* To find out whether a failing test was already failing before your change: run `cc-test.bat <that test>` on the base commit. Never run a full shard on base for this.
+* A test that fails only inside a shard/filtered run but passes both alone and in the full unfiltered run is cross-test pollution, not a flake to retry away - bisect (pair the failing test with suspect neighbours via `cc-test.bat "A|B"`) to find what leaked, and check whether the leaking fixture's own cleanup is scoped to everything its test actually created (MV-1271: `BigBermudaBoss.AddsRoot()` is "top-level ON PURPOSE", so destroying a fixture's own test root never touched it, and a deliberately-stranded-alive robot outlived the test that made it).
+* If a part fails with a `MissingMethodException` on a method that visibly exists with a matching signature, suspect a corrupted incremental-compile cache before the code: clear `Library/Bee` (and `Library/ScriptAssemblies` if that alone doesn't clear it), force a fresh compile, and retry. This is an environment artefact of heavy same-session Unity batchmode churn, not a code regression - confirm by checking the same test passed in an earlier full run on the same tree before spending time on it as a real bug.
+* Unchanged in spirit: `cc-verify.bat finish` must exit 0 on the final tree before every merge. `cc-test.bat` never replaces it, and neither does any individual part passing on its own.
 
 **Never wait on, poll, or watch a backgrounded task - any backgrounded task, without exception.** If a command is moved to the background (a 10-minute cap, a hung process, anything), do NOT wait for a completion notification, do NOT loop on task-output checks, and do NOT sleep-and-retry. You run in one-shot `-p` mode: there are no background notifications, so you will loop forever burning paid runs while nothing progresses. Kill it, say plainly in a Jira comment what was running and that it was abandoned, and move on to the next ticket.
 
