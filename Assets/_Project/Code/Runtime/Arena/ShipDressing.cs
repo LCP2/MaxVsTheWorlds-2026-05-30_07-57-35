@@ -37,7 +37,8 @@ namespace MaxWorlds.Arena
             // tag-based collector sidesteps that regardless of which world built the wall.
             List<StructuralWall> walls = ReefKit.CollectStructuralWalls(host);
             float wallHeight = map != null ? map.wallHeight : MapData.DefaultWallHeight;
-            ShipAreaKit.BuildWallDressing(host, cfg, walls, wallHeight);
+            float wallThickness = map != null ? map.wallThickness : MapData.DefaultWallThickness;
+            ShipAreaKit.BuildWallDressing(host, cfg, walls, wallHeight, wallThickness);
 
             // MV-1261: one hero set piece per hero area (needs the cover/wall dressing above already
             // built, to find a conveyor/glass-case/console footprint or a resolved wall run to stand on)

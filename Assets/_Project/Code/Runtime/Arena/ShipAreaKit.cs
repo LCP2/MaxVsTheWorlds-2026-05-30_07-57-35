@@ -44,8 +44,10 @@ namespace MaxWorlds.Arena
         /// rectangle, so panel/rib counts track what actually got built — including a gate gap's own
         /// shorter run — rather than what was authored. Each call's own root is renamed
         /// <c>"Wall {area.id} {wall}"</c> so a test (or a future pass) can find one side of one area
-        /// directly rather than re-deriving the match itself.</summary>
-        public static void BuildWallDressing(Transform host, WorldConfig cfg, List<StructuralWall> walls, float wallHeight)
+        /// directly rather than re-deriving the match itself. <paramref name="wallThickness"/> is the
+        /// map's own resolved value (MV-1269), sized into the wall-top cap plate so it reads as sitting on
+        /// the real wall rather than a different width.</summary>
+        public static void BuildWallDressing(Transform host, WorldConfig cfg, List<StructuralWall> walls, float wallHeight, float wallThickness)
         {
             if (host == null || cfg?.areas == null) return;
 
@@ -68,7 +70,7 @@ namespace MaxWorlds.Arena
                     int wallSeed = area.index * 4 + (int)wall;
 
                     GameObject wallGo = ShipKit.BuildBulkheadPanel(
-                        root.transform, a, b, inward, wallHeight, deckGlow, match.IsOuterEdge, wallSeed);
+                        root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed);
                     wallGo.name = $"Wall {area.id} {wall}";
 
                     // MV-1264: the panel backing (ShipKit.BuildPanelCell) stands with its own back face

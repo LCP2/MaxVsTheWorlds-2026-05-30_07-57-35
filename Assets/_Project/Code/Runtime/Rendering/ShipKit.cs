@@ -160,6 +160,17 @@ namespace MaxWorlds.Rendering
         private const float ClutterPitch = 4.5f;
         private const float HullMassDepth = 8f;               // ticket: "solid dark hull masses" outside the hull
 
+        // MV-1269: at the 72-degree play camera a 1.5-3 m wall's FACE is barely visible edge-on (or not
+        // visible at all, facing away), but its TOP and the floor at its base are squarely in view — the
+        // constants below move the same rust/teal/lamp/kick detail already on the face onto those two
+        // surfaces instead.
+        private const float BulkheadCapThickness = 0.07f;     // the cap plate's own vertical thickness
+        private const float BulkheadCapRibWidth = 0.08f;      // near-black rib at every ~3 m cap section
+        private const float FloorKickStripWidth = 0.3f;       // ticket: "0.3 m wide"
+        private const float FloorKickStripHeight = 0.03f;
+        private const float FloorKickGlowWidth = 0.03f;
+        private const float RobotRackStandoff = 0.6f;         // ticket: "stand at least 0.6 m into the room"
+
         private static readonly Color SteelPipe = Rgb(150, 155, 162);
         private static readonly Color CopperPipe = Rgb(176, 108, 68);
 
@@ -238,15 +249,18 @@ namespace MaxWorlds.Rendering
         /// length, a lamp plus a floor light-pool every other panel, a framed window onto Sotami plus a
         /// floor spill on every alternate panel of an OUTER wall only, a robot rack every ~6.5 m on a
         /// long wall, seeded side clutter, and — outer walls only — a solid hull mass standing just
-        /// beyond it. <paramref name="a"/>/<paramref name="b"/> are the wall run's own resolved endpoints
-        /// in world XZ; <paramref name="inward"/> points INTO the room this call is dressing — an
-        /// interior wall gets one call per side, same "no single front face" reasoning
-        /// <see cref="ReefKit.BuildWallFaceDetail"/> already documents for the Reef's own wall ribs.
-        /// Called by <see cref="MaxWorlds.Arena.ShipAreaKit"/>, which resolves the real
-        /// <see cref="StructuralWall"/>/<see cref="MaxWorlds.Arena.WorldArea"/> data this Rendering-
-        /// assembly method never sees — same WHERE/WHAT split every other kit in this namespace keeps.</summary>
+        /// beyond it. MV-1269 adds a wall-top cap (<see cref="BuildWallTopCap"/>) and a floor-edge kick
+        /// strip (<see cref="BuildFloorKickStrip"/>) — the two surfaces the 72-degree play camera actually
+        /// reads, since a 1.5-3 m wall's FACE is nearly edge-on at that angle. <paramref name="a"/>/
+        /// <paramref name="b"/> are the wall run's own resolved endpoints in world XZ; <paramref name="inward"/>
+        /// points INTO the room this call is dressing — an interior wall gets one call per side, same
+        /// "no single front face" reasoning <see cref="ReefKit.BuildWallFaceDetail"/> already documents
+        /// for the Reef's own wall ribs. Called by <see cref="MaxWorlds.Arena.ShipAreaKit"/>, which
+        /// resolves the real <see cref="StructuralWall"/>/<see cref="MaxWorlds.Arena.WorldArea"/> data
+        /// this Rendering-assembly method never sees — same WHERE/WHAT split every other kit in this
+        /// namespace keeps.</summary>
         public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward,
-            float wallHeight, Color deckGlow, bool isOuterEdge, int wallSeed)
+            float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed)
         {
             Transform root = NewRoot(parent, "Bulkhead Wall");
             Vector2 d = b - a;
@@ -257,6 +271,7 @@ namespace MaxWorlds.Rendering
             Vector3 n = new Vector3(inward.x, 0f, inward.z);
             n = n.sqrMagnitude > 0.0001f ? n.normalized : Vector3.forward;
             float h = Mathf.Max(0.1f, wallHeight);
+            float wt = Mathf.Max(0.05f, wallThickness);
 
             int panels = Mathf.Max(1, Mathf.CeilToInt(length / BulkheadPanelPitch));
             for (int i = 0; i < panels; i++)
@@ -276,6 +291,8 @@ namespace MaxWorlds.Rendering
 
             BuildTopPipes(root, a, b, dir, n, h);
             BuildTopTrim(root, a, b, dir, n, h);
+            BuildWallTopCap(root, a, b, dir, n, h, wt, deckGlow, panels);
+            BuildFloorKickStrip(root, a, b, dir, n, deckGlow);
 
             if (length >= RobotRackMinWallLength)
             {
@@ -378,6 +395,65 @@ namespace MaxWorlds.Rendering
             MeshBox(root, "Top Trim", pos, new Vector3(length, BulkheadTopTrimHeight, BulkheadBackingDepth + 0.02f).Oriented(dir), NearBlack);
         }
 
+        /// <summary>MV-1269: a wall-top cap plate spanning the wall's own full thickness, split along its
+        /// length into rust/teal sections (same ~3 m pitch and panel-to-panel alternation
+        /// <see cref="BuildPanelCell"/> uses below it), a near-black rib at every section boundary, and a
+        /// lamp strip in <paramref name="deckGlow"/> on every other section — the ticket's own "move that
+        /// detail to where the play camera can actually see it". Built from the same <paramref name="panels"/>
+        /// count the face loop already computed, so the cap's own coverage tracks the wall's real length
+        /// exactly (each section just under its own share of the run, for a hairline seam between
+        /// sections) rather than being derived separately.</summary>
+        private static void BuildWallTopCap(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n,
+            float wallHeight, float wallThickness, Color deckGlow, int panels)
+        {
+            float capY = wallHeight + BulkheadCapThickness * 0.5f;
+
+            for (int i = 0; i < panels; i++)
+            {
+                Vector2 pa = Vector2.Lerp(a, b, (float)i / panels);
+                Vector2 pb = Vector2.Lerp(a, b, (float)(i + 1) / panels);
+                float w = (pb - pa).magnitude;
+                if (w < 0.01f) continue;
+
+                Vector2 mid = (pa + pb) * 0.5f;
+                bool flip = (i % 2) == 1;
+                Vector3 pos = new Vector3(mid.x, capY, mid.y);
+                MeshBox(root, "Wall Top Cap", pos,
+                    new Vector3(w * 0.99f, BulkheadCapThickness, wallThickness).Oriented(dir), flip ? Teal : RustOrange);
+
+                if (i % 2 == 0)
+                    EmissiveBox(root, "Cap Lamp Strip", pos + Vector3.up * (BulkheadCapThickness * 0.5f + 0.008f),
+                        new Vector3(w * 0.5f, 0.012f, wallThickness * 0.3f).Oriented(dir), deckGlow);
+            }
+
+            for (int i = 0; i <= panels; i++)
+            {
+                Vector2 at = Vector2.Lerp(a, b, (float)i / panels);
+                MeshBox(root, "Cap Rib", new Vector3(at.x, capY, at.y),
+                    new Vector3(BulkheadCapRibWidth, BulkheadCapThickness * 1.4f, wallThickness * 1.05f).Oriented(dir), NearBlack);
+            }
+        }
+
+        /// <summary>MV-1269: a floor-edge kick strip along the base of this wall, extending
+        /// <see cref="FloorKickStripWidth"/> into the room with a thin deck-colour emissive line near its
+        /// inner edge (ticket, item 2: "so every room's edge is lit"). Distinct from
+        /// <see cref="BuildPanelCell"/>'s own per-panel "Kick Plate"/"Kick Glow", which stand proud of the
+        /// WALL FACE itself (a few cm off the wall) rather than lying flat on the floor across the wall's
+        /// full run.</summary>
+        private static void BuildFloorKickStrip(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n, Color deckGlow)
+        {
+            float length = (b - a).magnitude;
+            Vector2 mid = (a + b) * 0.5f;
+
+            Vector3 stripCentre = new Vector3(mid.x, FloorKickStripHeight * 0.5f, mid.y) + n * (FloorKickStripWidth * 0.5f);
+            MeshBox(root, "Floor Kick Strip", stripCentre,
+                new Vector3(length * 0.99f, FloorKickStripHeight, FloorKickStripWidth).Oriented(dir), NearBlack);
+
+            Vector3 glowCentre = new Vector3(mid.x, FloorKickStripHeight + 0.006f, mid.y) + n * (FloorKickStripWidth * 0.85f);
+            EmissiveBox(root, "Floor Kick Glow", glowCentre,
+                new Vector3(length * 0.97f, 0.01f, FloorKickGlowWidth).Oriented(dir), deckGlow);
+        }
+
         /// <summary>A lamp near the top in <paramref name="deckGlow"/>, with an additive floor light-pool
         /// just inside the wall (ticket, change item 2) — the pool is <see cref="CityKit.BuildPool"/>'s
         /// own generated disc, not a primitive quad.</summary>
@@ -416,14 +492,17 @@ namespace MaxWorlds.Rendering
         }
 
         /// <summary>A robot rack every ~6.5 m on a long wall (ticket, change item 4): an alcove frame
-        /// holding three dormant robot shells, inside the 1 m wall band.</summary>
+        /// holding three dormant robot shells, standing at least <see cref="RobotRackStandoff"/> into the
+        /// room from the wall face (MV-1269, ticket change item 3 — the rack used to sit almost flush on
+        /// the wall, where it read as part of the wall rather than a free-standing structure at the
+        /// 72-degree play camera's angle).</summary>
         private static void BuildRobotRack(Transform root, Vector2 at, Vector2 dir, Vector3 n, float wallHeight, int seed)
         {
             Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
-            Vector3 basePos = new Vector3(at.x, 0f, at.y);
+            Vector3 basePos = new Vector3(at.x, 0f, at.y) + n * RobotRackStandoff;
             float frameH = wallHeight * 0.55f;
 
-            Vector3 frameCentre = basePos + Vector3.up * (frameH * 0.5f + 0.1f) + n * (RobotRackDepth * 0.5f + 0.02f);
+            Vector3 frameCentre = basePos + Vector3.up * (frameH * 0.5f + 0.1f) + n * (RobotRackDepth * 0.5f);
             MeshBox(root, "Robot Rack Frame", frameCentre, new Vector3(RobotRackWidth, frameH, RobotRackDepth).Oriented(dir), NearBlack);
 
             for (int i = 0; i < 3; i++)
@@ -449,8 +528,12 @@ namespace MaxWorlds.Rendering
             Vector3 headPos = torsoPos + Vector3.up * (torsoH * 0.5f + headH * 0.5f);
             MeshPart(root, "Robot Shell Head", head, headPos, NearBlack);
 
-            Vector3 eyePos = headPos + n * (torsoR * 0.55f) + Vector3.up * (headH * 0.1f);
-            EmissiveBox(root, "Standby Eye", eyePos, new Vector3(0.05f, 0.05f, 0.02f), StandbyEyeRed);
+            // MV-1269: the eye moved onto the head's TOP surface (was the side, facing the room at
+            // head height) — at the 72-degree play camera these racks are seen from almost directly
+            // above, so a side-mounted eye was edge-on and never read (ticket, change item 3: "so they
+            // read from above").
+            Vector3 eyePos = headPos + Vector3.up * (headH * 0.5f + 0.012f);
+            EmissiveBox(root, "Standby Eye", eyePos, new Vector3(0.05f, 0.02f, 0.05f), StandbyEyeRed);
         }
 
         /// <summary>Small crates, canisters, consoles and cable loops seeded by <paramref name="wallSeed"/>
