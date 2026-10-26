@@ -120,6 +120,8 @@ namespace MaxWorlds.Player
         private WaterBlaster _blaster;
         private PulseLaser _pulseLaser;
         private Undertow _undertow;
+        private Ricochet _ricochet;
+        private LightMissile _lightMissile;
         private PlayerAbilities _abilities;
 
         /// <summary>MV-1005: Max's own red hit-flash/spark/low-HP-smoke read — built in
@@ -174,12 +176,13 @@ namespace MaxWorlds.Player
             _damageFeedback.SetExternalBodySource(() => MaxRig.Instance != null ? MaxRig.Instance.BodyRenderers : null);
         }
 
-        /// <summary>MV-760, generalised by MV-1088: the equipped primary's own tank, 0..1, for the
-        /// floating gauge — resolved through <see cref="IPrimaryEnergy"/> from whichever component
-        /// <see cref="WeaponSystemState.ActivePrimary"/> actually names, instead of special-casing the
-        /// LPPE and falling through to the RCDA for anything else (the fallthrough that silently
-        /// swallowed UNDERTOW: its own tank drained in World 3, but nothing read it, so the gauge showed
-        /// the idle RCDA's full tank). Every primary resolved lazily and cached, since whichever one is
+        /// <summary>MV-760, generalised by MV-1088 and MV-1288: the equipped primary's own tank, 0..1,
+        /// for the floating gauge — resolved through <see cref="IPrimaryEnergy"/> from whichever
+        /// component <see cref="WeaponSystemState.ActivePrimary"/> actually names, instead of
+        /// special-casing a couple of primaries and falling through to the RCDA for anything else (the
+        /// fallthrough that silently swallowed UNDERTOW in MV-1088, then RICOCHET and LIGHT MISSILE in
+        /// MV-1288: each one's own tank drained under fire, but nothing read it, so the gauge showed the
+        /// idle RCDA's full tank). Every primary resolved lazily and cached, since whichever one is
         /// attached may not exist yet on the frame this runs. Public so an EditMode test can read exactly
         /// what the gauge is given, through the real entry point rather than a reflected field.</summary>
         public float PrimaryEnergyNormalized()
@@ -199,6 +202,14 @@ namespace MaxWorlds.Player
                 case WeaponCatalog.PrimaryKind.Undertow:
                     if (_undertow == null) _undertow = GetComponent<Undertow>();
                     return _undertow;
+
+                case WeaponCatalog.PrimaryKind.Ricochet:
+                    if (_ricochet == null) _ricochet = GetComponent<Ricochet>();
+                    return _ricochet;
+
+                case WeaponCatalog.PrimaryKind.LightMissile:
+                    if (_lightMissile == null) _lightMissile = GetComponent<LightMissile>();
+                    return _lightMissile;
 
                 default:
                     if (_blaster == null) _blaster = GetComponent<WaterBlaster>();
