@@ -993,6 +993,21 @@ namespace MaxWorlds.Arena
         /// own <see cref="WorldDeck.height"/> (MV-692).</summary>
         public float deckHeight = 2.5f;
 
+        /// <summary>MV-1278: percent chance (0-100) a robot spawned from this world rolls elite.
+        /// 0 (every config authored before this field existed) means never.</summary>
+        public float eliteChancePct = 0f;
+
+        /// <summary>MV-1278: how many LIVE elites one area may hold at once before the roll stops
+        /// offering a new one — not a per-world total, a per-area ceiling.</summary>
+        public int eliteMaxPerArea = 3;
+
+        /// <summary>MV-1278: this world's authored affix pool, lowercase keys matching
+        /// <see cref="MaxWorlds.Enemies.EliteAffix"/>'s names (<see cref="MaxWorlds.Enemies.EliteAffixes.TryParse"/>).
+        /// Filtered to only the IMPLEMENTED ones before a roll ever reads it
+        /// (<see cref="MaxWorlds.Enemies.EliteAffixes.IsImplemented"/>) — an elite whose filtered list
+        /// is empty is a plain elite, not a refused roll.</summary>
+        public string[] eliteAffixes = Array.Empty<string>();
+
         public PacingRhythm EnginePacing =>
             new PacingRhythm(pacingRhythm != null && pacingRhythm.Length > 0 ? pacingRhythm : new[] { 1f });
     }

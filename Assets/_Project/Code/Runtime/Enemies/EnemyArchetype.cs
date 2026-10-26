@@ -125,13 +125,23 @@ namespace MaxWorlds.Enemies
         /// from this (via <see cref="RobotEnemy.Apply"/>).</summary>
         public readonly bool Splicer;
 
+        /// <summary>MV-1278: this spawn's own elite roll outcome — rolled by the caller (it needs the
+        /// area's live-elite count and the world's dials, neither of which <see cref="RobotEnemy.Apply"/>
+        /// itself has), carried in on the archetype exactly the way <see cref="Splicer"/> is. False for
+        /// every archetype value built without going through <see cref="WithElite"/>.</summary>
+        public readonly bool Elite;
+
+        /// <summary>MV-1278: the affix this elite rolled, <see cref="EliteAffix.None"/> for a plain
+        /// elite (or for a non-elite archetype, where this is meaningless). See <see cref="Elite"/>.</summary>
+        public readonly EliteAffix Affix;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
             float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
             float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f,
             string displayName = null, string skin = null, string colourRole = null,
-            bool splicer = false)
+            bool splicer = false, bool elite = false, EliteAffix affix = EliteAffix.None)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -146,7 +156,21 @@ namespace MaxWorlds.Enemies
             Skin = skin ?? string.Empty;
             ColourRole = colourRole ?? string.Empty;
             Splicer = splicer;
+            Elite = elite;
+            Affix = affix;
         }
+
+        /// <summary>MV-1278: the same archetype, rolled elite — see <see cref="Elite"/>/<see cref="Affix"/>.
+        /// The one fluent step every elite roll site (<see cref="AreaAccumulationDirector"/>'s
+        /// garrison/area spawns, <see cref="EnemySpawner.SpawnKind"/>) adds on top of its ordinary
+        /// <see cref="For"/>/<see cref="WithHealthMultiplier"/>/<see cref="Toughened"/> chain, exactly
+        /// like <see cref="WithOverride"/> stamps <see cref="Splicer"/>.</summary>
+        public EnemyArchetype WithElite(EliteAffix affix) => new EnemyArchetype(
+            Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
+            MoveSpeed, MaxHealth, ContactDamage, ContactRadius,
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
+            StandoffRange, TeleportCooldown, TouchDamage,
+            DisplayName, Skin, ColourRole, Splicer, elite: true, affix: affix);
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
         public float SpawnHeight => ColliderHeight * 0.5f;
@@ -681,7 +705,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage * multiplier,
-            DisplayName, Skin, ColourRole, Splicer);
+            DisplayName, Skin, ColourRole, Splicer, Elite, Affix);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -693,7 +717,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole, Splicer);
+            DisplayName, Skin, ColourRole, Splicer, Elite, Affix);
 
         /// <summary>The same lookup as <see cref="Of"/>, with this world's own
         /// <see cref="MaxWorlds.Arena.WorldConfig.enemyOverrides"/> applied over the base table
@@ -731,7 +755,7 @@ namespace MaxWorlds.Enemies
             string.IsNullOrEmpty(ov.displayName) ? DisplayName : ov.displayName,
             string.IsNullOrEmpty(ov.skin) ? Skin : ov.skin,
             string.IsNullOrEmpty(ov.colourRole) ? ColourRole : ov.colourRole,
-            Splicer || ov.splicer);
+            Splicer || ov.splicer, Elite, Affix);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

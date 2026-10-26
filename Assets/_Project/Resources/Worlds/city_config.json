@@ -55,7 +55,9 @@
    "launcherFromArea": 10,
    "blinkerFromArea": 9
   },
-  "powerupCadence": 2
+  "powerupCadence": 2,
+  "eliteChancePct": 20,
+  "eliteAffixes": ["shielded", "hasted", "molten"]
  },
  "enemyTypes": {
   "small": {

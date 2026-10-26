@@ -57,7 +57,9 @@
     },
     "powerupCadence": 2,
     "sludgeSpeedMultiplier": 0.6,
-    "deckHeight": 2.5
+    "deckHeight": 2.5,
+    "eliteChancePct": 10,
+    "eliteAffixes": ["shielded", "hasted"]
   },
   "enemyTypes": {
     "small": {

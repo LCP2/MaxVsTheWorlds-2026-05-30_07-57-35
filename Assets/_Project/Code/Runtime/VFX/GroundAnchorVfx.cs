@@ -130,9 +130,24 @@ namespace MaxWorlds.VFX
         {
             public GroundRing Shadow;
             public GroundRing Ring;
+
+            /// <summary>MV-1278: the elite marking's double ring — null until this slot's actor is
+            /// discovered elite for the first time (most actors never are, so most slots never build
+            /// these two extra quads).</summary>
+            public GroundRing EliteRingOuter;
+            public GroundRing EliteRingInner;
+
             public Vector3 LastPosition;
             public float LastFootprint;
             public bool LastIsPlayer;
+
+            /// <summary>MV-1278: whether this actor's elite ring was showing as of the last recompute —
+            /// part of the same <c>unchanged</c> short-circuit as <see cref="LastIsPlayer"/>, so a robot
+            /// capturing mid-fight (flips <see cref="MaxWorlds.Core.Team"/>, which this ticket's elite
+            /// gate reads) or dying with its ring up still forces one more recompute rather than being
+            /// skipped as "unchanged".</summary>
+            public bool LastIsElite;
+
             public bool Placed;
             public bool SeenThisFrame;
         }
@@ -190,6 +205,11 @@ namespace MaxWorlds.VFX
                 Vector3 pos = cc.transform.position;
                 bool isPlayer = actor.Team == Team.Player;
 
+                // MV-1278: never an elite's own halo for Max's side — a captured elite's Team flips to
+                // Player the instant conversion completes, so this reads "loses its ring ... while it
+                // is an ally" (the ticket's own wording) for free, with no separate capture hook needed.
+                bool isElite = !isPlayer && actor is RobotEnemy robotActor && robotActor.IsElite;
+
                 // MV-969: a CharacterController never changes side once discovered, so the ring's
                 // tint is decided once, right here, rather than re-selected (or, before this ticket,
                 // re-pushed through a MaterialPropertyBlock) every frame — see CreateRing.
@@ -209,7 +229,8 @@ namespace MaxWorlds.VFX
                 bool unchanged = slot.Placed
                     && pos == slot.LastPosition
                     && footprint == slot.LastFootprint
-                    && isPlayer == slot.LastIsPlayer;
+                    && isPlayer == slot.LastIsPlayer
+                    && isElite == slot.LastIsElite;
 
                 if (!unchanged)
                 {
@@ -221,9 +242,30 @@ namespace MaxWorlds.VFX
                     slot.Shadow.Show(ground, footprint * GroundAnchorTuning.ShadowRadiusScale);
                     slot.Ring.Show(ground, footprint * GroundAnchorTuning.RingRadiusScale);
 
+                    // MV-1278: the elite "double ring" — built lazily (most actors are never elite) and
+                    // placed only while isElite, hidden the rest of the time (dormant is already handled
+                    // above by the IDormant `continue`, so this only ever toggles on Team/IsElite).
+                    if (isElite)
+                    {
+                        if (slot.EliteRingOuter == null)
+                        {
+                            slot.EliteRingOuter = CreateEliteRing(GroundAnchorTuning.EliteRingOuterLift);
+                            slot.EliteRingInner = CreateEliteRing(GroundAnchorTuning.EliteRingInnerLift);
+                        }
+                        float outerRadius = footprint + GroundAnchorTuning.EliteRingOuterExtraRadius;
+                        slot.EliteRingOuter.Show(ground, outerRadius);
+                        slot.EliteRingInner.Show(ground, outerRadius - GroundAnchorTuning.EliteRingGap);
+                    }
+                    else
+                    {
+                        slot.EliteRingOuter?.Hide();
+                        slot.EliteRingInner?.Hide();
+                    }
+
                     slot.LastPosition = pos;
                     slot.LastFootprint = footprint;
                     slot.LastIsPlayer = isPlayer;
+                    slot.LastIsElite = isElite;
                     slot.Placed = true;
                     AnchorRecomputeCount++;
                 }
@@ -244,6 +286,8 @@ namespace MaxWorlds.VFX
 
                 slot.Shadow.Hide();
                 slot.Ring.Hide();
+                slot.EliteRingOuter?.Hide();
+                slot.EliteRingInner?.Hide();
                 slot.Placed = false;
             }
 
@@ -281,6 +325,19 @@ namespace MaxWorlds.VFX
             Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Annulus(), tone);
             var r = GroundRing.CreateFixedTint("AnchorRing", tinted);
             r.Lift = GroundAnchorTuning.RingLift;
+            r.transform.SetParent(transform, worldPositionStays: false);
+            return r;
+        }
+
+        /// <summary>One-time construction for one line of a newly-discovered elite's double ring
+        /// (MV-1278) — same fixed-tint, Annulus-texture idiom as <see cref="CreateRing"/>, just pale
+        /// gold and drawn twice (outer/inner, by <paramref name="lift"/>) for the "double ring" the
+        /// design image shows.</summary>
+        private GroundRing CreateEliteRing(float lift)
+        {
+            Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Annulus(), GroundAnchorTuning.EliteRing);
+            var r = GroundRing.CreateFixedTint("EliteRing", tinted);
+            r.Lift = lift;
             r.transform.SetParent(transform, worldPositionStays: false);
             return r;
         }
