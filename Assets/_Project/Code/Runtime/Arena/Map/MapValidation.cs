@@ -1074,6 +1074,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Breaker => c.Breaker,
             EnemyKind.Tractor => c.Tractor,
             EnemyKind.Welder => c.Welder,
+            EnemyKind.Projector => c.Projector,
             _ => 0,
         };
 

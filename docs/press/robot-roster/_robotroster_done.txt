@@ -13,3 +13,4 @@ dreadnought_pair.png
 skitter_pack.png
 mothership_pair.png
 mothership_pair_lensman_hauler.png
+projector_pair.png

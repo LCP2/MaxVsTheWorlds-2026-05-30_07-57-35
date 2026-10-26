@@ -16,6 +16,7 @@
 // MV-1238 EXCEPTION: BuildTractor is hand-authored for the same reason (robot-gen-mesh.html is an
 // interactive browser tool this worker cannot drive headlessly).
 // MV-1244 EXCEPTION: BuildWelder is hand-authored for the same reason.
+// MV-1279 EXCEPTION: BuildProjector is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -117,6 +118,7 @@ namespace MaxWorlds.VFX
                                               out breakerChainPivot, out breakerChainEnd, out breakerWallAnchor); break;
                 case EnemyKind.Tractor:  BuildTractor(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Welder:   BuildWelder(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Projector: BuildProjector(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -607,6 +609,71 @@ namespace MaxWorlds.VFX
 
             // The one eye lens, per the roster's one-eye rule.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0f, 0.5f, 0.24f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.12f, 0.12f, 0.055f)));
+        }
+
+        /// <summary>Half the Shield Projector's own leg-beam length — same "Beam is centred on its own
+        /// local origin" idiom as <see cref="GunnerLegBeamHalfLength"/>, which this is directly scaled
+        /// from (see <see cref="BuildProjector"/>'s own doc comment).</summary>
+        private const float ProjectorLegBeamHalfLength = 0.085f;
+
+        /// <summary>Shield Projector (MV-1279) — hand-authored, same exception as <see cref="BuildWelder"/>
+        /// above. The design image's own tripod-on-a-mast silhouette is <see cref="BuildGunner"/>'s own
+        /// proven leg geometry (three short legs radiating at 0/120/240 degrees, with the one working
+        /// tripod this roster already has), scaled 0.5x for the ticket's own "short legs" — a uniform
+        /// scale keeps every leg's hip/foot topology <see cref="AddLeg"/> already resolves correctly,
+        /// just smaller. A small 0.55 m hull sits on the tripod — the same "cool lower / warm upper"
+        /// shell idiom every other kind uses, matching the image's own "base split pale-blue warm half /
+        /// teal half" (the shared <see cref="RobotPalette.Cool"/> IS the pale-blue half; the kind's own
+        /// hue, <see cref="RobotPalette.Warm"/>, supplies the teal — <see cref="MaxWorlds.VFX.CharacterSkin.RoleFor"/>
+        /// has no case for <see cref="MaxWorlds.Enemies.EnemyKind.Projector"/> yet, same "no entry, falls
+        /// through to the base Robot hue" footing <see cref="EnemyKind.Tractor"/>/<see cref="EnemyKind.Welder"/>
+        /// already stand on, which happens to read as teal already). A thin mast (<c>p.Dark</c>) rises
+        /// from the hull to ~2.3 m — the ticket's own "the tallest robot in the pack" — topped with a
+        /// shallow lens-shaped dish reaching ~2.5 m total. The image's dish is white; no dedicated white
+        /// material exists in <see cref="RobotPalette"/> (every other kind's dish/lens accents reuse
+        /// <c>Cool</c>/<c>Dark</c>/<c>Gold</c> rather than owning a new shared material — see
+        /// <see cref="BuildTractor"/>'s own dish, built from <c>p.Dark</c>), so the dish reuses
+        /// <c>p.Cool</c> (the closest pale tone already shared by the whole roster) rather than adding
+        /// one — acceptable under BUILD MODE: INDICATIVE, where the image is the reference for the
+        /// result but is not itself the specification. One gold eye lens, OFF-CENTRE on the base (the
+        /// ticket's own "gold off-centre eye on the base"), per the roster's one-eye rule — the dome
+        /// itself (and its own look) is P2, not built here.</summary>
+        private static void BuildProjector(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // The tripod — BuildGunner's own leg geometry, uniformly scaled 0.5x (position, beam length
+            // and foot profile alike), so AddLeg's hip/foot math — already proven correct there — still
+            // resolves correctly here, just smaller.
+            Transform leg1Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(0f, 0.085f, 0.0825f), Quaternion.Euler(22f, 0f, 0f), Vector3.one);
+            Transform leg1Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(0f, 0.015f, 0.15f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg1Beam, leg1Foot, ProjectorLegBeamHalfLength));
+            Transform leg2Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(0.07145f, 0.085f, -0.04125f), Quaternion.Euler(-11f, 120f, -19.0526f), Vector3.one);
+            Transform leg2Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg2Beam, leg2Foot, ProjectorLegBeamHalfLength));
+            Transform leg3Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(-0.07145f, 0.085f, -0.04125f), Quaternion.Euler(-11f, 240f, 19.0526f), Vector3.one);
+            Transform leg3Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(-0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg3Beam, leg3Foot, ProjectorLegBeamHalfLength));
+
+            // The hull — two lathe halves, same "cool lower / warm upper" idiom as every other kind,
+            // sitting atop the tripod.
+            const float hullY = 0.17f;
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.02f, 0f), new Vector2(0.14f, 0.05f), new Vector2(0.16f, 0.16f), new Vector2(0.13f, 0.22f) }, 18), p.Cool, new Vector3(0f, hullY, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.13f, 0.22f), new Vector2(0.1f, 0.28f), new Vector2(0.05f, 0.34f), new Vector2(0.02f, 0.38f) }, 18), p.Warm, new Vector3(0f, hullY, 0f), Quaternion.identity, Vector3.one);
+
+            // The thin mast — rises from the hull's top to just under the dish, ~2.3 m up.
+            const float hullTopY = hullY + 0.38f;
+            const float dishBaseY = 2.3f;
+            float mastLength = dishBaseY - hullTopY;
+            Add(root, CharacterMeshes.Beam(mastLength, 0.035f, 0.02f, 8), p.Dark,
+                new Vector3(0f, hullTopY + mastLength * 0.5f, 0f), Quaternion.identity, Vector3.one, "Mast");
+
+            // The dish — a shallow lens shape capping the mast, reaching ~2.5 m total height.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.3f, 0.03f), new Vector2(0.32f, 0.1f), new Vector2(0.26f, 0.16f), new Vector2(0f, 0.2f) }, 24), p.Cool,
+                new Vector3(0f, dishBaseY, 0f), Quaternion.identity, Vector3.one, "Dish");
+
+            // The one gold eye lens, OFF-CENTRE on the base — the ticket's own "gold off-centre eye on
+            // the base" — per the roster's one-eye rule.
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0.09f, hullY + 0.26f, 0.13f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.09f, 0.09f, 0.045f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
