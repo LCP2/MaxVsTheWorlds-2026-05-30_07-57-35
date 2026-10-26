@@ -164,6 +164,12 @@ namespace MaxWorlds.UI
         /// uses, so a listener can orient the spark off <c>-hitDirection</c>.)</summary>
         public static event Action<Vector3, Vector3> ShieldDeflected;
 
+        /// <summary>MV-1284 point 2: a Shield Projector's dome deflected a hit entirely (x0 damage)
+        /// — fired instead of <see cref="DamageDealt"/>, never alongside it, so a listener
+        /// (<c>CombatVfx</c>) can ripple the dome at the hit point rather than show the ordinary
+        /// gold hit-spark. (worldPos = the hit's own <c>DamageInfo.Point</c>.)</summary>
+        public static event Action<Vector3> DomeBlocked;
+
         /// <summary>One rocket left the tube (MV-770) — fired once per rocket in a staggered
         /// <c>ShoulderRack</c> salvo, not once per salvo, so "each with its own muzzle flash" (spec)
         /// falls out of firing this once per launch rather than needing a count parameter.
@@ -366,6 +372,9 @@ namespace MaxWorlds.UI
 
         public static void EmitShieldDeflected(Vector3 worldPos, Vector3 hitDirection)
             => ShieldDeflected?.Invoke(worldPos, hitDirection);
+
+        public static void EmitDomeBlocked(Vector3 worldPos)
+            => DomeBlocked?.Invoke(worldPos);
 
         public static void EmitRocketMuzzle(Vector3 worldPos, Vector3 forward)
             => RocketMuzzle?.Invoke(worldPos, forward);
