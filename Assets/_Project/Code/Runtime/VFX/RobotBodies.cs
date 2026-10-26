@@ -17,6 +17,7 @@
 // interactive browser tool this worker cannot drive headlessly).
 // MV-1244 EXCEPTION: BuildWelder is hand-authored for the same reason.
 // MV-1279 EXCEPTION: BuildProjector is hand-authored for the same reason.
+// MV-1280 EXCEPTION: BuildJammer is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -119,6 +120,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Tractor:  BuildTractor(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Welder:   BuildWelder(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Projector: BuildProjector(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Jammer:   BuildJammer(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -674,6 +676,78 @@ namespace MaxWorlds.VFX
             // The one gold eye lens, OFF-CENTRE on the base — the ticket's own "gold off-centre eye on
             // the base" — per the roster's one-eye rule.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0.09f, hullY + 0.26f, 0.13f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.09f, 0.09f, 0.045f)));
+        }
+
+        /// <summary>Half the Jammer's own leg-beam length — same "Beam is centred on its own local
+        /// origin" idiom as <see cref="ProjectorLegBeamHalfLength"/>.</summary>
+        private const float JammerLegBeamHalfLength = 0.055f;
+
+        /// <summary>Jammer (MV-1280) — hand-authored, same exception as <see cref="BuildProjector"/>
+        /// above. A squat rounded drum (the ticket's own "squat rounded drum") sits on FOUR short legs
+        /// at 0/90/180/270 degrees — unlike every tripod kind (<see cref="BuildGunner"/>/
+        /// <see cref="BuildProjector"/>), each leg here is placed by composing
+        /// <c>Quaternion.Euler(0, bearing, 0) * Quaternion.Euler(tilt, 0, 0)</c> directly rather than
+        /// hand-baking a per-leg Euler+roll correction, so the same four-way-symmetric placement is
+        /// trivially exact at each of the four bearings. The drum is the same "cool lower / warm upper"
+        /// shell idiom every other kind uses, matching the image's own "pale-grey warm half / teal
+        /// half" (the shared <see cref="RobotPalette.Cool"/> IS the pale tone; the kind's own hue,
+        /// <see cref="RobotPalette.Warm"/>, supplies the teal — <see cref="MaxWorlds.VFX.CharacterSkin.RoleFor"/>
+        /// has no case for <see cref="MaxWorlds.Enemies.EnemyKind.Jammer"/> yet, same "no entry, falls
+        /// through to the base Robot hue" footing <see cref="EnemyKind.Tractor"/>/<see cref="EnemyKind.Welder"/>/
+        /// <see cref="EnemyKind.Projector"/> already stand on). Three antenna spikes radiate from the
+        /// drum's top at 0/120/240 degrees, each tipped with a small node — the ticket's own "three
+        /// antenna spikes tipped with white nodes"; no dedicated white material exists in
+        /// <see cref="RobotPalette"/> (same gap <see cref="BuildProjector"/>'s own dish hit), so the
+        /// nodes reuse <c>p.Cool</c> (the closest pale tone already shared by the whole roster) rather
+        /// than adding one — acceptable under BUILD MODE: INDICATIVE, where the image is the reference
+        /// for the result but is not itself the specification. One gold eye lens, OFF-CENTRE on the
+        /// drum (the ticket's own "gold off-centre eye"), per the roster's one-eye rule. The field
+        /// effect itself (J2) is MV-1286, explicitly out of scope here.</summary>
+        private static void BuildJammer(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // Four short legs, radiating at 0/90/180/270 degrees — each placed by composing a yaw
+            // (bearing) with a local pitch tilt, rather than a hand-baked per-leg Euler+roll correction.
+            const float legRadius = 0.2f;
+            const float legHipY = 0.065f;
+            const float legFootRadius = 0.32f;
+            const float legFootY = 0.015f;
+            const float legTiltDeg = 24f;
+            for (int i = 0; i < 4; i++)
+            {
+                float bearing = i * 90f;
+                float rad = bearing * Mathf.Deg2Rad;
+                Vector3 hipPos = new Vector3(Mathf.Sin(rad) * legRadius, legHipY, Mathf.Cos(rad) * legRadius);
+                Vector3 footPos = new Vector3(Mathf.Sin(rad) * legFootRadius, legFootY, Mathf.Cos(rad) * legFootRadius);
+                Quaternion legRot = Quaternion.Euler(0f, bearing, 0f) * Quaternion.Euler(legTiltDeg, 0f, 0f);
+
+                Transform legBeam = Add(root, CharacterMeshes.Beam(0.11f, 0.02f, 0.013f, 6), p.Dark, hipPos, legRot, Vector3.one);
+                Transform legFoot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.026f, 0f), new Vector2(0.018f, 0.014f), new Vector2(0.007f, 0.028f) }, 8), p.Dark, footPos, Quaternion.identity, Vector3.one);
+                legs.Add(AddLeg(root, legBeam, legFoot, JammerLegBeamHalfLength));
+            }
+
+            // The drum — two lathe halves, same "cool lower / warm upper" idiom as every other kind,
+            // squat and rounded per the ticket's own silhouette.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.03f, 0f), new Vector2(0.26f, 0.05f), new Vector2(0.3f, 0.14f) }, 20), p.Cool, new Vector3(0f, 0.1f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.3f, 0.14f), new Vector2(0.26f, 0.23f), new Vector2(0.03f, 0.28f) }, 20), p.Warm, new Vector3(0f, 0.1f, 0f), Quaternion.identity, Vector3.one);
+
+            // Three antenna spikes, radiating from the drum's top at 0/120/240 degrees, each tipped
+            // with a small node (reuses p.Cool — see doc comment above for why there is no white).
+            const float antennaBaseY = 0.37f;
+            const float antennaTiltDeg = 14f;
+            const float antennaLength = 0.2f;
+            for (int i = 0; i < 3; i++)
+            {
+                float bearing = i * 120f;
+                Quaternion antennaRot = Quaternion.Euler(0f, bearing, 0f) * Quaternion.Euler(antennaTiltDeg, 0f, 0f);
+                Add(root, CharacterMeshes.Beam(antennaLength, 0.012f, 0.006f, 5), p.Dark,
+                    new Vector3(0f, antennaBaseY, 0f), antennaRot, Vector3.one, "Antenna");
+                Vector3 tip = new Vector3(0f, antennaBaseY, 0f) + antennaRot * new Vector3(0f, antennaLength * 0.5f, 0f);
+                Add(root, CharacterMeshes.Sphere(10), p.Cool, tip, Quaternion.identity, new Vector3(0.028f, 0.028f, 0.028f), "AntennaNode");
+            }
+
+            // The one gold eye lens, OFF-CENTRE on the drum — the ticket's own "gold off-centre eye".
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0.09f, 0.2f, 0.22f), Quaternion.Euler(-30f, 0f, 0f), new Vector3(0.08f, 0.08f, 0.04f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
