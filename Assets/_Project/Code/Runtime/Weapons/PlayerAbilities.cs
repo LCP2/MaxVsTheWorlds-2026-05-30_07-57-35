@@ -82,7 +82,8 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Owned, off cooldown, AND no trap already down — the HUD button's own gate (spec:
         /// "one trap at a time — the button does nothing while one is down").</summary>
-        public bool TrapReady => TrapOwned && _activeTrap == null && _trapCooldown <= 0f;
+        public bool TrapReady => TrapOwned && _activeTrap == null && _trapCooldown <= 0f &&
+            !AbilityJam.IsJammedAt(transform.position);
 
         /// <summary>True while a trap is currently down — what the HUD reads to show the "n / capacity"
         /// hold readout and the post-fill conversion glow.</summary>
@@ -104,13 +105,15 @@ namespace MaxWorlds.Weapons
         /// Cells secondary bank, matching what a throw actually spends now — not Parts.</summary>
         public bool WaterBalloonReady =>
             WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon) &&
-            _waterBalloonCooldown <= 0f && PickupWallet.PowerCellsSecondary > 0;
+            _waterBalloonCooldown <= 0f && PickupWallet.PowerCellsSecondary > 0 &&
+            !AbilityJam.IsJammedAt(transform.position);
 
         /// <summary>Seconds left before Teleport can be used again, 0 when ready.</summary>
         public float TeleportCooldownRemaining => Mathf.Max(0f, _teleportCooldown);
 
         public bool TeleportReady =>
-            WeaponSystemState.IsAcquired(AbilityKind.Teleport) && _teleportCooldown <= 0f;
+            WeaponSystemState.IsAcquired(AbilityKind.Teleport) && _teleportCooldown <= 0f &&
+            !AbilityJam.IsJammedAt(transform.position);
 
         /// <summary>Seconds left before Force Field can be activated again, 0 when ready. Only starts
         /// counting down once the bubble pops (MV-361) — same "cooldown starts at the END of the
@@ -124,7 +127,8 @@ namespace MaxWorlds.Weapons
         /// an on-screen control gates its press on (same shape as <see cref="WaterBalloonReady"/>).</summary>
         public bool ForceFieldReady =>
             WeaponSystemState.IsAcquired(AbilityKind.ForceField) && !ForceFieldActive &&
-            _forceFieldCooldown <= 0f && PickupWallet.PowerCells >= ForceFieldActivationCost;
+            _forceFieldCooldown <= 0f && PickupWallet.PowerCells >= ForceFieldActivationCost &&
+            !AbilityJam.IsJammedAt(transform.position);
 
         /// <summary>1 (just activated) .. 0 (about to pop) — the bubble's own colour-shift/HUD countdown.</summary>
         public float ForceFieldAbsorbFraction =>
@@ -219,6 +223,7 @@ namespace MaxWorlds.Weapons
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon)) return false;
             if (_waterBalloonCooldown > 0f) return false;
+            if (AbilityJam.IsJammedAt(transform.position)) return false;
 
             Vector3 dir = new Vector3(aimDirection.x, 0f, aimDirection.z);
             if (dir.sqrMagnitude < 1e-4f) return false;
@@ -342,6 +347,7 @@ namespace MaxWorlds.Weapons
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
             if (_teleportCooldown > 0f) return false;
+            if (AbilityJam.IsJammedAt(transform.position)) return false;
 
             // MV-1222: a teleport is one of the states a forced move (knockback/pull) must never
             // survive -- it is never a teleport-style position set itself, but a blink straight through
@@ -533,6 +539,7 @@ namespace MaxWorlds.Weapons
             if (!WeaponSystemState.IsAcquired(AbilityKind.ForceField)) return false;
             if (ForceFieldActive) return false;
             if (_forceFieldCooldown > 0f) return false;
+            if (AbilityJam.IsJammedAt(transform.position)) return false;
             if (!PickupWallet.TrySpendPowerCells(ForceFieldActivationCost)) return false;
 
             int level = WeaponSystemState.AbilityLevel(AbilityKind.ForceField);
@@ -765,7 +772,8 @@ namespace MaxWorlds.Weapons
         /// <summary>MV-1113: owned, affordable, a slot free, AND off cooldown — what the SENTINEL
         /// button's own tap actually gates on (the three independent "unavailable" reasons: not owned —
         /// the button is hidden entirely — "NO PARTS", "FULL", and the radial cooldown sweep).</summary>
-        public bool SentinelCanDeployNow => SentinelReady && SentinelSlotAvailable && _sentinelCooldown <= 0f;
+        public bool SentinelCanDeployNow => SentinelReady && SentinelSlotAvailable && _sentinelCooldown <= 0f &&
+            !AbilityJam.IsJammedAt(transform.position);
 
         /// <summary>MV-1113: the SENTINEL button's own cooldown, seconds — fixed, never reduced by any
         /// RIG axis (Lee's own words: "a slow cooldown to prevent me adding sentinels quickly" — a
@@ -962,6 +970,7 @@ namespace MaxWorlds.Weapons
             if (_sentinelCooldown > 0f) return SentinelDeployOutcome.NotReady;
             if (!SentinelReady) return SentinelDeployOutcome.NotReady;
             if (!SentinelSlotAvailable) return SentinelDeployOutcome.NotReady;
+            if (AbilityJam.IsJammedAt(transform.position)) return SentinelDeployOutcome.NotReady;
 
             if (!TryFindSentinelArrivalPoint(out Vector3 point)) return SentinelDeployOutcome.NoRoom;
 
@@ -1124,6 +1133,7 @@ namespace MaxWorlds.Weapons
         public bool TryDropTrap()
         {
             if (!TrapReady) return false;
+            if (AbilityJam.IsJammedAt(transform.position)) return false;
 
             int holdLevel = Mathf.Max(1, RigState.Level("p_tcap"));
             int freeSlots = Mathf.Max(0, holdLevel - RobotEnemy.Converted.Count);

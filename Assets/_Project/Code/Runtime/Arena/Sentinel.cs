@@ -888,6 +888,12 @@ namespace MaxWorlds.Arena
                 if (_beamTimer <= 0f && _beamVfx != null) _beamVfx.SetStreaming(false);
             }
 
+            // MV-1286: a Jammer's field pauses firing outright rather than letting the cooldown
+            // run down unseen — gated BEFORE the decrement so a Sentinel that walks out of the
+            // field doesn't fire the instant it leaves on a cooldown that secretly finished while
+            // jammed.
+            if (AbilityJam.IsJammedAt(transform.position)) return;
+
             _fireCooldown -= dt;
             if (_fireCooldown > 0f) return;
 

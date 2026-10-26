@@ -1070,6 +1070,8 @@ namespace MaxWorlds.Enemies
             ClearMoltenPatches();
             // MV-1284 point 4: a captured Projector's dome drops at once, same as on death.
             CollapseDomeVisual();
+            // MV-1286: a captured Jammer's own field drops at once, same reasoning.
+            HideJammerFieldImmediate();
             // MV-1285: a captured Linked elite's tether snaps too, same as on death — "not captured"
             // is one of the partner-eligibility conditions in TryEstablishLink, so this also keeps a
             // captured ally from ever being picked as a fresh pairing candidate.
@@ -2306,6 +2308,12 @@ namespace MaxWorlds.Enemies
             // effectively always Chase/Search per TickProjectorHangBack's own doc comment, but this
             // has no coupling to that state switch below either way.
             if (Kind == EnemyKind.Projector && Team == Team.Enemy) TickProjectorDome(dt);
+
+            // MV-1286 item 5: a live, un-captured Jammer's own static-ring field ticks regardless of
+            // Current state too, same "ticked regardless of state" footing as the Projector dome
+            // recompute immediately above — the Team.Enemy gate here matches AbilityJam.IsJammedAt's
+            // own capture test exactly.
+            if (Kind == EnemyKind.Jammer && Team == Team.Enemy) TickJammerField(dt);
 
             // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
             // "stops moving" per the spec table — so it must be decided before the ordinary state
@@ -4061,6 +4069,19 @@ namespace MaxWorlds.Enemies
         /// Jammer closes to before it starts circling, and the radius it then holds while circling.</summary>
         private const float JammerStandoffRadius = 4f;
 
+        // --- MV-1286: the Jammer's own static-ring field visual ----------------------------------
+
+        /// <summary>MV-1286 item 5: "pulsing once per second" — a full brighten/dim cycle every this
+        /// many seconds, alpha only (never radius), so the ring's visible edge always reads as the
+        /// real <see cref="AbilityJam.JamRadius"/> gate.</summary>
+        private const float JammerFieldPulsePeriodSeconds = 1f;
+        private const float JammerFieldAlphaMin = 0.35f;
+        private const float JammerFieldAlphaMax = 0.9f;
+        private static readonly Color JammerFieldColor = new Color(0.95f, 0.97f, 1f);
+
+        private GroundRing _jammerFieldRing;
+        private float _jammerFieldPulseT;
+
         /// <summary>The ticket's own "(&#8804; 30&#176;/s)" circling CEILING — not the rate the goal is
         /// actually advanced by. At <see cref="JammerStandoffRadius"/>, 30&#176;/s needs ~2.1 m/s
         /// tangential, which exceeds the Jammer's own 1.0 m/s <see cref="EnemyArchetype.MoveSpeed"/> —
@@ -4148,6 +4169,32 @@ namespace MaxWorlds.Enemies
             float moveStep = Mathf.Min(EffectiveMoveSpeed * dt, stepDist);
             CharacterControllerMotion.SafeMove(_cc, dir * moveStep);
         }
+
+        /// <summary>MV-1286 item 5: the Jammer's own "crackling white static ring" — a flat
+        /// ground-hugging <see cref="GroundRing"/> at <see cref="AbilityJam.JamRadius"/> (6 m), the
+        /// same quad-plus-ring-texture danger-telegraph idiom every other ground mark in this project
+        /// uses, pulsed via alpha only once per second. Built lazily on this Jammer's first tick (its
+        /// own TickBody call site gates this on <c>Team == Team.Enemy</c>, matching
+        /// <see cref="AbilityJam.IsJammedAt"/>'s own capture test) rather than in <see cref="BuildBody"/>
+        /// — most robots are never a Jammer, so most never pay for the quad at all.</summary>
+        private void TickJammerField(float dt)
+        {
+            _jammerFieldRing ??= GroundRing.Create("Jammer Field Ring");
+
+            _jammerFieldPulseT += dt;
+            float phase = (_jammerFieldPulseT / JammerFieldPulsePeriodSeconds) * Mathf.PI * 2f;
+            float pulse = 0.5f - 0.5f * Mathf.Cos(phase);
+            Color c = JammerFieldColor;
+            c.a = Mathf.Lerp(JammerFieldAlphaMin, JammerFieldAlphaMax, pulse);
+
+            _jammerFieldRing.Show(transform.position, AbilityJam.JamRadius, c);
+        }
+
+        /// <summary>MV-1286: this Jammer died or was captured — same "drops at once" footing
+        /// <see cref="CollapseDomeVisual"/> gives the Shield Projector's dome, called from the same two
+        /// sites (<see cref="Die"/>/<see cref="TryConvert"/>) rather than waiting for a next tick that,
+        /// post-capture/death, may never come for this robot.</summary>
+        private void HideJammerFieldImmediate() => _jammerFieldRing?.Hide();
 
         // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------
 
@@ -4670,6 +4717,8 @@ namespace MaxWorlds.Enemies
             ClearMoltenPatches();
             // MV-1284 point 4: this robot's own dome (if any) drops at once.
             CollapseDomeVisual();
+            // MV-1286: this robot's own Jammer field (if any) drops at once.
+            HideJammerFieldImmediate();
             // MV-1285 point 4: this robot's death snaps the Linked tether and starts its live
             // partner's own revenge-heal countdown — read LinkedPartner BEFORE BreakLink clears it.
             if (IsElite && Affix == EliteAffix.Linked && LinkedPartner != null && LinkedPartner.IsAlive)
