@@ -157,6 +157,13 @@ namespace MaxWorlds.UI
         /// same "either way" shape as <see cref="MissileImpact"/> (MV-770). (worldPos, damage).</summary>
         public static event Action<Vector3, float> RocketImpact;
 
+        /// <summary>MV-1281: a Shielded elite's front-arc plate deflected a hit entirely (x0 damage) —
+        /// fired instead of <see cref="DamageDealt"/>, never alongside it, so a listener (<c>CombatVfx</c>)
+        /// can show the plate's own spark burst rather than the ordinary gold hit-spark. (worldPos,
+        /// hitDirection — same source-to-target travel convention every other <c>DamageInfo</c> site
+        /// uses, so a listener can orient the spark off <c>-hitDirection</c>.)</summary>
+        public static event Action<Vector3, Vector3> ShieldDeflected;
+
         /// <summary>One rocket left the tube (MV-770) — fired once per rocket in a staggered
         /// <c>ShoulderRack</c> salvo, not once per salvo, so "each with its own muzzle flash" (spec)
         /// falls out of firing this once per launch rather than needing a count parameter.
@@ -356,6 +363,9 @@ namespace MaxWorlds.UI
 
         public static void EmitRocketImpact(Vector3 worldPos, float damage)
             => RocketImpact?.Invoke(worldPos, damage);
+
+        public static void EmitShieldDeflected(Vector3 worldPos, Vector3 hitDirection)
+            => ShieldDeflected?.Invoke(worldPos, hitDirection);
 
         public static void EmitRocketMuzzle(Vector3 worldPos, Vector3 forward)
             => RocketMuzzle?.Invoke(worldPos, forward);

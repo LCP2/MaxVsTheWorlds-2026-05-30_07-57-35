@@ -16,9 +16,9 @@ namespace MaxWorlds.Enemies
     /// than refusing to roll at all.</summary>
     public static class EliteAffixes
     {
-        /// <summary>Every affix ships false here — E2 (Shielded), E3 (Molten), E4 (Linked) and E5
-        /// (Hasted) each flip their own entry true once they land.</summary>
-        public static bool IsImplemented(EliteAffix affix) => false;
+        /// <summary>Every affix ships false here except E2 (Shielded), flipped by MV-1281 — E3
+        /// (Molten), E4 (Linked) and E5 (Hasted) each flip their own entry true once they land.</summary>
+        public static bool IsImplemented(EliteAffix affix) => affix == EliteAffix.Shielded;
 
         public static bool TryParse(string s, out EliteAffix affix) =>
             System.Enum.TryParse(s, ignoreCase: true, out affix);
@@ -63,15 +63,19 @@ namespace MaxWorlds.Enemies
             if (RobotEnemy.LiveEliteCountInArea(areaIndex) >= Mathf.Max(0, dials.eliteMaxPerArea)) return false;
             if (Random.value >= dials.eliteChancePct / 100f) return false;
 
-            affix = RollAffix(dials.eliteAffixes);
+            affix = RollAffix(dials.eliteAffixes, kind);
             return true;
         }
 
         /// <summary>Picks one IMPLEMENTED affix at random from <paramref name="authoredAffixes"/>
         /// (MV-1278 point 2) — <see cref="EliteAffix.None"/> (a plain elite) when the authored list is
-        /// empty or every authored entry filters out as not-yet-implemented, which is every world's
-        /// outcome today since <see cref="EliteAffixes.IsImplemented"/> is false for all four.</summary>
-        private static EliteAffix RollAffix(string[] authoredAffixes)
+        /// empty or every authored entry filters out as not-yet-implemented/kind-ineligible.
+        /// MV-1281 point 4: Shielded is never given to a Blinker (it teleports past obstacles rather
+        /// than tanking a front-arc hit, so a shield plate would be incoherent on it) — filtered out of
+        /// the candidate list before the pick rather than rerolled after, which lands the same
+        /// "reroll among the world's other implemented affixes" distribution the ticket asks for,
+        /// since every candidate left is drawn uniformly either way.</summary>
+        private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind)
         {
             if (authoredAffixes == null || authoredAffixes.Length == 0) return EliteAffix.None;
 
@@ -81,6 +85,8 @@ namespace MaxWorlds.Enemies
                 if (EliteAffixes.TryParse(s, out EliteAffix parsed) && EliteAffixes.IsImplemented(parsed))
                     implemented.Add(parsed);
             }
+
+            if (kind == EnemyKind.Blinker) implemented.Remove(EliteAffix.Shielded);
 
             return implemented.Count == 0 ? EliteAffix.None : implemented[Random.Range(0, implemented.Count)];
         }

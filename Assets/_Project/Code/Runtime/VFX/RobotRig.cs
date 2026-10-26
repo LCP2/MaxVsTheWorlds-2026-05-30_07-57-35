@@ -113,6 +113,12 @@ namespace MaxWorlds.VFX
         /// nothing else in the roster wears it.</summary>
         private static readonly Color BreakerRamAccent = new Color(0.70f, 0.09f, 0.05f);
 
+        /// <summary>MV-1281: the Shielded elite's own front-arc plate — a light steel, worn identically
+        /// by whichever kind rolls the affix (same "one colour, one file, skin/affix-independent" idiom
+        /// as <see cref="StormdrainHazardBand"/>/<see cref="BreakerRamAccent"/>), since the plate is the
+        /// gameplay tell, not a kind's own colour.</summary>
+        private static readonly Color ShieldedPlateSteel = new Color(0.78f, 0.82f, 0.86f);
+
         /// <summary>How much bigger the Puffer Mine's inflatable core gets at the end of its telegraph
         /// than at the start (MV-746 AC5) — a visible inflate, not a subtle one, since it IS the tell
         /// for a kind whose whole gimmick is the wind-up.</summary>
@@ -172,6 +178,10 @@ namespace MaxWorlds.VFX
 
         /// <summary>MV-1231: the Breaker's own red ram-head knuckle accent — null for every other kind.</summary>
         private Material _accentMat;
+
+        /// <summary>MV-1281: the Shielded elite's own front-arc plate — null unless this robot is a
+        /// live Shielded elite.</summary>
+        private Material _shieldMat;
         private MaterialPropertyBlock _eyeMpb;
 
         /// <summary>MV-969: the one renderer <see cref="CombineStaticParts"/> folds this robot's whole
@@ -496,6 +506,12 @@ namespace MaxWorlds.VFX
             // MV-1231: the Breaker's own red ram-head knuckle accent — null for every other kind.
             if (_enemy.Kind == EnemyKind.Breaker)
                 _accentMat = SharedCharacterMaterial("Robot_Breaker_RamAccent", BreakerRamAccent);
+
+            // MV-1281: the Shielded elite's own front-arc plate — null unless this robot actually
+            // rolled the affix, in which case RobotBodies.Build (via RobotPalette.Shield) builds no
+            // plate at all.
+            if (_enemy.IsElite && _enemy.Affix == EliteAffix.Shielded)
+                _shieldMat = SharedCharacterMaterial("Robot_Shielded_Plate", ShieldedPlateSteel);
         }
 
         private static Material SharedCharacterMaterial(string name, Color color)
@@ -538,7 +554,7 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat),
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, _shieldMat),
                                          _enemy.Skin);
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
