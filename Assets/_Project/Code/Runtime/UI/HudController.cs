@@ -203,7 +203,7 @@ namespace MaxWorlds.UI
         // The Force Field button (MV-361): hidden until AbilityKind.ForceField is acquired, same
         // round-button/radial-cooldown shape as the Hydro burst button above.
         private RectTransform _forceFieldButtonRoot;
-        private Image _forceFieldGlow, _forceFieldRadial;
+        private Image _forceFieldGlow, _forceFieldRadial, _forceFieldStrike;
         private Text _forceFieldLabel;
         private bool _forceFieldWasReady;
         private bool _forceFieldWasActive;
@@ -212,7 +212,7 @@ namespace MaxWorlds.UI
         // The TRAP button (MV-1035): hidden until p_trp (a PRIMARY RIG node) is owned, same round
         // action-button/radial-cooldown shape as Force Field above.
         private RectTransform _trapButtonRoot;
-        private Image _trapGlow, _trapRadial;
+        private Image _trapGlow, _trapRadial, _trapStrike;
         private Text _trapLabel;
 
         // The SENTINEL button (MV-1113, retiring the MV-362/MV-399/MV-422 aimed-placement joystick):
@@ -222,7 +222,7 @@ namespace MaxWorlds.UI
         // sign and a live have/cost count (MV-1158) when the slot's free but Parts fall short of the
         // cost, and shaking with "NO ROOM" on a failed placement search.
         private RectTransform _sentinelButtonRoot;
-        private Image _sentinelGlow, _sentinelRadial;
+        private Image _sentinelGlow, _sentinelRadial, _sentinelStrike;
         private Text _sentinelLabel;
         private RectTransform _sentinelStopSignRoot;
         private Text _sentinelCountLabel;
@@ -1094,6 +1094,11 @@ namespace MaxWorlds.UI
             bool active = _abilities.ForceFieldActive;
             bool ready = _abilities.ForceFieldReady;
 
+            // MV-1286: an already-raised bubble stays up through a Jammer's field (ticket item 2) —
+            // the strike only reads while the button would otherwise be a live re-activation gate.
+            if (_forceFieldStrike != null)
+                _forceFieldStrike.gameObject.SetActive(!active && AbilityJam.IsJammedAt(_abilities.transform.position));
+
             if (ready && !_forceFieldWasReady) _forceFieldReadyFlash = 1f;
             _forceFieldWasReady = ready;
             _forceFieldReadyFlash = Mathf.Max(0f, _forceFieldReadyFlash - dt * 3.2f);
@@ -1134,6 +1139,12 @@ namespace MaxWorlds.UI
             if (_abilities == null) return;
 
             RobotTrap trap = _abilities.ActiveTrap;
+
+            // MV-1286: a trap already down keeps running through a Jammer's field — the strike only
+            // reads while the button would otherwise gate a fresh drop.
+            if (_trapStrike != null)
+                _trapStrike.gameObject.SetActive(trap == null && AbilityJam.IsJammedAt(_abilities.transform.position));
+
             if (trap != null)
             {
                 _trapLabel.text = $"{trap.HeldCount}/{trap.Capacity}";
@@ -1176,6 +1187,10 @@ namespace MaxWorlds.UI
             bool canDeployNow = _abilities.SentinelCanDeployNow;
             bool cantAfford = _sentinelNoRoomFlash <= 0f && cooldown <= 0f && slotAvailable && !ready;
 
+            if (_sentinelStrike != null)
+                _sentinelStrike.gameObject.SetActive(cooldown <= 0f && slotAvailable && ready &&
+                    AbilityJam.IsJammedAt(_abilities.transform.position));
+
             if (_sentinelNoRoomFlash > 0f)
             {
                 _sentinelLabel.text = "NO ROOM";
@@ -1217,9 +1232,13 @@ namespace MaxWorlds.UI
         /// secondary bank, since that's what a Water Balloon throw actually spends.</summary>
         private void UpdateAbilityControls()
         {
+            // MV-1286: a Jammer's field reads the same as "can't fire right now" for these two —
+            // full dark cover, same as an empty cell bank/live cooldown already gets.
+            bool jammed = _abilities != null && AbilityJam.IsJammedAt(_abilities.transform.position);
+
             if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
             {
-                if (MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary <= 0)
+                if (jammed || MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary <= 0)
                 {
                     _waterBalloonRadial.fillAmount = 1f;
                 }
@@ -1233,9 +1252,16 @@ namespace MaxWorlds.UI
 
             if (_teleportRadial != null && _teleportRoot != null && _teleportRoot.gameObject.activeSelf)
             {
-                float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
-                float remaining = _abilities != null ? _abilities.TeleportCooldownRemaining : 0f;
-                _teleportRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+                if (jammed)
+                {
+                    _teleportRadial.fillAmount = 1f;
+                }
+                else
+                {
+                    float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
+                    float remaining = _abilities != null ? _abilities.TeleportCooldownRemaining : 0f;
+                    _teleportRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+                }
             }
         }
 
@@ -1542,6 +1568,12 @@ namespace MaxWorlds.UI
             radial.raycastTarget = false;
             _forceFieldRadial = radial;
 
+            var strike = AddImage(root, HudTextures.VectorIcon(JammedStrikeSvg, 160), JammedStrikeColor, "Jammed Strike");
+            Stretch(strike.rectTransform);
+            strike.raycastTarget = false;
+            strike.gameObject.SetActive(false);
+            _forceFieldStrike = strike;
+
             root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
         }
 
@@ -1600,6 +1632,12 @@ namespace MaxWorlds.UI
             radial.raycastTarget = false;
             _trapRadial = radial;
 
+            var strike = AddImage(root, HudTextures.VectorIcon(JammedStrikeSvg, 160), JammedStrikeColor, "Jammed Strike");
+            Stretch(strike.rectTransform);
+            strike.raycastTarget = false;
+            strike.gameObject.SetActive(false);
+            _trapStrike = strike;
+
             root.gameObject.SetActive(RigState.IsOwned("p_trp"));
         }
 
@@ -1640,6 +1678,13 @@ namespace MaxWorlds.UI
         // Image.color, so two colours need two sprites, not one two-tone path.
         private const string SentinelStopSignOctagonSvg =
             "<path d=\"M20.33,8.42 L8.42,20.33 -8.42,20.33 -20.33,8.42 -20.33,-8.42 -8.42,-20.33 8.42,-20.33 20.33,-8.42 Z\" fill=\"#ICON#\"/>";
+
+        // MV-1286: the diagonal strike line a Jammer's field draws over FIELD/CAPTURE/SENTINEL while
+        // Max stands inside it — corner-to-corner across the icon's own 44x44 box, same stroked-path
+        // idiom the octagon above uses for a fill.
+        private const string JammedStrikeSvg =
+            "<path d=\"M-16,-16 L16,16\" stroke=\"#ICON#\" stroke-width=\"5\"/>";
+        private static readonly Color JammedStrikeColor = new Color(0.92f, 0.92f, 0.92f, 0.9f);
 
         /// <summary>
         /// The SENTINEL button (MV-1113) — same round action-button shape as Force Field/TRAP, at the
@@ -1735,6 +1780,12 @@ namespace MaxWorlds.UI
             radial.fillAmount = 0f;
             radial.raycastTarget = false;
             _sentinelRadial = radial;
+
+            var strike = AddImage(root, HudTextures.VectorIcon(JammedStrikeSvg, 160), JammedStrikeColor, "Jammed Strike");
+            Stretch(strike.rectTransform);
+            strike.raycastTarget = false;
+            strike.gameObject.SetActive(false);
+            _sentinelStrike = strike;
 
             root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
         }
