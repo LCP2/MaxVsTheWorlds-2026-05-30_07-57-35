@@ -58,6 +58,10 @@ namespace MaxWorlds.Enemies
         /// reflection.</summary>
         public Transform CurrentTarget => target;
 
+        /// <summary>MV-1283: how many live <see cref="MoltenPatch"/>es this robot's own trail currently
+        /// owns — a test seam, same "public read-only window" idiom as <see cref="CurrentTarget"/>.</summary>
+        public int MoltenPatchCount => _moltenPatches.Count;
+
         [Header("Movement")]
         // Fallback only — Apply() stamps the real number from EnemyArchetype, which is where you
         // tune it. Kept in step with Rusher (60% of Max's 6 m/s) so a robot built without an
@@ -90,6 +94,22 @@ namespace MaxWorlds.Enemies
         private float HastedMoveSpeedMultiplier =>
             (IsElite && Affix == EliteAffix.Hasted && Team == Team.Enemy) ? HastedSpeedMultiplier : 1f;
         [SerializeField] private float gravity = 20f;
+
+        /// <summary>MV-1283 point 2: a Molten elite drops a trailing patch every this many seconds, but
+        /// only while it has actually moved <see cref="MoltenMinMoveDistance"/> since the last one — a
+        /// robot stalled on an obstacle or mid-Telegraph/Lunge leaves no trail.</summary>
+        private const float MoltenPatchInterval = 0.6f;
+        private const float MoltenMinMoveDistance = 0.3f;
+
+        /// <summary>MV-1283 point 2: "cap 6 live patches per robot (oldest recycled first)" — in
+        /// practice a defensive upper bound rather than a routine one, since a patch's own 3 s
+        /// <see cref="MoltenPatch.Lifetime"/> self-expires the oldest just before a steady 0.6 s drip
+        /// would ever drop a 7th.</summary>
+        private const int MoltenPatchCap = 6;
+
+        private readonly List<MoltenPatch> _moltenPatches = new List<MoltenPatch>(MoltenPatchCap);
+        private float _moltenPatchTimer;
+        private Vector3 _moltenLastPatchPos;
 
         /// <summary>Minimum spacing this robot keeps from other active robots while chasing (MV-321),
         /// after any dev override — same live-read idiom as <see cref="EffectiveMoveSpeed"/>.</summary>
@@ -382,6 +402,12 @@ namespace MaxWorlds.Enemies
             // MV-1282 point 3: a Hasted elite does NOT get the x2.0 health bonus — its max health
             // stays its kind's normal resolved value, the speed is the whole trade-off.
             if (IsElite && Affix != EliteAffix.Hasted) maxHealth *= EliteRoll.MaxHealthMultiplier;
+            // MV-1283: a pooled instance must not carry a previous life's molten patches/trail timer
+            // into this one — same "pooled robot, last life leaks forward" footing as AreaIndex/the
+            // Breaker ram hit-list above.
+            ClearMoltenPatches();
+            _moltenPatchTimer = 0f;
+            _moltenLastPatchPos = transform.position;
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -1010,6 +1036,8 @@ namespace MaxWorlds.Enemies
 
             IsConverted = true;
             _team = Team.Player;
+            // MV-1283 point 2: a captured Molten elite's trail is removed, same as on death.
+            ClearMoltenPatches();
             _converted.Add(this);
             return true;
         }
@@ -1294,6 +1322,64 @@ namespace MaxWorlds.Enemies
             float bearing = BearingDegrees(transform.position, _playerTarget.position);
             float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, bearing, ShieldedFaceTurnRateDegPerSec * dt);
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
+
+        /// <summary>MV-1283 point 2: every <see cref="MoltenPatchInterval"/> elapsed, drops a trailing
+        /// <see cref="MoltenPatch"/> if (and only if) this robot has moved at least
+        /// <see cref="MoltenMinMoveDistance"/> since the last one — a robot that has stalled leaves no
+        /// patch that interval, but <see cref="_moltenLastPatchPos"/> is left unmoved so the distance
+        /// keeps accumulating toward the next check rather than resetting.
+        ///
+        /// Public (MV-1015's own "public, not reflection-driven" convention for a per-state Tick* method
+        /// a test needs to drive directly) so an EditMode test can exercise the trail-dropping cadence
+        /// without also pulling in <see cref="Tick"/>'s own gravity/CharacterController machinery, which
+        /// a bare capsule with no floor under it cannot survive several seconds of simulated time.</summary>
+        public void TickMolten(float dt)
+        {
+            _moltenPatchTimer += dt;
+            if (_moltenPatchTimer < MoltenPatchInterval) return;
+            _moltenPatchTimer -= MoltenPatchInterval;
+
+            if (Vector3.Distance(transform.position, _moltenLastPatchPos) < MoltenMinMoveDistance) return;
+
+            DropMoltenPatch();
+            _moltenLastPatchPos = transform.position;
+        }
+
+        /// <summary>Drops a patch at this robot's current position — a fresh <see cref="MoltenPatch.Spawn"/>
+        /// under the cap, or the OLDEST already-live one repositioned in place
+        /// (<see cref="MoltenPatch.ResetAt"/>) once <see cref="MoltenPatchCap"/> is reached, per the
+        /// ticket's own "pooled" instruction. Prunes any entry a patch's own natural 3 s expiry already
+        /// destroyed (Unity's fake-null) before counting, so a self-expired patch never blocks a fresh
+        /// one from spawning.</summary>
+        private void DropMoltenPatch()
+        {
+            _moltenPatches.RemoveAll(p => p == null);
+
+            if (_moltenPatches.Count >= MoltenPatchCap)
+            {
+                MoltenPatch oldest = _moltenPatches[0];
+                _moltenPatches.RemoveAt(0);
+                oldest.ResetAt(transform.position);
+                _moltenPatches.Add(oldest);
+            }
+            else
+            {
+                _moltenPatches.Add(MoltenPatch.Spawn(transform.position));
+            }
+        }
+
+        /// <summary>MV-1283 point 2's "all its patches are removed when it dies or is captured" — called
+        /// from <see cref="Die"/> and <see cref="TryConvert"/>, and from <see cref="Apply"/> so a pooled
+        /// instance's previous life never leaves a stray trail behind.</summary>
+        private void ClearMoltenPatches()
+        {
+            for (int i = 0; i < _moltenPatches.Count; i++)
+            {
+                MoltenPatch p = _moltenPatches[i];
+                if (p != null) p.Expire();
+            }
+            _moltenPatches.Clear();
         }
 
         [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
@@ -2053,6 +2139,11 @@ namespace MaxWorlds.Enemies
             // comment for the awake/lunge gate (which lives inside that method, not here) and why
             // Team.Enemy is checked here (a captured elite's own affix behaviour is suppressed).
             if (IsElite && Affix == EliteAffix.Shielded && Team == Team.Enemy) TickShieldedFacing(dt);
+
+            // MV-1283 point 2: a Molten elite trails patches regardless of Current state (Telegraph/
+            // Recover/Search included), same "ticked regardless of state" footing as the Shielded facing
+            // tick immediately above — a captured Molten elite's own trail is suppressed (Team.Enemy).
+            if (IsElite && Affix == EliteAffix.Molten && Team == Team.Enemy) TickMolten(dt);
 
             // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
             // "stops moving" per the spec table — so it must be decided before the ordinary state
@@ -4213,6 +4304,8 @@ namespace MaxWorlds.Enemies
             // slot the same way.
             if (IsChannelingSplice) CancelSpliceChannel();
             if (IsConverted) { _converted.Remove(this); IsConverted = false; }
+            // MV-1283 point 2: a Molten elite's trail dies with it.
+            ClearMoltenPatches();
             Current = State.Dead;
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).

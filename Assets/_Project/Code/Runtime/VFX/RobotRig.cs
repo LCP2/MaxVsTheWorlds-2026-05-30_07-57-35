@@ -124,6 +124,11 @@ namespace MaxWorlds.VFX
         /// the gameplay tell, not a kind's own colour.</summary>
         private static readonly Color HastedFinSteel = new Color(0.78f, 0.82f, 0.86f);
 
+        /// <summary>MV-1283: the Molten elite's own glowing vent slots — bright orange, same hue family
+        /// as <see cref="MoltenPatch"/>'s own hot colour so the body and its trail read as one thing.
+        /// Same "one colour, one file, skin/affix-independent" idiom as <see cref="ShieldedPlateSteel"/>.</summary>
+        private static readonly Color MoltenVentOrange = new Color(1f, 0.45f, 0.05f);
+
         /// <summary>How much bigger the Puffer Mine's inflatable core gets at the end of its telegraph
         /// than at the start (MV-746 AC5) — a visible inflate, not a subtle one, since it IS the tell
         /// for a kind whose whole gimmick is the wind-up.</summary>
@@ -191,6 +196,10 @@ namespace MaxWorlds.VFX
         /// <summary>MV-1282: the Hasted elite's own swept fins — null unless this robot is a live
         /// Hasted elite.</summary>
         private Material _hastedMat;
+
+        /// <summary>MV-1283: the Molten elite's own glowing vent slots — null unless this robot is a
+        /// live Molten elite.</summary>
+        private Material _moltenMat;
         private MaterialPropertyBlock _eyeMpb;
 
         /// <summary>MV-969: the one renderer <see cref="CombineStaticParts"/> folds this robot's whole
@@ -526,6 +535,19 @@ namespace MaxWorlds.VFX
             // affix, in which case RobotBodies.Build (via RobotPalette.Hasted) builds no fins at all.
             if (_enemy.IsElite && _enemy.Affix == EliteAffix.Hasted)
                 _hastedMat = SharedCharacterMaterial("Robot_Hasted_Fin", HastedFinSteel);
+
+            // MV-1283: the Molten elite's own glowing vent slots — null unless this robot actually
+            // rolled the affix, in which case RobotBodies.Build (via RobotPalette.Molten) builds no
+            // vents at all. Unlike the Shielded plate/Hasted fins (plain light steel), the vents are
+            // the ticket's own "glowing" tell, so emission is boosted on top of SharedCharacterMaterial's
+            // default black — same "a constant, shared by every Molten elite" footing as the stormdrain
+            // band's own emission write above.
+            if (_enemy.IsElite && _enemy.Affix == EliteAffix.Molten)
+            {
+                _moltenMat = SharedCharacterMaterial("Robot_Molten_Vent", MoltenVentOrange);
+                if (_moltenMat.HasProperty(EmissionId))
+                    _moltenMat.SetColor(EmissionId, MoltenVentOrange);
+            }
         }
 
         private static Material SharedCharacterMaterial(string name, Color color)
@@ -568,7 +590,7 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, _shieldMat, _hastedMat),
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, _shieldMat, _hastedMat, _moltenMat),
                                          _enemy.Skin);
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
