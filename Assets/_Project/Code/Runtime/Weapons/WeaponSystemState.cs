@@ -349,10 +349,21 @@ namespace MaxWorlds.Weapons
         /// whichever board a stale process static left active. Fires <see cref="Changed"/> once.</summary>
         public static void ApplyWorldLoadout(int worldIndex)
         {
-            RigBoard.UseWorld(worldIndex);
             WorldDefinition world = WorldCatalog.Get(worldIndex);
-            s_activePrimary = world.PrimaryWeapon;
-            s_secondaryKind = world.SecondaryWeapon;
+            ApplyLoadout(worldIndex, world.PrimaryWeapon, world.SecondaryWeapon);
+        }
+
+        /// <summary>MV-1287: the general form <see cref="ApplyWorldLoadout"/> now calls with the
+        /// world's own native pair — a PRIMARY/SECONDARY carries its own upgrade nodes into any world
+        /// via <see cref="RigBoard.UseLoadout"/> rather than always reading whichever weapon that world
+        /// happens to be wired to. <paramref name="worldIndex"/> still decides ENERGY/MOVE/SUPPORT and
+        /// <see cref="RigBoard.ActiveWorldIndex"/>; it no longer decides which PRIMARY/SECONDARY ids are
+        /// on the board.</summary>
+        public static void ApplyLoadout(int worldIndex, WeaponCatalog.PrimaryKind primary, SecondaryKind secondary)
+        {
+            RigBoard.UseLoadout(worldIndex, primary, secondary);
+            s_activePrimary = primary;
+            s_secondaryKind = secondary;
             Changed?.Invoke();
         }
 
@@ -410,22 +421,28 @@ namespace MaxWorlds.Weapons
             // ApplyWorldLoadout's own doc for why RESUME needs this same mapping available standalone.
             ApplyWorldLoadout(worldIndex);
 
+            // MV-1287: seeding follows the PRIMARY's OWN kit, not the world row it happens to be granted
+            // in — a composed loadout (RigBoard.UseLoadout) pulls PRIMARY's ids from that weapon's home
+            // board regardless of which world equips it, so the seed must key off the primary kind
+            // itself rather than a per-world flag that would silently miss a non-native pairing.
+            WeaponCatalog.PrimaryKind primary = world.PrimaryWeapon;
+
             preservedLevels["p_dmg"] = 1;
-            // MV-1128/MV-1142: SPLIT (p_spr on World 3's board) is owned at level 1 (one beam) from the
-            // moment UNDERTOW is granted too -- the same "owned from run start" shape p_dmg already
+            // MV-1128/MV-1142: SPLIT (p_spr on UNDERTOW's own board) is owned at level 1 (one beam) from
+            // the moment UNDERTOW is granted too -- the same "owned from run start" shape p_dmg already
             // needs this same explicit seed for (RestoreSnapshot below never defaults a missing id to
-            // its own RigBoard.StartLevel -- see RigState.RestoreSnapshot's own doc). A no-op on the
-            // World 1 -> World 2 morph: RestoreSnapshot drops any id the target board doesn't define,
-            // and World 2's board carries no p_spr at all.
-            if (world.PrimarySplitSeeded) preservedLevels["p_spr"] = 1;
+            // its own RigBoard.StartLevel -- see RigState.RestoreSnapshot's own doc). A no-op whenever
+            // the granted primary isn't UNDERTOW: RestoreSnapshot drops any id the target board doesn't
+            // define, and no other primary's board carries p_spr at all.
+            if (primary == WeaponCatalog.PrimaryKind.Undertow) preservedLevels["p_spr"] = 1;
             // MV-1195: RICOCHET's own RICOCHETS/RATE tracks are owned from a non-zero level the instant
-            // the City grants it (rig_board.city.json: p_ric startLevel 2, p_rof startLevel 1) -- the
+            // it's granted (rig_board.city.json: p_ric startLevel 2, p_rof startLevel 1) -- the
             // same "RestoreSnapshot never defaults a missing id to its own RigBoard.StartLevel" gap
             // p_dmg/p_spr already need an explicit seed for above. Read off the board's own authored
             // startLevel rather than a literal, so a retune of that file never drifts out of step with
-            // this. A no-op for every other world: RestoreSnapshot drops any id the target board
-            // doesn't define, and no other board carries p_ric at all.
-            if (world.PrimaryWeapon == WeaponCatalog.PrimaryKind.Ricochet)
+            // this. A no-op whenever the granted primary isn't RICOCHET: RestoreSnapshot drops any id
+            // the target board doesn't define, and no other primary's board carries p_ric at all.
+            if (primary == WeaponCatalog.PrimaryKind.Ricochet)
             {
                 preservedLevels["p_ric"] = RigBoard.StartLevel("p_ric");
                 preservedLevels["p_rof"] = RigBoard.StartLevel("p_rof");

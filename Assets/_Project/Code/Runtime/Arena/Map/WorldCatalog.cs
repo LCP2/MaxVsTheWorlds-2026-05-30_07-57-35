@@ -384,6 +384,31 @@ namespace MaxWorlds.Arena
             return -1;
         }
 
+        /// <summary>MV-1287: the first row whose own <see cref="WorldDefinition.PrimaryWeapon"/> is
+        /// <paramref name="primary"/> — a weapon's "home" board, the one <see cref="MaxWorlds.Weapons.RigBoard.UseLoadout"/>
+        /// pulls that weapon's PRIMARY nodes from regardless of which world is actually equipping it.
+        /// Falls back to row 0 if no row lists it (never happens for a real <c>PrimaryKind</c>, every one
+        /// of which has exactly one home row today).</summary>
+        public static int HomeWorldIndexForPrimary(WeaponCatalog.PrimaryKind primary)
+        {
+            for (int i = 0; i < s_rows.Count; i++)
+                if (s_rows[i].PrimaryWeapon == primary) return i;
+            return 0;
+        }
+
+        /// <summary>MV-1287: the first row whose own <see cref="WorldDefinition.SecondaryWeapon"/> is
+        /// <paramref name="secondary"/> — same "home board" role <see cref="HomeWorldIndexForPrimary"/>
+        /// plays for a PRIMARY, for a SECONDARY's own nodes instead. The Shoulder Rack's home is the
+        /// Stormdrain (the first row to grant it) even though the City and the Reef carry it on too —
+        /// their own copies are byte-for-byte the same ids/levels by design (see each board JSON's own
+        /// <c>$comment</c>), so pulling from the home row is never a loss.</summary>
+        public static int HomeWorldIndexForSecondary(SecondaryKind secondary)
+        {
+            for (int i = 0; i < s_rows.Count; i++)
+                if (s_rows[i].SecondaryWeapon == secondary) return i;
+            return 0;
+        }
+
         /// <summary>The row whose palette matches whatever <see cref="MaterialLibrary.Palette"/> is
         /// currently active, falling back to the first row when nothing matches — the same "no match =
         /// World 1" default the deleted <c>BackyardLighting.WorldIndexFromPalette</c> used. For callers
