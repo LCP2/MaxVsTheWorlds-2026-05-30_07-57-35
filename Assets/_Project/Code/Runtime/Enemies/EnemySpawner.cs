@@ -567,9 +567,17 @@ namespace MaxWorlds.Enemies
             // itself is what gets harder, not just how fast it arrives. The Settings panel's "Robot
             // health" knob (YT-194) is a separate, flat baseline applied first — the two compose
             // rather than fight, since WithHealthMultiplier leaves ContactDamage untouched.
+            // MV-1278: resolved early (not at its old call site below) so the elite roll can use the
+            // same value ResolveAreaIndex() would otherwise recompute a moment later — ResolveAreaIndex
+            // is a pure read of this transform's position plus the live map, so hoisting it here changes
+            // nothing about what it returns.
+            int areaIndex = ResolveAreaIndex();
+
             EnemyArchetype archetype = EnemyArchetype.For(kind, _worldConfig)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
+            if (EliteRoll.TryRoll(_worldConfig?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                archetype = archetype.WithElite(rolledAffix);
             RobotEnemy e = Take(kind, archetype);
 
             // Out of the mouth, fanned, facing the way it's about to run. With a real door (YT-108)
@@ -610,7 +618,7 @@ namespace MaxWorlds.Enemies
             }
 
             e.gameObject.SetActive(true);
-            e.SetAreaIndex(ResolveAreaIndex()); // MV-1122: see ResolveAreaIndex's own doc comment
+            e.SetAreaIndex(areaIndex); // MV-1122: see ResolveAreaIndex's own doc comment
 
             // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
             // Told to emerge first, it would be told to chase a frame later and step out of the door

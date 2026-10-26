@@ -358,6 +358,14 @@ namespace MaxWorlds.Enemies
             // ram hit-list into this one either.
             _breakerIsRam = false;
             _breakerRamSentinelsHit.Clear();
+            // MV-1278: stamped unconditionally (not just when true) so a pooled robot's last life's
+            // elite status never leaks into a roll that said "not elite" this time — same reasoning as
+            // AreaIndex = 0 above. Doubling maxHealth HERE, before ResetState() below sets
+            // _health = maxHealth, is what makes an elite spawn full health rather than needing a
+            // separate heal-up call.
+            IsElite = a.Elite;
+            Affix = a.Affix;
+            if (IsElite) maxHealth *= EliteRoll.MaxHealthMultiplier;
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -761,6 +769,44 @@ namespace MaxWorlds.Enemies
         /// <see cref="RetargetIfNeeded"/>.</summary>
         private RobotEnemy _engagedCapturedRobot;
         private float _health;
+
+        // --- MV-1278: Elite --------------------------------------------------------------------------
+
+        /// <summary>Whether this life is an elite (MV-1278) — stamped only by <see cref="Apply"/>, off
+        /// the per-spawn <see cref="EnemyArchetype.Elite"/> roll <see cref="MaxWorlds.Enemies.EliteRoll"/>
+        /// made before this robot's archetype was built. Deliberately NEVER touched by
+        /// <see cref="ResetState"/> (unlike <see cref="IsSplicer"/>) — <see cref="ResetState"/> runs
+        /// again on every <c>OnEnable</c>, which happens AFTER <see cref="Apply"/> for a robot spawned
+        /// while its GameObject is still inactive (<see cref="AreaAccumulationDirector.CreateInstance"/>/
+        /// <see cref="EnemySpawner.CreateInstance"/>), so a flag <see cref="ResetState"/> clears would be
+        /// wiped the instant that first <c>OnEnable</c> fires. <see cref="maxHealth"/> is the existing
+        /// proof this is safe: it is stamped in <see cref="Apply"/>/<see cref="Retoughen"/> only, never
+        /// read or reset by <see cref="ResetState"/>, and has survived exactly this ordering since before
+        /// this ticket.</summary>
+        public bool IsElite { get; private set; }
+
+        /// <summary>This elite's affix, <see cref="EliteAffix.None"/> for a plain elite or a non-elite.
+        /// See <see cref="IsElite"/>.</summary>
+        public EliteAffix Affix { get; private set; }
+
+        /// <summary>How many robots in <see cref="_active"/> are a LIVE elite (alive, <see cref="IsElite"/>)
+        /// in <paramref name="areaIndex"/> right now — what <see cref="MaxWorlds.Enemies.EliteRoll.TryRoll"/>
+        /// checks against a world's <see cref="MaxWorlds.Arena.WorldDials.eliteMaxPerArea"/> before
+        /// offering a new one. A captured/converted elite (<see cref="Team"/> flipped to
+        /// <see cref="Core.Team.Player"/>) still counts here — the cap is about how many tough enemy
+        /// bodies have existed in the area, not how many are still fighting Max — but an ally's own ring/
+        /// tag/affix behaviour is suppressed regardless (<see cref="VFX.GroundAnchorVfx"/>,
+        /// <see cref="TickBody"/>'s own marker refresh).</summary>
+        public static int LiveEliteCountInArea(int areaIndex)
+        {
+            int n = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r != null && r.IsElite && r.IsAlive && r.AreaIndex == areaIndex) n++;
+            }
+            return n;
+        }
 
         // --- MV-716: Splicer (enemy -> Sentinel) ---------------------------------------------------
 
@@ -1894,6 +1940,13 @@ namespace MaxWorlds.Enemies
         /// has a single call to wrap — no behaviour here changed by this split.</summary>
         private void TickBody(float dt)
         {
+            // MV-1278: re-evaluated every awake tick (not just on a discrete transition, unlike
+            // SetTrapMarker/SetReplicatorMarker) because this tag's visibility has to track TEAM, which
+            // can flip mid-life (a capture converts this robot to Team.Player) with no dedicated elite
+            // call site of its own to hook. TickBody never runs for a Dormant/trapHeld robot (see Tick's
+            // own early-returns), so the tag reads "shown while awake" for free, same as the ring
+            // (VFX.GroundAnchorVfx) does via its own Dormant skip.
+            _bar?.SetEliteMarker(IsElite && _team == Team.Enemy);
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
@@ -2144,6 +2197,10 @@ namespace MaxWorlds.Enemies
         public void Retoughen(in EnemyArchetype a)
         {
             maxHealth = a.MaxHealth;
+            // MV-1278: re-applied here too (point 5) — this robot's own IsElite, stamped once at spawn
+            // by Apply and never touched since, not a.Elite (Retoughen's caller re-stamps a DORMANT
+            // garrison robot's toughness from a fresh archetype; it never re-rolls elite status).
+            if (IsElite) maxHealth *= EliteRoll.MaxHealthMultiplier;
             contactDamage = a.ContactDamage;
             touchDamage = a.TouchDamage;
             _health = maxHealth;
@@ -3867,6 +3924,12 @@ namespace MaxWorlds.Enemies
             // MV-1122: grantsDrops is false for a clean-up safety-net kill (KillWithoutDrops) — the
             // player never fought this robot, so it must not pay out either.
             if (grantsDrops) MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
+            // MV-1278: an elite's bonus drop — exactly one Supercell, in ADDITION to whatever the
+            // ordinary drop signal above already grants, never on a clean-up/safety-net kill
+            // (grantsDrops false) — a robot the player never fought must not pay out extra either.
+            if (grantsDrops && IsElite)
+                MaxWorlds.Pickups.PickupDirector.EnsureInstalled()
+                    .PlacePickupAt(MaxWorlds.Pickups.PickupKind.Supercell, transform.position);
             // MV-705: a Sludger's whole gimmick — killing it isn't the end. Gated on grantsDrops too
             // (MV-1122): a forced clean-up kill splitting into MORE robots would fight the exact thing
             // the thinning/hard-limit layers exist to guarantee (the area actually empties).

@@ -73,6 +73,12 @@ namespace MaxWorlds.VFX
         /// under a warm sun actually looks like.</summary>
         public static readonly Color ContactShadow = new Color(0.06f, 0.07f, 0.11f, 0.34f);
 
+        /// <summary>MV-1278: the elite marking's ring colour — pale gold, matching the nameplate's own
+        /// ELITE tag (<see cref="MaxWorlds.UI.WorldHealthBar"/>). Deliberately clear of every reserved
+        /// ground-layer colour per the design image: red/amber (the danger telegraph), cyan (a
+        /// Replicator-relay robot's own status ring, MV-834), green (a captured ally).</summary>
+        public static readonly Color EliteRing = new Color(0.90f, 0.77f, 0.35f, 0.9f);
+
         // --- Size --------------------------------------------------------------------------------
 
         /// <summary>Ring radius, as a multiple of the actor's real collider footprint. Wider than the
@@ -83,6 +89,17 @@ namespace MaxWorlds.VFX
         /// slightly tighter than the body: a shadow that reaches past an actor's own outline stops
         /// looking like contact and starts looking like a puddle.</summary>
         public const float ShadowRadiusScale = 1.15f;
+
+        /// <summary>MV-1278: the elite marking's OUTER ring radius — a flat metres add-on over the
+        /// actor's real footprint (the ticket's own "radius = body radius + 0.3 m"), not a multiple of
+        /// it like <see cref="RingRadiusScale"/>: an elite's halo has to read as the same fixed distance
+        /// past the body for a Rusher and a Brute alike, not scale with the body already scaling it.</summary>
+        public const float EliteRingOuterExtraRadius = 0.3f;
+
+        /// <summary>MV-1278: the inner ring of the "double ring" sits this many metres inside the outer
+        /// one — close enough to read as one halo, far enough apart that the two lines are visibly two,
+        /// not a single thicker one.</summary>
+        public const float EliteRingGap = 0.12f;
 
         // --- Height ------------------------------------------------------------------------------
         //
@@ -102,6 +119,8 @@ namespace MaxWorlds.VFX
 
         public const float ShadowLift = GroundMarkHeights.ContactShadowLift;
         public const float RingLift = GroundMarkHeights.AnchorRingLift;
+        public const float EliteRingOuterLift = GroundMarkHeights.EliteRingOuterLift;
+        public const float EliteRingInnerLift = GroundMarkHeights.EliteRingInnerLift;
 
         /// <summary>The footprint an actor actually occupies, in world metres — read off the
         /// CharacterController that defines it rather than from a table that can drift away from it.

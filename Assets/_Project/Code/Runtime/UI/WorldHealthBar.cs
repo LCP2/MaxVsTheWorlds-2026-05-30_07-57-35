@@ -76,6 +76,10 @@ namespace MaxWorlds.UI
         private static readonly Color TrapHeldMarkerColor = new Color(1f, 0.65f, 0.2f, 0.95f);
         private static readonly Color TrapAllyMarkerColor = new Color(0.357f, 0.890f, 0.353f, 0.95f);
 
+        // MV-1278: the ELITE tag — pale gold, matching the elite ground ring's own tint
+        // (GroundAnchorTuning.EliteRingColor).
+        private static readonly Color EliteMarkerColor = new Color(0.90f, 0.77f, 0.35f, 0.95f);
+
         /// <summary>MV-991: the shield-% readout above Max's own name label — big enough (double
         /// <see cref="LabelFontSize"/>) that his eyes catch it without hunting the corner HUD button
         /// for the same number.</summary>
@@ -169,6 +173,7 @@ namespace MaxWorlds.UI
         private Text _numberText;
         private Text _replicatorMarker;
         private Text _trapMarker;
+        private Text _eliteMarker;
         private Text _shieldText;
         private Camera _camera;
         private CanvasGroup _canvasGroup;
@@ -384,6 +389,18 @@ namespace MaxWorlds.UI
             if (isAlly) _capturedAlwaysShow = true;
         }
 
+        /// <summary>Show/hide the ELITE nameplate tag (MV-1278) — same slot/shape as the replicator and
+        /// trap markers above, re-evaluated every awake tick by <c>RobotEnemy.TickBody</c> rather than
+        /// only on a discrete transition (see that call site's own doc comment for why: this tag has to
+        /// track Team, which has no dedicated "just got captured" hook the way HELD/ALLY does). The two
+        /// markers sharing this slot (replicator lure / elite) can in principle both want to show on the
+        /// same World 2 robot at once — a known, accepted overlap this tight slice does not resolve.</summary>
+        public void SetEliteMarker(bool show)
+        {
+            if (_eliteMarker == null) return;
+            _eliteMarker.gameObject.SetActive(show);
+        }
+
         /// <summary>MV-1089: true once this robot's TRAP conversion has completed — see
         /// <see cref="SetTrapMarker"/>'s own doc comment for where it's set. Read by <see cref="Refresh"/>
         /// (permanent visibility) and the fill-colour calls (player-side desaturated treatment).</summary>
@@ -499,6 +516,17 @@ namespace MaxWorlds.UI
             tmr.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
             _trapMarker.text = "HELD";
             _trapMarker.gameObject.SetActive(false);
+
+            // MV-1278: the ELITE tag — same slot/shape as the replicator/trap markers above (see
+            // SetEliteMarker's own doc comment on the known overlap with the replicator marker).
+            _eliteMarker = NewText(_canvas, LabelFontSize + 6, EliteMarkerColor, TextAnchor.LowerCenter);
+            var emr = _eliteMarker.rectTransform;
+            emr.anchorMin = emr.anchorMax = new Vector2(0.5f, 1f);
+            emr.pivot = new Vector2(0.5f, 0f);
+            emr.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
+            emr.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
+            _eliteMarker.text = "ELITE";
+            _eliteMarker.gameObject.SetActive(false);
 
             // MV-991: the Force Field shield % — directly above the name label, only ever fed by
             // Max's own Attach() call (shieldFraction/shieldActive stay null everywhere else, so a

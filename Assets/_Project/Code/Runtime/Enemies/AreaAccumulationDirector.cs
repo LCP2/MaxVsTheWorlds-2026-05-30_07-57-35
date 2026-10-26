@@ -584,6 +584,8 @@ namespace MaxWorlds.Enemies
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
+                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                    archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);
                 Vector3 pos = slots[i].Position;
@@ -984,6 +986,8 @@ namespace MaxWorlds.Enemies
 
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
+                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                    archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);
                 Vector3 pos = slots[i].Position;
@@ -1104,6 +1108,8 @@ namespace MaxWorlds.Enemies
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
+                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                    archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);
                 Vector3 pos = slots[i].Position;
@@ -1198,6 +1204,8 @@ namespace MaxWorlds.Enemies
             EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
+            if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                archetype = archetype.WithElite(rolledAffix);
 
             // MV-363: never the centreDenial Launcher barrage — that cluster is meant to read as
             // visible, denied ground, not a hidden knot.

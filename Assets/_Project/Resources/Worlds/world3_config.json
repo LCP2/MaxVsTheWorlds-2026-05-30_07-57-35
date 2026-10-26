@@ -55,7 +55,9 @@
    "blinkerFromArea": 2,
    "specialSharePct": 18
   },
-  "powerupCadence": 2
+  "powerupCadence": 2,
+  "eliteChancePct": 30,
+  "eliteAffixes": ["shielded", "hasted", "molten", "linked"]
  },
  "enemyTypes": {
   "small": {

@@ -23,6 +23,8 @@ namespace MaxWorlds.VFX
     ///   0.040  aim reticle       — bottom of the gameplay stack; drawn UNDER every other actor mark.
     ///   0.046  contact shadow    — under the actor, so under everything except the reticle beneath it.
     ///   0.052  anchor ring       — above its own shadow, below anything that demands a reaction.
+    ///   0.054  elite ring (outer)— MV-1278: above the anchor ring it shares an actor with.
+    ///   0.056  elite ring (inner)— the second of the "double ring", just above its own outer line.
     ///   0.060  danger telegraph  — always on top: an always-on decoration must never cover the one
     ///                              mark the player has to move away from.
     /// </summary>
@@ -35,6 +37,13 @@ namespace MaxWorlds.VFX
         public const float AimReticleLift = 0.040f;
         public const float ContactShadowLift = 0.046f;
         public const float AnchorRingLift = 0.052f;
+
+        /// <summary>MV-1278: the elite marking's two concentric rings — above the ordinary anchor ring
+        /// (so an elite's halo is never covered by its own side-colour ring) and still below the danger
+        /// telegraph, which must always win.</summary>
+        public const float EliteRingOuterLift = 0.054f;
+        public const float EliteRingInnerLift = 0.056f;
+
         public const float DangerTelegraphLift = 0.060f;
 
         /// <summary>The XZ-flattened surface a ground mark at <paramref name="p"/> should sit on: the

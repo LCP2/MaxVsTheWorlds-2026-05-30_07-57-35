@@ -553,6 +553,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
+            Add(BuildMv1278EliteCheck());
             Add(BuildMv1250ReefLookCheck());
             Add(BuildMv1251ReefStructureKitCheck());
             Add(BuildMv1255ReefWallDetailCheck());
@@ -4815,6 +4816,90 @@ namespace MaxWorlds.Dev
                     }
                     return sb.ToString();
                 },
+            };
+        }
+
+        // ---- Mv1278EliteCheck (MV-1278 AC3) ----------------------------------------------------
+
+        /// <summary>MV-1278 AC3: one capture of a World 5 (Mothership) area with at least one elite
+        /// robot on screen. Same real-production-camera route <see cref="BuildMv1249MothershipLookCheck"/>
+        /// already uses for this world (<see cref="DevModeController.TryJumpToArea"/> into the Hangar,
+        /// "a1" — populated by its own cradles/garrison, see MV-1223/MV-1232), framed through the live
+        /// <see cref="CinemachineBrain"/> rig, not a manual pose.
+        ///
+        /// A fresh spawn's own <c>eliteChancePct</c> roll (40% for the Mothership) is not good enough
+        /// for a ONE-capture, no-iteration shot — so this re-stamps one already-spawned, live, eligible
+        /// robot elite through the REAL production API, <see cref="RobotEnemy.Apply"/> with an
+        /// <see cref="EnemyArchetype.WithElite"/>-flagged archetype — the same "construct the real thing
+        /// directly, not a scripted pose" idiom <see cref="BuildMv1113SentinelArrival"/> already uses for
+        /// its own guaranteed-content capture, not a bespoke test-only hook on <see cref="RobotEnemy"/>.
+        /// </summary>
+        private static CapturePreset BuildMv1278EliteCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const string hangarArea = "a1";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                if (!DevModeController.TryJumpToArea(hangarArea))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{hangarArea}\") found no map/player to jump");
+
+                // Same "wait for the rig to settle" window BuildMv1249MothershipLookCheck's own
+                // FrameArea uses — the deck relight, gate self-heal and Cinemachine follow damping all
+                // need this before the frame is the production pose, not mid-transition.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+
+                GameObject playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo == null) throw new CaptureAbortException("Mothership built no Player-tagged Max to frame against");
+                Vector3 playerPos = playerGo.transform.position;
+
+                WorldConfig cfg = FindFirstObjectByType<BackyardPath>()?.Cfg;
+                if (cfg == null) throw new CaptureAbortException("Mothership built no BackyardPath/WorldConfig to resolve the elite's archetype from");
+
+                RobotEnemy nearest = null;
+                float nearestSqr = float.MaxValue;
+                foreach (RobotEnemy r in RobotEnemy.Active)
+                {
+                    if (r == null || !r.IsAlive || !EliteRoll.IsEligibleKind(r.Kind)) continue;
+                    float sqr = (r.transform.position - playerPos).sqrMagnitude;
+                    if (sqr < nearestSqr) { nearestSqr = sqr; nearest = r; }
+                }
+                if (nearest == null) throw new CaptureAbortException($"Mothership {hangarArea} built no eligible live robot to mark elite");
+
+                // The real spawn API, not a new test-only setter — see this preset's own doc comment.
+                nearest.Apply(EnemyArchetype.For(nearest.Kind, cfg).WithElite(EliteAffix.None));
+
+                for (int i = 0; i < 3; i++) yield return null;   // let TickBody/GroundAnchorVfx pick up the new elite's tag/ring
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1278eliteshot",
+                LogTag = "[MV1278Capture]",
+                Flag = "-mv1278shot",
+                ArmFile = "Temp/mv1278.arm",
+                HeadlessMarker = "Temp/mv1278.headless",
+                DoneFileName = "_mv1278_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,   // the live production camera, never a manual pose
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1278-elite-hangar", NoSetup) },
             };
         }
 
