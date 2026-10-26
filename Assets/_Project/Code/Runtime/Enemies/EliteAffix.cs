@@ -16,10 +16,11 @@ namespace MaxWorlds.Enemies
     /// than refusing to roll at all.</summary>
     public static class EliteAffixes
     {
-        /// <summary>Every affix ships false here except E2 (Shielded, MV-1281), E5 (Hasted, MV-1282) and
-        /// E3 (Molten, MV-1283) — E4 (Linked) flips its own entry true once it lands.</summary>
+        /// <summary>Every affix ships false here except E2 (Shielded, MV-1281), E5 (Hasted, MV-1282),
+        /// E3 (Molten, MV-1283) and E4 (Linked, MV-1285).</summary>
         public static bool IsImplemented(EliteAffix affix) =>
-            affix == EliteAffix.Shielded || affix == EliteAffix.Hasted || affix == EliteAffix.Molten;
+            affix == EliteAffix.Shielded || affix == EliteAffix.Hasted || affix == EliteAffix.Molten ||
+            affix == EliteAffix.Linked;
 
         public static bool TryParse(string s, out EliteAffix affix) =>
             System.Enum.TryParse(s, ignoreCase: true, out affix);
@@ -80,7 +81,7 @@ namespace MaxWorlds.Enemies
         /// Tractor — Turret is already excluded outright by <see cref="EliteRoll.IsEligibleKind"/>), on
         /// the same "incoherent on a body that never moves" footing. MV-1283 point 1: Molten is excluded
         /// by the identical zero-move-speed test — a robot that never walks can never trail a patch.</summary>
-        private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind)
+        private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind, EliteAffix exclude = EliteAffix.None)
         {
             if (authoredAffixes == null || authoredAffixes.Length == 0) return EliteAffix.None;
 
@@ -97,8 +98,17 @@ namespace MaxWorlds.Enemies
                 implemented.Remove(EliteAffix.Hasted);
                 implemented.Remove(EliteAffix.Molten);
             }
+            if (exclude != EliteAffix.None) implemented.Remove(exclude);
 
             return implemented.Count == 0 ? EliteAffix.None : implemented[Random.Range(0, implemented.Count)];
         }
+
+        /// <summary>MV-1285 point 2: the "no partner in range, or pairing would exceed the area's own
+        /// <see cref="WorldDials.eliteMaxPerArea"/> cap" fallback for a robot that already rolled
+        /// <see cref="EliteAffix.Linked"/> — the same pick <see cref="RollAffix"/> makes for a fresh
+        /// spawn, minus Linked itself (a Linked elite that failed to pair never retries pairing a
+        /// second time as some other affix).</summary>
+        public static EliteAffix RerollExcludingLinked(string[] authoredAffixes, EnemyKind kind) =>
+            RollAffix(authoredAffixes, kind, EliteAffix.Linked);
     }
 }

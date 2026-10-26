@@ -309,6 +309,14 @@ namespace MaxWorlds.VFX
         /// see <see cref="UpdateWelderBeamVfx"/>.</summary>
         private LineRenderer _welderBeamLine;
 
+        /// <summary>A Linked elite's own glowing node (MV-1285 point 6) — built lazily, only while this
+        /// robot actually has a live partner; see <see cref="UpdateLinkTetherVfx"/>.</summary>
+        private Transform _linkNode;
+
+        /// <summary>The pale-gold tether from <see cref="_linkNode"/> to the partner's own node (MV-1285
+        /// point 6) — built lazily; see <see cref="UpdateLinkTetherVfx"/>.</summary>
+        private LineRenderer _linkTetherLine;
+
         /// <summary>The colour the eye is currently burning — the tell, in one value. What a test looks
         /// at to prove the wind-up actually reaches the screen.</summary>
         public Color TellColor => _tellColor;
@@ -875,6 +883,7 @@ namespace MaxWorlds.VFX
             UpdateBeamVfx();
             UpdatePullVfx();
             UpdateWelderBeamVfx();
+            UpdateLinkTetherVfx();
             UpdateTeleportExpand();
             UpdateReefInflate();
 
@@ -1393,6 +1402,83 @@ namespace MaxWorlds.VFX
             lr.shadowCastingMode = ShadowCastingMode.Off;
             lr.receiveShadows = false;
             lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
+            lr.enabled = false;
+            return lr;
+        }
+
+        /// <summary>Ticket's own "pale-gold" node/tether colour.</summary>
+        private static readonly Color LinkTetherColor = new Color(0.85f, 0.70f, 0.30f);
+
+        private const float LinkTetherWidth = 0.09f; // point 6's own ">= 4px wide"
+        private const float LinkNodeHeight = 2.0f;   // point 6's own "on top of each body"
+        private const float LinkNodeRadius = 0.12f;
+
+        /// <summary>MV-1285 point 6: a Linked elite's glowing node + the pale-gold tether to its live
+        /// partner's own node — reuses the Welder/Tractor beam's plain two-point <see cref="LineRenderer"/>
+        /// idiom (point 6's own "do not add a new VFX system") rather than inventing a new tether type.
+        /// Hidden whenever this robot has no live partner (not elite, not Linked, partner dead/broken) —
+        /// node and tether disappear together, same "VFX state driven straight off RobotEnemy's own
+        /// read-only properties" pattern every other per-tick beam here already follows.</summary>
+        private void UpdateLinkTetherVfx()
+        {
+            RobotEnemy partner = (_enemy.IsElite && _enemy.Affix == EliteAffix.Linked) ? _enemy.LinkedPartner : null;
+            if (partner == null || !partner.IsAlive)
+            {
+                if (_linkTetherLine != null) _linkTetherLine.enabled = false;
+                if (_linkNode != null) _linkNode.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_linkNode == null) _linkNode = BuildLinkNode();
+            _linkNode.gameObject.SetActive(true);
+
+            if (_linkTetherLine == null) _linkTetherLine = BuildLinkTetherLine();
+            _linkTetherLine.enabled = true;
+            _linkTetherLine.SetPosition(0, _linkNode.position);
+            _linkTetherLine.SetPosition(1, partner.transform.position + Vector3.up * LinkNodeHeight);
+        }
+
+        /// <summary>The glowing node's small emissive sphere, built once and reused — same
+        /// lazily-built-and-reparented lifetime as <see cref="BuildPullLine"/>/<see cref="BuildWelderBeamLine"/>.</summary>
+        private Transform BuildLinkNode()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "LinkedNode";
+            var col = go.GetComponent<Collider>();
+            if (col != null)
+            {
+                if (Application.isPlaying) Destroy(col);
+                else DestroyImmediate(col);
+            }
+            go.transform.SetParent(_model, worldPositionStays: false);
+            go.transform.localPosition = Vector3.up * LinkNodeHeight;
+            go.transform.localScale = Vector3.one * LinkNodeRadius * 2f;
+
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = VfxMaterials.AdditiveTinted(LinkTetherColor);
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            return go.transform;
+        }
+
+        /// <summary>The node-to-node tether's <see cref="LineRenderer"/>, built once and reused — same
+        /// idiom as <see cref="BuildWelderBeamLine"/>, solid pale-gold rather than dashed.</summary>
+        private LineRenderer BuildLinkTetherLine()
+        {
+            var go = new GameObject("LinkTether");
+            go.transform.SetParent(_model, worldPositionStays: false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 0;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
+            lr.widthMultiplier = LinkTetherWidth;
+            lr.startColor = LinkTetherColor;
+            lr.endColor = LinkTetherColor;
             lr.enabled = false;
             return lr;
         }

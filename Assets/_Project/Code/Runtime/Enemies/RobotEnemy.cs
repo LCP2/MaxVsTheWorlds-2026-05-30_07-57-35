@@ -409,6 +409,12 @@ namespace MaxWorlds.Enemies
             ClearMoltenPatches();
             _moltenPatchTimer = 0f;
             _moltenLastPatchPos = transform.position;
+            // MV-1285: a pooled instance must not carry a previous life's Linked pairing/revenge
+            // countdown forward either — same "pooled robot, last life leaks forward" footing as the
+            // Molten trail immediately above.
+            BreakLink();
+            _linkPairingAttempted = false;
+            _linkReviveTimer = -1f;
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -832,6 +838,29 @@ namespace MaxWorlds.Enemies
         /// See <see cref="IsElite"/>.</summary>
         public EliteAffix Affix { get; private set; }
 
+        /// <summary>MV-1285: the other half of this Linked pair, or null if this robot never paired
+        /// (point 2's "reroll"/"plain elite" fallback), its partner is dead, or the tether has snapped
+        /// (point 5's distance break, or point 4's death). See <see cref="TryEstablishLink"/>,
+        /// <see cref="BreakLink"/>, <see cref="TickLinked"/>.</summary>
+        public RobotEnemy LinkedPartner { get; private set; }
+
+        /// <summary>Point 2's own "nearest robot ... within 8 m".</summary>
+        private const float LinkSearchRadius = 8f;
+
+        /// <summary>Point 5's own "more than 12 m apart".</summary>
+        private const float LinkBreakDistance = 12f;
+
+        /// <summary>Point 4's own "3 s countdown ring".</summary>
+        private const float LinkReviveSeconds = 3f;
+
+        /// <summary>True once this robot has run its one-time Linked pairing search (see
+        /// <see cref="TryEstablishLink"/>) — never retried, whichever way it resolved.</summary>
+        private bool _linkPairingAttempted;
+
+        /// <summary>Counting down to a revenge heal while &gt;= 0 (point 4); -1 means no countdown is
+        /// running. Started by this robot's own Linked partner's <see cref="Die"/>.</summary>
+        private float _linkReviveTimer = -1f;
+
         /// <summary>How many robots in <see cref="_active"/> are a LIVE elite (alive, <see cref="IsElite"/>)
         /// in <paramref name="areaIndex"/> right now — what <see cref="MaxWorlds.Enemies.EliteRoll.TryRoll"/>
         /// checks against a world's <see cref="MaxWorlds.Arena.WorldDials.eliteMaxPerArea"/> before
@@ -1041,6 +1070,10 @@ namespace MaxWorlds.Enemies
             ClearMoltenPatches();
             // MV-1284 point 4: a captured Projector's dome drops at once, same as on death.
             CollapseDomeVisual();
+            // MV-1285: a captured Linked elite's tether snaps too, same as on death — "not captured"
+            // is one of the partner-eligibility conditions in TryEstablishLink, so this also keeps a
+            // captured ally from ever being picked as a fresh pairing candidate.
+            BreakLink();
             _converted.Add(this);
             return true;
         }
@@ -1383,6 +1416,119 @@ namespace MaxWorlds.Enemies
                 if (p != null) p.Expire();
             }
             _moltenPatches.Clear();
+        }
+
+        // --- MV-1285: Linked elite pairing, shared damage, revenge heal -------------------------
+
+        /// <summary>Point 2/4/5's per-tick bookkeeping for a live Linked elite — see
+        /// <see cref="TryEstablishLink"/> (pairing, attempted once), the distance break below (point 5)
+        /// and the revenge-heal countdown below (point 4, started by the partner's own
+        /// <see cref="BeginLinkRevengeCountdown"/>).
+        ///
+        /// Public (MV-1015's own "public, not reflection-driven" convention for a per-state Tick* method
+        /// a test needs to drive directly) so an EditMode test can exercise pairing and the revenge-heal
+        /// countdown without also pulling in <see cref="Tick"/>'s own gravity/CharacterController
+        /// machinery, same reasoning <see cref="TickMolten"/> already documents for itself.</summary>
+        public void TickLinked(float dt)
+        {
+            if (!_linkPairingAttempted)
+            {
+                _linkPairingAttempted = true;
+                TryEstablishLink();
+            }
+
+            if (LinkedPartner != null)
+            {
+                if (!LinkedPartner.IsAlive)
+                    LinkedPartner = null;
+                else if (Vector3.Distance(transform.position, LinkedPartner.transform.position) > LinkBreakDistance)
+                    BreakLink(); // point 5: the break is permanent — nothing re-pairs them later.
+            }
+
+            if (_linkReviveTimer >= 0f)
+            {
+                _linkReviveTimer -= dt;
+                if (_linkReviveTimer <= 0f)
+                {
+                    _linkReviveTimer = -1f;
+                    if (IsAlive)
+                    {
+                        // Point 4: "heals to full max health and is no longer Linked."
+                        _health = maxHealth;
+                        Affix = EliteAffix.None;
+                    }
+                }
+            }
+        }
+
+        /// <summary>Point 2: the one-time pairing search, run from <see cref="TickLinked"/> on this
+        /// robot's first tick after spawn — not from <see cref="Apply"/> itself, since
+        /// <see cref="AreaIndex"/> is reset to 0 there and only stamped with the real value by the
+        /// spawner AFTER <c>Apply</c> returns (see <c>Apply</c>'s own doc comment), so a search at
+        /// Apply-time would always come up empty. Picks the nearest live, non-elite, non-converted,
+        /// elite-eligible-kind robot in this robot's own <see cref="AreaIndex"/> within
+        /// <see cref="LinkSearchRadius"/> — same "_active registry walk, nearest candidate" idiom as
+        /// <see cref="IsProtectedByAnyDome"/>. If pairing would push the area over its own
+        /// <see cref="WorldDials.eliteMaxPerArea"/> cap, or no eligible candidate exists at all, falls
+        /// back to another implemented affix (or a plain elite) via
+        /// <see cref="EliteRoll.RerollExcludingLinked"/> — the ticket's own "reroll among the world's
+        /// other implemented affixes; if none fit, plain elite."</summary>
+        private void TryEstablishLink()
+        {
+            RobotEnemy best = null;
+            float bestSq = LinkSearchRadius * LinkSearchRadius;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r == null || r == this || !r.IsAlive || r.IsElite || r.IsConverted) continue;
+                if (r.AreaIndex != AreaIndex || !EliteRoll.IsEligibleKind(r.Kind)) continue;
+                float sq = (r.transform.position - transform.position).sqrMagnitude;
+                if (sq > bestSq) continue;
+                bestSq = sq;
+                best = r;
+            }
+
+            WorldDials dials = FindFirstObjectByType<AreaAccumulationDirector>()?.ActiveWorldConfig?.dials;
+            int cap = dials != null ? Mathf.Max(0, dials.eliteMaxPerArea) : int.MaxValue;
+
+            if (best != null && LiveEliteCountInArea(AreaIndex) < cap)
+            {
+                best.PromoteToLinkedPartner(this);
+                LinkedPartner = best;
+                return;
+            }
+
+            Affix = dials != null ? EliteRoll.RerollExcludingLinked(dials.eliteAffixes, Kind) : EliteAffix.None;
+        }
+
+        /// <summary>Point 2: turns an ordinary robot into this Linked elite's paired partner —
+        /// "the partner's marking/HP/drop are as for any elite," i.e. the same <see cref="IsElite"/>
+        /// health-multiplier treatment <see cref="Apply"/> gives a freshly-rolled elite (healed to full
+        /// on promotion, same as a fresh elite spawn always starts full).</summary>
+        private void PromoteToLinkedPartner(RobotEnemy initiator)
+        {
+            IsElite = true;
+            Affix = EliteAffix.Linked;
+            maxHealth *= EliteRoll.MaxHealthMultiplier;
+            _health = maxHealth;
+            _linkPairingAttempted = true; // never runs its own search — it's already paired.
+            LinkedPartner = initiator;
+        }
+
+        /// <summary>Point 4: starts this survivor's revenge-heal countdown — called by its partner's
+        /// own <see cref="Die"/> the instant the tether snaps. See <see cref="TickLinked"/> for where
+        /// the countdown is actually ticked down and resolved.</summary>
+        private void BeginLinkRevengeCountdown() => _linkReviveTimer = LinkReviveSeconds;
+
+        /// <summary>Severs this robot's Linked tether, if any — both sides lose the reference, so
+        /// <see cref="TakeDamage"/>'s split and <see cref="TickLinked"/>'s break/revenge logic both stop
+        /// touching the other. Called from <see cref="Die"/>, <see cref="TryConvert"/>, <see cref="Apply"/>
+        /// (pooled-instance hygiene) and <see cref="TickLinked"/>'s own point-5 distance break.</summary>
+        private void BreakLink()
+        {
+            if (LinkedPartner != null && LinkedPartner.LinkedPartner == this)
+                LinkedPartner.LinkedPartner = null;
+            LinkedPartner = null;
         }
 
         [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
@@ -2147,6 +2293,12 @@ namespace MaxWorlds.Enemies
             // Recover/Search included), same "ticked regardless of state" footing as the Shielded facing
             // tick immediately above — a captured Molten elite's own trail is suppressed (Team.Enemy).
             if (IsElite && Affix == EliteAffix.Molten && Team == Team.Enemy) TickMolten(dt);
+
+            // MV-1285: a Linked elite's pairing/break/revenge bookkeeping ticks regardless of Current
+            // state too, same "ticked regardless of state" footing as the Shielded facing/Molten trail
+            // ticks immediately above — a captured Linked elite's own affix behaviour is suppressed
+            // (Team.Enemy).
+            if (IsElite && Affix == EliteAffix.Linked && Team == Team.Enemy) TickLinked(dt);
 
             // MV-1284 point 1: a live, un-captured Projector's own dome recentres regardless of
             // Current state, same "ticked regardless of state" footing as the Shielded facing/
@@ -4469,11 +4621,36 @@ namespace MaxWorlds.Enemies
             // multiplies it back down for a hit that arrived from in front — see
             // DredgeHulkFrontArcMultiplier's own doc comment.
             float amount = info.Amount * DamageTakenMultiplier * DredgeHulkFrontArcMultiplier(info.Direction);
+            // MV-1285 point 3: a live Linked elite splits every hit it takes 50/50 with its partner —
+            // half stays on THIS robot through the rest of this normal path (the multipliers above
+            // already applied), half forwarded directly to the partner's health via
+            // ApplyLinkedDamageShare, which never re-enters TakeDamage (point 3's own "without
+            // re-splitting — no recursion"). A captured elite's own Team flips off Enemy, which
+            // suppresses this the same way it already suppresses every other affix behaviour.
+            if (IsElite && Affix == EliteAffix.Linked && Team == Team.Enemy &&
+                LinkedPartner != null && LinkedPartner.IsAlive)
+            {
+                amount *= 0.5f;
+                LinkedPartner.ApplyLinkedDamageShare(amount);
+            }
             _health -= amount;
             // Floating damage number (YT-30 HUD). No-op if nothing is listening (tests).
             HudSignals.EmitDamage(transform.position, amount);
             if (_health <= 0f) Die(info.Direction);
             else SetTell(Color.white); // brief hit flash; next state tick restores
+        }
+
+        /// <summary>MV-1285 point 3: applies this robot's HALF of its Linked partner's hit directly to
+        /// health — no Shielded/dome gating, no further multipliers, and (critically) no re-entry into
+        /// <see cref="TakeDamage"/>'s own Linked-split check, so a shared hit can never recurse into a
+        /// third share. Called only by the other half of the pair, from its own <see cref="TakeDamage"/>.</summary>
+        private void ApplyLinkedDamageShare(float amount)
+        {
+            if (!IsAlive) return;
+            _health -= amount;
+            HudSignals.EmitDamage(transform.position, amount);
+            if (_health <= 0f) Die(Vector3.forward);
+            else SetTell(Color.white);
         }
 
         private void Die(Vector3 fromDir, bool grantsDrops = true)
@@ -4493,6 +4670,11 @@ namespace MaxWorlds.Enemies
             ClearMoltenPatches();
             // MV-1284 point 4: this robot's own dome (if any) drops at once.
             CollapseDomeVisual();
+            // MV-1285 point 4: this robot's death snaps the Linked tether and starts its live
+            // partner's own revenge-heal countdown — read LinkedPartner BEFORE BreakLink clears it.
+            if (IsElite && Affix == EliteAffix.Linked && LinkedPartner != null && LinkedPartner.IsAlive)
+                LinkedPartner.BeginLinkRevengeCountdown();
+            BreakLink();
             Current = State.Dead;
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).
