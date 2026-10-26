@@ -350,6 +350,7 @@ namespace MaxWorlds.Enemies
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
             _projectorRetargetTimer = 0f; // MV-1279: nor a previous Projector life's stale retarget countdown
+            _jammerRetargetTimer = 0f; // MV-1280: nor a previous Jammer life's stale retarget countdown
             // MV-1217: a pooled instance must not carry a previous Dreadnought life's turret cycle
             // phase/aim into this one — re-seeded by TickDreadnoughtTurrets on its first tick either way.
             _dreadnoughtTurretA = default;
@@ -2008,8 +2009,11 @@ namespace MaxWorlds.Enemies
                     // "never attacks Max or sentinels"). See EnemyArchetype.Welder's own doc comment.
                     // MV-1279: the Shield Projector never chases Max either — it hangs back behind its
                     // own pack instead. See TickProjectorHangBack's own doc comment.
+                    // MV-1280: the Jammer never chases Max either — it approaches to a standoff and
+                    // circles instead. See TickJammerApproach's own doc comment.
                     case State.Chase:    if (Kind == EnemyKind.Welder) TickWelderRepair(dt);
                                          else if (Kind == EnemyKind.Projector) TickProjectorHangBack(dt);
+                                         else if (Kind == EnemyKind.Jammer) TickJammerApproach(dt);
                                          else TickChase(dt); break;
                     case State.Search:   TickSearch(dt);   break;
                     case State.Telegraph: TickTelegraph(dt); break;
@@ -3559,6 +3563,100 @@ namespace MaxWorlds.Enemies
             if (dist > 0.001f) return away / dist;
             Vector3 fwd = transform.forward; fwd.y = 0f;
             return fwd.sqrMagnitude > 0.001f ? fwd.normalized : Vector3.forward;
+        }
+
+        // --- MV-1280: Jammer approach-then-circle movement --------------------------------------
+
+        /// <summary>The ticket's own "approach Max to 4 m" standoff radius — both the distance the
+        /// Jammer closes to before it starts circling, and the radius it then holds while circling.</summary>
+        private const float JammerStandoffRadius = 4f;
+
+        /// <summary>The ticket's own "(&#8804; 30&#176;/s)" circling CEILING — not the rate the goal is
+        /// actually advanced by. At <see cref="JammerStandoffRadius"/>, 30&#176;/s needs ~2.1 m/s
+        /// tangential, which exceeds the Jammer's own 1.0 m/s <see cref="EnemyArchetype.MoveSpeed"/> —
+        /// forcing the full 30&#176;/s onto the goal regardless would make the Jammer chronically chase a
+        /// point it can never reach, which is exactly a pure-pursuit spiral: it cuts every corner and
+        /// settles orbiting at <c>EffectiveMoveSpeed / angularRateInRadians</c> (measured: forcing a flat
+        /// 30&#176;/s here converged the AC1 test to ~1.9 m, not the ticket's own 3.5-4.5 m band). See
+        /// <see cref="TickJammerApproach"/>'s own doc comment for the fix.</summary>
+        private const float JammerCircleSpeedCapDegPerSec = 30f;
+
+        /// <summary>How often <see cref="TickJammerApproach"/> re-picks its goal — same throttled-decision
+        /// idiom as <see cref="ProjectorRetargetInterval"/>, so the goal doesn't recompute every frame.</summary>
+        private const float JammerRetargetInterval = 0.25f;
+
+        private float _jammerRetargetTimer;
+
+        /// <summary>The Jammer's own live goal bearing around Max, degrees, 0 along +Z (same convention
+        /// as <see cref="BearingDegrees"/>) — recomputed FRESH from the Jammer's own actual live bearing
+        /// every retarget (see <see cref="TickJammerApproach"/>'s own doc comment for why it is never
+        /// carried forward as an independent accumulator), then held steady between retargets so the
+        /// waypoint/movement below has a stable goal to walk toward.</summary>
+        private float _jammerAngleDeg;
+
+        /// <summary>Replaces the whole Chase/Telegraph/Lunge pipeline for <see cref="EnemyKind.Jammer"/>
+        /// (dispatched from <see cref="TickBody"/>'s own switch, same footing as
+        /// <see cref="TickWelderRepair"/>/<see cref="TickProjectorHangBack"/>) — this kind never attacks
+        /// Max or a Sentinel either, per <see cref="EnemyArchetype.Jammer"/>'s own doc comment, so there
+        /// is nothing here to wind up or commit to. Re-picks its goal every
+        /// <see cref="JammerRetargetInterval"/>, the same throttled idiom <see cref="TickProjectorHangBack"/>
+        /// already uses. The goal is always a point exactly <see cref="JammerStandoffRadius"/> from Max:
+        /// while further out than that radius its bearing is the Jammer's own CURRENT live bearing (a
+        /// straight approach); once inside, its bearing is the Jammer's own CURRENT live bearing PLUS one
+        /// retarget's worth of angular advance — deliberately re-measured from the Jammer's actual
+        /// position every single retarget, NEVER accumulated independently of it, because an
+        /// independently-accumulated angle that outruns what <see cref="EnemyArchetype.MoveSpeed"/> can
+        /// physically close against compounds every cycle into an ever-growing lead, which is exactly a
+        /// pure-pursuit spiral (see <see cref="JammerCircleSpeedCapDegPerSec"/>'s own doc comment for the
+        /// measured defect this replaced). The angular advance itself is whatever
+        /// <see cref="EnemyArchetype.MoveSpeed"/> can actually sustain tangentially at this radius
+        /// (<c>EffectiveMoveSpeed / radius</c>, converted to degrees), capped at the ticket's own
+        /// "&#8804; 30&#176;/s" — so the goal's tangential chord each retarget is within one retarget's
+        /// own walkable distance of the Jammer's current position, and the orbit holds its radius instead
+        /// of cutting corners inward. The same single formula naturally covers both the ticket's own
+        /// "approach to 4 m" and "then circle" phases, with no separate state machine between them. Paths
+        /// to that goal with the existing A* (<see cref="EnemyNavigation.Waypoint"/>, no new pathing —
+        /// the ticket's own "pathing with EnemyNavigation.Waypoint") and moves with the same direct
+        /// RotateToward+<see cref="CharacterControllerMotion.SafeMove"/> step every other simple mover in
+        /// this file uses (<see cref="TickWelderRepair"/>/<see cref="TickProjectorHangBack"/>).</summary>
+        private void TickJammerApproach(float dt)
+        {
+            if (target == null) { AcquireTarget(); return; }
+
+            Vector3 maxPos = target.position; maxPos.y = 0f;
+            Vector3 here = transform.position; here.y = 0f;
+
+            _jammerRetargetTimer -= dt;
+            if (_jammerRetargetTimer <= 0f)
+            {
+                _jammerRetargetTimer = JammerRetargetInterval;
+                float dist = Vector3.Distance(here, maxPos);
+                float liveBearing = BearingDegrees(maxPos, here);
+                if (dist > JammerStandoffRadius)
+                {
+                    _jammerAngleDeg = liveBearing;
+                }
+                else
+                {
+                    float achievableDegPerSec = Mathf.Min(JammerCircleSpeedCapDegPerSec,
+                        (EffectiveMoveSpeed / JammerStandoffRadius) * Mathf.Rad2Deg);
+                    _jammerAngleDeg = liveBearing + achievableDegPerSec * JammerRetargetInterval;
+                }
+            }
+
+            float rad = _jammerAngleDeg * Mathf.Deg2Rad;
+            Vector3 dirFromMax = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
+            Vector3 goal = maxPos + dirFromMax * JammerStandoffRadius;
+
+            Vector3 waypoint = EnemyNavigation.Waypoint(here, goal);
+            Vector3 step = waypoint - here; step.y = 0f;
+            float stepDist = step.magnitude;
+            if (stepDist <= 0.001f) return;
+
+            Vector3 dir = step / stepDist;
+            RotateToward(dir, dt);
+            float moveStep = Mathf.Min(EffectiveMoveSpeed * dt, stepDist);
+            CharacterControllerMotion.SafeMove(_cc, dir * moveStep);
         }
 
         // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------

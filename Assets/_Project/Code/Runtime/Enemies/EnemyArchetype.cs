@@ -15,7 +15,8 @@ namespace MaxWorlds.Enemies
     // Tractor (MV-1238) follows it too — a stationary emitter-dish that hauls Max in on a beam, appended after Breaker.
     // Welder (MV-1244) follows it too — a small repair drone that never attacks, appended after Tractor.
     // Projector (MV-1279) follows it too — a hang-back support drone that never attacks, appended after Welder.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector }
+    // Jammer (MV-1280) follows it too — a standoff-circling drone that never attacks, appended after Projector.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector, Jammer }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -46,6 +47,7 @@ namespace MaxWorlds.Enemies
                 case "tractor": kind = EnemyKind.Tractor; return true;
                 case "welder": kind = EnemyKind.Welder; return true;
                 case "projector": kind = EnemyKind.Projector; return true;
+                case "jammer": kind = EnemyKind.Jammer; return true;
                 default: kind = default; return false;
             }
         }
@@ -694,6 +696,32 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "SHIELD PROJECTOR");
 
+        /// <summary>
+        /// Jammer (MV-1280): a squat support drone that never attacks Max or a Sentinel at all —
+        /// its whole threat is the field it projects (MV-1286, explicitly out of scope here; this
+        /// ticket is the kind, its stats and its approach/circle movement only). 60 HP, no contact
+        /// damage (<see cref="ContactDamage"/> 0, <see cref="RobotEnemy"/>'s own contact-touch tick is
+        /// never reached) — <see cref="RobotEnemy.TickBody"/> never dispatches this kind into
+        /// Telegraph/Lunge at all (see <see cref="RobotEnemy.TickJammerApproach"/>), per the ticket's
+        /// own "never attacks". <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/<see cref="LungeTime"/>/
+        /// <see cref="RecoverTime"/> are unread — this body never reaches Telegraph/Lunge/Recover — kept
+        /// at nominal values rather than 0 only for readability, the same footing
+        /// <see cref="Dreadnought"/>/<see cref="Tractor"/>/<see cref="Welder"/>/<see cref="Projector"/>'s
+        /// own doc comments explain. The approach-then-circle movement itself (4 m standoff, ≤30°/s)
+        /// is driven by <see cref="RobotEnemy.TickJammerApproach"/>'s own authored constants, not by any
+        /// field here. Drops as a Bruiser — not <see cref="EnemyKind.Rusher"/>/<see cref="EnemyKind.Skitter"/>/
+        /// <see cref="EnemyKind.Welder"/>, so <see cref="IsLarge"/> already grants it the ordinary
+        /// large-tier roll with no extra code, matching the ticket's own "IsLarge (true)".
+        /// </summary>
+        public static EnemyArchetype Jammer => new EnemyArchetype(
+            EnemyKind.Jammer, EnemyShape.Capsule, new Vector3(0.9f, 0.6f, 0.9f),
+            colliderHeight: 1.1f, colliderRadius: 0.45f,   // squat, drum-bodied — per the design image
+            moveSpeed: 1.0f, maxHealth: 60f,
+            contactDamage: 0f, contactRadius: 0.5f,
+            lungeRange: 2.2f, telegraphTime: 0.3f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
+            knockbackDecay: 28f,
+            displayName: "JAMMER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -713,6 +741,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Tractor => Tractor,
             EnemyKind.Welder => Welder,
             EnemyKind.Projector => Projector,
+            EnemyKind.Jammer => Jammer,
             _ => Rusher,
         };
 

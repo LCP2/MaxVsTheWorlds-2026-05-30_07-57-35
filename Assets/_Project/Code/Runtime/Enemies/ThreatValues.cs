@@ -78,6 +78,13 @@ namespace MaxWorlds.Enemies
         /// shields it ships in P2), where the Welder only ever heals a structure.</summary>
         public const float Projector = 1.4f;
 
+        /// <summary>MV-1280: the ticket's own authored THV — a 60 HP support drone that deals no
+        /// damage of its own, priced above the Projector's 1.4 on the same placeholder footing: it is
+        /// tankier (60 HP vs 40) and its field (MV-1286, blocking Max's abilities and pausing
+        /// Sentinels) will disrupt more than the Projector's pack-shield once it ships, even though
+        /// that field itself is out of scope here.</summary>
+        public const float Jammer = 1.6f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -97,6 +104,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Tractor => Tractor,
             EnemyKind.Welder => Welder,
             EnemyKind.Projector => Projector,
+            EnemyKind.Jammer => Jammer,
             _ => Rusher,
         };
     }

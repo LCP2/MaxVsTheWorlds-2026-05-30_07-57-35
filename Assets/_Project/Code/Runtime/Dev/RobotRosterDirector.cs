@@ -44,6 +44,9 @@ namespace MaxWorlds.Dev
     ///
     /// MV-1279 adds a sixth extra shot the same way (<see cref="CaptureProjectorPair"/>): the Shield
     /// Projector next to a Rusher, for scale -- written to <c>projector_pair.png</c>.
+    ///
+    /// MV-1280 adds a seventh extra shot the same way (<see cref="CaptureJammerPair"/>): the Jammer
+    /// next to a Rusher, for scale -- written to <c>jammer_pair.png</c>.
     /// </summary>
     public sealed class RobotRosterDirector : MonoBehaviour
     {
@@ -86,6 +89,12 @@ namespace MaxWorlds.Dev
         private const float ProjectorPairPitch = 55f;
         private const float ProjectorPairDistance = 8.5f;
         private const float ProjectorPairSpacing = 2f;   // metres between the two robots' centres
+
+        /// <summary>MV-1280 AC2's own framing — same close pairing as <see cref="MothershipPairPitch"/>,
+        /// since the Jammer's 1.1 m squat drum is close in scale to the Rusher it's paired with.</summary>
+        private const float JammerPairPitch = 60f;
+        private const float JammerPairDistance = 4.5f;
+        private const float JammerPairSpacing = 1.8f;   // metres between the two robots' centres
 
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
@@ -168,6 +177,7 @@ namespace MaxWorlds.Dev
             yield return CaptureMothershipPair(cam, focusBase);
             yield return CaptureMothershipPair2(cam, focusBase);
             yield return CaptureProjectorPair(cam, focusBase);
+            yield return CaptureJammerPair(cam, focusBase);
 
             Finish();
         }
@@ -348,6 +358,37 @@ namespace MaxWorlds.Dev
             {
                 if (rusher != null) Destroy(rusher);
                 if (projector != null) Destroy(projector);
+            }
+        }
+
+        /// <summary>MV-1280 AC2 — the Jammer next to a Rusher, for scale: one extra shot appended the
+        /// same way as every pair above, using the base roster's <see cref="EnemyArchetype.Of"/> forms
+        /// (no mothership-specific skin for either kind) on the ordinary focus spot, not a dedicated
+        /// floor — same footing as <see cref="CaptureProjectorPair"/>.</summary>
+        private IEnumerator CaptureJammerPair(Camera cam, Vector3 focusBase)
+        {
+            GameObject rusher = null, jammer = null;
+            try
+            {
+                Vector3 rusherPos = focusBase + Vector3.left * (JammerPairSpacing * 0.5f);
+                Vector3 jammerPos = focusBase + Vector3.right * (JammerPairSpacing * 0.5f);
+
+                rusher = BuildRobot(EnemyKind.Rusher, rusherPos);
+                jammer = BuildRobot(EnemyKind.Jammer, jammerPos);
+                for (int i = 0; i < 3; i++) yield return null;   // let both rigs' build settle on screen
+
+                var rot = Quaternion.Euler(JammerPairPitch, 0f, 0f);
+                Vector3 focus = (rusherPos + jammerPos) * 0.5f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * JammerPairDistance, rot);
+
+                yield return null;
+                yield return null;
+                Capture(cam, "jammer_pair");
+            }
+            finally
+            {
+                if (rusher != null) Destroy(rusher);
+                if (jammer != null) Destroy(jammer);
             }
         }
 
