@@ -76,7 +76,19 @@ namespace MaxWorlds.Enemies
             // MV-705: a Sludge Drone is immune to sludge slow — its own map-authored puddles AND its
             // own death puddle (SludgePuddle) both flow through MapSlowZones, so exempting it here
             // covers both at once rather than needing a separate check per source.
-            (Kind == EnemyKind.Sludger ? 1f : MapSlowZones.Instance.SpeedMultiplierAt(transform.position));
+            (Kind == EnemyKind.Sludger ? 1f : MapSlowZones.Instance.SpeedMultiplierAt(transform.position)) *
+            HastedMoveSpeedMultiplier;
+
+        /// <summary>MV-1282 point 2: a Hasted elite's walking/chase speed is x1.4 — folded into
+        /// <see cref="EffectiveMoveSpeed"/>, the one read point every walk/chase site already uses
+        /// (<see cref="TickChase"/>'s own Charger exception reads <see cref="lungeSpeed"/> directly
+        /// instead, so a lunge/charge is never touched by this, per the ticket's own "NOT to
+        /// lunge/charge speed"). Same Team.Enemy suppression footing as
+        /// <see cref="ShieldedFrontArcMultiplier"/> — a captured Hasted elite loses the speed bonus
+        /// along with every other affix behaviour.</summary>
+        private const float HastedSpeedMultiplier = 1.4f;
+        private float HastedMoveSpeedMultiplier =>
+            (IsElite && Affix == EliteAffix.Hasted && Team == Team.Enemy) ? HastedSpeedMultiplier : 1f;
         [SerializeField] private float gravity = 20f;
 
         /// <summary>Minimum spacing this robot keeps from other active robots while chasing (MV-321),
@@ -367,7 +379,9 @@ namespace MaxWorlds.Enemies
             // separate heal-up call.
             IsElite = a.Elite;
             Affix = a.Affix;
-            if (IsElite) maxHealth *= EliteRoll.MaxHealthMultiplier;
+            // MV-1282 point 3: a Hasted elite does NOT get the x2.0 health bonus — its max health
+            // stays its kind's normal resolved value, the speed is the whole trade-off.
+            if (IsElite && Affix != EliteAffix.Hasted) maxHealth *= EliteRoll.MaxHealthMultiplier;
             ResetState();   // clears IsSplicer (a pooled robot's last life) before the stamp below
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
@@ -2266,7 +2280,8 @@ namespace MaxWorlds.Enemies
             // MV-1278: re-applied here too (point 5) — this robot's own IsElite, stamped once at spawn
             // by Apply and never touched since, not a.Elite (Retoughen's caller re-stamps a DORMANT
             // garrison robot's toughness from a fresh archetype; it never re-rolls elite status).
-            if (IsElite) maxHealth *= EliteRoll.MaxHealthMultiplier;
+            // MV-1282 point 3: Hasted is exempt, same as Apply above.
+            if (IsElite && Affix != EliteAffix.Hasted) maxHealth *= EliteRoll.MaxHealthMultiplier;
             contactDamage = a.ContactDamage;
             touchDamage = a.TouchDamage;
             _health = maxHealth;

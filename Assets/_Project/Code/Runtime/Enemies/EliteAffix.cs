@@ -16,9 +16,9 @@ namespace MaxWorlds.Enemies
     /// than refusing to roll at all.</summary>
     public static class EliteAffixes
     {
-        /// <summary>Every affix ships false here except E2 (Shielded), flipped by MV-1281 — E3
-        /// (Molten), E4 (Linked) and E5 (Hasted) each flip their own entry true once they land.</summary>
-        public static bool IsImplemented(EliteAffix affix) => affix == EliteAffix.Shielded;
+        /// <summary>Every affix ships false here except E2 (Shielded, MV-1281) and E5 (Hasted,
+        /// MV-1282) — E3 (Molten) and E4 (Linked) each flip their own entry true once they land.</summary>
+        public static bool IsImplemented(EliteAffix affix) => affix == EliteAffix.Shielded || affix == EliteAffix.Hasted;
 
         public static bool TryParse(string s, out EliteAffix affix) =>
             System.Enum.TryParse(s, ignoreCase: true, out affix);
@@ -74,7 +74,10 @@ namespace MaxWorlds.Enemies
         /// than tanking a front-arc hit, so a shield plate would be incoherent on it) — filtered out of
         /// the candidate list before the pick rather than rerolled after, which lands the same
         /// "reroll among the world's other implemented affixes" distribution the ticket asks for,
-        /// since every candidate left is drawn uniformly either way.</summary>
+        /// since every candidate left is drawn uniformly either way. MV-1282 point 1: Hasted is never
+        /// given to a kind whose archetype <see cref="EnemyArchetype.MoveSpeed"/> is 0 (today just
+        /// Tractor — Turret is already excluded outright by <see cref="EliteRoll.IsEligibleKind"/>), on
+        /// the same "incoherent on a body that never moves" footing.</summary>
         private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind)
         {
             if (authoredAffixes == null || authoredAffixes.Length == 0) return EliteAffix.None;
@@ -87,6 +90,7 @@ namespace MaxWorlds.Enemies
             }
 
             if (kind == EnemyKind.Blinker) implemented.Remove(EliteAffix.Shielded);
+            if (EnemyArchetype.Of(kind).MoveSpeed <= 0f) implemented.Remove(EliteAffix.Hasted);
 
             return implemented.Count == 0 ? EliteAffix.None : implemented[Random.Range(0, implemented.Count)];
         }
