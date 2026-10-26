@@ -55,11 +55,16 @@ namespace MaxWorlds.VFX
         /// plate at all (same optional-material idiom as <see cref="Hazard"/>).</summary>
         public readonly Material Shield;
 
+        /// <summary>MV-1282: the Hasted elite's own light-steel swept fins — null unless this robot
+        /// actually rolled the affix, same optional-material idiom as <see cref="Shield"/>.</summary>
+        public readonly Material Hasted;
+
         public RobotPalette(Material warm, Material cool, Material dark, Material gold,
-                            Material hazard = null, Material accent = null, Material shield = null)
+                            Material hazard = null, Material accent = null, Material shield = null,
+                            Material hasted = null)
         {
             Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard; Accent = accent;
-            Shield = shield;
+            Shield = shield; Hasted = hasted;
         }
     }
 
@@ -142,6 +147,10 @@ namespace MaxWorlds.VFX
             // stormdrain band immediately above, so it reads identically whichever kind rolled it.
             if (p.Shield != null) AddShieldedPlate(kind, visualRoot, p);
 
+            // MV-1282: the Hasted elite's own backward-swept fins — same "layered on, never a
+            // silhouette change" footing as the Shielded plate immediately above.
+            if (p.Hasted != null) AddHastedFins(kind, visualRoot, p);
+
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null,
                             breakerChainPivot, breakerChainEnd, breakerWallAnchor);
         }
@@ -187,6 +196,33 @@ namespace MaxWorlds.VFX
 
             Add(root, CharacterMeshes.Bevelled(new Vector3(plateWidth, plateHeight, 0.08f), 0.06f),
                 p.Shield, new Vector3(0f, y, z), Quaternion.identity, Vector3.one, "ShieldedPlate");
+        }
+
+        /// <summary>MV-1282 point 4: the Hasted elite's own tell — two light-steel fins on the body's
+        /// shoulders, ~0.6 m long per the ticket's design image, swept back 35 degrees off the body's
+        /// sides so they read as "built for speed" rather than armour plating (which is what
+        /// <see cref="AddShieldedPlate"/>'s flat forward-facing panel reads as). Mounted at shoulder
+        /// height on both sides, same mirrored-pair placement idiom as every kind's own arm pair.
+        /// Layered on top of whichever kind's own silhouette <see cref="Build"/> just built — never a
+        /// silhouette change, same footing as the shielded plate.</summary>
+        private static void AddHastedFins(EnemyKind kind, Transform root, in RobotPalette p)
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            const float finLength = 0.6f;
+            const float finHeight = 0.16f;
+            const float finThickness = 0.04f;
+            const float sweepDeg = 35f; // swept back off the body's sides, per the design image
+            float y = archetype.ColliderHeight * 0.55f;
+            float x = archetype.ColliderRadius * 0.85f;
+            float z = -archetype.ColliderRadius * 0.15f; // mounted slightly aft of centre
+
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Quaternion rot = Quaternion.Euler(0f, side * (90f + sweepDeg), 0f);
+                Add(root, CharacterMeshes.Bevelled(new Vector3(finLength, finHeight, finThickness), 0.015f),
+                    p.Hasted, new Vector3(side * x, y, z), rot, Vector3.one,
+                    side < 0f ? "HastedFinLeft" : "HastedFinRight");
+            }
         }
 
         /// <summary>MV-669 revision 3: reverting Max's own +10% scale-up re-exposed a pre-existing
