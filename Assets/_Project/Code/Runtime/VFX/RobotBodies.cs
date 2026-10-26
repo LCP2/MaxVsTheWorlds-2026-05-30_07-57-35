@@ -59,12 +59,16 @@ namespace MaxWorlds.VFX
         /// actually rolled the affix, same optional-material idiom as <see cref="Shield"/>.</summary>
         public readonly Material Hasted;
 
+        /// <summary>MV-1283: the Molten elite's own glowing vent slots — null unless this robot actually
+        /// rolled the affix, same optional-material idiom as <see cref="Shield"/>/<see cref="Hasted"/>.</summary>
+        public readonly Material Molten;
+
         public RobotPalette(Material warm, Material cool, Material dark, Material gold,
                             Material hazard = null, Material accent = null, Material shield = null,
-                            Material hasted = null)
+                            Material hasted = null, Material molten = null)
         {
             Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard; Accent = accent;
-            Shield = shield; Hasted = hasted;
+            Shield = shield; Hasted = hasted; Molten = molten;
         }
     }
 
@@ -151,6 +155,10 @@ namespace MaxWorlds.VFX
             // silhouette change" footing as the Shielded plate immediately above.
             if (p.Hasted != null) AddHastedFins(kind, visualRoot, p);
 
+            // MV-1283: the Molten elite's own glowing vent slots — same "layered on, never a
+            // silhouette change" footing as the Shielded plate/Hasted fins immediately above.
+            if (p.Molten != null) AddMoltenVents(kind, visualRoot, p);
+
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null,
                             breakerChainPivot, breakerChainEnd, breakerWallAnchor);
         }
@@ -222,6 +230,29 @@ namespace MaxWorlds.VFX
                 Add(root, CharacterMeshes.Bevelled(new Vector3(finLength, finHeight, finThickness), 0.015f),
                     p.Hasted, new Vector3(side * x, y, z), rot, Vector3.one,
                     side < 0f ? "HastedFinLeft" : "HastedFinRight");
+            }
+        }
+
+        /// <summary>MV-1283 point 4: the Molten elite's own tell — three glowing orange vent slots on
+        /// top of the body, per the ticket's design image. Laid out in a row along X, centred, sitting
+        /// just above the collider's top so they read from any angle (unlike the Shielded plate's
+        /// forward-only face). Layered on top of whichever kind's own silhouette <see cref="Build"/>
+        /// just built — never a silhouette change, same footing as the plate/fins above.</summary>
+        private static void AddMoltenVents(EnemyKind kind, Transform root, in RobotPalette p)
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            const int ventCount = 3;
+            const float ventWidth = 0.10f;
+            const float ventLength = 0.22f;
+            const float ventHeight = 0.05f;
+            const float ventSpacing = 0.16f;
+            float y = archetype.ColliderHeight + ventHeight * 0.5f;
+
+            for (int i = 0; i < ventCount; i++)
+            {
+                float x = (i - (ventCount - 1) * 0.5f) * ventSpacing;
+                Add(root, CharacterMeshes.Bevelled(new Vector3(ventWidth, ventHeight, ventLength), 0.015f),
+                    p.Molten, new Vector3(x, y, 0f), Quaternion.identity, Vector3.one, $"MoltenVent{i}");
             }
         }
 
