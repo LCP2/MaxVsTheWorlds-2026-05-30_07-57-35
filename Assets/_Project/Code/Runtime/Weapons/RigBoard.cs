@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 
 namespace MaxWorlds.Weapons
 {
@@ -115,7 +116,16 @@ namespace MaxWorlds.Weapons
         /// so it's pinned here instead.</summary>
         private const int DraftMaxCandidatesConst = 3;
 
-        private static string s_resourcePath = RigBoardLibrary.ForWorld(0);
+        private static string s_worldResourcePath = RigBoardLibrary.ForWorld(0);
+
+        /// <summary>MV-1287: which resource PRIMARY's nodes are read from — the active world's own file
+        /// (<see cref="s_worldResourcePath"/>) unless <see cref="UseLoadout"/> pinned a different
+        /// weapon's HOME board instead.</summary>
+        private static string s_primaryResourcePath = s_worldResourcePath;
+
+        /// <summary>MV-1287: same role as <see cref="s_primaryResourcePath"/>, for SECONDARY.</summary>
+        private static string s_secondaryResourcePath = s_worldResourcePath;
+
         private static int s_activeWorldIndex;
 
         private static Dictionary<string, RigNodeDef> s_nodes;
@@ -128,18 +138,65 @@ namespace MaxWorlds.Weapons
         /// <see cref="UseWorld"/> switches it.</summary>
         public static int ActiveWorldIndex => s_activeWorldIndex;
 
-        /// <summary>Points THE RIG at <paramref name="worldIndex"/>'s board (<see cref="RigBoardLibrary.ForWorld"/>)
-        /// — a no-op if it's already the active board. Forces a reload from Resources on the next
-        /// access when the resource actually changes; every existing level/unlock in
-        /// <see cref="RigState"/> is untouched here (the caller, <c>WeaponSystemState.ApplyWeaponCoreMorph</c>,
-        /// owns reconciling state across the switch).</summary>
+        /// <summary>Points THE RIG at <paramref name="worldIndex"/>'s own native board
+        /// (<see cref="RigBoardLibrary.ForWorld"/>) — a no-op if it's already the active board. Forces a
+        /// reload from Resources on the next access when the resource actually changes; every existing
+        /// level/unlock in <see cref="RigState"/> is untouched here (the caller,
+        /// <c>WeaponSystemState.ApplyWeaponCoreMorph</c>, owns reconciling state across the switch).</summary>
         public static void UseWorld(int worldIndex)
         {
             string path = RigBoardLibrary.ForWorld(worldIndex);
+            ApplyResourcePaths(worldIndex, path, path, path);
+        }
+
+        /// <summary>MV-1287: points THE RIG at a loadout-composed board for <paramref name="worldIndex"/>
+        /// — that world's own ENERGY/MOVE/SUPPORT, plus the PRIMARY category taken whole from
+        /// <paramref name="primary"/>'s HOME board (<see cref="WorldCatalog.HomeWorldIndexForPrimary"/>)
+        /// and the SECONDARY category taken whole from <paramref name="secondary"/>'s HOME board
+        /// (<see cref="WorldCatalog.HomeWorldIndexForSecondary"/>). Only one PRIMARY and one SECONDARY
+        /// category ever exist on the composed board, so ids never collide even though the same id
+        /// means something different on another world's own file (<c>p_spr</c> is SPREAD on the Backyard
+        /// board, SPLIT on the Reef's). <see cref="WeaponSystemState.ApplyWorldLoadout"/> calls this with
+        /// the world's own native pair, so the native path (every existing caller) resolves to exactly
+        /// the same board as before this ticket — composing a world's own file out of itself is a no-op
+        /// by construction.</summary>
+        public static void UseLoadout(int worldIndex, WeaponCatalog.PrimaryKind primary, SecondaryKind secondary)
+        {
+            string worldPath = RigBoardLibrary.ForWorld(worldIndex);
+            string primaryPath = RigBoardLibrary.ForWorld(WorldCatalog.HomeWorldIndexForPrimary(primary));
+            string secondaryPath = RigBoardLibrary.ForWorld(WorldCatalog.HomeWorldIndexForSecondary(secondary));
+            ApplyResourcePaths(worldIndex, worldPath, primaryPath, secondaryPath);
+        }
+
+        private static void ApplyResourcePaths(int worldIndex, string worldPath, string primaryPath, string secondaryPath)
+        {
             s_activeWorldIndex = worldIndex;
-            if (path == s_resourcePath) return;
-            s_resourcePath = path;
+            if (worldPath == s_worldResourcePath && primaryPath == s_primaryResourcePath &&
+                secondaryPath == s_secondaryResourcePath) return;
+            s_worldResourcePath = worldPath;
+            s_primaryResourcePath = primaryPath;
+            s_secondaryResourcePath = secondaryPath;
             s_nodes = null;
+        }
+
+        private static RigBoardWire LoadWire(string resourcePath)
+        {
+            TextAsset asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null)
+            {
+                Debug.LogError($"[RigBoard] no data at Resources/{resourcePath}.json");
+                return null;
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<RigBoardWire>(asset.text);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[RigBoard] {resourcePath}.json is malformed: {e.Message}");
+                return null;
+            }
         }
 
         private static void EnsureLoaded()
@@ -152,45 +209,64 @@ namespace MaxWorlds.Weapons
             s_fusions = new Dictionary<string, RigFusionDef>();
             s_allFusions = Array.Empty<RigFusionDef>();
 
-            TextAsset asset = Resources.Load<TextAsset>(s_resourcePath);
-            if (asset == null)
-            {
-                Debug.LogError($"[RigBoard] no data at Resources/{s_resourcePath}.json");
-                return;
-            }
+            RigBoardWire worldWire = LoadWire(s_worldResourcePath);
+            if (worldWire == null) return;
 
-            RigBoardWire wire;
-            try
-            {
-                wire = JsonUtility.FromJson<RigBoardWire>(asset.text);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[RigBoard] rig_board.json is malformed: {e.Message}");
-                return;
-            }
+            RigBoardWire primaryWire = s_primaryResourcePath == s_worldResourcePath
+                ? worldWire : LoadWire(s_primaryResourcePath);
+            RigBoardWire secondaryWire = s_secondaryResourcePath == s_worldResourcePath
+                ? worldWire
+                : s_secondaryResourcePath == s_primaryResourcePath ? primaryWire : LoadWire(s_secondaryResourcePath);
 
-            if (wire == null) return;
+            if (primaryWire == null || secondaryWire == null) return;
 
-            var ids = new List<string>(wire.abilities.Length);
-            foreach (RigAbilityWire a in wire.abilities)
+            // MV-1287: ENERGY/MOVE/SUPPORT (every category that isn't PRIMARY/SECONDARY) always come
+            // from the active world's own file; PRIMARY comes whole from the equipped primary's HOME
+            // board, SECONDARY whole from the equipped secondary's HOME board. For the native pairing
+            // (every caller before this ticket) all three wires are the same object, so this reduces to
+            // "every ability on the world's own file", unchanged — only the order of RigBoard.AllIds
+            // moves (no caller depends on it; see the three-wire merge below), never the id set.
+            var ids = new List<string>(worldWire.abilities.Length);
+            foreach (RigAbilityWire a in worldWire.abilities)
             {
                 if (a == null || string.IsNullOrEmpty(a.id)) continue;
-                var def = new RigNodeDef(a.id, a.category, a.maxLevel, a.parent, a.startLevel);
-                s_nodes[a.id] = def;
+                if (a.category == "PRIMARY" || a.category == "SECONDARY") continue;
+                s_nodes[a.id] = new RigNodeDef(a.id, a.category, a.maxLevel, a.parent, a.startLevel);
+                ids.Add(a.id);
+            }
+            foreach (RigAbilityWire a in primaryWire.abilities)
+            {
+                if (a == null || string.IsNullOrEmpty(a.id) || a.category != "PRIMARY") continue;
+                s_nodes[a.id] = new RigNodeDef(a.id, a.category, a.maxLevel, a.parent, a.startLevel);
+                ids.Add(a.id);
+            }
+            foreach (RigAbilityWire a in secondaryWire.abilities)
+            {
+                if (a == null || string.IsNullOrEmpty(a.id) || a.category != "SECONDARY") continue;
+                s_nodes[a.id] = new RigNodeDef(a.id, a.category, a.maxLevel, a.parent, a.startLevel);
                 ids.Add(a.id);
             }
             s_allIds = ids.ToArray();
 
-            var categoryIds = new List<string>(wire.categories.Length);
-            foreach (RigCategoryWire c in wire.categories)
+            var categoryIds = new List<string>(worldWire.categories.Length);
+            foreach (RigCategoryWire c in worldWire.categories)
                 if (c != null && !string.IsNullOrEmpty(c.id)) categoryIds.Add(c.id);
             s_allCategoryIds = categoryIds.ToArray();
 
-            var fusions = new List<RigFusionDef>(wire.fusions.Length);
-            foreach (RigFusionWire f in wire.fusions)
+            // MV-1287 AC4: a FORGE fusion whose two parent categories aren't BOTH actually populated on
+            // the composed board is hidden outright, never shown greyed/purchasable — every category on
+            // every shipped board is populated today (so this never trips in practice), but a future
+            // weapon kit whose home board omits a category it doesn't fit (never happens for the
+            // standard ENERGY/MOVE/SUPPORT/PRIMARY/SECONDARY five today) must not leave a fusion offered
+            // against a category with nothing in it.
+            var populatedCategories = new HashSet<string>();
+            foreach (RigNodeDef def in s_nodes.Values) populatedCategories.Add(def.Category);
+
+            var fusions = new List<RigFusionDef>(worldWire.fusions.Length);
+            foreach (RigFusionWire f in worldWire.fusions)
             {
                 if (f == null || string.IsNullOrEmpty(f.id)) continue;
+                if (!populatedCategories.Contains(f.parentA) || !populatedCategories.Contains(f.parentB)) continue;
                 var def = new RigFusionDef(f.id, f.parentA, f.parentB, f.hudSlot, f.cellCost);
                 s_fusions[f.id] = def;
                 fusions.Add(def);
@@ -267,10 +343,12 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Reloads from Resources on the next access, back to World 1's board — test isolation
         /// only (a live build never needs this; MV-689 is the only thing that switches boards at
-        /// runtime, and always explicitly via <see cref="UseWorld"/>).</summary>
+        /// runtime, and always explicitly via <see cref="UseWorld"/>/<see cref="UseLoadout"/>).</summary>
         public static void ResetForTests()
         {
-            s_resourcePath = RigBoardLibrary.ForWorld(0);
+            s_worldResourcePath = RigBoardLibrary.ForWorld(0);
+            s_primaryResourcePath = s_worldResourcePath;
+            s_secondaryResourcePath = s_worldResourcePath;
             s_activeWorldIndex = 0;
             s_nodes = null;
         }
