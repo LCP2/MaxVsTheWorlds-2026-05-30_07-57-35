@@ -114,6 +114,12 @@ namespace MaxWorlds.VFX
         private static readonly Color ShieldSparkCore = new Color(0.85f, 0.92f, 1.0f, 1f);
         private static readonly Color ShieldSparkDeep = new Color(0.55f, 0.68f, 0.80f, 1f);
 
+        // The Shield Projector's own dome (MV-1284 point 2): a white-blue ripple, matching the
+        // dome's own translucent white-blue fill colour rather than the gold hit-spark or the
+        // Shielded plate's cool-steel family.
+        private static readonly Color DomeRippleCore = new Color(0.75f, 0.92f, 1.0f, 1f);
+        private static readonly Color DomeRippleDeep = new Color(0.45f, 0.70f, 0.95f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -143,6 +149,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _lightMissileHit;    // LIGHT MISSILE: a ball's own contact burst (MV-1211)
         private VfxBurst _lightMissileFizzle; // LIGHT MISSILE: a ball's own fizzle puff (MV-1211)
         private VfxBurst _shieldSparks;       // Shielded elite: a deflected hit's own spark burst (MV-1281)
+        private VfxBurst _domeRipple;         // Shield Projector dome: a blocked hit's own ripple (MV-1284)
 
         private void Awake()
         {
@@ -192,6 +199,8 @@ namespace MaxWorlds.VFX
             _lightMissileFizzle = new VfxBurst("LightMissileFizzle", additive, 24, 0.1f, perFrameCap: 8);
             // MV-1281: small budget — a Shielded elite's own deflect is one plate, not a crowd event.
             _shieldSparks = new VfxBurst("ShieldSparks", additive, 60, 0.3f, perFrameCap: 6, stretched: true);
+            // MV-1284: small budget — a dome blocking a hit is one ripple, not a crowd event.
+            _domeRipple = new VfxBurst("DomeRipple", additive, 60, 0.3f, perFrameCap: 6, stretched: true);
         }
 
         private void OnEnable()
@@ -212,6 +221,7 @@ namespace MaxWorlds.VFX
             HudSignals.LightMissileHit += OnLightMissileHit;
             HudSignals.LightMissileFizzled += OnLightMissileFizzled;
             HudSignals.ShieldDeflected += OnShieldDeflected;
+            HudSignals.DomeBlocked += OnDomeBlocked;
         }
 
         private void OnDisable()
@@ -234,6 +244,7 @@ namespace MaxWorlds.VFX
             HudSignals.LightMissileHit -= OnLightMissileHit;
             HudSignals.LightMissileFizzled -= OnLightMissileFizzled;
             HudSignals.ShieldDeflected -= OnShieldDeflected;
+            HudSignals.DomeBlocked -= OnDomeBlocked;
         }
 
         private void OnDestroy()
@@ -250,7 +261,7 @@ namespace MaxWorlds.VFX
             Dispose(_playerHitSpark); Dispose(_playerContactGlow);
             Dispose(_rocketMuzzle); Dispose(_rocketImpactFlash); Dispose(_rocketImpactSparks);
             Dispose(_lightMissileHit); Dispose(_lightMissileFizzle);
-            Dispose(_shieldSparks);
+            Dispose(_shieldSparks); Dispose(_domeRipple);
         }
 
         // --- events ---
@@ -697,6 +708,22 @@ namespace MaxWorlds.VFX
                 colorA: ShieldSparkCore, colorB: ShieldSparkDeep);
         }
 
+        // --- the Shield Projector's own dome (MV-1284) ---
+
+        /// <summary>Point 2: "a blocked hit ripples the dome at the hit point" — an outward puff at
+        /// the hit itself (no kickback direction to work from the way the Shielded plate's own spark
+        /// has; the dome blocks from every direction, not just a front arc), in the dome's own
+        /// white-blue family rather than the Shielded plate's cool-steel one.</summary>
+        private void OnDomeBlocked(Vector3 pos)
+        {
+            _domeRipple.Emit(pos, 10,
+                axis: Vector3.up, spreadDegrees: 160f,
+                speedMin: 2f, speedMax: 4.5f,
+                sizeMin: 0.3f, sizeMax: 0.5f,
+                lifeMin: 0.18f, lifeMax: 0.3f,
+                colorA: DomeRippleCore, colorB: DomeRippleDeep);
+        }
+
         private void LateUpdate()
         {
             FrameCost.Begin(FrameCost.Bucket.Vfx);
@@ -712,6 +739,7 @@ namespace MaxWorlds.VFX
             _rocketMuzzle.EndFrame(); _rocketImpactFlash.EndFrame(); _rocketImpactSparks.EndFrame();
             _lightMissileHit.EndFrame(); _lightMissileFizzle.EndFrame();
             _shieldSparks.EndFrame();
+            _domeRipple.EndFrame();
 
             FrameCost.End(FrameCost.Bucket.Vfx);
         }

@@ -382,6 +382,7 @@ namespace MaxWorlds.Enemies
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
             _projectorRetargetTimer = 0f; // MV-1279: nor a previous Projector life's stale retarget countdown
+            DropDomeVisualImmediate(); // MV-1284: nor a previous Projector life's stale dome state/visual
             _jammerRetargetTimer = 0f; // MV-1280: nor a previous Jammer life's stale retarget countdown
             // MV-1217: a pooled instance must not carry a previous Dreadnought life's turret cycle
             // phase/aim into this one — re-seeded by TickDreadnoughtTurrets on its first tick either way.
@@ -1038,6 +1039,8 @@ namespace MaxWorlds.Enemies
             _team = Team.Player;
             // MV-1283 point 2: a captured Molten elite's trail is removed, same as on death.
             ClearMoltenPatches();
+            // MV-1284 point 4: a captured Projector's dome drops at once, same as on death.
+            CollapseDomeVisual();
             _converted.Add(this);
             return true;
         }
@@ -2144,6 +2147,13 @@ namespace MaxWorlds.Enemies
             // Recover/Search included), same "ticked regardless of state" footing as the Shielded facing
             // tick immediately above — a captured Molten elite's own trail is suppressed (Team.Enemy).
             if (IsElite && Affix == EliteAffix.Molten && Team == Team.Enemy) TickMolten(dt);
+
+            // MV-1284 point 1: a live, un-captured Projector's own dome recentres regardless of
+            // Current state, same "ticked regardless of state" footing as the Shielded facing/
+            // Molten trail ticks immediately above — it never attacks, so Current here is
+            // effectively always Chase/Search per TickProjectorHangBack's own doc comment, but this
+            // has no coupling to that state switch below either way.
+            if (Kind == EnemyKind.Projector && Team == Team.Enemy) TickProjectorDome(dt);
 
             // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
             // "stops moving" per the spec table — so it must be decided before the ordinary state
@@ -3728,6 +3738,171 @@ namespace MaxWorlds.Enemies
             return fwd.sqrMagnitude > 0.001f ? fwd.normalized : Vector3.forward;
         }
 
+        // --- MV-1284: Shield Projector protective dome -------------------------------------------
+
+        /// <summary>How far from itself a Projector looks for allies to form its dome's centroid
+        /// from — the ticket's own "within 8 m of it". Deliberately its own constant, not
+        /// <see cref="ProjectorPackSearchRadius"/> (10 m): the dome's own search radius and the
+        /// hang-back goal's pack search radius are two different numbers the ticket specifies
+        /// separately, even though both happen to recompute on the same 4x/s cadence.</summary>
+        private const float ProjectorDomeSearchRadius = 8f;
+
+        /// <summary>The ticket's own dome radius: a robot within this many metres (XZ, same level)
+        /// of a live dome's centre takes x0 damage from a player-side hit. Also the dome visual's
+        /// own sphere radius.</summary>
+        public const float ProjectorDomeRadius = 4f;
+
+        /// <summary>How often <see cref="TickProjectorDome"/> recomputes the dome centre — the
+        /// ticket's own "recomputed 4x/s". Shares its value with <see cref="ProjectorRetargetInterval"/>
+        /// only by coincidence (both are the project's standard throttled-decision cadence); they
+        /// are two independent timers over two different search radii and purposes.</summary>
+        private const float ProjectorDomeRecomputeInterval = 0.25f;
+
+        /// <summary>How much of the gap between the dome's last centre and a freshly recomputed raw
+        /// centroid closes on each recompute — the ticket's own "(smoothed)", so a pack member
+        /// stepping in or out of the 8 m search radius shifts the dome gradually rather than
+        /// snapping it there.</summary>
+        private const float ProjectorDomeSmoothing = 0.5f;
+
+        /// <summary>The Shield Projector's own dish height, world-space-relative to its feet —
+        /// <see cref="MaxWorlds.VFX.RobotBodies"/>'s BuildProjector places its dish at ~2.3 m (its
+        /// own <c>dishBaseY</c>); duplicated here only as the dome beam's visual origin, kept in
+        /// sync by convention like every other cross-file mesh constant in this roster.</summary>
+        private const float ProjectorDishHeight = 2.3f;
+
+        private float _domeRetargetTimer;
+        private Vector3 _domeCenter;
+        private bool _hasDomeCenter;
+        private ProjectorDome _domeVisual;
+
+        /// <summary>True while this robot is a live, awake, un-captured Projector actively
+        /// projecting a dome (point 1: "with no such robots, no dome"). The gate every other
+        /// robot's <see cref="TakeDamage"/> dome check reads via <see cref="IsProtectedByAnyDome"/>.
+        /// This robot's own death/capture path (<see cref="Die"/>/<see cref="TryConvert"/>, which
+        /// both ultimately pull it out of <see cref="_active"/> via <see cref="OnDisable"/>, and
+        /// which also call <see cref="CollapseDomeVisual"/> directly) drops it "at once" — a captured
+        /// Projector reads <c>Team != Team.Enemy</c> here the instant <see cref="TryConvert"/> flips
+        /// <see cref="_team"/>, same footing <see cref="ShieldedFrontArcMultiplier"/>'s own capture
+        /// suppression already stands on.</summary>
+        public bool HasDome => _hasDomeCenter && IsAwake && Team == Team.Enemy && Kind == EnemyKind.Projector;
+
+        /// <summary>The dome's own smoothed centre (XZ; Y is always 0) — meaningless unless
+        /// <see cref="HasDome"/> is true.</summary>
+        public Vector3 DomeCenter => _domeCenter;
+
+        /// <summary>Recomputes this Projector's own dome centroid every
+        /// <see cref="ProjectorDomeRecomputeInterval"/> and keeps its visual
+        /// (<see cref="ProjectorDome"/>) in sync. Ticked unconditionally for a live, un-captured
+        /// Projector — see the call site's own doc comment for why.</summary>
+        private void TickProjectorDome(float dt)
+        {
+            _domeRetargetTimer -= dt;
+            if (_domeRetargetTimer > 0f) return;
+            _domeRetargetTimer = ProjectorDomeRecomputeInterval;
+
+            if (TryComputeDomeCentroid(out Vector3 raw))
+            {
+                _domeCenter = _hasDomeCenter ? Vector3.Lerp(_domeCenter, raw, ProjectorDomeSmoothing) : raw;
+                _hasDomeCenter = true;
+                ShowDomeVisual();
+            }
+            else
+            {
+                _hasDomeCenter = false;
+                HideDomeVisual();
+            }
+        }
+
+        /// <summary>Point 1's own goal maths: the centroid of awake, non-Projector robots in this
+        /// robot's own <see cref="AreaIndex"/> within <see cref="ProjectorDomeSearchRadius"/> — same
+        /// registry-walk shape as <see cref="ComputeProjectorGoal"/>, a different (smaller) radius
+        /// and no "push away from Max" step, since this is the dome's own centre, not a movement
+        /// goal.</summary>
+        private bool TryComputeDomeCentroid(out Vector3 centroid)
+        {
+            Vector3 here = transform.position; here.y = 0f;
+            Vector3 sum = Vector3.zero;
+            int count = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r == null || r == this || r.Kind == EnemyKind.Projector) continue;
+                if (!r.IsAwake || r.AreaIndex != AreaIndex) continue;
+                Vector3 rp = r.transform.position; rp.y = 0f;
+                if ((rp - here).sqrMagnitude > ProjectorDomeSearchRadius * ProjectorDomeSearchRadius) continue;
+                sum += rp;
+                count++;
+            }
+            if (count == 0) { centroid = Vector3.zero; return false; }
+            centroid = sum / count;
+            return true;
+        }
+
+        private void ShowDomeVisual()
+        {
+            Vector3 beamOrigin = transform.position + Vector3.up * ProjectorDishHeight;
+            if (_domeVisual == null) _domeVisual = ProjectorDome.Spawn(_domeCenter, ProjectorDomeRadius, beamOrigin);
+            else _domeVisual.Reposition(_domeCenter, beamOrigin);
+        }
+
+        private void HideDomeVisual() => _domeVisual?.HideImmediate();
+
+        /// <summary>Point 4's "drops at once (0.3 s collapse VFX)" — called from <see cref="Die"/>
+        /// and <see cref="TryConvert"/>. Detaches the visual's reference and lets it play its own
+        /// fade-and-self-destroy independently (same "VFX prop outlives a pooled owner's reset"
+        /// footing as <see cref="MoltenPatch"/>) — this robot may be pooled and <see cref="Apply"/>-
+        /// reset the very same frame it dies, and the fade must keep playing regardless.</summary>
+        private void CollapseDomeVisual()
+        {
+            _hasDomeCenter = false;
+            if (_domeVisual == null) return;
+            _domeVisual.Collapse();
+            _domeVisual = null;
+        }
+
+        /// <summary>A pooled instance must not carry a previous Projector life's dome visual into
+        /// this one — same "pooled robot, last life leaks forward" footing as
+        /// <see cref="ClearMoltenPatches"/>. No fade here (this is a pooling reset, not a gameplay
+        /// death) — destroyed immediately.</summary>
+        private void DropDomeVisualImmediate()
+        {
+            _domeRetargetTimer = 0f;
+            _hasDomeCenter = false;
+            if (_domeVisual == null) return;
+            _domeVisual.DestroyImmediateSelf();
+            _domeVisual = null;
+        }
+
+        /// <summary>Point 3's own exclusion list ("never protected: any Projector ... bosses,
+        /// captured/converted allies") plus the ticket's own "every player-side source" gate,
+        /// applied from <see cref="TakeDamage"/>. A boss needs no special case here: every boss
+        /// implements <see cref="IDamageable.TakeDamage"/> on its own class entirely, never this
+        /// one, so a boss's own hit simply never reaches this check at all.</summary>
+        private float ProjectorDomeMultiplier(Team attacker)
+        {
+            if (attacker != Team.Player) return 1f;
+            if (Kind == EnemyKind.Projector || Team != Team.Enemy) return 1f;
+            return IsProtectedByAnyDome() ? 0f : 1f;
+        }
+
+        /// <summary>Point 2: true while this robot's own XZ position sits within
+        /// <see cref="ProjectorDomeRadius"/> of ANY live <see cref="HasDome"/> Projector in its own
+        /// <see cref="AreaIndex"/> — a robot can be shielded by a neighbour's dome, not only its own
+        /// pack's Projector. Same <see cref="_active"/> registry-walk idiom as
+        /// <see cref="CountAwakeOfKindInArea"/>.</summary>
+        private bool IsProtectedByAnyDome()
+        {
+            Vector3 here = transform.position; here.y = 0f;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r == null || r.Kind != EnemyKind.Projector || !r.HasDome || r.AreaIndex != AreaIndex) continue;
+                Vector3 center = r.DomeCenter; center.y = 0f;
+                if ((here - center).sqrMagnitude <= ProjectorDomeRadius * ProjectorDomeRadius) return true;
+            }
+            return false;
+        }
+
         // --- MV-1280: Jammer approach-then-circle movement --------------------------------------
 
         /// <summary>The ticket's own "approach Max to 4 m" standoff radius — both the distance the
@@ -4279,6 +4454,16 @@ namespace MaxWorlds.Enemies
                 HudSignals.EmitShieldDeflected(transform.position, info.Direction);
                 return;
             }
+            // MV-1284: a Shield Projector's dome deflects a player-side hit entirely (x0, never
+            // merely reduced) for anything standing inside it — checked after Shielded's own
+            // front-arc plate (a different robot's own elite affix) and before the amount/health
+            // maths below, same "handled before health maths, own VFX instead of the ordinary hit
+            // flash" shape. See ProjectorDomeMultiplier's own doc comment for the exclusion list.
+            if (ProjectorDomeMultiplier(info.Attacker) <= 0f)
+            {
+                HudSignals.EmitDomeBlocked(info.Point);
+                return;
+            }
             // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
             // applies (20 -> 25 at the ticket's own 1.25x). MV-715: the Dredge Hulk's front-arc armour
             // multiplies it back down for a hit that arrived from in front — see
@@ -4306,6 +4491,8 @@ namespace MaxWorlds.Enemies
             if (IsConverted) { _converted.Remove(this); IsConverted = false; }
             // MV-1283 point 2: a Molten elite's trail dies with it.
             ClearMoltenPatches();
+            // MV-1284 point 4: this robot's own dome (if any) drops at once.
+            CollapseDomeVisual();
             Current = State.Dead;
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).
