@@ -50,10 +50,16 @@ namespace MaxWorlds.VFX
         /// <see cref="Warm"/>.</summary>
         public readonly Material Accent;
 
+        /// <summary>MV-1281: the Shielded elite's own light-steel front-arc plate — null unless this
+        /// robot actually rolled the affix, in which case <see cref="RobotBodies.Build"/> builds no
+        /// plate at all (same optional-material idiom as <see cref="Hazard"/>).</summary>
+        public readonly Material Shield;
+
         public RobotPalette(Material warm, Material cool, Material dark, Material gold,
-                            Material hazard = null, Material accent = null)
+                            Material hazard = null, Material accent = null, Material shield = null)
         {
             Warm = warm; Cool = cool; Dark = dark; Gold = gold; Hazard = hazard; Accent = accent;
+            Shield = shield;
         }
     }
 
@@ -131,6 +137,11 @@ namespace MaxWorlds.VFX
             // just built — never a silhouette change of its own (ticket AC4).
             if (skin == StormdrainSkinTag) AddStormdrainShoulderBand(kind, visualRoot, p);
 
+            // MV-1281: the Shielded elite's own front-arc plate — on top of whichever silhouette the
+            // switch above just built, same "layered on, never a silhouette change" footing as the
+            // stormdrain band immediately above, so it reads identically whichever kind rolled it.
+            if (p.Shield != null) AddShieldedPlate(kind, visualRoot, p);
+
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null,
                             breakerChainPivot, breakerChainEnd, breakerWallAnchor);
         }
@@ -152,6 +163,30 @@ namespace MaxWorlds.VFX
 
             Add(root, CharacterMeshes.Ring(radius * 0.82f, radius * 1.02f, thickness, 20), p.Hazard,
                 new Vector3(0f, y, 0f), Quaternion.identity, Vector3.one, "StormdrainBand");
+        }
+
+        /// <summary>MV-1281 point 5: the Shielded elite's own front-arc plate — a light-steel panel
+        /// with a dark edge, ~1.2 m wide per the ticket's design image, standing just proud of the
+        /// collider on its +Z (forward) face at chest height so it reads at a glance as "the front is
+        /// armoured". <see cref="CharacterMeshes.Bevelled"/>'s chamfer is what gives a flat box the
+        /// "curved plate" read the image calls for without a bespoke lathe profile. The dark box behind
+        /// is sized slightly larger so it peeks out as a border/edge around the steel face, same
+        /// outline-via-oversized-backing idiom <see cref="BuildRusher"/> and friends already use for
+        /// eye bezels. Layered on top of whichever kind's own silhouette <see cref="Build"/> just
+        /// built — this never changes a kind's own shape, only adds the tell.</summary>
+        private static void AddShieldedPlate(EnemyKind kind, Transform root, in RobotPalette p)
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            const float plateWidth = 1.2f;
+            const float plateHeight = 0.5f;
+            float y = archetype.ColliderHeight * 0.5f;
+            float z = archetype.ColliderRadius * 0.95f;
+
+            Add(root, CharacterMeshes.Bevelled(new Vector3(plateWidth + 0.06f, plateHeight + 0.06f, 0.05f), 0.02f),
+                p.Dark, new Vector3(0f, y, z - 0.01f), Quaternion.identity, Vector3.one, "ShieldedPlateEdge");
+
+            Add(root, CharacterMeshes.Bevelled(new Vector3(plateWidth, plateHeight, 0.08f), 0.06f),
+                p.Shield, new Vector3(0f, y, z), Quaternion.identity, Vector3.one, "ShieldedPlate");
         }
 
         /// <summary>MV-669 revision 3: reverting Max's own +10% scale-up re-exposed a pre-existing

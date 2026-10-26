@@ -108,6 +108,12 @@ namespace MaxWorlds.VFX
         private static readonly Color LightMissileHitDeep = new Color(0.69f, 0.25f, 1.0f, 1f);
         private static readonly Color LightMissileFizzleColor = new Color(0.55f, 0.25f, 0.85f, 1f);
 
+        // The Shielded elite's own front-arc plate (MV-1281): a cool light-steel spark, deliberately
+        // apart from the gold hit-spark family above so a deflected hit reads as "it bounced off
+        // something", not a re-skinned ordinary hit.
+        private static readonly Color ShieldSparkCore = new Color(0.85f, 0.92f, 1.0f, 1f);
+        private static readonly Color ShieldSparkDeep = new Color(0.55f, 0.68f, 0.80f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -136,6 +142,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _rocketImpactSparks; // Shoulder Rack: the detonation's own sparks (MV-770)
         private VfxBurst _lightMissileHit;    // LIGHT MISSILE: a ball's own contact burst (MV-1211)
         private VfxBurst _lightMissileFizzle; // LIGHT MISSILE: a ball's own fizzle puff (MV-1211)
+        private VfxBurst _shieldSparks;       // Shielded elite: a deflected hit's own spark burst (MV-1281)
 
         private void Awake()
         {
@@ -183,6 +190,8 @@ namespace MaxWorlds.VFX
             // MV-1211: small budgets — a volley is at most a handful of balls landing close together.
             _lightMissileHit = new VfxBurst("LightMissileHit", additive, 40, 0f, perFrameCap: 8);
             _lightMissileFizzle = new VfxBurst("LightMissileFizzle", additive, 24, 0.1f, perFrameCap: 8);
+            // MV-1281: small budget — a Shielded elite's own deflect is one plate, not a crowd event.
+            _shieldSparks = new VfxBurst("ShieldSparks", additive, 60, 0.3f, perFrameCap: 6, stretched: true);
         }
 
         private void OnEnable()
@@ -202,6 +211,7 @@ namespace MaxWorlds.VFX
             HudSignals.RocketImpact += OnRocketImpact;
             HudSignals.LightMissileHit += OnLightMissileHit;
             HudSignals.LightMissileFizzled += OnLightMissileFizzled;
+            HudSignals.ShieldDeflected += OnShieldDeflected;
         }
 
         private void OnDisable()
@@ -223,6 +233,7 @@ namespace MaxWorlds.VFX
             HudSignals.RocketImpact -= OnRocketImpact;
             HudSignals.LightMissileHit -= OnLightMissileHit;
             HudSignals.LightMissileFizzled -= OnLightMissileFizzled;
+            HudSignals.ShieldDeflected -= OnShieldDeflected;
         }
 
         private void OnDestroy()
@@ -239,6 +250,7 @@ namespace MaxWorlds.VFX
             Dispose(_playerHitSpark); Dispose(_playerContactGlow);
             Dispose(_rocketMuzzle); Dispose(_rocketImpactFlash); Dispose(_rocketImpactSparks);
             Dispose(_lightMissileHit); Dispose(_lightMissileFizzle);
+            Dispose(_shieldSparks);
         }
 
         // --- events ---
@@ -665,6 +677,26 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.35f,
             colorA: LightMissileFizzleColor, colorB: LightMissileFizzleColor);
 
+        // --- the Shielded elite's own front-arc plate (MV-1281) ---
+
+        /// <summary>A deflected hit (point 5: ">=8 frames, >=20px") — kicks back off the plate along
+        /// the reverse of the hit direction, same "something struck you here" read as
+        /// <see cref="OnPlayerHit"/>'s isolated spark, but in the shield's own cool steel family
+        /// (<see cref="ShieldSparkCore"/>) rather than the gold hit-spark palette, since no health was
+        /// actually lost. Fired instead of the ordinary gold spark <see cref="OnDamage"/> would have
+        /// drawn — <see cref="HudSignals.ShieldDeflected"/> is raised instead of
+        /// <see cref="HudSignals.DamageDealt"/>, never alongside it.</summary>
+        private void OnShieldDeflected(Vector3 pos, Vector3 hitDirection)
+        {
+            Vector3 kickback = hitDirection.sqrMagnitude > 1e-6f ? -hitDirection.normalized : Vector3.up;
+            _shieldSparks.Emit(pos + Vector3.up * 0.6f, 10,
+                axis: kickback, spreadDegrees: 55f,
+                speedMin: 2.5f, speedMax: 5.5f,
+                sizeMin: 0.42f, sizeMax: 0.6f,
+                lifeMin: 0.16f, lifeMax: 0.26f,
+                colorA: ShieldSparkCore, colorB: ShieldSparkDeep);
+        }
+
         private void LateUpdate()
         {
             FrameCost.Begin(FrameCost.Bucket.Vfx);
@@ -679,6 +711,7 @@ namespace MaxWorlds.VFX
             _playerHitSpark.EndFrame(); _playerContactGlow.EndFrame();
             _rocketMuzzle.EndFrame(); _rocketImpactFlash.EndFrame(); _rocketImpactSparks.EndFrame();
             _lightMissileHit.EndFrame(); _lightMissileFizzle.EndFrame();
+            _shieldSparks.EndFrame();
 
             FrameCost.End(FrameCost.Bucket.Vfx);
         }

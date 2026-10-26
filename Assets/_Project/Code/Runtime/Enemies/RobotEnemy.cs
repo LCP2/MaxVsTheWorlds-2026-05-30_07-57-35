@@ -1216,19 +1216,70 @@ namespace MaxWorlds.Enemies
             SetBodyVisible(distanceToPlayer <= AnglerfishVisibleRange);
         }
 
-        /// <summary>Dredge Hulk's front-arc armour (MV-715, AC3). <paramref name="hitDirection"/> is
-        /// the same source-to-target travel convention every <see cref="DamageInfo"/> already uses
-        /// (e.g. WaterBlaster's own <c>transform.forward</c>): its reverse points back toward whoever
-        /// dealt the hit, so a positive dot with this robot's own forward means the attacker was in
-        /// front of it. Returns 1 (no reduction) for every kind/skin other than the Reef Brute.</summary>
+        /// <summary>Shared front-arc test (MV-715 Dredge Hulk, MV-1281 Shielded): whether
+        /// <paramref name="hitDirection"/> — the same source-to-target travel convention every
+        /// <see cref="DamageInfo"/> already uses (e.g. WaterBlaster's own <c>transform.forward</c>) —
+        /// arrived from this robot's front half. Its reverse points back toward whoever dealt the hit,
+        /// so a positive dot with this robot's own forward means the attacker was in front of it. A
+        /// flattened zero direction (ShoulderRack rockets/WaterBalloon send <see cref="Vector3.up"/>,
+        /// Orbitals <see cref="Vector3.down"/>, Force Field sends outward) never counts as front.</summary>
+        private bool IsFrontArcHit(Vector3 hitDirection)
+        {
+            Vector3 towardAttacker = -hitDirection;
+            towardAttacker.y = 0f;
+            if (towardAttacker.sqrMagnitude < 1e-6f) return false;
+            return Vector3.Dot(towardAttacker.normalized, transform.forward) > 0f;
+        }
+
+        /// <summary>Dredge Hulk's front-arc armour (MV-715, AC3). Returns 1 (no reduction) for every
+        /// kind/skin other than the Reef Brute. See <see cref="IsFrontArcHit"/>'s own doc comment for
+        /// what counts as front.</summary>
         private float DredgeHulkFrontArcMultiplier(Vector3 hitDirection)
         {
             if (Kind != EnemyKind.Brute || Skin != ReefSkinTag) return 1f;
-            Vector3 towardAttacker = -hitDirection;
-            towardAttacker.y = 0f;
-            if (towardAttacker.sqrMagnitude < 1e-6f) return 1f;
-            return Vector3.Dot(towardAttacker.normalized, transform.forward) > 0f
-                ? DredgeHulkFrontArmorMultiplier : 1f;
+            return IsFrontArcHit(hitDirection) ? DredgeHulkFrontArmorMultiplier : 1f;
+        }
+
+        /// <summary>Shielded elite's front-arc plate (MV-1281 point 2): a hit arriving from this
+        /// robot's front half is fully deflected (x0), never merely reduced — "it is 0 or full" per the
+        /// ticket's own "do not re-raise". Returns 1 (no reduction) for every robot that is not a LIVE
+        /// Shielded elite on <see cref="Team.Enemy"/> — once this elite is captured (<see cref="Team"/>
+        /// flips off Enemy) its own affix behaviour is suppressed, same footing <see cref="IsElite"/>'s
+        /// own doc comment already establishes for the elite ring/tag. Applies identically whichever
+        /// source dealt the hit — a captured ally's contact damage already funnels through this same
+        /// <see cref="TakeDamage"/> call (point 2's "contact from captured allies follows the same
+        /// rule"), so there is no separate path to special-case.</summary>
+        private float ShieldedFrontArcMultiplier(Vector3 hitDirection)
+        {
+            if (!IsElite || Affix != EliteAffix.Shielded || Team != Team.Enemy) return 1f;
+            return IsFrontArcHit(hitDirection) ? 0f : 1f;
+        }
+
+        /// <summary>MV-1281 point 3: how fast a Shielded elite may turn to track Max, degrees/second —
+        /// the ticket's own "&lt;=180 deg/s" cap. A yaw-only <see cref="Mathf.MoveTowardsAngle"/> value,
+        /// not <see cref="RotateToward"/>'s movement-coupled <c>Quaternion.RotateTowards</c> — this must
+        /// turn in place while standing still mid-Telegraph/Recover, not only while walking, same idiom
+        /// the Dreadnought's own turret aim (<see cref="DreadnoughtTurretTurnRateDegPerSec"/>) uses.</summary>
+        private const float ShieldedFaceTurnRateDegPerSec = 180f;
+
+        /// <summary>MV-1281 point 3: while awake and not mid-lunge/charge (<see cref="State.Lunge"/>
+        /// covers both an ordinary lunge and the Cart Charger's own ram — there is no separate "charge"
+        /// state), a Shielded elite keeps its front-arc plate oriented toward Max by turning its own yaw
+        /// toward him at up to <see cref="ShieldedFaceTurnRateDegPerSec"/>, so the player can't just
+        /// stand still and strafe around a motionless shield. Faces <see cref="_playerTarget"/>
+        /// specifically (Max) — not whatever <c>target</c> this robot happens to be engaging (a
+        /// Sentinel/captured robot) — per the ticket's own "turns to face Max". Ticked regardless of
+        /// <see cref="Current"/> (so it still tracks through Telegraph/Recover/Search, not just Chase),
+        /// same unconditional-every-tick footing as <see cref="TickDreadnoughtTurrets"/>; its own
+        /// IsElite/Affix/Team gate lives at the call site, the awake/lunge gate lives here.</summary>
+        private void TickShieldedFacing(float dt)
+        {
+            if (_playerTarget == null) return;
+            if (!IsAwake || Current == State.Lunge) return;
+
+            float bearing = BearingDegrees(transform.position, _playerTarget.position);
+            float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, bearing, ShieldedFaceTurnRateDegPerSec * dt);
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         }
 
         [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
@@ -1982,6 +2033,12 @@ namespace MaxWorlds.Enemies
             // body-wide wind-up/commit the way every other ranged kind's ONE weapon is. Same "ticked
             // regardless of state" footing as the corroded timer/Reef stealth visibility above.
             if (Kind == EnemyKind.Dreadnought) TickDreadnoughtTurrets(dt);
+
+            // MV-1281 point 3: a Shielded elite keeps turning to face Max regardless of Current state
+            // (Telegraph/Recover/Search included, not just Chase) — see TickShieldedFacing's own doc
+            // comment for the awake/lunge gate (which lives inside that method, not here) and why
+            // Team.Enemy is checked here (a captured elite's own affix behaviour is suppressed).
+            if (IsElite && Affix == EliteAffix.Shielded && Team == Team.Enemy) TickShieldedFacing(dt);
 
             // MV-1016: a Splicer's own channel takes over this tick entirely while it's running —
             // "stops moving" per the spec table — so it must be decided before the ordinary state
@@ -4107,6 +4164,15 @@ namespace MaxWorlds.Enemies
             // lethal hit still reaches Die() below, whose own CancelSpliceChannel call is then a no-op
             // (already cancelled here).
             if (IsChannelingSplice) CancelSpliceChannel();
+            // MV-1281: a Shielded elite's front-arc plate deflects a front hit entirely (x0, never
+            // merely reduced) — checked and handled BEFORE the amount/health maths below, since a
+            // deflected hit never reduces health at all and shows its own spark instead of the ordinary
+            // hit flash. See ShieldedFrontArcMultiplier's own doc comment.
+            if (ShieldedFrontArcMultiplier(info.Direction) <= 0f)
+            {
+                HudSignals.EmitShieldDeflected(transform.position, info.Direction);
+                return;
+            }
             // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
             // applies (20 -> 25 at the ticket's own 1.25x). MV-715: the Dredge Hulk's front-arc armour
             // multiplies it back down for a hit that arrived from in front — see
