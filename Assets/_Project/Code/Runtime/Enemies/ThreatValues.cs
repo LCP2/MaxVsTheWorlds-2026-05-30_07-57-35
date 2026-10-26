@@ -72,6 +72,12 @@ namespace MaxWorlds.Enemies
         /// repositions Max, only heals a structure, so it carries less threat than any kind here.</summary>
         public const float Welder = 1.2f;
 
+        /// <summary>MV-1279: the ticket's own authored THV — a 40 HP support drone that deals no
+        /// damage of its own, priced just above the Welder's 1.2 on the same placeholder footing: it
+        /// at least orients itself around protecting its pack (even though the dome that actually
+        /// shields it ships in P2), where the Welder only ever heals a structure.</summary>
+        public const float Projector = 1.4f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -90,6 +96,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Breaker => Breaker,
             EnemyKind.Tractor => Tractor,
             EnemyKind.Welder => Welder,
+            EnemyKind.Projector => Projector,
             _ => Rusher,
         };
     }

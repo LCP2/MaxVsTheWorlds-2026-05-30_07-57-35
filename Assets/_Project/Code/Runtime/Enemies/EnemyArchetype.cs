@@ -14,7 +14,8 @@ namespace MaxWorlds.Enemies
     // Breaker (MV-1228) follows it too — a chained, press-punching/ramming robot beast, appended after Skitter.
     // Tractor (MV-1238) follows it too — a stationary emitter-dish that hauls Max in on a beam, appended after Breaker.
     // Welder (MV-1244) follows it too — a small repair drone that never attacks, appended after Tractor.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder }
+    // Projector (MV-1279) follows it too — a hang-back support drone that never attacks, appended after Welder.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -44,6 +45,7 @@ namespace MaxWorlds.Enemies
                 case "breaker": kind = EnemyKind.Breaker; return true;
                 case "tractor": kind = EnemyKind.Tractor; return true;
                 case "welder": kind = EnemyKind.Welder; return true;
+                case "projector": kind = EnemyKind.Projector; return true;
                 default: kind = default; return false;
             }
         }
@@ -665,6 +667,33 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "WELDER");
 
+        /// <summary>
+        /// Shield Projector (MV-1279): Lee's (21 Oct 2026) "support robot that protects other
+        /// robots" — this ticket is the kind, its stats and its hang-back movement only; the dome
+        /// that actually shields its pack is P2 (<see cref="RobotEnemy.TickBody"/> never dispatches
+        /// this kind into Telegraph/Lunge at all, per the ticket's own "never attacks"). 40 HP, no
+        /// contact damage (<see cref="ContactDamage"/> 0, <see cref="RobotEnemy"/>'s own contact-touch
+        /// tick is never reached). <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/
+        /// <see cref="LungeTime"/>/<see cref="RecoverTime"/> are unread — this body never reaches
+        /// Telegraph/Lunge/Recover — kept at nominal values rather than 0 only for readability, the
+        /// same footing <see cref="Dreadnought"/>/<see cref="Tractor"/>/<see cref="Welder"/>'s own doc
+        /// comments explain. The hang-back movement itself (pack centroid, push-further, 7-9 m clamp)
+        /// is driven by <see cref="RobotEnemy.TickProjectorHangBack"/>'s own authored constants, not by
+        /// any field here — unlike <see cref="Launcher"/>/<see cref="Bolter"/>/<see cref="Tractor"/>'s
+        /// "one field, several doors" idiom, nothing here doubles as a movement parameter. Drops as a
+        /// Bruiser — not <see cref="EnemyKind.Rusher"/>/<see cref="EnemyKind.Skitter"/>/
+        /// <see cref="EnemyKind.Welder"/>, so <see cref="IsLarge"/> already grants it the ordinary
+        /// large-tier roll with no extra code, matching the ticket's own "IsLarge (true)".
+        /// </summary>
+        public static EnemyArchetype Projector => new EnemyArchetype(
+            EnemyKind.Projector, EnemyShape.Capsule, new Vector3(0.75f, 0.75f, 0.75f),
+            colliderHeight: 1.8f, colliderRadius: 0.3f,   // tall and thin — "the tallest robot in the pack"
+            moveSpeed: 0.9f, maxHealth: 40f,
+            contactDamage: 0f, contactRadius: 0.5f,
+            lungeRange: 2.2f, telegraphTime: 0.3f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
+            knockbackDecay: 28f,
+            displayName: "SHIELD PROJECTOR");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -683,6 +712,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Breaker => Breaker,
             EnemyKind.Tractor => Tractor,
             EnemyKind.Welder => Welder,
+            EnemyKind.Projector => Projector,
             _ => Rusher,
         };
 

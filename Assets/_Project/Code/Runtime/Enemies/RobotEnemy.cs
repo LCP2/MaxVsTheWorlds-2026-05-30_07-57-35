@@ -349,6 +349,7 @@ namespace MaxWorlds.Enemies
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
+            _projectorRetargetTimer = 0f; // MV-1279: nor a previous Projector life's stale retarget countdown
             // MV-1217: a pooled instance must not carry a previous Dreadnought life's turret cycle
             // phase/aim into this one — re-seeded by TickDreadnoughtTurrets on its first tick either way.
             _dreadnoughtTurretA = default;
@@ -2005,7 +2006,11 @@ namespace MaxWorlds.Enemies
                     // damaged Assembly Cradle in its own area instead, replacing Chase/Telegraph/Lunge
                     // entirely (there is nothing here to wind up or commit to, per the ticket's own
                     // "never attacks Max or sentinels"). See EnemyArchetype.Welder's own doc comment.
-                    case State.Chase:    if (Kind == EnemyKind.Welder) TickWelderRepair(dt); else TickChase(dt); break;
+                    // MV-1279: the Shield Projector never chases Max either — it hangs back behind its
+                    // own pack instead. See TickProjectorHangBack's own doc comment.
+                    case State.Chase:    if (Kind == EnemyKind.Welder) TickWelderRepair(dt);
+                                         else if (Kind == EnemyKind.Projector) TickProjectorHangBack(dt);
+                                         else TickChase(dt); break;
                     case State.Search:   TickSearch(dt);   break;
                     case State.Telegraph: TickTelegraph(dt); break;
                     case State.Lunge:    TickLunge(dt);    break;
@@ -3440,6 +3445,120 @@ namespace MaxWorlds.Enemies
             RotateToward(dir, dt);
             float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
             CharacterControllerMotion.SafeMove(_cc, dir * step);
+        }
+
+        // --- MV-1279: Shield Projector hang-back movement --------------------------------------
+
+        /// <summary>How often <see cref="TickProjectorHangBack"/> re-picks its goal — the ticket's own
+        /// "each 0.25 s".</summary>
+        private const float ProjectorRetargetInterval = 0.25f;
+
+        /// <summary>How far from itself a Projector looks for allies to hang back behind — the
+        /// ticket's own "within 10 m".</summary>
+        private const float ProjectorPackSearchRadius = 10f;
+
+        /// <summary>How far past the pack's own centroid the goal sits, along the Max-to-centroid line
+        /// — the ticket's own "pushed 3 m further from Max".</summary>
+        private const float ProjectorPushDistance = 3f;
+
+        private const float ProjectorMinStandoff = 7f;
+        private const float ProjectorMaxStandoff = 9f;
+
+        /// <summary>The ticket's own "with no robots in range, hold 8 m from Max".</summary>
+        private const float ProjectorDefaultStandoff = 8f;
+
+        private float _projectorRetargetTimer;
+        private Vector3 _projectorGoal;
+
+        /// <summary>Replaces the whole Chase/Telegraph/Lunge pipeline for <see cref="EnemyKind.Projector"/>
+        /// (dispatched from <see cref="TickBody"/>'s own switch, same footing as
+        /// <see cref="TickWelderRepair"/>) — this kind never attacks Max or a Sentinel either, per
+        /// <see cref="EnemyArchetype.Projector"/>'s own doc comment, so there is nothing here to wind up
+        /// or commit to. Re-picks its goal every <see cref="ProjectorRetargetInterval"/> (the ticket's
+        /// own "each 0.25 s") rather than every tick, the same throttled-decision idiom
+        /// <see cref="ZoneRouteBudget"/> already uses elsewhere, so a pack drifting mid-frame doesn't
+        /// make the goal chatter. Paths to that goal with the existing A*
+        /// (<see cref="EnemyNavigation.Waypoint"/>, no zone routing/formation/separation layered on top
+        /// — the ticket's own "no new pathing", and a hang-back drone has no crowd of its own kind to
+        /// jostle through the way a chasing pack does) and moves the same direct
+        /// RotateToward+<see cref="CharacterControllerMotion.SafeMove"/> step every other simple mover
+        /// in this file uses (<see cref="TickWelderRepair"/>/<see cref="TickPull"/>). Reads Max's LIVE
+        /// position, not <see cref="_sight"/>'s remembered one — unlike <see cref="TickChase"/>, this
+        /// kind is never routing toward a player it has to have seen to find; it is reacting to its own
+        /// allies' positions (always known, the same way <see cref="EnemySeparation"/>'s neighbour query
+        /// already is), so there is no omniscience to guard against here.</summary>
+        private void TickProjectorHangBack(float dt)
+        {
+            if (target == null) { AcquireTarget(); return; }
+
+            _projectorRetargetTimer -= dt;
+            if (_projectorRetargetTimer <= 0f)
+            {
+                _projectorRetargetTimer = ProjectorRetargetInterval;
+                _projectorGoal = ComputeProjectorGoal();
+            }
+
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, _projectorGoal);
+            Vector3 step = waypoint - transform.position;
+            step.y = 0f;
+            float dist = step.magnitude;
+            if (dist <= 0.001f) return;
+
+            Vector3 dir = step / dist;
+            RotateToward(dir, dt);
+            float moveStep = Mathf.Min(EffectiveMoveSpeed * dt, dist);
+            CharacterControllerMotion.SafeMove(_cc, dir * moveStep);
+        }
+
+        /// <summary>The ticket's own goal maths: the centroid of awake, non-Projector robots in this
+        /// robot's own <see cref="AreaIndex"/> within <see cref="ProjectorPackSearchRadius"/>, pushed
+        /// <see cref="ProjectorPushDistance"/> further from Max along the Max-to-centroid line, then
+        /// clamped to <see cref="ProjectorMinStandoff"/>-<see cref="ProjectorMaxStandoff"/> m from Max —
+        /// walking it to the far side of its own pack, using the pack as a shield between itself and
+        /// Max. Falls back to holding <see cref="ProjectorDefaultStandoff"/> m from Max, along this
+        /// robot's own current bearing, when nothing is in range.</summary>
+        private Vector3 ComputeProjectorGoal()
+        {
+            Vector3 maxPos = target.position; maxPos.y = 0f;
+            Vector3 here = transform.position; here.y = 0f;
+
+            Vector3 sum = Vector3.zero;
+            int count = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r == null || r == this || r.Kind == EnemyKind.Projector) continue;
+                if (!r.IsAwake || r.AreaIndex != AreaIndex) continue;
+                Vector3 rp = r.transform.position; rp.y = 0f;
+                if ((rp - here).sqrMagnitude > ProjectorPackSearchRadius * ProjectorPackSearchRadius) continue;
+                sum += rp;
+                count++;
+            }
+
+            if (count == 0)
+            {
+                Vector3 bearing = ProjectorAwayDirection(here, maxPos);
+                return maxPos + bearing * ProjectorDefaultStandoff;
+            }
+
+            Vector3 centroid = sum / count;
+            Vector3 away = ProjectorAwayDirection(centroid, maxPos);
+            Vector3 pushed = centroid + away * ProjectorPushDistance;
+            float standoff = Mathf.Clamp(Vector3.Distance(pushed, maxPos), ProjectorMinStandoff, ProjectorMaxStandoff);
+            return maxPos + away * standoff;
+        }
+
+        /// <summary>The unit direction from <paramref name="maxPos"/> toward <paramref name="from"/> —
+        /// falls back to this robot's own current facing when the two coincide (both XZ-flattened
+        /// already by the caller), so a degenerate "Max standing exactly on the pack centroid" input
+        /// never hands back a zero vector.</summary>
+        private Vector3 ProjectorAwayDirection(Vector3 from, Vector3 maxPos)
+        {
+            Vector3 away = from - maxPos;
+            float dist = away.magnitude;
+            if (dist > 0.001f) return away / dist;
+            Vector3 fwd = transform.forward; fwd.y = 0f;
+            return fwd.sqrMagnitude > 0.001f ? fwd.normalized : Vector3.forward;
         }
 
         // --- MV-1217: Dreadnought twin shoulder turrets -----------------------------------------

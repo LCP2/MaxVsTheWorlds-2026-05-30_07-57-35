@@ -41,6 +41,9 @@ namespace MaxWorlds.Dev
     /// MV-1224 AC3 adds a second extra shot the same way (<see cref="CaptureSkitterPack"/>): a loose
     /// pack of five Skitters, two of them caught genuinely mid-hop — written to
     /// <c>skitter_pack.png</c>.
+    ///
+    /// MV-1279 adds a sixth extra shot the same way (<see cref="CaptureProjectorPair"/>): the Shield
+    /// Projector next to a Rusher, for scale -- written to <c>projector_pair.png</c>.
     /// </summary>
     public sealed class RobotRosterDirector : MonoBehaviour
     {
@@ -75,6 +78,14 @@ namespace MaxWorlds.Dev
         private const float MothershipPair2Pitch = 58f;
         private const float MothershipPair2Distance = 5.4f;
         private const float MothershipPair2Spacing = 2.2f;   // metres between the two robots' centres
+
+        /// <summary>MV-1279 AC2's own framing — pulled back further than every pair above since the
+        /// Projector's mast+dish reaches ~2.5 m, the tallest silhouette this director frames in a pair
+        /// shot (taller than the Dreadnought pair's own Bruiser/Dreadnought, which are wider rather than
+        /// tall).</summary>
+        private const float ProjectorPairPitch = 55f;
+        private const float ProjectorPairDistance = 8.5f;
+        private const float ProjectorPairSpacing = 2f;   // metres between the two robots' centres
 
         private const string DoneMarker = "_robotroster_done.txt";
         private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens\robot-roster";
@@ -156,6 +167,7 @@ namespace MaxWorlds.Dev
             yield return CaptureSkitterPack(cam, focusBase);
             yield return CaptureMothershipPair(cam, focusBase);
             yield return CaptureMothershipPair2(cam, focusBase);
+            yield return CaptureProjectorPair(cam, focusBase);
 
             Finish();
         }
@@ -304,6 +316,38 @@ namespace MaxWorlds.Dev
             {
                 if (lensman != null) Destroy(lensman);
                 if (hauler != null) Destroy(hauler);
+            }
+        }
+
+        /// <summary>MV-1279 AC2 — the Shield Projector next to a Rusher, for scale: one extra shot
+        /// appended the same way as every pair above, using the base roster's <see cref="EnemyArchetype.Of"/>
+        /// forms (no mothership-specific skin for either kind) on the ordinary focus spot, not a
+        /// dedicated floor — neither <see cref="CaptureDreadnoughtPair"/>'s Reef deck nor any mothership
+        /// config is part of this ticket's own AC.</summary>
+        private IEnumerator CaptureProjectorPair(Camera cam, Vector3 focusBase)
+        {
+            GameObject rusher = null, projector = null;
+            try
+            {
+                Vector3 rusherPos = focusBase + Vector3.left * (ProjectorPairSpacing * 0.5f);
+                Vector3 projectorPos = focusBase + Vector3.right * (ProjectorPairSpacing * 0.5f);
+
+                rusher = BuildRobot(EnemyKind.Rusher, rusherPos);
+                projector = BuildRobot(EnemyKind.Projector, projectorPos);
+                for (int i = 0; i < 3; i++) yield return null;   // let both rigs' build settle on screen
+
+                var rot = Quaternion.Euler(ProjectorPairPitch, 0f, 0f);
+                Vector3 focus = (rusherPos + projectorPos) * 0.5f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * ProjectorPairDistance, rot);
+
+                yield return null;
+                yield return null;
+                Capture(cam, "projector_pair");
+            }
+            finally
+            {
+                if (rusher != null) Destroy(rusher);
+                if (projector != null) Destroy(projector);
             }
         }
 
