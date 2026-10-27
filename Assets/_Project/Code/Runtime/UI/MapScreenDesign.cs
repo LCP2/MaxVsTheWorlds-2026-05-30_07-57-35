@@ -55,10 +55,19 @@ namespace MaxWorlds.UI
         /// nothing (alpha 0), this is the only colour left on the marker, for every kind.</summary>
         public static readonly Color ReplicatorDestroyed = new Color32(0x8C, 0x8C, 0x8C, 0xFF);
 
+        /// <summary>MV-1294: a City pylon's own small map dot — steady (never blinks, unlike the
+        /// objective markers above — "not blinking, it is not an exit requirement"), dark red, "the
+        /// machines hold it" per the design image.</summary>
+        public static readonly Color PylonDot = new Color32(0x8C, 0x10, 0x10, 0xFF);
+
         /// <summary>World metres. An objective marker's footprint on the map (MV-830, broadened by
         /// MV-1119 to every still-alive shed/hutch/reactor/Replicator/boss) — matches a Replicator's
         /// 2 x 2 m body.</summary>
         public const float ReplicatorSize = 2f;
+
+        /// <summary>MV-1294: a pylon's own map dot diameter — smaller than <see cref="ReplicatorSize"/>'s
+        /// objective marker, since a pylon is a feed, not an objective in itself.</summary>
+        public const float PylonDotSize = 1.1f;
         /// <summary>World metres. Stroke width for an objective marker's outline.</summary>
         public const float ReplicatorOutlineWidth = 0.3f;
         /// <summary>World metres. A gate is drawn as a bar ALONG the wall it sits in, its length the

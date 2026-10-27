@@ -210,6 +210,14 @@ namespace MaxWorlds.Save
         /// instead of restarting from zero.</summary>
         public string[] CheckpointDestroyedCradleIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>Pylon.Id</c>) of every City substation pylon destroyed by the time
+        /// this checkpoint was captured (MV-1294) — the pylon equivalent of
+        /// <see cref="CheckpointDestroyedReplicatorIds"/>/<see cref="CheckpointDestroyedCradleIds"/>,
+        /// restored the same way: silently re-destroying whichever of the freshly-rebuilt level's pylons
+        /// carry a matching id, so a resume never resurrects a pylon the player already destroyed (and
+        /// never re-feeds a relay or boss whose shield the player already dropped).</summary>
+        public string[] CheckpointDestroyedPylonIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player

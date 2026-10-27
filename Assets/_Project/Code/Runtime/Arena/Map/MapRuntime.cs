@@ -27,6 +27,9 @@ namespace MaxWorlds.Arena
         /// <summary>The Assembly Cradles this map built (MV-1232), in the order it authored them.</summary>
         public readonly List<AssemblyCradle> Cradles = new List<AssemblyCradle>(2);
 
+        /// <summary>The pylons this map built (MV-1294), in the order it authored them.</summary>
+        public readonly List<Pylon> Pylons = new List<Pylon>(4);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1339,6 +1342,12 @@ namespace MaxWorlds.Arena
             RetireSceneFactories();
             FactoryCensus.Reset();
 
+            // MV-1294: same reasoning as FactoryCensus.Reset() above, one level up — a level loaded a
+            // second time (the game, or a test run) must count its own pylons, not the previous level's
+            // (or the previous test's) ghosts. ResetRegistry, not Reset — see that method's own doc
+            // comment for why a MonoBehaviour can't name a static method "Reset".
+            Pylon.ResetRegistry();
+
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
             AreaVisitCensus.Reset();
@@ -2489,6 +2498,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Boss:
                         built.Bosses.Add(BuildBoss(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.Pylon:
+                        built.Pylons.Add(BuildPylon(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2716,6 +2729,37 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return replicator;
+        }
+
+        /// <summary>
+        /// A City substation pylon, from data (MV-1294) — same "one recipe, however many a level
+        /// authors" shape as <see cref="BuildReplicator"/>/<see cref="BuildCradle"/>. Built AFTER every
+        /// shed/replicator/cradle/boss (<see cref="WorldMapLoader.TryLoad"/> appends pylons to the
+        /// entity list last, for exactly this reason): <see cref="MapEntity.feeds"/> names a relay or
+        /// boss entity id that must already be standing in <paramref name="built"/>.Actors for this
+        /// pylon to find and feed its cable toward. A <c>feeds</c> id that resolves to nothing (typo, or
+        /// a target not yet built) leaves the pylon with no cable rather than throwing — the same
+        /// "forward compatible, never refuses to build" idiom <see cref="EntityKind.Unknown"/> already
+        /// keeps for an unrecognised entity kind.
+        /// </summary>
+        private static Pylon BuildPylon(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+            MarkDiscoverable(body);
+
+            var pylon = body.AddComponent<Pylon>();
+            pylon.SetId(e.id);
+            pylon.Configure(e.feeds);
+
+            if (!string.IsNullOrEmpty(e.feeds) && built.Actors.TryGetValue(e.feeds, out GameObject targetGo) && targetGo != null)
+                pylon.SetFeedTarget(targetGo.transform);
+
+            // A pylon never moves — tag it the same way BuildReplicator tags its own box.
+            TagStatic(map, body, rendererZones);
+
+            built.Actors[e.id] = body;
+            return pylon;
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly

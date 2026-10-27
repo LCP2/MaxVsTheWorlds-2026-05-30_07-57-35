@@ -181,6 +181,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1201CityRelay() => RunFromMenu(CapturePresets.All["mv1201cityrelay"]);
         public static void CaptureMv1201CityRelay() => Run(CapturePresets.All["mv1201cityrelay"]);
 
+        [MenuItem("MaxWorlds/Capture/Pylon + Cable (MV-1294)")]
+        public static void MenuMv1294Pylon() => RunFromMenu(CapturePresets.All["mv1294pylon"]);
+        public static void CaptureMv1294Pylon() => Run(CapturePresets.All["mv1294pylon"]);
+
         [MenuItem("MaxWorlds/Capture/Assembly Cradle (MV-1227)")]
         public static void MenuMv1227AssemblyCradle() => RunFromMenu(CapturePresets.All["mv1227assemblycradle"]);
         public static void CaptureMv1227AssemblyCradle() => Run(CapturePresets.All["mv1227assemblycradle"]);

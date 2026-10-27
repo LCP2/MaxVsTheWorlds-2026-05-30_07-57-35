@@ -309,6 +309,7 @@ namespace MaxWorlds.Save
             data.CheckpointDestroyedReplicatorIds = FactoryCensus.DestroyedReplicatorIds();
             data.CheckpointDestroyedShedIds = FactoryCensus.DestroyedShedIds();
             data.CheckpointDestroyedCradleIds = FactoryCensus.DestroyedCradleIds();
+            data.CheckpointDestroyedPylonIds = Pylon.DestroyedIds();
             data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
 
             // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
@@ -390,6 +391,7 @@ namespace MaxWorlds.Save
             FactoryCensus.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedReplicatorIds);
             FactoryCensus.ApplyCheckpointDestroyedShedIds(data.CheckpointDestroyedShedIds);
             FactoryCensus.ApplyCheckpointDestroyedCradleIds(data.CheckpointDestroyedCradleIds);
+            Pylon.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedPylonIds);
             BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
 
             // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
@@ -525,6 +527,7 @@ namespace MaxWorlds.Save
             data.CheckpointDestroyedReplicatorIds = Array.Empty<string>();
             data.CheckpointDestroyedShedIds = Array.Empty<string>();
             data.CheckpointDestroyedCradleIds = Array.Empty<string>();
+            data.CheckpointDestroyedPylonIds = Array.Empty<string>();
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();
             data.CheckpointFinaleWeaponGranted = false;
             data.CheckpointFinaleExitOpen = false;
