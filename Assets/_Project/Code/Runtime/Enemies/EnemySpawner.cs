@@ -392,6 +392,14 @@ namespace MaxWorlds.Enemies
         /// as dormant rather than as a threat he can't see or answer.</summary>
         public void SetAreaPaused(bool paused) => _areaPaused = paused;
 
+        private bool _emissionGateOpen = true;
+
+        /// <summary>MV-1295: the Hatchery Clam's own open/shut cycle — gates production exactly like
+        /// <see cref="SetAreaPaused"/> already gates "Max isn't standing here", so a shut clam's mouth
+        /// stays latched without touching <see cref="_running"/> (which <see cref="Stop"/> reserves for
+        /// "dead for good"). A plain shed never calls this, so it stays permanently open.</summary>
+        public void SetEmissionGateOpen(bool open) => _emissionGateOpen = open;
+
         /// <summary>Live count of one kind — lets a test prove the mix actually reaches the field.</summary>
         public int LiveCountOf(EnemyKind kind)
         {
@@ -443,6 +451,7 @@ namespace MaxWorlds.Enemies
             // MV-1093: only produce while Max stands in this shed's own area — live or post-destruction
             // trickle alike (MV-456's rule, generalised rather than kept as a destroyed-only special case).
             if (_areaPaused) return;
+            if (!_emissionGateOpen) return; // MV-1295: a shut Hatchery Clam's mouth stays latched
             // MV-1093: nothing this area may emit — the door must stay shut, not cycle open and shut on
             // nothing (World 3's every shed, pre-fix: no composition, no fallback, WantsToEmit never
             // checked the cadence at all).

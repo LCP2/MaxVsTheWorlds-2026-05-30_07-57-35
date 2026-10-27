@@ -563,6 +563,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1258ReefSetPiecesCheck());
             Add(BuildMv1260ShipWallDressingCheck());
             Add(BuildMv1266ReefPlayCameraCheck());
+            Add(BuildMv1295HatcheryClamLook());
             return d;
         }
 
@@ -2075,6 +2076,77 @@ namespace MaxWorlds.Dev
                 TimeoutSeconds = 90,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1211-balls", Setup) },
                 Cleanup = () => LightMissileBall.DestroyPoolForTests(),
+            };
+        }
+
+        // ---- MV1295HatcheryClamLook (MV-1295 AC2) ---------------------------------------------
+
+        /// <summary>MV-1295 AC2: one capture of a clam OPEN and a clam SHUT, side by side — same
+        /// "two states, one shot" idiom <see cref="BuildMv1211LightMissileLook"/> uses for LIGHT
+        /// MISSILE's two power levels. Two synthetic <see cref="MowerHutch"/> bodies, same "spawn it
+        /// fresh in the open zone" recipe <see cref="BuildMv1097ShedLaserBeamCheck"/> uses, each turned
+        /// into a Hatchery Clam; the right one is ticked 9s into its own 8-open/4-shut cycle (1s into
+        /// shut) so the two read as the ticket's own two static poses rather than a mid-swing blur.</summary>
+        private static CapturePreset BuildMv1295HatcheryClamLook()
+        {
+            const float pitch = 50f;
+            const float distance = 7f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject openGo = null;
+            GameObject shutGo = null;
+
+            MowerHutch SpawnClam(Vector3 position, string name)
+            {
+                var go = new GameObject(name);
+                go.transform.position = position;
+                go.transform.localScale = new Vector3(3f, 2f, 3f); // the body MapRuntime's own sheds build at
+                var hutch = go.AddComponent<MowerHutch>();
+                typeof(MowerHutch).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(hutch, null);
+                hutch.ApplyReefSkin();
+                hutch.ApplyHatcheryClamBehavior();
+                return hutch;
+            }
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + self-installing systems settle
+
+                Vector3 origin = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                MowerHutch open = SpawnClam(origin + new Vector3(-2.2f, 0f, 0f), "MV1295CaptureClamOpen");
+                openGo = open.gameObject;
+
+                MowerHutch shut = SpawnClam(origin + new Vector3(2.2f, 0f, 0f), "MV1295CaptureClamShut");
+                shutGo = shut.gameObject;
+                shut.TickClamPhase(9f); // 1s into the shut phase — the ticket's own second static pose
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 focus = origin + Vector3.up * 1f;
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1295hatcheryclamlook",
+                LogTag = "[MV1295Capture]",
+                Flag = "-mv1295shot",
+                ArmFile = "Temp/mv1295.arm",
+                HeadlessMarker = "Temp/mv1295.headless",
+                DoneFileName = "_mv1295_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1295-clam-open-shut", Setup) },
+                Cleanup = () =>
+                {
+                    if (openGo != null) Destroy(openGo);
+                    if (shutGo != null) Destroy(shutGo);
+                },
             };
         }
 
