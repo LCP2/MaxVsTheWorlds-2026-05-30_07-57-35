@@ -293,7 +293,10 @@ namespace MaxWorlds.VFX
             TintLens(eye, RelayGold);
         }
 
-        private static void TintLens(MeshRenderer r, Color c)
+        /// <summary>Public (MV-1297): <see cref="MaxWorlds.Factories.AssemblyCradle"/> re-tints its own
+        /// top lens for the STANDBY dim/pulse, the same MaterialPropertyBlock mechanism every other lens
+        /// in this file already uses.</summary>
+        public static void TintLens(MeshRenderer r, Color c)
         {
             var mpb = new MaterialPropertyBlock();
             r.GetPropertyBlock(mpb);
@@ -401,7 +404,10 @@ namespace MaxWorlds.VFX
         /// (ticket), #E2483D.</summary>
         private static readonly Color CradleRed = new Color(0.886f, 0.282f, 0.239f);
 
-        private static readonly Color CradleGold = new Color(1.00f, 0.80f, 0.20f);
+        /// <summary>Public (MV-1297): <see cref="MaxWorlds.Factories.AssemblyCradle"/> restores its top
+        /// lens to this exact tint when leaving STANDBY, so the two never drift to slightly different
+        /// golds.</summary>
+        public static readonly Color CradleGold = new Color(1.00f, 0.80f, 0.20f);
         private static readonly Color CradlePreviewGrey = new Color(0.55f, 0.55f, 0.58f);
 
         /// <summary>The same idle amber every live robot's own eye rests at (RobotRig's own
@@ -431,9 +437,14 @@ namespace MaxWorlds.VFX
             public readonly Transform BayRoot;
             public readonly Transform[] TurretHousings;
 
-            public CradleGantry(Transform[] arms, Transform bayRoot, Transform[] turretHousings)
+            /// <summary>MV-1297: the gold lens on top — the one static, always-visible light
+            /// <see cref="MaxWorlds.Factories.AssemblyCradle"/> dims and slow-pulses for its STANDBY
+            /// tell, restoring <see cref="CradleGold"/> the rest of the time.</summary>
+            public readonly MeshRenderer TopLens;
+
+            public CradleGantry(Transform[] arms, Transform bayRoot, Transform[] turretHousings, MeshRenderer topLens)
             {
-                Arms = arms; BayRoot = bayRoot; TurretHousings = turretHousings;
+                Arms = arms; BayRoot = bayRoot; TurretHousings = turretHousings; TopLens = topLens;
             }
         }
 
@@ -523,7 +534,7 @@ namespace MaxWorlds.VFX
             bayRoot.SetParent(root, worldPositionStays: false);
             bayRoot.localPosition = new Vector3(0f, -hh, 0f);
 
-            return new CradleGantry(arms, bayRoot, turrets);
+            return new CradleGantry(arms, bayRoot, turrets, topLens);
         }
 
         /// <summary>The front-top turret housing plus barrel — a hexagonal drum, never a plain cube
