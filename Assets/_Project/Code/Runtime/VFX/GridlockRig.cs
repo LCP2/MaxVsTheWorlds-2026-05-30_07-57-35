@@ -186,6 +186,7 @@ namespace MaxWorlds.VFX
             BuildEye();
             BuildGoldRing();
             BuildLegs();
+            BuildTelegraph();
         }
 
         /// <summary>The six-sided housing itself: white ceramic below, black glass above, split on one
@@ -237,8 +238,8 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>The roof dial and its clock ring — static geometry only. MV-1306 is what actually
-        /// fills the ring toward her next attack; this ticket builds the track it fills along.</summary>
+        /// <summary>The roof dial and its clock ring track. <see cref="BuildTelegraph"/> is what
+        /// actually fills the ring toward her next attack (MV-1306) and shows the warning shapes.</summary>
         private void BuildDial()
         {
             CharacterPart.Add(transform, CharacterMeshes.Prism(24, DialRadius, DialRadius, DialHeight),
@@ -246,6 +247,110 @@ namespace MaxWorlds.VFX
 
             CharacterPart.Add(transform, CharacterMeshes.Ring(ClockRingInner, ClockRingOuter, ClockRingThickness),
                 s_accent, new Vector3(0f, DrumTopY + DialHeight + 0.01f, 0f), Quaternion.identity, Vector3.one, "ClockRing");
+        }
+
+        // ---------------------------------------------------------------- warning telegraph (MV-1306)
+
+        private const float TellY = 0.02f;
+        private const float TellTriBase = 0.22f, TellTriTip = 0.02f, TellTriHeight = 0.14f;
+        private const float TellCrossLength = 0.85f, TellCrossThickness = 0.1f, TellCrossHeight = 0.1f;
+        private const int FillPipCount = 12;
+
+        private Transform _squadTell, _jumpTell, _strikeTell;
+        private MeshRenderer[] _fillPips;
+
+        /// <summary>The three white SHAPES the ticket's own "never a traffic-light colour" calls for
+        /// (chevrons/double-arrow/crosshair), plus a ring of discrete pip lights standing in for the
+        /// clock ring's fill — same "a light is a lit/unlit discrete element" idiom the rack lights
+        /// and floor grid already use on this rig, rather than a partial-arc shader
+        /// <see cref="CharacterMeshes.Ring"/> has no support for. Built once, inactive; toggled per
+        /// frame in <see cref="UpdateTelegraph"/> off <see cref="GridlockBoss"/>'s own read-only
+        /// state — gameplay says what's imminent, the rig only shows it.</summary>
+        private void BuildTelegraph()
+        {
+            float y = DrumTopY + DialHeight + TellY;
+
+            _squadTell = NewTellRoot("SquadTell", y);
+            AddTellMarker(_squadTell, -0.32f);
+            AddTellMarker(_squadTell, 0f);
+            AddTellMarker(_squadTell, 0.32f);
+
+            _jumpTell = NewTellRoot("JumpTell", y);
+            AddTellMarker(_jumpTell, -0.22f);
+            AddTellMarker(_jumpTell, 0.22f);
+
+            _strikeTell = NewTellRoot("StrikeTell", y);
+            Vector3 crossCenter = new Vector3(0f, TellCrossHeight * 0.5f, 0f);
+            var barA = CharacterPart.AddLens(_strikeTell,
+                CharacterMeshes.Bevelled(new Vector3(TellCrossLength, TellCrossHeight, TellCrossThickness), 0.01f),
+                crossCenter, Quaternion.identity, Vector3.one);
+            ApplyLensColor(barA, Color.white);
+            var barB = CharacterPart.AddLens(_strikeTell,
+                CharacterMeshes.Bevelled(new Vector3(TellCrossThickness, TellCrossHeight, TellCrossLength), 0.01f),
+                crossCenter, Quaternion.identity, Vector3.one);
+            ApplyLensColor(barB, Color.white);
+
+            BuildFillPips(y + 0.01f);
+        }
+
+        private Transform NewTellRoot(string name, float y)
+        {
+            var root = new GameObject(name).transform;
+            root.SetParent(transform, worldPositionStays: false);
+            root.localPosition = new Vector3(0f, y, 0f);
+            root.gameObject.SetActive(false);
+            return root;
+        }
+
+        /// <summary>One small white triangular nub standing on the dial at local Z
+        /// <paramref name="localZ"/> — three of these in a row read as the SQUAD tell's chevrons,
+        /// two side by side read as the JUMP tell's double arrow (same vertical-Prism convention
+        /// <see cref="BuildCore"/>'s own crystal spike already uses, so no new rotation maths is
+        /// needed to keep it readable from the fixed top-down camera).</summary>
+        private void AddTellMarker(Transform parent, float localZ)
+        {
+            Vector3 pos = new Vector3(0f, TellTriHeight * 0.5f, localZ);
+            var marker = CharacterPart.AddLens(parent, CharacterMeshes.Prism(3, TellTriBase, TellTriTip, TellTriHeight),
+                pos, Quaternion.identity, Vector3.one);
+            ApplyLensColor(marker, Color.white);
+        }
+
+        private void BuildFillPips(float y)
+        {
+            float radius = (ClockRingInner + ClockRingOuter) * 0.5f;
+            _fillPips = new MeshRenderer[FillPipCount];
+            for (int i = 0; i < FillPipCount; i++)
+            {
+                float angleDeg = i * (360f / FillPipCount);
+                Vector3 pos = AngleDir(angleDeg) * radius + Vector3.up * (y + 0.015f);
+                var pip = CharacterPart.AddLens(transform, CharacterMeshes.Bevelled(new Vector3(0.1f, 0.03f, 0.1f), 0.015f),
+                    pos, Quaternion.identity, Vector3.one);
+                pip.gameObject.name = "ClockPip";
+                ApplyLensColor(pip, DarkSteel);
+                _fillPips[i] = pip;
+            }
+        }
+
+        /// <summary>Shows exactly one warning shape at a time (the ticket's own three attacks never
+        /// telegraph simultaneously — each owns its own cadence) and lights the clock-ring pips up to
+        /// <see cref="GridlockBoss.NextAttackProgress01"/>.</summary>
+        private void UpdateTelegraph()
+        {
+            if (_boss == null) return;
+
+            if (_squadTell != null) _squadTell.gameObject.SetActive(_boss.SquadWarningActive);
+            if (_jumpTell != null) _jumpTell.gameObject.SetActive(_boss.JumpWarningActive);
+            if (_strikeTell != null) _strikeTell.gameObject.SetActive(_boss.StrikeArming);
+
+            UpdateFillPips(_boss.NextAttackProgress01);
+        }
+
+        private void UpdateFillPips(float progress01)
+        {
+            if (_fillPips == null) return;
+            int lit = Mathf.RoundToInt(Mathf.Clamp01(progress01) * _fillPips.Length);
+            for (int i = 0; i < _fillPips.Length; i++)
+                ApplyLensColor(_fillPips[i], i < lit ? Color.white : DarkSteel);
         }
 
         /// <summary>The turning crystal core — a faceted red spike, spinning continuously on its own Y
@@ -407,6 +512,7 @@ namespace MaxWorlds.VFX
             UpdateGait(dt);
             SpinCore(dt);
             FollowFloorGrid();
+            UpdateTelegraph();
         }
 
         private void Follow()
@@ -429,7 +535,11 @@ namespace MaxWorlds.VFX
         private void SpinCore(float dt)
         {
             if (_coreTransform == null) return;
-            _coreTransform.Rotate(Vector3.up, CoreSpinDegPerSec * dt, Space.Self);
+            // MV-1306: "at half health, her lights run twice as fast" -- the spinning core is the one
+            // part of her that's always moving (see this field's own doc comment), so it's what reads
+            // as her "lights" speeding up.
+            float speedScale = _boss != null ? _boss.LightSpeedScale : 1f;
+            _coreTransform.Rotate(Vector3.up, CoreSpinDegPerSec * speedScale * dt, Space.Self);
         }
 
         /// <summary>Advances the planted-foot walk and re-stretches every needle leg to join its own
