@@ -162,6 +162,7 @@ namespace MaxWorlds.Arena
                     foreach (MapEntity e in map.entities)
                     {
                         if (e == null || e.Kind != EntityKind.Cover) continue;
+                        if (e.broken) continue;   // MV-1298: a broken destructible piece no longer blocks
                         if (!zone.Contains(e.x, e.z)) continue;   // cover sits inside a room (MapRoutes)
 
                         Rect fp = e.ToCover().Footprint;

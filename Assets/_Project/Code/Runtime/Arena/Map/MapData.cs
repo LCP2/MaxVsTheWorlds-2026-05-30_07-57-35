@@ -189,6 +189,19 @@ namespace MaxWorlds.Arena
         /// dressing-keyed Hedge/Pipe exemption, not a replacement for it.</summary>
         public string coverKind = "solid";
 
+        /// <summary>Cover only (MV-1298) — resolved from <see cref="WorldCover.hp"/>. 0 (default, every
+        /// other kind) means indestructible. 0 for every other kind.</summary>
+        public float hp;
+
+        /// <summary>Cover only (MV-1298) — set true at RUNTIME, directly on this instance, the moment a
+        /// <see cref="MaxWorlds.Factories.DestructibleCover"/> breaks. Unlike every other field on this
+        /// record, this one is mutated after load rather than authored — <see cref="ZoneRouteGrid"/>
+        /// rasterises straight off <see cref="MapData.entities"/>, so flipping this here (rather than
+        /// keeping a parallel "destroyed ids" set the grid would have to cross-reference) is what makes a
+        /// broken piece stop blocking the very next <see cref="ZoneRouteGrid.Forget"/>-triggered re-solve.
+        /// False for every other kind, and for every intact cover piece.</summary>
+        public bool broken;
+
         /// <summary>Factory only — resolved from <see cref="WorldShed.mobile"/> (MV-548, shed roadmap
         /// stage 3). <see cref="MapRuntime"/> gives a mobile factory a <c>CharacterController</c> and
         /// wires it into <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> instead of

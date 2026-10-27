@@ -226,6 +226,14 @@ namespace MaxWorlds.Save
         /// blew (and never re-chains an explosion that already happened).</summary>
         public string[] CheckpointDestroyedCanisterIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>DestructibleCover.Id</c>) of every destructible cover piece broken by
+        /// the time this checkpoint was captured (MV-1298) — the cover equivalent of
+        /// <see cref="CheckpointDestroyedPylonIds"/>/<see cref="CheckpointDestroyedCanisterIds"/>,
+        /// restored the same way: silently re-breaking whichever of the freshly-rebuilt level's
+        /// destructible cover pieces carry a matching id, so a resume never resurrects cover the player
+        /// already broke.</summary>
+        public string[] CheckpointDestroyedCoverIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player

@@ -493,6 +493,13 @@ namespace MaxWorlds.Arena
         /// (see <see cref="MapRuntime.BuildCover"/> for why the existing dressing-keyed exemption stays
         /// alongside this field rather than being replaced by it).</summary>
         public string coverKind = "solid";
+
+        /// <summary>MV-1298: this piece's HP — 0 (every piece authored before this field existed)
+        /// means indestructible, unchanged. A piece with <c>hp &gt; 0</c> takes damage from shots of
+        /// ANY team that it blocks and breaks once its HP reaches zero (<see cref="MaxWorlds.Factories.DestructibleCover"/>).
+        /// Placement of any destructible piece is a separate ticket (MV-1302); this field only adds the
+        /// capability.</summary>
+        public float hp = 0f;
     }
 
     /// <summary>One authored floor-paint/street-furniture decal (MV-1177) — a rect given by its CENTRE

@@ -370,6 +370,7 @@ namespace MaxWorlds.Arena
                         shape = c.shape,
                         dressing = c.dressing,
                         coverKind = c.coverKind,
+                        hp = c.hp,
                     });
                 }
             }
