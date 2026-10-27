@@ -224,6 +224,22 @@ namespace MaxWorlds.Arena
                     // can persist and restore "which cradles are destroyed" by id.
                     cradle.SetId(cradleId);
                 }
+
+                // MV-1312: same reasoning as the cradle loop above — a Welder's own airlock-cut tick
+                // (RobotEnemy.TickWelderAirlockCut) asks AirlockPanel.NearestReadyForWelderCut for "the
+                // nearest READY airlock in its own area", which means nothing if every panel is stuck at
+                // the default AreaIndex 0 regardless of which of the 30 areas actually built it.
+                WorldAirlock[] airlocksCfg = area.airlocks ?? Array.Empty<WorldAirlock>();
+                for (int i = 0; i < airlocksCfg.Length; i++)
+                {
+                    WorldAirlock airlockCfg = airlocksCfg[i];
+                    if (airlockCfg == null || string.IsNullOrEmpty(airlockCfg.id)) continue;
+                    if (!build.Actors.TryGetValue(airlockCfg.id, out GameObject airlockGo) || airlockGo == null) continue;
+
+                    AirlockPanel airlock = airlockGo.GetComponent<AirlockPanel>();
+                    if (airlock == null) continue;
+                    airlock.SetAreaIndex(area.index);
+                }
             }
 
             BuildGateIntoAreaMap(build);

@@ -69,9 +69,11 @@ namespace MaxWorlds.Tests.EditMode
             [14] = new ExpectedComposition { Rusher = 6, Turret = 2, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 2, Brute = 2 },
             [16] = new ExpectedComposition { Rusher = 6, Turret = 3, Gunner = 3, Bruiser = 3, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Tractor = 2 },
             [19] = new ExpectedComposition { Rusher = 7, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 2, Blinker = 2, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Breaker = 1 },
-            [21] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Breaker = 2 },
-            [24] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 2, Breaker = 2, Welder = 2 },
-            [26] = new ExpectedComposition { Rusher = 9, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 3, Breaker = 2 },
+            // MV-1312 hand-added 1 Welder each to a21/a24/a26 (near each area's own airlock) —
+            // a24 already carried 2, so its own +1 stacks onto that ticket's own total.
+            [21] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 2, Heavy = 2, Skitter = 3, Brute = 2, Breaker = 2, Welder = 1 },
+            [24] = new ExpectedComposition { Rusher = 8, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 2, Breaker = 2, Welder = 3 },
+            [26] = new ExpectedComposition { Rusher = 9, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 3, Breaker = 2, Welder = 1 },
             [29] = new ExpectedComposition { Rusher = 9, Turret = 3, Gunner = 4, Bruiser = 4, Launcher = 3, Blinker = 3, Bolter = 3, Heavy = 3, Skitter = 3, Brute = 3, Breaker = 2 },
         };
 

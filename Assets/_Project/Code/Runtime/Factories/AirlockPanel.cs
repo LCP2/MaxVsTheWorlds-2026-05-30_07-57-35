@@ -61,6 +61,19 @@ namespace MaxWorlds.Factories
         /// keep in sync.</summary>
         private float _elapsedSinceBlow = float.PositiveInfinity;
 
+        /// <summary>MV-1312: set by <c>RobotEnemy.TickWelderAirlockCut</c> every frame a Welder's torch
+        /// is actively dwelling on this panel — read (then cleared) by <see cref="Tick"/> so a frame with
+        /// no call reads as "not being cut" again without a separate timeout. Drives the ticket's own
+        /// "the panel light flickers orange during the cut", layered on READY the same way BLOWING's own
+        /// flicker is, via <see cref="_cutFlickerElapsed"/>.</summary>
+        private bool _beingCutThisFrame;
+        private bool _beingCut;
+        private float _cutFlickerElapsed;
+
+        /// <summary>Called once per tick by a Welder mid-beam (MV-1312) — see <see cref="_beingCutThisFrame"/>'s
+        /// own doc comment.</summary>
+        public void MarkBeingCut() => _beingCutThisFrame = true;
+
         /// <summary>A panel is never destroyed, only cycled — always a valid <see cref="IDamageable"/>
         /// hit target.</summary>
         public bool IsAlive => true;
@@ -75,6 +88,15 @@ namespace MaxWorlds.Factories
         public string Id { get; private set; } = string.Empty;
 
         public void SetId(string id) => Id = id ?? string.Empty;
+
+        /// <summary>MV-1312: which 1-based area this panel was placed into — same "set once by whoever
+        /// built the world, not re-derived live from position" footing as
+        /// <see cref="MaxWorlds.Factories.AssemblyCradle.AreaIndex"/>, read by
+        /// <see cref="NearestReadyForWelderCut"/> so a Welder only ever finds an airlock in its OWN
+        /// area. 0 until stamped, same default every unplaced <c>RobotEnemy.AreaIndex</c> starts at.</summary>
+        public int AreaIndex { get; private set; }
+
+        public void SetAreaIndex(int area) => AreaIndex = area;
 
         /// <summary>Resolved, not stored — the one place the three states are told apart, so
         /// <see cref="Hit"/>/<see cref="Tick"/>/the pull queries below can never disagree about which
@@ -178,6 +200,11 @@ namespace MaxWorlds.Factories
         public void Tick(float dt)
         {
             if (_elapsedSinceBlow < ReadySeconds) _elapsedSinceBlow += dt;
+
+            _cutFlickerElapsed = _beingCutThisFrame ? _cutFlickerElapsed + dt : 0f;
+            _beingCut = _beingCutThisFrame;
+            _beingCutThisFrame = false;
+
             UpdateLight();
         }
 
@@ -196,7 +223,15 @@ namespace MaxWorlds.Factories
                     c = RechargingLightColor;
                     break;
                 default:
-                    c = ReadyLightColor;
+                    if (_beingCut)
+                    {
+                        bool cutFlashOn = Mathf.FloorToInt(_cutFlickerElapsed * FlashesPerSecond) % 2 == 0;
+                        c = cutFlashOn ? BlowingLightColor : ReadyLightColor;
+                    }
+                    else
+                    {
+                        c = ReadyLightColor;
+                    }
                     break;
             }
 
@@ -237,6 +272,35 @@ namespace MaxWorlds.Factories
                 pull += (toPanel / dist) * speed;
             }
             return pull;
+        }
+
+        /// <summary>MV-1312: the nearest READY airlock to <paramref name="from"/> (a Welder's own
+        /// position) in <paramref name="areaIndex"/> that <paramref name="maxPosition"/> currently sits
+        /// within <paramref name="maxDistanceFromMax"/> of — the ticket's own trigger, "when Max is
+        /// within 12 m of a READY airlock". Null if nothing in the area qualifies. Same "mover queries a
+        /// static source" shape as <see cref="AssemblyCradle.NearestDamagedInArea"/>, gated on Max's
+        /// distance rather than the Welder's own.</summary>
+        public static AirlockPanel NearestReadyForWelderCut(Vector3 from, Vector3 maxPosition, int areaIndex, float maxDistanceFromMax)
+        {
+            AirlockPanel best = null;
+            float bestDistSqr = float.PositiveInfinity;
+            float maxRangeSqr = maxDistanceFromMax * maxDistanceFromMax;
+
+            for (int i = 0; i < Registered.Count; i++)
+            {
+                AirlockPanel p = Registered[i];
+                if (p == null || p.AreaIndex != areaIndex) continue;
+                if (p.State != PanelState.Ready) continue;
+
+                Vector3 toMax = p.transform.position - maxPosition;
+                toMax.y = 0f;
+                if (toMax.sqrMagnitude > maxRangeSqr) continue;
+
+                float distSqr = (p.transform.position - from).sqrMagnitude;
+                if (distSqr < bestDistSqr) { bestDistSqr = distSqr; best = p; }
+            }
+
+            return best;
         }
 
         /// <summary>True the instant <paramref name="worldPosition"/> is within ANY currently-BLOWING

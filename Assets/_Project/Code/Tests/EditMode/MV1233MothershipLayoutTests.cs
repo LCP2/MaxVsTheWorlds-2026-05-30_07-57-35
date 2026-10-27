@@ -47,11 +47,14 @@ namespace MaxWorlds.Tests.EditMode
         // and 1 Jammer each to a6/a11/a16/a21/a26 (indices 5/10/15/20/25) — the ticket's own "Worlds
         // 3-5 stop feeling the same", outside the Areas tab's own column G and not yet mirrored back
         // into the workbook (that mirroring is this ticket's own named follow-up).
+        // MV-1312 hand-added 1 Welder each to a21-a28 (indices 20-27) near each area's own airlock —
+        // the ticket's own "Mothership twist: Welders cut airlocks open on Max", same "outside the
+        // Areas tab, not yet mirrored back" footing as MV-1292's own Projector/Jammer additions.
         private static readonly int[] ExpectedRobotCounts =
         {
             14, 18, 16, 23, 24, 27, 22, 36, 29, 26,
             25, 32, 30, 27, 39, 31, 32, 34, 33, 28,
-            37, 44, 38, 41, 32, 41, 40, 40, 41, 32,
+            38, 45, 39, 42, 33, 42, 41, 41, 41, 32,
         };
 
         private const int ExpectedAreaCount = 30;
