@@ -25,6 +25,7 @@ namespace MaxWorlds.Arena
         Pylon,                // MV-1294
         Canister,             // MV-1296
         Current,              // MV-1300
+        Airlock,              // MV-1305
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -223,8 +224,9 @@ namespace MaxWorlds.Arena
         /// <see cref="Wall"/>), resolved by <see cref="WorldMapLoader"/> from rect adjacency at load
         /// time. Replicator only (MV-860) — which side is its IN face, resolved from
         /// <see cref="WorldReplicator.facing"/> ("S" when unauthored). Current only (MV-1300) — the
-        /// lane's own flow direction, resolved from <see cref="WorldCurrent.dir"/>. Empty for every
-        /// other kind.</summary>
+        /// lane's own flow direction, resolved from <see cref="WorldCurrent.dir"/>. Airlock only
+        /// (MV-1305) — cosmetic door-facing, resolved from <see cref="WorldAirlock.facing"/>. Empty for
+        /// every other kind.</summary>
         public string facing = "";
 
         /// <summary>Sludge only (MV-692) — the speed multiplier a mover standing inside this rect is

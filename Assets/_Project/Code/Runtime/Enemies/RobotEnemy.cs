@@ -2362,6 +2362,7 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
             ApplyCurrentDrift(dt);
+            ApplyAirlockPull(dt);
 
             // MV-1066: once the guaranteed-arrival glide has taken over (TickReplicatorSeeking, past
             // GuaranteedArrivalSeconds), gravity and the fall-recovery safety net (MV-946/MV-952) must
@@ -2462,6 +2463,32 @@ namespace MaxWorlds.Enemies
 
             Vector3 drift = MapCurrents.Instance.DriftAt(transform.position);
             if (drift.sqrMagnitude > 0f) CharacterControllerMotion.SafeMove(_cc, drift * dt);
+        }
+
+        /// <summary>MV-1305: a blowing airlock panel's pull on this robot — same exemptions as
+        /// <see cref="ApplyCurrentDrift"/> immediately above (a Dreadnought/Turret stand their ground,
+        /// a fully-submerged Lurker is not "on the ground" to be pushed), and its own
+        /// <see cref="AirlockPanel.RobotPullAt"/>/<see cref="AirlockPanel.AnyKillZoneContains"/> queries
+        /// rather than <see cref="MapCurrents"/> — the pull is a different speed for a robot than for Max
+        /// (<see cref="AirlockPanel"/>'s own doc comment explains why that rules out one shared drift
+        /// field). MV-1293 ruling: a PLAYER-triggered hazard (this one, set off by Max shooting the panel)
+        /// is explicitly licensed to remove robots, unlike a world-run hazard — so a robot that closes
+        /// within the panel's kill radius is blown out via <see cref="KillWithoutDrops"/> rather than
+        /// merely damaged.</summary>
+        private void ApplyAirlockPull(float dt)
+        {
+            if (Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Turret) return;
+            if (Current == State.Submerged && _lurkerPhase == LurkerCycle.Phase.Submerged) return;
+
+            if (AirlockPanel.AnyKillZoneContains(transform.position))
+            {
+                AirlockPanel.PlaySuckVfx(transform.position);
+                KillWithoutDrops();
+                return;
+            }
+
+            Vector3 pull = AirlockPanel.RobotPullAt(transform.position);
+            if (pull.sqrMagnitude > 0f) CharacterControllerMotion.SafeMove(_cc, pull * dt);
         }
 
         /// <summary>

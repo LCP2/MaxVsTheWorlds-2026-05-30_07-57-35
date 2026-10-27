@@ -33,6 +33,9 @@ namespace MaxWorlds.Arena
         /// <summary>The explosive canisters this map built (MV-1296), in the order it authored them.</summary>
         public readonly List<Canister> Canisters = new List<Canister>(4);
 
+        /// <summary>The airlock panels this map built (MV-1305), in the order it authored them.</summary>
+        public readonly List<AirlockPanel> Airlocks = new List<AirlockPanel>(4);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1356,6 +1359,11 @@ namespace MaxWorlds.Arena
             // test's) ghosts.
             Canister.ResetRegistry();
 
+            // MV-1305: same reasoning again, one ticket later — a level loaded a second time must
+            // reset its own airlock panels (no Blowing/Recharging state, no stale pull on a mover)
+            // rather than carrying the previous level's (or the previous test's) forward.
+            AirlockPanel.ResetRegistry();
+
             // MV-1298: same reasoning again — a level loaded a second time must count its own
             // destructible cover pieces, not the previous level's (or the previous test's) ghosts.
             DestructibleCover.ResetRegistry();
@@ -2536,6 +2544,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Canister:
                         built.Canisters.Add(BuildCanister(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.Airlock:
+                        built.Airlocks.Add(BuildAirlock(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2820,6 +2832,28 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return canister;
+        }
+
+        /// <summary>
+        /// An airlock panel, from data (MV-1305) — same "one recipe, however many a level authors"
+        /// shape as <see cref="BuildPylon"/>/<see cref="BuildCanister"/>. The built cube IS the hull
+        /// door (<see cref="AirlockPanel"/> dresses it with hazard edging and a status light); it never
+        /// moves, so it is tagged static the same way a pylon/canister body is.
+        /// </summary>
+        private static AirlockPanel BuildAirlock(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+            body.transform.rotation = CradleFacingRotation(e.facing);
+            MarkDiscoverable(body);
+
+            var airlock = body.AddComponent<AirlockPanel>();
+            airlock.SetId(e.id);
+
+            TagStatic(map, body, rendererZones);
+
+            built.Actors[e.id] = body;
+            return airlock;
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly

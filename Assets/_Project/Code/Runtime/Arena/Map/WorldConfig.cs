@@ -608,6 +608,28 @@ namespace MaxWorlds.Arena
         public float z;
     }
 
+    /// <summary>A Mothership airlock panel (MV-1305) — rule AIRLOCKS (Lee, 27 Oct 2026). Another
+    /// PLAYER-triggered hazard, same footing as <see cref="WorldCanister"/>: any player-side hit while
+    /// READY blows it, and the resulting pull is explicitly licensed to remove robots too
+    /// (<c>docs/DECISIONS.md</c> §4, "Hazards: world-run vs player-triggered"). <see cref="x"/>/
+    /// <see cref="z"/> are ABSOLUTE world metres (panel centre), same convention as
+    /// <see cref="WorldReplicator"/>/<see cref="WorldPylon"/>/<see cref="WorldCanister"/> above — on an
+    /// outer hull wall. No placement is authored by this ticket; <see cref="WorldArea.airlocks"/>
+    /// defaults empty (placement is MV-1310's own).</summary>
+    [Serializable]
+    public sealed class WorldAirlock
+    {
+        public string id;
+        public float x;
+        public float z;
+
+        /// <summary>The direction into the room this panel opens toward ("N"|"E"|"S"|"W"), same
+        /// cardinal convention <see cref="Wall"/>/<see cref="WorldCurrent.dir"/> already use. Cosmetic
+        /// only (which way the built door faces) — the pull/kill radius around
+        /// <see cref="MaxWorlds.Factories.AirlockPanel"/> is a plain radial distance, not axis-gated.</summary>
+        public string facing = "N";
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -664,6 +686,10 @@ namespace MaxWorlds.Arena
         /// <summary>Explosive canisters authored into this area (MV-1296). Optional; no config authors
         /// any yet — placement is a separate ticket (MV-1302).</summary>
         public WorldCanister[] canisters = Array.Empty<WorldCanister>();
+
+        /// <summary>Airlock panels authored into this area (MV-1305). Optional; no config authors any
+        /// yet — placement is a separate ticket (MV-1310).</summary>
+        public WorldAirlock[] airlocks = Array.Empty<WorldAirlock>();
 
         public WorldBoss boss;
 
