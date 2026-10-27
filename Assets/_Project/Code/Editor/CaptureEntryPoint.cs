@@ -261,6 +261,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1295HatcheryClamLook() => RunFromMenu(CapturePresets.All["mv1295hatcheryclamlook"]);
         public static void CaptureMv1295HatcheryClamLook() => Run(CapturePresets.All["mv1295hatcheryclamlook"]);
 
+        [MenuItem("MaxWorlds/Capture/Gridlock (MV-1299)")]
+        public static void MenuMv1299Gridlock() => RunFromMenu(CapturePresets.All["mv1299gridlock"]);
+        public static void CaptureMv1299Gridlock() => Run(CapturePresets.All["mv1299gridlock"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

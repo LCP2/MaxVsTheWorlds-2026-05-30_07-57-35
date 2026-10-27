@@ -564,6 +564,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1260ShipWallDressingCheck());
             Add(BuildMv1266ReefPlayCameraCheck());
             Add(BuildMv1295HatcheryClamLook());
+            Add(BuildMv1299Gridlock());
             return d;
         }
 
@@ -1438,6 +1439,103 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-699-result", Setup) },
+                Cleanup = () =>
+                {
+                    if (rig != null) Destroy(rig.gameObject);
+                    if (bossGo != null) Destroy(bossGo);
+                },
+            };
+        }
+
+        // ---- MV1299Gridlock (MV-1299) -------------------------------------------------------
+
+        /// <summary>Builds a standalone GRIDLOCK in a test arena and grows her rig via
+        /// <see cref="GridlockRig.CreateFor"/> — same shape as <see cref="BuildMv699Sludgequeen"/>:
+        /// proof of the actual generated body (drum, dial, core, eye, gold ring, legs), not a
+        /// description of one. Walks her forward in real time first so the shot lands mid-stride.</summary>
+        private static CapturePreset BuildMv1299Gridlock()
+        {
+            // Lower than BuildMv699Sludgequeen's 60 degrees: a near-top-down pitch at this boss's own
+            // true 6.8 m scale (unlike that preset, this one does NOT leave bossGo at CreatePrimitive's
+            // default 1 m scale -- see the true-size localScale set below) framed nothing but the roof
+            // dial from 22 m out. A shallower, more oblique angle is also what actually reads her
+            // side -- the eye, rack lights and legs -- the way the approved design image frames her.
+            const float pitch = 40f;
+            const float distance = 42f;
+
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject bossGo = null;
+            GridlockRig rig = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 8; i++) yield return null;   // let the self-installing systems dress the world first -- longer than BuildMv699Sludgequeen's 4 so BackyardPath has reliably finished installing before OpenZoneCenter() below reads it
+
+                // The largest open room's centre (same source BuildMv699Sludgequeen uses) clears Max's
+                // own spawn structure/gate dressing, which her 6.8 m drum is wide enough to clip if
+                // placed right at Max's own start position instead.
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? GameObject.FindGameObjectWithTag("Player")?.transform.position ?? Vector3.zero;
+
+                bossGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bossGo.name = "MV1299CaptureGridlock";
+                bossGo.transform.position = focus;
+                // The camera below approaches from -Z looking toward +Z -- face the rig's own +Z
+                // front (the eye's side) back at it, same reasoning BuildMv699Sludgequeen's own
+                // comment gives.
+                bossGo.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+                // GridlockRig's own AuthoredBodyWidth (6.8 m, the ticket's own number) -- matching it
+                // here is what makes _rigScale come out to 1 (true authored size), the same scale a
+                // real map-authored boss entity gets from its own authored e.Size in MapRuntime.BuildBoss.
+                bossGo.transform.localScale = Vector3.one * 6.8f;
+                var boss = bossGo.AddComponent<GridlockBoss>();
+
+                rig = GridlockRig.CreateFor(boss);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
+
+                // Walk her forward in real time (this is Play mode, so the rig's own LateUpdate is
+                // actually running every frame) long enough to clear more than one full stride cycle,
+                // so the shot below lands mid-stride -- same reasoning BuildMv699Sludgequeen gives.
+                float walked = 0f;
+                const float walkSeconds = 2.5f;
+                while (walked < walkSeconds)
+                {
+                    float dt = Time.deltaTime;
+                    bossGo.transform.position += new Vector3(GridlockTuning.MoveSpeed * dt, 0f, 0f);
+                    walked += dt;
+                    yield return null;
+                }
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = bossGo.transform.position + Vector3.up * 2.4f;   // follow the walk, roughly mid-drum height
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                // MV-1209: see WarmUpRender's own doc.
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1299gridlock",
+                LogTag = "[MV1299Capture]",
+                Flag = "-mv1299shot",
+                ArmFile = "Temp/mv1299.arm",
+                HeadlessMarker = "Temp/mv1299.headless",
+                DoneFileName = "_mv1299_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard BuildMv699Sludgequeen's own preset uses: on a fresh
+                    // profile (no slot picked yet) HomeScreen's pick-a-slot modal freezes
+                    // Time.timeScale at 0 and blocks this capture indefinitely.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1299-result", Setup) },
                 Cleanup = () =>
                 {
                     if (rig != null) Destroy(rig.gameObject);

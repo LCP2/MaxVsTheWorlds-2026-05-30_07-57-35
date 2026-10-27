@@ -18,6 +18,7 @@ namespace MaxWorlds.Bosses
         public const string Anchorhead = "anchorhead";
         public const string Sludgequeen = "sludgequeen";
         public const string Helmsman = "helmsman";
+        public const string Gridlock = "gridlock";
 
         public sealed class Row
         {
@@ -79,6 +80,15 @@ namespace MaxWorlds.Bosses
                 // needs no edit to a30's shipped boss size.
                 HelmsmanRig.CreateFor(helmsman);
                 return helmsman;
+            }),
+
+            [Gridlock] = new Row("GRIDLOCK", (body, e, map) =>
+            {
+                var gridlock = body.AddComponent<GridlockBoss>(); // RequireComponent adds the CharacterController
+                gridlock.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
+                // MV-1299: same per-instance rig-binding reasoning as every other boss (MV-573).
+                GridlockRig.CreateFor(gridlock);
+                return gridlock;
             }),
         };
 
