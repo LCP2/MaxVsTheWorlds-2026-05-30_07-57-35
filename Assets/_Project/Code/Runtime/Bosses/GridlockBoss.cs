@@ -5,19 +5,19 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Bosses
 {
     /// <summary>
     /// GRIDLOCK — The City's boss (MV-1299), "The Core": a six-sided drum of rack lights on six
     /// needle legs. Standalone <see cref="IDamageable"/>, modelled on <see cref="SludgequeenBoss"/>
-    /// for the walk/standoff/touch shape, but intentionally simpler: this ticket is body, wake, walk
-    /// and passive touch only — one phase, no escalation, no spawns, no charge/ram (the ticket's own
-    /// "no charge or ram" is absolute, unlike <see cref="BigBermudaBoss"/>'s retired one). Her attacks
-    /// (SQUAD/JUMP/STRIKE, the escalation clock the roof dial's clock ring reads) are MV-1306's; the
-    /// arena, shield and finale are MV-1309's. Neither exists yet, so there is deliberately no phase
-    /// machine here for them to slot into later beyond the one switch (Dormant -&gt; Fight -&gt; Dead)
-    /// every boss already has.
+    /// for the walk/standoff/touch shape — one phase, no charge/ram (the ticket's own "no charge or
+    /// ram" is absolute, unlike <see cref="BigBermudaBoss"/>'s retired one). MV-1306 adds her three
+    /// attacks (SQUAD/JUMP/STRIKE, cadence owned by <see cref="GridlockAttackClock"/>) and her
+    /// escalation clock, read by the roof dial's clock ring. The arena, shield and finale are
+    /// MV-1309's and still don't exist, so there is deliberately no phase machine here for them to
+    /// slot into later beyond the one switch (Dormant -&gt; Fight -&gt; Dead) every boss already has.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [PerfSection("bosses")]
@@ -42,11 +42,59 @@ namespace MaxWorlds.Bosses
         private float _preferSign;
         private readonly ZoneRouteBudget _routeBudget = new ZoneRouteBudget();
 
-        // This boss's own authored area, same convention as every other boss's _wakeArea — unused
-        // beyond storage today (the shared wake rule consults range + line of sight only), kept for
-        // parity with SludgequeenBoss/BigBermudaBoss/HelmsmanBoss's own SetWakeArea.
+        // This boss's own authored area (MV-1306 now also reads it — see ClampToOwnArea — same
+        // convention as every other boss's _wakeArea, parity with
+        // SludgequeenBoss/BigBermudaBoss/HelmsmanBoss's own SetWakeArea).
         private Rect _wakeArea;
         private int _areaIndex;
+
+        // --- attacks (MV-1306): SQUAD/JUMP/STRIKE cadence + escalation, pure-ticked by
+        // GridlockAttackClock; this class executes the actual spawn/teleport/damage on each edge. ---
+        private readonly GridlockAttackClock _attacks = new GridlockAttackClock();
+        private int _lastAnnouncedSpawnLevel = 1;
+
+        private struct PendingBeam { public Vector3 Position; public EnemyKind Kind; public float Timer; }
+        private readonly List<PendingBeam> _pendingBeams = new List<PendingBeam>(4);
+        private Transform _addsRoot; // top-level, unit-scaled -- same "never dragged by the moving boss" reasoning as BigBermudaBoss.AddsRoot
+        private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _addPools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
+        private Collider[] _playerColliders;
+
+        private bool _jumpWarningWasActive;
+        private Vector3 _jumpDestination;
+
+        private struct StrikeCircle { public Vector3 Center; public float Timer; public bool DamageApplied; }
+        private readonly List<StrikeCircle> _strikeCircles = new List<StrikeCircle>(GridlockTuning.StrikeCircleCount);
+
+        public int SquadFiredCount { get; private set; }
+        public int JumpFiredCount { get; private set; }
+        public int StrikeFiredCount { get; private set; }
+
+        /// <summary>How many of her own robots are currently alive — the ticket's own "at most 10 of
+        /// her robots alive" cap, enforced in <see cref="FireSquad"/>/<see cref="AdvancePendingBeams"/>.</summary>
+        public int AliveRobotCount => CountAliveRobots();
+
+        /// <summary>True on her own dial while SQUAD's 1 s warning is showing — read by
+        /// <see cref="MaxWorlds.VFX.GridlockRig"/> to show the three-chevron tell.</summary>
+        public bool SquadWarningActive => _attacks.SquadWarningActive;
+
+        /// <summary>True on her own dial while JUMP's 1 s warning (and the landing-spot ring) is
+        /// showing — read by <see cref="MaxWorlds.VFX.GridlockRig"/> for the double-arrow tell.</summary>
+        public bool JumpWarningActive => _attacks.JumpWarningActive;
+
+        /// <summary>True while any STRIKE circle is still arming (harmless) — read by
+        /// <see cref="MaxWorlds.VFX.GridlockRig"/> for the crosshair tell. STRIKE has no separate
+        /// pre-telegraph of its own; the circles' own 1.2 s arming window IS the tell.</summary>
+        public bool StrikeArming => HasArmingStrikeCircle();
+
+        /// <summary>0..1 toward whichever attack is closest to firing — <see cref="MaxWorlds.VFX.GridlockRig"/>
+        /// fills the roof dial's clock ring toward this.</summary>
+        public float NextAttackProgress01 => _attacks.NextAttackProgress01;
+
+        /// <summary>The ticket's own "at half health, her lights run twice as fast" — read by
+        /// <see cref="MaxWorlds.VFX.GridlockRig"/> to speed up the spinning crystal core.</summary>
+        public float LightSpeedScale => IsHalfHealth ? GridlockTuning.HalfHealthLightScale : 1f;
+
+        private bool IsHalfHealth => _health != null && _health.Normalized <= GridlockTuning.HalfHealthThreshold;
 
         public bool IsAlive => _phase != Phase.Dead && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
@@ -117,7 +165,9 @@ namespace MaxWorlds.Bosses
             }
 
             _phase = Phase.Fight;
-            // One phase today (no escalation in this ticket) -> the HUD bar shows a single segment.
+            // One phase (Dormant -> Fight -> Dead, no Intro/enrage split) -> the HUD name-card bar
+            // shows a single segment. Her escalation (MV-1306) drives the SEPARATE spawn-level bar,
+            // reported every fight tick via BossCensus.ReportSpawnLevel in TickAttacks below.
             BossCensus.Register(this, BossName, 1, _health.Current, _health.Max, areaIndex);
         }
 
@@ -166,6 +216,7 @@ namespace MaxWorlds.Bosses
             Approach(dt);
             FaceTarget();
             TickContactDamage(dt);
+            TickAttacks(dt);
         }
 
         private void Approach(float dt)
@@ -279,7 +330,341 @@ namespace MaxWorlds.Bosses
             return WorldRadius(_cc, transform) + targetRadius + GridlockTuning.ContactSkin;
         }
 
-        private void OnDestroy() => BossCensus.Forget(this);
+        // ---------------------------------------------------------------- attacks (MV-1306)
+
+        private void TickAttacks(float dt)
+        {
+            bool halfHealth = IsHalfHealth;
+            float timerScale = halfHealth ? GridlockTuning.HalfHealthTimerScale : 1f;
+            _attacks.Tick(dt, halfHealth);
+
+            if (_attacks.SquadJustFired) FireSquad();
+
+            // The destination is resolved ONCE, on the warning's rising edge, so the dashed ring and
+            // the eventual jump land on the exact same point (MV-1306's own "marks a spot ... for
+            // 1 s; she ... reassembles there").
+            if (_attacks.JumpWarningActive && !_jumpWarningWasActive) _jumpDestination = ResolveJumpDestination();
+            _jumpWarningWasActive = _attacks.JumpWarningActive;
+            if (_attacks.JumpJustFired) FireJump();
+
+            if (_attacks.StrikeJustFired) FireStrike();
+
+            AdvancePendingBeams(dt);
+            AdvanceStrikeCircles(dt, timerScale);
+            TickEscalation();
+        }
+
+        private void TickEscalation()
+        {
+            BossCensus.ReportSpawnLevel(this, _attacks.SpawnLevel, _attacks.SpawnLevelProgress01);
+            if (_attacks.SpawnLevel <= _lastAnnouncedSpawnLevel) return;
+            _lastAnnouncedSpawnLevel = _attacks.SpawnLevel;
+
+            // The ticket's own singular "L3 adds ... one Jammer" / "L4 adds a Brute" — a one-time add
+            // the instant the level is first reached, not an ongoing GridlockSpawnLevels pool member
+            // (see that class's own doc comment).
+            if (_attacks.SpawnLevel == 3) QueueSpecialAdd(EnemyKind.Jammer);
+            else if (_attacks.SpawnLevel == 4) QueueSpecialAdd(EnemyKind.Brute);
+        }
+
+        private void QueueSpecialAdd(EnemyKind kind)
+        {
+            if (CountAliveRobots() + _pendingBeams.Count >= GridlockTuning.MaxGridlockRobots) return;
+            Vector3 raw = transform.position + AngleDirFlat(Random.Range(0f, 360f)) * GridlockTuning.SquadLandRadius;
+            Vector3 landing = ClampToOwnArea(raw, EnemyArchetype.Of(kind).ColliderRadius);
+            _pendingBeams.Add(new PendingBeam { Position = landing, Kind = kind, Timer = 0f });
+        }
+
+        // --- SQUAD: a 1 s warning (GridlockAttackClock), then 3 robots beam in round her, 0.2 s apart,
+        // through the shared landing clamp (ResolveLanding/ClampToOwnArea below). ---
+
+        private void FireSquad()
+        {
+            SquadFiredCount++;
+
+            int room = Mathf.Max(0, GridlockTuning.MaxGridlockRobots - CountAliveRobots() - _pendingBeams.Count);
+            int spawnCount = Mathf.Min(GridlockTuning.SquadRobotCount, room);
+            if (spawnCount <= 0) return;
+
+            EnemyKind[] pool = GridlockSpawnLevels.KindsFor(_attacks.SpawnLevel);
+            float startAngle = Random.Range(0f, 360f);
+
+            for (int i = 0; i < spawnCount; i++)
+            {
+                float angle = startAngle + i * (360f / GridlockTuning.SquadRobotCount);
+                EnemyKind kind = pool[Random.Range(0, pool.Length)];
+                Vector3 raw = transform.position + AngleDirFlat(angle) * GridlockTuning.SquadLandRadius;
+                Vector3 landing = ClampToOwnArea(raw, EnemyArchetype.Of(kind).ColliderRadius);
+                _pendingBeams.Add(new PendingBeam { Position = landing, Kind = kind, Timer = i * GridlockTuning.SquadBeamStagger });
+            }
+        }
+
+        private void AdvancePendingBeams(float dt)
+        {
+            for (int i = _pendingBeams.Count - 1; i >= 0; i--)
+            {
+                PendingBeam beam = _pendingBeams[i];
+                beam.Timer -= dt;
+                if (beam.Timer > 0f) { _pendingBeams[i] = beam; continue; }
+
+                _pendingBeams.RemoveAt(i);
+                if (CountAliveRobots() >= GridlockTuning.MaxGridlockRobots) continue; // re-checked at spawn time -- the cap must never be exceeded
+                SpawnRobotAt(beam.Position, beam.Kind);
+            }
+        }
+
+        // --- JUMP: a dashed ring marks the resolved spot for 1 s (GridlockAttackClock's warning),
+        // then she teleports there through the same shared landing clamp. ---
+
+        private const int JumpLandingAttempts = 8;
+
+        private Vector3 ResolveJumpDestination()
+        {
+            Vector3 selfPos = transform.position;
+            Vector3 maxPos = _target != null ? _target.position : selfPos + Vector3.forward * GridlockTuning.JumpMinDistanceFromSelf;
+            float bodyRadius = WorldRadius(_cc, transform);
+
+            for (int attempt = 0; attempt < JumpLandingAttempts; attempt++)
+            {
+                float angle = Random.Range(0f, 360f);
+                float dist = GridlockTuning.JumpMinDistanceFromSelf + attempt * 1.5f;
+                Vector3 candidate = selfPos + AngleDirFlat(angle) * dist;
+                Vector3 clamped = ClampToOwnArea(candidate, bodyRadius);
+
+                Vector3 toMax = clamped - maxPos; toMax.y = 0f;
+                if (toMax.magnitude >= GridlockTuning.JumpMinDistanceFromMax) return clamped;
+            }
+
+            // Fallback: straight away from Max at the minimum self-distance, still through the clamp.
+            Vector3 away = selfPos - maxPos; away.y = 0f;
+            Vector3 dir = away.sqrMagnitude > 0.0001f ? away.normalized : Vector3.forward;
+            return ClampToOwnArea(selfPos + dir * GridlockTuning.JumpMinDistanceFromSelf, bodyRadius);
+        }
+
+        private void FireJump()
+        {
+            JumpFiredCount++;
+            Vector3 destination = _jumpDestination;
+            destination.y = transform.position.y;
+            CharacterControllerSafety.SafeReposition(_cc, destination, "GridlockBoss.FireJump");
+        }
+
+        // --- STRIKE: four circles near Max arm for 1.2 s (harmless), then go live for 0.4 s, dealing
+        // 30 damage once on that transition to Max/Sentinels still standing inside. No separate
+        // pre-telegraph of its own -- the circles' own arming window IS the tell (StrikeArming). ---
+
+        private void FireStrike()
+        {
+            StrikeFiredCount++;
+            if (_target == null) return;
+
+            Vector3 center = _target.position;
+            for (int i = 0; i < GridlockTuning.StrikeCircleCount; i++)
+            {
+                Vector2 offset = Random.insideUnitCircle * GridlockTuning.StrikeSpreadRadius;
+                Vector3 pos = new Vector3(center.x + offset.x, center.y, center.z + offset.y);
+                _strikeCircles.Add(new StrikeCircle { Center = pos, Timer = 0f, DamageApplied = false });
+            }
+        }
+
+        private void AdvanceStrikeCircles(float dt, float timerScale)
+        {
+            float armDelay = GridlockTuning.StrikeArmDelay * timerScale;
+            float lifetime = armDelay + GridlockTuning.StrikeStayDuration * timerScale;
+
+            for (int i = _strikeCircles.Count - 1; i >= 0; i--)
+            {
+                StrikeCircle c = _strikeCircles[i];
+                float prevTimer = c.Timer;
+                c.Timer += dt;
+
+                if (!c.DamageApplied && prevTimer < armDelay && c.Timer >= armDelay)
+                {
+                    ApplyStrikeDamage(c.Center);
+                    c.DamageApplied = true;
+                }
+
+                if (c.Timer >= lifetime) { _strikeCircles.RemoveAt(i); continue; }
+                _strikeCircles[i] = c;
+            }
+        }
+
+        private bool HasArmingStrikeCircle()
+        {
+            for (int i = 0; i < _strikeCircles.Count; i++)
+                if (!_strikeCircles[i].DamageApplied) return true;
+            return false;
+        }
+
+        private void ApplyStrikeDamage(Vector3 center)
+        {
+            DamageStrikeIfTouching(_target, center);
+
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel s = sentinels[i];
+                DamageStrikeIfTouching(s != null ? s.transform : null, center);
+            }
+        }
+
+        private void DamageStrikeIfTouching(Transform t, Vector3 center)
+        {
+            if (t == null) return;
+            Vector3 to = t.position - center; to.y = 0f;
+            if (to.magnitude > GridlockTuning.StrikeCircleRadius + TargetRadius(t)) return;
+
+            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return;
+            Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : Vector3.forward;
+            damageable.TakeDamage(new DamageInfo(GridlockTuning.StrikeDamage, center, dir, Team.Enemy));
+        }
+
+        // --- the shared landing clamp (MV-1306's own phrase): every spot SQUAD/JUMP/the one-time
+        // escalation adds resolve to goes through the same snap-to-walkable-surface + clamp-into-her-
+        // own-area shape BigBermudaBoss.ClampLandingToArea already established for a flung add. ---
+
+        private Vector3 ClampToOwnArea(Vector3 point, float bodyRadius)
+        {
+            MapData map = EnemyNavigation.Map;
+            Vector3 resolved = map != null ? map.SnapToWalkableSurface(transform.position, point, bodyRadius) : point;
+
+            if (_wakeArea.width <= 0f || _wakeArea.height <= 0f) return resolved;
+
+            float minX = _wakeArea.xMin + bodyRadius, maxX = _wakeArea.xMax - bodyRadius;
+            float minZ = _wakeArea.yMin + bodyRadius, maxZ = _wakeArea.yMax - bodyRadius;
+            if (minX > maxX) minX = maxX = _wakeArea.center.x;
+            if (minZ > maxZ) minZ = maxZ = _wakeArea.center.y;
+
+            return new Vector3(Mathf.Clamp(resolved.x, minX, maxX), resolved.y, Mathf.Clamp(resolved.z, minZ, maxZ));
+        }
+
+        private static Vector3 AngleDirFlat(float angleDeg)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
+        }
+
+        // --- robot spawn/pool plumbing -- same shape as BigBermudaBoss.TakeAdd/CreateAdd/OnAddDied,
+        // minus the flight arc: a beamed-in SQUAD add already stands at its landing spot the instant
+        // it activates, it never flies there. ---
+
+        private RobotEnemy SpawnRobotAt(Vector3 position, EnemyKind kind)
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            RobotEnemy robot = TakeAdd(archetype);
+            robot.TagNoReplicatePermanent(); // MV-706: a boss-flung/beamed robot may never be lured into a Replicator
+            robot.SetAreaIndex(_areaIndex);
+            robot.transform.position = position;
+
+            Vector3 facing = transform.position - position; facing.y = 0f;
+            robot.transform.rotation = facing.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(facing.normalized, Vector3.up)
+                : Quaternion.identity;
+
+            var cc = robot.GetComponent<CharacterController>();
+            if (!CharacterControllerSafety.CanCreate(robot.transform, cc, out string reason))
+            {
+                CharacterControllerSafety.LogRefusal("GridlockBoss.SpawnRobotAt", robot.gameObject.name,
+                    reason, position, robot.transform.lossyScale);
+                ReturnToPool(robot);
+                return null;
+            }
+
+            robot.gameObject.SetActive(true); // OnEnable -> ResetState -> Chase, full health, acquires Max
+            LetThePlayerThrough(robot.gameObject);
+            return robot;
+        }
+
+        private RobotEnemy TakeAdd(in EnemyArchetype archetype)
+        {
+            if (_addPools.TryGetValue(archetype.Kind, out Stack<RobotEnemy> pool) && pool.Count > 0)
+                return pool.Pop();
+            return CreateAdd(archetype);
+        }
+
+        private RobotEnemy CreateAdd(in EnemyArchetype a)
+        {
+            var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
+            go.name = $"Gridlock Add {a.Kind}";
+            go.transform.SetParent(AddsRoot(), false);
+            go.transform.localScale = a.BodyScale;
+
+            // MV-1021: deactivate before AddComponent<CharacterController> -- an active GameObject
+            // creates the native PhysX controller synchronously (same trap BigBermudaBoss.CreateAdd
+            // guards against).
+            go.SetActive(false);
+            if (!CharacterControllerSafety.CanCreate(go.transform, null, out string createReason))
+            {
+                CharacterControllerSafety.LogRefusal("GridlockBoss.CreateAdd", go.name,
+                    createReason, go.transform.position, go.transform.lossyScale);
+            }
+
+            var cc = go.AddComponent<CharacterController>();
+            float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);
+            cc.height = a.ColliderHeight / Mathf.Max(a.BodyScale.y, 1e-4f);
+            cc.radius = a.ColliderRadius / Mathf.Max(lateral, 1e-4f);
+            cc.center = Vector3.zero;
+
+            var e = go.AddComponent<RobotEnemy>();
+            e.Apply(a);
+            go.AddComponent<RobotRig>();
+            e.Died += OnAddDied;
+            go.SetActive(false);
+            return e;
+        }
+
+        private void OnAddDied(RobotEnemy e) => ReturnToPool(e);
+
+        private void ReturnToPool(RobotEnemy e)
+        {
+            if (!_addPools.TryGetValue(e.Kind, out Stack<RobotEnemy> pool))
+                _addPools[e.Kind] = pool = new Stack<RobotEnemy>(4);
+            pool.Push(e);
+        }
+
+        private Transform AddsRoot()
+        {
+            if (_addsRoot == null) _addsRoot = new GameObject("Gridlock Adds").transform;
+            return _addsRoot;
+        }
+
+        private void LetThePlayerThrough(GameObject enemy)
+        {
+            if (_playerColliders == null || _playerColliders.Length == 0)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return;
+                _playerColliders = p.GetComponents<Collider>();
+            }
+
+            foreach (var ec in enemy.GetComponents<Collider>())
+            {
+                if (ec == null) continue;
+                foreach (var pc in _playerColliders)
+                    if (pc != null) Physics.IgnoreCollision(ec, pc, true);
+            }
+        }
+
+        private int CountAliveRobots()
+        {
+            if (_addsRoot == null) return 0;
+
+            int count = 0;
+            for (int i = 0; i < _addsRoot.childCount; i++)
+            {
+                Transform child = _addsRoot.GetChild(i);
+                if (child == null || !child.gameObject.activeInHierarchy) continue;
+                if (!child.TryGetComponent<RobotEnemy>(out RobotEnemy robot) || !robot.IsAlive) continue;
+                count++;
+            }
+            return count;
+        }
+
+        private void OnDestroy()
+        {
+            if (_addsRoot != null) Destroy(_addsRoot.gameObject);
+            BossCensus.Forget(this);
+        }
 
         // ---------------------------------------------------------------- IDamageable
 
