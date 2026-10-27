@@ -2088,7 +2088,8 @@
    "composition": {
     "rusher": 10,
     "bruiser": 11,
-    "turret": 2
+    "turret": 2,
+    "projector": 1
    },
    "surfaces": [],
    "cover": [
@@ -2509,6 +2510,12 @@
      "kind": "bruiser",
      "x": 50.0,
      "z": 69.5,
+     "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 48.0,
+     "z": 70.0,
      "level": 0
     }
    ]
@@ -3893,7 +3900,8 @@
     "rusher": 10,
     "bruiser": 5,
     "gunner": 7,
-    "turret": 2
+    "turret": 2,
+    "jammer": 1
    },
    "surfaces": [
     {
@@ -4389,6 +4397,12 @@
      "kind": "rusher",
      "x": 15.5,
      "z": 106.5,
+     "level": 0
+    },
+    {
+     "kind": "jammer",
+     "x": 14.0,
+     "z": 110.2,
      "level": 0
     }
    ]
@@ -5467,7 +5481,8 @@
     "turret": 2,
     "bruiser": 5,
     "heavy": 3,
-    "bolter": 2
+    "bolter": 2,
+    "projector": 1
    },
    "surfaces": [
     {
@@ -5856,6 +5871,12 @@
      "kind": "bolter",
      "x": 107.0,
      "z": 137.0,
+     "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 101.0,
+     "z": 141.0,
      "level": 0
     }
    ]
@@ -6343,7 +6364,8 @@
     "launcher": 3,
     "gunner": 2,
     "heavy": 2,
-    "brute": 4
+    "brute": 4,
+    "jammer": 1
    },
    "surfaces": [],
    "cover": [
@@ -7774,6 +7796,12 @@
      "x": 78.5,
      "z": 184.0,
      "level": 0
+    },
+    {
+     "kind": "jammer",
+     "x": 71.3,
+     "z": 180.0,
+     "level": 0
     }
    ]
   },
@@ -8892,7 +8920,8 @@
     "gunner": 2,
     "bruiser": 2,
     "blinker": 1,
-    "heavy": 1
+    "heavy": 1,
+    "projector": 1
    },
    "surfaces": [
     {
@@ -9236,6 +9265,12 @@
      "kind": "heavy",
      "x": 100.0,
      "z": 262.5,
+     "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 104.0,
+     "z": 250.0,
      "level": 0
     }
    ]
@@ -10093,7 +10128,8 @@
     "brute": 2,
     "gunner": 2,
     "heavy": 4,
-    "bolter": 3
+    "bolter": 3,
+    "jammer": 1
    },
    "surfaces": [
     {
@@ -10444,6 +10480,12 @@
      "kind": "heavy",
      "x": 142.5,
      "z": 312.5,
+     "level": 0
+    },
+    {
+     "kind": "jammer",
+     "x": 138.0,
+     "z": 299.0,
      "level": 0
     }
    ]
@@ -12456,7 +12498,8 @@
     "brute": 3,
     "blinker": 3,
     "bolter": 1,
-    "heavy": 1
+    "heavy": 1,
+    "projector": 1
    },
    "surfaces": [],
    "cover": [
@@ -13695,6 +13738,12 @@
      "x": 146.0,
      "z": 325.0,
      "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 131.0,
+     "z": 331.3,
+     "level": 0
     }
    ]
   },
@@ -14152,7 +14201,8 @@
     "blinker": 2,
     "turret": 3,
     "bruiser": 1,
-    "launcher": 1
+    "launcher": 1,
+    "jammer": 1
    },
    "surfaces": [
     {
@@ -14643,6 +14693,12 @@
      "kind": "rusher",
      "x": 148.5,
      "z": 370.5,
+     "level": 0
+    },
+    {
+     "kind": "jammer",
+     "x": 159.0,
+     "z": 366.0,
      "level": 0
     }
    ]
@@ -16008,7 +16064,8 @@
     "launcher": 3,
     "bruiser": 2,
     "brute": 1,
-    "bolter": 4
+    "bolter": 4,
+    "projector": 1
    },
    "surfaces": [
     {
@@ -16437,6 +16494,12 @@
      "kind": "rusher",
      "x": 202.0,
      "z": 426.0,
+     "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 210.5,
+     "z": 430.0,
      "level": 0
     }
    ]
@@ -17859,7 +17922,8 @@
     "turret": 3,
     "bolter": 1,
     "launcher": 4,
-    "gunner": 1
+    "gunner": 1,
+    "jammer": 1
    },
    "surfaces": [],
    "cover": [
@@ -18319,6 +18383,12 @@
      "kind": "gunner",
      "x": 181.5,
      "z": 478.0,
+     "level": 0
+    },
+    {
+     "kind": "jammer",
+     "x": 176.5,
+     "z": 464.7,
      "level": 0
     }
    ]
@@ -19374,7 +19444,8 @@
     "turret": 4,
     "brute": 3,
     "bruiser": 3,
-    "heavy": 1
+    "heavy": 1,
+    "projector": 1
    },
    "surfaces": [
     {
@@ -19964,6 +20035,12 @@
      "kind": "brute",
      "x": 230.5,
      "z": 517.0,
+     "level": 0
+    },
+    {
+     "kind": "projector",
+     "x": 242.0,
+     "z": 501.0,
      "level": 0
     }
    ]
