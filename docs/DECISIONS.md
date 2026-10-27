@@ -147,6 +147,13 @@ that has cost the most time here.
 evidence behind it: four tickets with and without an inline AUTHORISATION clause produced four inconsistent
 outcomes, which is proof the clause was never a mechanism.
 
+**Hazards: world-run vs player-triggered (Lee, 27 Oct 2026).** A hazard the WORLD runs on its own (sludge,
+Molten patches, vents on a clock) follows MV-924: it hurts Max and his Sentinels only. A hazard the PLAYER
+triggers by shooting it (explosive canisters, airlock panels) may also damage or remove robots — that is its
+whole point. Each such hazard states its exception in its own target loop with a comment naming this ruling.
+Bosses are never removed by a hazard. Note: World 5 plasma vents (MV-1240) already hit robots today; that
+predates this ruling and is left as is until Lee says otherwise.
+
 ---
 
 ## 5. Mechanics
