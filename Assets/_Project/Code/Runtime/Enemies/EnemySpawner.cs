@@ -78,8 +78,19 @@ namespace MaxWorlds.Enemies
         /// and used to eat into this same field-wide budget, starving a shed in a room whose own
         /// population was nowhere near full. A Dormant/Submerged-asleep robot is not a threat yet and
         /// must never block a new one from arriving.</summary>
+        /// <summary>MV-1297: the same reservation idea as <see cref="_replicatorReservedSlots"/>, held by
+        /// an Assembly Cradle for the whole 4 s build animation it commits to — see
+        /// <see cref="ReserveCradleSlot"/>'s own doc for why a cradle can never just check
+        /// <see cref="HasGlobalRoom"/> once and then play the animation on a promise.</summary>
+        private static int _cradleReservedSlots;
+
         private static bool GlobalHasRoom =>
-            RobotEnemy.AwakeCount + _replicatorReservedSlots < GlobalMaxLiveEnemies;
+            RobotEnemy.AwakeCount + _replicatorReservedSlots + _cradleReservedSlots < GlobalMaxLiveEnemies;
+
+        /// <summary>MV-1297: the field-wide budget check an Assembly Cradle makes before ever starting a
+        /// build animation — see <see cref="MaxWorlds.Factories.AssemblyCradle"/>'s own STANDBY doc for
+        /// why this has to be checked (and reserved) up front rather than only at the moment it spawns.</summary>
+        public static bool HasGlobalRoom => GlobalHasRoom;
 
         /// <summary>MV-809: called the instant a Replicator despawns a consumed robot — holds that
         /// robot's now-vacant slot until <see cref="ReleaseReplicatorReservation"/> spends it, so
@@ -95,6 +106,22 @@ namespace MaxWorlds.Enemies
         /// <summary>Test/level-reset hygiene for the static reservation counter (MV-809) — same pattern
         /// as <see cref="RobotEnemy.ResetRegistry"/>. Never called by shipped gameplay.</summary>
         public static void ResetReplicatorReservations() => _replicatorReservedSlots = 0;
+
+        /// <summary>MV-1297: held from the instant an Assembly Cradle commits to a build cycle until
+        /// either the guaranteed spawn at the end of it (<see cref="ReleaseCradleReservation"/>, called
+        /// immediately before that spawn) or the cradle is destroyed mid-build — never silently, and
+        /// never a build animation played on a promise another spawner could take back before it
+        /// finishes.</summary>
+        public static void ReserveCradleSlot() => _cradleReservedSlots++;
+
+        /// <summary>MV-1297: releases one held cradle reservation — same "immediately before spending it"
+        /// contract as <see cref="ReleaseReplicatorReservation"/>.</summary>
+        public static void ReleaseCradleReservation() =>
+            _cradleReservedSlots = Mathf.Max(0, _cradleReservedSlots - 1);
+
+        /// <summary>Test/level-reset hygiene for the static reservation counter (MV-1297) — same pattern
+        /// as <see cref="ResetReplicatorReservations"/>. Never called by shipped gameplay.</summary>
+        public static void ResetCradleReservations() => _cradleReservedSlots = 0;
 
         /// <summary>The live-count ceiling THIS factory actually enforces right now: a flat
         /// <see cref="maxLiveEnemies"/> (8) at every Invasion Level for a live shed — MV-1093 removed

@@ -31,13 +31,32 @@ namespace MaxWorlds.Factories
     [MaxWorlds.Core.PerfSection("assembly_cradle")]
     public sealed class AssemblyCradle : MonoBehaviour, IDamageable, IFactoryBody, IHealthReadout
     {
-        public enum BuildStage { None, Frame, Plates, Done }
+        /// <summary><see cref="Standby"/> (MV-1297) is the "room-starved" state: a build was about to
+        /// start but the field-wide robot budget had no room, so this cradle never played the animation
+        /// at all — distinct from <see cref="None"/>, which is simply idle (out of range or between
+        /// cycles with room to spare).</summary>
+        public enum BuildStage { None, Standby, Frame, Plates, Done }
 
         // Lee's first-pass numbers (17 Oct, Cradle tab) — tuning comes after a play, not this ticket.
         public const float BuildSeconds = 4.0f;
         public const float FrameAtSeconds = 1.5f;
         public const float PlatesAtSeconds = 3.0f;
         public const int MaxAliveSpawned = 6;
+
+        /// <summary>MV-1297 (Lee-approved 27 Oct): a cradle builds only while Max is within this of it —
+        /// measured horizontally, "(same level)", the same ignore-Y convention Replicator's own queue
+        /// arrival check uses. The thin red floor ring at this radius is the player-visible version of
+        /// the same number.</summary>
+        public const float ProximityRadius = 10f;
+
+        /// <summary>MV-1297: how often a STANDBY cradle re-checks <see cref="EnemySpawner.HasGlobalRoom"/>
+        /// — never every frame, so 47 room-starved cradles don't all hammer the same static check every
+        /// Update.</summary>
+        private const float StandbyRetrySeconds = 0.5f;
+
+        /// <summary>MV-1297: one full dim-to-bright-to-dim cycle of the STANDBY top-lens pulse — "a slow
+        /// pulse" per the ticket, not the Jammer field's 1 s cadence.</summary>
+        private const float StandbyPulsePeriodSeconds = 2f;
 
         /// <summary>A robot destroyed mid-build drops this many Parts (PickupKind.PowerCell) at the bay
         /// instead of ever completing.</summary>
@@ -60,10 +79,25 @@ namespace MaxWorlds.Factories
         private const float BarHeightAboveCentre = 2.6f;
         private const float BarWorldWidth = 1.8f;
 
+        // --- MV-1297: the proximity ring's own thin-red tint and the STANDBY lens's dim rest colour. ---
+        private static readonly Color ProximityRingColor = new Color(0.9f, 0.15f, 0.15f, 0.5f);
+        private static readonly Color StandbyDimColor = new Color(0.22f, 0.18f, 0.08f);
+
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private float _buildTimer;
         private bool _maxInArea;
+
+        // --- MV-1297: proximity build-gate, the room-starved STANDBY state, and the global-budget
+        // reservation held across a whole build animation — see Tick's own doc for the full shape.
+        // Reuses the _maxTransform field below (MV-1246), resolved once for both turrets and this. ---
+        private bool _standby;
+        private float _standbyRetryTimer;
+        private bool _holdingGlobalSlot;
+        private float _lensPulseT;
+        private GroundRing _proximityRing;
+        private MeshRenderer _topLens;
+        private Transform _bodyRoot;
 
         /// <summary>MV-1252: found once in <see cref="Start"/> (never by an EditMode test — see that
         /// method's own doc comment) so this cradle can unsubscribe from
@@ -158,11 +192,13 @@ namespace MaxWorlds.Factories
         public float BuildProgress => Mathf.Clamp01(_buildTimer / BuildSeconds);
 
         /// <summary>The current build's visible stage — frame at 1.5 s, plates at 3.0 s, done (eye lit)
-        /// at 4.0 s — for MV-1227.</summary>
+        /// at 4.0 s — for MV-1227. MV-1297: <see cref="BuildStage.Standby"/> first, since standby only
+        /// ever holds while <see cref="_buildTimer"/> is at zero anyway.</summary>
         public BuildStage Stage
         {
             get
             {
+                if (_standby) return BuildStage.Standby;
                 if (_buildTimer < FrameAtSeconds) return BuildStage.None;
                 if (_buildTimer < PlatesAtSeconds) return BuildStage.Frame;
                 if (_buildTimer < BuildSeconds) return BuildStage.Plates;
@@ -220,11 +256,18 @@ namespace MaxWorlds.Factories
             }
 
             Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
+            _bodyRoot = bodyRoot; // MV-1297: hidden wholesale on death, see ApplyDestructionEffects
             FactoryBodies.CradleGantry gantry = FactoryBodies.BuildAssemblyCradle(bodyRoot, transform.lossyScale);
             _arms = gantry.Arms;
             _bayRoot = gantry.BayRoot;
             TurretHousings = gantry.TurretHousings;
+            _topLens = gantry.TopLens; // MV-1297: the STANDBY dim/pulse tell
             BuildTurretFittings();
+
+            // MV-1297: the proximity ring — a thin red floor circle at ProximityRadius, shown
+            // continuously in Tick while alive, same lazy-ring-then-Show-every-frame idiom
+            // RobotEnemy.TickJammerField already uses for its own persistent floor ring.
+            _proximityRing = GroundRing.Create("Assembly Cradle Proximity Ring");
         }
 
         /// <summary>MV-1246: one <see cref="ShedFitting"/> per housing, sitting exactly at the housing's
@@ -307,15 +350,56 @@ namespace MaxWorlds.Factories
 
         /// <summary>The per-frame build step, pulled out with an explicit <paramref name="dt"/> — same
         /// "Tick(dt), not a bare Update()" shape as EnemySpawner.Tick/Replicator.TickConsumption — so an
-        /// EditMode test can drive many simulated seconds with no live Unity frame loop.</summary>
+        /// EditMode test can drive many simulated seconds with no live Unity frame loop.
+        ///
+        /// MV-1297: the proximity ring and STANDBY lens are driven whenever this cradle is alive,
+        /// independent of area/range — the ring is a passive floor marker, not a build gate itself.
+        /// <see cref="_maxInArea"/> still gates turrets and the build entirely (unchanged MV-1252 area
+        /// rule); within the area, a NEW build cycle additionally needs Max within
+        /// <see cref="ProximityRadius"/> (checked once, at the instant a cycle would start — leaving
+        /// range mid-build does not abort an already-reserved cycle) and the field-wide robot budget to
+        /// have room, reserved for the whole animation via <see cref="EnemySpawner.ReserveCradleSlot"/>
+        /// so a build is never played and then silently fails to spawn. No room reads as STANDBY, not
+        /// idle, and retries every <see cref="StandbyRetrySeconds"/>.</summary>
         public void Tick(float dt)
         {
-            if (!IsAlive || !_maxInArea) return;
+            if (!IsAlive) return;
+
+            _proximityRing?.Show(transform.position, ProximityRadius, ProximityRingColor);
+            TickTopLensVisual(dt);
+
+            if (!_maxInArea)
+            {
+                SetStandby(false); // leaving the area must never leave a stale STANDBY state behind
+                return;
+            }
+
+            EnsureMaxTransform();
             TickTurrets(dt); // MV-1246: independent of the build cadence below — gated only by the same IsAlive/_maxInArea this method already checked, so a destroyed cradle fires no further shots and an empty area never fires at all
             if (_spawner.LiveCount >= MaxAliveSpawned) return; // at the cap: held at zero, not merely paused
 
             if (_buildTimer <= 0f)
             {
+                if (!MaxWithinProximity())
+                {
+                    SetStandby(false); // out of range reads as plain idle, never STANDBY — STANDBY means room-starved
+                    return;
+                }
+
+                if (_standby)
+                {
+                    _standbyRetryTimer += dt;
+                    if (_standbyRetryTimer < StandbyRetrySeconds) return;
+                    _standbyRetryTimer = 0f;
+                }
+
+                if (!EnemySpawner.HasGlobalRoom)
+                {
+                    SetStandby(true);
+                    return;
+                }
+                SetStandby(false);
+
                 // A fresh cycle starting — decide (and cache) which kind this build will produce. Read
                 // exactly once per cycle, here at the start rather than at completion (MV-1223's
                 // original shape): TryNextKind mutates the cadence's own emitted tally (MV-1227 doc on
@@ -325,6 +409,11 @@ namespace MaxWorlds.Factories
                 if (!_spawner.Cadence.TryNextKind(out EnemyKind kind)) return; // this area authors nothing
                 _previewKind = kind;
                 RebuildPreview(kind);
+
+                // MV-1297: reserve the slot THIS instant, not at the moment of spawning four seconds
+                // from now — see EnemySpawner.ReserveCradleSlot's own doc for why.
+                EnemySpawner.ReserveCradleSlot();
+                _holdingGlobalSlot = true;
             }
 
             _buildTimer += dt;
@@ -332,8 +421,67 @@ namespace MaxWorlds.Factories
             if (_buildTimer < BuildSeconds) return;
 
             _buildTimer = 0f;
-            List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true);
+            if (_holdingGlobalSlot) // release immediately before spending it, same contract as Replicator's own reservation
+            {
+                EnemySpawner.ReleaseCradleReservation();
+                _holdingGlobalSlot = false;
+            }
+            List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true, ignoreGlobalRoom: true);
             PlaceOnOutPad(spawned);
+        }
+
+        /// <summary>MV-1297: lazily resolves Max's transform once, shared by <see cref="TickTurrets"/>'s
+        /// targeting and <see cref="MaxWithinProximity"/>'s build gate — a single
+        /// <see cref="GameObject.FindGameObjectWithTag"/> per cradle instead of two.</summary>
+        private void EnsureMaxTransform()
+        {
+            if (_maxTransform != null) return;
+            var p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null) _maxTransform = p.transform;
+        }
+
+        /// <summary>MV-1297: true while Max is within <see cref="ProximityRadius"/> of this cradle,
+        /// measured horizontally ("(same level)") — the same ignore-Y convention every other
+        /// Max-distance gate in this codebase uses for a top-down game where vertical gaps are never the
+        /// point. No resolvable Max transform at all (no "Player"-tagged object in the scene — shipped
+        /// gameplay always has one) falls back to true rather than blocking every build: proximity is a
+        /// tighter gate ON TOP of <see cref="_maxInArea"/>, never a replacement for it.</summary>
+        private bool MaxWithinProximity()
+        {
+            if (_maxTransform == null) return true;
+            Vector3 d = transform.position - _maxTransform.position;
+            d.y = 0f;
+            return d.sqrMagnitude <= ProximityRadius * ProximityRadius;
+        }
+
+        private void SetStandby(bool standby)
+        {
+            if (_standby == standby) return;
+            _standby = standby;
+            _standbyRetryTimer = 0f;
+        }
+
+        /// <summary>MV-1297: the top lens dims and slow-pulses while STANDBY, restoring
+        /// <see cref="FactoryBodies.CradleGold"/> exactly once on the way out — never every frame while
+        /// already steady, so an idle cradle costs no MaterialPropertyBlock churn.</summary>
+        private void TickTopLensVisual(float dt)
+        {
+            if (_topLens == null) return;
+
+            if (!_standby)
+            {
+                if (_lensPulseT > 0f)
+                {
+                    _lensPulseT = 0f;
+                    FactoryBodies.TintLens(_topLens, FactoryBodies.CradleGold);
+                }
+                return;
+            }
+
+            _lensPulseT += dt;
+            float phase = (_lensPulseT / StandbyPulsePeriodSeconds) * Mathf.PI * 2f;
+            float pulse = 0.5f - 0.5f * Mathf.Cos(phase);
+            FactoryBodies.TintLens(_topLens, Color.Lerp(StandbyDimColor, FactoryBodies.CradleGold, pulse));
         }
 
         /// <summary>MV-1246: drives both turret fittings at whatever <see cref="ResolveTurretTarget"/>
@@ -344,12 +492,6 @@ namespace MaxWorlds.Factories
         private void TickTurrets(float dt)
         {
             if (_turretFittings == null || _turretKind == ShedFittingKind.None) return;
-
-            if (_maxTransform == null)
-            {
-                var p = GameObject.FindGameObjectWithTag("Player");
-                if (p != null) _maxTransform = p.transform;
-            }
 
             Transform target = ResolveTurretTarget();
             for (int i = 0; i < _turretFittings.Length; i++)
@@ -452,6 +594,7 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // robots can't wreck their own cradle
+            HudSignals.EmitDamage(transform.position + Vector3.up * 2f, info.Amount); // MV-1297: damage numbers like the other machines
             _health.TakeDamage(info.Amount);
         }
 
@@ -460,12 +603,30 @@ namespace MaxWorlds.Factories
         /// <see cref="ApplyCheckpointDestroyed"/> can silently re-apply a checkpoint's already-recorded
         /// destruction (a resume rebuilding the level from scratch) without re-granting loot or a second
         /// family reveal the player already banked on the run that actually earned it. Same split
-        /// <see cref="Replicator.ApplyDestructionEffects"/> uses.</summary>
-        private void ApplyDestructionEffects() =>
+        /// <see cref="Replicator.ApplyDestructionEffects"/> uses.
+        ///
+        /// MV-1297: also where the body goes away for good — hides every renderer under
+        /// <see cref="_bodyRoot"/> and disables this cradle's own collider (the primitive cube's), the
+        /// same "renderer off, collider gone" the ticket asks for. Both a live kill and a checkpoint's
+        /// silent restore need this; <see cref="FactoryHusk"/> (now installed for every
+        /// <see cref="AssemblyCradle"/>, see its own Install) watches <see cref="IsAlive"/> and raises the
+        /// wreck itself the instant it goes false, so nothing here has to drive the husk directly.</summary>
+        private void ApplyDestructionEffects()
+        {
             // MV-1247: report to the census synchronously with the kill — same reasoning as
             // Replicator.ApplyDestructionEffects (a caller reacting to this same death needs this cradle
             // already counted, not one WorldRunner poll tick later). Idempotent.
             FactoryCensus.ReportCradleDestroyed(this);
+
+            if (_bodyRoot != null)
+            {
+                Renderer[] renderers = _bodyRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+                for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = false;
+            }
+            var col = GetComponent<Collider>();
+            if (col != null) col.enabled = false;
+            _proximityRing?.Hide();
+        }
 
         /// <summary>Scrap (a build was in progress — <see cref="_buildTimer"/> &gt; 0, read before this
         /// cycle ever reaches <see cref="BuildSeconds"/> and resets it): that robot is never spawned, and
@@ -474,6 +635,12 @@ namespace MaxWorlds.Factories
         /// <see cref="PayoutParts"/> destroy payout.</summary>
         private void OnDestroyed()
         {
+            if (_holdingGlobalSlot) // MV-1297: a build interrupted mid-cycle must give its slot back
+            {
+                EnemySpawner.ReleaseCradleReservation();
+                _holdingGlobalSlot = false;
+            }
+
             ApplyDestructionEffects();
             HudSignals.EmitFactoryDestroyed(transform.position);
 

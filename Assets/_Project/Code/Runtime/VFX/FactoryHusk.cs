@@ -33,6 +33,7 @@ namespace MaxWorlds.VFX
         {
             InstallFor(FindObjectsByType<MowerHutch>(FindObjectsSortMode.None));
             InstallFor(FindObjectsByType<Replicator>(FindObjectsSortMode.None));
+            InstallFor(FindObjectsByType<AssemblyCradle>(FindObjectsSortMode.None)); // MV-1297
         }
 
         /// <summary>MV-756: one husk per factory BODY, whichever concrete type it is.</summary>
