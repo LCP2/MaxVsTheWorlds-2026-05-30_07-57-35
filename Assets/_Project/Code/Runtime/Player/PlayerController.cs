@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -293,6 +294,24 @@ namespace MaxWorlds.Player
             CharacterControllerMotion.SafeMove(_cc, drift * dt);
         }
 
+        /// <summary>MV-1303: Anchorhead's whirlpool — its own SafeMove call, same independent-of-forced-
+        /// move reasoning as <see cref="TickCurrentDrift"/> immediately above (a boss's pull must not
+        /// cancel, or be cancelled by, a Breaker knockback or Tractor haul). Deliberately goes through
+        /// <see cref="AnchorheadBoss.Active"/> rather than <see cref="MapCurrents"/> — the whirlpool is
+        /// centred on a moving boss and Max-only (robots keep calling <see cref="MapCurrents"/> alone via
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.ApplyCurrentDrift"/>, untouched by this), not an
+        /// authored static current rect every mover reads.</summary>
+        private void TickAnchorheadWhirlpool(float dt)
+        {
+            AnchorheadBoss anchor = AnchorheadBoss.Active;
+            if (anchor == null) return;
+
+            Vector3 drift = anchor.WhirlpoolDriftAt(transform.position);
+            if (drift.sqrMagnitude <= 0f) return;
+
+            CharacterControllerMotion.SafeMove(_cc, drift * dt);
+        }
+
         /// <summary>MV-1222: <see cref="PlayerHealth"/> self-adds after <see cref="PlayerController"/>
         /// (see every scaffold/test site that builds Max), so it may not exist yet the first time this
         /// runs — resolved lazily, same "cache once found" idiom <see cref="PlayerHealth.Abilities"/>
@@ -364,6 +383,9 @@ namespace MaxWorlds.Player
             // MV-1300: same reasoning — its own SafeMove call, after the stuck diagnostic, independent
             // of the forced-move slot immediately above.
             TickCurrentDrift(moveDir, dt);
+
+            // MV-1303: Anchorhead's whirlpool — same independent SafeMove slot as the current drift above.
+            TickAnchorheadWhirlpool(dt);
 
             if (_facing.sqrMagnitude > 0.001f)
             {
