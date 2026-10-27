@@ -212,6 +212,12 @@ namespace MaxWorlds.Factories
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
 
+        /// <summary>MV-1304: this box's own protective dome, up for as long as
+        /// <see cref="Pylon.LiveFeedersOf"/> reads non-zero for <see cref="Id"/> — null until the
+        /// first pylon starts feeding this relay (see <see cref="UpdateRelayDome"/>), and again once
+        /// it has fully collapsed and self-destroyed.</summary>
+        private RelayDome _relayDome;
+
         /// <summary>MV-1201: every World 2 hazard-stripe piece <see cref="BuildBody"/> built —
         /// <see cref="ApplyCityRelaySkin"/> hides these before laying the Teleport Relay dressing over
         /// the top. Empty (never null) until <see cref="BuildBody"/> runs.</summary>
@@ -706,6 +712,15 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // robots can't wreck their own box
+            // MV-1304: a relay fed by at least one live pylon takes no damage at all — a player hit
+            // and a Team.Neutral hit (an exploding canister, MV-1296) are both blocked alike, since
+            // either already had to clear DamageRules.Applies above to reach here.
+            if (Pylon.LiveFeedersOf(Id) > 0)
+            {
+                HudSignals.EmitDomeBlocked(info.Point);
+                _relayDome?.FlashBlocked();
+                return;
+            }
             HudSignals.EmitDamage(transform.position + Vector3.up * 1.2f, info.Amount);
             _health.TakeDamage(info.Amount);
         }
@@ -1209,7 +1224,29 @@ namespace MaxWorlds.Factories
             // only two triggers, both already reached from OnAreaEntered/TickConsumption.
             TickConsumption(Time.deltaTime);
 
+            UpdateRelayDome();
+
             FrameCost.End(FrameCost.Bucket.Repl);
+        }
+
+        /// <summary>MV-1304: keeps this box's own <see cref="RelayDome"/> in sync with
+        /// <see cref="Pylon.LiveFeedersOf"/> every frame — spawns it the instant a pylon starts
+        /// feeding this relay (point 4: never for a relay with none), updates its ring count as
+        /// pylons die, and otherwise leaves it to collapse/self-destroy on its own once the last one
+        /// falls (see <see cref="RelayDome.SetLiveFeederCount"/>).</summary>
+        private void UpdateRelayDome()
+        {
+            int live = Pylon.LiveFeedersOf(Id);
+            if (_relayDome == null)
+            {
+                if (live <= 0) return;
+                float footprintRadius = Mathf.Max(transform.lossyScale.x, transform.lossyScale.z) * 0.5f;
+                Vector3 groundCenter = new Vector3(transform.position.x, GroundY, transform.position.z);
+                _relayDome = RelayDome.Spawn(groundCenter, footprintRadius + 1f, footprintRadius, live);
+                return;
+            }
+
+            _relayDome.SetLiveFeederCount(live);
         }
 
         private void OnDestroyed()
@@ -1262,6 +1299,15 @@ namespace MaxWorlds.Factories
 
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
+
+            // MV-1304: the box itself is gone — its dome (if any was ever up, i.e. this relay still
+            // had a live feeder right up until the lethal hit that reached it after its last one
+            // died) has nothing left to protect, regardless of whatever fade it was mid-way through.
+            if (_relayDome != null)
+            {
+                _relayDome.Discard();
+                _relayDome = null;
+            }
 
             // MV-756 change 4: hide the GENERATED Body child (hull/band/hatch/LED/valve wheel), not
             // the root's own renderer — that one was already switched off in BuildBody, the instant
