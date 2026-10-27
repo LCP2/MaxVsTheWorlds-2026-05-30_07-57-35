@@ -1,7 +1,7 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 5 \u2014 The Mothership",
-  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor. MV-1244: added 2 Welder garrison entries each to areas 8/12/22/24 beside cradle 1, and \"welder\": 1 onto every cradle's own composition in areas 8 onward.",
+  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor. MV-1244: added 2 Welder garrison entries each to areas 8/12/22/24 beside cradle 1, and \"welder\": 1 onto every cradle's own composition in areas 8 onward. MV-1310: added \"airlocks\" to every area a1-a30 (a1-a3 one each, a30 two per MV-1313, every other area one), each on the area's own outline, >= 4 m from every gate, >= 6 m from every cradle, with a clear 12 m open-floor cone in front -- via Tools/World5/add_airlock_placements.py.",
   "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
@@ -765,6 +765,14 @@
             "rusher": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a1_airlock1",
+          "x": 53,
+          "z": 15.0,
+          "facing": "W"
+        }
       ]
     },
     {
@@ -977,6 +985,14 @@
             "rusher": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a2_airlock1",
+          "x": 44.0,
+          "z": 56.0,
+          "facing": "S"
+        }
       ]
     },
     {
@@ -1133,6 +1149,14 @@
           "composition": {
             "rusher": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a3_airlock1",
+          "x": 68.0,
+          "z": 50.5,
+          "facing": "E"
         }
       ]
     },
@@ -1364,6 +1388,14 @@
           "composition": {
             "turret": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a4_airlock1",
+          "x": 94.0,
+          "z": 58.0,
+          "facing": "N"
         }
       ]
     },
@@ -1681,6 +1713,14 @@
           "composition": {
             "rusher": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a5_airlock1",
+          "x": 150.0,
+          "z": 77.0,
+          "facing": "W"
         }
       ]
     },
@@ -2028,6 +2068,14 @@
             "turret": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a6_airlock1",
+          "x": 132.0,
+          "z": 128.0,
+          "facing": "S"
+        }
       ]
     },
     {
@@ -2223,6 +2271,14 @@
           "composition": {
             "rusher": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a7_airlock1",
+          "x": 152.0,
+          "z": 122.5,
+          "facing": "E"
         }
       ]
     },
@@ -2537,6 +2593,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a8_airlock1",
+          "x": 169.0,
+          "z": 130.0,
+          "facing": "N"
+        }
       ]
     },
     {
@@ -2832,6 +2896,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a9_airlock1",
+          "x": 245.0,
+          "z": 153.0,
+          "facing": "W"
+        }
       ]
     },
     {
@@ -3080,6 +3152,14 @@
             "rusher": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a10_airlock1",
+          "x": 227.0,
+          "z": 190.0,
+          "facing": "S"
         }
       ]
     },
@@ -3408,6 +3488,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a11_airlock1",
+          "x": 247.0,
+          "z": 183.5,
+          "facing": "E"
+        }
       ]
     },
     {
@@ -3698,6 +3786,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a12_airlock1",
+          "x": 270.0,
+          "z": 193.0,
+          "facing": "N"
         }
       ]
     },
@@ -4065,6 +4161,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a13_airlock1",
+          "x": 329.0,
+          "z": 211.0,
+          "facing": "W"
+        }
       ]
     },
     {
@@ -4293,6 +4397,14 @@
             "rusher": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a14_airlock1",
+          "x": 309.0,
+          "z": 251.0,
+          "facing": "S"
         }
       ]
     },
@@ -4671,6 +4783,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a15_airlock1",
+          "x": 331.0,
+          "z": 245.5,
+          "facing": "E"
+        }
       ]
     },
     {
@@ -5035,6 +5155,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a16_airlock1",
+          "x": 360.5,
+          "z": 263.0,
+          "facing": "N"
+        }
       ]
     },
     {
@@ -5347,6 +5475,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a17_airlock1",
+          "x": 423.0,
+          "z": 281.0,
+          "facing": "W"
+        }
       ]
     },
     {
@@ -5648,6 +5784,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a18_airlock1",
+          "x": 406.0,
+          "z": 333.0,
+          "facing": "S"
         }
       ]
     },
@@ -5952,6 +6096,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a19_airlock1",
+          "x": 425.0,
+          "z": 327.5,
+          "facing": "E"
+        }
       ]
     },
     {
@@ -6186,6 +6338,14 @@
             "rusher": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a20_airlock1",
+          "x": 450.5,
+          "z": 335.0,
+          "facing": "N"
         }
       ]
     },
@@ -6596,6 +6756,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a21_airlock1",
+          "x": 513.0,
+          "z": 343.0,
+          "facing": "W"
         }
       ]
     },
@@ -7031,6 +7199,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a22_airlock1",
+          "x": 491.0,
+          "z": 411.0,
+          "facing": "S"
+        }
       ]
     },
     {
@@ -7363,6 +7539,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a23_airlock1",
+          "x": 515.0,
+          "z": 405.5,
+          "facing": "E"
         }
       ]
     },
@@ -7710,6 +7894,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a24_airlock1",
+          "x": 543.0,
+          "z": 413.0,
+          "facing": "N"
         }
       ]
     },
@@ -8079,6 +8271,14 @@
             "rusher": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a25_airlock1",
+          "x": 601.0,
+          "z": 439.0,
+          "facing": "W"
         }
       ]
     },
@@ -8457,6 +8657,14 @@
             "turret": 1,
             "welder": 1
           }
+        }
+      ],
+      "airlocks": [
+        {
+          "id": "a26_airlock1",
+          "x": 578.5,
+          "z": 483.0,
+          "facing": "S"
         }
       ]
     },
@@ -8885,6 +9093,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a27_airlock1",
+          "x": 605.0,
+          "z": 473.0,
+          "facing": "E"
+        }
       ]
     },
     {
@@ -9229,6 +9445,14 @@
             "welder": 1
           }
         }
+      ],
+      "airlocks": [
+        {
+          "id": "a28_airlock1",
+          "x": 633.0,
+          "z": 487.0,
+          "facing": "N"
+        }
       ]
     },
     {
@@ -9532,7 +9756,15 @@
           "level": 0
         }
       ],
-      "cradles": []
+      "cradles": [],
+      "airlocks": [
+        {
+          "id": "a29_airlock1",
+          "x": 697.0,
+          "z": 505.0,
+          "facing": "W"
+        }
+      ]
     },
     {
       "id": "a30",
@@ -9856,7 +10088,21 @@
           "level": 0
         }
       ],
-      "cradles": []
+      "cradles": [],
+      "airlocks": [
+        {
+          "id": "a30_airlock1",
+          "x": 675.0,
+          "z": 557.0,
+          "facing": "S"
+        },
+        {
+          "id": "a30_airlock2",
+          "x": 669.0,
+          "z": 557.0,
+          "facing": "S"
+        }
+      ]
     }
   ],
   "route": [
