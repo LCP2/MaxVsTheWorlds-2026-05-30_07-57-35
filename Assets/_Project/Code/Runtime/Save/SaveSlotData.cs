@@ -92,6 +92,26 @@ namespace MaxWorlds.Save
         /// <see cref="SupportRememberedIds"/>.</summary>
         public int[] SupportRememberedLevels = Array.Empty<int>();
 
+        /// <summary>The world index this slot has chosen a non-native PRIMARY for (MV-1289) — -1 (the
+        /// default) means unset, in which case that world plays its own native
+        /// <see cref="MaxWorlds.Arena.WorldDefinition.PrimaryWeapon"/> exactly as before this ticket. Only
+        /// one world's choice is ever remembered at a time (today's loadout scope is "this world", not a
+        /// per-world table) — picking a different world's loadout overwrites this.</summary>
+        public int ChosenPrimaryForWorldIndex = -1;
+
+        /// <summary>The PRIMARY chosen for <see cref="ChosenPrimaryForWorldIndex"/>, read only while that
+        /// field equals the world actually being equipped.</summary>
+        public MaxWorlds.Weapons.WeaponCatalog.PrimaryKind ChosenPrimaryForWorld;
+
+        /// <summary>The world index this slot has chosen a non-native SECONDARY for (MV-1289) — same
+        /// "-1 unset, falls back to the world's own native row" contract as
+        /// <see cref="ChosenPrimaryForWorldIndex"/>.</summary>
+        public int ChosenSecondaryForWorldIndex = -1;
+
+        /// <summary>The SECONDARY chosen for <see cref="ChosenSecondaryForWorldIndex"/>, read only while
+        /// that field equals the world actually being equipped.</summary>
+        public MaxWorlds.Weapons.SecondaryKind ChosenSecondaryForWorld;
+
         // --- Mid-run checkpoint (MV-557 schema; captured/restored for real as of MV-524 parts 2/3) ---
         // Written by SaveSystem.CaptureActiveCheckpoint (AreaAccumulationDirector.EnterArea and
         // WorldRunner's pause/focus handlers) and read by SaveSystem.RestoreCheckpoint (HomeScreen's
