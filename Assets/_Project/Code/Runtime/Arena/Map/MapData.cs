@@ -240,6 +240,12 @@ namespace MaxWorlds.Arena
         /// field, same "reuse the shape, not the meaning" idiom as <see cref="SludgeSpeedMultiplier"/>.</summary>
         public float CurrentSpeedMps => height;
 
+        /// <summary>Current only (MV-1307) — seconds between flips, resolved from
+        /// <see cref="WorldCurrent.reverseEvery"/> and carried on the otherwise-unused (for Current)
+        /// <see cref="crossingAt"/> field, same "reuse the shape, not the meaning" idiom as
+        /// <see cref="CurrentSpeedMps"/>. 0 (default) means never reverses.</summary>
+        public float CurrentReverseEverySec => crossingAt;
+
         /// <summary>Sludge only (MV-1164) — resolved from <see cref="WorldSludge.crossingAt"/>, WORLD
         /// metres along this rect's own run axis. 0 for every other kind.</summary>
         public float crossingAt;

@@ -420,6 +420,12 @@ namespace MaxWorlds.Arena
         /// <summary>m/s. Default 2.0 (the ticket's own number) — every current authored before a
         /// different speed is ever needed loads at that pace unchanged.</summary>
         public float speed = 2f;
+
+        /// <summary>Seconds between flips (MV-1307). 0 (default) = never reverses — every current
+        /// authored before this ticket loads unchanged. &gt; 0 means the lane runs its authored
+        /// <see cref="dir"/> for this many seconds, then the opposite for the same span, repeating — see
+        /// <see cref="MapGeometry.CurrentDriftAt"/>.</summary>
+        public float reverseEvery;
     }
 
     /// <summary>A locked deck-cell opening (MV-697) — same area-local MIN-corner convention as

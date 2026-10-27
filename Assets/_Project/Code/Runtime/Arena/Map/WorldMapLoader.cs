@@ -461,6 +461,9 @@ namespace MaxWorlds.Arena
                         facing = c.dir,
                         // CurrentSpeedMps reads this back off the otherwise-unused height field.
                         height = c.speed,
+                        // CurrentReverseEverySec reads this back off the otherwise-unused (for Current)
+                        // crossingAt field, same "reuse the shape, not the meaning" idiom.
+                        crossingAt = c.reverseEvery,
                     });
                 }
 
