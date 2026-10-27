@@ -43,11 +43,15 @@ namespace MaxWorlds.Tests.EditMode
         // only five counts that differed from the Areas tab's own pre-Tractor column G. MV-1244
         // hand-added 2 Welder garrison entries each to a8 (index 7), a12 (11), a22 (21) and a24 (23) —
         // a22 already carries a Tractor pair, so its own +2 stacks onto that ticket's own total.
+        // MV-1292 hand-added 1 Shield Projector each to a4/a9/a14/a19/a24/a29 (indices 3/8/13/18/23/28)
+        // and 1 Jammer each to a6/a11/a16/a21/a26 (indices 5/10/15/20/25) — the ticket's own "Worlds
+        // 3-5 stop feeling the same", outside the Areas tab's own column G and not yet mirrored back
+        // into the workbook (that mirroring is this ticket's own named follow-up).
         private static readonly int[] ExpectedRobotCounts =
         {
-            14, 18, 16, 22, 24, 26, 22, 36, 28, 26,
-            24, 32, 30, 26, 39, 30, 32, 34, 32, 28,
-            36, 44, 38, 40, 32, 40, 40, 40, 40, 32,
+            14, 18, 16, 23, 24, 27, 22, 36, 29, 26,
+            25, 32, 30, 27, 39, 31, 32, 34, 33, 28,
+            37, 44, 38, 41, 32, 41, 40, 40, 41, 32,
         };
 
         private const int ExpectedAreaCount = 30;

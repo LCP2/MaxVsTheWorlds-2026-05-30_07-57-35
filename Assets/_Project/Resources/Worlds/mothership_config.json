@@ -1203,7 +1203,8 @@
         "gunner": 4,
         "bruiser": 4,
         "launcher": 2,
-        "blinker": 2
+        "blinker": 2,
+        "projector": 1
       },
       "garrison": [
         {
@@ -1336,6 +1337,12 @@
           "kind": "blinker",
           "x": 84.0,
           "z": 82.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 92.0,
+          "z": 76.0,
           "level": 0
         }
       ],
@@ -1835,7 +1842,8 @@
         "blinker": 2,
         "bolter": 2,
         "heavy": 2,
-        "skitter": 3
+        "skitter": 3,
+        "jammer": 1
       },
       "garrison": [
         {
@@ -1992,6 +2000,12 @@
           "kind": "skitter",
           "x": 126.0,
           "z": 100.0,
+          "level": 0
+        },
+        {
+          "kind": "jammer",
+          "x": 132.0,
+          "z": 112.0,
           "level": 0
         }
       ],
@@ -2618,7 +2632,8 @@
         "bolter": 2,
         "heavy": 2,
         "skitter": 3,
-        "brute": 2
+        "brute": 2,
+        "projector": 1
       },
       "garrison": [
         {
@@ -2787,6 +2802,12 @@
           "kind": "brute",
           "x": 217.0,
           "z": 158.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 223.0,
+          "z": 153.0,
           "level": 0
         }
       ],
@@ -3221,7 +3242,8 @@
         "bolter": 2,
         "heavy": 2,
         "skitter": 2,
-        "brute": 1
+        "brute": 1,
+        "jammer": 1
       },
       "garrison": [
         {
@@ -3366,6 +3388,12 @@
           "kind": "brute",
           "x": 261.0,
           "z": 177.0,
+          "level": 0
+        },
+        {
+          "kind": "jammer",
+          "x": 265.0,
+          "z": 178.0,
           "level": 0
         }
       ],
@@ -4088,7 +4116,8 @@
         "bolter": 2,
         "heavy": 2,
         "skitter": 2,
-        "brute": 2
+        "brute": 2,
+        "projector": 1
       },
       "garrison": [
         {
@@ -4245,6 +4274,12 @@
           "kind": "brute",
           "x": 303.0,
           "z": 237.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 309.0,
+          "z": 241.0,
           "level": 0
         }
       ],
@@ -4798,7 +4833,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "tractor": 2
+        "tractor": 2,
+        "jammer": 1
       },
       "garrison": [
         {
@@ -4979,6 +5015,12 @@
           "kind": "tractor",
           "x": 342.0,
           "z": 291.0,
+          "level": 0
+        },
+        {
+          "kind": "jammer",
+          "x": 358.0,
+          "z": 278.0,
           "level": 0
         }
       ],
@@ -5686,7 +5728,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "breaker": 1
+        "breaker": 1,
+        "projector": 1
       },
       "garrison": [
         {
@@ -5879,6 +5922,12 @@
           "kind": "breaker",
           "x": 455.0,
           "z": 317.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 446.0,
+          "z": 320.5,
           "level": 0
         }
       ],
@@ -6300,7 +6349,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "breaker": 2
+        "breaker": 2,
+        "jammer": 1
       },
       "garrison": [
         {
@@ -6517,6 +6567,12 @@
           "kind": "breaker",
           "x": 483.0,
           "z": 337.0,
+          "level": 0
+        },
+        {
+          "kind": "jammer",
+          "x": 491.0,
+          "z": 346.0,
           "level": 0
         }
       ],
@@ -7383,7 +7439,8 @@
         "skitter": 3,
         "brute": 2,
         "breaker": 2,
-        "welder": 2
+        "welder": 2,
+        "projector": 1
       },
       "garrison": [
         {
@@ -7624,6 +7681,12 @@
           "kind": "welder",
           "x": 532.5,
           "z": 427.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 541.0,
+          "z": 433.0,
           "level": 0
         }
       ],
@@ -8113,7 +8176,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 3,
-        "breaker": 2
+        "breaker": 2,
+        "jammer": 1
       },
       "garrison": [
         {
@@ -8354,6 +8418,12 @@
           "kind": "breaker",
           "x": 575.0,
           "z": 459.0,
+          "level": 0
+        },
+        {
+          "kind": "jammer",
+          "x": 581.0,
+          "z": 469.0,
           "level": 0
         }
       ],
@@ -9211,7 +9281,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 3,
-        "breaker": 2
+        "breaker": 2,
+        "projector": 1
       },
       "garrison": [
         {
@@ -9452,6 +9523,12 @@
           "kind": "breaker",
           "x": 667.0,
           "z": 507.0,
+          "level": 0
+        },
+        {
+          "kind": "projector",
+          "x": 675.0,
+          "z": 505.0,
           "level": 0
         }
       ],

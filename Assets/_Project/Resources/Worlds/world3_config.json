@@ -2095,6 +2095,12 @@
      "level": 0,
      "x": 98.5,
      "z": 1.5
+    },
+    {
+     "kind": "projector",
+     "x": 84.5,
+     "z": 14.0,
+     "level": 0
     }
    ],
    "windows": [
@@ -2115,7 +2121,11 @@
     }
    ],
    "wallDressing": "planters",
-   "roomType": "gallery"
+   "roomType": "gallery",
+   "composition": {
+    "projector": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a5",
@@ -2801,6 +2811,12 @@
      "level": 0,
      "x": 152.5,
      "z": 22.5
+    },
+    {
+     "kind": "jammer",
+     "x": 154.0,
+     "z": 14.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -2823,7 +2839,8 @@
    "roomType": "engine_room",
    "composition": {
     "dreadnought": 1,
-    "blendWithDial": true
+    "blendWithDial": true,
+    "jammer": 1
    }
   },
   {
@@ -4291,6 +4308,12 @@
      "level": 0,
      "x": 173.5,
      "z": 104.5
+    },
+    {
+     "kind": "projector",
+     "x": 182.5,
+     "z": 86.5,
+     "level": 0
     }
    ],
    "decor": [
@@ -4310,7 +4333,11 @@
     }
    ],
    "wallDressing": "racks",
-   "roomType": "cargo_hold"
+   "roomType": "cargo_hold",
+   "composition": {
+    "projector": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a10",
@@ -5144,6 +5171,12 @@
      "level": 0,
      "x": 131.5,
      "z": 101.5
+    },
+    {
+     "kind": "jammer",
+     "x": 150.0,
+     "z": 127.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -5156,7 +5189,11 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "engine_room"
+   "roomType": "engine_room",
+   "composition": {
+    "jammer": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a12",
@@ -6488,6 +6525,12 @@
      "level": 0,
      "x": 86.5,
      "z": 57.5
+    },
+    {
+     "kind": "projector",
+     "x": 74.5,
+     "z": 75.5,
+     "level": 0
     }
    ],
    "decor": [
@@ -6507,7 +6550,11 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "reactor_bay"
+   "roomType": "reactor_bay",
+   "composition": {
+    "projector": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a15",
@@ -7539,10 +7586,20 @@
      "level": 0,
      "x": 170.5,
      "z": 57.5
+    },
+    {
+     "kind": "jammer",
+     "x": 154.5,
+     "z": 75.5,
+     "level": 0
     }
    ],
    "wallDressing": "planters",
-   "roomType": "gallery"
+   "roomType": "gallery",
+   "composition": {
+    "jammer": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a17",
@@ -8897,6 +8954,12 @@
      "level": 0,
      "x": 65.5,
      "z": 29.5
+    },
+    {
+     "kind": "projector",
+     "x": 82.0,
+     "z": 42.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -8909,7 +8972,11 @@
     }
    ],
    "wallDressing": "planters",
-   "roomType": "crew_hydroponics"
+   "roomType": "crew_hydroponics",
+   "composition": {
+    "projector": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a20",
@@ -10070,10 +10137,20 @@
      "level": 0,
      "x": 29.5,
      "z": 98.5
+    },
+    {
+     "kind": "jammer",
+     "x": 42.0,
+     "z": 78.0,
+     "level": 0
     }
    ],
    "wallDressing": "planters",
-   "roomType": "gallery"
+   "roomType": "gallery",
+   "composition": {
+    "jammer": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a22",
@@ -12096,6 +12173,12 @@
      "level": 0,
      "x": 8.5,
      "z": 167.0
+    },
+    {
+     "kind": "projector",
+     "x": 18.0,
+     "z": 159.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -12123,7 +12206,8 @@
    "roomType": "cargo_hold",
    "composition": {
     "dreadnought": 1,
-    "blendWithDial": true
+    "blendWithDial": true,
+    "projector": 1
    }
   },
   {
@@ -13779,6 +13863,12 @@
      "level": 0,
      "x": 164.5,
      "z": 143.5
+    },
+    {
+     "kind": "jammer",
+     "x": 148.0,
+     "z": 158.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -13805,7 +13895,11 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "reactor_bay"
+   "roomType": "reactor_bay",
+   "composition": {
+    "jammer": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a28",
@@ -15795,6 +15889,12 @@
      "level": 0,
      "x": 230.5,
      "z": 143.5
+    },
+    {
+     "kind": "projector",
+     "x": 212.5,
+     "z": 161.0,
+     "level": 0
     }
    ],
    "decor": [
@@ -15839,7 +15939,11 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "pressure_lock"
+   "roomType": "pressure_lock",
+   "composition": {
+    "projector": 1,
+    "blendWithDial": true
+   }
   },
   {
    "id": "a30",
