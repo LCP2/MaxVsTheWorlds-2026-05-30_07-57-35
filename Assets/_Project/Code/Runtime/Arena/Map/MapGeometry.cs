@@ -377,9 +377,26 @@ namespace MaxWorlds.Arena
             {
                 var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
                 if (footprint.Contains(new Vector2(x, z)))
-                    drift += CurrentDirectionVector(e.facing) * e.CurrentSpeedMps;
+                {
+                    Vector3 dir = CurrentDirectionVector(e.facing);
+                    if (IsReversedNow(e.CurrentReverseEverySec)) dir = -dir;
+                    drift += dir * e.CurrentSpeedMps;
+                }
             }
             return drift;
+        }
+
+        /// <summary>MV-1307: whether a lane whose own authored cadence is
+        /// <paramref name="reverseEverySec"/> is currently running opposite its authored
+        /// <see cref="WorldCurrent.dir"/> — the shared <see cref="MapCurrentReversalRunner.Age"/> clock
+        /// cut into back-to-back <paramref name="reverseEverySec"/>-second intervals, odd-numbered ones
+        /// reversed, even ones (including the first, [0, reverseEverySec)) as-authored. 0/unauthored (the
+        /// vast majority of lanes) never reverses.</summary>
+        private static bool IsReversedNow(float reverseEverySec)
+        {
+            if (reverseEverySec <= 0f) return false;
+            var interval = (int)(MapCurrentReversalRunner.Age / reverseEverySec);
+            return (interval & 1) == 1;
         }
 
         /// <summary>MV-1102: a wall-gate's own height is authored as exactly <c>wallHeight</c> (MV-277),

@@ -7861,7 +7861,8 @@
      "w": 4,
      "d": 11,
      "dir": "S",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a16_cur2",
@@ -7870,7 +7871,8 @@
      "w": 4,
      "d": 11,
      "dir": "N",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -8403,7 +8405,8 @@
      "w": 20,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a17_cur2",
@@ -8412,7 +8415,8 @@
      "w": 20,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -8984,7 +8988,8 @@
      "w": 9,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a18_cur2",
@@ -8993,7 +8998,8 @@
      "w": 9,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -9298,7 +9304,8 @@
      "w": 20,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a19_cur2",
@@ -9307,7 +9314,8 @@
      "w": 20,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -9933,7 +9941,8 @@
      "w": 20,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a20_cur2",
@@ -9942,7 +9951,8 @@
      "w": 20,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -10512,7 +10522,8 @@
      "w": 4,
      "d": 20,
      "dir": "N",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a21_cur2",
@@ -10521,7 +10532,8 @@
      "w": 4,
      "d": 20,
      "dir": "S",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -11127,7 +11139,8 @@
      "w": 4,
      "d": 20,
      "dir": "N",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a22_cur2",
@@ -11136,7 +11149,8 @@
      "w": 4,
      "d": 20,
      "dir": "S",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -11798,7 +11812,8 @@
      "w": 4,
      "d": 18,
      "dir": "N",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a23_cur2",
@@ -11807,7 +11822,8 @@
      "w": 4,
      "d": 14,
      "dir": "S",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -12630,7 +12646,8 @@
      "w": 20,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a24_cur2",
@@ -12639,7 +12656,8 @@
      "w": 20,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
@@ -13359,7 +13377,8 @@
      "w": 20,
      "d": 4,
      "dir": "E",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     },
     {
      "id": "a25_cur2",
@@ -13368,7 +13387,8 @@
      "w": 20,
      "d": 4,
      "dir": "W",
-     "speed": 2
+     "speed": 2,
+     "reverseEvery": 10
     }
    ]
   },
