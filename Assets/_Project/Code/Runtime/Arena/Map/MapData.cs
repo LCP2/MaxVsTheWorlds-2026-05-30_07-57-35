@@ -22,6 +22,7 @@ namespace MaxWorlds.Arena
         Grate,                // MV-781
         Cradle,               // MV-1232
         Vent,                 // MV-1240
+        Pylon,                // MV-1294
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -235,6 +236,10 @@ namespace MaxWorlds.Arena
         /// <summary>Replicator only (MV-706) — the maximum number of doublings this box can ever
         /// perform, resolved from <see cref="WorldReplicator.capacity"/>. 0 for every other kind.</summary>
         public int capacity;
+
+        /// <summary>Pylon only (MV-1294) — the id of the relay or boss this pylon feeds, resolved from
+        /// <see cref="WorldPylon.feeds"/>. Empty for every other kind.</summary>
+        public string feeds = "";
 
         /// <summary>Cradle only (MV-1232) — resolved from <see cref="WorldCradle.composition"/>, handed
         /// straight to the built <see cref="MaxWorlds.Enemies.EnemySpawner.ConfigureAreaComposition"/>

@@ -421,10 +421,14 @@ namespace MaxWorlds.Arena
 
     /// <summary>A Replicator's authored position and doubling budget (MV-706) — World 2's factory:
     /// a box that never spawns on its own, but doubles any robot that reaches its hatch. <see cref="x"/>/
-    /// <see cref="z"/> are area-local metres (box centre), same convention as <see cref="WorldShed"/>.
-    /// <see cref="capacity"/> is the maximum number of doublings this one box can ever perform — Lee's
-    /// exact-count rule: the worst case per area is the authored composition plus Σ every replicator's
-    /// capacity, by design, never a dial retuned live.</summary>
+    /// <see cref="z"/> are ABSOLUTE world metres (box centre), same convention as <see cref="WorldShed"/>
+    /// (MV-1294: corrected — <see cref="WorldMapLoader.TryLoad"/> hands both straight through with no
+    /// area-origin offset, unlike a genuinely area-local record such as <see cref="WorldSludge"/>, which
+    /// IS resolved against the area's own <see cref="WorldArea.WorldRectOf"/>; this comment previously
+    /// said "area-local", which was never true of either). <see cref="capacity"/> is the maximum number
+    /// of doublings this one box can ever perform — Lee's exact-count rule: the worst case per area is
+    /// the authored composition plus Σ every replicator's capacity, by design, never a dial retuned
+    /// live.</summary>
     [Serializable]
     public sealed class WorldReplicator
     {
@@ -541,6 +545,24 @@ namespace MaxWorlds.Arena
         public float to = 1f;
     }
 
+    /// <summary>A City substation pylon (MV-1294) — feeds a relay (<see cref="WorldReplicator"/>) or a
+    /// boss (<see cref="WorldBoss"/>) in the same area: while any pylon naming that target's id in
+    /// <see cref="feeds"/> is still alive, the target cannot be damaged (MV-1304's relay dome, MV-1309's
+    /// GRIDLOCK shield). <see cref="x"/>/<see cref="z"/> are ABSOLUTE world metres (mast centre), same
+    /// convention as <see cref="WorldReplicator"/> above — not area-local.</summary>
+    [Serializable]
+    public sealed class WorldPylon
+    {
+        public string id;
+        public float x;
+        public float z;
+
+        /// <summary>The id of the relay or boss this pylon feeds, in this same area. Resolved by
+        /// <see cref="MaxWorlds.Factories.Pylon.LiveFeedersOf"/> against every registered pylon's own
+        /// live <see cref="MaxWorlds.Factories.Pylon.IsAlive"/>.</summary>
+        public string feeds;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -588,6 +610,11 @@ namespace MaxWorlds.Arena
         /// build-a-robot machine, the Ship counterpart of a shed/replicator. Optional; most areas
         /// (every one but the Hangar Bay, today) carry none.</summary>
         public WorldCradle[] cradles = Array.Empty<WorldCradle>();
+
+        /// <summary>Substation pylons authored into this area (MV-1294) — the City's own power-feed
+        /// structure, feeding a relay or a boss in the same area. Optional; most areas (every one but
+        /// the City's relay/boss areas) carry none.</summary>
+        public WorldPylon[] pylons = Array.Empty<WorldPylon>();
 
         public WorldBoss boss;
 

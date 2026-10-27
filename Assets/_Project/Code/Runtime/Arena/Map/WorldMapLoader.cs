@@ -45,6 +45,14 @@ namespace MaxWorlds.Arena
         /// preset scales a probe body to).</summary>
         public const float CradleSize = 3f;
 
+        /// <summary>A pylon's plinth footprint, square, in metres (MV-1294 ticket: "a 1.4 m square
+        /// plinth").</summary>
+        public const float PylonFootprint = 1.4f;
+
+        /// <summary>A pylon's built height (plinth + mast), in metres (MV-1294 ticket: "a lattice
+        /// substation mast 3.0 m tall").</summary>
+        public const float PylonHeight = 3f;
+
         /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
@@ -608,6 +616,32 @@ namespace MaxWorlds.Arena
                         width = b.size?.w ?? 3.5f,
                         height = BossHeight,
                         depth = b.size?.d ?? 3.5f,
+                    });
+                }
+            }
+
+            // MV-1294: an area's substation pylons — built AFTER sheds/replicators/cradles/bosses
+            // (every valid WorldPylon.feeds target) so PlaceActors, which builds entities in this exact
+            // list order, always has the fed target's GameObject already in built.Actors by the time a
+            // pylon resolves it (MapRuntime.BuildPylon). One entity per authored pylon, same
+            // "per-entity not per-area" shape as WorldShed/WorldReplicator/WorldCradle above (MV-475).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldPylon[] pylons = a.pylons ?? Array.Empty<WorldPylon>();
+                for (int i = 0; i < pylons.Length; i++)
+                {
+                    WorldPylon p = pylons[i];
+                    if (p == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(p.id) ? $"{a.id}_pylon{i + 1}" : p.id,
+                        kind = "pylon",
+                        x = p.x,
+                        z = p.z,
+                        width = PylonFootprint,
+                        height = PylonHeight,
+                        depth = PylonFootprint,
+                        feeds = p.feeds ?? "",
                     });
                 }
             }

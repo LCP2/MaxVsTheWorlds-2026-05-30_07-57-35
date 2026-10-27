@@ -439,6 +439,13 @@ namespace MaxWorlds.UI
                 if (entity != null && entity.Kind == EntityKind.Boss)
                     AddObjectiveMarker(entity, BossIsAlive(entity), "Boss");
 
+            // Pylons (MV-1294) — deliberately NOT an objective marker: "a small dark-red dot while
+            // alive (not blinking — it is not an exit requirement)", so this draws through its own
+            // AddPylonDotMarker rather than AddObjectiveMarker, and only while the pylon is still alive.
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.Pylon && PylonIsAlive(entity))
+                    AddPylonDotMarker(entity);
+
             // Area index + name labels (item 8) — anchored to each room's own bottom-left corner (item
             // 3): the top-left is where cover clusters, and drawn last so a label is never buried under
             // a shed or boss glow that happens to sit near it.
@@ -591,6 +598,30 @@ namespace MaxWorlds.UI
             if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
             var cradle = go.GetComponent<AssemblyCradle>();
             return cradle == null || cradle.IsAlive;
+        }
+
+        /// <summary>A pylon's own small, steady map dot (MV-1294) — never a blinking objective marker
+        /// (see <see cref="AddObjectiveMarker"/>'s own doc for why sheds/Replicators/Cradles/bosses get
+        /// that treatment and a pylon deliberately does not): dark red, drawn only while the pylon is
+        /// still alive (the caller already filtered on <see cref="PylonIsAlive"/>).</summary>
+        private void AddPylonDotMarker(MapEntity entity)
+        {
+            var dot = AddImage(_content, HudTextures.Disc(16), MapScreenDesign.PylonDot, "Pylon");
+            Anchor(dot.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+            dot.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
+            dot.rectTransform.sizeDelta = new Vector2(MapScreenDesign.PylonDotSize, MapScreenDesign.PylonDotSize);
+            dot.raycastTarget = false;
+        }
+
+        /// <summary>Resolves a pylon entity's live/destroyed state off the actual built <see cref="Pylon"/>
+        /// component for its id, via <see cref="BackyardPath.Actors"/> — same reasoning and same
+        /// "defaults alive" fallback as <see cref="ReplicatorIsAlive"/>.</summary>
+        private bool PylonIsAlive(MapEntity entity)
+        {
+            if (_backyardPath == null) return true;
+            if (!_backyardPath.Actors.TryGetValue(entity.id, out GameObject go) || go == null) return true;
+            var pylon = go.GetComponent<Pylon>();
+            return pylon == null || pylon.IsAlive;
         }
 
         /// <summary>Resolves a boss entity's live/destroyed state off <see cref="BossCensus.IsAreaDefeated"/>

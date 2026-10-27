@@ -516,6 +516,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv773GrateLurker());
             Add(BuildMv775ReplicatorMachine());
             Add(BuildMv1201CityRelay());
+            Add(BuildMv1294Pylon());
             Add(BuildMv1227AssemblyCradle());
             Add(BuildMv1229PodLaunch());
             Add(BuildMv818CoverCheck());
@@ -3943,6 +3944,94 @@ namespace MaxWorlds.Dev
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1201-city-relay", Setup) },
                 Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
+            };
+        }
+
+        // ---- Mv1294Pylon (MV-1294 AC2) ---------------------------------------------------------
+
+        /// <summary>AC2's own "ONE capture of a pylon and its cable" — builds a real
+        /// <see cref="Pylon"/> next to the real Player-tagged Max, feeding a real (re-skinned)
+        /// <see cref="Replicator"/> relay a few metres away via the real
+        /// <see cref="Pylon.SetFeedTarget"/>/<see cref="Pylon.Build"/> path: proof of the actual built
+        /// mast, its health bar and its own glowing floor cable with travelling dots, not a description
+        /// of one.</summary>
+        private static CapturePreset BuildMv1294Pylon()
+        {
+            const float pitch = 45f;
+            const float distance = 14f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const string relayId = "MV1294CaptureRelay";
+
+            GameObject relayGo = null;
+            GameObject pylonGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                // Same proven-safe direction MV1201CityRelay's own preset already frames clear of scene
+                // geometry (right * 3.5f) — the pylon sits further along that SAME line rather than off
+                // on a second axis, so this shot can't land behind a wall/roof the way an added
+                // forward/back offset did on the first capture pass.
+                Vector3 relayFocus = maxGo.transform.position + maxGo.transform.right * 3.5f;
+                Vector3 pylonFocus = maxGo.transform.position + maxGo.transform.right * 8f;
+
+                relayGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                relayGo.name = relayId;
+                relayGo.transform.position = relayFocus;
+                relayGo.transform.localScale = new Vector3(2f, 1.5f, 2f); // the authored 2x1.5x2 footprint
+                var relay = relayGo.AddComponent<Replicator>();
+                relay.Configure(1);
+                relay.SetId(relayId);
+                relay.ApplyCityRelaySkin();
+
+                pylonGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pylonGo.name = "MV1294CapturePylon";
+                pylonGo.transform.position = pylonFocus;
+                pylonGo.transform.localScale = new Vector3(1.4f, 3f, 1.4f); // the authored 1.4x3x1.4 footprint
+                var pylon = pylonGo.AddComponent<Pylon>();
+                pylon.SetId("MV1294CapturePylon");
+                pylon.Configure(relayId);
+                pylon.SetFeedTarget(relayGo.transform);
+
+                for (int i = 0; i < 8; i++) yield return null;   // let the generated body and the cable's travelling dots settle
+
+                Vector3 camFocus = Vector3.Lerp(pylonFocus, relayFocus, 0.5f) + Vector3.up * 1.2f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1294pylon",
+                LogTag = "[MV1294Capture]",
+                Flag = "-mv1294shot",
+                ArmFile = "Temp/mv1294.arm",
+                HeadlessMarker = "Temp/mv1294.headless",
+                DoneFileName = "_mv1294_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV693Replicator/MV1201CityRelay's own
+                    // presets use: on a fresh profile HomeScreen's pick-a-slot modal freezes
+                    // Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1294-pylon-cable", Setup) },
+                Cleanup = () =>
+                {
+                    if (pylonGo != null) Destroy(pylonGo);
+                    if (relayGo != null) Destroy(relayGo);
+                },
             };
         }
 
