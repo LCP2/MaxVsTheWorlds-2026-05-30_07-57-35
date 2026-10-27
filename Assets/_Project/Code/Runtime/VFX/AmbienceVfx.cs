@@ -59,6 +59,10 @@ namespace MaxWorlds.VFX
         [SerializeField] private Color scorchColor = new Color(0.10f, 0.09f, 0.07f, 0.62f);
         [SerializeField] private Color wreckColor = new Color(0.13f, 0.10f, 0.07f, 0.75f);
 
+        /// <summary>MV-1296 ticket: "a scorch decal that fades in 5 s" — far short of the ordinary
+        /// <see cref="decalLife"/> above, so a canister's mark needs its own, shorter lifetime.</summary>
+        private const float CanisterScorchLife = 5f;
+
         private ParticleSystem _motes;
         private Transform _player;
 
@@ -107,12 +111,14 @@ namespace MaxWorlds.VFX
         {
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
+            HudSignals.CanisterDetonated += OnCanisterDetonated;
         }
 
         private void OnDisable()
         {
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+            HudSignals.CanisterDetonated -= OnCanisterDetonated;
         }
 
         // --- motes ---
@@ -184,12 +190,15 @@ namespace MaxWorlds.VFX
 
         private void OnEnemyKilled(Vector3 pos) => AddDecal(pos, Random.Range(0.7f, 1.1f), scorchColor);
         private void OnFactoryDestroyed(Vector3 pos) => AddDecal(pos, 3.4f, wreckColor);
+        private void OnCanisterDetonated(Vector3 pos) => AddDecal(pos, 1.6f, scorchColor, CanisterScorchLife);
 
         /// <summary>
         /// Leave a mark on the ground. Capped and recycled oldest-first: a long run kills a lot of
         /// robots, and an uncapped decal list would grow without bound for the whole session.
+        /// <paramref name="life"/> defaults to the shared <see cref="decalLife"/> — MV-1296's own
+        /// canister scorch is the one caller that overrides it, to the ticket's shorter 5 s.
         /// </summary>
-        private void AddDecal(Vector3 worldPos, float radius, Color color)
+        private void AddDecal(Vector3 worldPos, float radius, Color color, float life = -1f)
         {
             Decal d;
             if (_decals.Count >= maxDecals)
@@ -221,7 +230,7 @@ namespace MaxWorlds.VFX
             d.Tr.localScale = new Vector3(radius * 2f, radius * 2f, 1f);
             d.Color = color;
             d.Age = 0f;
-            d.Life = decalLife;
+            d.Life = life > 0f ? life : decalLife;
             _decals.Add(d);
         }
 

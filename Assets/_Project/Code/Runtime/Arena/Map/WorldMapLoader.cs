@@ -53,6 +53,13 @@ namespace MaxWorlds.Arena
         /// substation mast 3.0 m tall").</summary>
         public const float PylonHeight = 3f;
 
+        /// <summary>An explosive canister's built footprint, diameter, in metres (MV-1296 ticket: "a
+        /// drum 0.8 m across").</summary>
+        public const float CanisterFootprint = 0.8f;
+
+        /// <summary>An explosive canister's built height, in metres (MV-1296 ticket: "1.0 m tall").</summary>
+        public const float CanisterHeight = 1f;
+
         /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
@@ -642,6 +649,30 @@ namespace MaxWorlds.Arena
                         height = PylonHeight,
                         depth = PylonFootprint,
                         feeds = p.feeds ?? "",
+                    });
+                }
+            }
+
+            // MV-1296: an area's explosive canisters — no ordering dependency on anything else (unlike
+            // pylons above, a canister feeds nothing), so appended last for no reason beyond "after
+            // everything this ticket doesn't touch". One entity per authored canister, same
+            // "per-entity not per-area" shape as WorldPylon/WorldReplicator (MV-475).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldCanister[] canisters = a.canisters ?? Array.Empty<WorldCanister>();
+                for (int i = 0; i < canisters.Length; i++)
+                {
+                    WorldCanister c = canisters[i];
+                    if (c == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(c.id) ? $"{a.id}_canister{i + 1}" : c.id,
+                        kind = "canister",
+                        x = c.x,
+                        z = c.z,
+                        width = CanisterFootprint,
+                        height = CanisterHeight,
+                        depth = CanisterFootprint,
                     });
                 }
             }

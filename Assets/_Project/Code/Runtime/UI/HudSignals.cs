@@ -219,6 +219,13 @@ namespace MaxWorlds.UI
         /// <see cref="EnemyKilled"/> also drives — its own signal, its own small VFX beat, nothing else.</summary>
         public static event Action<Vector3> FittingDestroyed;
 
+        /// <summary>An explosive canister's fuse ran out and it blasted (MV-1296) — worldPos is the
+        /// blast centre. Deliberately NOT <see cref="FittingDestroyed"/>/<see cref="EnemyKilled"/>: a
+        /// canister's ground mark fades in the ticket's own 5 s, far short of every other scorch's shared
+        /// <c>decalLife</c>, so it needs its own signal to carry that distinct lifetime to
+        /// <see cref="MaxWorlds.VFX.AmbienceVfx"/>.</summary>
+        public static event Action<Vector3> CanisterDetonated;
+
         /// <summary>MV-706: which word the bottom banner counter should use — true for "REPLICATORS",
         /// false for "FACTORIES". Fired once by <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/> after
         /// a level finishes building, since only the map — not the HUD, built earlier — knows whether
@@ -287,6 +294,9 @@ namespace MaxWorlds.UI
 
         public static void EmitFittingDestroyed(Vector3 worldPos)
             => FittingDestroyed?.Invoke(worldPos);
+
+        public static void EmitCanisterDetonated(Vector3 worldPos)
+            => CanisterDetonated?.Invoke(worldPos);
 
         public static void EmitWorldFactoryWording(bool isReplicatorWorld, string noun = "REPLICATORS")
         {

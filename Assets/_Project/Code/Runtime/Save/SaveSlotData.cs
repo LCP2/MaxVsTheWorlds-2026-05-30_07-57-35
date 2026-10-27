@@ -218,6 +218,14 @@ namespace MaxWorlds.Save
         /// never re-feeds a relay or boss whose shield the player already dropped).</summary>
         public string[] CheckpointDestroyedPylonIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>Canister.Id</c>) of every explosive canister destroyed by the time
+        /// this checkpoint was captured (MV-1296) — the canister equivalent of
+        /// <see cref="CheckpointDestroyedReplicatorIds"/>/<see cref="CheckpointDestroyedPylonIds"/>,
+        /// restored the same way: silently re-destroying whichever of the freshly-rebuilt level's
+        /// canisters carry a matching id, so a resume never resurrects a canister the player already
+        /// blew (and never re-chains an explosion that already happened).</summary>
+        public string[] CheckpointDestroyedCanisterIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player
