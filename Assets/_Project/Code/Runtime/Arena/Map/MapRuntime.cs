@@ -1356,6 +1356,10 @@ namespace MaxWorlds.Arena
             // test's) ghosts.
             Canister.ResetRegistry();
 
+            // MV-1298: same reasoning again — a level loaded a second time must count its own
+            // destructible cover pieces, not the previous level's (or the previous test's) ghosts.
+            DestructibleCover.ResetRegistry();
+
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
             AreaVisitCensus.Reset();
@@ -1640,14 +1644,32 @@ namespace MaxWorlds.Arena
                 {
                     case EntityKind.Cover:
                     {
-                        // MV-882: cover never moves — YT-78 already removed the only thing that ever
-                        // swayed it (AmbienceVfx's old prop-sway pass, which the class's own doc
-                        // comment records as having swayed nothing since YT-75, and was deleted rather
-                        // than fixed) — so it batches with the floor/walls instead of costing its own
-                        // draw call.
                         CoverPiece piece = BuildCover(root, e);
                         built.Cover.Add(piece);
-                        AddStatic(map, piece.Body, staticGeometry, rendererZones);
+
+                        if (e.hp > 0f)
+                        {
+                            // MV-1298: a destructible piece must keep its OWN renderer — Build()'s crack
+                            // stages and Break()'s hide/rubble swap can't take effect on a renderer that
+                            // has already been folded into the static combined mesh below. Same "never
+                            // batch something whose look changes at runtime" reasoning TagStatic-only
+                            // (no AddStatic) already gets Sludge (it flows) and every Pylon/Canister body
+                            // (BuildPylon/BuildCanister, neither ever calls AddStatic either).
+                            var destructible = piece.Body.AddComponent<DestructibleCover>();
+                            destructible.SetId(e.id);
+                            destructible.Configure(e, e.hp);
+                            TagStatic(map, piece.Body, rendererZones);
+                        }
+                        else
+                        {
+                            // MV-882: cover never moves — YT-78 already removed the only thing that ever
+                            // swayed it (AmbienceVfx's old prop-sway pass, which the class's own doc
+                            // comment records as having swayed nothing since YT-75, and was deleted
+                            // rather than fixed) — so it batches with the floor/walls instead of costing
+                            // its own draw call. hp 0 means indestructible (MV-1298): every piece
+                            // authored before that ticket keeps this exact path, unchanged.
+                            AddStatic(map, piece.Body, staticGeometry, rendererZones);
+                        }
                         break;
                     }
 
