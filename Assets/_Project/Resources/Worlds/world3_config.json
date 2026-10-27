@@ -1096,7 +1096,18 @@
     }
    ],
    "wallDressing": "racks",
-   "roomType": "cargo_hold"
+   "roomType": "cargo_hold",
+   "currents": [
+    {
+     "id": "a1_cur1",
+     "x": 16,
+     "z": 0,
+     "w": 4,
+     "d": 16,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a2",
@@ -1537,7 +1548,18 @@
     }
    ],
    "wallDressing": "planters",
-   "roomType": "gallery"
+   "roomType": "gallery",
+   "currents": [
+    {
+     "id": "a2_cur1",
+     "x": 4,
+     "z": 20,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a3",
@@ -1837,7 +1859,18 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "reactor_bay"
+   "roomType": "reactor_bay",
+   "currents": [
+    {
+     "id": "a3_cur1",
+     "x": 10,
+     "z": 24,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a4",
@@ -2125,7 +2158,27 @@
    "composition": {
     "projector": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a4_cur1",
+     "x": 9,
+     "z": 11.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a4_cur2",
+     "x": 23,
+     "z": 0,
+     "w": 15,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a5",
@@ -2434,7 +2487,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "pressure_lock"
+   "roomType": "pressure_lock",
+   "currents": [
+    {
+     "id": "a5_cur1",
+     "x": 1,
+     "z": 7.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a5_cur2",
+     "x": 8,
+     "z": 0,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a6",
@@ -2841,7 +2914,27 @@
     "dreadnought": 1,
     "blendWithDial": true,
     "jammer": 1
-   }
+   },
+   "currents": [
+    {
+     "id": "a6_cur1",
+     "x": 8,
+     "z": 0,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a6_cur2",
+     "x": 8,
+     "z": 6.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a7",
@@ -3279,7 +3372,27 @@
     }
    ],
    "wallDressing": "racks",
-   "roomType": "cargo_hold"
+   "roomType": "cargo_hold",
+   "currents": [
+    {
+     "id": "a7_cur1",
+     "x": 1,
+     "z": 16,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a7_cur2",
+     "x": 7.1,
+     "z": 21,
+     "w": 4,
+     "d": 15,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a8",
@@ -4007,7 +4120,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "pressure_lock"
+   "roomType": "pressure_lock",
+   "currents": [
+    {
+     "id": "a8_cur1",
+     "x": 0,
+     "z": 1,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a8_cur2",
+     "x": 23.1,
+     "z": 19,
+     "w": 4,
+     "d": 8,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a9",
@@ -4337,7 +4470,27 @@
    "composition": {
     "projector": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a9_cur1",
+     "x": 0,
+     "z": 7,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a9_cur2",
+     "x": 10.1,
+     "z": 7,
+     "w": 4,
+     "d": 20,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a10",
@@ -4803,7 +4956,27 @@
     }
    ],
    "wallDressing": "planters",
-   "roomType": "crew_hydroponics"
+   "roomType": "crew_hydroponics",
+   "currents": [
+    {
+     "id": "a10_cur1",
+     "x": 5.1,
+     "z": 8,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a10_cur2",
+     "x": 11.1,
+     "z": 9,
+     "w": 4,
+     "d": 20,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a11",
@@ -5193,7 +5366,27 @@
    "composition": {
     "jammer": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a11_cur1",
+     "x": 19,
+     "z": 4.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a11_cur2",
+     "x": 19,
+     "z": 26.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a12",
@@ -5571,7 +5764,27 @@
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a12_cur1",
+     "x": 0,
+     "z": 0,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a12_cur2",
+     "x": 14,
+     "z": 6.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a13",
@@ -6070,7 +6283,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "engine_room"
+   "roomType": "engine_room",
+   "currents": [
+    {
+     "id": "a13_cur1",
+     "x": 0,
+     "z": 11,
+     "w": 4,
+     "d": 20,
+     "dir": "S",
+     "speed": 2
+    },
+    {
+     "id": "a13_cur2",
+     "x": 4,
+     "z": 11,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a14",
@@ -6554,7 +6787,27 @@
    "composition": {
     "projector": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a14_cur1",
+     "x": 12,
+     "z": 21.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a14_cur2",
+     "x": 11,
+     "z": 17.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a15",
@@ -7599,7 +7852,27 @@
    "composition": {
     "jammer": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a16_cur1",
+     "x": 9.1,
+     "z": 18,
+     "w": 4,
+     "d": 11,
+     "dir": "S",
+     "speed": 2
+    },
+    {
+     "id": "a16_cur2",
+     "x": 13.1,
+     "z": 15,
+     "w": 4,
+     "d": 11,
+     "dir": "N",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a17",
@@ -8121,7 +8394,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "engine_room"
+   "roomType": "engine_room",
+   "currents": [
+    {
+     "id": "a17_cur1",
+     "x": 7.87,
+     "z": 9,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a17_cur2",
+     "x": 8,
+     "z": 13,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a18",
@@ -8682,7 +8975,27 @@
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a18_cur1",
+     "x": 15,
+     "z": 9,
+     "w": 9,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a18_cur2",
+     "x": 15,
+     "z": 13,
+     "w": 9,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a19",
@@ -8976,7 +9289,27 @@
    "composition": {
     "projector": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a19_cur1",
+     "x": 8,
+     "z": 0,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a19_cur2",
+     "x": 8,
+     "z": 10,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a20",
@@ -9591,7 +9924,27 @@
     }
    ],
    "wallDressing": "planters",
-   "roomType": "gallery"
+   "roomType": "gallery",
+   "currents": [
+    {
+     "id": "a20_cur1",
+     "x": 9,
+     "z": 21,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    },
+    {
+     "id": "a20_cur2",
+     "x": 6,
+     "z": 8,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a21",
@@ -10150,7 +10503,27 @@
    "composition": {
     "jammer": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a21_cur1",
+     "x": 2,
+     "z": 12,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a21_cur2",
+     "x": 21,
+     "z": 10.5,
+     "w": 4,
+     "d": 20,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a22",
@@ -10745,7 +11118,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "reactor_bay"
+   "roomType": "reactor_bay",
+   "currents": [
+    {
+     "id": "a22_cur1",
+     "x": 11.1,
+     "z": 9,
+     "w": 4,
+     "d": 20,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a22_cur2",
+     "x": 0,
+     "z": 12.5,
+     "w": 4,
+     "d": 20,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a23",
@@ -11396,7 +11789,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "pressure_lock"
+   "roomType": "pressure_lock",
+   "currents": [
+    {
+     "id": "a23_cur1",
+     "x": 1,
+     "z": 11,
+     "w": 4,
+     "d": 18,
+     "dir": "N",
+     "speed": 2
+    },
+    {
+     "id": "a23_cur2",
+     "x": 5,
+     "z": 26,
+     "w": 4,
+     "d": 14,
+     "dir": "S",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a24",
@@ -12208,7 +12621,27 @@
     "dreadnought": 1,
     "blendWithDial": true,
     "projector": 1
-   }
+   },
+   "currents": [
+    {
+     "id": "a24_cur1",
+     "x": 9,
+     "z": 20.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a24_cur2",
+     "x": 1.5,
+     "z": 8.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a25",
@@ -12917,7 +13350,27 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "pressure_lock"
+   "roomType": "pressure_lock",
+   "currents": [
+    {
+     "id": "a25_cur1",
+     "x": 8,
+     "z": 10.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a25_cur2",
+     "x": 8,
+     "z": 20.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a26",
@@ -13899,7 +14352,27 @@
    "composition": {
     "jammer": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a27_cur1",
+     "x": 14,
+     "z": 0,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a27_cur2",
+     "x": 14,
+     "z": 29.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a28",
@@ -14938,7 +15411,27 @@
    "composition": {
     "dreadnought": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a28_cur1",
+     "x": 3,
+     "z": 3.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a28_cur2",
+     "x": 0.5,
+     "z": 7.1,
+     "w": 20,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a29",
@@ -15943,7 +16436,27 @@
    "composition": {
     "projector": 1,
     "blendWithDial": true
-   }
+   },
+   "currents": [
+    {
+     "id": "a29_cur1",
+     "x": 3,
+     "z": 25.1,
+     "w": 20,
+     "d": 4,
+     "dir": "E",
+     "speed": 2
+    },
+    {
+     "id": "a29_cur2",
+     "x": 10,
+     "z": 9.1,
+     "w": 13,
+     "d": 4,
+     "dir": "W",
+     "speed": 2
+    }
+   ]
   },
   {
    "id": "a30",
