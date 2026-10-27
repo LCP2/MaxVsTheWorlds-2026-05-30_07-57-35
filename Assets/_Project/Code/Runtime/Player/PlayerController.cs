@@ -5,6 +5,7 @@ using MaxWorlds.Bosses;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
 
@@ -312,6 +313,20 @@ namespace MaxWorlds.Player
             CharacterControllerMotion.SafeMove(_cc, drift * dt);
         }
 
+        /// <summary>MV-1305: a blowing airlock panel's pull on Max — same independent SafeMove slot as
+        /// <see cref="TickCurrentDrift"/>/<see cref="TickAnchorheadWhirlpool"/> above. Deliberately plain
+        /// additive (no <see cref="TickCurrentDrift"/>-style floor against his own input): the ticket's
+        /// own "he can still walk away slowly" is already true of a 3 m/s pull added on top of his own
+        /// WalkSpeed-driven movement elsewhere, with no further floor needed. Never kills Max — only
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.ApplyAirlockPull"/> reads the panel's kill radius.</summary>
+        private void TickAirlockPull(float dt)
+        {
+            Vector3 pull = AirlockPanel.MaxPullAt(transform.position);
+            if (pull.sqrMagnitude <= 0f) return;
+
+            CharacterControllerMotion.SafeMove(_cc, pull * dt);
+        }
+
         /// <summary>MV-1222: <see cref="PlayerHealth"/> self-adds after <see cref="PlayerController"/>
         /// (see every scaffold/test site that builds Max), so it may not exist yet the first time this
         /// runs — resolved lazily, same "cache once found" idiom <see cref="PlayerHealth.Abilities"/>
@@ -386,6 +401,9 @@ namespace MaxWorlds.Player
 
             // MV-1303: Anchorhead's whirlpool — same independent SafeMove slot as the current drift above.
             TickAnchorheadWhirlpool(dt);
+
+            // MV-1305: a blowing airlock panel's pull — same independent SafeMove slot as the two above.
+            TickAirlockPull(dt);
 
             if (_facing.sqrMagnitude > 0.001f)
             {

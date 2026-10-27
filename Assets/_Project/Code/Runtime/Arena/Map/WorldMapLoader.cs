@@ -60,6 +60,19 @@ namespace MaxWorlds.Arena
         /// <summary>An explosive canister's built height, in metres (MV-1296 ticket: "1.0 m tall").</summary>
         public const float CanisterHeight = 1f;
 
+        /// <summary>An airlock panel's built width, in metres (MV-1305 ticket: "a 3 m-wide hull
+        /// door").</summary>
+        public const float AirlockWidth = 3f;
+
+        /// <summary>An airlock panel's built height, in metres — same "reads like a door" proportion
+        /// as a <see cref="WorldMapLoader.ShedHeight"/> doorway, not separately specified by the
+        /// ticket.</summary>
+        public const float AirlockHeight = 2.4f;
+
+        /// <summary>An airlock panel's built depth (into the wall), in metres — thin, same "mounted
+        /// flush on the hull" reasoning as a gate's own thickness.</summary>
+        public const float AirlockDepth = 0.3f;
+
         /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
@@ -696,6 +709,30 @@ namespace MaxWorlds.Arena
                         width = CanisterFootprint,
                         height = CanisterHeight,
                         depth = CanisterFootprint,
+                    });
+                }
+            }
+
+            // MV-1305: an area's airlock panels — same "per-entity not per-area", no ordering
+            // dependency on anything else shape as WorldCanister above (an airlock feeds nothing and is
+            // fed by nothing).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldAirlock[] airlocks = a.airlocks ?? Array.Empty<WorldAirlock>();
+                for (int i = 0; i < airlocks.Length; i++)
+                {
+                    WorldAirlock al = airlocks[i];
+                    if (al == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(al.id) ? $"{a.id}_airlock{i + 1}" : al.id,
+                        kind = "airlock",
+                        x = al.x,
+                        z = al.z,
+                        width = AirlockWidth,
+                        height = AirlockHeight,
+                        depth = AirlockDepth,
+                        facing = al.facing ?? "N",
                     });
                 }
             }
