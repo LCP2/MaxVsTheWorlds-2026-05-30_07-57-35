@@ -59,6 +59,12 @@ namespace MaxWorlds.Bosses
         private float _podTimer;
         private Transform _podRoot;
 
+        // ---------------------------------------------------------------- Bridge airlocks (MV-1313)
+        private AirlockPanel[] _bridgeAirlocks;
+        private bool _bridgeAirlocksResolved;
+        private float _airlockElapsed;
+        private int _airlockCycleIndex;
+
         public bool IsAlive => _phase != Phase.Dead && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
 
@@ -210,6 +216,53 @@ namespace MaxWorlds.Bosses
             _sweep.SetCooldownSeconds(HelmsmanTuning.SweepCooldownPhase2);
             _sweep.Tick(dt);
             if (_sweep.JustActivated) ApplyLensSweepDamage();
+
+            TickAirlockCycle(dt);
+        }
+
+        /// <summary>Phase 2's own airlock cycle (MV-1313): the two Bridge airlocks (MV-1310) blow in
+        /// turn every <see cref="HelmsmanTuning.AirlockCycleSeconds"/>, alternating sides, each with a
+        /// <see cref="HelmsmanTuning.AirlockWarnSeconds"/> white warning flash on its own panel first
+        /// (<see cref="AirlockPanel.MarkPendingBlow"/>) before the blow itself
+        /// (<see cref="AirlockPanel.Hit"/> — the same call a player hit or a Welder's own cut makes,
+        /// MV-1305/MV-1312). The Helmsman never consults <see cref="AirlockPanel.RobotPullAt"/> or
+        /// <see cref="AirlockPanel.MaxPullAt"/> for her own movement (those are read only by
+        /// <c>RobotEnemy</c>/<c>PlayerController</c>), so she is exempt from the pull by construction —
+        /// the ticket's own "the Helmsman herself is exempt from the pull".</summary>
+        private void TickAirlockCycle(float dt)
+        {
+            ResolveBridgeAirlocksOnce();
+            if (_bridgeAirlocks == null || _bridgeAirlocks.Length == 0) return;
+
+            _airlockElapsed += dt;
+            AirlockPanel panel = _bridgeAirlocks[_airlockCycleIndex % _bridgeAirlocks.Length];
+
+            float blowAt = (_airlockCycleIndex + 1) * HelmsmanTuning.AirlockCycleSeconds;
+            float warnAt = blowAt - HelmsmanTuning.AirlockWarnSeconds;
+
+            if (_airlockElapsed >= warnAt && _airlockElapsed < blowAt) panel.MarkPendingBlow();
+
+            if (_airlockElapsed >= blowAt)
+            {
+                panel.Hit();
+                _airlockCycleIndex++;
+            }
+        }
+
+        /// <summary>Finds this boss's own area's airlocks exactly once, off the static registry
+        /// (<see cref="AirlockPanel.PanelsInArea"/>) keyed by this boss's own <see cref="_areaIndex"/> —
+        /// resolved lazily on the first Phase 2 tick rather than in <see cref="Wake"/>, since
+        /// <see cref="AirlockPanel.AreaIndex"/> is stamped by <c>WorldRunner.Build</c>'s own pass over
+        /// the loaded config, which always completes before any boss's Update ever runs. Sorted by
+        /// world X so "alternating sides" is deterministic across a run.</summary>
+        private void ResolveBridgeAirlocksOnce()
+        {
+            if (_bridgeAirlocksResolved) return;
+            _bridgeAirlocksResolved = true;
+
+            List<AirlockPanel> found = AirlockPanel.PanelsInArea(_areaIndex);
+            found.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+            _bridgeAirlocks = found.ToArray();
         }
 
         private void Approach(float dt)
@@ -475,6 +528,14 @@ namespace MaxWorlds.Bosses
         {
             _phase = Phase.Dead;
             BossCensus.ReportDefeated(this);
+
+            // MV-1313: "on her death both reseal and stop" -- the cycle itself already stops (TickWalking
+            // never runs again once _phase is Dead), this forces whichever airlock is mid-cycle back to
+            // READY immediately rather than leaving it to finish its own 20 s recharge.
+            if (_bridgeAirlocks != null)
+                for (int i = 0; i < _bridgeAirlocks.Length; i++)
+                    _bridgeAirlocks[i]?.ForceReady();
+
             // MV-1245 owns what collecting the Helm Key actually DOES (the viewport exit) — this only
             // drops it where the Helmsman dies.
             PickupDirector.EnsureInstalled().PlacePickupAt(PickupKind.HelmKey, transform.position);
