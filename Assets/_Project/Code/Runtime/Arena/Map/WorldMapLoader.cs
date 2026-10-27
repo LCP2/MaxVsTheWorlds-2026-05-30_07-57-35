@@ -429,6 +429,28 @@ namespace MaxWorlds.Arena
                     });
                 }
 
+                // MV-1300: current lanes — same area-local rect resolution as sludge above, and the
+                // same overlay exemption (an overlay area shares its target's floor hazards, never
+                // building its own second copy).
+                if (!isOverlay)
+                foreach (WorldCurrent c in a.currents ?? Array.Empty<WorldCurrent>())
+                {
+                    if (c == null) continue;
+                    Rect rect = a.WorldRectOf(c.x, c.z, c.w, c.d);
+                    entities.Add(new MapEntity
+                    {
+                        id = c.id,
+                        kind = "current",
+                        x = rect.center.x,
+                        z = rect.center.y,
+                        width = rect.width,
+                        depth = rect.height,
+                        facing = c.dir,
+                        // CurrentSpeedMps reads this back off the otherwise-unused height field.
+                        height = c.speed,
+                    });
+                }
+
                 var deckRects = new List<(WorldDeck deck, Rect rect, float height)>();
                 foreach (WorldDeck d in a.decks ?? Array.Empty<WorldDeck>())
                 {
