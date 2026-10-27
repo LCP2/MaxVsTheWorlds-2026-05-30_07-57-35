@@ -74,6 +74,7 @@ namespace MaxWorlds.UI
         /// primary's own blue, since the turret is meant to read as Max's own tech ("a hose pipe on a
         /// stick").</summary>
         private static readonly Color SentinelColor = new Color(0.45f, 0.65f, 0.85f);
+        private static readonly Color GridlockShieldColor = new Color(1f, 0.15f, 0.12f);
         /// <summary>The TRAP button's colour (MV-1035) — the same ally green (#5BE35A) the trap's own
         /// ring/core and a converted robot's body all wear, so the button reads as the same thing.</summary>
         private static readonly Color TrapColor = new Color(0.357f, 0.890f, 0.353f);
@@ -427,6 +428,7 @@ namespace MaxWorlds.UI
             HudSignals.BossSpawnLevelChanged += OnBossSpawnLevel;
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.SentinelRecalled += OnSentinelRecalled;
+            HudSignals.GridlockShieldBlocked += OnGridlockShieldBlocked;
             HudSignals.Objective += OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged += OnPowerCellsSecondary;
@@ -469,6 +471,7 @@ namespace MaxWorlds.UI
             HudSignals.BossSpawnLevelChanged -= OnBossSpawnLevel;
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
+            HudSignals.GridlockShieldBlocked -= OnGridlockShieldBlocked;
             HudSignals.Objective -= OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged -= OnPowerCellsSecondary;
@@ -750,6 +753,13 @@ namespace MaxWorlds.UI
         /// recall burst is the other half, for whoever IS looking at it.</summary>
         private void OnSentinelRecalled(Vector3 pos)
             => _floating?.Spawn(pos + Vector3.up * 1.8f, "SENTINEL RECALLED", SentinelColor, false, 1.1f, 22f);
+
+        /// <summary>MV-1309: a hit landed on GRIDLOCK while a live pylon still feeds her shield — same
+        /// "the player needs to understand why that hit did nothing" reasoning as <see cref="OnSentinelRecalled"/>,
+        /// alongside <c>GridlockRig</c>'s own ring flash (<see cref="HudSignals.GridlockShieldBlocked"/>'s
+        /// other listener).</summary>
+        private void OnGridlockShieldBlocked(Vector3 pos)
+            => _floating?.Spawn(pos, "SHIELDED", GridlockShieldColor, false, 0.8f, 30f);
 
         private void OnEnemyKilled(Vector3 pos)
         {
