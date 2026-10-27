@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -870,10 +871,10 @@ namespace MaxWorlds.UI
             // death" line has no reason to shrink just because the world/area line above it is long.
             var statusRoot = NewRect("Status", cardRt, Vector2.zero, Vector2.zero);
             float statusW = w - 2f * StatusInsetX;
-            float lineH = (ButtonRowTopY - StatusTopY) / 3f;
             PlaceTL(statusRoot, StatusInsetX, StatusTopY, statusW, ButtonRowTopY - StatusTopY);
 
             string[] statusLines = StatusLines(data, worldInfoCache);
+            float lineH = (ButtonRowTopY - StatusTopY) / statusLines.Length;
             for (int li = 0; li < statusLines.Length; li++)
             {
                 var line = AddText(statusRoot, StatusMaxFontSize, Dim, TextAnchor.UpperLeft, FontStyle.Normal);
@@ -1040,27 +1041,40 @@ namespace MaxWorlds.UI
         /// <see cref="Build"/> call (see call site).</summary>
         private static string[] StatusLines(SaveSlotData data, Dictionary<int, (string Name, int AreaCount)> worldInfoCache)
         {
-            if (!data.HasData) return new[] { "Empty", string.Empty, string.Empty };
-
-            if (data.HasRunInProgress)
+            string[] lines;
+            if (!data.HasData)
+            {
+                lines = new[] { "Empty", string.Empty, string.Empty };
+            }
+            else if (data.HasRunInProgress)
             {
                 int worldIndex = data.CheckpointWorldIndex >= 0 ? data.CheckpointWorldIndex : data.WorldIndex;
                 (string name, int areaCount) = WorldInfo(worldIndex, worldInfoCache);
-                return new[]
+                lines = new[]
                 {
                     $"World {worldIndex + 1}: {name} - Area {data.CheckpointAreaIndex} of {areaCount}",
                     $"Played {FormatPlayedTime(data.CheckpointElapsedSeconds)} - {DeathsPhrase(data.CheckpointDeathsTaken)}",
                     BestLine(data.BestDeathsToVictory)
                 };
             }
-
-            (string nextName, _) = WorldInfo(data.WorldIndex, worldInfoCache);
-            return new[]
+            else
             {
-                $"Next: World {data.WorldIndex + 1}: {nextName}",
-                BestLine(data.BestDeathsToVictory),
-                $"Furthest: World {data.FurthestWorldIndex + 1}"
-            };
+                (string nextName, _) = WorldInfo(data.WorldIndex, worldInfoCache);
+                lines = new[]
+                {
+                    $"Next: World {data.WorldIndex + 1}: {nextName}",
+                    BestLine(data.BestDeathsToVictory),
+                    $"Furthest: World {data.FurthestWorldIndex + 1}"
+                };
+            }
+
+            // MV-1291: the device-wide flag, not a per-slot fact, so it appends to every card —
+            // empty or not — rather than replacing one of the lines above.
+            if (!SaveSystem.AllWeaponsUnlocked) return lines;
+            var withFlag = new string[lines.Length + 1];
+            Array.Copy(lines, withFlag, lines.Length);
+            withFlag[lines.Length] = "ALL WEAPONS UNLOCKED";
+            return withFlag;
         }
 
         /// <summary>Loads <paramref name="worldIndex"/>'s config at most once per <see cref="Build"/>
