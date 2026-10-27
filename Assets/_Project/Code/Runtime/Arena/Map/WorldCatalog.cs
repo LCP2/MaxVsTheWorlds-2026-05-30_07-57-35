@@ -409,6 +409,25 @@ namespace MaxWorlds.Arena
             return 0;
         }
 
+        /// <summary>MV-1289: every PRIMARY a slot owns once it has reached <paramref name="furthestWorldIndex"/>
+        /// — the native <see cref="WorldDefinition.PrimaryWeapon"/> of every world from 0 through that
+        /// index inclusive (the Weapon Core taken at the end of world N-1 is what grants world N's, so by
+        /// the time a slot has reached world N it already owns N's own primary too). Derived from this
+        /// catalog's own rows, never a hard-coded list — the LOADOUT screen (MV-1290) reads this to decide
+        /// what a slot can pick between.</summary>
+        public static IEnumerable<WeaponCatalog.PrimaryKind> OwnedPrimariesThroughWorld(int furthestWorldIndex)
+        {
+            int clamped = Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
+            for (int i = 0; i <= clamped; i++) yield return s_rows[i].PrimaryWeapon;
+        }
+
+        /// <summary>MV-1289: the SECONDARY twin of <see cref="OwnedPrimariesThroughWorld"/>.</summary>
+        public static IEnumerable<SecondaryKind> OwnedSecondariesThroughWorld(int furthestWorldIndex)
+        {
+            int clamped = Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
+            for (int i = 0; i <= clamped; i++) yield return s_rows[i].SecondaryWeapon;
+        }
+
         /// <summary>The row whose palette matches whatever <see cref="MaterialLibrary.Palette"/> is
         /// currently active, falling back to the first row when nothing matches — the same "no match =
         /// World 1" default the deleted <c>BackyardLighting.WorldIndexFromPalette</c> used. For callers

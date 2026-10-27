@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Save;
 
 namespace MaxWorlds.Weapons
 {
@@ -336,6 +337,33 @@ namespace MaxWorlds.Weapons
             WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
             WaterBalloonRepeatFirePerLevel);
 
+        /// <summary>MV-1289: grants whichever SECONDARY is actually EQUIPPED (<see cref="SecondaryKind"/>)
+        /// its own starter grant — the world's own secondary-unlock events (the Rack Module pickup, the
+        /// 2nd Assembly Cradle) used to hard-code the Shoulder Rack's <c>s_rkt</c>/Orbitals' four ids
+        /// directly, which was only ever correct while the world's native secondary was always the one
+        /// equipped. A chosen loadout can now diverge from the world's native row, so the grant must
+        /// follow the equipped kind instead. <see cref="SecondaryKind.WaterBalloon"/>'s own root
+        /// (<c>s_bal</c>) is included for completeness, though no shipped secondary-unlock event can
+        /// grant it today (it's already owned from run start).</summary>
+        public static void AcquireEquippedSecondaryDefaults()
+        {
+            switch (s_secondaryKind)
+            {
+                case SecondaryKind.WaterBalloon:
+                    AcquireById("s_bal");
+                    break;
+                case SecondaryKind.ShoulderRack:
+                    AcquireById("s_rkt");
+                    break;
+                case SecondaryKind.Orbitals:
+                    AcquireById("s_orb");
+                    AcquireById("s_rad");
+                    AcquireById("s_odm");
+                    AcquireById("s_spd");
+                    break;
+            }
+        }
+
         // ---------------------------------------------------------------- Weapon Core morph (MV-689)
 
         /// <summary>MV-1023: the one source of truth for which primary/secondary/board a world plays
@@ -350,7 +378,29 @@ namespace MaxWorlds.Weapons
         public static void ApplyWorldLoadout(int worldIndex)
         {
             WorldDefinition world = WorldCatalog.Get(worldIndex);
-            ApplyLoadout(worldIndex, world.PrimaryWeapon, world.SecondaryWeapon);
+            ApplyLoadout(worldIndex, ResolvedPrimary(worldIndex, world), ResolvedSecondary(worldIndex, world));
+        }
+
+        /// <summary>MV-1289: <paramref name="worldIndex"/>'s own native PRIMARY, unless the active save
+        /// slot (<see cref="SaveSystem.ActiveSlot"/>) has chosen a different one for exactly this world
+        /// (<see cref="SaveSlotData.ChosenPrimaryForWorldIndex"/>) — every caller of
+        /// <see cref="ApplyWorldLoadout"/>/<see cref="ApplyWeaponCoreMorph"/> resolves through here so a
+        /// chosen loadout applies everywhere the native pair used to (world start/join, the Weapon Core
+        /// morph, resume, dev world jumps), with no per-callsite plumbing. No active slot (a capture/
+        /// press-kit/perf-capture run, or a bare EditMode fixture) always reads the native pair.</summary>
+        private static WeaponCatalog.PrimaryKind ResolvedPrimary(int worldIndex, WorldDefinition world)
+        {
+            if (SaveSystem.ActiveSlot < 0) return world.PrimaryWeapon;
+            SaveSlotData data = SaveSystem.Load(SaveSystem.ActiveSlot);
+            return data.ChosenPrimaryForWorldIndex == worldIndex ? data.ChosenPrimaryForWorld : world.PrimaryWeapon;
+        }
+
+        /// <summary>MV-1289: the SECONDARY twin of <see cref="ResolvedPrimary"/>.</summary>
+        private static SecondaryKind ResolvedSecondary(int worldIndex, WorldDefinition world)
+        {
+            if (SaveSystem.ActiveSlot < 0) return world.SecondaryWeapon;
+            SaveSlotData data = SaveSystem.Load(SaveSystem.ActiveSlot);
+            return data.ChosenSecondaryForWorldIndex == worldIndex ? data.ChosenSecondaryForWorld : world.SecondaryWeapon;
         }
 
         /// <summary>MV-1287: the general form <see cref="ApplyWorldLoadout"/> now calls with the
@@ -425,7 +475,10 @@ namespace MaxWorlds.Weapons
             // in — a composed loadout (RigBoard.UseLoadout) pulls PRIMARY's ids from that weapon's home
             // board regardless of which world equips it, so the seed must key off the primary kind
             // itself rather than a per-world flag that would silently miss a non-native pairing.
-            WeaponCatalog.PrimaryKind primary = world.PrimaryWeapon;
+            // MV-1289: and the primary actually being granted is the slot's CHOSEN one when it has set
+            // one for this world, not always this row's native PrimaryWeapon — ApplyWorldLoadout below
+            // resolves the same way, so this must agree with whatever board it just composed.
+            WeaponCatalog.PrimaryKind primary = ResolvedPrimary(worldIndex, world);
 
             preservedLevels["p_dmg"] = 1;
             // MV-1128/MV-1142: SPLIT (p_spr on UNDERTOW's own board) is owned at level 1 (one beam) from

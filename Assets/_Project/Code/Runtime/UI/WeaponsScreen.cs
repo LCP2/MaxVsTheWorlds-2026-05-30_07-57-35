@@ -955,18 +955,21 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>MV-1090: resolves a banked Rack Module (<see cref="PendingMorphingModule.RackModulePending"/>)
-        /// the moment THE RIG opens — unlocks SECONDARY and grants <c>s_rkt</c> at level 1, both at once
+        /// the moment THE RIG opens — unlocks SECONDARY and grants its root at level 1, both at once
         /// (unlike <see cref="GrantDraftCandidate"/>, which only ever does one or the other), then plays
         /// the exact same family reveal <see cref="StartCeremony"/> gives a Device's 1-candidate grant.
         /// The grant happens immediately, same as every other draft path — the ceremony only gates what
-        /// the player can SEE/SPEND while it plays, never when the grant itself lands.</summary>
+        /// the player can SEE/SPEND while it plays, never when the grant itself lands.
+        ///
+        /// MV-1289: grants whichever SECONDARY is actually equipped, not always the Shoulder Rack's own
+        /// <c>s_rkt</c> — a chosen loadout can equip a different SECONDARY than World 2's native row.</summary>
         private void OpenRackModuleReveal()
         {
             PendingMorphingModule.TakeRackModule();
             RigState.UnlockCategory("SECONDARY");
             // MV-435: every RIG grant routes through WeaponSystemState so Changed fires — granting
             // straight off the model layer here would leave the HUD never told to refresh.
-            WeaponSystemState.AcquireById("s_rkt");
+            WeaponSystemState.AcquireEquippedSecondaryDefaults();
 
             if (_canvas == null) Build();
             if (!_open)
@@ -987,15 +990,15 @@ namespace MaxWorlds.UI
         /// destroyed) — unlocks SECONDARY and grants every <c>s_orb</c> node (ORBS/REACH/POWER/SPIN) at
         /// level 1, since Orbitals is "always on once owned, nothing to press" (<c>OrbitalsTrackKind</c>'s
         /// own class doc) rather than a single root grant the player levels up themselves the way
-        /// <see cref="OpenRackModuleReveal"/>'s <c>s_rkt</c> is. Same ceremony shape otherwise.</summary>
+        /// <see cref="OpenRackModuleReveal"/>'s default grant is. Same ceremony shape otherwise.
+        ///
+        /// MV-1289: grants whichever SECONDARY is actually equipped, not always Orbitals — a chosen
+        /// loadout can equip a different SECONDARY than World 5's native row.</summary>
         private void OpenSecondaryFamilyReveal()
         {
             PendingMorphingModule.TakeSecondaryFamily();
             RigState.UnlockCategory("SECONDARY");
-            WeaponSystemState.AcquireById("s_orb");
-            WeaponSystemState.AcquireById("s_rad");
-            WeaponSystemState.AcquireById("s_odm");
-            WeaponSystemState.AcquireById("s_spd");
+            WeaponSystemState.AcquireEquippedSecondaryDefaults();
 
             if (_canvas == null) Build();
             if (!_open)
