@@ -70,6 +70,20 @@ namespace MaxWorlds.Factories
         private bool _beingCut;
         private float _cutFlickerElapsed;
 
+        /// <summary>MV-1313: set every frame by the Helmsman's own airlock cycle during the 1 s warning
+        /// before it blows this panel automatically — same per-frame-flag/clear-if-not-renewed shape as
+        /// <see cref="_beingCutThisFrame"/>, layered on READY via <see cref="_pendingBlowFlickerElapsed"/>
+        /// the same way. Flashes white/black rather than <see cref="_beingCut"/>'s orange so the two
+        /// reads stay visually distinct (a hostile cut vs. this boss's own incoming blow).</summary>
+        private bool _pendingBlowThisFrame;
+        private bool _pendingBlow;
+        private float _pendingBlowFlickerElapsed;
+
+        /// <summary>Called once per tick by <c>HelmsmanBoss.TickAirlockCycle</c> during the warning
+        /// second before it blows this panel itself — see <see cref="_pendingBlowThisFrame"/>'s own doc
+        /// comment.</summary>
+        public void MarkPendingBlow() => _pendingBlowThisFrame = true;
+
         /// <summary>Called once per tick by a Welder mid-beam (MV-1312) — see <see cref="_beingCutThisFrame"/>'s
         /// own doc comment.</summary>
         public void MarkBeingCut() => _beingCutThisFrame = true;
@@ -194,6 +208,12 @@ namespace MaxWorlds.Factories
             _elapsedSinceBlow = 0f;
         }
 
+        /// <summary>MV-1313: forces this panel back to READY immediately, bypassing the rest of the
+        /// 20 s-since-the-hit recharge — the Helmsman's own death reseals both of her Bridge airlocks on
+        /// the spot (ticket's own "on her death both reseal and stop") rather than leaving whichever one
+        /// is mid-cycle to finish its timer on its own.</summary>
+        public void ForceReady() => _elapsedSinceBlow = float.PositiveInfinity;
+
         /// <summary>Advances the state timer and the light's look — dt-parameterised, called from this
         /// object's own <c>Update</c> in Play mode and directly by an EditMode test, same "Update calls it
         /// with Time.deltaTime, a test calls it directly" idiom <see cref="Canister.Tick"/> already uses.</summary>
@@ -204,6 +224,10 @@ namespace MaxWorlds.Factories
             _cutFlickerElapsed = _beingCutThisFrame ? _cutFlickerElapsed + dt : 0f;
             _beingCut = _beingCutThisFrame;
             _beingCutThisFrame = false;
+
+            _pendingBlowFlickerElapsed = _pendingBlowThisFrame ? _pendingBlowFlickerElapsed + dt : 0f;
+            _pendingBlow = _pendingBlowThisFrame;
+            _pendingBlowThisFrame = false;
 
             UpdateLight();
         }
@@ -223,7 +247,12 @@ namespace MaxWorlds.Factories
                     c = RechargingLightColor;
                     break;
                 default:
-                    if (_beingCut)
+                    if (_pendingBlow)
+                    {
+                        bool warnFlashOn = Mathf.FloorToInt(_pendingBlowFlickerElapsed * FlashesPerSecond) % 2 == 0;
+                        c = warnFlashOn ? ReadyLightColor : Color.black;
+                    }
+                    else if (_beingCut)
                     {
                         bool cutFlashOn = Mathf.FloorToInt(_cutFlickerElapsed * FlashesPerSecond) % 2 == 0;
                         c = cutFlashOn ? BlowingLightColor : ReadyLightColor;
@@ -301,6 +330,22 @@ namespace MaxWorlds.Factories
             }
 
             return best;
+        }
+
+        /// <summary>MV-1313: every registered panel currently stamped with <paramref name="areaIndex"/>
+        /// — the Helmsman's own lookup for "the airlocks in a30", same "query the static registry by
+        /// area, once <c>WorldRunner.Build</c> has stamped it" convention as
+        /// <see cref="NearestReadyForWelderCut"/>, but returning every match rather than the nearest
+        /// one since the Helmsman cycles through all of them, not just the closest.</summary>
+        public static List<AirlockPanel> PanelsInArea(int areaIndex)
+        {
+            var result = new List<AirlockPanel>(2);
+            for (int i = 0; i < Registered.Count; i++)
+            {
+                AirlockPanel p = Registered[i];
+                if (p != null && p.AreaIndex == areaIndex) result.Add(p);
+            }
+            return result;
         }
 
         /// <summary>True the instant <paramref name="worldPosition"/> is within ANY currently-BLOWING

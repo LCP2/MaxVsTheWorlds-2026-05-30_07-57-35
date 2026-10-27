@@ -46,5 +46,15 @@ namespace MaxWorlds.Bosses
 
         public const float HatchSide = 2.2f;
         public const float HatchLandingForward = 1.5f;
+
+        // ---------------------------------------------------------------- phase 2: Bridge airlocks
+        // (MV-1313) -- the two a30 airlocks (MV-1310) blow in turn, alternating sides, once phase 2
+        // begins; see HelmsmanBoss.TickAirlockCycle.
+
+        /// <summary>Seconds between one airlock blowing and the next (alternating side) blowing.</summary>
+        public const float AirlockCycleSeconds = 12f;
+
+        /// <summary>How long before each blow its panel shows the white warning flash.</summary>
+        public const float AirlockWarnSeconds = 1f;
     }
 }
