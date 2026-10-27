@@ -6,6 +6,7 @@ using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
+using MaxWorlds.Save;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
@@ -414,17 +415,22 @@ namespace MaxWorlds.Arena
         /// index inclusive (the Weapon Core taken at the end of world N-1 is what grants world N's, so by
         /// the time a slot has reached world N it already owns N's own primary too). Derived from this
         /// catalog's own rows, never a hard-coded list — the LOADOUT screen (MV-1290) reads this to decide
-        /// what a slot can pick between.</summary>
+        /// what a slot can pick between.
+        ///
+        /// MV-1291: once the device-wide <see cref="SaveSystem.AllWeaponsUnlocked"/> flag is set,
+        /// <paramref name="furthestWorldIndex"/> is ignored and every row's PRIMARY is owned — including
+        /// World 1 of a brand-new or just-RESET slot, since the flag outranks a slot's own progress.</summary>
         public static IEnumerable<WeaponCatalog.PrimaryKind> OwnedPrimariesThroughWorld(int furthestWorldIndex)
         {
-            int clamped = Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
+            int clamped = SaveSystem.AllWeaponsUnlocked ? s_rows.Count - 1 : Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
             for (int i = 0; i <= clamped; i++) yield return s_rows[i].PrimaryWeapon;
         }
 
-        /// <summary>MV-1289: the SECONDARY twin of <see cref="OwnedPrimariesThroughWorld"/>.</summary>
+        /// <summary>MV-1289: the SECONDARY twin of <see cref="OwnedPrimariesThroughWorld"/>. MV-1291: same
+        /// <see cref="SaveSystem.AllWeaponsUnlocked"/> override.</summary>
         public static IEnumerable<SecondaryKind> OwnedSecondariesThroughWorld(int furthestWorldIndex)
         {
-            int clamped = Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
+            int clamped = SaveSystem.AllWeaponsUnlocked ? s_rows.Count - 1 : Mathf.Clamp(furthestWorldIndex, 0, s_rows.Count - 1);
             for (int i = 0; i <= clamped; i++) yield return s_rows[i].SecondaryWeapon;
         }
 

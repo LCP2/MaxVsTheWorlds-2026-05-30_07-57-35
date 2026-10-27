@@ -88,6 +88,10 @@ namespace MaxWorlds.Save
 
         private static string PathFor(int slot) => Path.Combine(Directory, $"save_slot_{slot}.json");
 
+        /// <summary>MV-1291: the device-wide profile's own file — separate from every per-slot
+        /// <see cref="PathFor"/>, so a slot RESET (<see cref="Delete"/>) can never touch it.</summary>
+        private static string ProfilePath => Path.Combine(Directory, "profile.json");
+
         /// <summary>Default identity for a never-played slot — a rename UI is a future seam, not
         /// built here.</summary>
         public static string DefaultDisplayName(int slot) => $"PLAYER {slot + 1}";
@@ -140,6 +144,43 @@ namespace MaxWorlds.Save
             string path = PathFor(slot);
             if (File.Exists(path)) File.Delete(path);
         }
+
+        /// <summary>MV-1291: read the device-wide profile. Same "missing/corrupt reads as empty"
+        /// contract as <see cref="Load"/> — a profile is a convenience, not something that should be
+        /// able to brick the Home screen.</summary>
+        public static ProfileData LoadProfile()
+        {
+            string path = ProfilePath;
+            if (!File.Exists(path)) return new ProfileData();
+            try
+            {
+                return JsonUtility.FromJson<ProfileData>(File.ReadAllText(path)) ?? new ProfileData();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SaveSystem] profile failed to load, treating as empty: {e.Message}");
+                return new ProfileData();
+            }
+        }
+
+        /// <summary>MV-1291: write the device-wide profile.</summary>
+        public static void SaveProfile(ProfileData data)
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(Directory);
+                File.WriteAllText(ProfilePath, JsonUtility.ToJson(data));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SaveSystem] profile failed to save: {e.Message}");
+            }
+        }
+
+        /// <summary>MV-1291: <see cref="ProfileData.AllWeaponsUnlocked"/>, read fresh off disk every
+        /// call — same non-cached idiom as <see cref="Load"/>, so a test pointing
+        /// <see cref="DirectoryOverride"/> at a scratch folder never reads a stale value.</summary>
+        public static bool AllWeaponsUnlocked => LoadProfile().AllWeaponsUnlocked;
 
         /// <summary>First pick of a never-played slot: create its profile with a default name and no
         /// personal best yet. A no-op (returns the existing profile untouched) if the slot already
@@ -438,7 +479,12 @@ namespace MaxWorlds.Save
         /// (<see cref="ResetCheckpointFields"/>, same fields <see cref="ClearCheckpoint"/> resets): the
         /// game is genuinely over for this profile, so there must be nothing left for RESUME to restore
         /// into. A no-op for <paramref name="slot"/> &lt; 0 (a capture/press-kit/perf-capture run, or a
-        /// test with no active slot) -- same guard <see cref="CaptureActiveCheckpoint"/> already uses.</summary>
+        /// test with no active slot) -- same guard <see cref="CaptureActiveCheckpoint"/> already uses.
+        ///
+        /// MV-1291: also stamps the device-wide <see cref="ProfileData.AllWeaponsUnlocked"/> flag, the
+        /// first time the ending is seen in ANY slot -- separate from this slot's own
+        /// <see cref="SaveSlotData.EndingSeen"/>, which stays per-slot. Once set it is never cleared, so
+        /// it survives every subsequent slot RESET.</summary>
         public static void MarkEndingSeen(int slot)
         {
             if (slot < 0) return;
@@ -446,6 +492,13 @@ namespace MaxWorlds.Save
             data.EndingSeen = true;
             ResetCheckpointFields(data);
             Save(slot, data);
+
+            ProfileData profile = LoadProfile();
+            if (!profile.AllWeaponsUnlocked)
+            {
+                profile.AllWeaponsUnlocked = true;
+                SaveProfile(profile);
+            }
         }
 
         /// <summary>Every Checkpoint* field (MV-776) back to "no run in progress" — shared by
