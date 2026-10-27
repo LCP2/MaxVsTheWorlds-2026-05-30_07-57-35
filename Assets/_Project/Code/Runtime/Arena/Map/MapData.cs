@@ -24,6 +24,7 @@ namespace MaxWorlds.Arena
         Vent,                 // MV-1240
         Pylon,                // MV-1294
         Canister,             // MV-1296
+        Current,              // MV-1300
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -221,7 +222,9 @@ namespace MaxWorlds.Arena
         /// <summary>Ramp only (MV-692) — which wall of THIS rect abuts the deck it climbs to (N/E/S/W,
         /// <see cref="Wall"/>), resolved by <see cref="WorldMapLoader"/> from rect adjacency at load
         /// time. Replicator only (MV-860) — which side is its IN face, resolved from
-        /// <see cref="WorldReplicator.facing"/> ("S" when unauthored). Empty for every other kind.</summary>
+        /// <see cref="WorldReplicator.facing"/> ("S" when unauthored). Current only (MV-1300) — the
+        /// lane's own flow direction, resolved from <see cref="WorldCurrent.dir"/>. Empty for every
+        /// other kind.</summary>
         public string facing = "";
 
         /// <summary>Sludge only (MV-692) — the speed multiplier a mover standing inside this rect is
@@ -229,6 +232,11 @@ namespace MaxWorlds.Arena
         /// carried on the otherwise-unused <see cref="height"/> field — same "reuse the shape, not the
         /// meaning" idiom as <see cref="mobile"/>/<see cref="opensOn"/> above.</summary>
         public float SludgeSpeedMultiplier => height;
+
+        /// <summary>Current only (MV-1300) — the lane's drift speed in m/s, resolved from
+        /// <see cref="WorldCurrent.speed"/> and carried on the otherwise-unused <see cref="height"/>
+        /// field, same "reuse the shape, not the meaning" idiom as <see cref="SludgeSpeedMultiplier"/>.</summary>
+        public float CurrentSpeedMps => height;
 
         /// <summary>Sludge only (MV-1164) — resolved from <see cref="WorldSludge.crossingAt"/>, WORLD
         /// metres along this rect's own run axis. 0 for every other kind.</summary>
@@ -568,6 +576,23 @@ namespace MaxWorlds.Arena
             foreach (MapEntity e in entities)
                 if (e != null && e.Kind == EntityKind.Vent) list.Add(e);
             return _ventEntitiesCache = list.ToArray();
+        }
+
+        /// <summary>Every Current entity in the map (MV-1300), same cache-once idiom as
+        /// <see cref="SludgeEntities"/> — what <see cref="MapGeometry.CurrentDriftAt"/> walks instead of
+        /// the whole, unfiltered <see cref="entities"/> array every mover, every frame.</summary>
+        private MapEntity[] _currentEntitiesCache;
+
+        public MapEntity[] CurrentEntities()
+        {
+            if (_currentEntitiesCache != null) return _currentEntitiesCache;
+
+            if (entities == null) return _currentEntitiesCache = Array.Empty<MapEntity>();
+
+            var list = new List<MapEntity>();
+            foreach (MapEntity e in entities)
+                if (e != null && e.Kind == EntityKind.Current) list.Add(e);
+            return _currentEntitiesCache = list.ToArray();
         }
 
         /// <summary>The Deck/Hatch entity (never a ramp — MV-833's own rule) whose rect contains

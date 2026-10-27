@@ -348,6 +348,40 @@ namespace MaxWorlds.Arena
             return multiplier;
         }
 
+        /// <summary>World-direction unit vector for a current lane's authored N/E/S/W (MV-1300) — the
+        /// same N=+Z/E=+X/S=-Z/W=-X convention <see cref="MapRuntime.ExitOutwardDir"/> and
+        /// <see cref="WorldJoinDressing"/>'s own copy already keep, duplicated here rather than shared —
+        /// the same "duplicate a two-line geometry helper rather than share it" idiom those two already
+        /// follow for this exact function.</summary>
+        private static Vector3 CurrentDirectionVector(string dir) => dir switch
+        {
+            "N" => Vector3.forward,
+            "S" => Vector3.back,
+            "E" => Vector3.right,
+            "W" => Vector3.left,
+            _ => Vector3.forward,
+        };
+
+        /// <summary>Every current lane's resolved drift at a point, summed (MV-1300) — ADDITIVE, unlike
+        /// <see cref="SpeedMultiplierAt"/>'s slowest-rect-wins rule for sludge, per the ticket's own
+        /// "several sources add" spec: two overlapping lanes push harder together, not weaker. Ground
+        /// level only, the same deckHeight-0.5 threshold <see cref="SpeedMultiplierAt"/> already gates
+        /// sludge on — a current never pushes anything standing on a deck built above it.</summary>
+        public static Vector3 CurrentDriftAt(MapData map, float x, float y, float z)
+        {
+            Vector3 drift = Vector3.zero;
+            if (map?.entities == null) return drift;
+            if (y >= map.deckHeight - 0.5f) return drift;
+
+            foreach (MapEntity e in map.CurrentEntities())
+            {
+                var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+                if (footprint.Contains(new Vector2(x, z)))
+                    drift += CurrentDirectionVector(e.facing) * e.CurrentSpeedMps;
+            }
+            return drift;
+        }
+
         /// <summary>MV-1102: a wall-gate's own height is authored as exactly <c>wallHeight</c> (MV-277),
         /// so without this its top face sits on the exact same plane as the flanking wall's — a z-fight
         /// Lee saw as "gate hinges flicker" on a device playtest (World 1, 2026-10-06), caught by

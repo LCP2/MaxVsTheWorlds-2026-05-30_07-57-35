@@ -89,6 +89,11 @@ namespace MaxWorlds.Player
         private const float ForcedMoveBlockedEpsilon = 0.001f;   // 1 mm, same idiom as StuckDisplacementEpsilon
         private const int ForcedMoveBlockedTicksLimit = 3;
 
+        /// <summary>MV-1300: walking directly against a current lane can never cost Max more than 70% of
+        /// his own WalkSpeed — "never below 30% of walk speed, so he can always make headway" is the
+        /// ticket's own rule.</summary>
+        private const float MinWalkAgainstCurrentFraction = 0.3f;
+
         /// <summary>Lazily resolved once <see cref="PlayerHealth"/> exists on this object (it self-adds
         /// after <see cref="PlayerController"/>, so Awake order can't be relied on) so a death clears
         /// whatever forced move was mid-flight — see <see cref="ClearForcedMove"/>.</summary>
@@ -263,6 +268,31 @@ namespace MaxWorlds.Player
             }
         }
 
+        /// <summary>MV-1300: this frame's current-lane drift (<see cref="MapCurrents"/>) — its own
+        /// SafeMove call, entirely independent of <see cref="ApplyForcedMove"/>/<see cref="TickForcedMove"/>
+        /// (MV-1222's knockback/pull slot): a current must never cancel, or be cancelled by, either.
+        /// <paramref name="moveDir"/> is Max's own raw stick input (magnitude 0..1, not yet scaled by
+        /// <see cref="WalkSpeed"/>) — floor-clamped so that walking directly against a lane still nets at
+        /// least <see cref="MinWalkAgainstCurrentFraction"/> of his own WalkSpeed along his own chosen
+        /// direction ("he can always make headway"); walking with or across a lane is untouched, the
+        /// full additive drift.</summary>
+        private void TickCurrentDrift(Vector3 moveDir, float dt)
+        {
+            Vector3 drift = MapCurrents.Instance.DriftAt(transform.position);
+            if (drift.sqrMagnitude <= 0f) return;
+
+            if (moveDir.sqrMagnitude > 0.0001f)
+            {
+                Vector3 inputDir = moveDir.normalized;
+                float netAlongInput = WalkSpeed + Vector3.Dot(drift, inputDir);
+                float minAlongInput = WalkSpeed * MinWalkAgainstCurrentFraction;
+                if (netAlongInput < minAlongInput)
+                    drift += inputDir * (minAlongInput - netAlongInput);
+            }
+
+            CharacterControllerMotion.SafeMove(_cc, drift * dt);
+        }
+
         /// <summary>MV-1222: <see cref="PlayerHealth"/> self-adds after <see cref="PlayerController"/>
         /// (see every scaffold/test site that builds Max), so it may not exist yet the first time this
         /// runs — resolved lazily, same "cache once found" idiom <see cref="PlayerHealth.Abilities"/>
@@ -330,6 +360,10 @@ namespace MaxWorlds.Player
             // MV-1222: its own SafeMove call, after the diagnostic above so a knockback/pull never
             // pollutes the MV-503 stuck read, which is about INPUT-driven movement specifically.
             TickForcedMove(dt);
+
+            // MV-1300: same reasoning — its own SafeMove call, after the stuck diagnostic, independent
+            // of the forced-move slot immediately above.
+            TickCurrentDrift(moveDir, dt);
 
             if (_facing.sqrMagnitude > 0.001f)
             {

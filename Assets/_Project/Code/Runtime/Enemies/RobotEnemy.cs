@@ -2361,6 +2361,7 @@ namespace MaxWorlds.Enemies
             }
 
             ApplyKnockback(dt);
+            ApplyCurrentDrift(dt);
 
             // MV-1066: once the guaranteed-arrival glide has taken over (TickReplicatorSeeking, past
             // GuaranteedArrivalSeconds), gravity and the fall-recovery safety net (MV-946/MV-952) must
@@ -2443,6 +2444,24 @@ namespace MaxWorlds.Enemies
             if (_knockback.sqrMagnitude < 0.0004f) { _knockback = Vector3.zero; return; }
             CharacterControllerMotion.SafeMove(_cc, _knockback * dt); // MV-386: no oversized single Move()
             _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, knockbackDecay * dt);
+        }
+
+        /// <summary>MV-1300: a current lane's additive drift (<see cref="MapCurrents"/>) — ticked
+        /// regardless of state, same footing as <see cref="ApplyKnockback(float)"/> immediately above it
+        /// in <see cref="TickBody"/>. Deliberately its own <see cref="CharacterControllerMotion.SafeMove"/>
+        /// call rather than routed through <see cref="ApplyKnockback(Vector3)"/> — that method refuses
+        /// the Dreadnought AND the Breaker, but the ticket exempts only the Dreadnought from a current
+        /// (the Breaker must still drift). The ticket's own exemptions: a Dreadnought/Turret stand their
+        /// ground against anything, and a Lurker fully submerged (not merely rattling/emerging/
+        /// re-submerging — <see cref="_lurkerPhase"/>) is not really "on the ground" to be pushed. A
+        /// boss is a separate class entirely and never reaches this method.</summary>
+        private void ApplyCurrentDrift(float dt)
+        {
+            if (Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Turret) return;
+            if (Current == State.Submerged && _lurkerPhase == LurkerCycle.Phase.Submerged) return;
+
+            Vector3 drift = MapCurrents.Instance.DriftAt(transform.position);
+            if (drift.sqrMagnitude > 0f) CharacterControllerMotion.SafeMove(_cc, drift * dt);
         }
 
         /// <summary>

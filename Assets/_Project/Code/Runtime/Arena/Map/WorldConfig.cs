@@ -398,6 +398,30 @@ namespace MaxWorlds.Arena
         public float d;
     }
 
+    /// <summary>A current lane (MV-1300) — Reef rule CURRENTS, a fixed water-flow rect in AREA-LOCAL
+    /// metres (MIN corner), same convention as <see cref="WorldSludge"/>. Anything on the ground inside
+    /// it drifts at <see cref="speed"/> m/s toward <see cref="dir"/> — see
+    /// <see cref="MapGeometry.CurrentDriftAt"/>. Reused by airlocks (MV-1305) and Anchorhead's whirlpool
+    /// (MV-1303) rather than either inventing its own push.</summary>
+    [Serializable]
+    public sealed class WorldCurrent
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+
+        /// <summary>One of "N"/"E"/"S"/"W" — the same cardinal convention <see cref="Wall"/> already
+        /// uses. Unrecognised/unauthored falls back to N, the same safe-default idiom
+        /// <see cref="MapRuntime.ExitOutwardDir"/>'s own switch already follows.</summary>
+        public string dir;
+
+        /// <summary>m/s. Default 2.0 (the ticket's own number) — every current authored before a
+        /// different speed is ever needed loads at that pace unchanged.</summary>
+        public float speed = 2f;
+    }
+
     /// <summary>A locked deck-cell opening (MV-697) — same area-local MIN-corner convention as
     /// <see cref="WorldSludge"/>, authored on the same <see cref="WorldArea"/> record as the
     /// <see cref="WorldDeck"/> it sits on. Built as an <see cref="AreaGate"/> lying flat at the deck's
@@ -716,6 +740,10 @@ namespace MaxWorlds.Arena
         /// <summary>Sludge slow-zones authored into this area (MV-692), area-local rects. Optional —
         /// most areas carry none.</summary>
         public WorldSludge[] sludge = Array.Empty<WorldSludge>();
+
+        /// <summary>Current lanes authored into this area (MV-1300), area-local rects. Optional —
+        /// most areas carry none.</summary>
+        public WorldCurrent[] currents = Array.Empty<WorldCurrent>();
 
         /// <summary>Walkable decks authored into this area (MV-692), area-local rects. Optional — most
         /// areas carry none.</summary>
