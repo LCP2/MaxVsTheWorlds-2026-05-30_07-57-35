@@ -381,6 +381,8 @@ namespace MaxWorlds.Enemies
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
+            WelderCutTarget = null; // MV-1312: nor a previous Welder life's airlock-cut target
+            _welderCutElapsed = 0f;
             _projectorRetargetTimer = 0f; // MV-1279: nor a previous Projector life's stale retarget countdown
             DropDomeVisualImmediate(); // MV-1284: nor a previous Projector life's stale dome state/visual
             _jammerRetargetTimer = 0f; // MV-1280: nor a previous Jammer life's stale retarget countdown
@@ -3796,6 +3798,28 @@ namespace MaxWorlds.Enemies
         /// repair beam.</summary>
         public AssemblyCradle WelderRepairTarget { get; private set; }
 
+        /// <summary>The Welder's own airlock, right now (MV-1312) — null whenever it isn't mid-cut.
+        /// Last-set value only, same "meaningless outside the relevant state" footing as
+        /// <see cref="WelderRepairTarget"/>; read by <see cref="MaxWorlds.VFX.RobotRig"/> to draw the
+        /// (reused) beam.</summary>
+        public AirlockPanel WelderCutTarget { get; private set; }
+
+        /// <summary>MV-1312: how close Max must be to a READY airlock for a cradle-less Welder to start
+        /// cutting it — the ticket's own "when Max is within 12 m of a READY airlock".</summary>
+        private const float WelderCutMaxRangeFromMax = 12f;
+
+        /// <summary>MV-1312: how close the Welder itself must close to the airlock before the 2 s beam
+        /// starts counting — the ticket's own "walks to within 3 m of that airlock".</summary>
+        private const float WelderCutArriveRange = 3f;
+
+        /// <summary>MV-1312: the ticket's own beam duration, "beams it for 2 s".</summary>
+        private const float WelderCutSeconds = 2f;
+
+        /// <summary>Seconds into the current <see cref="WelderCutTarget"/>'s beam so far — only counts
+        /// once the Welder is within <see cref="WelderCutArriveRange"/>, reset whenever a cut starts,
+        /// finishes or is abandoned.</summary>
+        private float _welderCutElapsed;
+
         /// <summary>Replaces the whole Chase/Telegraph/Lunge pipeline for <see cref="EnemyKind.Welder"/>
         /// (dispatched from <see cref="TickBody"/>'s own switch instead of <see cref="TickChase"/>) —
         /// this kind never attacks Max or a Sentinel, so there is nothing here to wind up or commit to.
@@ -3809,13 +3833,21 @@ namespace MaxWorlds.Enemies
         /// and repairs it"), gliding straight at it rather than routing around cover
         /// (<see cref="TickChase"/>'s own waypoint/wall-latch machinery is built around chasing Max room
         /// to room; a Welder's own cradle sits in the same room it was garrisoned in, per the ticket's
-        /// own placements). Idle (no movement, no heal) once nothing in range needs it — the ticket's
-        /// own "idle near its cradle when none is damaged".</summary>
+        /// own placements). MV-1312: "a Welder with no cradle to repair" — nothing damaged in range —
+        /// falls through to <see cref="TickWelderAirlockCut"/> instead of sitting idle.</summary>
         private void TickWelderRepair(float dt)
         {
             AssemblyCradle cradle = AssemblyCradle.NearestDamagedInArea(transform.position, AreaIndex, lungeRange);
             WelderRepairTarget = cradle;
-            if (cradle == null) return;
+            if (cradle == null)
+            {
+                TickWelderAirlockCut(dt);
+                return;
+            }
+
+            // Repairing takes priority — abandon any in-progress cut rather than running both at once.
+            WelderCutTarget = null;
+            _welderCutElapsed = 0f;
 
             cradle.Heal(WelderRepairPerSecond * dt);
 
@@ -3828,6 +3860,67 @@ namespace MaxWorlds.Enemies
             RotateToward(dir, dt);
             float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
             CharacterControllerMotion.SafeMove(_cc, dir * step);
+        }
+
+        /// <summary>MV-1312 — "Mothership twist: Welders cut airlocks open on Max". Reached only when
+        /// <see cref="TickWelderRepair"/> finds nothing damaged to repair. Picks the nearest READY
+        /// airlock in this robot's own <see cref="AreaIndex"/> that Max currently sits within
+        /// <see cref="WelderCutMaxRangeFromMax"/> of (<see cref="AirlockPanel.NearestReadyForWelderCut"/>)
+        /// and commits to it — once picked, the cut is NOT re-evaluated against Max's live position
+        /// every frame (only "killing the Welder during the 2 s cancels it" is specified), so a cut
+        /// already under way keeps running even if Max retreats out of range mid-beam. Walks straight at
+        /// it (same gliding-not-routing footing as <see cref="TickWelderRepair"/>'s own cradle approach)
+        /// until within <see cref="WelderCutArriveRange"/>, then beams it — marking it
+        /// (<see cref="AirlockPanel.MarkBeingCut"/>) for the ticket's own "panel light flickers orange
+        /// during the cut" — for <see cref="WelderCutSeconds"/> before blowing it exactly as a player hit
+        /// would (<see cref="AirlockPanel.Hit"/>, MV-1305), which is what then pulls Max in while he's in
+        /// range. <c>target</c> is guaranteed non-null here — <see cref="TickBody"/> re-acquires it,
+        /// unconditionally, before dispatching into this state's switch.</summary>
+        private void TickWelderAirlockCut(float dt)
+        {
+            if (WelderCutTarget == null)
+            {
+                WelderCutTarget = AirlockPanel.NearestReadyForWelderCut(
+                    transform.position, target.position, AreaIndex, WelderCutMaxRangeFromMax);
+                _welderCutElapsed = 0f;
+                if (WelderCutTarget == null) return;
+            }
+
+            AirlockPanel airlock = WelderCutTarget;
+            if (airlock.State != AirlockPanel.PanelState.Ready)
+            {
+                // Something else changed it mid-cut (never expected in practice, since only a
+                // player-side hit or this same method ever blows a panel) — abandon cleanly rather than
+                // beaming a panel that can't blow.
+                WelderCutTarget = null;
+                _welderCutElapsed = 0f;
+                return;
+            }
+
+            Vector3 to = airlock.transform.position - transform.position;
+            to.y = 0f;
+            float dist = to.magnitude;
+
+            if (dist > WelderCutArriveRange)
+            {
+                if (dist > 0.001f)
+                {
+                    Vector3 dir = to / dist;
+                    RotateToward(dir, dt);
+                    float step = Mathf.Min(EffectiveMoveSpeed * dt, dist - WelderCutArriveRange);
+                    CharacterControllerMotion.SafeMove(_cc, dir * step);
+                }
+                return; // still closing the gap — the 2 s beam only counts once arrived
+            }
+
+            airlock.MarkBeingCut();
+            _welderCutElapsed += dt;
+            if (_welderCutElapsed >= WelderCutSeconds)
+            {
+                airlock.Hit();
+                WelderCutTarget = null;
+                _welderCutElapsed = 0f;
+            }
         }
 
         // --- MV-1279: Shield Projector hang-back movement --------------------------------------

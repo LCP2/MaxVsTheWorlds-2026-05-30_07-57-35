@@ -6510,7 +6510,8 @@
         "skitter": 3,
         "brute": 2,
         "breaker": 2,
-        "jammer": 1
+        "jammer": 1,
+        "welder": 1
       },
       "garrison": [
         {
@@ -6734,6 +6735,12 @@
           "x": 491.0,
           "z": 346.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 507.0,
+          "z": 343.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -6910,7 +6917,7 @@
         "brute": 3,
         "breaker": 2,
         "tractor": 2,
-        "welder": 2
+        "welder": 3
       },
       "garrison": [
         {
@@ -7176,6 +7183,12 @@
           "x": 476.5,
           "z": 379.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 491.0,
+          "z": 405.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -7287,7 +7300,8 @@
         "skitter": 3,
         "brute": 2,
         "breaker": 2,
-        "tractor": 2
+        "tractor": 2,
+        "welder": 1
       },
       "garrison": [
         {
@@ -7517,6 +7531,12 @@
           "x": 554.0,
           "z": 389.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 521.0,
+          "z": 403.5,
+          "level": 0
         }
       ],
       "cradles": [
@@ -7623,7 +7643,7 @@
         "skitter": 3,
         "brute": 2,
         "breaker": 2,
-        "welder": 2,
+        "welder": 3,
         "projector": 1
       },
       "garrison": [
@@ -7872,6 +7892,12 @@
           "x": 541.0,
           "z": 433.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 543.0,
+          "z": 419.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -8065,7 +8091,8 @@
         "heavy": 2,
         "skitter": 3,
         "brute": 2,
-        "breaker": 1
+        "breaker": 1,
+        "welder": 1
       },
       "garrison": [
         {
@@ -8259,6 +8286,12 @@
           "x": 577.0,
           "z": 433.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 595.0,
+          "z": 439.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -8377,7 +8410,8 @@
         "skitter": 3,
         "brute": 3,
         "breaker": 2,
-        "jammer": 1
+        "jammer": 1,
+        "welder": 1
       },
       "garrison": [
         {
@@ -8625,6 +8659,12 @@
           "x": 581.0,
           "z": 469.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 578.5,
+          "z": 477.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -8828,7 +8868,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 3,
-        "breaker": 2
+        "breaker": 2,
+        "welder": 1
       },
       "garrison": [
         {
@@ -9070,6 +9111,12 @@
           "x": 627.0,
           "z": 481.0,
           "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 611.0,
+          "z": 473.0,
+          "level": 0
         }
       ],
       "cradles": [
@@ -9180,7 +9227,8 @@
         "heavy": 3,
         "skitter": 3,
         "brute": 3,
-        "breaker": 2
+        "breaker": 2,
+        "welder": 1
       },
       "garrison": [
         {
@@ -9421,6 +9469,12 @@
           "kind": "breaker",
           "x": 635.0,
           "z": 505.0,
+          "level": 0
+        },
+        {
+          "kind": "welder",
+          "x": 636.0,
+          "z": 491.0,
           "level": 0
         }
       ],

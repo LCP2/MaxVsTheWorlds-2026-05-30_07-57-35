@@ -1364,14 +1364,20 @@ namespace MaxWorlds.VFX
         /// The Welder's repair beam (MV-1244) — solid (not dashed, unlike the Tractor's pull beam: a
         /// weld torch reads as a continuous arc, not a tow line), drawn from this robot's own root to
         /// <see cref="RobotEnemy.WelderRepairTarget"/>'s live position every frame while it is non-null,
-        /// hidden the instant it goes null (the ticket's own "idle ... when none is damaged").
+        /// hidden the instant it goes null (the ticket's own "idle ... when none is damaged"). MV-1312:
+        /// the same torch, reused (the ticket's own "existing beam") against
+        /// <see cref="RobotEnemy.WelderCutTarget"/> whenever there's no cradle to repair instead.
         /// </summary>
         private void UpdateWelderBeamVfx()
         {
             if (_enemy.Kind != EnemyKind.Welder) return;
 
             AssemblyCradle cradle = _enemy.WelderRepairTarget;
-            if (cradle == null)
+            Vector3? beamEnd = cradle != null ? cradle.transform.position
+                : _enemy.WelderCutTarget != null ? _enemy.WelderCutTarget.transform.position
+                : (Vector3?)null;
+
+            if (beamEnd == null)
             {
                 if (_welderBeamLine != null) _welderBeamLine.enabled = false;
                 return;
@@ -1383,7 +1389,7 @@ namespace MaxWorlds.VFX
             _welderBeamLine.startColor = WelderBeamColor;
             _welderBeamLine.endColor = WelderBeamColor;
             _welderBeamLine.SetPosition(0, transform.position);
-            _welderBeamLine.SetPosition(1, cradle.transform.position);
+            _welderBeamLine.SetPosition(1, beamEnd.Value);
         }
 
         /// <summary>The repair beam's LineRenderer, built once and reused — same lifetime/parenting
