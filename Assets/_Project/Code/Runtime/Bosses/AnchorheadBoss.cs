@@ -41,6 +41,16 @@ namespace MaxWorlds.Bosses
         private const float PullDistance = 3f;
         private const float PullDuration = 0.8f;
 
+        /// <summary>MV-1303: the whirlpool's reach — zero pull at/beyond this radius, same "out to 10 m"
+        /// boundary the floor spiral (AnchorheadRig) is drawn to.</summary>
+        private const float WhirlpoolOuterRadius = 10f;
+
+        /// <summary>Zero pull at/inside this radius, so Max is never pinned onto the boss itself.</summary>
+        private const float WhirlpoolInnerRadius = 2f;
+
+        private const float WhirlpoolRadialSpeed = 1.2f;
+        private const float WhirlpoolTangentialSpeed = 0.6f;
+
         /// <summary>60% of Big Bermuda's own move speed while dragging, 110% once awake — stacked onto
         /// <see cref="BigBermudaBoss.ExternalSpeedScale"/>, which the base class multiplies into its
         /// own approach speed on top of its enrage scale.</summary>
@@ -74,11 +84,52 @@ namespace MaxWorlds.Bosses
         /// taut-chain beat, separate from the floor telegraph above.</summary>
         public bool IsPulling => _state == DragState.Pulling;
 
+        /// <summary>MV-1303: the one Anchorhead currently ticking, for
+        /// <see cref="MaxWorlds.Player.PlayerController"/> to query its whirlpool against without a
+        /// scene-wide find every frame — same "static Active, set in Awake, cleared in OnDestroy" shape
+        /// <see cref="MaxWorlds.VFX.WorldFinaleGate.Active"/> already uses. There is only ever one
+        /// Anchorhead per world (MapRuntime builds it once, by authored id), so last-wins-on-overwrite
+        /// never actually arises.</summary>
+        public static AnchorheadBoss Active { get; private set; }
+
         private void Awake()
         {
             _boss = GetComponent<BigBermudaBoss>();
             _timer = DraggingSlamInterval;
             AcquireTarget();
+            Active = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (Active == this) Active = null;
+        }
+
+        /// <summary>MV-1303: this frame's additive whirlpool drift at <paramref name="worldPosition"/> —
+        /// a velocity (m/s), for the caller to scale by dt and feed through its own SafeMove, same
+        /// "return a velocity, caller integrates" contract <see cref="MaxWorlds.Arena.MapCurrents.DriftAt"/>
+        /// already has. Radial speed rises linearly from 0 at <see cref="WhirlpoolInnerRadius"/> to
+        /// <see cref="WhirlpoolRadialSpeed"/> at <see cref="WhirlpoolOuterRadius"/> (zero outside either
+        /// bound, so Max is never pinned onto the boss and the pull never reaches past the floor spiral's
+        /// own 10 m edge), plus a constant tangential swirl component so the drag doesn't read as a
+        /// straight-line yank. Zero whenever the boss isn't "awake and alive" in the ticket's sense —
+        /// <see cref="BigBermudaBoss.IsAlive"/>, which already requires past Dormant/Intro (woken) and
+        /// short of Dead. <see cref="Phase"/> (Dragging/Awake) is this boss's OWN anchor-drag sub-state,
+        /// unrelated despite the name collision — the whirlpool runs through both of its sub-phases.</summary>
+        public Vector3 WhirlpoolDriftAt(Vector3 worldPosition)
+        {
+            if (_boss == null || !_boss.IsAlive) return Vector3.zero;
+
+            Vector3 toBoss = transform.position - worldPosition;
+            toBoss.y = 0f;
+            float dist = toBoss.magnitude;
+            if (dist <= WhirlpoolInnerRadius || dist >= WhirlpoolOuterRadius) return Vector3.zero;
+
+            Vector3 radialDir = toBoss / dist;
+            float t = (dist - WhirlpoolInnerRadius) / (WhirlpoolOuterRadius - WhirlpoolInnerRadius);
+            Vector3 tangentDir = Vector3.Cross(Vector3.up, radialDir);
+
+            return radialDir * (t * WhirlpoolRadialSpeed) + tangentDir * WhirlpoolTangentialSpeed;
         }
 
         private void Update()

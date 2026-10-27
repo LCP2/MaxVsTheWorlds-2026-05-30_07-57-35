@@ -49,6 +49,7 @@ namespace MaxWorlds.VFX
         private static readonly Color EyeAmber = new Color(1f, 0.66f, 0.12f);
         private static readonly Color EyeRage = new Color(0.95f, 0.10f, 0.05f);
         private static readonly Color HazardOrange = new Color(1f, 0.42f, 0.05f);
+        private static readonly Color WhirlpoolCyan = new Color(0.55f, 0.95f, 1f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
@@ -67,6 +68,16 @@ namespace MaxWorlds.VFX
         private const float FlukeOffsetX = 0.62f, FlukeY = 2.35f;
         private const float LegSpreadX = 0.62f;
 
+        // ---------------------------------------------------------------- whirlpool (MV-1303)
+
+        private const int SpiralArmCount = 3;
+        private const int SpiralSegments = 48;
+        private const float SpiralOuterRadius = 10f; // matches AnchorheadBoss.WhirlpoolOuterRadius
+        private const float SpiralTurns = 2.5f;
+        private const float SpiralTurnDegreesPerSecond = 12f; // "turning slowly"
+        private const float SpiralWidth = 0.08f;
+        private const float SpiralFadeSeconds = 1f;
+
         // ---------------------------------------------------------------- state
 
         private BigBermudaBoss _boss;
@@ -82,6 +93,10 @@ namespace MaxWorlds.VFX
         private Color _eyeColor = EyeAmber;
         private float _flash;
         private float _lastHealth = 1f;
+
+        private LineRenderer[] _spiralArms;
+        private float _spiralAngle;
+        private float _spiralFadeElapsed;
 
         private bool _dying;
         private BossDeathSequence _deathSeq;
@@ -176,6 +191,7 @@ namespace MaxWorlds.VFX
             BuildArmsAndChains();
             BuildAnchorHead();
             BuildTelegraphRing();
+            BuildWhirlpoolSpiral();
         }
 
         /// <summary>A pair of squat, heavy legs — mostly hidden under the torso from the 72° camera, but
@@ -290,6 +306,69 @@ namespace MaxWorlds.VFX
             ApplyLensColor(_telegraphRing, Color.black);
         }
 
+        /// <summary>MV-1303: the whirlpool's look — <see cref="SpiralArmCount"/> Archimedean spiral arms
+        /// of cyan-white streaks traced out to <see cref="SpiralOuterRadius"/> (the design image's
+        /// reference), evenly offset around the anchor so the turning read comes from
+        /// <see cref="SpinSpiral"/> rotating the whole set rather than from re-laying geometry every
+        /// frame. Local space (unlike <see cref="UndertowVfx"/>'s world-space beams) because this rig
+        /// already re-anchors itself to the boss every <see cref="Follow"/> call.</summary>
+        private void BuildWhirlpoolSpiral()
+        {
+            Material glow = VfxMaterials.Additive(VfxMaterials.LineGlow());
+            _spiralArms = new LineRenderer[SpiralArmCount];
+
+            for (int a = 0; a < SpiralArmCount; a++)
+            {
+                var go = new GameObject("WhirlpoolSpiralArm" + a);
+                go.transform.SetParent(transform, worldPositionStays: false);
+
+                var line = go.AddComponent<LineRenderer>();
+                line.positionCount = SpiralSegments + 1;
+                line.widthMultiplier = SpiralWidth;
+                line.useWorldSpace = false;
+                line.shadowCastingMode = ShadowCastingMode.Off;
+                line.receiveShadows = false;
+                line.sharedMaterial = glow;
+
+                float armOffsetDeg = a * (360f / SpiralArmCount);
+                for (int i = 0; i <= SpiralSegments; i++)
+                {
+                    float t = i / (float)SpiralSegments;
+                    float radius = t * SpiralOuterRadius;
+                    float rad = (armOffsetDeg + t * SpiralTurns * 360f) * Mathf.Deg2Rad;
+                    line.SetPosition(i, new Vector3(Mathf.Cos(rad) * radius, 0.03f, Mathf.Sin(rad) * radius));
+                }
+
+                _spiralArms[a] = line;
+            }
+
+            ApplySpiralAlpha(0f); // invisible until TickTells finds the boss alive
+        }
+
+        /// <summary>Rotates the whole spiral slowly around the anchor — unconditional, even while dying,
+        /// so the turn doesn't visibly freeze the instant the fade starts.</summary>
+        private void SpinSpiral(float dt)
+        {
+            if (_spiralArms == null) return;
+            _spiralAngle += dt * SpiralTurnDegreesPerSecond;
+            Quaternion spin = Quaternion.Euler(0f, _spiralAngle, 0f);
+            foreach (LineRenderer arm in _spiralArms)
+                if (arm != null) arm.transform.localRotation = spin;
+        }
+
+        private void ApplySpiralAlpha(float alpha01)
+        {
+            if (_spiralArms == null) return;
+            Color c = WhirlpoolCyan;
+            c.a = Mathf.Clamp01(alpha01);
+            foreach (LineRenderer arm in _spiralArms)
+            {
+                if (arm == null) continue;
+                arm.startColor = c;
+                arm.endColor = c;
+            }
+        }
+
         private void ApplyLensColor(MeshRenderer r, Color c)
         {
             if (r == null) return;
@@ -309,6 +388,8 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (_boss == null) return;
+
+            SpinSpiral(Time.deltaTime);
 
             // MV-1190: once dying, the body freezes where it died — the death sequence owns the
             // transform entirely (X/Z jitter only, Y pinned), so Follow() (which re-anchors to the
@@ -338,6 +419,10 @@ namespace MaxWorlds.VFX
 
             float ring = _anchor != null ? _anchor.TelegraphProgress01 : 0f;
             ApplyLensColor(_telegraphRing, HazardOrange * ring);
+
+            // MV-1303: the whirlpool spiral is only ever visible while the boss is actually pulling —
+            // "awake and alive" in the ticket's sense, i.e. IsAlive (past Dormant/Intro, short of Dead).
+            ApplySpiralAlpha(_boss.IsAlive ? 1f : 0f);
         }
 
         private void OnHealth(float normalized)
@@ -396,6 +481,11 @@ namespace MaxWorlds.VFX
             _eyeColor = lit ? EyeAmber : Color.black;
             ApplyEyes(_eyeColor);
             ApplyLensColor(_telegraphRing, Color.black);
+
+            // MV-1303: "fades out over 1 s when Anchorhead dies" — its own timer, independent of however
+            // long the broader death throes/finale sequence runs, so the spiral is always gone within 1 s.
+            _spiralFadeElapsed += dt;
+            ApplySpiralAlpha(1f - Mathf.Clamp01(_spiralFadeElapsed / SpiralFadeSeconds));
 
             if (_deathSeq.Done) gameObject.SetActive(false);
         }
