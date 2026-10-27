@@ -563,6 +563,20 @@ namespace MaxWorlds.Arena
         public string feeds;
     }
 
+    /// <summary>An explosive canister (MV-1296) — a player-triggered hazard: shoot it down and its
+    /// blast may damage or remove robots too (<see cref="docs/DECISIONS.md"/> §4, "Hazards: world-run
+    /// vs player-triggered", Lee 27 Oct 2026), unlike a world-run hazard such as <see cref="WorldSludge"/>.
+    /// <see cref="x"/>/<see cref="z"/> are ABSOLUTE world metres (drum centre), same convention as
+    /// <see cref="WorldReplicator"/>/<see cref="WorldPylon"/> above — not area-local. No placement is
+    /// authored by this ticket; <see cref="WorldArea.canisters"/> defaults empty.</summary>
+    [Serializable]
+    public sealed class WorldCanister
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -615,6 +629,10 @@ namespace MaxWorlds.Arena
         /// structure, feeding a relay or a boss in the same area. Optional; most areas (every one but
         /// the City's relay/boss areas) carry none.</summary>
         public WorldPylon[] pylons = Array.Empty<WorldPylon>();
+
+        /// <summary>Explosive canisters authored into this area (MV-1296). Optional; no config authors
+        /// any yet — placement is a separate ticket (MV-1302).</summary>
+        public WorldCanister[] canisters = Array.Empty<WorldCanister>();
 
         public WorldBoss boss;
 

@@ -30,6 +30,9 @@ namespace MaxWorlds.Arena
         /// <summary>The pylons this map built (MV-1294), in the order it authored them.</summary>
         public readonly List<Pylon> Pylons = new List<Pylon>(4);
 
+        /// <summary>The explosive canisters this map built (MV-1296), in the order it authored them.</summary>
+        public readonly List<Canister> Canisters = new List<Canister>(4);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1348,6 +1351,11 @@ namespace MaxWorlds.Arena
             // comment for why a MonoBehaviour can't name a static method "Reset".
             Pylon.ResetRegistry();
 
+            // MV-1296: same reasoning as Pylon.ResetRegistry() above, one ticket later — a level loaded
+            // a second time must count its own canisters, not the previous level's (or the previous
+            // test's) ghosts.
+            Canister.ResetRegistry();
+
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
             AreaVisitCensus.Reset();
@@ -2502,6 +2510,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Pylon:
                         built.Pylons.Add(BuildPylon(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.Canister:
+                        built.Canisters.Add(BuildCanister(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2760,6 +2772,32 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return pylon;
+        }
+
+        /// <summary>
+        /// An explosive canister, from data (MV-1296) — same "one recipe, however many a level authors"
+        /// shape as <see cref="BuildPylon"/>/<see cref="BuildReplicator"/>. Built as a Cylinder (the
+        /// drum itself), unlike every other actor here, which spawns a Cube and either hides or dresses
+        /// it — a canister's real collision/visual shape already IS the primitive, so there is no cosmetic
+        /// cube to hide.
+        /// </summary>
+        private static Canister BuildCanister(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            // The cylinder mesh is 2 units tall, so half its height goes into the Y scale (same
+            // compensation BuildCover already documents for its own CoverShape.Cylinder case).
+            Vector3 scale = new Vector3(e.width, e.height * 0.5f, e.depth);
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cylinder, e.GroundedCenter, scale);
+            MarkDiscoverable(body);
+
+            var canister = body.AddComponent<Canister>();
+            canister.SetId(e.id);
+
+            // A canister never moves — tag it the same way BuildPylon/BuildReplicator tag their own body.
+            TagStatic(map, body, rendererZones);
+
+            built.Actors[e.id] = body;
+            return canister;
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly
