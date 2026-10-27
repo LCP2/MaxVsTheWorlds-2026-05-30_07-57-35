@@ -1176,12 +1176,36 @@ namespace MaxWorlds.Intro
             if (alpha <= 0f)
             {
                 // MV-1123 §8: Max is under his own control again the instant the destination world is
-                // actually visible -- no scripted walk left to run.
-                RestoreGameplay();
+                // actually visible -- no scripted walk left to run. MV-1290: unless the slot now owns a
+                // real choice of PRIMARY/SECONDARY for the world just arrived in and hasn't picked one
+                // yet, in which case the LOADOUT screen gates control instead -- see
+                // TryOpenLoadoutOrRestore. Flipping the phase first (not inside that call) is what makes
+                // this a one-shot: Tick() only ever reaches TickFadeIn while _phase is still FadeIn.
                 _titleCardHoldRemaining = TitleCardHoldAfterFadeIn;
                 _phase = Phase.PlayerControl;
                 _phaseElapsed = 0f;
+                TryOpenLoadoutOrRestore();
             }
+        }
+
+        /// <summary>MV-1290: the destination world's own LOADOUT gate, right where control would
+        /// otherwise be handed straight back. Gameplay stays suspended (robots frozen, HUD/player
+        /// disabled -- <see cref="SuspendGameplay"/> already set this up back in
+        /// <see cref="InitializeArrival"/>) for as long as the screen is up; <see cref="RestoreGameplay"/>
+        /// only runs once the player taps START, which is also where the chosen loadout is written and
+        /// applied (<see cref="LoadoutScreen.CommitAndStart"/>). The title card is hidden immediately
+        /// rather than left to its own hold timer -- its "WORLD n / name" line would otherwise double up
+        /// with the LOADOUT screen's own identical header.</summary>
+        private void TryOpenLoadoutOrRestore()
+        {
+            int worldIndex = _fromWorldIndex + 1;
+            if (LoadoutScreen.ShouldShow(worldIndex))
+            {
+                if (_titleCard != null) _titleCard.Hide();
+                var loadout = FindFirstObjectByType<LoadoutScreen>();
+                if (loadout != null) { loadout.Open(worldIndex, RestoreGameplay); return; }
+            }
+            RestoreGameplay();
         }
 
         /// <summary>MV-1123 §8: Max is free to walk the arrival shell himself from here. This just

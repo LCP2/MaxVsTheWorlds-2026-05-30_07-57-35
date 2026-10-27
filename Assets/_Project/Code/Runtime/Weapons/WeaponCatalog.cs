@@ -385,6 +385,24 @@ namespace MaxWorlds.Weapons
             }
         }
 
+        /// <summary>MV-1290: a SECONDARY's long display name — the LOADOUT screen's own card text
+        /// needed a label for the SECONDARY row that nothing in this catalog carried before (only
+        /// PRIMARY had <see cref="DisplayName(PrimaryKind)"/>/<see cref="ShortName(PrimaryKind)"/>;
+        /// <c>WeaponsScreen</c> inlined its own "SHOULDER RACK" literal rather than read one off here).
+        /// Short and long are the same word for every SECONDARY today, same shape as UNDERTOW/RICOCHET's
+        /// own PRIMARY pair.</summary>
+        public static string DisplayName(SecondaryKind kind) => kind switch
+        {
+            SecondaryKind.WaterBalloon => "WATER BALLOON",
+            SecondaryKind.ShoulderRack => "SHOULDER RACK",
+            SecondaryKind.Orbitals => "ORBITALS",
+            _ => kind.ToString(),
+        };
+
+        /// <summary>MV-1290: the short form a LOADOUT card actually has room for — same shape as
+        /// <see cref="ShortName(PrimaryKind)"/>.</summary>
+        public static string ShortName(SecondaryKind kind) => DisplayName(kind);
+
         public static string DisplayName(AbilityKind kind)
         {
             switch (kind)
