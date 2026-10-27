@@ -45,8 +45,13 @@ namespace MaxWorlds.VFX
     /// not just the registered-living set) before the orb appears; collecting it
     /// (<see cref="OnWeaponCoreCollected"/>) destroys every robot still alive in the final area and
     /// opens the exit, all in the same frame, with no further clean-up/exit-beat gate and no camera or
-    /// input take-over steering Max toward the door — he walks there himself. <see cref="DestroyRestAndOpenDoor"/>
-    /// is the shared step a bossless finale area (MV-1179, the City's a1) calls too.
+    /// input take-over steering Max toward the door — he walks there himself.
+    ///
+    /// MV-1309: the City's own final area (a30) now authors a real boss (GRIDLOCK) too, so the
+    /// bossless finale path MV-1179/MV-1195/MV-1198 built for it (<c>ResolveBosslessFinaleIfReady</c>,
+    /// <c>TryApplyCityToReefHandover</c>, and the <c>EnemyKilled</c>/<c>FactoryDestroyed</c> hooks that
+    /// fed them) is removed outright — every world's final area is boss-role now, so this class needs
+    /// only the one finale path every other world already used.
     ///
     /// MV-964: no longer a barrier that sinks in place — opening now hands off to
     /// <see cref="WorldJoinSequence"/> to cut the REAL door <see cref="WorldTransitions"/> authors for
@@ -116,20 +121,8 @@ namespace MaxWorlds.VFX
         /// <summary>MV-1129: guards <see cref="ResumeFromCheckpoint"/> to exactly once per gate.</summary>
         private bool _resumedFromCheckpoint;
 
-        /// <summary>MV-1179: guards <see cref="OnEnemyKilled"/> against its own
-        /// <see cref="DestroyRestAndOpenDoor"/> call re-entering itself — every robot that call kills
-        /// fires <see cref="HudSignals.EnemyKilled"/> too, before <see cref="Open"/> (called last) has
-        /// had a chance to set <see cref="IsOpen"/>.</summary>
-        private bool _bosslessFinaleResolving;
-
-        /// <summary>MV-1179 (Lee, 14 Oct, option A): the City's bossless finale area (a1) destroys
-        /// whatever is left and opens its exit once this few of its own robots remain standing — the
-        /// same threshold Lee approved for the retired boss-world clean-up phase, now the live trigger
-        /// instead of a 45s timer's floor.</summary>
-        private const int BosslessFinaleClearThreshold = 3;
-
-        /// <summary>MV-1195: whether the City-&gt;Reef interim hand-over banner is currently showing —
-        /// see <see cref="TryApplyCityToReefHandover"/>.</summary>
+        /// <summary>MV-1195/MV-1245: whether the interim hand-over/ending banner is currently showing —
+        /// see <see cref="OnHelmKeyCollected"/>.</summary>
         private bool _interimBannerActive;
         private float _interimBannerTime;
 
@@ -240,8 +233,6 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
-            HudSignals.EnemyKilled += OnEnemyKilled;
-            HudSignals.FactoryDestroyed += OnFactoryDestroyed;
         }
 
         private void OnDisable()
@@ -249,8 +240,6 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
             HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
-            HudSignals.EnemyKilled -= OnEnemyKilled;
-            HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
 
             // MV-1079: a gate torn down mid-beat (scene reload, test teardown) must not leak its own
             // scratch VFX/UI or leave gameplay stuck suspended.
@@ -374,8 +363,8 @@ namespace MaxWorlds.VFX
         /// the SAME shared step <see cref="OnWeaponCoreCollected"/> uses (<see cref="DestroyRestAndOpenDoor"/>)
         /// but never <see cref="BeginWeaponBeat"/> -- the Mothership is the last world, so there is no
         /// next weapon to morph into (the ticket's own "no new weapon" rule) -- and shows "THE SHIP IS
-        /// YOURS" instead of "NEW WEAPON", reusing the same interim-banner hold
-        /// <see cref="TryApplyCityToReefHandover"/> already uses for its own one-off hand-over banner.
+        /// YOURS" instead of "NEW WEAPON", reusing the same interim-banner hold (<see cref="_interimBannerActive"/>)
+        /// as its own one-off hand-over banner.
         /// Called directly from <see cref="PickupDirector"/>'s own HelmKey case (there is no generic
         /// <c>HudSignals.WeaponCoreCollected</c>-style signal for this -- that event also drives the
         /// "Weapon Core fanfare" SFX cue and <c>RunTracker</c>'s own Victory/Result-screen seal, neither
@@ -400,102 +389,6 @@ namespace MaxWorlds.VFX
                 MaxWorlds.Intro.ObservationDeckSequence.Build(_map.exitDoorway.Value);
         }
 
-        /// <summary>MV-1179: the bossless finale's own trigger — the City's Market Street (a1) has no
-        /// boss to die and drop a Core, so there is no <see cref="OnWeaponCoreCollected"/> to hang the
-        /// finale off. Hooked to every robot death field-wide (<see cref="HudSignals.EnemyKilled"/>),
-        /// since nothing else already reports "this area's own population just dropped" — the area's
-        /// authored roster is a few dozen robots at most, so re-checking <see cref="AreaAccumulationDirector.ActiveCountForArea"/>
-        /// on each one is cheap. A no-op for any boss-role finale (that path is <see cref="OnWeaponCoreCollected"/>'s)
-        /// and for every other robot death in the game. Lee, 14 Oct (option A): once
-        /// <see cref="BosslessFinaleClearThreshold"/> or fewer of the final area's robots are left
-        /// standing, the rest are destroyed and the door opens in the same call — no clean-up
-        /// count/ring/arrow/timer, no camera take-over, and (unlike <see cref="OnWeaponCoreCollected"/>)
-        /// no Core or weapon morph: <see cref="BeginWeaponBeat"/> is never called from here.
-        ///
-        /// MV-1198: also re-checked off <see cref="HudSignals.FactoryDestroyed"/> (<see cref="OnFactoryDestroyed"/>)
-        /// — see <see cref="ResolveBosslessFinaleIfReady"/> for why a robot death alone is not enough.</summary>
-        private void OnEnemyKilled(Vector3 _) => ResolveBosslessFinaleIfReady();
-
-        /// <summary>MV-1198: the factory counterpart to <see cref="OnEnemyKilled"/> — the last robot
-        /// source can die AFTER the ambient count has already dropped to or below
-        /// <see cref="BosslessFinaleClearThreshold"/> (Lee, device, TestFlight 16 Oct: the City's exit
-        /// opened and Undertow was granted ~20s into a run, while 18 garrison robots plus the area's
-        /// own factory were still alive — <see cref="AreaAccumulationDirector.ActiveCountForArea"/>
-        /// correctly counts a Dormant/parked garrison, so the real gap was that nothing ever checked
-        /// whether the factory itself had died). Without this hook the finale would sit stuck waiting on
-        /// a robot death that may never come once the ambient count already reads low.</summary>
-        private void OnFactoryDestroyed(Vector3 _) => ResolveBosslessFinaleIfReady();
-
-        /// <summary>MV-1198: the bossless exit fires only once BOTH are true — every robot source in the
-        /// final area is destroyed (<see cref="AreaSourcesCleared"/>) AND
-        /// <see cref="BosslessFinaleClearThreshold"/> or fewer of the area's robots (any state —
-        /// awake, Dormant, parked) are still alive. Shared by <see cref="OnEnemyKilled"/> and
-        /// <see cref="OnFactoryDestroyed"/> so either event can be the one that finally satisfies both
-        /// conditions.</summary>
-        private void ResolveBosslessFinaleIfReady()
-        {
-            if (IsOpen || _bosslessFinaleResolving) return;
-
-            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
-            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
-            if (cfg?.dials == null) return;
-
-            int finalAreaIndex = cfg.dials.areaCount;
-            WorldArea area = cfg.AreaByIndex(finalAreaIndex);
-            if (area == null || area.IsBossRole || !area.IsExitRole) return;
-
-            if (areaDirector.ActiveCountForArea(finalAreaIndex) > BosslessFinaleClearThreshold) return;
-            if (!AreaSourcesCleared()) return;
-
-            // Guards against DestroyRestAndOpenDoor's own kill loop re-entering this handler for each
-            // robot it destroys below -- Open() (called last, inside that method) is what finally sets
-            // IsOpen, so without this a 4th, 3rd, 2nd... robot death would each re-enter and re-run the
-            // whole step on top of itself.
-            _bosslessFinaleResolving = true;
-            DestroyRestAndOpenDoor(finalAreaIndex);
-            TryApplyCityToReefHandover(areaDirector);
-            _bosslessFinaleResolving = false;
-        }
-
-        /// <summary>MV-1198: true once every registered robot source this run has — every
-        /// <see cref="MowerHutch"/> and <see cref="Replicator"/> <see cref="FactoryCensus"/> knows
-        /// about — is destroyed. Field-wide rather than filtered to one area: <see cref="MowerHutch"/>
-        /// carries no area tag of its own the way <see cref="RobotEnemy.AreaIndex"/> does (unlike
-        /// <see cref="StopFinalAreaProduction"/>'s position-based filter, which needs a real, built
-        /// <see cref="_map"/> that a geometry-independent test never has), and the only live caller
-        /// (<see cref="ResolveBosslessFinaleIfReady"/>, the City's a1) is this world's one and only
-        /// area — the same "every source in the run" scope <see cref="BigBermudaBoss"/> already wakes
-        /// off via <see cref="FactoryCensus.Cleared"/>. Vacuously true when this run registers no source
-        /// at all, same convention <see cref="FactoryCensus.AllDown"/>/<see cref="FactoryCensus.AllReplicatorsDestroyed"/>
-        /// already use — <c>CityToReefTests</c>' own fixture, with no factory built at all, must keep
-        /// resolving exactly as before this ticket.</summary>
-        private static bool AreaSourcesCleared() =>
-            FactoryCensus.Destroyed == FactoryCensus.Total &&
-            FactoryCensus.ReplicatorsDestroyed == FactoryCensus.RegisteredReplicators.Count;
-
-        /// <summary>MV-1195, design v5 Decision 3: the interim hand-over to the Reef, until the City's
-        /// own boss (The Core) is built — the City's bossless exit (above) grants UNDERTOW the same
-        /// way a boss world's own Weapon Core orb would, but with no physical Core to fly (a bossless
-        /// area never calls <see cref="PickupDirector.SpawnWeaponCore"/>), so this applies the morph
-        /// directly and shows a brief banner instead of borrowing Beat A's full cinematic. Only fires
-        /// for the City itself (by <see cref="WorldIds"/>, not "any bossless world") — this is a named,
-        /// one-off hand-over, not a generalised rule for every bossless finale that might exist
-        /// later.</summary>
-        private void TryApplyCityToReefHandover(AreaAccumulationDirector areaDirector)
-        {
-            int playedWorld = areaDirector != null ? areaDirector.ActiveWorldIndex : -1;
-            if (playedWorld < 0 || WorldCatalog.Get(playedWorld).Id != WorldIds.City) return;
-            if (playedWorld + 1 >= WorldCatalog.Count) return;
-
-            WeaponSystemState.ApplyWeaponCoreMorph(playedWorld + 1);
-
-            (string shortName, string effectLine) = BannerCopyFor(WeaponSystemState.ActivePrimary);
-            if (_banner == null) _banner = FinaleBanner.Create();
-            _banner.Show("NEW WEAPON", shortName, effectLine, 1f);
-            _interimBannerActive = true;
-            _interimBannerTime = 0f;
-        }
-
         /// <summary>MV-1183's shared end-of-finale step: every robot still alive in
         /// <paramref name="areaIndex"/> — awake, Dormant, replicated or stuck mid-air alike — is
         /// destroyed with the ordinary death effect and no drops (same <see cref="RobotEnemy.KillWithoutDrops"/>
@@ -503,9 +396,7 @@ namespace MaxWorlds.VFX
         /// the exit door opens and stays open. Filtered on <see cref="RobotEnemy.AreaIndex"/> alone —
         /// the stamp every spawn path already sets — not map footprint, so this needs no built scene to
         /// run (a geometry-independent test's whole point). Called from the live orb pickup
-        /// (<see cref="OnWeaponCoreCollected"/>) and from <see cref="ResumeFromCheckpoint"/>; MV-1179's
-        /// bossless finale area (the City's a1) calls this same method from its own trigger instead of
-        /// duplicating it.</summary>
+        /// (<see cref="OnWeaponCoreCollected"/>) and from <see cref="ResumeFromCheckpoint"/>.</summary>
         private void DestroyRestAndOpenDoor(int areaIndex)
         {
             if (areaIndex > 0)

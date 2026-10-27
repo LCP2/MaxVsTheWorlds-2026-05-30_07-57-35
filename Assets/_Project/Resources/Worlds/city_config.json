@@ -20049,7 +20049,7 @@
    "id": "a30",
    "index": 30,
    "name": "Station Forecourt",
-   "role": "exit",
+   "role": "boss+exit",
    "origin": {
     "x": 227,
     "z": 518
@@ -20324,6 +20324,42 @@
     }
    ],
    "replicators": [],
+   "boss": {
+    "id": "gridlock",
+    "kind": "gridlock",
+    "x": 252,
+    "z": 543,
+    "size": {
+     "w": 6.8,
+     "d": 6.8
+    }
+   },
+   "pylons": [
+    {
+     "id": "a30_pylon1",
+     "x": 234,
+     "z": 528,
+     "feeds": "gridlock"
+    },
+    {
+     "id": "a30_pylon2",
+     "x": 270,
+     "z": 530,
+     "feeds": "gridlock"
+    },
+    {
+     "id": "a30_pylon3",
+     "x": 233,
+     "z": 552,
+     "feeds": "gridlock"
+    },
+    {
+     "id": "a30_pylon4",
+     "x": 271,
+     "z": 552,
+     "feeds": "gridlock"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",

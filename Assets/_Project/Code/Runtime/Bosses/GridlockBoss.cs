@@ -15,9 +15,9 @@ namespace MaxWorlds.Bosses
     /// for the walk/standoff/touch shape — one phase, no charge/ram (the ticket's own "no charge or
     /// ram" is absolute, unlike <see cref="BigBermudaBoss"/>'s retired one). MV-1306 adds her three
     /// attacks (SQUAD/JUMP/STRIKE, cadence owned by <see cref="GridlockAttackClock"/>) and her
-    /// escalation clock, read by the roof dial's clock ring. The arena, shield and finale are
-    /// MV-1309's and still don't exist, so there is deliberately no phase machine here for them to
-    /// slot into later beyond the one switch (Dormant -&gt; Fight -&gt; Dead) every boss already has.
+    /// escalation clock, read by the roof dial's clock ring. MV-1309 adds her arena (a30), her pylon
+    /// shield (see <see cref="ShieldRingCount"/>/<see cref="TakeDamage"/>) and the standard boss
+    /// finale, on the one phase switch (Dormant -&gt; Fight -&gt; Dead) every boss already has.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [PerfSection("bosses")]
@@ -27,6 +27,12 @@ namespace MaxWorlds.Bosses
 
         private const string BossName = "GRIDLOCK";
         private const float Gravity = 20f;
+
+        /// <summary>Her own authored boss id (MV-1309, <c>city_config.json</c> a30) — what
+        /// <see cref="Pylon.LiveFeedersOf"/> matches a pylon's own <c>feeds</c> against. Only one
+        /// GRIDLOCK exists in the game, so a literal constant (same footing <see cref="BossName"/>
+        /// already uses) is simpler than threading an authored id through the boss component.</summary>
+        private const string GridlockId = "gridlock";
 
         private Phase _phase = Phase.Dormant;
         private DestructibleHealth _health;
@@ -95,6 +101,11 @@ namespace MaxWorlds.Bosses
         public float LightSpeedScale => IsHalfHealth ? GridlockTuning.HalfHealthLightScale : 1f;
 
         private bool IsHalfHealth => _health != null && _health.Normalized <= GridlockTuning.HalfHealthThreshold;
+
+        /// <summary>How many of her own pylons (MV-1294/MV-1309, <c>city_config.json</c> a30) are still
+        /// alive and feeding her shield right now — read by <see cref="MaxWorlds.VFX.GridlockRig"/> to
+        /// show one red ring per live pylon.</summary>
+        public int ShieldRingCount => Pylon.LiveFeedersOf(GridlockId);
 
         public bool IsAlive => _phase != Phase.Dead && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
@@ -681,6 +692,16 @@ namespace MaxWorlds.Bosses
 
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
+
+            // MV-1309: while any pylon feeding her (city_config.json a30, WorldPylon.feeds ==
+            // GridlockId) is still alive, she takes no damage at all — the same damage-refusal shape
+            // Replicator.TakeDamage already uses for a relay's own feeding pylons.
+            if (Pylon.LiveFeedersOf(GridlockId) > 0)
+            {
+                HudSignals.EmitGridlockShieldBlocked(transform.position + Vector3.up * 2.5f);
+                return;
+            }
+
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
             _health.TakeDamage(info.Amount);
             BossCensus.ReportHealth(this, _health.Current, _health.Max);

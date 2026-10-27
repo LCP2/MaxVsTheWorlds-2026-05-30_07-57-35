@@ -170,6 +170,12 @@ namespace MaxWorlds.UI
         /// gold hit-spark. (worldPos = the hit's own <c>DamageInfo.Point</c>.)</summary>
         public static event Action<Vector3> DomeBlocked;
 
+        /// <summary>MV-1309: a hit landed on GRIDLOCK while a live pylon still feeds her shield —
+        /// blocked entirely (x0 damage), same "fired instead of DamageDealt" footing as
+        /// <see cref="ShieldDeflected"/>/<see cref="DomeBlocked"/>. Two listeners: <c>GridlockRig</c>
+        /// flashes her shield ring, <c>HudController</c> shows the "SHIELDED" floating text. (worldPos.)</summary>
+        public static event Action<Vector3> GridlockShieldBlocked;
+
         /// <summary>One rocket left the tube (MV-770) — fired once per rocket in a staggered
         /// <c>ShoulderRack</c> salvo, not once per salvo, so "each with its own muzzle flash" (spec)
         /// falls out of firing this once per launch rather than needing a count parameter.
@@ -385,6 +391,9 @@ namespace MaxWorlds.UI
 
         public static void EmitDomeBlocked(Vector3 worldPos)
             => DomeBlocked?.Invoke(worldPos);
+
+        public static void EmitGridlockShieldBlocked(Vector3 worldPos)
+            => GridlockShieldBlocked?.Invoke(worldPos);
 
         public static void EmitRocketMuzzle(Vector3 worldPos, Vector3 forward)
             => RocketMuzzle?.Invoke(worldPos, forward);

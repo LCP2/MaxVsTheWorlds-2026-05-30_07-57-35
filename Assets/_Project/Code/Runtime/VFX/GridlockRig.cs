@@ -82,6 +82,21 @@ namespace MaxWorlds.VFX
         private const float FloorGridClearRadius = FootRadius + 0.5f;
         private const float FloorTileSize = 0.92f, FloorTileHeight = 0.02f;
 
+        // ---------------------------------------------------------------- pylon shield (MV-1309): one
+        // red ring round her per live pylon (Pylon.LiveFeedersOf, via GridlockBoss.ShieldRingCount),
+        // same concentric-ring-per-feeder shape RelayDome already uses for a relay's own dome, minus
+        // the dome fill -- the ticket's own prose asks for "a ring round her", not a dome.
+        private const int MaxShieldRings = 4;
+        private const float ShieldRingBaseRadius = FootRadius + 0.6f;
+        private const float ShieldRingSpacing = 0.35f;
+        private const float ShieldRingY = 0.06f;
+        private const float ShieldRingFlashSeconds = 0.15f; // ticket point 2: "a blocked hit flashes the ring"
+        private static readonly Color ShieldRingColor = new Color(1f, 0.15f, 0.12f, 1f);
+        private static readonly Color ShieldRingFlashColor = Color.white;
+
+        private readonly GameObject[] _shieldRings = new GameObject[MaxShieldRings];
+        private float _shieldFlashRemaining;
+
         // ---------------------------------------------------------------- palette (the ticket's own
         // red accent #ff2a3a, white rack lights, white ceramic / black glass split, gold eye+ring)
 
@@ -142,8 +157,22 @@ namespace MaxWorlds.VFX
         /// boss" reasoning as every other boss rig's own <c>Boss</c> getter.</summary>
         public GridlockBoss Boss => _boss;
 
-        private void OnEnable() => HudSignals.BossDefeated += OnDefeated;
-        private void OnDisable() => HudSignals.BossDefeated -= OnDefeated;
+        private void OnEnable()
+        {
+            HudSignals.BossDefeated += OnDefeated;
+            HudSignals.GridlockShieldBlocked += OnShieldBlocked;
+        }
+
+        private void OnDisable()
+        {
+            HudSignals.BossDefeated -= OnDefeated;
+            HudSignals.GridlockShieldBlocked -= OnShieldBlocked;
+        }
+
+        /// <summary>MV-1309: only one GRIDLOCK (and one rig) ever exists in the game, so unlike
+        /// <see cref="OnDefeated"/>'s own "every rig built so far hears it" caveat (shared across every
+        /// boss kind), this signal has no identity to mismatch.</summary>
+        private void OnShieldBlocked(Vector3 pos) => _shieldFlashRemaining = ShieldRingFlashSeconds;
 
         private void Bind(GridlockBoss boss)
         {
@@ -187,6 +216,7 @@ namespace MaxWorlds.VFX
             BuildGoldRing();
             BuildLegs();
             BuildTelegraph();
+            BuildShieldRings();
         }
 
         /// <summary>The six-sided housing itself: white ceramic below, black glass above, split on one
@@ -353,6 +383,67 @@ namespace MaxWorlds.VFX
                 ApplyLensColor(_fillPips[i], i < lit ? Color.white : DarkSteel);
         }
 
+        // ---------------------------------------------------------------- pylon shield (MV-1309)
+
+        /// <summary>Up to <see cref="MaxShieldRings"/> concentric ground rings just outside her feet,
+        /// one lit per live pylon (<see cref="UpdateShieldRings"/>) — built once, inactive, same
+        /// "toggle per frame off read-only boss state" idiom <see cref="BuildTelegraph"/> already uses.
+        /// Parented to the yaw-following rig root like every other part here: a ring is radially
+        /// symmetric, so rotating with her facing is invisible.</summary>
+        private void BuildShieldRings()
+        {
+            for (int i = 0; i < MaxShieldRings; i++)
+            {
+                var go = new GameObject($"ShieldRing{i}");
+                go.transform.SetParent(transform, worldPositionStays: false);
+
+                var lr = go.AddComponent<LineRenderer>();
+                const int segments = 32;
+                lr.positionCount = segments + 1;
+                lr.useWorldSpace = false;
+                lr.widthMultiplier = 0.12f;
+                lr.material = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+                lr.startColor = lr.endColor = ShieldRingColor;
+                lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                lr.receiveShadows = false;
+
+                float ringRadius = ShieldRingBaseRadius + i * ShieldRingSpacing;
+                for (int s = 0; s <= segments; s++)
+                {
+                    float t = (float)s / segments * Mathf.PI * 2f;
+                    lr.SetPosition(s, new Vector3(Mathf.Cos(t) * ringRadius, ShieldRingY, Mathf.Sin(t) * ringRadius));
+                }
+
+                go.SetActive(false);
+                _shieldRings[i] = go;
+            }
+        }
+
+        /// <summary>Ticket points 2/3: one ring lit per <see cref="GridlockBoss.ShieldRingCount"/> live
+        /// pylon, each pylon's death bursting the outermost one (a ring simply goes inactive — no
+        /// separate burst animation the way <c>RelayDome</c>'s own dome plays, since a flat ring has no
+        /// comparable "flare outward" read), and every lit ring flashing white for
+        /// <see cref="ShieldRingFlashSeconds"/> on a blocked hit (<see cref="OnShieldBlocked"/>).</summary>
+        private void UpdateShieldRings(float dt)
+        {
+            if (_shieldFlashRemaining > 0f) _shieldFlashRemaining = Mathf.Max(0f, _shieldFlashRemaining - dt);
+
+            int live = _boss != null ? Mathf.Clamp(_boss.ShieldRingCount, 0, MaxShieldRings) : 0;
+            Color color = _shieldFlashRemaining > 0f ? ShieldRingFlashColor : ShieldRingColor;
+
+            for (int i = 0; i < MaxShieldRings; i++)
+            {
+                GameObject ring = _shieldRings[i];
+                if (ring == null) continue;
+                bool shouldShow = i < live;
+                if (ring.activeSelf != shouldShow) ring.SetActive(shouldShow);
+                if (!shouldShow) continue;
+
+                var lr = ring.GetComponent<LineRenderer>();
+                if (lr != null) lr.startColor = lr.endColor = color;
+            }
+        }
+
         /// <summary>The turning crystal core — a faceted red spike, spinning continuously on its own Y
         /// axis (<see cref="SpinCore"/>), the one part of her that never stops moving even standing
         /// still, same "never reads as a statue" intent as her own feet drifting at standoff.</summary>
@@ -513,6 +604,7 @@ namespace MaxWorlds.VFX
             SpinCore(dt);
             FollowFloorGrid();
             UpdateTelegraph();
+            UpdateShieldRings(dt);
         }
 
         private void Follow()

@@ -72,12 +72,6 @@ namespace MaxWorlds.Tests.EditMode
              "item 1's own allowed form for \"the world after the one just played\" (index + 1) — the pattern's " +
              "bare \\b[1-9]\\b matches the arithmetic literal \"1\" regardless."),
 
-            ("WorldFinaleGate.cs",
-             "WeaponSystemState.ApplyWeaponCoreMorph(playedWorld + 1);",
-             "MV-1195: the City-to-Reef interim hand-over's own \"the world after the one just played\" " +
-             "(index + 1) — same allowed form as the entry above, a different local (playedWorld, not " +
-             "_weaponBeatPlayedWorld) since this is TryApplyCityToReefHandover, not Beat A."),
-
             ("WorldTransitionCoverageTests.cs",
              "WorldConfig toCfg = WorldLibrary.Load(WorldLibrary.KeyForIndex(i + 1));",
              "loops over every from-world generically (i + 1 is \"the next world\", item 1's own allowed " +
