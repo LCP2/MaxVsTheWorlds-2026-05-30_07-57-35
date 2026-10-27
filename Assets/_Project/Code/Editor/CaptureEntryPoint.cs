@@ -257,6 +257,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1266ReefPlayCamera() => RunFromMenu(CapturePresets.All["mv1266reefplaycam"]);
         public static void CaptureMv1266ReefPlayCamera() => Run(CapturePresets.All["mv1266reefplaycam"]);
 
+        [MenuItem("MaxWorlds/Capture/Hatchery Clam Open+Shut (MV-1295)")]
+        public static void MenuMv1295HatcheryClamLook() => RunFromMenu(CapturePresets.All["mv1295hatcheryclamlook"]);
+        public static void CaptureMv1295HatcheryClamLook() => Run(CapturePresets.All["mv1295hatcheryclamlook"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

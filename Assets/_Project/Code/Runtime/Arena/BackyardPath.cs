@@ -337,7 +337,13 @@ namespace MaxWorlds.Arena
         private static void ApplyReefKit(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
             foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
+            {
                 hutch.ApplyReefSkin();
+                // MV-1295: every Reef shed IS one of the ticket's 13 named areas (a1, a4, a7, a9, a11,
+                // a14, a16, a18, a20, a23, a25, a27, a29) — no per-area filter needed, this loop already
+                // only ever sees hutches the Reef's own build produced.
+                hutch.ApplyHatcheryClamBehavior();
+            }
             // MV-1141: the gate skin loop moved to ApplyWorldMaterials's own GateSkin switch, which now
             // covers both this world and Stormdrain's from one place.
 

@@ -55,8 +55,28 @@ namespace MaxWorlds.Factories
         private Transform _barPivot;
         private RectTransform _barCanvas;
         private Image _barFill;
+        private Text _label;
         private Renderer _core;
         private MaterialPropertyBlock _coreMpb;
+
+        // --- Hatchery Clam (MV-1295): the Reef's own open/shut cycle, wrapped around this SAME hutch
+        // body rather than a new class — it reuses the shed's spawner, FactoryCensus reporting, gate
+        // and husk wholesale (ticket: "no new census or gate kind"), the same "cosmetic/behaviour layer
+        // over the one shared body" shape ApplyReefSkin already established. Open
+        // ClamOpenSeconds (8s): damage lands normally, the spawner emits. Shut ClamShutSeconds (4s):
+        // every hit is refused entirely (x0 — same "deflected instead of DamageDealt" shape as
+        // HudSignals.ShieldDeflected/DomeBlocked, MV-1281/MV-1284) and the spawner's mouth stays shut. ---
+        private const float ClamOpenSeconds = 8f;
+        private const float ClamShutSeconds = 4f;
+        private const float ClamLidOpenAngle = 50f;        // ticket: "top shell lifted ~50 deg"
+        private const float ClamBandPixelHeight = 10f;
+        private const float ClamBandGapWorld = 0.08f;      // gap below the health bar, metres
+
+        private bool _isHatcheryClam;
+        private float _clamPhaseElapsed;
+        private bool _clamOpen = true;
+        private Transform _clamLidHinge;
+        private Image _clamBandFill;
 
         // --- Mobile shed (MV-548, shed roadmap stage 3) — levitate, then pursue Max while still
         // spawning. Only ever engages for a shed MapRuntime built with WorldShed.mobile true
@@ -193,6 +213,145 @@ namespace MaxWorlds.Factories
             coreColor = WorldMaterials.ReefBioGlow;
             TintBody();
             if (_barFill != null) _barFill.color = barColor;
+        }
+
+        /// <summary>Whether this hutch is wearing the Hatchery Clam behaviour (MV-1295) — true only
+        /// after <see cref="ApplyHatcheryClamBehavior"/> has run, which <see cref="MaxWorlds.Arena.BackyardPath"/>
+        /// calls for every hutch it builds while loading the Reef. A World 1 shed never calls it, so
+        /// this reads false there and <see cref="TakeDamage"/>'s shut-phase refusal never applies.</summary>
+        public bool IsHatcheryClam => _isHatcheryClam;
+
+        /// <summary>Whether THIS INSTANT sits in the open half of the cycle (MV-1295). Meaningless
+        /// (and never read) unless <see cref="IsHatcheryClam"/> — a plain hutch is always vacuously
+        /// "open" in the sense that nothing ever checks this for it.</summary>
+        public bool ClamOpen => _clamOpen;
+
+        /// <summary>MV-1295: wraps the open/shut cycle around this same hutch body — called once, right
+        /// after <see cref="ApplyReefSkin"/>, for every hutch <see cref="MaxWorlds.Arena.BackyardPath"/>
+        /// built while loading the Reef. Every Reef shed IS one of the ticket's 13 named areas, so no
+        /// per-area filter is needed here — "replaces each shed IN PLACE" falls out of this running for
+        /// every hutch the Reef's own build produced. Idempotent (guards on <see cref="_isHatcheryClam"/>)
+        /// so a stray second call can never double up the lid/band visuals.</summary>
+        public void ApplyHatcheryClamBehavior()
+        {
+            if (_isHatcheryClam) return;
+            _isHatcheryClam = true;
+            _clamPhaseElapsed = 0f;
+            _clamOpen = true;
+
+            if (_label != null) _label.text = "HATCHERY CLAM";
+            if (_spawner != null) _spawner.SetEmissionGateOpen(true);
+
+            BuildClamLid();
+            BuildClamPhaseBand();
+            ApplyClamPhaseLook();
+        }
+
+        /// <summary>Advances the open/shut cycle (MV-1295) — public and dt-parameterized, same
+        /// "no bare Update()" shape as <see cref="TickMobility"/>/<see cref="Pylon.TickCable"/>, so an
+        /// EditMode test can drive many simulated seconds with no live Unity frame loop. A no-op unless
+        /// <see cref="ApplyHatcheryClamBehavior"/> has run, or once this clam is dead — a destroyed
+        /// clam's phase freezes rather than still flipping tells on a body <see cref="ApplyDestructionEffects"/>
+        /// has already hidden.</summary>
+        public void TickClamPhase(float dt)
+        {
+            if (!_isHatcheryClam || !IsAlive) return;
+
+            _clamPhaseElapsed += dt;
+            float cycle = ClamOpenSeconds + ClamShutSeconds;
+            float t = Mathf.Repeat(_clamPhaseElapsed, cycle);
+            bool open = t < ClamOpenSeconds;
+            float phaseProgress = open ? t / ClamOpenSeconds : (t - ClamOpenSeconds) / ClamShutSeconds;
+
+            if (open != _clamOpen)
+            {
+                _clamOpen = open;
+                if (_spawner != null) _spawner.SetEmissionGateOpen(open);
+                ApplyClamPhaseLook();
+            }
+
+            if (_clamBandFill != null) _clamBandFill.fillAmount = Mathf.Clamp01(phaseProgress);
+        }
+
+        /// <summary>The lid pose and glow tint for whichever phase <see cref="_clamOpen"/> currently
+        /// names — called once on <see cref="ApplyHatcheryClamBehavior"/> (starting open) and again every
+        /// time <see cref="TickClamPhase"/> flips the phase, never on every frame (nothing here needs to
+        /// animate continuously; the ticket's own image shows two static poses, not a tween).</summary>
+        private void ApplyClamPhaseLook()
+        {
+            if (_clamLidHinge != null)
+                _clamLidHinge.localRotation = Quaternion.Euler(_clamOpen ? -ClamLidOpenAngle : 0f, 0f, 0f);
+
+            coreColor = _clamOpen ? WorldMaterials.ReefCircuitPurple : WorldMaterials.ReefMetalDark;
+            if (_clamBandFill != null)
+                _clamBandFill.color = _clamOpen ? WorldMaterials.ReefCircuitCyan : WorldMaterials.ReefHazard;
+        }
+
+        /// <summary>The top shell, hinged at the back (ticket: "hinge at the back... lifted ~50 deg").
+        /// A thin slab child of a pivot sitting at the body's own top-back edge, so rotating the PIVOT
+        /// (not the slab) around local X lifts the slab's front edge — same "a hinge is a pivot, not a
+        /// property on the thing it swings" shape every other rotated greybox part in this codebase
+        /// uses. Cosmetic only, no collider — the body's own primitive still carries the real one.</summary>
+        private void BuildClamLid()
+        {
+            if (_clamLidHinge != null) return;
+
+            var hinge = new GameObject("ClamLidHinge").transform;
+            hinge.SetParent(transform, false);
+            hinge.localPosition = new Vector3(0f, 0.5f, -0.5f); // top-back edge, body's own unit-cube space
+
+            var lidGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            lidGo.name = "ClamLid";
+            var col = lidGo.GetComponent<Collider>();
+            if (col != null)
+            {
+                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+            }
+            lidGo.transform.SetParent(hinge, false);
+            lidGo.transform.localPosition = new Vector3(0f, 0f, 0.5f); // reaches from the hinge to the front edge
+            lidGo.transform.localScale = new Vector3(1f, 0.16f, 1f);
+
+            var rend = lidGo.GetComponent<Renderer>();
+            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, WorldMaterials.ReefMetalDark);
+            if (mat != null) rend.sharedMaterial = mat;
+
+            _clamLidHinge = hinge;
+        }
+
+        /// <summary>The rim-light band (ticket: "a light band round the shell's rim that fills as the
+        /// phase runs") — the exact same world-space <see cref="Image.Type.Filled"/> idiom
+        /// <see cref="BuildHealthBar"/> already uses, parented to the SAME <see cref="_barPivot"/> (so it
+        /// billboards and shows/hides together with the health bar for free) and sitting just under it.</summary>
+        private void BuildClamPhaseBand()
+        {
+            if (_clamBandFill != null || _barPivot == null) return;
+
+            var canvasGo = new GameObject("ClamPhaseBand", typeof(Canvas));
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var crt = (RectTransform)canvasGo.transform;
+            crt.SetParent(_barPivot, false);
+            crt.sizeDelta = new Vector2(BarPixelWidth, ClamBandPixelHeight);
+            float canvasScale = WorldBar.CanvasScaleFor(BarWorldWidth, BarPixelWidth);
+            crt.localScale = Vector3.one * canvasScale;
+            float barWorldHeight = BarPixelHeight * canvasScale;
+            float bandWorldHeight = ClamBandPixelHeight * canvasScale;
+            crt.localPosition = new Vector3(0f, -(barWorldHeight * 0.5f + ClamBandGapWorld + bandWorldHeight * 0.5f), 0f);
+
+            var bg = NewImage(crt, HudTextures.RoundedBox(24, 0.5f), new Color(0f, 0f, 0f, 0.6f));
+            bg.type = Image.Type.Sliced;
+            var bgRect = bg.rectTransform;
+            bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero; bgRect.offsetMax = Vector2.zero;
+
+            _clamBandFill = NewImage(crt, HudTextures.RoundedBox(24, 0.5f), WorldMaterials.ReefCircuitCyan);
+            _clamBandFill.type = Image.Type.Filled;
+            _clamBandFill.fillMethod = Image.FillMethod.Horizontal;
+            _clamBandFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _clamBandFill.fillAmount = 0f;
+            var fRect = _clamBandFill.rectTransform;
+            fRect.anchorMin = Vector2.zero; fRect.anchorMax = Vector2.one;
+            fRect.offsetMin = new Vector2(2f, 2f); fRect.offsetMax = new Vector2(-2f, -2f);
         }
 
         /// <summary>Re-read the Factory-health slider and retune this hutch live (YT-126). Raising it
@@ -332,6 +491,17 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // robots can't wreck their own factory
+
+            // MV-1295: a shut Hatchery Clam refuses the hit entirely (x0) — fired INSTEAD of EmitDamage,
+            // never alongside it, same "deflected" shape as ShieldDeflected/DomeBlocked (MV-1281/MV-1284).
+            // The "SHUT" callout reuses EmitPickup's own floating-text path, same as Banner()'s "GATE OPEN".
+            if (_isHatcheryClam && !_clamOpen)
+            {
+                HudSignals.EmitDomeBlocked(info.Point);
+                HudSignals.EmitPickup(transform.position + Vector3.up * 2f, "SHUT", barColor);
+                return;
+            }
+
             HudSignals.EmitDamage(transform.position + Vector3.up * 2f, info.Amount);
             _tookDamage = true; // MV-548: a mobile shed's Grounded->LiftOff trigger, first hit ever
             _health.TakeDamage(info.Amount);
@@ -438,6 +608,8 @@ namespace MaxWorlds.Factories
 
         private void Update()
         {
+            if (_isHatcheryClam) TickClamPhase(Time.deltaTime);
+
             if (!_mobile || !IsAlive) return;
 
             if (_pursuitTarget == null)
@@ -853,6 +1025,7 @@ namespace MaxWorlds.Factories
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.color = new Color(1f, 0.85f, 0.4f);
             t.raycastTarget = false;
+            _label = t;
         }
     }
 }
