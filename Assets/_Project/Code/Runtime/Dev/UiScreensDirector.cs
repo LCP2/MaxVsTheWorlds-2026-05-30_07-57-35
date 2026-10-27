@@ -98,6 +98,7 @@ namespace MaxWorlds.Dev
             RunFamilyPanelContainmentCheck();
             yield return CaptureWeaponsButton();
             yield return CaptureMapScreen();
+            yield return CaptureLoadoutScreen();
 
             Finish();
 
@@ -517,6 +518,183 @@ namespace MaxWorlds.Dev
                 (w, h) => map.RefitOpeningView(w, h));
         }
 
+        /// <summary>MV-1290 AC1: the LOADOUT screen at World 5 (index 4) with every PRIMARY/SECONDARY
+        /// owned — a state no real save reaches without playing the whole game, hence
+        /// <see cref="LoadoutScreen.OpenWithOwnedSets"/> rather than the production
+        /// <see cref="LoadoutScreen.Open"/> (which reads the active slot). One shot per aspect this
+        /// harness already treats as conformance-relevant for THE RIG (<c>16x9</c>/<c>phone</c>/
+        /// <c>ipad-mini</c> — see <see cref="RunFamilyPanelContainmentCheck"/>'s own copy of these three
+        /// pixel sizes) — <see cref="CaptureFixtureScreen"/>'s own name-gated dispatch runs
+        /// <see cref="RunLoadoutConformanceChecks"/> against exactly these three names.</summary>
+        private IEnumerator CaptureLoadoutScreen()
+        {
+            var loadout = FindFirstObjectByType<LoadoutScreen>();
+            if (loadout == null) { LogWarn("loadout: no LoadoutScreen in the scene"); yield break; }
+
+            Canvas canvas = loadout.GetComponentInChildren<Canvas>(true);
+            if (canvas == null)
+            {
+                // LoadoutScreen builds its canvas lazily inside Open()/OpenWithOwnedSets the first time
+                // (same MapScreen.Build() idiom) — prime it once so the fixture below already has a real
+                // canvas reference before CaptureFixtureScreen calls its own "open" callback.
+                loadout.OpenWithOwnedSets(0, Array.Empty<WeaponCatalog.PrimaryKind>(), Array.Empty<SecondaryKind>(), null);
+                loadout.Close();
+                canvas = loadout.GetComponentInChildren<Canvas>(true);
+            }
+            if (canvas == null) { LogWarn("loadout: LoadoutScreen built no canvas"); yield break; }
+
+            // MV-1146: "the last world" (today World 5) is the allowed form, not a literal — also the
+            // right state for "every weapon owned" regardless of how many worlds ever ship.
+            int worldIndex = WorldCatalog.Count - 1;
+            var primaries = DedupePrimaries(WorldCatalog.OwnedPrimariesThroughWorld(worldIndex));
+            var secondaries = DedupeSecondaries(WorldCatalog.OwnedSecondariesThroughWorld(worldIndex));
+
+            var aspects = new (string Name, int W, int H)[]
+            {
+                ("16x9", 1920, 1080),
+                ("phone", 2340, 1080),
+                ("ipad-mini", 1078, 815),
+            };
+            foreach (var aspect in aspects)
+            {
+                yield return CaptureFixtureScreen($"loadout-{aspect.Name}", aspect.W, aspect.H, null,
+                    () => loadout.OpenWithOwnedSets(worldIndex, primaries, secondaries, null),
+                    loadout.Close, canvas, (w, h) => loadout.RefitOpeningView(w, h));
+            }
+        }
+
+        private static List<WeaponCatalog.PrimaryKind> DedupePrimaries(IEnumerable<WeaponCatalog.PrimaryKind> source)
+        {
+            var seen = new HashSet<WeaponCatalog.PrimaryKind>();
+            var list = new List<WeaponCatalog.PrimaryKind>();
+            foreach (WeaponCatalog.PrimaryKind k in source) if (seen.Add(k)) list.Add(k);
+            return list;
+        }
+
+        private static List<SecondaryKind> DedupeSecondaries(IEnumerable<SecondaryKind> source)
+        {
+            var seen = new HashSet<SecondaryKind>();
+            var list = new List<SecondaryKind>();
+            foreach (SecondaryKind k in source) if (seen.Add(k)) list.Add(k);
+            return list;
+        }
+
+        /// <summary>MV-1290 AC1: tap-target size, glyph height and Y/X bounds containment for the LOADOUT
+        /// screen, same "PASS/FAIL line per check, gate the whole run" shape
+        /// <see cref="RunConformanceChecks"/> uses for THE RIG. Pure resolved-geometry, not pixel
+        /// sampling (same category of check as <see cref="CheckYBoundsContainment"/>/
+        /// <see cref="RunFamilyPanelContainmentCheck"/> already run inside this same harness): every
+        /// card/START rect is read off its own live <see cref="RectTransform"/> via
+        /// <see cref="RectTransformUtility.WorldToScreenPoint"/> against the SAME capture camera that
+        /// just rendered this shot, so a real CanvasScaler/layout defect (wrong scale factor, a card
+        /// pushed off-frame by a wrap-math bug) shows up as a real measured deviation — never a re-read
+        /// of the authored <c>CardWidth</c>/<c>CardHeight</c> constants themselves (Testing policy Tier
+        /// 1). Glyph height reads each card name's own resolved best-fit size
+        /// (<see cref="Text.cachedTextGenerator"/>'s <c>fontSizeUsedForBestFit</c>) — the exact resolved
+        /// value <c>WeaponsScreenCategoryLabelFontSizeTests</c> uses, and the one MV-489's own fix
+        /// (CLAUDE.md Testing policy) needed: a stale <c>fontSize</c> cap silently clamps best-fit below
+        /// its intended <c>resizeTextMaxSize</c> even when every authored number looks right.</summary>
+        private void RunLoadoutConformanceChecks(Texture2D tex, string aspectName, int w, int h)
+        {
+            var loadout = FindFirstObjectByType<LoadoutScreen>();
+            if (loadout == null) return;
+
+            var lines = new List<string>();
+            int passCount = 0, checkCount = 0;
+            void Emit(string name, bool pass, string detail)
+            {
+                checkCount++;
+                lines.Add(RigBoardConformance.PassFailLine(name, pass, detail));
+                if (pass) passCount++;
+                else _failures.Add($"conformance/{aspectName}/{name}: {detail}");
+            }
+
+            var rects = new List<(string id, Rect px, Text nameText)>();
+            for (int i = 0; i < loadout.PrimaryCardCount; i++)
+                rects.Add(($"primary{i}", LoadoutScreenRect(loadout.PrimaryCardRect(i)), loadout.PrimaryCardNameText(i)));
+            for (int i = 0; i < loadout.SecondaryCardCount; i++)
+                rects.Add(($"secondary{i}", LoadoutScreenRect(loadout.SecondaryCardRect(i)), loadout.SecondaryCardNameText(i)));
+            rects.Add(("start", LoadoutScreenRect(loadout.StartButtonRect), null));
+
+            // MV-472 phone floor: every card/START >=44pt tall (>=160 ref-px at the screen's own
+            // 1920x1080 match-by-height frame — LoadoutScreen.Build's own CanvasScaler setting), the
+            // ref-px floor scaled to THIS capture's own pixels-per-ref-unit. Read the canvas's own
+            // scaleFactor directly (ShowCanvasOnCamera has already set it to ComputeScaleFactor(w, h) by
+            // the time this runs, still inside CaptureFixtureScreen's own try block, before its finally
+            // restores it) rather than recomputing h/1080 by hand — one less place this and the real
+            // CanvasScaler math could quietly drift apart.
+            Canvas canvas = loadout.GetComponentInChildren<Canvas>(true);
+            float pixelsPerRefUnit = canvas != null ? canvas.scaleFactor : h / 1080f;
+            float tapFloorPx = 160f * pixelsPerRefUnit;
+            var tapFails = new List<string>();
+            foreach (var r in rects)
+                if (r.px.height < tapFloorPx - 0.5f)
+                    tapFails.Add($"{r.id} {RigBoardConformance.Fmt(r.px.height)}px < {RigBoardConformance.Fmt(tapFloorPx)}px floor");
+            Emit("tap-target-size", tapFails.Count == 0,
+                tapFails.Count == 0 ? $"{rects.Count}/{rects.Count} clear the 44pt/160px-at-ref floor"
+                                     : $"{tapFails.Count}/{rects.Count} under floor — {string.Join("; ", tapFails)}");
+
+            // 11pt/32 ref-px is a FONT SIZE floor, not a literal ink-height one — same "half the
+            // authored size" allowance CheckGlyphHeight already uses for THE RIG's own category labels
+            // (a glyph's rendered stroke extent is naturally well under its nominal font size: ascender
+            // to baseline, no descender headroom), confirmed live running this exact check: a card
+            // comfortably rendering at the max 38-ref-px font still only measures ~24-26px of actual ink
+            // at 16x9. Measured off each card name's own RENDERED ink extent in this actual capture
+            // (Testing policy Tier 3) — cachedTextGenerator.fontSizeUsedForBestFit turned out unreliable
+            // here (read back inside this same run it measured implausibly low), so this measures what
+            // the player's eye actually sees instead of trusting that API's own resolution.
+            float glyphFloorPx = 32f * 0.5f * pixelsPerRefUnit;
+            var glyphFails = new List<string>();
+            int glyphChecked = 0;
+            foreach (var r in rects)
+            {
+                if (r.nameText == null) continue;
+                glyphChecked++;
+                Rect textPx = LoadoutScreenRect(r.nameText.rectTransform);
+                float glyphPx = MeasureInkHeightPx(tex, textPx, Color.white, GlyphInkTolerance);   // LoadoutScreen's own card-name colour
+                if (glyphPx < glyphFloorPx - 0.5f)
+                    glyphFails.Add($"{r.id} {RigBoardConformance.Fmt(glyphPx)}px < {RigBoardConformance.Fmt(glyphFloorPx)}px floor");
+            }
+            Emit("glyph-height", glyphFails.Count == 0,
+                glyphFails.Count == 0 ? $"{glyphChecked}/{glyphChecked} card names clear the 11pt/32px-at-ref floor"
+                                      : $"{glyphFails.Count}/{glyphChecked} under floor — {string.Join("; ", glyphFails)}");
+
+            // Y/X bounds containment: no card/START may render outside the captured frame itself.
+            var boundsFails = new List<string>();
+            foreach (var r in rects)
+            {
+                if (r.px.yMin < -0.5f || r.px.yMax > h + 0.5f || r.px.xMin < -0.5f || r.px.xMax > w + 0.5f)
+                    boundsFails.Add($"{r.id} x=[{RigBoardConformance.Fmt(r.px.xMin)},{RigBoardConformance.Fmt(r.px.xMax)}] y=[{RigBoardConformance.Fmt(r.px.yMin)},{RigBoardConformance.Fmt(r.px.yMax)}]");
+            }
+            Emit("bounds-containment", boundsFails.Count == 0,
+                boundsFails.Count == 0 ? $"{rects.Count}/{rects.Count} within [0,{w}]x[0,{h}]"
+                                       : $"{boundsFails.Count}/{rects.Count} overrun — {string.Join("; ", boundsFails)}");
+
+            Log($"conformance/{aspectName}: {passCount}/{checkCount} check families passed");
+            _manifest.AppendLine($"-- conformance: {aspectName} ({w}x{h}) --");
+            foreach (var l in lines) _manifest.AppendLine(l);
+            WriteConformanceReport(aspectName, w, h, lines);
+        }
+
+        /// <summary>A live <see cref="RectTransform"/>'s own rendered screen-pixel rect, read via
+        /// <see cref="RectTransformUtility.WorldToScreenPoint"/> against this run's capture camera — the
+        /// same path <see cref="CheckChipBorderColour"/> already uses for a RectTransform with no json
+        /// coordinate of its own.</summary>
+        private Rect LoadoutScreenRect(RectTransform rt)
+        {
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners);
+            Vector2 min = RectTransformUtility.WorldToScreenPoint(_captureCam, corners[0]);
+            Vector2 max = min;
+            for (int i = 1; i < 4; i++)
+            {
+                Vector2 p = RectTransformUtility.WorldToScreenPoint(_captureCam, corners[i]);
+                min = Vector2.Min(min, p);
+                max = Vector2.Max(max, p);
+            }
+            return new Rect(min, max - min);
+        }
+
         /// <summary>MV-519 AC9: fires the real <see cref="HudSignals.SupercellCollected"/> signal at
         /// Max's live position (falls back to the origin if no Player-tagged object exists in this
         /// capture scene) so <see cref="HudController.StartSupercellFx"/> runs the exact same projection
@@ -684,6 +862,12 @@ namespace MaxWorlds.Dev
                     else if (name == "rig-phone" || name == "rig-ipad-mini" || name == "rig-world2-16x9")
                     {
                         RunConformanceChecks(tex, name, w, h);
+                    }
+                    // MV-1290: the LOADOUT screen's own three conformance-relevant aspects, same trio as
+                    // THE RIG's own rig-16x9/rig-phone/rig-ipad-mini above.
+                    else if (name == "loadout-16x9" || name == "loadout-phone" || name == "loadout-ipad-mini")
+                    {
+                        RunLoadoutConformanceChecks(tex, name, w, h);
                     }
                 }
                 finally { Destroy(tex); }
@@ -1035,6 +1219,42 @@ namespace MaxWorlds.Dev
 
         private const float InkTolerance = 0.03f;       // RigBoardConformance.ColorDistance units (sum of |dr|+|dg|+|db|) — the colour-probe hue check (below) found real, hue-distinguishable fill several pixels out that a 0.05 magnitude floor was missing
         private const float HueProbeTolerance = 0.18f;   // RigBoardConformance.HueDistance units — hue direction, not brightness (see that method's own doc comment)
+
+        // MV-1290: how close to pure white (LoadoutScreen's own card-name colour) a pixel must read to
+        // count as glyph ink in MeasureInkHeightPx — loose enough for antialiased glyph edges, still far
+        // from LoadoutScreen's dark CardColor background (ColorDistance ~2.5 from white).
+        private const float GlyphInkTolerance = 0.9f;
+
+        /// <summary>MV-1290: the rendered vertical extent of whatever ink sits inside
+        /// <paramref name="searchPx"/> (already a screen-pixel rect — see <see cref="LoadoutScreenRect"/>)
+        /// against <paramref name="inkColor"/> — a plain top/bottom ink-row scan, simpler than
+        /// <see cref="MeasureVerticalInkExtentPx"/>'s own json-space/<see cref="RigBoardConformance.BoardPixelTransform"/>
+        /// machinery since this already has the real screen-pixel rect in hand and samples the texture
+        /// directly (both share the same bottom-left origin — no flip needed, same as
+        /// <see cref="CheckChipBorderColour"/>'s own <c>WorldToScreenPoint</c> + <c>GetPixel</c> pairing).</summary>
+        private static float MeasureInkHeightPx(Texture2D tex, Rect searchPx, Color inkColor, float tolerance, int step = 2)
+        {
+            int xMin = Mathf.Clamp(Mathf.RoundToInt(searchPx.xMin), 0, tex.width - 1);
+            int xMax = Mathf.Clamp(Mathf.RoundToInt(searchPx.xMax), 0, tex.width - 1);
+            int yMin = Mathf.Clamp(Mathf.RoundToInt(searchPx.yMin), 0, tex.height - 1);
+            int yMax = Mathf.Clamp(Mathf.RoundToInt(searchPx.yMax), 0, tex.height - 1);
+
+            int firstInkRow = -1, lastInkRow = -1;
+            for (int y = yMin; y <= yMax; y += step)
+            {
+                bool rowHasInk = false;
+                for (int x = xMin; x <= xMax; x += step)
+                {
+                    if (RigBoardConformance.ColorDistance(tex.GetPixel(x, y), inkColor) <= tolerance) { rowHasInk = true; break; }
+                }
+                if (rowHasInk)
+                {
+                    if (firstInkRow < 0) firstInkRow = y;
+                    lastInkRow = y;
+                }
+            }
+            return firstInkRow < 0 ? 0f : lastInkRow - firstInkRow;
+        }
 
         // MV-480: BuildPhoneScrollViewport's own two constants (WeaponsScreen.cs, private there) —
         // duplicated here because the harness has no reach into that private method, same idiom the
