@@ -307,15 +307,42 @@ namespace MaxWorlds.Rendering
                 return cached;
             }
 
-            Shader shader = MaterialLibrary.SurfaceShader;
-            if (shader == null) return null;
-
-            var m = new Material(shader)
+            // MV-1316: cloned from an AUTHORED asset (Resources/Materials/M_ReefDeckKeepEmission.mat),
+            // not `new Material(shader)` like every other material in this file. The deck's circuit-
+            // inlay emission mask rendered on Windows D3D12 but was invisible on WebGL/iPhone (GLES/
+            // Metal) even after disabling GPU instancing alone (measured on a local WebGL capture:
+            // zero trace pixels near Max matched the AC2 hue/saturation band with instancing off,
+            // _EMISSION still enabled only via runtime EnableKeyword). No material anywhere in this
+            // project ships with _EMISSION serialized on — every emissive Reef material is built from
+            // `new Material(shader)` plus a runtime EnableKeyword call the same way this one used to be
+            // — so Unity's build-time shader-variant stripper has no serialized material to discover
+            // the _EMISSION variant of URP/Lit from, and nothing here proves per-platform stripping
+            // behaves identically. Cloning an authored .mat that already has _EMISSION baked in and
+            // lives under Resources/ (guaranteed to ship on every platform, same as every other
+            // Resources-loaded asset in this project) removes that gap: the variant is now declared
+            // statically, not discovered by chance from whatever else happens to be in the build.
+            Material template = Resources.Load<Material>("Materials/M_ReefDeckKeepEmission");
+            Material m;
+            if (template != null)
             {
-                name = key,
-                hideFlags = HideFlags.HideAndDontSave,
-                enableInstancing = true,
-            };
+                m = new Material(template)
+                {
+                    name = key,
+                    hideFlags = HideFlags.HideAndDontSave,
+                    enableInstancing = false,
+                };
+            }
+            else
+            {
+                Shader shader = MaterialLibrary.SurfaceShader;
+                if (shader == null) return null;
+                m = new Material(shader)
+                {
+                    name = key,
+                    hideFlags = HideFlags.HideAndDontSave,
+                    enableInstancing = false,
+                };
+            }
 
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ReefShipFloor);
             if (m.HasProperty("_Color")) m.SetColor("_Color", ReefShipFloor);
@@ -326,19 +353,25 @@ namespace MaxWorlds.Rendering
             // branch uses. The mask already carries the real cyan/violet/magenta hues, so this is a
             // brightness multiplier only, not a tint.
             //
-            // MV-1275: 2.14x (not white/1x) — the same factor this ticket removed from PostExposure.
-            // The emission mask's own colours (WorldMaterials.ReefFloorCircuitCyan etc.) are baked at
-            // full value (255), so on the Mobile tier's LDR buffer they were already clipped to 1.0
-            // and rode PostExposure's old +1.1-stop lift with no visible change — the lift did nothing
-            // for them. Losing that lift still mattered: on an LDR target the emissive trace's OWN
-            // antialiased edge texels and the ReefDeckAlbedo multiplier under it sit well under 1.0,
-            // and at those partial values 8-bit quantization rounds a now-dimmer trace toward
-            // grey/black, collapsing its hue/saturation along with its brightness — measured on the
-            // local WebGL capture: zero trace pixels within 2 m of Max read saturation >= 0.5 at
-            // PostExposure 0.15/_EmissionColor white (AC3 fail by inspection, not just by the band).
-            // Baking the same 2.14x into _EmissionColor restores those edge/multiplied texels to
-            // their pre-fix brightness without touching the mask's own hues.
-            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(2.14f, 2.14f, 2.14f));
+            // MV-1275 baked 2.14x in here (the same factor that ticket removed from PostExposure) on
+            // the reasoning that the emissive trace's own partial-value edge/multiplied texels needed
+            // it back since they no longer rode the post lift. That reasoning assumed the emission
+            // BINDING itself was intact — on WebGL it was not (MV-1316): the mask never rendered there
+            // at all, at any multiplier, so 2.14x was never actually exercised on that platform. Now
+            // that MV-1316 fixes the binding, 2.14x on an already-full-value (255) baked mask blows the
+            // floor out white-cyan on both platforms.
+            //
+            // MV-1316: the two platforms don't converge on one shared value. Measured on local
+            // captures (floor-only crop, same AC3 band both times): D3D (Editor Mobile-tier substitute)
+            // reads median luminance ~0 (invisible) at 0.55x and 31.7/255 (in band) at 0.85x; WebGL
+            // reads 40.7/255 (in band) at 0.55x and 55.0/255 (over band) at 0.85x. A single scalar
+            // can't land both in the 25-45 band at once, so this reads the actual graphics backend —
+            // the same GLES/Metal-vs-D3D split the ticket's own hypothesis names — rather than guess
+            // one compromise value that fails both. See MV-1316's fix comment for the measured numbers.
+            bool isDirect3D = SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D11
+                || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D12;
+            float emission = isDirect3D ? 0.85f : 0.55f;
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(emission, emission, emission));
             m.EnableKeyword("_EMISSION");
             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
