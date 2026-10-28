@@ -269,18 +269,12 @@ namespace MaxWorlds.Rendering
             // the _BaseMap_ST the shader samples through.
             floorRenderer.sharedMaterial.SetTextureScale("_BaseMap", tiling);
 
-            // MV-1267: _EmissionMap carries its OWN independent _ST, never inherited from _BaseMap's.
-            // Left unset (Unity's default scale (1,1), offset (0,0)) it does not no-op like
-            // mainTextureScale above — it silently stretches the single ReefDeckEmission supertile
-            // image across the mesh's whole 0..1 UV span (the floor's full footprint, per this method's
-            // own doc comment on the Box primitive's default face UVs) instead of repeating it once per
-            // supertile the way _BaseMap does. The circuit traces/nodes are a handful of bright texels
-            // on an otherwise-black 256x256 image; blown up over the whole floor and then minified back
-            // down by the camera's real viewing distance, they average toward the image's own dominant
-            // accent tint instead of reading as fine lines — this is the Reef deck's reported mauve
-            // wash (and MV-1256/MV-1265's "circuit inlay doesn't render", the same broken binding).
-            floorRenderer.sharedMaterial.SetTextureScale("_EmissionMap", tiling);
-
+            // MV-1316: MV-1267's own SetTextureScale("_EmissionMap", ...) call used to sit here. Triage
+            // (MV-1275, 22 Oct) found it dead: URP/Lit has no separate _EmissionMap_ST property at all —
+            // every map samples through the one UV transform _BaseMap_ST already produces — so setting
+            // _EmissionMap's own texture scale never reached the shader. The deck's real invisible-on-
+            // WebGL/iPhone defect was the emission BINDING, not this tiling — see ReefDeckFloorMaterial's
+            // enableInstancing fix in WorldMaterials.cs.
             var patterns = new int[gridCells * gridCells];
             for (int gy = 0; gy < gridCells; gy++)
             for (int gx = 0; gx < gridCells; gx++)
