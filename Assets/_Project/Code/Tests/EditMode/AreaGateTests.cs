@@ -332,6 +332,10 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                var openGate = openGo.GetComponent<AreaGate>();
+                if (openGate != null) InvokeOnDestroy(openGate);
+                var lockedGate = lockedGo.GetComponent<AreaGate>();
+                if (lockedGate != null) InvokeOnDestroy(lockedGate);
                 Object.DestroyImmediate(openGo);
                 Object.DestroyImmediate(lockedGo);
             }
@@ -344,6 +348,22 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeAwake(AreaGate gate)
         {
             var m = typeof(AreaGate).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
+            m.Invoke(gate, null);
+        }
+
+        /// <summary>MV-1317: DestroyImmediate does not reliably fire OnDestroy synchronously under
+        /// -batchmode -runTests for a component whose Awake only ran via reflection (the same quirk
+        /// MV1026PowerCellRingFollowsSurfaceTests' own OnEnable/OnDisable note already names) -- without
+        /// this, AreaGate.OnDestroy's own cleanup of its SIBLING threshold collider (and, once skinned,
+        /// its sibling dressing root) never runs. A gate built directly on a root-level GameObject (no
+        /// parent) leaves that threshold parented at scene root, at the gate's own world position, where
+        /// a later fixture can collide with it -- exactly what left a real, solid collider sitting at
+        /// world origin for MV1300CurrentLaneTests' Rusher to push against (its "got 3.08 m" failure,
+        /// 1.08 m of which was this leaked collider, not the current lane). Invoke this before destroying
+        /// any gate built with InvokeAwake above whose GameObject has no parent of its own.</summary>
+        private static void InvokeOnDestroy(AreaGate gate)
+        {
+            var m = typeof(AreaGate).GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance);
             m.Invoke(gate, null);
         }
 
@@ -495,6 +515,8 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                var gate = go.GetComponent<AreaGate>();
+                if (gate != null) InvokeOnDestroy(gate);
                 Object.DestroyImmediate(go);
             }
         }

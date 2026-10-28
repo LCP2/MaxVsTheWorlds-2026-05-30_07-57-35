@@ -178,6 +178,8 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                var gate = gateGo.GetComponent<AreaGate>();
+                if (gate != null) InvokePrivate(gate, "OnDestroy");
                 Object.DestroyImmediate(gateGo);
             }
         }
