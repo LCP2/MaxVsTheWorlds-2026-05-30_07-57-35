@@ -43,7 +43,12 @@ namespace MaxWorlds.Tests.EditMode
         {
             if (_sequence != null) Object.DestroyImmediate(_sequence.gameObject);
             if (_playerGo != null) Object.DestroyImmediate(_playerGo);
-            if (_gateGo != null) Object.DestroyImmediate(_gateGo);
+            if (_gateGo != null)
+            {
+                var gate = _gateGo.GetComponent<AreaGate>();
+                if (gate != null) InvokeOnDestroy(gate);
+                Object.DestroyImmediate(_gateGo);
+            }
             foreach (var stray in Object.FindObjectsByType<BackyardLighting>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(stray.gameObject);
 
@@ -54,6 +59,16 @@ namespace MaxWorlds.Tests.EditMode
 
         private static void InvokeAwake(Object component) =>
             component.GetType().GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(component, null);
+
+        /// <summary>MV-1317: DestroyImmediate does not reliably fire OnDestroy synchronously under
+        /// -batchmode -runTests for a component whose Awake only ran via reflection (same quirk
+        /// AreaGateTests' own InvokeOnDestroy note names) — without this, AreaGate.OnDestroy's cleanup
+        /// of its SIBLING threshold collider never runs. This test's exit gate sits on a root-level
+        /// GameObject.CreatePrimitive cube, so the leaked threshold would sit at the gate's own world
+        /// position for a later test in the same EditMode run to collide with.</summary>
+        private static void InvokeOnDestroy(Object component) =>
+            component.GetType().GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance)
                 .Invoke(component, null);
 
         /// <summary>Same wall-outward math <see cref="WorldJoinSequence"/> itself uses internally, kept

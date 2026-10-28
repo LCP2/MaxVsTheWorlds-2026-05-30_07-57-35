@@ -39,7 +39,12 @@ namespace MaxWorlds.Tests.EditMode
         public void TearDown()
         {
             if (_go != null) Object.DestroyImmediate(_go);
-            if (_go2 != null) Object.DestroyImmediate(_go2);
+            if (_go2 != null)
+            {
+                var gate = _go2.GetComponent<AreaGate>();
+                if (gate != null) InvokeOnDestroy(gate);
+                Object.DestroyImmediate(_go2);
+            }
         }
 
         private sealed class FakeUnit : MonoBehaviour, IHealthReadout
@@ -74,6 +79,18 @@ namespace MaxWorlds.Tests.EditMode
         private static void InvokeAwake(AreaGate gate)
         {
             var m = typeof(AreaGate).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
+            m.Invoke(gate, null);
+        }
+
+        /// <summary>MV-1317: DestroyImmediate does not reliably fire OnDestroy synchronously under
+        /// -batchmode -runTests for a component whose Awake only ran via reflection (same quirk
+        /// AreaGateTests' own InvokeOnDestroy note names) — without this, AreaGate.OnDestroy's cleanup
+        /// of its SIBLING threshold collider never runs. This test's gate sits on a root-level
+        /// GameObject with no parent, so the leaked threshold would sit at the gate's own world position
+        /// for a later test in the same EditMode run to collide with.</summary>
+        private static void InvokeOnDestroy(AreaGate gate)
+        {
+            var m = typeof(AreaGate).GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance);
             m.Invoke(gate, null);
         }
 

@@ -25,6 +25,20 @@ namespace MaxWorlds.Tests.EditMode
                 .Invoke(component, null);
         }
 
+        /// <summary>MV-1317: DestroyImmediate does not reliably fire OnDestroy synchronously under
+        /// -batchmode -runTests for a component whose Awake only ran via reflection (same quirk
+        /// AreaGateTests' own InvokeOnDestroy note names) — without this, AreaGate.OnDestroy's cleanup
+        /// of its SIBLING threshold collider never runs. This test's gate sits on a root-level
+        /// GameObject.CreatePrimitive cube at the world origin, so the leaked threshold left a real,
+        /// solid collider sitting exactly where MV1300CurrentLaneTests/MV1307CurrentReversalTests spawn
+        /// their own Rusher, adding ~1.08 m of extra collision push on top of the intended 2 m current
+        /// drift ("got 3.08 m").</summary>
+        private static void InvokeOnDestroy(Object component)
+        {
+            component.GetType().GetMethod("OnDestroy", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(component, null);
+        }
+
         [TearDown]
         public void TearDown() => EnemyNavigation.Reset();
 
@@ -109,6 +123,8 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
+                var gate = go.GetComponent<AreaGate>();
+                if (gate != null) InvokeOnDestroy(gate);
                 Object.DestroyImmediate(go);
             }
         }
