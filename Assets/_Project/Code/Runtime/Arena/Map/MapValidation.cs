@@ -553,6 +553,31 @@ namespace MaxWorlds.Arena
         /// MV-655's per-robot gap.</summary>
         public const float MinPickupCoverGap = 1f;
 
+        /// <summary>MV-1315: clearance a City pylon's footprint must keep from cover and gates, matching
+        /// <see cref="MinBossCoverClearance"/> — chosen over MV-1308's original 3.0 m ask, which no
+        /// existing cover-clearance rule in this project reaches and which 11 of the City's 98 required
+        /// pylon instances could not clear anywhere in their authored 6-10 m ring (Lee's full 360° x
+        /// 6-10 m sweep, MV-1315). One named exemption below; every other relay's pylon(s) resolve to
+        /// this value via <see cref="RequiredPylonCoverClearance"/>.</summary>
+        public const float MinPylonCoverClearance = 2f;
+
+        /// <summary>MV-1315: the one relay <see cref="MinPylonCoverClearance"/> still cannot reach — a5
+        /// (Back Alleys)'s a5_rep1, whose full ring sweep measures 1.85 m best-case against authored
+        /// cover that is not to be thinned or moved (docs/DECISIONS.md section 4, Authority). Named by
+        /// its <see cref="MaxWorlds.Factories.Pylon.Feeds"/> target id, not by pylon id — the exemption
+        /// is the relay being fed, not any particular pylon instance.</summary>
+        public const string PylonClearanceExemptFeeds = "a5_rep1";
+
+        /// <summary>MV-1315: the exempted clearance for the pylon feeding <see cref="PylonClearanceExemptFeeds"/>
+        /// — its measured best case, not a round number.</summary>
+        public const float PylonClearanceExemptValue = 1.85f;
+
+        /// <summary>MV-1315: the cover/gate clearance a City pylon feeding <paramref name="feedsId"/> must
+        /// clear — <see cref="MinPylonCoverClearance"/> for every relay except the one named exemption
+        /// above.</summary>
+        public static float RequiredPylonCoverClearance(string feedsId) =>
+            feedsId == PylonClearanceExemptFeeds ? PylonClearanceExemptValue : MinPylonCoverClearance;
+
         public static bool ValidateWorldConfig(WorldConfig cfg, out string reason)
         {
             if (cfg == null) { reason = "the world config is null"; return false; }
