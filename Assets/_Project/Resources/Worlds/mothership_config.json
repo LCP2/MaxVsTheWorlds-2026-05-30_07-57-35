@@ -1,7 +1,7 @@
 {
   "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
   "world": "World 5 \u2014 The Mothership",
-  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor. MV-1244: added 2 Welder garrison entries each to areas 8/12/22/24 beside cradle 1, and \"welder\": 1 onto every cradle's own composition in areas 8 onward. MV-1310: added \"airlocks\" to every area a1-a30 (a1-a3 one each, a30 two per MV-1313, every other area one), each on the area's own outline, >= 4 m from every gate, >= 6 m from every cradle, with a clear 12 m open-floor cone in front -- via Tools/World5/add_airlock_placements.py.",
+  "revision": "WORLD 5 V3 2026-10-19 (MV-1233): full 30-area layout generated from Tools/World5/generate_mothership_layout.py, reading the Areas tab of MVW_World5_Design.xlsx (47 cradles, 903 robots). Area 1 (MV-1232) carried unchanged; areas 2-30 are new. Welder, Orbitals and plasma vents are later tickets and author no slots here. MV-1238 hand-authored 2 Tractor garrison slots each in a15/a16/a22/a23/a30, per the workbook Areas tab notes -- outside the generator's own pass, so a future re-run of generate_mothership_layout.py will drop them until the generator itself is taught about the Tractor. MV-1244: added 2 Welder garrison entries each to areas 8/12/22/24 beside cradle 1, and \"welder\": 1 onto every cradle's own composition in areas 8 onward. MV-1310: added \"airlocks\" to every area a1-a30 (a1-a3 one each, a30 two per MV-1313, every other area one), each on the area's own outline, >= 4 m from every gate, >= 6 m from every cradle, with a clear 12 m open-floor cone in front -- via Tools/World5/add_airlock_placements.py. MV-1302: added \"canisters\" to every area index>=3 (2-4 each, 83 total), marked 42 eligible cover piece(s) destructible (hp=150) across 21 areas -- via Tools/MV1302/add_canisters_and_cover.py.",
   "note": "MV-1232: Lee's own design image (C:\\Dev\\MaxVsTheWorlds-Images\\MV-1232.png, BUILD MODE: INDICATIVE) is the layout source of truth -- cover/cradle positions and gate pos come from the ticket's own exact numbers; garrison positions are read off the drawing.",
   "units": "1 world unit = 1 metre",
   "wallHeight": 3,
@@ -626,7 +626,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a1_droppod6",
@@ -648,7 +649,8 @@
           "depth": 3,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a1_crate2",
@@ -833,7 +835,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a2_cover5",
@@ -844,7 +847,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a2_cover6",
@@ -1031,7 +1035,8 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         }
       ],
       "composition": {
@@ -1157,6 +1162,18 @@
           "x": 68.0,
           "z": 50.5,
           "facing": "E"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a3_canister1",
+          "x": 106.0,
+          "z": 40.0
+        },
+        {
+          "id": "a3_canister2",
+          "x": 72.0,
+          "z": 50.0
         }
       ]
     },
@@ -1397,6 +1414,28 @@
           "z": 58.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a4_canister1",
+          "x": 78.0,
+          "z": 84.0
+        },
+        {
+          "id": "a4_canister2",
+          "x": 102.0,
+          "z": 92.0
+        },
+        {
+          "id": "a4_canister3",
+          "x": 84.0,
+          "z": 60.0
+        },
+        {
+          "id": "a4_canister4",
+          "x": 108.0,
+          "z": 66.0
+        }
       ]
     },
     {
@@ -1435,7 +1474,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a5_cover3",
@@ -1468,7 +1508,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a5_cover6",
@@ -1490,7 +1531,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a5_cover8",
@@ -1722,6 +1764,28 @@
           "z": 77.0,
           "facing": "W"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a5_canister1",
+          "x": 126.0,
+          "z": 94.0
+        },
+        {
+          "id": "a5_canister2",
+          "x": 148.0,
+          "z": 94.0
+        },
+        {
+          "id": "a5_canister3",
+          "x": 141.0,
+          "z": 66.0
+        },
+        {
+          "id": "a5_canister4",
+          "x": 114.0,
+          "z": 76.0
+        }
       ]
     },
     {
@@ -1771,7 +1835,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a6_cover4",
@@ -1826,7 +1891,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a6_cover9",
@@ -1870,7 +1936,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         }
       ],
       "composition": {
@@ -2076,6 +2143,23 @@
           "z": 128.0,
           "facing": "S"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a6_canister1",
+          "x": 143.0,
+          "z": 126.0
+        },
+        {
+          "id": "a6_canister2",
+          "x": 116.0,
+          "z": 116.0
+        },
+        {
+          "id": "a6_canister3",
+          "x": 150.0,
+          "z": 98.0
+        }
       ]
     },
     {
@@ -2114,7 +2198,8 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         }
       ],
       "composition": {
@@ -2280,6 +2365,23 @@
           "z": 122.5,
           "facing": "E"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a7_canister1",
+          "x": 177.0,
+          "z": 128.0
+        },
+        {
+          "id": "a7_canister2",
+          "x": 156.0,
+          "z": 122.0
+        },
+        {
+          "id": "a7_canister3",
+          "x": 192.0,
+          "z": 112.0
+        }
       ]
     },
     {
@@ -2329,7 +2431,8 @@
           "depth": 2.0,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         }
       ],
       "composition": {
@@ -2601,6 +2704,23 @@
           "z": 130.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a8_canister1",
+          "x": 199.0,
+          "z": 132.0
+        },
+        {
+          "id": "a8_canister2",
+          "x": 149.0,
+          "z": 158.0
+        },
+        {
+          "id": "a8_canister3",
+          "x": 183.0,
+          "z": 162.0
+        }
       ]
     },
     {
@@ -2650,7 +2770,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a9_cover4",
@@ -2672,7 +2793,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a9_cover6",
@@ -2903,6 +3025,28 @@
           "x": 245.0,
           "z": 153.0,
           "facing": "W"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a9_canister1",
+          "x": 243.0,
+          "z": 142.0
+        },
+        {
+          "id": "a9_canister2",
+          "x": 220.0,
+          "z": 142.0
+        },
+        {
+          "id": "a9_canister3",
+          "x": 205.0,
+          "z": 160.0
+        },
+        {
+          "id": "a9_canister4",
+          "x": 230.0,
+          "z": 164.0
         }
       ]
     },
@@ -3161,6 +3305,23 @@
           "z": 190.0,
           "facing": "S"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a10_canister1",
+          "x": 245.0,
+          "z": 188.0
+        },
+        {
+          "id": "a10_canister2",
+          "x": 215.0,
+          "z": 176.0
+        },
+        {
+          "id": "a10_canister3",
+          "x": 236.0,
+          "z": 168.0
+        }
       ]
     },
     {
@@ -3243,7 +3404,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a11_cover7",
@@ -3265,7 +3427,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a11_cover9",
@@ -3287,7 +3450,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a11_cover11",
@@ -3495,6 +3659,28 @@
           "x": 247.0,
           "z": 183.5,
           "facing": "E"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a11_canister1",
+          "x": 251.0,
+          "z": 175.0
+        },
+        {
+          "id": "a11_canister2",
+          "x": 276.0,
+          "z": 165.0
+        },
+        {
+          "id": "a11_canister3",
+          "x": 281.0,
+          "z": 191.0
+        },
+        {
+          "id": "a11_canister4",
+          "x": 262.0,
+          "z": 191.0
         }
       ]
     },
@@ -3795,6 +3981,23 @@
           "z": 193.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a12_canister1",
+          "x": 253.0,
+          "z": 219.0
+        },
+        {
+          "id": "a12_canister2",
+          "x": 277.0,
+          "z": 227.0
+        },
+        {
+          "id": "a12_canister3",
+          "x": 283.0,
+          "z": 201.0
+        }
       ]
     },
     {
@@ -3844,7 +4047,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a13_cover4",
@@ -3910,7 +4114,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a13_cover10",
@@ -3921,7 +4126,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a13_cover11",
@@ -4169,6 +4375,18 @@
           "z": 211.0,
           "facing": "W"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a13_canister1",
+          "x": 289.0,
+          "z": 217.0
+        },
+        {
+          "id": "a13_canister2",
+          "x": 327.0,
+          "z": 199.0
+        }
       ]
     },
     {
@@ -4196,7 +4414,8 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a14_cover2",
@@ -4406,6 +4625,18 @@
           "z": 251.0,
           "facing": "S"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a14_canister1",
+          "x": 291.0,
+          "z": 243.0
+        },
+        {
+          "id": "a14_canister2",
+          "x": 329.0,
+          "z": 233.0
+        }
       ]
     },
     {
@@ -4499,7 +4730,8 @@
           "depth": 2.0,
           "shape": "box",
           "dressing": "ship_glass_case",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a15_cover8",
@@ -4791,6 +5023,18 @@
           "z": 245.5,
           "facing": "E"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a15_canister1",
+          "x": 373.0,
+          "z": 227.0
+        },
+        {
+          "id": "a15_canister2",
+          "x": 335.0,
+          "z": 245.0
+        }
       ]
     },
     {
@@ -4818,7 +5062,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a16_cover2",
@@ -4829,7 +5074,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a16_cover3",
@@ -4873,7 +5119,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a16_cover7",
@@ -5163,6 +5410,23 @@
           "z": 263.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a16_canister1",
+          "x": 342.0,
+          "z": 291.0
+        },
+        {
+          "id": "a16_canister2",
+          "x": 375.0,
+          "z": 265.0
+        },
+        {
+          "id": "a16_canister3",
+          "x": 348.0,
+          "z": 265.0
+        }
       ]
     },
     {
@@ -5190,7 +5454,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a17_cover2",
@@ -5223,7 +5488,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a17_cover5",
@@ -5482,6 +5748,28 @@
           "x": 423.0,
           "z": 281.0,
           "facing": "W"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a17_canister1",
+          "x": 421.0,
+          "z": 269.0
+        },
+        {
+          "id": "a17_canister2",
+          "x": 408.0,
+          "z": 293.0
+        },
+        {
+          "id": "a17_canister3",
+          "x": 381.0,
+          "z": 287.0
+        },
+        {
+          "id": "a17_canister4",
+          "x": 397.0,
+          "z": 269.0
         }
       ]
     },
@@ -5792,6 +6080,18 @@
           "x": 406.0,
           "z": 333.0,
           "facing": "S"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a18_canister1",
+          "x": 391.0,
+          "z": 321.0
+        },
+        {
+          "id": "a18_canister2",
+          "x": 423.0,
+          "z": 303.0
         }
       ]
     },
@@ -6104,6 +6404,23 @@
           "z": 327.5,
           "facing": "E"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a19_canister1",
+          "x": 437.0,
+          "z": 319.0
+        },
+        {
+          "id": "a19_canister2",
+          "x": 459.0,
+          "z": 311.0
+        },
+        {
+          "id": "a19_canister3",
+          "x": 465.0,
+          "z": 333.0
+        }
       ]
     },
     {
@@ -6142,7 +6459,8 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         }
       ],
       "composition": {
@@ -6347,6 +6665,28 @@
           "z": 335.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a20_canister1",
+          "x": 467.0,
+          "z": 337.0
+        },
+        {
+          "id": "a20_canister2",
+          "x": 429.0,
+          "z": 347.0
+        },
+        {
+          "id": "a20_canister3",
+          "x": 446.0,
+          "z": 337.0
+        },
+        {
+          "id": "a20_canister4",
+          "x": 452.0,
+          "z": 355.0
+        }
       ]
     },
     {
@@ -6385,7 +6725,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a21_cover3",
@@ -6418,7 +6759,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a21_cover6",
@@ -6462,7 +6804,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a21_cover10",
@@ -6771,6 +7114,18 @@
           "x": 513.0,
           "z": 343.0,
           "facing": "W"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a21_canister1",
+          "x": 473.0,
+          "z": 349.0
+        },
+        {
+          "id": "a21_canister2",
+          "x": 511.0,
+          "z": 331.0
         }
       ]
     },
@@ -7220,6 +7575,18 @@
           "z": 411.0,
           "facing": "S"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a22_canister1",
+          "x": 513.0,
+          "z": 373.0
+        },
+        {
+          "id": "a22_canister2",
+          "x": 471.0,
+          "z": 391.0
+        }
       ]
     },
     {
@@ -7567,6 +7934,18 @@
           "x": 515.0,
           "z": 405.5,
           "facing": "E"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a23_canister1",
+          "x": 557.0,
+          "z": 411.0
+        },
+        {
+          "id": "a23_canister2",
+          "x": 520.0,
+          "z": 389.0
         }
       ]
     },
@@ -7929,6 +8308,18 @@
           "z": 413.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a24_canister1",
+          "x": 559.0,
+          "z": 421.0
+        },
+        {
+          "id": "a24_canister2",
+          "x": 525.0,
+          "z": 439.0
+        }
       ]
     },
     {
@@ -7956,7 +8347,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a25_cover2",
@@ -7989,7 +8381,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a25_cover5",
@@ -8022,7 +8415,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate_low",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a25_cover8",
@@ -8313,6 +8707,18 @@
           "z": 439.0,
           "facing": "W"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a25_canister1",
+          "x": 599.0,
+          "z": 453.0
+        },
+        {
+          "id": "a25_canister2",
+          "x": 565.0,
+          "z": 435.0
+        }
       ]
     },
     {
@@ -8340,7 +8746,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a26_cover2",
@@ -8384,7 +8791,8 @@
           "depth": 1.4,
           "shape": "box",
           "dressing": "ship_drop_pod",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a26_cover6",
@@ -8706,6 +9114,28 @@
           "z": 483.0,
           "facing": "S"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a26_canister1",
+          "x": 561.0,
+          "z": 475.0
+        },
+        {
+          "id": "a26_canister2",
+          "x": 603.0,
+          "z": 457.0
+        },
+        {
+          "id": "a26_canister3",
+          "x": 589.0,
+          "z": 481.0
+        },
+        {
+          "id": "a26_canister4",
+          "x": 578.0,
+          "z": 457.0
+        }
       ]
     },
     {
@@ -8744,7 +9174,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a27_cover3",
@@ -8766,7 +9197,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a27_cover5",
@@ -8821,7 +9253,8 @@
           "depth": 3.0,
           "shape": "box",
           "dressing": "ship_crate",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a27_cover10",
@@ -9147,6 +9580,28 @@
           "x": 605.0,
           "z": 473.0,
           "facing": "E"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a27_canister1",
+          "x": 649.0,
+          "z": 453.0
+        },
+        {
+          "id": "a27_canister2",
+          "x": 625.0,
+          "z": 453.0
+        },
+        {
+          "id": "a27_canister3",
+          "x": 640.0,
+          "z": 485.0
+        },
+        {
+          "id": "a27_canister4",
+          "x": 609.0,
+          "z": 471.0
         }
       ]
     },
@@ -9507,6 +9962,18 @@
           "z": 487.0,
           "facing": "N"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a28_canister1",
+          "x": 611.0,
+          "z": 491.0
+        },
+        {
+          "id": "a28_canister2",
+          "x": 651.0,
+          "z": 513.0
+        }
       ]
     },
     {
@@ -9534,7 +10001,8 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a29_cover2",
@@ -9818,6 +10286,28 @@
           "z": 505.0,
           "facing": "W"
         }
+      ],
+      "canisters": [
+        {
+          "id": "a29_canister1",
+          "x": 681.0,
+          "z": 495.0
+        },
+        {
+          "id": "a29_canister2",
+          "x": 671.0,
+          "z": 515.0
+        },
+        {
+          "id": "a29_canister3",
+          "x": 695.0,
+          "z": 515.0
+        },
+        {
+          "id": "a29_canister4",
+          "x": 657.0,
+          "z": 497.0
+        }
       ]
     },
     {
@@ -9909,7 +10399,8 @@
           "depth": 1.5,
           "shape": "box",
           "dressing": "ship_console_bank",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0
         },
         {
           "id": "a30_cover7",
@@ -10155,6 +10646,28 @@
           "x": 669.0,
           "z": 557.0,
           "facing": "S"
+        }
+      ],
+      "canisters": [
+        {
+          "id": "a30_canister1",
+          "x": 703.0,
+          "z": 549.0
+        },
+        {
+          "id": "a30_canister2",
+          "x": 684.0,
+          "z": 519.0
+        },
+        {
+          "id": "a30_canister3",
+          "x": 649.0,
+          "z": 525.0
+        },
+        {
+          "id": "a30_canister4",
+          "x": 668.0,
+          "z": 555.0
         }
       ]
     }

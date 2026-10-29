@@ -899,22 +899,31 @@ namespace MaxWorlds.Arena
         /// permanently enabled, orphaned from the gate that correctly hides their own parent crate body
         /// the instant its zone goes inactive. With the body gone dark and the caps left lit, all that
         /// was left drawing was four thin orange slivers where a full crate should be — Lee's own "one
-        /// slab ... part-drawn" (MV-1052). Found by walking every static cover body already in
-        /// <see cref="_statics"/> for a "Corner Caps" child, rather than re-deriving a crate's own
-        /// identity here — every cap is tagged with the SAME zone ids its own parent body already
-        /// carries, so it tracks the gate exactly as that body does without needing its own probe.</summary>
+        /// slab ... part-drawn" (MV-1052).
+        ///
+        /// MV-1302: walks a SNAPSHOT of every renderer already in <see cref="_rendererZones"/>, not
+        /// just <see cref="_statics"/> — a destructible crate's own body (<c>hp &gt; 0</c>,
+        /// <see cref="BuildProps"/>'s MV-1298 branch) is deliberately never added to <see cref="_statics"/>
+        /// (it must keep its own un-combined renderer for <see cref="MaxWorlds.Factories.DestructibleCover"/>'s
+        /// crack/break stages) but IS still <c>TagStatic</c>'d into <see cref="_rendererZones"/>, so the
+        /// old <see cref="_statics"/>-only walk never found its "Corner Caps" child either — the same
+        /// orphaned-cap defect MV-1052 fixed, reintroduced the moment MV-1302 made the first Reef crate
+        /// (dressing <c>reef_crate</c>, which carries corner caps) destructible. A snapshot, not the live
+        /// dictionary, because <see cref="AddRendererZones"/> below adds the cap renderers themselves as
+        /// NEW keys to <see cref="_rendererZones"/> — mutating it while enumerating it directly would
+        /// throw. Every cap is tagged with the SAME zone ids its own parent body already carries, so it
+        /// tracks the gate exactly as that body does without needing its own probe.</summary>
         private void TagCrateCornerCaps()
         {
-            if (_statics == null) return;
+            if (_rendererZones == null) return;
 
-            foreach (GameObject go in _statics)
+            foreach (Renderer body in new List<Renderer>(_rendererZones.Keys))
             {
-                if (go == null) continue;
-                Transform caps = go.transform.Find("Corner Caps");
+                if (body == null) continue;
+                Transform caps = body.transform.Find("Corner Caps");
                 if (caps == null) continue;
 
-                Renderer body = go.GetComponent<Renderer>();
-                if (body == null || !_rendererZones.TryGetValue(body, out List<string> zones)) continue;
+                if (!_rendererZones.TryGetValue(body, out List<string> zones)) continue;
 
                 foreach (Renderer cap in caps.GetComponentsInChildren<Renderer>(true))
                     AddRendererZones(cap, zones);
