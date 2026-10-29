@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 4 \u2014 The Reef",
- "revision": "WORLD 4 Reef V9 2026-10-19: hull-fill pieces (aN_hM) dressed as reef_bulkhead and raised to wall height 3.0 (were plain 1.8 m 'none' slabs); nothing else changed. Previous: WORLD 4 Reef V8 2026-10-17: interiors re-authored with the Reef structure kit (MV-1215) from MVW_World4_Reef_Level_Design_V8; footprints, route, gates, garrison, sheds, hull fill and dials unchanged; a15 and stub unchanged. Previous: WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed.",
+ "revision": "WORLD 4 Reef V9 2026-10-19: hull-fill pieces (aN_hM) dressed as reef_bulkhead and raised to wall height 3.0 (were plain 1.8 m 'none' slabs); nothing else changed. Previous: WORLD 4 Reef V8 2026-10-17: interiors re-authored with the Reef structure kit (MV-1215) from MVW_World4_Reef_Level_Design_V8; footprints, route, gates, garrison, sheds, hull fill and dials unchanged; a15 and stub unchanged. Previous: WORLD 3 v4 2026-09-30 (Lee's MVW_World3_Level_Design_V6 'The Maelstrom'): double-spiral route - in to the ship's heart (a15 boss), back out to the bow (a30, exit E); 30 larger areas shaped by solid hull fill; no decks, bridges or piers. Dials/enemyTypes/enemyOverrides unchanged, so every area's robot composition is unchanged; pre-placed garrison authored at the positions the game would seed. MV-1302: added \"canisters\" to every area index>=3 (2-4 each, 83 total), marked 69 eligible cover piece(s) destructible (hp=150) across 29 areas -- via Tools/MV1302/add_canisters_and_cover.py.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 3,
@@ -932,7 +932,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a1_k2",
@@ -976,7 +977,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a1_k6",
@@ -998,7 +1000,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a1_k8",
@@ -1020,7 +1023,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a1_k10",
@@ -1265,7 +1269,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a2_c14",
@@ -1717,7 +1722,8 @@
      "depth": 3,
      "shape": "cylinder",
      "dressing": "reef_drum",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a3_k3",
@@ -1870,6 +1876,28 @@
      "dir": "E",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a3_canister1",
+     "x": 60.0,
+     "z": 26.0
+    },
+    {
+     "id": "a3_canister2",
+     "x": 58.0,
+     "z": 2.0
+    },
+    {
+     "id": "a3_canister3",
+     "x": 38.0,
+     "z": 26.0
+    },
+    {
+     "id": "a3_canister4",
+     "x": 30.0,
+     "z": 6.0
+    }
    ]
   },
   {
@@ -1995,7 +2023,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a4_k2",
@@ -2006,7 +2035,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a4_k3",
@@ -2178,6 +2208,28 @@
      "dir": "W",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a4_canister1",
+     "x": 65.0,
+     "z": 5.0
+    },
+    {
+     "id": "a4_canister2",
+     "x": 98.0,
+     "z": 2.0
+    },
+    {
+     "id": "a4_canister3",
+     "x": 64.0,
+     "z": 26.0
+    },
+    {
+     "id": "a4_canister4",
+     "x": 84.0,
+     "z": 14.0
+    }
    ]
   },
   {
@@ -2248,7 +2300,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a5_c6",
@@ -2347,7 +2400,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     }
    ],
    "sludge": [
@@ -2507,6 +2561,18 @@
      "dir": "W",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a5_canister1",
+     "x": 104.0,
+     "z": 19.0
+    },
+    {
+     "id": "a5_canister2",
+     "x": 134.0,
+     "z": 9.0
+    }
    ]
   },
   {
@@ -2555,7 +2621,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a6_c4",
@@ -2566,7 +2633,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a6_c5",
@@ -2610,7 +2678,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a6_c9",
@@ -2687,7 +2756,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a6_c16",
@@ -2709,7 +2779,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a6_c18",
@@ -2933,6 +3004,23 @@
      "d": 4,
      "dir": "W",
      "speed": 2
+    }
+   ],
+   "canisters": [
+    {
+     "id": "a6_canister1",
+     "x": 138.0,
+     "z": 6.0
+    },
+    {
+     "id": "a6_canister2",
+     "x": 161.0,
+     "z": 2.0
+    },
+    {
+     "id": "a6_canister3",
+     "x": 170.0,
+     "z": 23.0
     }
    ]
   },
@@ -3158,7 +3246,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a7_c20",
@@ -3180,7 +3269,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a7_c22",
@@ -3202,7 +3292,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a7_k2",
@@ -3224,7 +3315,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a7_k4",
@@ -3391,6 +3483,23 @@
      "d": 15,
      "dir": "S",
      "speed": 2
+    }
+   ],
+   "canisters": [
+    {
+     "id": "a7_canister1",
+     "x": 198.0,
+     "z": 34.0
+    },
+    {
+     "id": "a7_canister2",
+     "x": 174.0,
+     "z": 27.0
+    },
+    {
+     "id": "a7_canister3",
+     "x": 174.0,
+     "z": 2.0
     }
    ]
   },
@@ -3913,7 +4022,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a8_k5",
@@ -3935,7 +4045,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     }
    ],
    "sludge": [],
@@ -4140,6 +4251,23 @@
      "dir": "S",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a8_canister1",
+     "x": 194.0,
+     "z": 70.0
+    },
+    {
+     "id": "a8_canister2",
+     "x": 174.0,
+     "z": 38.0
+    },
+    {
+     "id": "a8_canister3",
+     "x": 198.0,
+     "z": 45.0
+    }
    ]
   },
   {
@@ -4265,7 +4393,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a9_k2",
@@ -4287,7 +4416,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a9_k4",
@@ -4490,6 +4620,23 @@
      "dir": "S",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a9_canister1",
+     "x": 198.0,
+     "z": 104.0
+    },
+    {
+     "id": "a9_canister2",
+     "x": 198.0,
+     "z": 74.0
+    },
+    {
+     "id": "a9_canister3",
+     "x": 174.0,
+     "z": 78.0
+    }
    ]
   },
   {
@@ -4659,7 +4806,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a10_c15",
@@ -4692,7 +4840,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a10_c18",
@@ -4703,7 +4852,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a10_c19",
@@ -4976,6 +5126,28 @@
      "dir": "S",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a10_canister1",
+     "x": 198.0,
+     "z": 108.0
+    },
+    {
+     "id": "a10_canister2",
+     "x": 198.0,
+     "z": 126.0
+    },
+    {
+     "id": "a10_canister3",
+     "x": 174.0,
+     "z": 114.0
+    },
+    {
+     "id": "a10_canister4",
+     "x": 188.0,
+     "z": 140.0
+    }
    ]
   },
   {
@@ -5112,7 +5284,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a11_k3",
@@ -5386,6 +5559,23 @@
      "dir": "E",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a11_canister1",
+     "x": 132.0,
+     "z": 102.0
+    },
+    {
+     "id": "a11_canister2",
+     "x": 170.0,
+     "z": 140.0
+    },
+    {
+     "id": "a11_canister3",
+     "x": 132.0,
+     "z": 140.0
+    }
    ]
   },
   {
@@ -5489,7 +5679,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a12_k1",
@@ -5533,7 +5724,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a12_k5",
@@ -5784,6 +5976,18 @@
      "dir": "E",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a12_canister1",
+     "x": 103.0,
+     "z": 121.0
+    },
+    {
+     "id": "a12_canister2",
+     "x": 128.0,
+     "z": 140.0
+    }
    ]
   },
   {
@@ -6019,7 +6223,8 @@
      "depth": 4,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a13_c21",
@@ -6303,6 +6508,18 @@
      "dir": "N",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a13_canister1",
+     "x": 30.0,
+     "z": 102.0
+    },
+    {
+     "id": "a13_canister2",
+     "x": 86.0,
+     "z": 140.0
+    }
    ]
   },
   {
@@ -6428,7 +6645,8 @@
      "depth": 3,
      "shape": "cylinder",
      "dressing": "reef_drum",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a14_k2",
@@ -6483,7 +6701,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     }
    ],
    "sludge": [],
@@ -6806,6 +7025,18 @@
      "d": 4,
      "dir": "W",
      "speed": 2
+    }
+   ],
+   "canisters": [
+    {
+     "id": "a14_canister1",
+     "x": 58.0,
+     "z": 72.0
+    },
+    {
+     "id": "a14_canister2",
+     "x": 98.0,
+     "z": 86.0
     }
    ]
   },
@@ -7362,7 +7593,24 @@
      "w": 3.6,
      "d": 3.6
     }
-   }
+   },
+   "canisters": [
+    {
+     "id": "a15_canister1",
+     "x": 116.0,
+     "z": 78.0
+    },
+    {
+     "id": "a15_canister2",
+     "x": 131.0,
+     "z": 98.0
+    },
+    {
+     "id": "a15_canister3",
+     "x": 142.0,
+     "z": 69.0
+    }
+   ]
   },
   {
    "id": "a16",
@@ -7410,7 +7658,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a16_c4",
@@ -7443,7 +7692,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a16_c7",
@@ -7454,7 +7704,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a16_c8",
@@ -7487,7 +7738,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a16_c11",
@@ -7874,6 +8126,23 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a16_canister1",
+     "x": 170.0,
+     "z": 73.0
+    },
+    {
+     "id": "a16_canister2",
+     "x": 170.0,
+     "z": 98.0
+    },
+    {
+     "id": "a16_canister3",
+     "x": 146.0,
+     "z": 65.0
+    }
    ]
   },
   {
@@ -7922,7 +8191,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a17_c4",
@@ -7933,7 +8203,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a17_c5",
@@ -8418,6 +8689,23 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a17_canister1",
+     "x": 140.0,
+     "z": 30.0
+    },
+    {
+     "id": "a17_canister2",
+     "x": 145.0,
+     "z": 54.0
+    },
+    {
+     "id": "a17_canister3",
+     "x": 170.0,
+     "z": 54.0
+    }
    ]
   },
   {
@@ -8444,7 +8732,8 @@
      "depth": 9,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a18_c2",
@@ -8477,7 +8766,8 @@
      "depth": 6,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a18_c5",
@@ -8521,7 +8811,8 @@
      "depth": 9,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a18_c9",
@@ -8565,7 +8856,8 @@
      "depth": 8,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a18_c13",
@@ -9001,6 +9293,23 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a18_canister1",
+     "x": 117.0,
+     "z": 32.0
+    },
+    {
+     "id": "a18_canister2",
+     "x": 132.0,
+     "z": 54.0
+    },
+    {
+     "id": "a18_canister3",
+     "x": 102.0,
+     "z": 54.0
+    }
    ]
   },
   {
@@ -9115,7 +9424,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a19_k2",
@@ -9317,6 +9627,18 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a19_canister1",
+     "x": 82.0,
+     "z": 42.0
+    },
+    {
+     "id": "a19_canister2",
+     "x": 66.0,
+     "z": 30.0
+    }
    ]
   },
   {
@@ -9453,7 +9775,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a20_c12",
@@ -9475,7 +9798,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a20_k2",
@@ -9954,6 +10278,28 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a20_canister1",
+     "x": 30.0,
+     "z": 38.0
+    },
+    {
+     "id": "a20_canister2",
+     "x": 62.0,
+     "z": 54.0
+    },
+    {
+     "id": "a20_canister3",
+     "x": 54.0,
+     "z": 30.0
+    },
+    {
+     "id": "a20_canister4",
+     "x": 42.0,
+     "z": 54.0
+    }
    ]
   },
   {
@@ -9980,7 +10326,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a21_c2",
@@ -10068,7 +10415,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a21_k2",
@@ -10535,6 +10883,28 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a21_canister1",
+     "x": 30.0,
+     "z": 83.0
+    },
+    {
+     "id": "a21_canister2",
+     "x": 30.0,
+     "z": 58.0
+    },
+    {
+     "id": "a21_canister3",
+     "x": 54.0,
+     "z": 71.0
+    },
+    {
+     "id": "a21_canister4",
+     "x": 50.0,
+     "z": 98.0
+    }
    ]
   },
   {
@@ -10759,7 +11129,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a22_k2",
@@ -11152,6 +11523,18 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a22_canister1",
+     "x": 2.0,
+     "z": 64.0
+    },
+    {
+     "id": "a22_canister2",
+     "x": 21.0,
+     "z": 100.0
+    }
    ]
   },
   {
@@ -11288,7 +11671,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a23_k3",
@@ -11310,7 +11694,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a23_k5",
@@ -11825,6 +12210,23 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a23_canister1",
+     "x": 26.0,
+     "z": 115.0
+    },
+    {
+     "id": "a23_canister2",
+     "x": 2.0,
+     "z": 104.0
+    },
+    {
+     "id": "a23_canister3",
+     "x": 21.0,
+     "z": 140.0
+    }
    ]
   },
   {
@@ -12005,7 +12407,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a24_c16",
@@ -12060,7 +12463,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a24_k3",
@@ -12659,6 +13063,18 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a24_canister1",
+     "x": 34.0,
+     "z": 144.0
+    },
+    {
+     "id": "a24_canister2",
+     "x": 8.0,
+     "z": 167.0
+    }
    ]
   },
   {
@@ -12861,7 +13277,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_pillar",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a25_k4",
@@ -12883,7 +13300,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_console",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a25_k6",
@@ -13390,6 +13808,18 @@
      "speed": 2,
      "reverseEvery": 10
     }
+   ],
+   "canisters": [
+    {
+     "id": "a25_canister1",
+     "x": 38.0,
+     "z": 148.0
+    },
+    {
+     "id": "a25_canister2",
+     "x": 67.0,
+     "z": 174.0
+    }
    ]
   },
   {
@@ -13515,7 +13945,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a26_k2",
@@ -13526,7 +13957,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_manifold",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a26_k3",
@@ -13567,7 +13999,29 @@
     }
    ],
    "wallDressing": "pipes",
-   "roomType": "engine_room"
+   "roomType": "engine_room",
+   "canisters": [
+    {
+     "id": "a26_canister1",
+     "x": 103.0,
+     "z": 173.0
+    },
+    {
+     "id": "a26_canister2",
+     "x": 74.0,
+     "z": 174.0
+    },
+    {
+     "id": "a26_canister3",
+     "x": 91.0,
+     "z": 144.0
+    },
+    {
+     "id": "a26_canister4",
+     "x": 124.0,
+     "z": 153.0
+    }
+   ]
   },
   {
    "id": "a27",
@@ -13747,7 +14201,8 @@
      "depth": 2,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a27_c16",
@@ -14392,6 +14847,23 @@
      "dir": "W",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a27_canister1",
+     "x": 148.0,
+     "z": 158.0
+    },
+    {
+     "id": "a27_canister2",
+     "x": 164.0,
+     "z": 174.0
+    },
+    {
+     "id": "a27_canister3",
+     "x": 134.0,
+     "z": 174.0
+    }
    ]
   },
   {
@@ -14550,7 +15022,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c14",
@@ -14561,7 +15034,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c15",
@@ -14616,7 +15090,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c20",
@@ -14638,7 +15113,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c22",
@@ -14649,7 +15125,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c23",
@@ -14660,7 +15137,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a28_c24",
@@ -15451,6 +15929,28 @@
      "dir": "W",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a28_canister1",
+     "x": 188.0,
+     "z": 148.0
+    },
+    {
+     "id": "a28_canister2",
+     "x": 168.0,
+     "z": 153.0
+    },
+    {
+     "id": "a28_canister3",
+     "x": 193.0,
+     "z": 169.0
+    },
+    {
+     "id": "a28_canister4",
+     "x": 172.0,
+     "z": 174.0
+    }
    ]
   },
   {
@@ -15543,7 +16043,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a29_c8",
@@ -15565,7 +16066,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a29_c10",
@@ -16476,6 +16978,23 @@
      "dir": "W",
      "speed": 2
     }
+   ],
+   "canisters": [
+    {
+     "id": "a29_canister1",
+     "x": 230.0,
+     "z": 144.0
+    },
+    {
+     "id": "a29_canister2",
+     "x": 212.0,
+     "z": 161.0
+    },
+    {
+     "id": "a29_canister3",
+     "x": 230.0,
+     "z": 174.0
+    }
    ]
   },
   {
@@ -16546,7 +17065,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a30_c6",
@@ -16612,7 +17132,8 @@
      "depth": 1,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a30_c12",
@@ -16623,7 +17144,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a30_c13",
@@ -16634,7 +17156,8 @@
      "depth": 5,
      "shape": "box",
      "dressing": "reef_crate",
-     "coverKind": "solid"
+     "coverKind": "solid",
+     "hp": 150.0
     },
     {
      "id": "a30_c14",
@@ -16766,7 +17289,24 @@
     }
    ],
    "wallDressing": "racks",
-   "roomType": "cargo_hold"
+   "roomType": "cargo_hold",
+   "canisters": [
+    {
+     "id": "a30_canister1",
+     "x": 248.0,
+     "z": 156.0
+    },
+    {
+     "id": "a30_canister2",
+     "x": 274.0,
+     "z": 130.0
+    },
+    {
+     "id": "a30_canister3",
+     "x": 274.0,
+     "z": 182.0
+    }
+   ]
   }
  ]
 }
