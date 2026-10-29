@@ -1396,5 +1396,91 @@ namespace MaxWorlds.Arena
             foreach (WorldArea a in cfg.areas) if (a.IsEntryRole) return a;
             return null;
         }
+
+        // --- MV-1314: destructible-cover eligibility rule. MV-1302 AC1 ("every world has destructible
+        // cover in >= 20 areas") found the Mothership's hull/footprint rules left it at 10/30 areas —
+        // structural, not a tuning problem. Lee's decision (2026-10-29): raise the footprint cap to
+        // 10 m² AND carve small hull-named pieces (<= 6 m²) out of the hull exclusion. MV-1302 itself is
+        // still unbuilt (blocked by this ticket) and will mark cover hp>0 against exactly this rule once
+        // it lands; this is the one rule both it and this ticket's own test read. ---
+
+        /// <summary>Largest footprint a solid cover piece may have and still be eligible for
+        /// destructible marking (MV-1314) — raised from the original 6 m² so a 3x3 m <c>ship_crate</c>
+        /// (9 m²) qualifies.</summary>
+        public const float DestructibleCoverFootprintCapSqm = 10f;
+
+        /// <summary>A hull-named piece (<see cref="IsHullDressing"/>) at or under this footprint is a
+        /// small prop reusing that dressing, not wall-forming structure, and is eligible despite its
+        /// name (MV-1314) — the Mothership's own 2.56-4.0 m² <c>ship_bulkhead_stub</c> instances, never
+        /// its 30-59 m² wall sections.</summary>
+        public const float DestructibleCoverHullCarveOutSqm = 6f;
+
+        /// <summary>Closest a solid cover piece's centre may sit to a resolved gate mouth and still be
+        /// eligible for destructible marking (MV-1314, unchanged from MV-1302's original rule) —
+        /// breaking it must never open a second doorway next to the real one.</summary>
+        public const float DestructibleCoverGateClearance = 2f;
+
+        /// <summary>True for a dressing that forms hull/outline structure ("Mothership bulkheads...
+        /// anything forming the area outline") — every world's wall-forming cover dressing carries
+        /// "bulkhead" in its name (<c>ship_bulkhead_stub</c>, <c>reef_bulkhead</c>) and nothing else
+        /// does, so a substring match is exact today and stays forward-compatible with a future world's
+        /// own hull dressing.</summary>
+        public static bool IsHullDressing(string dressing) =>
+            !string.IsNullOrEmpty(dressing) &&
+            dressing.IndexOf("bulkhead", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>True if <paramref name="cover"/> itself clears MV-1314's rule: solid, within the
+        /// footprint cap, and either not hull-named or small enough to not be wall-forming. Gate
+        /// clearance needs the resolved <see cref="MapData"/> and is checked separately by
+        /// <see cref="CountAreasWithEligibleDestructibleCover"/>.</summary>
+        public static bool IsEligibleForDestructibleCover(WorldCover cover)
+        {
+            if (cover == null) return false;
+            if (MapEnums.CoverBehaviour(cover.coverKind) != CoverKind.Solid) return false;
+
+            float footprint = cover.width * cover.depth;
+            if (footprint > DestructibleCoverFootprintCapSqm) return false;
+            if (IsHullDressing(cover.dressing) && footprint > DestructibleCoverHullCarveOutSqm) return false;
+
+            return true;
+        }
+
+        /// <summary>How many of <paramref name="cfg"/>'s areas carry at least one cover piece eligible
+        /// under MV-1314's rule — the number this ticket's own test asserts against, and what MV-1302
+        /// will call to mark cover destructible once it lands. <paramref name="map"/> supplies resolved
+        /// gate-mouth positions for the clearance check, same <see cref="WorldMapLoader.TryLoad"/> build
+        /// every other caller already holds.</summary>
+        public static int CountAreasWithEligibleDestructibleCover(WorldConfig cfg, MapData map)
+        {
+            if (cfg?.areas == null) return 0;
+
+            var gates = new List<Vector2>();
+            if (map?.entities != null)
+                foreach (MapEntity e in map.entities)
+                    if (e != null && e.Kind == EntityKind.AreaGate) gates.Add(new Vector2(e.x, e.z));
+
+            int count = 0;
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area?.cover == null) continue;
+
+                foreach (WorldCover cover in area.cover)
+                {
+                    if (!IsEligibleForDestructibleCover(cover)) continue;
+
+                    var p = new Vector2(cover.x, cover.z);
+                    bool nearGate = false;
+                    foreach (Vector2 g in gates)
+                        if (Vector2.Distance(p, g) < DestructibleCoverGateClearance) { nearGate = true; break; }
+
+                    if (nearGate) continue;
+
+                    count++;
+                    break; // one eligible piece is enough to count this area
+                }
+            }
+
+            return count;
+        }
     }
 }
