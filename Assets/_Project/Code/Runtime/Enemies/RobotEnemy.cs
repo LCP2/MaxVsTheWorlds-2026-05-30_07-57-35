@@ -383,6 +383,8 @@ namespace MaxWorlds.Enemies
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
             WelderCutTarget = null; // MV-1312: nor a previous Welder life's airlock-cut target
             _welderCutElapsed = 0f;
+            WelderRebuildTarget = null; // MV-1311: nor a previous Welder life's pylon-rebuild target
+            _welderPylonRebuildElapsed = 0f;
             _projectorRetargetTimer = 0f; // MV-1279: nor a previous Projector life's stale retarget countdown
             DropDomeVisualImmediate(); // MV-1284: nor a previous Projector life's stale dome state/visual
             _jammerRetargetTimer = 0f; // MV-1280: nor a previous Jammer life's stale retarget countdown
@@ -3820,24 +3822,64 @@ namespace MaxWorlds.Enemies
         /// finishes or is abandoned.</summary>
         private float _welderCutElapsed;
 
+        /// <summary>The Welder's own destroyed pylon mid-rebuild, right now (MV-1311) — null whenever it
+        /// isn't mid-channel. Same "meaningless outside the relevant state" footing as
+        /// <see cref="WelderRepairTarget"/>/<see cref="WelderCutTarget"/>; read by
+        /// <see cref="MaxWorlds.VFX.RobotRig"/> to draw the (reused) beam.</summary>
+        public Pylon WelderRebuildTarget { get; private set; }
+
+        /// <summary>MV-1311: how close the Welder must close to a DOWN pylon before the 6 s rebuild beam
+        /// starts counting — the ticket's own "walks to within 2 m".</summary>
+        private const float WelderPylonRebuildArriveRange = 2f;
+
+        /// <summary>MV-1311: the ticket's own beam duration, "beams it for 6 s".</summary>
+        private const float WelderPylonRebuildSeconds = 6f;
+
+        /// <summary>Seconds into the current <see cref="WelderRebuildTarget"/>'s beam so far — only
+        /// counts once the Welder is within <see cref="WelderPylonRebuildArriveRange"/>, reset whenever a
+        /// rebuild starts, finishes or the target changes.</summary>
+        private float _welderPylonRebuildElapsed;
+
         /// <summary>Replaces the whole Chase/Telegraph/Lunge pipeline for <see cref="EnemyKind.Welder"/>
         /// (dispatched from <see cref="TickBody"/>'s own switch instead of <see cref="TickChase"/>) —
         /// this kind never attacks Max or a Sentinel, so there is nothing here to wind up or commit to.
-        /// Finds the nearest damaged <see cref="AssemblyCradle"/> in this robot's own
-        /// <see cref="AreaIndex"/> within <see cref="lungeRange"/> (the archetype's own "one field,
-        /// several doors" detection/repair range, see <see cref="EnemyArchetype.Welder"/>'s doc comment)
-        /// and heals it at <see cref="WelderRepairPerSecond"/> HP/s for every tick it stays in range —
-        /// the ticket's own AC1 ticks this with the Welder merely "within 20 m", with no extra arrival
-        /// distance to cross first, so the heal is unconditional on range alone, not on having closed
-        /// the gap. It still flies toward the cradle while healing it (the ticket's own "flies to ...
-        /// and repairs it"), gliding straight at it rather than routing around cover
-        /// (<see cref="TickChase"/>'s own waypoint/wall-latch machinery is built around chasing Max room
-        /// to room; a Welder's own cradle sits in the same room it was garrisoned in, per the ticket's
-        /// own placements). MV-1312: "a Welder with no cradle to repair" — nothing damaged in range —
-        /// falls through to <see cref="TickWelderAirlockCut"/> instead of sitting idle.</summary>
+        /// Finds the nearest <see cref="IRepairable"/> in this robot's own <see cref="AreaIndex"/> within
+        /// <see cref="lungeRange"/> (the archetype's own "one field, several doors" detection/repair
+        /// range, see <see cref="EnemyArchetype.Welder"/>'s doc comment) via
+        /// <see cref="RepairableRegistry.NearestDamagedInArea"/> — MV-1311's generalization of what used
+        /// to be a hard-wired <c>AssemblyCradle.NearestDamagedInArea</c> call.
+        ///
+        /// A DOWN <see cref="Pylon"/> (<see cref="IRepairable.IsDown"/>) is handed to
+        /// <see cref="TickWelderPylonRebuild"/> — the ticket's own walk-up-and-beam-for-6s-then-revive
+        /// flow, nothing like the continuous trickle below. Anything else found is treated the exact same
+        /// way Mothership always has (unchanged — AC1 ticks this with the Welder merely "within 20 m",
+        /// with no extra arrival distance to cross first, so the heal is unconditional on range alone, not
+        /// on having closed the gap): heals it at <see cref="WelderRepairPerSecond"/> HP/s for every tick
+        /// it stays in range while flying straight at it (the ticket's own "flies to ... and repairs it"),
+        /// gliding rather than routing around cover (<see cref="TickChase"/>'s own waypoint/wall-latch
+        /// machinery is built around chasing Max room to room; a Welder's own cradle sits in the same room
+        /// it was garrisoned in, per the ticket's own placements). <see cref="WelderRepairTarget"/> is only
+        /// ever set to an <see cref="AssemblyCradle"/> (the sole type Mothership ever registers), kept
+        /// exactly as before so <see cref="MaxWorlds.VFX.RobotRig"/>'s own beam draw needs no change for
+        /// that path. MV-1312: nothing found at all — falls through to
+        /// <see cref="TickWelderAirlockCut"/> instead of sitting idle.</summary>
         private void TickWelderRepair(float dt)
         {
-            AssemblyCradle cradle = AssemblyCradle.NearestDamagedInArea(transform.position, AreaIndex, lungeRange);
+            IRepairable found = RepairableRegistry.NearestDamagedInArea(transform.position, AreaIndex, lungeRange);
+
+            if (found is Pylon downPylon && downPylon.IsDown)
+            {
+                WelderRepairTarget = null;
+                WelderCutTarget = null;
+                _welderCutElapsed = 0f;
+                TickWelderPylonRebuild(dt, downPylon);
+                return;
+            }
+
+            WelderRebuildTarget = null;
+            _welderPylonRebuildElapsed = 0f;
+
+            AssemblyCradle cradle = found as AssemblyCradle;
             WelderRepairTarget = cradle;
             if (cradle == null)
             {
@@ -3860,6 +3902,50 @@ namespace MaxWorlds.Enemies
             RotateToward(dir, dt);
             float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
             CharacterControllerMotion.SafeMove(_cc, dir * step);
+        }
+
+        /// <summary>MV-1311: a Welder's own pylon-rebuild beam, reached when <see cref="TickWelderRepair"/>'s
+        /// generalized lookup finds a DESTROYED <see cref="Pylon"/> in range instead of a damaged
+        /// <see cref="AssemblyCradle"/>. Same approach-then-beam shape as
+        /// <see cref="TickWelderAirlockCut"/>: walks straight at it until within
+        /// <see cref="WelderPylonRebuildArriveRange"/>, then beams for
+        /// <see cref="WelderPylonRebuildSeconds"/> before reviving it in one shot
+        /// (<see cref="Pylon.Heal"/>) — the ticket's own "at the end the pylon stands again at full
+        /// health", not a continuous HP/s trickle. Killing the Welder mid-beam cancels the rebuild for
+        /// free: a dead Welder's <see cref="Tick"/> never runs again, so this method simply stops being
+        /// called and <see cref="_welderPylonRebuildElapsed"/> never reaches
+        /// <see cref="WelderPylonRebuildSeconds"/>.</summary>
+        private void TickWelderPylonRebuild(float dt, Pylon pylon)
+        {
+            if (WelderRebuildTarget != pylon)
+            {
+                WelderRebuildTarget = pylon;
+                _welderPylonRebuildElapsed = 0f;
+            }
+
+            Vector3 to = pylon.transform.position - transform.position;
+            to.y = 0f;
+            float dist = to.magnitude;
+
+            if (dist > WelderPylonRebuildArriveRange)
+            {
+                if (dist > 0.001f)
+                {
+                    Vector3 dir = to / dist;
+                    RotateToward(dir, dt);
+                    float step = Mathf.Min(EffectiveMoveSpeed * dt, dist - WelderPylonRebuildArriveRange);
+                    CharacterControllerMotion.SafeMove(_cc, dir * step);
+                }
+                return; // still closing the gap — the 6 s beam only counts once arrived
+            }
+
+            _welderPylonRebuildElapsed += dt;
+            if (_welderPylonRebuildElapsed >= WelderPylonRebuildSeconds)
+            {
+                pylon.Heal(1f); // any positive amount — Pylon.Heal revives outright while IsDown
+                WelderRebuildTarget = null;
+                _welderPylonRebuildElapsed = 0f;
+            }
         }
 
         /// <summary>MV-1312 — "Mothership twist: Welders cut airlocks open on Max". Reached only when
