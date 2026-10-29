@@ -29,7 +29,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     [MaxWorlds.Core.PerfSection("assembly_cradle")]
-    public sealed class AssemblyCradle : MonoBehaviour, IDamageable, IFactoryBody, IHealthReadout
+    public sealed class AssemblyCradle : MonoBehaviour, IDamageable, IFactoryBody, IHealthReadout, IRepairable
     {
         /// <summary><see cref="Standby"/> (MV-1297) is the "room-starved" state: a build was about to
         /// start but the field-wide robot budget had no room, so this cradle never played the animation
@@ -111,16 +111,11 @@ namespace MaxWorlds.Factories
         private ShedFittingKind _turretKind = ShedFittingKind.None;
         private Transform _maxTransform;
 
-        // --- MV-1244: a field-wide registry of every built cradle, so a Welder
-        // (RobotEnemy.TickWelderRepair) can find "the nearest damaged cradle in its own area" without a
-        // map-wide scene query — same reasoning as RobotEnemy's own _active registry. ---
-        private static readonly List<AssemblyCradle> _active = new List<AssemblyCradle>(8);
-
-        /// <summary>Test-only reset (MV-465 idiom, same as RobotEnemy.ResetRegistry/PickupWallet.Reset) —
-        /// an EditMode suite shares one physics scene for the whole cc-verify run with no per-test reset,
-        /// so a cradle left behind by an earlier test would otherwise leak into a later test's "nearest"
-        /// search.</summary>
-        public static void ResetRegistry() => _active.Clear();
+        /// <summary>MV-1311: delegates to the shared <see cref="RepairableRegistry"/> — kept under this
+        /// name (rather than removed) because <c>MV1244WelderRepairTests</c> calls it directly and that
+        /// test must stay unchanged. Test-only reset (MV-465 idiom), same reasoning as
+        /// RobotEnemy.ResetRegistry/PickupWallet.Reset.</summary>
+        public static void ResetRegistry() => RepairableRegistry.ResetRegistry();
 
         /// <summary>MV-820-style stamp: which 1-based area this cradle was placed into — set once by
         /// whoever built the world (<see cref="WorldMapLoader"/>), not re-derived live from position. 0
@@ -141,24 +136,11 @@ namespace MaxWorlds.Factories
         /// post-build configure call in this file.</summary>
         public void SetId(string id) => Id = id ?? string.Empty;
 
-        /// <summary>The nearest cradle below full health, in <paramref name="areaIndex"/>, within
-        /// <paramref name="maxRange"/> of <paramref name="from"/> — what a Welder's repair tick asks for
-        /// every frame. Null if nothing in range qualifies.</summary>
-        public static AssemblyCradle NearestDamagedInArea(Vector3 from, int areaIndex, float maxRange)
-        {
-            AssemblyCradle best = null;
-            float bestDistSqr = maxRange * maxRange;
-            for (int i = 0; i < _active.Count; i++)
-            {
-                AssemblyCradle c = _active[i];
-                if (c == null || !c.IsAlive) continue;
-                if (c.AreaIndex != areaIndex) continue;
-                if (c.Normalized >= 1f) continue; // not damaged — nothing to repair
-                float distSqr = (c.transform.position - from).sqrMagnitude;
-                if (distSqr <= bestDistSqr) { bestDistSqr = distSqr; best = c; }
-            }
-            return best;
-        }
+        /// <summary>MV-1311: always false — a cradle never supports the Welder's down-then-rebuild beam,
+        /// only the continuous HP/s trickle below. Once dead it is unregistered from
+        /// <see cref="RepairableRegistry"/> entirely (see <see cref="ApplyDestructionEffects"/>), so it can
+        /// never resurface as a target either way — this never needs to flip true.</summary>
+        public bool IsDown => false;
 
         // --- MV-1227: the gantry's own moving/measurable parts, built once in Build(). ---
         private Transform[] _arms;
@@ -221,7 +203,7 @@ namespace MaxWorlds.Factories
             WorldHealthBar.Attach(gameObject, this, BarHeightAboveCentre, BarWorldWidth,
                 alwaysShow: true, showNumber: false);
 
-            if (!_active.Contains(this)) _active.Add(this); // MV-1244: see the registry's own doc comment
+            RepairableRegistry.Register(this); // MV-1244/MV-1311: see the registry's own doc comment
 
             // MV-1247: self-register with the HUD counter's own census (as Replicator/MowerHutch do) so
             // "CRADLES destroyed/47" reads correctly from the first frame instead of HudModel's own
@@ -232,7 +214,7 @@ namespace MaxWorlds.Factories
 
         private void OnDestroy()
         {
-            _active.Remove(this);
+            RepairableRegistry.Unregister(this);
             if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnAreaEntered;
         }
 
@@ -613,6 +595,13 @@ namespace MaxWorlds.Factories
         /// wreck itself the instant it goes false, so nothing here has to drive the husk directly.</summary>
         private void ApplyDestructionEffects()
         {
+            // MV-1311: unregister from the shared repair registry the instant this cradle dies — covers
+            // both a live kill (this method is called from OnDestroyed) and a checkpoint's silent restore
+            // (ApplyCheckpointDestroyed calls this directly too), the same two paths that both needed the
+            // old NearestDamagedInArea's explicit "!IsAlive" filter before the registry replaced it. A
+            // cradle never comes back (see IsDown's own doc comment), so once it's gone it's gone for good.
+            RepairableRegistry.Unregister(this);
+
             // MV-1247: report to the census synchronously with the kill — same reasoning as
             // Replicator.ApplyDestructionEffects (a caller reacting to this same death needs this cradle
             // already counted, not one WorldRunner poll tick later). Idempotent.

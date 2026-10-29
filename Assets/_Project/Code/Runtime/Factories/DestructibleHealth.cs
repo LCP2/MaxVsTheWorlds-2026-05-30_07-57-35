@@ -67,6 +67,18 @@ namespace MaxWorlds.Factories
             Changed?.Invoke(Current);
         }
 
+        /// <summary>MV-1311: brings a destroyed structure back to full health — the one deliberate break
+        /// from <see cref="Heal"/>'s own one-shot-destroyed rule, used only by a Welder's completed pylon
+        /// rebuild channel (<see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own <c>TickWelderPylonRebuild</c>).
+        /// Re-arms <see cref="Destroyed"/> to fire again on a future death — a rebuilt structure that dies
+        /// again is a fresh destruction, not a replay of the old one.</summary>
+        public void Revive()
+        {
+            if (IsAlive) return;
+            Current = Max;
+            Changed?.Invoke(Current);
+        }
+
         /// <summary>MV-776: reaches zero HP with no <see cref="Destroyed"/> event — a checkpoint restore
         /// re-applying history a run already earned, not a live kill that should re-trigger whatever a
         /// subscriber wires to that event (loot, HUD signal, VFX). One-shot, same as

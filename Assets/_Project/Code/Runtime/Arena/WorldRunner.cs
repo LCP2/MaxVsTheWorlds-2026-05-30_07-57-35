@@ -240,6 +240,22 @@ namespace MaxWorlds.Arena
                     if (airlock == null) continue;
                     airlock.SetAreaIndex(area.index);
                 }
+
+                // MV-1311: same reasoning as the cradle/airlock loops above — a Welder's generalized
+                // repair tick (RobotEnemy.TickWelderRepair, via RepairableRegistry.NearestDamagedInArea)
+                // asks for "the nearest repairable in its own area", which means nothing if every City
+                // pylon is stuck at the default AreaIndex 0 regardless of which area actually built it.
+                WorldPylon[] pylonsCfg = area.pylons ?? Array.Empty<WorldPylon>();
+                for (int i = 0; i < pylonsCfg.Length; i++)
+                {
+                    WorldPylon pylonCfg = pylonsCfg[i];
+                    if (pylonCfg == null || string.IsNullOrEmpty(pylonCfg.id)) continue;
+                    if (!build.Actors.TryGetValue(pylonCfg.id, out GameObject pylonGo) || pylonGo == null) continue;
+
+                    Pylon pylon = pylonGo.GetComponent<Pylon>();
+                    if (pylon == null) continue;
+                    pylon.SetAreaIndex(area.index);
+                }
             }
 
             BuildGateIntoAreaMap(build);

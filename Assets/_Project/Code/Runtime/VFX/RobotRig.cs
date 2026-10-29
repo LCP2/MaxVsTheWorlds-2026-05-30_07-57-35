@@ -1366,7 +1366,9 @@ namespace MaxWorlds.VFX
         /// <see cref="RobotEnemy.WelderRepairTarget"/>'s live position every frame while it is non-null,
         /// hidden the instant it goes null (the ticket's own "idle ... when none is damaged"). MV-1312:
         /// the same torch, reused (the ticket's own "existing beam") against
-        /// <see cref="RobotEnemy.WelderCutTarget"/> whenever there's no cradle to repair instead.
+        /// <see cref="RobotEnemy.WelderCutTarget"/> whenever there's no cradle to repair instead. MV-1311:
+        /// same reuse again against <see cref="RobotEnemy.WelderRebuildTarget"/> while rebuilding a
+        /// destroyed pylon.
         /// </summary>
         private void UpdateWelderBeamVfx()
         {
@@ -1375,6 +1377,7 @@ namespace MaxWorlds.VFX
             AssemblyCradle cradle = _enemy.WelderRepairTarget;
             Vector3? beamEnd = cradle != null ? cradle.transform.position
                 : _enemy.WelderCutTarget != null ? _enemy.WelderCutTarget.transform.position
+                : _enemy.WelderRebuildTarget != null ? _enemy.WelderRebuildTarget.transform.position
                 : (Vector3?)null;
 
             if (beamEnd == null)

@@ -52,9 +52,12 @@ namespace MaxWorlds.Tests.EditMode
             [14] = new ExpectedComposition { Brute = 1, Rusher = 11, Launcher = 1, Turret = 3, Bolter = 4, Gunner = 2, Bruiser = 2, Blinker = 1, Heavy = 1 },
             [16] = new ExpectedComposition { Rusher = 11, Turret = 3, Launcher = 2, Brute = 2, Gunner = 2, Heavy = 4, Bolter = 3 },
             [19] = new ExpectedComposition { Launcher = 3, Rusher = 16, Turret = 4, Bruiser = 5, Gunner = 2, Brute = 3, Blinker = 3, Bolter = 1, Heavy = 1 },
-            [21] = new ExpectedComposition { Rusher = 12, Gunner = 5, Heavy = 2, Brute = 3, Blinker = 2, Turret = 3, Bruiser = 1, Launcher = 1 },
-            [24] = new ExpectedComposition { Rusher = 17, Gunner = 6, Turret = 4, Blinker = 3, Launcher = 3, Bruiser = 2, Brute = 1, Bolter = 4 },
-            [26] = new ExpectedComposition { Rusher = 13, Heavy = 2, Blinker = 4, Brute = 2, Turret = 3, Bolter = 1, Launcher = 4, Gunner = 1 },
+            // MV-1311: a21/a24/a26 each gained one Welder garrison entry (within 8 m of that area's
+            // own pylon, Tools/MV1311/add_city_welders.py) — the only other three of a21-a27 this
+            // dictionary tracks at all; a22/a23/a25/a27 carry no MV-1292 baseline here to begin with.
+            [21] = new ExpectedComposition { Rusher = 12, Gunner = 5, Heavy = 2, Brute = 3, Blinker = 2, Turret = 3, Bruiser = 1, Launcher = 1, Welder = 1 },
+            [24] = new ExpectedComposition { Rusher = 17, Gunner = 6, Turret = 4, Blinker = 3, Launcher = 3, Bruiser = 2, Brute = 1, Bolter = 4, Welder = 1 },
+            [26] = new ExpectedComposition { Rusher = 13, Heavy = 2, Blinker = 4, Brute = 2, Turret = 3, Bolter = 1, Launcher = 4, Gunner = 1, Welder = 1 },
             [29] = new ExpectedComposition { Gunner = 3, Launcher = 4, Blinker = 4, Rusher = 17, Bolter = 2, Turret = 4, Brute = 3, Bruiser = 3, Heavy = 1 },
         };
 

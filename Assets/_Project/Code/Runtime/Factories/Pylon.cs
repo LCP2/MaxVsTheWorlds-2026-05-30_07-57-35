@@ -24,7 +24,7 @@ namespace MaxWorlds.Factories
     /// drops no loot and counts in no economy either.
     /// </summary>
     [MaxWorlds.Core.PerfSection("factories")]
-    public sealed class Pylon : MonoBehaviour, IDamageable, IHealthReadout
+    public sealed class Pylon : MonoBehaviour, IDamageable, IHealthReadout, IRepairable
     {
         /// <summary>Ticket's own "120 HP".</summary>
         private const float PylonHealth = 120f;
@@ -79,6 +79,36 @@ namespace MaxWorlds.Factories
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't (ticket: "player side only")
         public float Normalized => _health?.Normalized ?? 0f;
+
+        /// <summary>MV-820-style stamp: which 1-based area this pylon was placed into — set once by
+        /// whoever built the world (<see cref="MaxWorlds.Arena.WorldRunner"/>), same convention as
+        /// <see cref="AssemblyCradle.AreaIndex"/>. 0 until stamped.</summary>
+        public int AreaIndex { get; private set; }
+
+        public void SetAreaIndex(int area) => AreaIndex = area;
+
+        /// <summary>MV-1311: true exactly when destroyed — the signal a Welder's generalized repair tick
+        /// (<see cref="RepairableRegistry.NearestDamagedInArea"/>) uses to target this pylon for its
+        /// walk-up-and-beam-for-6s rebuild rather than a cradle-style continuous trickle.</summary>
+        public bool IsDown => !IsAlive;
+
+        /// <summary>MV-1311: a Welder's own repair call. While alive-but-damaged, an ordinary incremental
+        /// heal (same semantics as <see cref="AssemblyCradle.Heal"/>). While <see cref="IsDown"/>, any
+        /// positive amount revives this pylon outright — the Welder's completed 6 s rebuild channel calls
+        /// this exactly once, at the end, never per-tick (ticket's own "at the end the pylon stands again
+        /// at full health", not a trickle).</summary>
+        public void Heal(float amount)
+        {
+            if (amount <= 0f) return;
+            if (IsAlive)
+            {
+                _health.Heal(amount);
+                return;
+            }
+
+            _health.Revive();
+            ApplyRebuildEffects();
+        }
 
         // --- IHealthReadout — the same world health bar every gate/sentinel/robot/Max/Replicator carries. ---
         public float HealthNormalized => Normalized;
@@ -184,9 +214,14 @@ namespace MaxWorlds.Factories
             TryBuildCable();
 
             if (!Registered.Contains(this)) Registered.Add(this);
+            RepairableRegistry.Register(this); // MV-1311: see that registry's own doc comment
         }
 
-        private void OnDestroy() => Registered.Remove(this);
+        private void OnDestroy()
+        {
+            Registered.Remove(this);
+            RepairableRegistry.Unregister(this);
+        }
 
         private void BuildBody()
         {
@@ -301,6 +336,25 @@ namespace MaxWorlds.Factories
             if (_collider != null) _collider.enabled = false;
 
             if (_hasCable) _cableFadeElapsed = 0f; // starts the ticket's own 0.3 s cable fade-to-dark
+        }
+
+        /// <summary>MV-1311: the inverse of <see cref="ApplyDestructionEffects"/> — a Welder's completed
+        /// rebuild channel calls this (via <see cref="Heal"/>) to stand the mast back up, hide the wreck
+        /// stub, re-enable the collider and relight the cable. <see cref="LiveFeedersOf"/> picks this
+        /// pylon back up automatically the instant <see cref="IsAlive"/> flips true — its own callers
+        /// (<see cref="MaxWorlds.Factories.RelayDome"/>/<see cref="MaxWorlds.Bosses.GridlockBoss"/>) already
+        /// re-read it live, so "one shield ring returns" needs nothing further here.</summary>
+        private void ApplyRebuildEffects()
+        {
+            if (_mast != null) _mast.gameObject.SetActive(true);
+            if (_stub != null) _stub.gameObject.SetActive(false);
+            if (_collider != null) _collider.enabled = true;
+
+            if (_hasCable)
+            {
+                _cableFadeElapsed = -1f; // cable relights — travelling dots resume, no fade-out pending
+                SetCableVisible(true);
+            }
         }
 
         /// <summary>MV-1294: silently applies a checkpoint's already-recorded destruction — called once,
