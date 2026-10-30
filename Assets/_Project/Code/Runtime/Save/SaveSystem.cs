@@ -61,6 +61,15 @@ namespace MaxWorlds.Save
         /// of it. False (the RESUME path) whenever no dev jump is in flight.</summary>
         public static bool PendingDevFinaleJump { get; set; }
 
+        /// <summary>MV-1327: the world index a dev world jump (<see cref="MaxWorlds.UI.HomeScreen.OnWorldDevStart"/>)
+        /// just seeded, spanning the reload it always triggers — same idiom as <see cref="PendingResume"/>,
+        /// but for a dev jump rather than a RESUME: a dev jump never raises
+        /// <see cref="SaveSlotData.FurthestWorldIndex"/> itself, so it needs its own signal for
+        /// <see cref="MaxWorlds.UI.HomeScreen.Start"/> to know whether the LOADOUT screen should gate the
+        /// freshly-reloaded world. Null means no dev jump is in flight. Consumed (set null) by whichever
+        /// <c>Start()</c> finds it set.</summary>
+        public static int? PendingDevWorldJump { get; set; }
+
         /// <summary>See <see cref="PendingResume"/>.</summary>
         public readonly struct PendingResumePlan
         {
@@ -561,6 +570,7 @@ namespace MaxWorlds.Save
             s_directoryOverride = null;
             PendingResume = null;
             PendingDevFinaleJump = false;
+            PendingDevWorldJump = null;
         }
     }
 }

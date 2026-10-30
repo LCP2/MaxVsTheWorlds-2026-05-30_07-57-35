@@ -134,8 +134,13 @@ namespace MaxWorlds.UI
             return !alreadyChosen;
         }
 
+        /// <summary>MV-1327: <see cref="Math.Max"/> against <paramref name="worldIndex"/> itself, not
+        /// just the slot's recorded <see cref="SaveSlotData.FurthestWorldIndex"/> — a dev world jump
+        /// (<see cref="MaxWorlds.UI.HomeScreen.StartDevWorld"/>) deliberately never raises that field (it
+        /// would unlock real progress), so a jump straight to a later world on a fresh profile used to
+        /// read as having reached only world 0.</summary>
         private static int FurthestWorldIndexFor(int worldIndex) =>
-            SaveSystem.ActiveSlot < 0 ? worldIndex : SaveSystem.Load(SaveSystem.ActiveSlot).FurthestWorldIndex;
+            SaveSystem.ActiveSlot < 0 ? worldIndex : Math.Max(SaveSystem.Load(SaveSystem.ActiveSlot).FurthestWorldIndex, worldIndex);
 
         // ------------------------------------------------------------------ open / close
 
