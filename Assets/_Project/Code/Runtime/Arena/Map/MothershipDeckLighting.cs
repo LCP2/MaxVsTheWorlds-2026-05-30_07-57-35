@@ -17,6 +17,15 @@ namespace MaxWorlds.Arena
     {
         private const float BlendSeconds = 0.6f;
 
+        /// <summary>MV-1274 AC5: the live deck Max is standing on right now, so <see cref="MaxWorlds.VFX.CharacterSkin"/>
+        /// can scope the Hangar's own kind-coloured robot glow to the Hangar deck only (areas 1-5) without
+        /// every robot everywhere needing a reference to this component. Null whenever no Mothership
+        /// session is live (not Mothership, or between <see cref="Configure"/> and <see cref="OnDestroy"/>)
+        /// — <see cref="MothershipDeck.Hangar"/> is enum value 0, so a plain non-nullable field would read
+        /// as "Hangar" by default and leak the glow into every other world. A resolved value (set from the
+        /// same crossing event <see cref="Update"/> blends off), not authored.</summary>
+        public static MothershipDeck? CurrentDeck { get; private set; }
+
         private AreaAccumulationDirector _areaDirector;
         private BackyardLighting _lighting;
         private MothershipDeck _currentDeck;
@@ -32,6 +41,7 @@ namespace MaxWorlds.Arena
         {
             _areaDirector = areaDirector;
             _currentDeck = MothershipDecks.ForArea(areaDirector.CurrentArea);
+            CurrentDeck = _currentDeck;
             // Seeds _to at the starting deck's own look with _t already at 1 (settled, no blend in
             // flight), so the FIRST real crossing's _from below resolves to the starting deck rather
             // than an unset, all-black default(BackyardLook).
@@ -51,6 +61,7 @@ namespace MaxWorlds.Arena
             _from = _t >= 1f ? _to : BackyardLook.Lerp(_from, _to, _t);
             _to = MothershipDecks.LookFor(areaIndex);
             _currentDeck = deck;
+            CurrentDeck = deck;
             _t = 0f;
         }
 
@@ -67,6 +78,7 @@ namespace MaxWorlds.Arena
         private void OnDestroy()
         {
             if (_areaDirector != null) _areaDirector.PlayerCrossedIntoArea -= OnPlayerCrossedIntoArea;
+            CurrentDeck = null;
         }
     }
 }

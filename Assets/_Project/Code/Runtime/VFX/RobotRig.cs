@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -93,6 +94,88 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+
+        /// <summary>MV-1274 AC5 round 7: StylizedCharacter's own Fresnel edge term
+        /// (<c>MaterialLibrary.cs:134</c>, applied at <c>StylizedCharacter.shader:233-234</c>) — already
+        /// live on every robot body material at a fixed cool colour. The Hangar-only write below
+        /// overrides it per-submesh via property block (never via <see cref="Material.SetColor"/>,
+        /// which would recolour the shared Cool/Dark/Gold materials for every kind and every deck).</summary>
+        private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
+        private static readonly int RimPowerId = Shader.PropertyToID("_RimPower");
+
+        /// <summary>MV-1274 AC5 round 7: the baked default (1.25, MaterialLibrary.cs:135) is what
+        /// actually pins a robot's silhouette edge near the frame's tonemap ceiling regardless of this
+        /// ticket's own constants -- see <see cref="HangarRimStrength"/>'s own doc.</summary>
+        private static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
+
+        /// <summary>MV-1274 AC5: in the Hangar only, every robot's resting body emission targets this
+        /// SAME luma regardless of how dark or bright its own kind colour (<see cref="CurrentBodyColor"/>)
+        /// is -- round 4's own finding (recorded in <see cref="CharacterSkin"/>, where this constant was
+        /// first tuned): a flat per-kind multiplier either underlights a dark kind or pushes a bright
+        /// kind's emission past <c>BloomThreshold</c>, blooming and spilling onto its own floor ring --
+        /// AC5's denominator -- in lockstep with its numerator. This is round 5's root-cause fix: that
+        /// tuning lived in <see cref="CharacterSkin"/>, which <see cref="MaxWorlds.VFX.CharacterSkinDirector"/>
+        /// never attaches to a RobotRig-built body (see <see cref="MaxWorlds.Enemies.RobotEnemy.BeginTrapConversion"/>'s
+        /// own doc comment for why), so three rounds of tuning never once reached the screen for a real
+        /// robot. <see cref="LateUpdate"/>'s own body-heat write below is what actually does.
+        ///
+        /// Round 7 (29 Oct triage): lowered from 0.92, which clipped the glowing submesh at the
+        /// frame's own tonemapper ceiling (232.287/255) -- brighter than the eye's own measured render
+        /// (90-231 across this round's captures), violating item 5's "the eye as the brightest emissive
+        /// on the body". Round 7's own measurement swept 0.3-0.92 (see Logs/mv1274-capture.log history
+        /// in the fix comment) and found bodyMax UNMOVED across that whole range once the kind-coloured
+        /// rim below was split onto its own submeshes -- the peak was never this constant's own
+        /// contribution, it was <see cref="HangarRimStrength"/>'s baked-default predecessor (see that
+        /// constant's own doc). 0.75 is set on what DOES respond to this constant -- the dark-deck MEAN
+        /// -- rather than chasing a peak it was never driving.</summary>
+        private const float HangarRestingGlowTargetLuma = 0.75f;
+
+        /// <summary>MV-1274 AC5 round 7 (29 Oct triage): the kind-coloured Fresnel RIM item 5 actually
+        /// asks for ("a kind-coloured emissive rim") -- as opposed to <see cref="HangarRestingGlowTargetLuma"/>'s
+        /// flat body-submesh glow, which only ever covers <see cref="_bodyMaterialIndex"/> and so stayed
+        /// under 2.5x for Turret/Gunner, whose kind-coloured submesh is a small fraction of their visible
+        /// silhouette (round 6's own finding). The rim is already live on every character material at a
+        /// fixed cool colour (<see cref="MaxWorlds.Rendering.MaterialLibrary.DefaultRimColor"/>,
+        /// MaterialLibrary.cs:134-136, applied at StylizedCharacter.shader:233-234) and, per that
+        /// shader's own stated principle, is most of what a silhouette shows at this camera angle -- so
+        /// tinting it per-submesh is what actually reaches the whole-body mean AC5 measures, not just
+        /// one submesh.
+        ///
+        /// 1.0 (i.e. the kind colour at its own natural brightness, no extra multiplier) -- round 7's
+        /// sweep up to 3.2 moved bodyMax by single digits at most (208-227 at 3.2, 203-231 even at 1.0),
+        /// confirming the peak is <see cref="HangarRimStrength"/>'s own baked-default 1.25, not this
+        /// multiplier. Left at 1.0 rather than higher: it still visibly tints the edge per kind, and
+        /// pushing it higher only costs more peak for no corresponding mean gain this round's
+        /// measurements could find.</summary>
+        private const float HangarRimBoost = 1.0f;
+
+        /// <summary>MV-1274 AC5 round 7 (29 Oct triage): the Hangar-only override for
+        /// <c>_RimPower</c> (StylizedCharacter.shader:20, <c>pow(1 - dot(N,V), _RimPower)</c>) -- LOWER
+        /// widens the band, since a lower exponent keeps the falloff curve higher across a wider range
+        /// of surface angles instead of collapsing to near-zero away from the silhouette's own grazing
+        /// edge. The default 4.6 (<see cref="MaxWorlds.Rendering.MaterialLibrary.DefaultRimPower"/>) is
+        /// tuned tight on purpose for Max's own readability at gameplay zoom (MaterialLibrary.cs:156-163,
+        /// "an edge is an EDGE"); the Hangar's own robots need the opposite trade -- more of a boxy
+        /// silhouette (Turret/Gunner) actually catching the kind-coloured glow, not a sharper edge on
+        /// it -- so this is a Hangar-only, per-submesh property-block override, never a change to the
+        /// shared default. Does NOT raise the true grazing-edge value itself (<c>pow(1, anything) == 1</c>
+        /// always) -- only how far the glow reaches away from that edge; see
+        /// <see cref="HangarRimStrength"/> for what actually controls the edge peak.</summary>
+        private const float HangarRimPower = 1.4f;
+
+        /// <summary>MV-1274 AC5 round 7 (29 Oct triage) -- the constant that actually matters for the
+        /// eye-brightest gate, found only by measurement: a true silhouette-edge pixel always has
+        /// <c>pow(1 - dot(N,V), power) == 1</c> regardless of <see cref="HangarRimPower"/>, so the EDGE
+        /// value is <c>_RimColor * _RimStrength</c> alone. The baked default
+        /// (<see cref="MaxWorlds.Rendering.MaterialLibrary.DefaultRimStrength"/>, 1.25) is why bodyMax
+        /// sat at 200-231 across every <see cref="HangarRestingGlowTargetLuma"/>/<see cref="HangarRimBoost"/>
+        /// combination this round tried (0.3-0.92 x 1.0-3.2) -- that edge highlight exists on every
+        /// robot today, on every deck, independent of anything this ticket added; the Hangar's own dark
+        /// ambient just makes it read far more prominently against a near-black floor than it ever did
+        /// against the Backyard's daylight key. 0.5 is this round's one actual lever on the peak itself;
+        /// confirm the resulting bodyMax against a fresh measured eye before trusting it, same as every
+        /// other constant here.</summary>
+        private const float HangarRimStrength = 0.35f;
 
         /// <summary>World 3's skin tag (MV-715/MV-746) — its own copy, the same "one literal per file
         /// that needs it" idiom <see cref="CharacterSkin"/> and <see cref="RobotEnemy"/> already use.</summary>
@@ -214,6 +297,17 @@ namespace MaxWorlds.VFX
         /// this kind — see <see cref="SharedCharacterMaterial"/>). -1 if the body colour never made it
         /// into a combined submesh (should not happen; guarded defensively).</summary>
         private int _bodyMaterialIndex = -1;
+
+        /// <summary>MV-1274 AC5 round 7: how many distinct submesh/material slots <see cref="_combinedRenderer"/>
+        /// actually has, cached once at build time so the Hangar-only rim write below can touch every
+        /// one of them (kind body AND the shared Cool/Dark/Gold slots) without re-querying
+        /// <see cref="Renderer.sharedMaterials"/> — which allocates a fresh array — every frame.</summary>
+        private int _combinedMaterialCount;
+
+        /// <summary>MV-1274 AC5 round 7: the rim colour last written to every submesh (MV-963's own
+        /// "skip once settled" idiom, applied to the rim write the same way <see cref="_lastAppliedBodyHeat"/>
+        /// already applies to the emission write). Null until the first <see cref="LateUpdate"/>.</summary>
+        private Color? _lastAppliedRim;
 
         private MaterialPropertyBlock _bodyMpb;
 
@@ -630,6 +724,7 @@ namespace MaxWorlds.VFX
             if (_combinedRenderer != null)
             {
                 Material[] mats = _combinedRenderer.sharedMaterials;
+                _combinedMaterialCount = mats.Length;
                 for (int i = 0; i < mats.Length; i++)
                 {
                     if (mats[i] != _bodyMat) continue;
@@ -958,6 +1053,18 @@ namespace MaxWorlds.VFX
                 float teleportPop = 1f - _teleportExpand;
                 Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
                            + TeleportFlashColor * (teleportPop * 0.8f);
+
+                // MV-1274 AC5: a resting kind-coloured glow, Hangar deck only -- see
+                // HangarRestingGlowTargetLuma's own doc for why this is normalized-to-luma rather than a
+                // flat multiplier. Additive onto heat like every other term above, but at rest (no
+                // windup/flash/teleport) heat is otherwise black, so this is what a steady-state robot
+                // in the Hangar actually shows.
+                if (MothershipDeckLighting.CurrentDeck == MothershipDeck.Hangar)
+                {
+                    Color baseColor = CurrentBodyColor;
+                    float baseLuma = 0.2126f * baseColor.r + 0.7152f * baseColor.g + 0.0722f * baseColor.b;
+                    if (baseLuma > 0.01f) heat += baseColor * (HangarRestingGlowTargetLuma / baseLuma);
+                }
                 // MV-963: skip the write once heat has settled (the steady state for the vast majority
                 // of robots, most frames — no wind-up, no flash, no teleport pop).
                 // MV-969: writes to a MaterialPropertyBlock on THIS robot's own combined renderer, at
@@ -974,6 +1081,46 @@ namespace MaxWorlds.VFX
                     _combinedRenderer.GetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
                     _bodyMpb.SetColor(EmissionId, heat);
                     _combinedRenderer.SetPropertyBlock(_bodyMpb, _bodyMaterialIndex);
+                }
+
+                // MV-1274 AC5 round 7 (29 Oct triage): the kind-coloured RIM item 5 actually asks for,
+                // written to EVERY submesh's own property block -- never to the shared Cool/Dark/Gold
+                // materials themselves (see HangarRimBoost's own doc for why that would recolour every
+                // kind, on every deck). Includes _bodyMaterialIndex: round 7 first tried skipping it
+                // (reasoning the flat glow write above already covered that submesh), but measurement
+                // showed bodyMax sat at 200-231 regardless of HangarRestingGlowTargetLuma OR
+                // HangarRimBoost -- the peak was never either of those, it was the BAKED-DEFAULT rim
+                // strength (MaterialLibrary.cs:135, 1.25) that every submesh carries already, body
+                // included. HangarRimStrength's own override is what actually controls that peak, so it
+                // has to reach every submesh, not just the ones this ticket added glow to.
+                //
+                // Reverts to MaterialLibrary's own baked defaults the instant this robot leaves the
+                // Hangar, the same self-correcting pattern the body-heat write above already uses -- not
+                // a Clear(), which on _bodyMaterialIndex would also drop the heat write's own overrides.
+                bool inHangar = MothershipDeckLighting.CurrentDeck == MothershipDeck.Hangar;
+                Color rimColor = inHangar ? CurrentBodyColor * HangarRimBoost : MaterialLibrary.DefaultRimColor;
+                // Width, not just magnitude -- see HangarRimPower's own doc for why a boxy silhouette
+                // needs the band widened, not only brightened.
+                float rimPower = inHangar ? HangarRimPower : MaterialLibrary.DefaultRimPower;
+                // The actual peak lever -- see HangarRimStrength's own doc for why this, not the colour
+                // multiplier or the power, is what pins a grazing-edge pixel near the tonemap ceiling.
+                float rimStrength = inHangar ? HangarRimStrength : MaterialLibrary.DefaultRimStrength;
+                if (_combinedRenderer != null && _combinedMaterialCount > 0 && _bodyMat != null &&
+                    _bodyMat.HasProperty(RimColorId) &&
+                    (!_lastAppliedRim.HasValue || _lastAppliedRim.Value != rimColor))
+                {
+                    _lastAppliedRim = rimColor;
+                    bool hasRimPower = _bodyMat.HasProperty(RimPowerId);
+                    bool hasRimStrength = _bodyMat.HasProperty(RimStrengthId);
+                    for (int i = 0; i < _combinedMaterialCount; i++)
+                    {
+                        _bodyMpb ??= new MaterialPropertyBlock();
+                        _combinedRenderer.GetPropertyBlock(_bodyMpb, i);
+                        _bodyMpb.SetColor(RimColorId, rimColor);
+                        if (hasRimPower) _bodyMpb.SetFloat(RimPowerId, rimPower);
+                        if (hasRimStrength) _bodyMpb.SetFloat(RimStrengthId, rimStrength);
+                        _combinedRenderer.SetPropertyBlock(_bodyMpb, i);
+                    }
                 }
             }
         }
@@ -1502,6 +1649,60 @@ namespace MaxWorlds.VFX
             Color c = Color.Lerp(EyeIdle, EyeWarn, Mathf.Clamp01(windup));
             c = Color.Lerp(c, Color.white, Mathf.Clamp01(flash));
             return c;
+        }
+
+        /// <summary>MV-1274 AC5: the eye lens's own world position, for a capture-tool brightness check
+        /// -- <see cref="CharacterPart.AddLens"/> names every eye "Part" like any other piece, so nothing
+        /// else can find it by GameObject name. Same first-eye idiom <see cref="UpdateBeamVfx"/> already
+        /// uses for its own beam origin.</summary>
+        public bool TryGetEyeWorldPosition(out Vector3 pos)
+        {
+            if (_eyes != null && _eyes.Length > 0 && _eyes[0] != null)
+            {
+                pos = _eyes[0].transform.position;
+                return true;
+            }
+            pos = default;
+            return false;
+        }
+
+        /// <summary>MV-1274 AC5 round 6: the combined body renderer's own world-space bounds, for a
+        /// capture probe to scan the robot's actual visible silhouette instead of trusting one fixed
+        /// offset point. Round 5's Gunner 1.82x miss was that single point landing on a non-glowing
+        /// submesh (Dark/Cool) of the combined mesh, not a real glow-magnitude shortfall -- a wider
+        /// probe reads the true "mean body luminance" AC5 asks for, glowing and non-glowing patches
+        /// both. <see cref="Renderer.bounds"/> is Unity's own resolved AABB (MV-465 Tier 2), not an
+        /// authored guess.</summary>
+        public bool TryGetBodyWorldBounds(out Bounds bounds)
+        {
+            if (_combinedRenderer != null)
+            {
+                bounds = _combinedRenderer.bounds;
+                return true;
+            }
+            bounds = default;
+            return false;
+        }
+
+        /// <summary>MV-1274 AC5 round 6: every eye lens renderer's own world-space bounds (combined, in
+        /// the rare case a kind has more than one), for a capture probe to find the eye's own brightest
+        /// pixel CLUSTER directly -- the 28 Oct decision's own wording -- instead of trusting
+        /// <see cref="TryGetEyeWorldPosition"/>'s single point plus a small fixed box, which can land
+        /// mostly on the dark socket around a small additive lens sprite rather than the lit cluster
+        /// itself.</summary>
+        public bool TryGetEyeWorldBounds(out Bounds bounds)
+        {
+            if (_eyes == null || _eyes.Length == 0) { bounds = default; return false; }
+            bool any = false;
+            Bounds b = default;
+            foreach (MeshRenderer eye in _eyes)
+            {
+                if (eye == null) continue;
+                if (!any) { b = eye.bounds; any = true; }
+                else b.Encapsulate(eye.bounds);
+            }
+            bounds = b;
+            return any;
         }
 
         private void ApplyEyes(Color c)

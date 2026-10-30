@@ -149,6 +149,29 @@ namespace MaxWorlds.Rendering
         /// 20-pixel body reads as sunlight rather than as an edge; a cool one reads as an edge.</summary>
         private static readonly Color RimColor = new Color(0.86f, 0.94f, 1f);
 
+        /// <summary>MV-1274 AC5 round 7: every character material's own baked <see cref="RimColor"/>,
+        /// exposed so a gameplay system can write the SAME default back into a MaterialPropertyBlock
+        /// override when it needs to hand the rim back after tinting it (<see cref="MaxWorlds.VFX.RobotRig"/>'s
+        /// Hangar-only kind-coloured rim) — never by mutating the shared material itself, which every
+        /// robot of that kind and every deck draws from.</summary>
+        public static Color DefaultRimColor => RimColor;
+
+        /// <summary>MV-1274 AC5 round 7: the same hand-back idiom as <see cref="DefaultRimColor"/>, for
+        /// <see cref="_RimPower"/> — <see cref="MaxWorlds.VFX.RobotRig"/>'s Hangar-only rim widens the
+        /// Fresnel band (a LOWER power) to raise how much of a boxy silhouette (Turret/Gunner) actually
+        /// catches the kind-coloured glow, independent of how bright it is.</summary>
+        public static float DefaultRimPower => RimPower;
+
+        /// <summary>MV-1274 AC5 round 7: the same hand-back idiom, for <see cref="_RimStrength"/> --
+        /// round 7's own measurement found this baked 1.25 is what actually pins a robot's silhouette
+        /// edge near the frame's tonemap ceiling (a grazing-angle pixel's Fresnel term approaches 1
+        /// regardless of <see cref="_RimPower"/>, which only reshapes the falloff AWAY from the edge,
+        /// not the edge value itself) -- independent of <see cref="MaxWorlds.VFX.RobotRig"/>'s own
+        /// Hangar-only glow constants, and present on every deck today. <see cref="MaxWorlds.VFX.RobotRig"/>'s
+        /// Hangar-only override lowers this specifically to keep a robot's own brightest pixel below the
+        /// measured eye.</summary>
+        public static float DefaultRimStrength => RimStrength;
+
         /// <summary>Loud. It was 0.55 and the actors read as flat blobs at gameplay zoom.</summary>
         private const float RimStrength = 1.25f;
 

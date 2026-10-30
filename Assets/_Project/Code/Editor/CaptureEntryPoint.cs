@@ -241,6 +241,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1278EliteShot() => RunFromMenu(CapturePresets.All["mv1278eliteshot"]);
         public static void CaptureMv1278EliteShot() => Run(CapturePresets.All["mv1278eliteshot"]);
 
+        [MenuItem("MaxWorlds/Capture/Hangar Relight Check (MV-1274)")]
+        public static void MenuMv1274HangarCheck() => RunFromMenu(CapturePresets.All["mv1274hangarcheck"]);
+        public static void CaptureMv1274HangarCheck() => Run(CapturePresets.All["mv1274hangarcheck"]);
+
         [MenuItem("MaxWorlds/Capture/Reef Ambient Life a2 (MV-1257)")]
         public static void MenuMv1257ReefAmbient() => RunFromMenu(CapturePresets.All["mv1257reefambient"]);
         public static void CaptureMv1257ReefAmbient() => Run(CapturePresets.All["mv1257reefambient"]);
