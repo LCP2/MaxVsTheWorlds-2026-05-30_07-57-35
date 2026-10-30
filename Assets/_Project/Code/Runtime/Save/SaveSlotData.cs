@@ -245,6 +245,12 @@ namespace MaxWorlds.Save
         /// re-attempt a pad he already failed either.</summary>
         public string[] CheckpointFailedChallengeIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>RepairBay.Id</c>) of every repair bay USED by the time this checkpoint
+        /// was captured (MV-1319) — restored the same way as <see cref="CheckpointDestroyedCanisterIds"/>:
+        /// silently re-applying USED onto whichever of the freshly-rebuilt level's bays carry a matching
+        /// id, so a resume never lets Max re-use a bay he already used (one use per bay).</summary>
+        public string[] CheckpointUsedRepairBayIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player

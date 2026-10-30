@@ -608,6 +608,17 @@ namespace MaxWorlds.Weapons
             _forceFieldAbsorbRemaining = Mathf.Clamp(_forceFieldAbsorbRemaining + delta, 0f, _forceFieldAbsorbCap);
         }
 
+        /// <summary>MV-1319: a repair bay tops the bubble's absorb budget back to its current cap —
+        /// only meaningful while the field is already up (ticket: "charging it if it is not already up
+        /// is NOT required — refill only what the existing force field state supports"). No-op if the
+        /// field isn't active.</summary>
+        public void RefillForceField()
+        {
+            if (!ForceFieldActive) return;
+            _forceFieldAbsorbRemaining = _forceFieldAbsorbCap;
+            if (_forceFieldBubble != null) _forceFieldBubble.SetFraction(1f);
+        }
+
         /// <summary>Eat as much of an incoming hit as the bubble's remaining budget allows — the single
         /// hook <see cref="MaxWorlds.Player.PlayerHealth.TakeDamage"/> calls before touching HP, so
         /// EVERY damage source (contact lunge, beam tick, missile splash) is absorbed the same way

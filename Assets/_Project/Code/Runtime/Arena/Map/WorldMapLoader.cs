@@ -766,6 +766,25 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-1319: an area's repair bays — same "per-entity not per-area" shape as the challenge
+            // pads above, but with no composition to resolve (a bay spawns nothing).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldRepairBay[] bays = a.repairBays ?? Array.Empty<WorldRepairBay>();
+                for (int i = 0; i < bays.Length; i++)
+                {
+                    WorldRepairBay b = bays[i];
+                    if (b == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(b.id) ? $"{a.id}_repairbay{i + 1}" : b.id,
+                        kind = "repairbay",
+                        x = b.x,
+                        z = b.z,
+                    });
+                }
+            }
+
             map = new MapData
             {
                 name = string.IsNullOrEmpty(cfg.world) ? "World" : cfg.world,

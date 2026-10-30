@@ -315,6 +315,7 @@ namespace MaxWorlds.Save
             data.CheckpointDefeatedBossAreas = BossCensus.DefeatedAreaIndices();
             data.CheckpointWonChallengeIds = ChallengePad.WonIds();
             data.CheckpointFailedChallengeIds = ChallengePad.FailedIds();
+            data.CheckpointUsedRepairBayIds = RepairBay.UsedIds();
 
             // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
             // null for every world before its own final boss falls, same as a fresh run. Read directly
@@ -401,6 +402,7 @@ namespace MaxWorlds.Save
             BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
             ChallengePad.ApplyCheckpointWonIds(data.CheckpointWonChallengeIds);
             ChallengePad.ApplyCheckpointFailedIds(data.CheckpointFailedChallengeIds);
+            RepairBay.ApplyCheckpointUsedIds(data.CheckpointUsedRepairBayIds);
 
             // MV-951: the mirror of the capture-side write above — AbilityCreditBank/UpgradeState/
             // PendingMorphingModule.WeaponCorePending all get wiped by HomeScreen.OnResume's own
@@ -541,6 +543,7 @@ namespace MaxWorlds.Save
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();
             data.CheckpointWonChallengeIds = Array.Empty<string>();
             data.CheckpointFailedChallengeIds = Array.Empty<string>();
+            data.CheckpointUsedRepairBayIds = Array.Empty<string>();
             data.CheckpointFinaleWeaponGranted = false;
             data.CheckpointFinaleExitOpen = false;
             data.CheckpointAbilityCredits = 0;

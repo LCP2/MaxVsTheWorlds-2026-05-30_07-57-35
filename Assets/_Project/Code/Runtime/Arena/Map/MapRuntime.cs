@@ -39,6 +39,9 @@ namespace MaxWorlds.Arena
         /// <summary>The challenge pads this map built (MV-1318), in the order it authored them.</summary>
         public readonly List<ChallengePad> Challenges = new List<ChallengePad>(4);
 
+        /// <summary>The repair bays this map built (MV-1319), in the order it authored them.</summary>
+        public readonly List<RepairBay> RepairBays = new List<RepairBay>(4);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1380,6 +1383,10 @@ namespace MaxWorlds.Arena
             // pads, not the previous level's (or the previous test's) ghosts.
             ChallengePad.ResetRegistry();
 
+            // MV-1319: same reasoning again — a level loaded a second time must count its own repair
+            // bays, not the previous level's (or the previous test's) ghosts.
+            RepairBay.ResetRegistry();
+
             // MV-1298: same reasoning again — a level loaded a second time must count its own
             // destructible cover pieces, not the previous level's (or the previous test's) ghosts.
             DestructibleCover.ResetRegistry();
@@ -2568,6 +2575,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Challenge:
                         built.Challenges.Add(BuildChallenge(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.RepairBay:
+                        built.RepairBays.Add(BuildRepairBay(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2902,6 +2913,29 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = go;
             return pad;
+        }
+
+        /// <summary>
+        /// A repair bay, from data (MV-1319) — same "one recipe, however many a level authors, bare
+        /// GameObject, no collider" shape as <see cref="BuildChallenge"/>: a bay is something Max stands
+        /// INSIDE, not an obstacle, and <see cref="RepairBay.Build"/> grows its own ring/icon visuals as
+        /// children.
+        /// </summary>
+        private static RepairBay BuildRepairBay(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            var go = new GameObject(e.id);
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = new Vector3(e.x, 0f, e.z);
+            MarkDiscoverable(go);
+
+            var bay = go.AddComponent<RepairBay>();
+            bay.SetId(e.id);
+
+            TagStatic(map, go, rendererZones);
+
+            built.Actors[e.id] = go;
+            return bay;
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly

@@ -27,6 +27,7 @@ namespace MaxWorlds.Arena
         Current,              // MV-1300
         Airlock,              // MV-1305
         Challenge,            // MV-1318
+        RepairBay,            // MV-1319
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
