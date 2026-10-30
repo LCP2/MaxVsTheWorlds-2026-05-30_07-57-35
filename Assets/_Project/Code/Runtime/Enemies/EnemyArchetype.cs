@@ -673,9 +673,10 @@ namespace MaxWorlds.Enemies
         /// Shield Projector (MV-1279): Lee's (21 Oct 2026) "support robot that protects other
         /// robots" — this ticket is the kind, its stats and its hang-back movement only; the dome
         /// that actually shields its pack is P2 (<see cref="RobotEnemy.TickBody"/> never dispatches
-        /// this kind into Telegraph/Lunge at all, per the ticket's own "never attacks"). 40 HP, no
-        /// contact damage (<see cref="ContactDamage"/> 0, <see cref="RobotEnemy"/>'s own contact-touch
-        /// tick is never reached). <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/
+        /// this kind into Telegraph/Lunge at all, per the ticket's own "never attacks"). 160 HP
+        /// (MV-1326: was 40 — less than a City Courier's 48, so it died before its effect was ever
+        /// visible), no contact damage (<see cref="ContactDamage"/> 0, <see cref="RobotEnemy"/>'s own
+        /// contact-touch tick is never reached). <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/
         /// <see cref="LungeTime"/>/<see cref="RecoverTime"/> are unread — this body never reaches
         /// Telegraph/Lunge/Recover — kept at nominal values rather than 0 only for readability, the
         /// same footing <see cref="Dreadnought"/>/<see cref="Tractor"/>/<see cref="Welder"/>'s own doc
@@ -690,7 +691,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Projector => new EnemyArchetype(
             EnemyKind.Projector, EnemyShape.Capsule, new Vector3(0.75f, 0.75f, 0.75f),
             colliderHeight: 1.8f, colliderRadius: 0.3f,   // tall and thin — "the tallest robot in the pack"
-            moveSpeed: 0.9f, maxHealth: 40f,
+            moveSpeed: 0.9f, maxHealth: 160f,   // MV-1326: 40 -> 160
             contactDamage: 0f, contactRadius: 0.5f,
             lungeRange: 2.2f, telegraphTime: 0.3f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
             knockbackDecay: 28f,
@@ -699,11 +700,11 @@ namespace MaxWorlds.Enemies
         /// <summary>
         /// Jammer (MV-1280): a squat support drone that never attacks Max or a Sentinel at all —
         /// its whole threat is the field it projects (MV-1286, explicitly out of scope here; this
-        /// ticket is the kind, its stats and its approach/circle movement only). 60 HP, no contact
-        /// damage (<see cref="ContactDamage"/> 0, <see cref="RobotEnemy"/>'s own contact-touch tick is
-        /// never reached) — <see cref="RobotEnemy.TickBody"/> never dispatches this kind into
-        /// Telegraph/Lunge at all (see <see cref="RobotEnemy.TickJammerApproach"/>), per the ticket's
-        /// own "never attacks". <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/<see cref="LungeTime"/>/
+        /// ticket is the kind, its stats and its approach/circle movement only). 140 HP (MV-1326: was
+        /// 60 — died before its effect was ever visible), no contact damage (<see cref="ContactDamage"/>
+        /// 0, <see cref="RobotEnemy"/>'s own contact-touch tick is never reached) — <see cref="RobotEnemy.TickBody"/> never dispatches
+        /// this kind into Telegraph/Lunge at all (see <see cref="RobotEnemy.TickJammerApproach"/>), per
+        /// the ticket's own "never attacks". <see cref="TelegraphTime"/>/<see cref="LungeSpeed"/>/<see cref="LungeTime"/>/
         /// <see cref="RecoverTime"/> are unread — this body never reaches Telegraph/Lunge/Recover — kept
         /// at nominal values rather than 0 only for readability, the same footing
         /// <see cref="Dreadnought"/>/<see cref="Tractor"/>/<see cref="Welder"/>/<see cref="Projector"/>'s
@@ -716,7 +717,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Jammer => new EnemyArchetype(
             EnemyKind.Jammer, EnemyShape.Capsule, new Vector3(0.9f, 0.6f, 0.9f),
             colliderHeight: 1.1f, colliderRadius: 0.45f,   // squat, drum-bodied — per the design image
-            moveSpeed: 1.0f, maxHealth: 60f,
+            moveSpeed: 1.0f, maxHealth: 140f,   // MV-1326: 60 -> 140
             contactDamage: 0f, contactRadius: 0.5f,
             lungeRange: 2.2f, telegraphTime: 0.3f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
             knockbackDecay: 28f,
