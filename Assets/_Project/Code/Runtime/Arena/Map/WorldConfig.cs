@@ -649,6 +649,19 @@ namespace MaxWorlds.Arena
         public float z;
     }
 
+    /// <summary>A repair bay (MV-1319) — a player-triggered, one-shot full heal: Max standing inside its
+    /// ring while READY heals him to full HP and tops his Force Field's absorb budget back to its current
+    /// cap, then goes dark for good. <see cref="x"/>/<see cref="z"/> are ABSOLUTE world metres (ring
+    /// centre), same convention as <see cref="WorldChallenge"/>/<see cref="WorldPylon"/>/<see cref="WorldCanister"/>
+    /// above — not area-local. One use per bay; USED is saved and never resets.</summary>
+    [Serializable]
+    public sealed class WorldRepairBay
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -712,6 +725,9 @@ namespace MaxWorlds.Arena
 
         /// <summary>Challenge pads authored into this area (MV-1318). Optional; most areas carry none.</summary>
         public WorldChallenge[] challenges = Array.Empty<WorldChallenge>();
+
+        /// <summary>Repair bays authored into this area (MV-1319). Optional; most areas carry none.</summary>
+        public WorldRepairBay[] repairBays = Array.Empty<WorldRepairBay>();
 
         public WorldBoss boss;
 
