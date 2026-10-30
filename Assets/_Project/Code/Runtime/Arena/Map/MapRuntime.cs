@@ -36,6 +36,9 @@ namespace MaxWorlds.Arena
         /// <summary>The airlock panels this map built (MV-1305), in the order it authored them.</summary>
         public readonly List<AirlockPanel> Airlocks = new List<AirlockPanel>(4);
 
+        /// <summary>The challenge pads this map built (MV-1318), in the order it authored them.</summary>
+        public readonly List<ChallengePad> Challenges = new List<ChallengePad>(4);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1373,6 +1376,10 @@ namespace MaxWorlds.Arena
             // rather than carrying the previous level's (or the previous test's) forward.
             AirlockPanel.ResetRegistry();
 
+            // MV-1318: same reasoning again — a level loaded a second time must count its own challenge
+            // pads, not the previous level's (or the previous test's) ghosts.
+            ChallengePad.ResetRegistry();
+
             // MV-1298: same reasoning again — a level loaded a second time must count its own
             // destructible cover pieces, not the previous level's (or the previous test's) ghosts.
             DestructibleCover.ResetRegistry();
@@ -2557,6 +2564,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Airlock:
                         built.Airlocks.Add(BuildAirlock(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.Challenge:
+                        built.Challenges.Add(BuildChallenge(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2863,6 +2874,34 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return airlock;
+        }
+
+        /// <summary>
+        /// A challenge pad, from data (MV-1318) — same "one recipe, however many a level authors" shape
+        /// as <see cref="BuildPylon"/>/<see cref="BuildCanister"/>/<see cref="BuildAirlock"/>, but with no
+        /// primitive body: unlike those, a pad is something Max stands INSIDE, not an obstacle, so this
+        /// spawns a bare GameObject (<see cref="ChallengePad.Build"/> grows its own ring/icon visuals as
+        /// children, the same "AddComponent's Awake builds synchronously" idiom <see cref="Canister.Build"/>
+        /// already documents) with no collider to walk through at all. <see cref="MapEntity.challengeComposition"/>
+        /// (resolved by <see cref="WorldMapLoader"/>, which alone holds the <see cref="WorldConfig"/> a
+        /// dial fallback needs) is handed straight to <see cref="ChallengePad.SetComposition"/>.
+        /// </summary>
+        private static ChallengePad BuildChallenge(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            var go = new GameObject(e.id);
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = new Vector3(e.x, 0f, e.z);
+            MarkDiscoverable(go);
+
+            var pad = go.AddComponent<ChallengePad>();
+            pad.SetId(e.id);
+            pad.SetComposition(e.challengeComposition);
+
+            TagStatic(map, go, rendererZones);
+
+            built.Actors[e.id] = go;
+            return pad;
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly

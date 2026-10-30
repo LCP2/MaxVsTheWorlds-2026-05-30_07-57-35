@@ -26,6 +26,7 @@ namespace MaxWorlds.Arena
         Canister,             // MV-1296
         Current,              // MV-1300
         Airlock,              // MV-1305
+        Challenge,            // MV-1318
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -275,6 +276,13 @@ namespace MaxWorlds.Arena
         /// straight to the built <see cref="MaxWorlds.Enemies.EnemySpawner.ConfigureAreaComposition"/>
         /// call. Null for every other kind.</summary>
         public WorldComposition cradleComposition;
+
+        /// <summary>Challenge pad only (MV-1318) — this pad's own area's authored composition, or the
+        /// world's dial-derived fallback if the area has none, resolved once by <see cref="WorldMapLoader"/>
+        /// (it alone holds the <see cref="WorldConfig"/> a dial fallback needs) and handed straight to the
+        /// built <see cref="MaxWorlds.Factories.ChallengePad.SetComposition"/> call — same "resolved at
+        /// load, consumed at build" shape as <see cref="cradleComposition"/>. Null for every other kind.</summary>
+        public WorldComposition challengeComposition;
 
         /// <summary>Deck only (MV-852) — resolved from <see cref="WorldDeck.walled"/>: every non-mouth
         /// edge gets a solid, collider-bearing parapet instead of the ordinary open MV-821 edge band.

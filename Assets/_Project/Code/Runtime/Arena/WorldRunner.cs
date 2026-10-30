@@ -256,6 +256,21 @@ namespace MaxWorlds.Arena
                     if (pylon == null) continue;
                     pylon.SetAreaIndex(area.index);
                 }
+
+                // MV-1318: a challenge pad's own hidden EnemySpawner needs the world config wired in
+                // (same as a shed's own spawner, the shed loop above) so its wave spawns can resolve
+                // elite rolls and MV-701 enemyOverrides — BuildChallenge itself only has the per-entity
+                // resolved composition to hand it (MapRuntime carries no WorldConfig reference at all).
+                WorldChallenge[] challengesCfg = area.challenges ?? Array.Empty<WorldChallenge>();
+                for (int i = 0; i < challengesCfg.Length; i++)
+                {
+                    WorldChallenge challengeCfg = challengesCfg[i];
+                    if (challengeCfg == null || string.IsNullOrEmpty(challengeCfg.id)) continue;
+                    if (!build.Actors.TryGetValue(challengeCfg.id, out GameObject challengeGo) || challengeGo == null) continue;
+
+                    EnemySpawner challengeSpawner = challengeGo.GetComponent<EnemySpawner>();
+                    if (challengeSpawner != null) challengeSpawner.ConfigureWorldConfig(cfg);
+                }
             }
 
             BuildGateIntoAreaMap(build);
