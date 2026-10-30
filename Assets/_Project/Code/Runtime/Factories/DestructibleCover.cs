@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
@@ -31,11 +32,20 @@ namespace MaxWorlds.Factories
         private static readonly Color DamagedColor = new Color(0.40f, 0.37f, 0.34f);  // deeper cracks
         private static readonly Color RubbleColor = new Color(0.34f, 0.31f, 0.29f);
 
+        // --- MV-1320: a secret's own hairline crack and cache payload ---
+        private const float HairlineWorldWidth = 0.04f;       // "~2 px wide at the play camera" (48 px/m)
+        private const float HairlineHeightFraction = 0.7f;    // "60-80% of the piece's height"
+        private static readonly Color HairlineColor = new Color(0.46f, 0.44f, 0.41f); // subtly darker than IntactColor, not as dark as DamagedColor — findable, not obvious
+        private const int SecretPowerCellCount = 4;            // ticket: "4 PickupKind.PowerCell"
+        private const float SecretScatterRadius = 0.9f;        // same ring spacing PickupDirector's own ScatterRadius uses
+
         private DestructibleHealth _health;
         private Collider _collider;
         private Renderer _bodyRenderer;
         private MapEntity _entity;
         private float _configuredHp;
+        private bool _secret;
+        private GameObject _crack;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Neutral; // ticket: "takes damage from shots of ANY team"
@@ -105,6 +115,18 @@ namespace MaxWorlds.Factories
             if (_health != null) RebuildHealth();
         }
 
+        /// <summary>MV-1320: marks this piece a secret — called by <see cref="MaxWorlds.Arena.MapRuntime"/>
+        /// right after <see cref="Configure"/>, same "post-build configure call, order-independent of
+        /// <see cref="Build"/>" convention that method's own doc comment describes. Builds the hairline
+        /// crack immediately if the body already exists (production order: <c>Awake</c> already ran via
+        /// <c>AddComponent</c>); otherwise <see cref="Build"/> builds it once the body exists, since this
+        /// call may land before <see cref="Build"/> has ever run (an EditMode test's order).</summary>
+        public void SetSecret(bool secret)
+        {
+            _secret = secret;
+            if (_bodyRenderer != null) ApplySecretVisual();
+        }
+
         private void Awake() => Build();
 
         /// <summary>Construct the health model. Exposed publicly, same reasoning as
@@ -118,6 +140,7 @@ namespace MaxWorlds.Factories
             _bodyRenderer = GetComponent<Renderer>();
             RebuildHealth();
             SetStageTint(damaged: false);
+            ApplySecretVisual(); // no-op if SetSecret(true) hasn't been called yet — see that method's own doc
 
             if (!Registered.Contains(this)) Registered.Add(this);
         }
@@ -168,6 +191,7 @@ namespace MaxWorlds.Factories
 
             if (_collider != null) _collider.enabled = false; // ticket: "disable its collider"
             if (_bodyRenderer != null) _bodyRenderer.enabled = false;
+            if (_crack != null) _crack.SetActive(false); // MV-1320: the hairline goes with the body it was etched into
             gameObject.layer = 0; // Default — ticket: "remove it from CoverLayer"
 
             // Ticket Change 3: mark the MapEntity broken so ZoneRouteGrid no longer rasterises it, then
@@ -177,6 +201,60 @@ namespace MaxWorlds.Factories
             ZoneRouteGrid.Forget();
 
             BuildRubbleDecal();
+
+            // MV-1320: a secret places its cache on EVERY break that leaves it un-found — a fresh live
+            // break (never found yet), and a RESUME's silent re-break of a secret the player broke but
+            // never walked back to collect (SecretCensus.ApplyCheckpointFoundIds runs before this, on
+            // MaxWorlds.Save.SaveSystem.RestoreCheckpoint, so a FOUND secret's own id already reads true
+            // here and correctly places nothing).
+            if (_secret && !string.IsNullOrEmpty(Id) && !SecretCensus.IsFound(Id))
+                PlaceSecretCache();
+        }
+
+        /// <summary>MV-1320: 1 Supercell (tagged with this piece's own <see cref="Id"/> so collecting it
+        /// marks the secret FOUND — see <see cref="PickupDirector.Collect"/>) plus
+        /// <see cref="SecretPowerCellCount"/> Parts, scattered the same way <see cref="PickupDirector"/>'s
+        /// own kill/shed drops ring their centre. Via <see cref="PickupDirector.PlacePickupAt"/>, same as
+        /// the ticket's own "place at its centre" — that method never marks a drop to expire (the ticket's
+        /// own "placed pickups do not expire"), unlike a robot-kill drop.</summary>
+        private void PlaceSecretCache()
+        {
+            PickupDirector director = PickupDirector.EnsureInstalled();
+            director.PlacePickupAt(PickupKind.Supercell, transform.position, Id);
+            for (int i = 0; i < SecretPowerCellCount; i++)
+            {
+                float ang = i * (Mathf.PI * 2f / SecretPowerCellCount);
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * SecretScatterRadius;
+                director.PlacePickupAt(PickupKind.PowerCell, transform.position + off);
+            }
+        }
+
+        /// <summary>MV-1320: builds the one subtle hairline crack a secret piece carries — a thin, darker
+        /// line sitting just proud of the body's own +Z face, <see cref="HairlineHeightFraction"/> of the
+        /// piece's own height. A no-op once already built, or before <see cref="_bodyRenderer"/> exists
+        /// (<see cref="SetSecret"/>'s own doc comment covers the two call orders this resolves). Never
+        /// built at all for a non-secret piece — the ordinary cracked-stages look is unchanged.</summary>
+        private void ApplySecretVisual()
+        {
+            if (!_secret || _crack != null || _bodyRenderer == null) return;
+
+            Vector3 parentScale = transform.localScale;
+            if (parentScale.x <= 0f || parentScale.y <= 0f || parentScale.z <= 0f) return;
+
+            _crack = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _crack.name = "SecretCrack";
+            var col = _crack.GetComponent<Collider>();
+            if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); // a hairline is purely cosmetic, same "no collider" idiom BuildRubbleDecal already uses
+            _crack.transform.SetParent(transform, worldPositionStays: false);
+
+            float localDepth = HairlineWorldWidth / parentScale.z;
+            _crack.transform.localScale = new Vector3(HairlineWorldWidth / parentScale.x, HairlineHeightFraction, localDepth);
+            _crack.transform.localPosition = new Vector3(0f, 0f, 0.5f + localDepth * 0.5f); // just proud of the +Z face, no z-fighting
+
+            var rend = _crack.GetComponent<MeshRenderer>();
+            Material mat = MaterialLibrary.Tinted(SurfaceKind.Stone, HairlineColor);
+            if (mat != null) rend.sharedMaterial = mat;
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
         /// <summary>MV-1298: silently applies a checkpoint's already-recorded break — called once, on

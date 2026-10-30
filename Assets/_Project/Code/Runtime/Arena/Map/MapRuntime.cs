@@ -1391,6 +1391,14 @@ namespace MaxWorlds.Arena
             // destructible cover pieces, not the previous level's (or the previous test's) ghosts.
             DestructibleCover.ResetRegistry();
 
+            // MV-1320: same reasoning again — a level loaded a second time must count its own secret
+            // caches, not the previous level's (or the previous test's) ghosts.
+            SecretCensus.Reset();
+            int secretTotal = 0;
+            foreach (MapEntity e in map.entities)
+                if (e != null && e.secret) secretTotal++;
+            SecretCensus.SeedTotal(secretTotal);
+
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
             AreaVisitCensus.Reset();
@@ -1689,6 +1697,7 @@ namespace MaxWorlds.Arena
                             var destructible = piece.Body.AddComponent<DestructibleCover>();
                             destructible.SetId(e.id);
                             destructible.Configure(e, e.hp);
+                            destructible.SetSecret(e.secret);
                             TagStatic(map, piece.Body, rendererZones);
                         }
                         else

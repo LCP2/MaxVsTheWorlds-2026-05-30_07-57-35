@@ -50,6 +50,14 @@ namespace MaxWorlds.Pickups
         /// Meaningless for any other kind.</summary>
         public AbilityKind Ability { get; set; }
 
+        /// <summary>For a Supercell that is a secret's own cache (MV-1320), the owning
+        /// <see cref="MaxWorlds.Factories.DestructibleCover.Id"/> — null/empty for every ordinary
+        /// pickup. Set by the director from <see cref="PickupDirector.PlacePickupAt(PickupKind, Vector3, string)"/>
+        /// when it's placed, and reset on every <see cref="PickupDirector"/> drop (fresh or pooled reuse)
+        /// so a pooled Supercell never carries a stale id forward, same reasoning as <see cref="Part"/>/
+        /// <see cref="Ability"/> always being re-set on every <c>SpawnDrop</c> call.</summary>
+        public string SecretId { get; set; }
+
         private Transform _spin;
         private float _baseY = FloatHeight;
         private GroundRing _glowRing;   // MV-698: only the Weapon Core carries one of its own

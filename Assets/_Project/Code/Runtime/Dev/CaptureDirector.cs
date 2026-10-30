@@ -676,6 +676,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1266ReefPlayCameraCheck());
             Add(BuildMv1295HatcheryClamLook());
             Add(BuildMv1299Gridlock());
+            Add(BuildMv1320SecretCover());
             return d;
         }
 
@@ -1651,6 +1652,94 @@ namespace MaxWorlds.Dev
                 {
                     if (rig != null) Destroy(rig.gameObject);
                     if (bossGo != null) Destroy(bossGo);
+                },
+            };
+        }
+
+        // ---- Mv1320SecretCover (MV-1320 AC2) --------------------------------------------------
+
+        /// <summary>AC2's own "ONE capture with a secret piece beside an ordinary destructible piece"
+        /// — two real <see cref="DestructibleCover"/> instances (same AddComponent/SetId/Configure/
+        /// SetSecret/Build call shape <c>MV1320SecretCacheTests</c> itself drives), side by side: one
+        /// ordinary (secret false, today's plain intact tint) and one secret (secret true, carrying the
+        /// one hairline crack) — proof the two read differently, not a description of one.</summary>
+        private static CapturePreset BuildMv1320SecretCover()
+        {
+            // Shallow, same reasoning BuildMv1231BreakerLook's own comment gives for its own 32-degree
+            // custom inspection angle: a steep top-down pitch reads only the roof of a 1.5 m-tall box,
+            // never the vertical face the hairline crack is etched onto.
+            const float pitch = 30f;
+            const float distance = 6f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject ordinaryGo = null;
+            GameObject secretGo = null;
+
+            GameObject BuildPiece(string id, Vector3 pos, bool secret)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = id;
+                go.transform.position = pos;
+                // The camera below approaches from -Z looking toward +Z -- face the piece's own +Z
+                // front (the face DestructibleCover.ApplySecretVisual etches the hairline onto) back at
+                // it, same reasoning BuildMv1299Gridlock's own comment gives.
+                go.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+                go.transform.localScale = new Vector3(2f, 1.5f, 1f); // same footprint MV1320SecretCacheTests' own fixture authors
+                var cover = go.AddComponent<DestructibleCover>();
+                cover.SetId(id);
+                cover.Configure(null, 50f);
+                cover.SetSecret(secret);
+                cover.Build();
+                return go;
+            }
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                Vector3 focus = maxGo.transform.position + maxGo.transform.forward * 10f;
+                Vector3 ordinaryPos = focus + maxGo.transform.right * -1.3f;
+                Vector3 secretPos = focus + maxGo.transform.right * 1.3f;
+
+                ordinaryGo = BuildPiece("MV1320CaptureOrdinary", ordinaryPos, secret: false);
+                secretGo = BuildPiece("MV1320CaptureSecret", secretPos, secret: true);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the tint/hairline settle
+
+                Vector3 camFocus = focus + Vector3.up * 0.75f; // mid-height on the 1.5 m piece
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1320secretcover",
+                LogTag = "[MV1320Capture]",
+                Flag = "-mv1320shot",
+                ArmFile = "Temp/mv1320.arm",
+                HeadlessMarker = "Temp/mv1320.headless",
+                DoneFileName = "_mv1320_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard every other preset in this file uses: on a fresh profile
+                    // (no slot picked yet) HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1320-secret-cover", Setup) },
+                Cleanup = () =>
+                {
+                    if (ordinaryGo != null) Destroy(ordinaryGo);
+                    if (secretGo != null) Destroy(secretGo);
                 },
             };
         }
