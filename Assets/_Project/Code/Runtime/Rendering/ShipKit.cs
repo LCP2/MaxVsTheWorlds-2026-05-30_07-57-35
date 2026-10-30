@@ -171,8 +171,33 @@ namespace MaxWorlds.Rendering
         private const float FloorKickGlowWidth = 0.03f;
         private const float RobotRackStandoff = 0.6f;         // ticket: "stand at least 0.6 m into the room"
 
+        // MV-1274 addendum ("the wall blocks are 'super basic boxes'"): the Hangar's own wall-top cap —
+        // a framed, bevelled housing with a recessed inset panel, not a flat slab. Hangar areas (1-5)
+        // only; every other deck keeps BuildWallTopCap's original flat MV-1269 cap unchanged.
+        private const float HangarCapFrameBevel = 0.03f;       // pronounced vs DefaultBevel's ~0.0084 clamp-to-0.015 for this thin a box — "bevelled... not a sharp extruded box"
+        private const float HangarCapInsetFraction = 0.55f;    // per-axis scale -> ~0.3 (30%) of the top's own area, under the ticket's 40% cap
+        private const float HangarCapBumperFraction = 0.08f;
+        private const float HangarCapStudPitch = 0.5f;
+        // MV-1274 recapture fix-pass: the Neutral tonemapper compresses a 2.0-2.6x HDR boost to well
+        // under AC3's >230/255 bloom-pixel threshold (measured 0 bloom pixels across the whole frame
+        // at the original boosts) -- raised well past the curve's compression so the source itself
+        // clips bright, not just the bloom halo around it.
+        private const float HangarCapNeonBoost = 6.0f;         // HDR multiplier, see Hdr() below
+        private static readonly Color GunmetalTone = Rgb(42, 46, 54);
+
         private static readonly Color SteelPipe = Rgb(150, 155, 162);
         private static readonly Color CopperPipe = Rgb(176, 108, 68);
+
+        /// <summary>Pushes <paramref name="c"/> past 1.0 so it clips <see cref="BackyardLook.BloomThreshold"/>
+        /// and reads as true HDR neon rather than a flat emissive tint — MV-1274's own "HDR emissive
+        /// above the bloom threshold" ask, applied only where a caller explicitly opts in (every existing
+        /// emissive tone in this file stays &lt;= 1.0 unless routed through this).</summary>
+        private static Color Hdr(Color c, float boost)
+        {
+            Color r = c * boost;
+            r.a = 1f;
+            return r;
+        }
 
         /// <summary>The ticket's own explicit "red standby eye" ask — the one sanctioned exception to
         /// <see cref="IsReservedColour"/>'s cradle-red band (same exemption shape <see cref="GoldLamp"/>'s
@@ -260,7 +285,8 @@ namespace MaxWorlds.Rendering
         /// this Rendering-assembly method never sees — same WHERE/WHAT split every other kit in this
         /// namespace keeps.</summary>
         public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward,
-            float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed, bool capVisible = true)
+            float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed, bool capVisible = true,
+            bool hangarStyle = false)
         {
             Transform root = NewRoot(parent, "Bulkhead Wall");
             Vector2 d = b - a;
@@ -281,7 +307,7 @@ namespace MaxWorlds.Rendering
                 BuildPanelCell(root, pa, pb, dir, n, h, deckGlow, flip: (i % 2) == 1);
 
                 if (i % 2 == 0)
-                    BuildWallLamp(root, Vector2.Lerp(pa, pb, 0.5f), n, h, deckGlow);
+                    BuildWallLamp(root, Vector2.Lerp(pa, pb, 0.5f), n, h, deckGlow, hangarStyle);
                 else if (isOuterEdge)
                     BuildWindowPanel(root, pa, pb, dir, n, h);
             }
@@ -301,7 +327,7 @@ namespace MaxWorlds.Rendering
             // their renderers disabled — same "hide the box, keep the structure" contract this file
             // already uses on the wall's own backing renderer two lines below — so only one copy is
             // ever actually drawn.
-            BuildWallTopCap(root, a, b, dir, n, h, wt, deckGlow, panels, capVisible);
+            BuildWallTopCap(root, a, b, dir, n, h, wt, deckGlow, panels, capVisible, hangarStyle);
             BuildFloorKickStrip(root, a, b, dir, n, deckGlow);
 
             if (length >= RobotRackMinWallLength)
@@ -430,7 +456,7 @@ namespace MaxWorlds.Rendering
         /// owns — not a "lift one 0.01 m" patch, since the actual duplicate geometry here is removed
         /// rather than hidden behind an offset.</summary>
         private static void BuildWallTopCap(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n,
-            float wallHeight, float wallThickness, Color deckGlow, int panels, bool visible)
+            float wallHeight, float wallThickness, Color deckGlow, int panels, bool visible, bool hangarStyle = false)
         {
             float capY = wallHeight + BulkheadCapThickness * 0.5f;
 
@@ -449,15 +475,24 @@ namespace MaxWorlds.Rendering
                 Vector2 mid = (pa + pb) * 0.5f;
                 bool flip = (i % 2) == 1;
                 Vector3 pos = new Vector3(mid.x, capY, mid.y);
+
+                if (hangarStyle)
+                {
+                    BuildHangarCapSection(root, pos, w, dir, n, wallThickness, flip, deckGlow, visible);
+                    continue;
+                }
+
                 GameObject cap = MeshBox(root, "Wall Top Cap", pos,
                     new Vector3(w * 0.99f, BulkheadCapThickness, wallThickness).Oriented(dir), flip ? Teal : RustOrange);
                 if (!visible) HideRenderer(cap);
+                TagDressing(cap);
 
                 if (i % 2 == 0)
                 {
                     GameObject lamp = EmissiveBox(root, "Cap Lamp Strip", pos + Vector3.up * (BulkheadCapThickness * 0.5f + 0.008f),
                         new Vector3(w * 0.5f, 0.012f, wallThickness * 0.3f).Oriented(dir), deckGlow);
                     if (!visible) HideRenderer(lamp);
+                    TagDressing(lamp);
                 }
             }
 
@@ -467,7 +502,60 @@ namespace MaxWorlds.Rendering
                 GameObject rib = MeshBox(root, "Cap Rib", new Vector3(at.x, capY, at.y),
                     new Vector3(BulkheadCapRibWidth, BulkheadCapThickness * 1.4f, wallThickness * 1.05f).Oriented(dir), NearBlack);
                 if (!visible) HideRenderer(rib);
+                TagDressing(rib);
             }
+        }
+
+        /// <summary>MV-1274 addendum: one Hangar wall-top cap section — a gunmetal frame (pronounced
+        /// bevel, "not a sharp extruded box"), a recessed rust/teal inset panel covering
+        /// <see cref="HangarCapInsetFraction"/>&#178; (~30%, under the ticket's 40% cap) of the frame's
+        /// own footprint, two end bumpers, a row of rivet/conduit studs along the frame's outer edge, and
+        /// an HDR neon edge line along the room-facing edge. <paramref name="pos"/>/<paramref name="w"/>
+        /// are this section's own centre/along-wall length (world space, already resolved by the caller's
+        /// loop) — never read back off an <see cref="StormdrainKit.Oriented"/>'d size, which only ever
+        /// reports WORLD axis extents, not "along-wall" ones, once the wall runs along Z instead of X.</summary>
+        private static void BuildHangarCapSection(Transform root, Vector3 pos, float w, Vector2 dir, Vector3 n,
+            float wallThickness, bool flip, Color deckGlow, bool visible)
+        {
+            Vector3 dir3 = new Vector3(dir.x, 0f, dir.y);
+            Vector3 frameSize = new Vector3(w * 0.99f, BulkheadCapThickness, wallThickness).Oriented(dir);
+
+            GameObject frame = StormdrainKit.AddMeshPart(root, "Wall Top Cap", CharacterMeshes.Bevelled(frameSize, HangarCapFrameBevel), pos, SurfaceKind.Metal, GunmetalTone);
+            if (!visible) HideRenderer(frame);
+            TagDressing(frame);
+
+            Vector3 insetSize = new Vector3(w * HangarCapInsetFraction, BulkheadCapThickness * 0.55f, wallThickness * HangarCapInsetFraction).Oriented(dir);
+            Vector3 insetPos = pos + Vector3.down * (BulkheadCapThickness * 0.5f - insetSize.y * 0.5f - 0.004f);
+            GameObject inset = MeshBox(root, "Wall Top Cap Inset", insetPos, insetSize, flip ? Teal : RustOrange);
+            if (!visible) HideRenderer(inset);
+            TagDressing(inset);
+
+            float bumperLen = Mathf.Min(w * HangarCapBumperFraction, 0.16f);
+            Vector3 bumperSize = new Vector3(bumperLen, BulkheadCapThickness * 1.5f, wallThickness * 0.92f).Oriented(dir);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 bumperPos = pos + dir3 * (side * (w * 0.5f - bumperLen * 0.5f)) + Vector3.up * (BulkheadCapThickness * 0.2f);
+                GameObject bumper = MeshBox(root, "Wall Top Cap Bumper", bumperPos, bumperSize, GunmetalTone);
+                if (!visible) HideRenderer(bumper);
+                TagDressing(bumper);
+            }
+
+            int studs = Mathf.Clamp(Mathf.FloorToInt(w / HangarCapStudPitch), 2, 8);
+            Mesh studMesh = CharacterMeshes.Prism(6, 0.016f, 0.016f, BulkheadCapThickness * 0.9f, 0.12f);
+            for (int s = 0; s < studs; s++)
+            {
+                float t = (s + 0.5f) / studs - 0.5f;
+                Vector3 studPos = pos + dir3 * (t * w * 0.9f) - n * (wallThickness * 0.32f) + Vector3.up * (BulkheadCapThickness * 0.5f + 0.001f);
+                GameObject rivet = MeshPart(root, "Wall Top Cap Rivet", studMesh, studPos, GunmetalTone);
+                if (!visible) HideRenderer(rivet);
+                TagDressing(rivet);
+            }
+
+            Vector3 neonPos = pos + n * (wallThickness * 0.5f - 0.01f) + Vector3.up * (BulkheadCapThickness * 0.5f + 0.003f);
+            Vector3 neonSize = new Vector3(w * 0.96f, 0.012f, 0.02f).Oriented(dir);
+            GameObject neon = EmissiveBox(root, "Wall Top Cap Neon Edge", neonPos, neonSize, Hdr(deckGlow, HangarCapNeonBoost));
+            if (!visible) HideRenderer(neon);
+            TagDressing(neon);
         }
 
         /// <summary>MV-1272: disables a built piece's own renderer without removing it — same "hide the
@@ -478,6 +566,25 @@ namespace MaxWorlds.Rendering
         {
             var renderer = go != null ? go.GetComponent<Renderer>() : null;
             if (renderer != null) renderer.enabled = false;
+        }
+
+        /// <summary>MV-1277: the Unity layer <see cref="CaptureDirector"/>'s differential capture
+        /// clears from <c>cam.cullingMask</c> to exclude a collider-free dressing/VFX piece from a
+        /// frame -- the renderer-side exclusion idiom named by this file's own class doc ("nothing here
+        /// carries a collider ... colliders come from the map's own cover entries"), reused rather than
+        /// invented a third mechanism (ticket's own "Method"). Never applied to <see cref="BuildAtlasFloor"/>'s
+        /// own floor tiles or <see cref="BuildGraduatedPool"/>'s light-pool rings -- those are the
+        /// measurement SUBJECT, not a candidate occluder of it.</summary>
+        public const string DressingLayerName = "Dressing";
+
+        /// <summary>Tags <paramref name="go"/>'s own layer as <see cref="DressingLayerName"/> so a
+        /// differential capture can exclude it via <c>cam.cullingMask</c>. A no-op if that layer hasn't
+        /// been added to <c>ProjectSettings/TagManager.asset</c> (defensive only -- MV-1277 adds it).</summary>
+        private static void TagDressing(GameObject go)
+        {
+            if (go == null) return;
+            int layer = LayerMask.NameToLayer(DressingLayerName);
+            if (layer >= 0) go.layer = layer;
         }
 
         /// <summary>MV-1269: a floor-edge kick strip along the base of this wall, extending
@@ -502,17 +609,77 @@ namespace MaxWorlds.Rendering
 
         /// <summary>A lamp near the top in <paramref name="deckGlow"/>, with an additive floor light-pool
         /// just inside the wall (ticket, change item 2) — the pool is <see cref="CityKit.BuildPool"/>'s
-        /// own generated disc, not a primitive quad.</summary>
-        private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow)
+        /// own generated disc, not a primitive quad.
+        ///
+        /// MV-1274: <paramref name="hangarStyle"/> swaps <see cref="CityKit.BuildPool"/>'s own flat disc
+        /// (a single hard-edged radius — the ticket's own "not flat discs") for <see cref="BuildGraduatedPool"/>'s
+        /// stepped radial falloff, at <see cref="HangarLightPoolRadius"/> (1.6 m) instead of the shared
+        /// <see cref="BulkheadLightPoolRadius"/> — every other deck's own lamp pool is untouched (AC8).</summary>
+        private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow, bool hangarStyle = false)
         {
             Vector3 lampPos = new Vector3(at.x, wallHeight * 0.72f, at.y) + n * (BulkheadBackingDepth + BulkheadLampSize * 0.5f + 0.02f);
-            EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow);
+            TagDressing(EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow));
+
+            if (hangarStyle)
+            {
+                Vector3 hangarPoolPos = new Vector3(at.x, 0f, at.y) + n * (HangarLightPoolRadius * 0.9f);
+                BuildGraduatedPool(root, hangarPoolPos, HangarLightPoolRadius, deckGlow);
+                return;
+            }
 
             // MV-1264: was 0.6 — well outside CityKit's own 0.12-0.26 pool-strength range, which is why
             // these painted as large flat solid discs on a real device (no bloom falloff left to read as
             // a light pool rather than a dyed patch of deck). 0.18 sits inside that range.
             Vector3 poolPos = new Vector3(at.x, 0f, at.y) + n * (BulkheadLightPoolRadius * 0.9f);
             CityKit.BuildPool(root, poolPos, BulkheadLightPoolRadius, BulkheadLightPoolRadius, deckGlow, 0.18f);
+        }
+
+        private const float HangarLightPoolRadius = 1.6f;     // ticket: "graduated radial falloff over at least 1.5 m"
+
+        /// <summary>MV-1274 AC4's own "graduated radial falloff ... not flat discs": five concentric
+        /// additive rings (<see cref="CharacterMeshes.Ring"/>, a real lathed annulus — plus one innermost
+        /// lathed disc), each a step dimmer outward, in place of <see cref="CityKit.BuildPool"/>'s single
+        /// flat-strength disc. A real continuous gradient would need a baked radial-alpha texture (the
+        /// floor atlas's own "no imported image files, baked in code" contract would still allow a
+        /// generated one, but every other additive glow in this kit is a flat-tinted material, never a
+        /// textured one) — this reuses that same flat-material idiom, so the "graduated" look is carried
+        /// by genuinely stepped geometry instead, which is also the literal shape AC4's own acceptance
+        /// test measures ("at least 4 distinct steps, each step at least 5 apart").</summary>
+        private static void BuildGraduatedPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
+        {
+            // MV-1274 triage (21 Oct, Jira comment 15685): the original strengths put the pool centre at
+            // ~224-232 luma, clipped flat against the Neutral tonemapper's shoulder -- AC4's own falloff
+            // probe starts inside that plateau, so no monotonic gradient can exist there at any sampling
+            // distance. Cut roughly in half so the brightest step lands in the tonemapper's still-responsive
+            // range instead of its ceiling.
+            var steps = new (float outerFraction, float strength)[]
+            {
+                (0.22f, 0.42f),
+                (0.42f, 0.24f),
+                (0.62f, 0.14f),
+                (0.82f, 0.075f),
+                (1.00f, 0.035f),
+            };
+
+            float innerR = 0f;
+            for (int i = 0; i < steps.Length; i++)
+            {
+                float outerR = radius * steps[i].outerFraction;
+                Mesh ring = i == 0
+                    ? CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(1f, 0f) }, 24)
+                    : CharacterMeshes.Ring(innerR / outerR, 1f, 0.01f, 24);
+
+                var go = new GameObject($"Pool Step {i}");
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = groundCentre + Vector3.up * (0.02f + i * 0.001f);
+                go.transform.localScale = new Vector3(outerR, 1f, outerR);
+                go.AddComponent<MeshFilter>().sharedMesh = ring;
+                go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainLightKit.AdditiveUnlit(tone * steps[i].strength, $"HangarPool{i}");
+                go.AddComponent<KeepsOwnMaterial>();
+                StormdrainKit.Strip(go);
+
+                innerR = outerR;
+            }
         }
 
         /// <summary>A framed window onto stars and the limb of the planet Sotami, plus a faint additive
@@ -653,11 +820,28 @@ namespace MaxWorlds.Rendering
         {
             Transform root = NewRoot(parent, "Launch Pad Hazard Stripes");
 
-            const float stripe = 0.3f;
+            // MV-1274 triage: neonWidth widened 0.05 -> 0.12 so the HDR source itself has more physical
+            // extent for the bloom kernel to spread from, same AC3 fix as the 9.0x boost above.
+            // MV-1274 round 3: 0.12/9.0x left the near-stripe delta at 19.2 against the >=25 gate.
+            // 0.22/15.0x moved it to 23.6 (close) but read as a solid garish bar rather than a neon
+            // line at this width -- pulled back partway, trading some of AC3's margin for a look that
+            // still reads as a thin accent.
+            const float stripe = 0.3f, neonWidth = 0.16f;
             StormdrainKit.Box(root, "Hazard N", new Vector3(area.center.x, 0.016f, area.yMax - stripe * 0.5f),
                 new Vector3(area.width, 0.006f, stripe), HazardYellow, SurfaceKind.Metal);
             StormdrainKit.Box(root, "Hazard S", new Vector3(area.center.x, 0.016f, area.yMin + stripe * 0.5f),
                 new Vector3(area.width, 0.006f, stripe), HazardYellow, SurfaceKind.Metal);
+
+            // MV-1274 ("Neon... on: the hazard stripe"): a thin HDR centreline on top of the walkable lit
+            // stripe above — the stripe itself stays readable/walkable-lit, the centreline is what blooms.
+            // MV-1274 triage: AC3's near-hazard-stripe delta (0.15 m past the stripe's own outer edge,
+            // so ~0.3 m past this centreline) is in Neutral's near-linear mid-range, which triage read as
+            // reachable with more spill, not a brighter clamped source -- widened and boosted here rather
+            // than touching BloomIntensity/PostExposure again (both already tuned against AC1/AC2's bands).
+            EmissiveBox(root, "Hazard N Neon", new Vector3(area.center.x, 0.019f, area.yMax - stripe * 0.5f),
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
+            EmissiveBox(root, "Hazard S Neon", new Vector3(area.center.x, 0.019f, area.yMin + stripe * 0.5f),
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
@@ -695,10 +879,21 @@ namespace MaxWorlds.Rendering
         private static readonly Color VentSlatTone = Rgb(32, 34, 40);
         private static readonly Color TreadBumpTone = Rgb(44, 47, 54);
 
-        private static readonly Quaternion FaceUp = Quaternion.LookRotation(Vector3.down, Vector3.forward);
-
         private static Texture2D s_floorAlbedo, s_floorEmission;
         private static Material s_floorMaterial, s_decalMaterial;
+
+        // MV-1274: a second, darker-navy atlas for the Hangar (areas 1-5) only — cached independently
+        // of s_floorAlbedo/s_floorEmission/s_floorMaterial above so every other deck's own atlas (and
+        // every byte of its baked texture) stays bit-identical (AC8's "areas 6-30 unchanged"). Ticket's
+        // own target floor-plate albedo: RGB 26/34/50.
+        private static readonly Color HangarPlainLightTone = Rgb(34, 44, 62);
+        private static readonly Color HangarPlainMidTone = Rgb(26, 34, 50);     // the ticket's own exact target
+        private static readonly Color HangarPlainDarkTone = Rgb(17, 23, 36);
+        private static readonly Color HangarVentSlatTone = Rgb(10, 13, 21);
+        private static readonly Color HangarTreadBumpTone = Rgb(14, 18, 29);
+
+        private static Texture2D s_floorAlbedoDark, s_floorEmissionDark;
+        private static Material s_floorMaterialDark;
 
         /// <summary>The ticket's own per-area deck floor (MV-1259): one combined mesh of 2 m atlas-plate
         /// quads (<see cref="BuildPlateMesh"/>), dark seams with a thin deck-coloured emissive line every
@@ -709,17 +904,23 @@ namespace MaxWorlds.Rendering
         /// an Arena/Gameplay-assembly lookup this Rendering-assembly kit cannot make itself — see this
         /// file's own header on why every builder here takes plain data, never a map or config). No
         /// collider anywhere: purely a visual overlay on top of the zone's own real, already-walkable
-        /// floor.</summary>
-        public static GameObject BuildAtlasFloor(Transform parent, Rect area, int areaIndex, Color seamGlow)
+        /// floor.
+        ///
+        /// MV-1274: <paramref name="darkBase"/> — Hangar areas only (<see cref="MaxWorlds.Arena.MothershipDecks"/>'s
+        /// own area-to-deck gate, resolved by the Arena-assembly caller, same "plain data down" contract
+        /// this file's own header documents) — swaps in the darker navy atlas (target plate albedo RGB
+        /// 26/34/50, MV-1274 AC2) and HDR-boosts the seam glow lines. Every other deck still builds the
+        /// original MV-1259 atlas unchanged (AC8).</summary>
+        public static GameObject BuildAtlasFloor(Transform parent, Rect area, int areaIndex, Color seamGlow, bool darkBase = false)
         {
             Transform root = NewRoot(parent, $"Atlas Floor A{areaIndex}");
 
             var plates = new GameObject("Plates") { isStatic = true };
             plates.transform.SetParent(root, false);
             plates.AddComponent<MeshFilter>().sharedMesh = BuildPlateMesh(area, areaIndex);
-            plates.AddComponent<MeshRenderer>().sharedMaterial = FloorMaterial();
+            plates.AddComponent<MeshRenderer>().sharedMaterial = FloorMaterial(darkBase);
 
-            BuildSeams(root, area, seamGlow);
+            BuildSeams(root, area, seamGlow, hdrGlow: darkBase);
 
             Mesh wear = BuildWearDecalMesh(area, areaIndex);
             if (wear != null)
@@ -834,27 +1035,37 @@ namespace MaxWorlds.Rendering
         /// flat 0.6x multiplier — the only place a per-deck colour reaches this kit, since every other
         /// ShipKit tone is fixed (see this file's own header). MV-1259 fix-pass 1: raised from an initial
         /// 0.35x, which read as barely-there against a fresh MV-1249 capture — this is still well under
-        /// <see cref="GoldLamp"/>'s own full-intensity use, so "low" still holds.</summary>
-        private static void BuildSeams(Transform root, Rect area, Color seamGlow)
+        /// <see cref="GoldLamp"/>'s own full-intensity use, so "low" still holds.
+        ///
+        /// MV-1274: the glow line itself used to be a bare <see cref="StormdrainKit.Glow"/> — a Unity
+        /// primitive Quad left entirely unreplaced (every OTHER glow/lamp piece in this file already
+        /// swaps its primitive's mesh for a generated one; this was the one spot that didn't) — which is
+        /// what MV1274HangarNoPrimitivesTests catches under every Hangar area's own floor dressing. Now a
+        /// flat <see cref="EmissiveBox"/> instead, same visible footprint, generated mesh.
+        /// <paramref name="hdrGlow"/> (Hangar only — see <see cref="BuildAtlasFloor"/>'s own
+        /// <c>darkBase</c> doc) pushes the line past 1.0 so it clips <see cref="BackyardLook.BloomThreshold"/>
+        /// and reads as neon (ticket change item 2: "the faint floor grid lines") instead of the flat
+        /// 0.6x wash every other deck still gets unchanged.</summary>
+        private static void BuildSeams(Transform root, Rect area, Color seamGlow, bool hdrGlow = false)
         {
-            const float spacing = 8f, seamWidth = 0.05f, glowWidth = 0.025f;
-            Color dim = seamGlow * 0.6f;
+            const float spacing = 8f, seamWidth = 0.05f, glowWidth = 0.025f, glowThin = 0.004f;
+            Color dim = seamGlow * (hdrGlow ? 5.0f : 0.6f);
             dim.a = 1f;
 
             for (float x = area.xMin + spacing; x < area.xMax - 0.01f; x += spacing)
             {
                 StormdrainKit.Box(root, $"Seam X{x:F0}", new Vector3(x, SeamY, area.center.y),
                     new Vector3(seamWidth, 0.01f, area.height), NearBlack, SurfaceKind.Metal);
-                StormdrainKit.Glow(root, $"Seam Glow X{x:F0}", new Vector3(x, GlowY, area.center.y),
-                    new Vector3(glowWidth, area.height, 1f), FaceUp, dim);
+                EmissiveBox(root, $"Seam Glow X{x:F0}", new Vector3(x, GlowY, area.center.y),
+                    new Vector3(glowWidth, glowThin, area.height), dim);
             }
 
             for (float z = area.yMin + spacing; z < area.yMax - 0.01f; z += spacing)
             {
                 StormdrainKit.Box(root, $"Seam Z{z:F0}", new Vector3(area.center.x, SeamY, z),
                     new Vector3(area.width, 0.01f, seamWidth), NearBlack, SurfaceKind.Metal);
-                StormdrainKit.Glow(root, $"Seam Glow Z{z:F0}", new Vector3(area.center.x, GlowY, z),
-                    new Vector3(area.width, glowWidth, 1f), FaceUp, dim);
+                EmissiveBox(root, $"Seam Glow Z{z:F0}", new Vector3(area.center.x, GlowY, z),
+                    new Vector3(area.width, glowThin, glowWidth), dim);
             }
         }
 
@@ -949,24 +1160,35 @@ namespace MaxWorlds.Rendering
         /// <summary>The shared atlas material (<see cref="MaterialLibrary.SurfaceShader"/>, lit, so the
         /// floor reads the same per-deck ambient light as everything else) — built and cached once, the
         /// same lazy-static idiom <c>StylizedTextures</c> uses for its own baked textures.</summary>
-        private static Material FloorMaterial()
+        private static Material FloorMaterial(bool darkBase = false)
         {
+            if (darkBase)
+            {
+                if (s_floorMaterialDark != null && s_floorAlbedoDark != null && s_floorEmissionDark != null) return s_floorMaterialDark;
+                BuildFloorAtlasTextures(darkBase: true, out s_floorAlbedoDark, out s_floorEmissionDark);
+                Material dark = NewFloorMaterial("M_ShipFloorAtlasHangar", s_floorAlbedoDark, s_floorEmissionDark);
+                s_floorMaterialDark = dark;
+                return dark;
+            }
+
             if (s_floorMaterial != null && s_floorAlbedo != null && s_floorEmission != null) return s_floorMaterial;
+            BuildFloorAtlasTextures(darkBase: false, out s_floorAlbedo, out s_floorEmission);
+            s_floorMaterial = NewFloorMaterial("M_ShipFloorAtlas", s_floorAlbedo, s_floorEmission);
+            return s_floorMaterial;
+        }
 
-            BuildFloorAtlasTextures(out s_floorAlbedo, out s_floorEmission);
-
+        private static Material NewFloorMaterial(string name, Texture2D albedo, Texture2D emission)
+        {
             Shader shader = MaterialLibrary.SurfaceShader;
             if (shader == null) return null;
 
-            var m = new Material(shader) { name = "M_ShipFloorAtlas", hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", s_floorAlbedo);
+            var m = new Material(shader) { name = name, hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", albedo);
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
             if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
-            if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", s_floorEmission);
+            if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", emission);
             if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.white);
             m.EnableKeyword("_EMISSION");
-
-            s_floorMaterial = m;
             return m;
         }
 
@@ -1002,7 +1224,7 @@ namespace MaxWorlds.Rendering
         /// image files"), 128 px per cell — one 512x256 albedo plus a matching emission mask (black except
         /// the <see cref="FloorPlateVariant.FloorLight"/> cell's own dot). No mips: an atlas's own packed
         /// cells would bleed into each other under minification the moment Unity generates them.</summary>
-        private static void BuildFloorAtlasTextures(out Texture2D albedo, out Texture2D emission)
+        private static void BuildFloorAtlasTextures(bool darkBase, out Texture2D albedo, out Texture2D emission)
         {
             int w = AtlasCols * CellPx, h = AtlasRows * CellPx;
             var albedoPx = new Color32[w * h];
@@ -1012,11 +1234,11 @@ namespace MaxWorlds.Rendering
             {
                 int ox = (cell % AtlasCols) * CellPx;
                 int oy = (cell / AtlasCols) * CellPx;
-                DrawPlateCell((FloorPlateVariant)cell, albedoPx, emissionPx, w, ox, oy);
+                DrawPlateCell((FloorPlateVariant)cell, albedoPx, emissionPx, w, ox, oy, darkBase);
             }
 
-            albedo = NewAtlasTexture("ShipFloorAtlasAlbedo", w, h, albedoPx);
-            emission = NewAtlasTexture("ShipFloorAtlasEmission", w, h, emissionPx);
+            albedo = NewAtlasTexture(darkBase ? "ShipFloorAtlasAlbedoHangar" : "ShipFloorAtlasAlbedo", w, h, albedoPx);
+            emission = NewAtlasTexture(darkBase ? "ShipFloorAtlasEmissionHangar" : "ShipFloorAtlasEmission", w, h, emissionPx);
         }
 
         private static Texture2D NewAtlasTexture(string name, int w, int h, Color32[] px)
@@ -1035,18 +1257,24 @@ namespace MaxWorlds.Rendering
 
         /// <summary>Every variant shares the ticket's own common framing — a bevel highlight on the top
         /// edge, a shadow on the bottom edge, four corner rivets — then layers its own pattern on top.</summary>
-        private static void DrawPlateCell(FloorPlateVariant variant, Color32[] albedo, Color32[] emission, int atlasW, int ox, int oy)
+        private static void DrawPlateCell(FloorPlateVariant variant, Color32[] albedo, Color32[] emission, int atlasW, int ox, int oy, bool darkBase = false)
         {
+            Color plainLight = darkBase ? HangarPlainLightTone : PlainLightTone;
+            Color plainMid = darkBase ? HangarPlainMidTone : PlainMidTone;
+            Color plainDark = darkBase ? HangarPlainDarkTone : PlainDarkTone;
+            Color ventSlat = darkBase ? HangarVentSlatTone : VentSlatTone;
+            Color treadBump = darkBase ? HangarTreadBumpTone : TreadBumpTone;
+
             Color baseTone = variant switch
             {
-                FloorPlateVariant.PlainLight => PlainLightTone,
-                FloorPlateVariant.PlainMid => PlainMidTone,
-                FloorPlateVariant.PlainDark => PlainDarkTone,
-                FloorPlateVariant.Vent => PlainDarkTone,
-                FloorPlateVariant.Tread => PlainMidTone,
-                FloorPlateVariant.RivetRing => PlainMidTone,
-                FloorPlateVariant.FloorLight => PlainDarkTone,
-                _ => PlainMidTone, // Hatch
+                FloorPlateVariant.PlainLight => plainLight,
+                FloorPlateVariant.PlainMid => plainMid,
+                FloorPlateVariant.PlainDark => plainDark,
+                FloorPlateVariant.Vent => plainDark,
+                FloorPlateVariant.Tread => plainMid,
+                FloorPlateVariant.RivetRing => plainMid,
+                FloorPlateVariant.FloorLight => plainDark,
+                _ => plainMid, // Hatch
             };
 
             for (int ly = 0; ly < CellPx; ly++)
@@ -1057,13 +1285,13 @@ namespace MaxWorlds.Rendering
                     switch (variant)
                     {
                         case FloorPlateVariant.Vent when (ly / 8) % 2 == 0:
-                            c = VentSlatTone;
+                            c = ventSlat;
                             break;
                         case FloorPlateVariant.Hatch when IsCornerMark(lx, ly):
                             c = HazardYellow;
                             break;
                         case FloorPlateVariant.Tread when IsTreadBump(lx, ly):
-                            c = TreadBumpTone;
+                            c = treadBump;
                             break;
                         case FloorPlateVariant.RivetRing when IsRingRivet(lx, ly):
                             c = NearBlack;
@@ -1335,20 +1563,37 @@ namespace MaxWorlds.Rendering
 
         /// <summary>Hangar Bay (a1, ticket Change item 1): the painted launch ring on the deck — a gold
         /// outer ring, a cyan inner ring, and a bright roundel at the centre standing in for the
-        /// ticket's own stencilled "01" (see this section's own header on why).</summary>
+        /// ticket's own stencilled "01" (see this section's own header on why).
+        ///
+        /// MV-1274 ("Neon... on: the launch-ring circles"): the rings themselves move from a LIT
+        /// <see cref="MeshPart"/> (reads the deck's own dim ambient like any other metal surface) to an
+        /// HDR-boosted unlit ring, via <see cref="MeshPartGlow"/> — so they clip
+        /// <see cref="BackyardLook.BloomThreshold"/> and read as neon rather than painted metal.</summary>
         public static GameObject BuildLaunchRingMarking(Transform parent, Vector3 groundCenter, float radius)
         {
             Transform root = NewRoot(parent, "Launch Ring");
             Mesh outer = CharacterMeshes.Ring(radius * 0.92f, radius, 0.03f, 32);
             Mesh inner = CharacterMeshes.Ring(radius * 0.74f, radius * 0.82f, 0.03f, 32);
 
-            MeshPart(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, GoldLamp);
-            MeshPart(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, HangarFieldTone);
-            EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
-                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), GoldLamp);
+            TagDressing(MeshPartGlow(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, Hdr(GoldLamp, 5.0f)));
+            TagDressing(MeshPartGlow(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, Hdr(HangarFieldTone, 5.0f)));
+            TagDressing(EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
+                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), Hdr(GoldLamp, 6.0f)));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
+        }
+
+        /// <summary>A collider-free unlit part in an HDR tone — the <see cref="MeshPart"/> counterpart
+        /// for a lathed/ring mesh that needs to glow rather than read the deck's own lit ambient.</summary>
+        private static GameObject MeshPartGlow(Transform parent, string name, Mesh mesh, Vector3 pos, Color tone)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(tone, name);
+            return go;
         }
 
         /// <summary>Assembly Line (a8, ticket Change item 2): amber edge-light strips flanking the

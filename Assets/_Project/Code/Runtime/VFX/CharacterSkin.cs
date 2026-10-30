@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
@@ -291,6 +292,35 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
+
+        // MV-1274 AC5 ("a kind-coloured emissive rim, and the eye as the brightest emissive on the
+        // body") — the Hangar only (MothershipDeckLighting.CurrentDeck gate below), areas 6-30 and every
+        // other world keep StylizedCharacter's plain material default (warm, un-tinted) untouched (AC8).
+        // _body is already each robot's own resolved kind colour (ResolveBodyColor) — the same value
+        // CharacterSkinDirector logs as "expected"/"actual" per spawn, so no new palette is introduced.
+        // MV-1274 round 3: 0.9/3.0 topped out at 1.83x against the >=2.5x gate. A first attempt at
+        // 1.8/5.5 made it measurably WORSE (best robot 1.75x) and visually broke the look -- the
+        // RimBoost term is a Fresnel edge glow (StylizedCharacter.shader's _RimColor/_RimPower), so
+        // boosting IT blooms hardest at the silhouette EDGE and spreads straight onto the surrounding
+        // floor ring, raising AC5's denominator in near lockstep with its numerator. Rebalanced
+        // toward the flat body term instead (no edge concentration to bloom outward from) and pulled
+        // RimBoost back below the overshoot.
+        //
+        // MV-1274 round 4: a flat per-kind MULTIPLIER (the old HangarRestingGlowStrength = 2.2) hits a
+        // structural ceiling a single constant can't clear for every kind at once. BackyardLook.ShipHangar
+        // inherits ShipBase's BloomThreshold = 1.0, and the roster's base colours span a wide luma range
+        // -- TurretBody (0.34/0.37/0.40, luma ~0.365) at 2.2x reaches emission luma ~0.80, well short of
+        // the threshold and barely lifted off the floor; RobotGold (0.847/0.647/0.227, luma ~0.659) at
+        // the SAME 2.2x already reaches ~1.45, past the threshold, blooming and spilling onto its own
+        // floor ring (AC5's denominator) in lockstep with its numerator, exactly round 3's finding. A
+        // dark kind can't be lifted further without also pushing every bright kind deeper into that
+        // self-defeating bloom spill. Normalized instead: every kind's resting glow targets the SAME
+        // luma, comfortably under the threshold, regardless of how dark or bright its own base colour
+        // is -- so a dark kind (the one AC5 was actually failing hardest on) gets the full available
+        // headroom instead of a fixed fraction of a colour that was never the limiting factor.
+        private const float HangarRestingGlowTargetLuma = 0.92f;
+        private const float HangarRimBoost = 3.2f;
 
         [SerializeField] private CharacterRole role = CharacterRole.Robot;
 
@@ -606,14 +636,32 @@ namespace MaxWorlds.VFX
             // Emission carries most of the flash, so a hit reads hot without the body losing the
             // colour that tells you what it is.
             Color emission = FlashColor * (_flash * 0.9f) + WarnColor * (windup * 0.35f);
-            Write(body, emission);
+
+            // MV-1274 AC5: in the Hangar only, every robot carries a resting kind-coloured glow — at
+            // rest (no flash, no windup) emission was flatly black, which is exactly why AC5 measured
+            // several robots DARKER than their own floor ring. Added on top of the flash/warn terms
+            // rather than replacing them, so a hit or wind-up still reads over the resting glow.
+            // role != Player is every enemy kind this skin ever renders (Robot/Rusher, Bruiser, Gunner,
+            // Turret, ... -- AC5 measures "every robot in frame" off RobotEnemy, not just the base
+            // CharacterRole.Robot value MV-303/MV-312/etc. have been splitting kinds off of ever since).
+            Color? rim = null;
+            if (role != CharacterRole.Player && MothershipDeckLighting.CurrentDeck == MothershipDeck.Hangar)
+            {
+                float baseLuma = 0.2126f * baseColor.r + 0.7152f * baseColor.g + 0.0722f * baseColor.b;
+                float glowBoost = baseLuma > 0.01f ? HangarRestingGlowTargetLuma / baseLuma : 0f;
+                emission += baseColor * glowBoost;
+                rim = baseColor * HangarRimBoost;
+            }
+
+            Write(body, emission, rim);
         }
 
-        private void Write(Color body, Color emission)
+        private void Write(Color body, Color emission, Color? rim = null)
         {
             _renderer.GetPropertyBlock(_mpb);
             _mpb.SetColor(BaseColorId, body);
             _mpb.SetColor(EmissionId, emission);
+            if (rim.HasValue) _mpb.SetColor(RimColorId, rim.Value);
             _renderer.SetPropertyBlock(_mpb);
         }
 

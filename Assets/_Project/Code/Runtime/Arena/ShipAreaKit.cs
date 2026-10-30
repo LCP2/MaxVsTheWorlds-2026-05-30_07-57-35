@@ -76,9 +76,10 @@ namespace MaxWorlds.Arena
                     Color deckGlow = MothershipDecks.LookFor(area.index).RimColor;
                     int wallSeed = area.index * 4 + (int)wall;
                     bool capVisible = cappedWalls.Add(match);
+                    bool hangarStyle = MothershipDecks.ForArea(area.index) == MothershipDeck.Hangar;    // MV-1274
 
                     GameObject wallGo = ShipKit.BuildBulkheadPanel(
-                        root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed, capVisible);
+                        root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed, capVisible, hangarStyle);
                     wallGo.name = $"Wall {area.id} {wall}";
 
                     // MV-1264: the panel backing (ShipKit.BuildPanelCell) stands with its own back face
