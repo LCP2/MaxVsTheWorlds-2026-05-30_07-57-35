@@ -96,7 +96,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             typeof(PickupDirector)
                 .GetMethod("SpawnDrop", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(director, new object[] { kind, pos, default(MaxWorlds.Upgrades.PartKind), default(AbilityKind) });
+                .Invoke(director, new object[] { kind, pos, default(MaxWorlds.Upgrades.PartKind), default(AbilityKind), null });
         }
 
         private static Pickup FindLive(PickupDirector director, PickupKind kind)

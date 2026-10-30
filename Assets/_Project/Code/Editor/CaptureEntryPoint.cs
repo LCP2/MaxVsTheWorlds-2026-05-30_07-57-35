@@ -269,6 +269,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1299Gridlock() => RunFromMenu(CapturePresets.All["mv1299gridlock"]);
         public static void CaptureMv1299Gridlock() => Run(CapturePresets.All["mv1299gridlock"]);
 
+        [MenuItem("MaxWorlds/Capture/Secret Cover (MV-1320)")]
+        public static void MenuMv1320SecretCover() => RunFromMenu(CapturePresets.All["mv1320secretcover"]);
+        public static void CaptureMv1320SecretCover() => Run(CapturePresets.All["mv1320secretcover"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

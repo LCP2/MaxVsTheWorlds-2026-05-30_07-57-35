@@ -325,6 +325,7 @@ namespace MaxWorlds.Save
             data.CheckpointWonChallengeIds = ChallengePad.WonIds();
             data.CheckpointFailedChallengeIds = ChallengePad.FailedIds();
             data.CheckpointUsedRepairBayIds = RepairBay.UsedIds();
+            data.CheckpointFoundSecretIds = SecretCensus.FoundIds();
 
             // MV-1129: the live finale gate's own resolved state, if this world has reached one yet --
             // null for every world before its own final boss falls, same as a fresh run. Read directly
@@ -407,6 +408,10 @@ namespace MaxWorlds.Save
             FactoryCensus.ApplyCheckpointDestroyedCradleIds(data.CheckpointDestroyedCradleIds);
             Pylon.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedPylonIds);
             Canister.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedCanisterIds);
+            // MV-1320: must run BEFORE DestructibleCover's own restore below — a secret's
+            // ApplyCheckpointDestroyed re-places its cache only when SecretCensus does not already
+            // report it FOUND, so the found set has to be in place first.
+            SecretCensus.ApplyCheckpointFoundIds(data.CheckpointFoundSecretIds);
             DestructibleCover.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedCoverIds);
             BossCensus.ApplyCheckpointDefeatedAreas(data.CheckpointDefeatedBossAreas);
             ChallengePad.ApplyCheckpointWonIds(data.CheckpointWonChallengeIds);

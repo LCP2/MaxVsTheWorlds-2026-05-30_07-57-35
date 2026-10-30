@@ -247,7 +247,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private static Pickup SpawnDropAt(PickupDirector director, PickupKind kind, Vector3 pos) =>
             (Pickup)typeof(PickupDirector).GetMethod("SpawnDrop", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(director, new object[] { kind, pos, default(PartKind), default(AbilityKind) });
+                .Invoke(director, new object[] { kind, pos, default(PartKind), default(AbilityKind), null });
 
         private static void InvokeCollect(PickupDirector director, Pickup pickup)
         {

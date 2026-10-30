@@ -59,7 +59,7 @@ namespace MaxWorlds.Tests.EditMode
 
         private static void SpawnPowerCellSecondaryAt(PickupDirector director, Vector3 pos) =>
             typeof(PickupDirector).GetMethod("SpawnDrop", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(director, new object[] { PickupKind.PowerCellSecondary, pos, default(MaxWorlds.Upgrades.PartKind), default(AbilityKind) });
+                .Invoke(director, new object[] { PickupKind.PowerCellSecondary, pos, default(MaxWorlds.Upgrades.PartKind), default(AbilityKind), null });
 
         private static List<Pickup> LiveList(PickupDirector director) =>
             (List<Pickup>)typeof(PickupDirector).GetField("_live", BindingFlags.NonPublic | BindingFlags.Instance)

@@ -530,6 +530,14 @@ namespace MaxWorlds.Arena
         /// Placement of any destructible piece is a separate ticket (MV-1302); this field only adds the
         /// capability.</summary>
         public float hp = 0f;
+
+        /// <summary>MV-1320: true if breaking this piece reveals a secret cache (1 Supercell + 4
+        /// Parts) behind a single subtle hairline crack, instead of the ordinary cracked-stages look —
+        /// Phase 3's "optional things to find". Only meaningful with <see cref="hp"/> &gt; 0;
+        /// <see cref="WorldMapLoader"/> logs an error and ignores this flag on an indestructible piece
+        /// (hp 0), since a secret that can never be broken makes no sense to author. Default false, so
+        /// every piece authored before this field existed is unchanged.</summary>
+        public bool secret = false;
     }
 
     /// <summary>One authored floor-paint/street-furniture decal (MV-1177) — a rect given by its CENTRE

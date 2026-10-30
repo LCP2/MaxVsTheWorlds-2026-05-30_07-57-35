@@ -371,6 +371,19 @@ namespace MaxWorlds.Arena
                 foreach (WorldCover c in a.cover)
                 {
                     if (c == null) continue;
+
+                    // MV-1320: "secret" only means anything on a piece that can actually break — logged
+                    // and ignored here, not refused outright, same "forward compatible" idiom
+                    // WorldSurface's own "unrecognised kind logs one warning and is skipped" doc comment
+                    // already uses.
+                    bool secret = c.secret;
+                    if (secret && c.hp <= 0f)
+                    {
+                        Debug.LogError($"[WorldMapLoader] area '{a.id}': cover '{c.id}' authors secret=true " +
+                                        $"with hp={c.hp} — secret requires hp > 0; ignoring secret.");
+                        secret = false;
+                    }
+
                     entities.Add(new MapEntity
                     {
                         id = c.id,
@@ -384,6 +397,7 @@ namespace MaxWorlds.Arena
                         dressing = c.dressing,
                         coverKind = c.coverKind,
                         hp = c.hp,
+                        secret = secret,
                     });
                 }
             }

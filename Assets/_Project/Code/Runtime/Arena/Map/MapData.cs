@@ -206,6 +206,12 @@ namespace MaxWorlds.Arena
         /// False for every other kind, and for every intact cover piece.</summary>
         public bool broken;
 
+        /// <summary>Cover only (MV-1320) — resolved from <see cref="WorldCover.secret"/>. True means
+        /// this destructible piece hides a cache behind a single hairline crack instead of the ordinary
+        /// cracked-stages look. False (default) for every other kind, and for an ordinary destructible
+        /// or indestructible piece.</summary>
+        public bool secret;
+
         /// <summary>Factory only — resolved from <see cref="WorldShed.mobile"/> (MV-548, shed roadmap
         /// stage 3). <see cref="MapRuntime"/> gives a mobile factory a <c>CharacterController</c> and
         /// wires it into <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> instead of

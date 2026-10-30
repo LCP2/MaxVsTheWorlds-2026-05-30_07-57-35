@@ -447,6 +447,14 @@ namespace MaxWorlds.Pickups
         /// itself.</summary>
         public Pickup PlacePickupAt(PickupKind kind, Vector3 pos) => SpawnDrop(kind, pos);
 
+        /// <summary>MV-1320: same thin public wrapper as <see cref="PlacePickupAt(PickupKind, Vector3)"/>,
+        /// but tags the placed pickup with a secret's own <see cref="MaxWorlds.Factories.DestructibleCover.Id"/>
+        /// — what <see cref="Collect"/> reads to mark that secret FOUND the moment this Supercell is
+        /// walked over. Meaningless for any kind but <see cref="PickupKind.Supercell"/>, same "meaningless
+        /// for any other kind" convention <see cref="Pickup.Part"/>/<see cref="Pickup.Ability"/> already
+        /// document.</summary>
+        public Pickup PlacePickupAt(PickupKind kind, Vector3 pos, string secretId) => SpawnDrop(kind, pos, secretId: secretId);
+
         /// <summary>MV-964: banks any Weapon Core still on the ground exactly as if Max had walked over
         /// it — <see cref="MaxWorlds.Intro.WorldJoinSequence"/> calls this the instant Max crosses the
         /// world's finale door, so a core he never walked over in the open can't block progress into the
@@ -523,7 +531,7 @@ namespace MaxWorlds.Pickups
         }
 
         private Pickup SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
-                               AbilityKind ability = default)
+                               AbilityKind ability = default, string secretId = null)
         {
             if (kind == PickupKind.PowerCell)
             {
@@ -552,6 +560,7 @@ namespace MaxWorlds.Pickups
             if (p == null) p = Pickup.Create(kind);
             p.Part = part;
             p.Ability = ability;
+            p.SecretId = secretId; // MV-1320: reset on every drop, same "never carries a stale value out of the pool" reasoning as Part/Ability above
             p.transform.SetParent(transform, worldPositionStays: false);
             p.Place(pos);
             _live.Add(p);
@@ -889,6 +898,15 @@ namespace MaxWorlds.Pickups
                     int cellsBefore = PickupWallet.PowerCells;
                     PickupWallet.AddSupercell();
                     HudSignals.EmitSupercellCollected(p.transform.position, cellsBefore, PickupWallet.PowerCells);
+
+                    // MV-1320: a secret's own Supercell carries its DestructibleCover's Id (set via
+                    // PlacePickupAt's secretId overload) — collecting it marks that secret FOUND and
+                    // flies up "SECRET", on top of (never instead of) the ordinary payoff above.
+                    if (!string.IsNullOrEmpty(p.SecretId))
+                    {
+                        SecretCensus.MarkFound(p.SecretId);
+                        HudSignals.EmitPickup(p.transform.position, "SECRET", new Color(0.95f, 0.78f, 0.22f));
+                    }
                     break;
             }
 

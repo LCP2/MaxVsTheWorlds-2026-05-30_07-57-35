@@ -251,6 +251,13 @@ namespace MaxWorlds.Save
         /// id, so a resume never lets Max re-use a bay he already used (one use per bay).</summary>
         public string[] CheckpointUsedRepairBayIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>DestructibleCover.Id</c>) of every secret cache FOUND (its Supercell
+        /// collected) by the time this checkpoint was captured (MV-1320) — restored by
+        /// <c>SecretCensus.ApplyCheckpointFoundIds</c> BEFORE <see cref="CheckpointDestroyedCoverIds"/> is
+        /// re-applied, so a secret broken but never collected correctly re-places its cache on RESUME,
+        /// while one already found correctly places nothing.</summary>
+        public string[] CheckpointFoundSecretIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player
