@@ -636,6 +636,19 @@ namespace MaxWorlds.Arena
         public string facing = "N";
     }
 
+    /// <summary>A challenge pad (MV-1318) — a player-triggered 3-wave gauntlet: Max standing inside its
+    /// ring while READY starts it, three waves beam in around it, and clearing all three rewards a
+    /// Supercell (two if Max took no hit). <see cref="x"/>/<see cref="z"/> are ABSOLUTE world metres (ring
+    /// centre), same convention as <see cref="WorldPylon"/>/<see cref="WorldCanister"/>/<see cref="WorldAirlock"/>
+    /// above — not area-local. One attempt per pad; WON/FAILED is saved used and never re-starts.</summary>
+    [Serializable]
+    public sealed class WorldChallenge
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -696,6 +709,9 @@ namespace MaxWorlds.Arena
         /// <summary>Airlock panels authored into this area (MV-1305). Optional; no config authors any
         /// yet — placement is a separate ticket (MV-1310).</summary>
         public WorldAirlock[] airlocks = Array.Empty<WorldAirlock>();
+
+        /// <summary>Challenge pads authored into this area (MV-1318). Optional; most areas carry none.</summary>
+        public WorldChallenge[] challenges = Array.Empty<WorldChallenge>();
 
         public WorldBoss boss;
 

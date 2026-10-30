@@ -234,6 +234,17 @@ namespace MaxWorlds.Save
         /// already broke.</summary>
         public string[] CheckpointDestroyedCoverIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>ChallengePad.Id</c>) of every challenge pad WON by the time this
+        /// checkpoint was captured (MV-1318) — restored the same way as <see cref="CheckpointDestroyedCanisterIds"/>:
+        /// silently re-applying WON onto whichever of the freshly-rebuilt level's pads carry a matching
+        /// id, so a resume never lets Max re-attempt a pad he already cleared (one attempt per pad).</summary>
+        public string[] CheckpointWonChallengeIds = Array.Empty<string>();
+
+        /// <summary>Same as <see cref="CheckpointWonChallengeIds"/>, for every challenge pad FAILED by
+        /// the time this checkpoint was captured — restored the same way, so a resume never lets Max
+        /// re-attempt a pad he already failed either.</summary>
+        public string[] CheckpointFailedChallengeIds = Array.Empty<string>();
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player

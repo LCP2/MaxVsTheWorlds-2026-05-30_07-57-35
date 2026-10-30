@@ -740,6 +740,32 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-1318: an area's challenge pads — same "per-entity not per-area", no ordering dependency
+            // on anything else shape as WorldCanister/WorldAirlock above (a pad feeds nothing and is fed
+            // by nothing). The pad's own kind mix is resolved HERE, not in MapRuntime/ChallengePad itself,
+            // because only this loader holds the WorldConfig a dial fallback (cfg.SolveComposition) needs
+            // — ticket: "Kinds come from the area's own authored composition (or the world's composition
+            // dials if the area has none)".
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldChallenge[] challenges = a.challenges ?? Array.Empty<WorldChallenge>();
+                for (int i = 0; i < challenges.Length; i++)
+                {
+                    WorldChallenge c = challenges[i];
+                    if (c == null) continue;
+                    WorldComposition composition = a.composition ??
+                        WorldComposition.FromEngineComposition(cfg.SolveComposition(a.index));
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(c.id) ? $"{a.id}_challenge{i + 1}" : c.id,
+                        kind = "challenge",
+                        x = c.x,
+                        z = c.z,
+                        challengeComposition = composition,
+                    });
+                }
+            }
+
             map = new MapData
             {
                 name = string.IsNullOrEmpty(cfg.world) ? "World" : cfg.world,
