@@ -11,12 +11,12 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-1195 (the one new test, Rule 1): fires one RICOCHET disc at 45 degrees into a fixture wall
-    /// corner with the City board's own start levels (p_ric=2, p_dmg=1, p_aim=0) and proves, on
-    /// RESOLVED values (MV-465 Tier 2): the disc bounces exactly twice (once off the corner wall, once
-    /// off a robot placed on its second leg) then ends on its third contact; that robot's own measured
-    /// health loss from the bank-bonused hit (12 base damage x 1.2, one bounce already taken); and that
-    /// the City's own Weapon Core morph actually resolves <see cref="WeaponCatalog.PrimaryKind.Ricochet"/>
-    /// as the active primary, not a leftover UNDERTOW.
+    /// corner with the City board's own start levels (p_ric=1, p_dmg=1, p_aim=0 — MV-1325 lowered
+    /// p_ric's own start from 2) and proves, on RESOLVED values (MV-465 Tier 2): the disc bounces
+    /// exactly once (off the corner wall) then ends on contact with a robot placed on its second leg;
+    /// that robot's own measured health loss from the bank-bonused hit (8 base damage x 1.2, one bounce
+    /// already taken); and that the City's own Weapon Core morph actually resolves
+    /// <see cref="WeaponCatalog.PrimaryKind.Ricochet"/> as the active primary, not a leftover UNDERTOW.
     ///
     /// Fails on base commit 84c2e27 (main HEAD before this ticket) — it cannot compile: RICOCHET
     /// (<see cref="Ricochet"/>, <see cref="RicochetDisc"/>, <see cref="WeaponCatalog.PrimaryKind.Ricochet"/>)
@@ -70,9 +70,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Ricochet, WeaponSystemState.ActivePrimary,
                 "the City's own Weapon Core morph must resolve RICOCHET as the active primary");
 
-            // --- test precondition: the City board's own start levels, exactly AC1's "p_ric=2, p_dmg=1,
+            // --- test precondition: the City board's own start levels, exactly AC1's "p_ric=1, p_dmg=1,
             // p_aim=0" -- all three are the board's own startLevel, untouched by the morph above.
-            Assert.AreEqual(2, RigState.Level("p_ric"), "test precondition: p_ric must start at 2");
+            Assert.AreEqual(1, RigState.Level("p_ric"), "test precondition: p_ric must start at 1");
             Assert.AreEqual(1, RigState.Level("p_dmg"), "test precondition: p_dmg must start at 1");
             Assert.AreEqual(0, RigState.Level("p_aim"), "test precondition: p_aim must start unowned at 0");
 
@@ -80,14 +80,14 @@ namespace MaxWorlds.Tests.EditMode
             Ricochet weapon = _weaponGo.AddComponent<Ricochet>();
             RicochetAwake.Invoke(weapon, null); // Awake doesn't run for AddComponent outside Play mode
 
-            Assert.AreEqual(2, weapon.BouncesPerDisc, "test precondition: BouncesPerDisc must read p_ric directly");
-            Assert.AreEqual(12f, weapon.EffectiveDamagePerDisc, 1e-4f, "test precondition: POWER L1 must be the authored base, 12");
+            Assert.AreEqual(1, weapon.BouncesPerDisc, "test precondition: BouncesPerDisc must read p_ric directly");
+            Assert.AreEqual(8f, weapon.EffectiveDamagePerDisc, 1e-4f, "test precondition: POWER L1 must be the authored base, 8");
             Assert.AreEqual(0f, weapon.AimTurnRateDegPerSec, 1e-4f, "test precondition: AIMING at level 0 must be dead straight");
 
-            // --- the fixture: a corner wall the 45-degree shot hits first, a robot on the reflected
-            // second leg, and a big enclosing room so whichever way the disc deflects off that robot, a
-            // THIRD contact is always there to end it (AC1 doesn't pin the exact end position, only the
-            // bounce count and the one robot's own measured damage).
+            // --- the fixture: a corner wall the 45-degree shot hits first (spending its one bounce,
+            // MV-1325), then a robot on the reflected second leg that ends the disc on contact. The
+            // big enclosing room is a leftover safety net from before MV-1325 (when a third contact was
+            // needed) -- harmless to keep, since this disc never reaches it.
             _wallA = BuildWall(new Vector3(3f, 1f, 0f), new Vector3(0.02f, 2f, 34f));
             _boundaryN = BuildWall(new Vector3(0f, 1f, 17f), new Vector3(40f, 2f, 0.6f));
             _boundaryS = BuildWall(new Vector3(0f, 1f, -17f), new Vector3(40f, 2f, 0.6f));
@@ -129,16 +129,16 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < maxSteps && disc.IsActiveDisc; i++) disc.Tick(step);
 
             Assert.IsFalse(disc.IsActiveDisc,
-                "the disc must have retired (bounces exhausted on its third contact) well within " +
+                "the disc must have retired (bounces exhausted on contact with the robot) well within " +
                 "its own 2.5s lifetime");
-            Assert.AreEqual(2, disc.BouncesTaken,
-                "it bounces exactly twice -- once off the corner wall, once off the robot on its " +
-                "second leg -- then ends on its third contact");
+            Assert.AreEqual(1, disc.BouncesTaken,
+                "it bounces exactly once -- off the corner wall -- then ends on contact with the robot " +
+                "on its second leg (MV-1325: BouncesPerDisc is now 1)");
 
             float damage = healthBefore - robot.HealthCurrent;
-            Assert.AreEqual(14.4f, damage, 0.01f,
-                "the robot on the disc's second leg must take 12 (POWER L1) x 1.2 (one bounce already " +
-                "taken) = 14.4 damage");
+            Assert.AreEqual(9.6f, damage, 0.01f,
+                "the robot on the disc's second leg must take 8 (POWER L1, MV-1325) x 1.2 (one bounce " +
+                "already taken) = 9.6 damage");
         }
 
         private static GameObject BuildWall(Vector3 center, Vector3 size)
