@@ -132,6 +132,25 @@ namespace MaxWorlds.UI
                     return;
                 }
 
+                // MV-1327: OnWorldDevStart left this set just before its own reload above — the dev-jump
+                // equivalent of PendingResume, since a dev jump reaches this world with no corridor
+                // arrival to ask LoadoutScreen.ShouldShow on its behalf. Consumed once, same as
+                // PendingResume.
+                if (SaveSystem.PendingDevWorldJump.HasValue)
+                {
+                    int jumpWorldIndex = SaveSystem.PendingDevWorldJump.Value;
+                    SaveSystem.PendingDevWorldJump = null;
+                    if (LoadoutScreen.ShouldShow(jumpWorldIndex))
+                    {
+                        var loadout = FindFirstObjectByType<LoadoutScreen>();
+                        if (loadout != null)
+                        {
+                            loadout.Open(jumpWorldIndex, () => BootTiming.Mark("controllable-replay"));
+                            return;
+                        }
+                    }
+                }
+
                 // A slot is already live: either a defensive re-add, or exactly the Replay-triggered
                 // reload YT-216 targets (sub-3-second AC) — this is the earliest point that reload
                 // hands control back, so it's the "controllable" mark for that path.
@@ -477,6 +496,10 @@ namespace MaxWorlds.UI
         private void OnWorldDevStart(int slot, int worldIndex)
         {
             StartDevWorld(slot, worldIndex);
+            // MV-1327: a dev jump reaches this world the same way a real player never can — straight in,
+            // with no corridor arrival to ask LoadoutScreen.ShouldShow — so Start() must ask on its own
+            // behalf once the reload below hands control back.
+            SaveSystem.PendingDevWorldJump = worldIndex;
             Time.timeScale = 1f;
             Scene scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
@@ -556,6 +579,26 @@ namespace MaxWorlds.UI
             SaveSlotData data = SaveSystem.Load(slot);
             Close();
 
+            // MV-1327: a RESUME into a world the slot has reached but never picked a loadout for (no
+            // corridor arrival ever asked, since it jumped straight to a checkpoint) gates on
+            // LoadoutScreen the same way the corridor arrival does — FinishResume only runs once the
+            // screen's own START commits a choice (or there was nothing to choose).
+            if (LoadoutScreen.ShouldShow(worldIndex))
+            {
+                var loadout = FindFirstObjectByType<LoadoutScreen>();
+                if (loadout != null)
+                {
+                    loadout.Open(worldIndex, () => FinishResume(data));
+                    return;
+                }
+            }
+            FinishResume(data);
+        }
+
+        /// <summary>The checkpoint restore's own tail — shared by <see cref="ApplyResume"/>'s immediate
+        /// path and its deferred LOADOUT-screen one (MV-1327).</summary>
+        private static void FinishResume(SaveSlotData data)
+        {
             var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
             runner?.ResumeCheckpoint(data.CheckpointAreaIndex, data.CheckpointGateId);
 
