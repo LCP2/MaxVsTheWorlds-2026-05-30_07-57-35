@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -147,6 +148,8 @@ namespace MaxWorlds.Weapons
         public static LightMissileBall Spawn(Vector3 origin, Vector3 direction, float speed, float damage,
             float trackingBase, int areaIndex, int powerLevel = 1, HashSet<IDamageable> volleyClaimed = null)
         {
+            PruneDestroyedPoolEntries();
+
             LightMissileBall ball = null;
             for (int i = 0; i < s_pool.Count; i++)
             {
@@ -196,12 +199,36 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>Rule 1: "freeze, death or resume" style clear — deactivates every pooled ball without
-        /// destroying the pool, same idiom <see cref="RicochetDisc.ClearAll"/> uses.</summary>
+        /// destroying the pool, same idiom <see cref="RicochetDisc.ClearAll"/> uses.
+        ///
+        /// MV-1331: must never throw — same stale-entry hazard and fix as
+        /// <see cref="RicochetDisc.ClearAll"/>.</summary>
         public static void ClearAll()
         {
+            PruneDestroyedPoolEntries();
             for (int i = 0; i < s_pool.Count; i++)
                 if (s_pool[i]._active) s_pool[i].Retire();
         }
+
+        /// <summary>MV-1331: same stale-pool-entry hazard and fix as
+        /// <see cref="RicochetDisc.PruneDestroyedPoolEntries"/> — a scene reload destroys every pooled
+        /// ball's GameObject without going through <see cref="Retire"/>, and nothing else removes the
+        /// dead entry from <see cref="s_pool"/>.</summary>
+        private static void PruneDestroyedPoolEntries()
+        {
+            for (int i = s_pool.Count - 1; i >= 0; i--)
+                if (s_pool[i] == null) s_pool.RemoveAt(i);
+        }
+
+        /// <summary>MV-1331: same scene-unload hook as <see cref="RicochetDisc.RegisterSceneUnloadHook"/>.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void RegisterSceneUnloadHook()
+        {
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
+            SceneManager.sceneUnloaded += OnSceneUnloaded;
+        }
+
+        private static void OnSceneUnloaded(Scene scene) => s_pool.Clear();
 
         /// <summary>Test-only teardown — destroys every pooled instance and empties the pool.</summary>
         public static void DestroyPoolForTests()
