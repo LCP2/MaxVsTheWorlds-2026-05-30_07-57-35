@@ -1024,7 +1024,9 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a3_cover2",
@@ -2160,6 +2162,13 @@
           "x": 150.0,
           "z": 98.0
         }
+      ],
+      "challenges": [
+        {
+          "id": "a6_challenge1",
+          "x": 132.0,
+          "z": 108.0
+        }
       ]
     },
     {
@@ -2187,7 +2196,9 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a7_cover2",
@@ -3048,6 +3059,13 @@
           "x": 230.0,
           "z": 164.0
         }
+      ],
+      "challenges": [
+        {
+          "id": "a9_challenge1",
+          "x": 238.5,
+          "z": 153.0
+        }
       ]
     },
     {
@@ -3277,7 +3295,8 @@
           "kind": "brute",
           "x": 237.0,
           "z": 174.0,
-          "level": 0
+          "level": 0,
+          "carriesKey": true
         },
         {
           "kind": "brute",
@@ -3321,6 +3340,16 @@
           "id": "a10_canister3",
           "x": 236.0,
           "z": 168.0
+        }
+      ],
+      "vaults": [
+        {
+          "id": "a10_vault1",
+          "x": 218.0,
+          "z": 178.0,
+          "w": 6,
+          "d": 6,
+          "door": "E"
         }
       ]
     },
@@ -4415,7 +4444,8 @@
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
           "coverKind": "solid",
-          "hp": 150.0
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a14_cover2",
@@ -6421,6 +6451,13 @@
           "x": 465.0,
           "z": 333.0
         }
+      ],
+      "repairBays": [
+        {
+          "id": "a19_repair1",
+          "x": 446.0,
+          "z": 322.0
+        }
       ]
     },
     {
@@ -6448,7 +6485,9 @@
           "depth": 1.6,
           "shape": "box",
           "dressing": "ship_bulkhead_stub",
-          "coverKind": "solid"
+          "coverKind": "solid",
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a20_cover2",
@@ -6726,7 +6765,8 @@
           "shape": "box",
           "dressing": "ship_crate",
           "coverKind": "solid",
-          "hp": 150.0
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a21_cover3",
@@ -8234,7 +8274,8 @@
           "kind": "brute",
           "x": 533.0,
           "z": 419.0,
-          "level": 0
+          "level": 0,
+          "carriesKey": true
         },
         {
           "kind": "brute",
@@ -8319,6 +8360,16 @@
           "id": "a24_canister2",
           "x": 525.0,
           "z": 439.0
+        }
+      ],
+      "vaults": [
+        {
+          "id": "a24_vault1",
+          "x": 541.0,
+          "z": 433.0,
+          "w": 6,
+          "d": 6,
+          "door": "S"
         }
       ]
     },
@@ -9175,7 +9226,8 @@
           "shape": "box",
           "dressing": "ship_crate",
           "coverKind": "solid",
-          "hp": 150.0
+          "hp": 150.0,
+          "secret": true
         },
         {
           "id": "a27_cover3",
