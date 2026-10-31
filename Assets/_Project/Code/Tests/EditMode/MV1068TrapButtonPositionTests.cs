@@ -69,10 +69,15 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TrapButtonStaysOnScreenNeverOverlapsAndDropsATrap_MV1068()
         {
-            // World 3, every node (including p_trp) maxed — HomeScreen's own DEV WORLD 3 entry point
-            // (MV-736), the real path the ticket's own "DEV WORLD 3" context note refers to.
+            // World 3, every node maxed — HomeScreen's own DEV WORLD 3 entry point (MV-736), the real
+            // path the ticket's own "DEV WORLD 3" context note refers to. MV-1328 stopped this path
+            // maxing PRIMARY/SECONDARY (the weapon itself now lands on the same bottom-of-board floor
+            // a plain corridor entry gets, even here) — p_trp is a capture ability under PRIMARY, not
+            // a weapon stat that ticket cares about, so it's granted directly, the same way a shed
+            // draft would, rather than relying on the old blanket "every node maxed" side effect.
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = 0 });
             HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
+            RigState.AcquireCap("p_trp");
 
             GameObject maxGo = null, hudGo = null;
             Object droppedTrapGo = null;

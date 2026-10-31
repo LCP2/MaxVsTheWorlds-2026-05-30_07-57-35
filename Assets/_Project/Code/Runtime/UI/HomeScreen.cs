@@ -289,19 +289,23 @@ namespace MaxWorlds.UI
         /// <paramref name="maxRig"/> selects which populated state the button hands the tester:
         /// <list type="bullet">
         /// <item>false (MV-737; SUPPORT carve-out MV-1095; generalised off a literal World 1 by
-        /// MV-1180): the PREVIOUS world's own EXIT state — ENERGY/MOVE (and SECONDARY, when
-        /// <see cref="WorldDefinition.CarrySecondaryAcrossMorph"/> is set) additionally unlocked and
-        /// maxed to <c>worldIndex - 1</c>'s own level caps (<see cref="UnlockAndMaxCategory"/>, capped
-        /// via <see cref="RigBoard.SnapshotMaxLevels"/> — MV-856: never this world's own higher
-        /// caps/extra nodes, which stay for the player to buy in here), PRIMARY left on the morph's
-        /// owned-but-unupgraded floor, SUPPORT LOCKED (MV-1095: a real player arriving this way has it
+        /// MV-1180; MV-1328 stopped maxing SECONDARY here): the PREVIOUS world's own EXIT state —
+        /// ENERGY/MOVE additionally unlocked and maxed to <c>worldIndex - 1</c>'s own level caps
+        /// (<see cref="UnlockAndMaxCategory"/>, capped via <see cref="RigBoard.SnapshotMaxLevels"/> —
+        /// MV-856: never this world's own higher caps/extra nodes, which stay for the player to buy in
+        /// here), PRIMARY and SECONDARY both left on the morph's own bottom-of-board floor (SECONDARY
+        /// unlocked when <see cref="WorldDefinition.CarrySecondaryAcrossMorph"/> is set, same as a real
+        /// corridor entry — MV-1328), SUPPORT LOCKED (MV-1095: a real player arriving this way has it
         /// locked too — <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> already remembers
         /// whatever this dev jump would otherwise have maxed, which is nothing on a fresh dev slot),
         /// exactly as a player who cleared the previous world would arrive.</item>
-        /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
-        /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>
-        /// (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content, not to make the tester
-        /// grind a rig first. FORGE itself stays untouched (MV-850: World 1 only until redesigned).</item>
+        /// <item>true (WORLD 3, MV-736; MV-1328 stopped maxing PRIMARY/SECONDARY here too): a fully
+        /// maxed rig — every category unlocked and every node on <paramref name="worldIndex"/>'s own
+        /// board raised to its <see cref="RigBoard.MaxLevel"/>, except PRIMARY/SECONDARY which stay on
+        /// the morph's own bottom-of-board floor (<see cref="MaxOutRig"/>) — World 3 exists to test
+        /// World 3 content, not to make the tester grind a rig first, but the weapon itself still
+        /// starts at the bottom like any other world entry. FORGE itself stays untouched (MV-850:
+        /// World 1 only until redesigned).</item>
         /// </list>
         /// <see cref="StartSlotWorld2"/> is a one-line call onto this with the original MV-726 shape
         /// (world 1, maxRig: false) so the two paths can never drift (MV-726 AC4).</summary>
@@ -313,6 +317,15 @@ namespace MaxWorlds.UI
             data.WorldIndex = worldIndex;
             data.WeaponCorePending = false;
             SaveSystem.Save(slot, data);
+
+            // MV-1180/MV-1328: a dev start simulates arriving having actually played the previous
+            // world -- when this world's own Weapon Core morph keeps SECONDARY's category from the
+            // previous world (WorldDefinition.CarrySecondaryAcrossMorph), unlock it BEFORE the morph
+            // runs, so ApplyWeaponCoreMorph's own floor seed (the same floor a real corridor entry
+            // gets, including the fire-floor exception) applies here too, rather than leaving
+            // SECONDARY locked the way a truly fresh wipe would -- WipeForFreshRun above already reset
+            // it to locked.
+            if (WorldCatalog.Get(worldIndex).CarrySecondaryAcrossMorph) RigState.UnlockCategory("SECONDARY");
 
             WeaponSystemState.ApplyWeaponCoreMorph(worldIndex);
 
@@ -336,15 +349,15 @@ namespace MaxWorlds.UI
                 IReadOnlyDictionary<string, int> caps = RigBoard.SnapshotMaxLevels(previousWorld);
                 UnlockAndMaxCategory("ENERGY", caps);
                 UnlockAndMaxCategory("MOVE", caps);
-                // MV-1180: SECONDARY carries too, on a row whose Weapon Core morph keeps the previous
-                // world's SECONDARY ids on its own board (today, the City and the Reef) — same reason
-                // ENERGY/MOVE carry: a real player arriving here kept whatever they'd already earned.
-                if (WorldCatalog.Get(worldIndex).CarrySecondaryAcrossMorph)
-                    UnlockAndMaxCategory("SECONDARY", caps);
+                // MV-1328: SECONDARY is deliberately NOT maxed here any more — ApplyWeaponCoreMorph
+                // above already seeded it to the bottom of its board (unlocked when
+                // WorldDefinition.CarrySecondaryAcrossMorph keeps the category open, e.g. the City and
+                // the Reef), same floor a real player's own corridor entry gets. MV-1180 used to max it
+                // to the previous world's own caps here, matching what ApplyWeaponCoreMorph itself used
+                // to do before MV-1328 changed that.
                 // MV-1095: SUPPORT is deliberately NOT unlocked/maxed here any more — a real player
                 // arriving this way has the family LOCKED (ApplyWeaponCoreMorph above already does
-                // that), re-earned through this world's own cadence, same as SECONDARY (when it isn't
-                // carried).
+                // that), re-earned through this world's own cadence, same as SECONDARY.
             }
 
             // MV-1185: a DEV world start must not leave PickupWallet empty -- Lee then fought a
@@ -388,9 +401,16 @@ namespace MaxWorlds.UI
         /// path), then an attempt at every FORGE fusion through <see cref="RigFusionState.TryForge"/>
         /// (both parent categories are lit by construction once every node is owned). The id/fusion
         /// lists are read from the loaded board each time, never hard-coded, so this keeps working
-        /// unmodified if a node or fusion is ever added to the board. Maxing <c>s_rkt</c> here also
-        /// clears <see cref="RigState.SecondaryLocked"/> on its own (that flag is just "mystery armed
-        /// AND s_rkt owned") — no special case needed.
+        /// unmodified if a node or fusion is ever added to the board.
+        ///
+        /// MV-1328: PRIMARY and SECONDARY are the one exception — they are left exactly where the
+        /// caller's own <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> call just put them (the
+        /// bottom of their own board, same as any other world entry), not raised to their own max —
+        /// a world exists to test its own content, not to hand the tester a weapon already maxed out.
+        /// <see cref="RigState.SecondaryLocked"/> still clears on its own when SECONDARY stays
+        /// unlocked (that flag is just "mystery armed AND s_rkt owned", and the floor seed already
+        /// grants <c>s_rkt</c> at least level 1 whenever the category is unlocked) — no special case
+        /// needed here either.
         ///
         /// MV-850: for World 2+ (every world this method's own caller can reach — see
         /// <see cref="StartSlotWorld"/>'s <c>worldIndex &gt;= 2</c> WORLD 3 button), the
@@ -401,7 +421,16 @@ namespace MaxWorlds.UI
         {
             var levels = new Dictionary<string, int>();
             foreach (string id in RigBoard.AllIds)
-                levels[id] = RigBoard.MaxLevel(id);
+            {
+                string category = RigBoard.Category(id);
+                // MV-1328: PRIMARY/SECONDARY stay at the floor the caller's own ApplyWeaponCoreMorph
+                // call (just above, in StartSlotWorld) already seeded them to — a MaxedRig dev start
+                // (the Reef) maxes every OTHER category for testing, but the weapon itself starts at
+                // the bottom of its board here too, same as any other world entry (rule 1).
+                levels[id] = category == "PRIMARY" || category == "SECONDARY"
+                    ? RigState.Level(id)
+                    : RigBoard.MaxLevel(id);
+            }
 
             RigState.RestoreSnapshot(levels, RigBoard.AllCategoryIds);
             WeaponSystemState.RebuildAcquiredFromRigState();
