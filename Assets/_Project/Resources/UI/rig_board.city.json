@@ -200,8 +200,8 @@
       "maxLevel": 6,
       "kind": "cap",
       "parent": "p_dmg",
-      "startLevel": 1,
-      "$comment": "MV-1195: bounces per disc -- the level NUMBER is the bounce count directly, no separate formula. Ricochet.BouncesPerDisc reads this track directly. MV-1325: owned from level 1 (a fresh disc bounces once), down from level 2 -- RICOCHET was too strong from the first second against World 3's new support robots."
+      "startLevel": 2,
+      "$comment": "MV-1195: bounces per disc. Owned from level 2 (a fresh disc always bounces at least twice) — the level NUMBER is the bounce count directly, no separate formula. Ricochet.BouncesPerDisc reads this track directly. MV-1330: restored from MV-1325's level 1 -- the real cause of World 3 being too easy was the Shoulder Rack rockets, fixed by sibling tickets."
     },
     {
       "id": "p_aim",
