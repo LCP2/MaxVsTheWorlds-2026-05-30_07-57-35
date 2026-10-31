@@ -1773,7 +1773,8 @@
      "height": 1.0,
      "shape": "box",
      "dressing": "pallet",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a3_c5",
@@ -2609,6 +2610,13 @@
      "x": 52.325635,
      "z": 84.292592,
      "feeds": "a4_rep1"
+    }
+   ],
+   "challenges": [
+    {
+     "id": "a4_challenge1",
+     "x": 48.0,
+     "z": 70.0
     }
    ]
   },
@@ -4782,7 +4790,8 @@
      "kind": "bruiser",
      "x": 49.0,
      "z": 101.5,
-     "level": 0
+     "level": 0,
+     "carriesKey": true
     },
     {
      "kind": "gunner",
@@ -4957,6 +4966,16 @@
      "x": 67.293768,
      "z": 106.219474,
      "feeds": "a7_rep2"
+    }
+   ],
+   "vaults": [
+    {
+     "id": "a7_vault1",
+     "x": 40.0,
+     "z": 110.0,
+     "w": 6,
+     "d": 6,
+     "door": "N"
     }
    ]
   },
@@ -5938,7 +5957,8 @@
      "height": 1.4,
      "shape": "box",
      "dressing": "roadSign",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a9_c18",
@@ -6677,6 +6697,13 @@
      "x": 94.581647,
      "z": 181.255132,
      "feeds": "a10_rep1"
+    }
+   ],
+   "challenges": [
+    {
+     "id": "a10_challenge1",
+     "x": 100.0,
+     "z": 168.0
     }
    ]
   },
@@ -9119,7 +9146,8 @@
      "height": 0.9,
      "shape": "cylinder",
      "dressing": "bin",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a13_c29",
@@ -9609,7 +9637,8 @@
      "kind": "brute",
      "x": 106.5,
      "z": 251.5,
-     "level": 0
+     "level": 0,
+     "carriesKey": true
     },
     {
      "kind": "rusher",
@@ -9797,6 +9826,16 @@
      "x": 101.112405,
      "z": 269.298488,
      "feeds": "a14_rep1"
+    }
+   ],
+   "vaults": [
+    {
+     "id": "a14_vault1",
+     "x": 104.0,
+     "z": 236.0,
+     "w": 6,
+     "d": 6,
+     "door": "N"
     }
    ]
   },
@@ -11218,7 +11257,8 @@
      "height": 1.0,
      "shape": "box",
      "dressing": "barrier",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a17_c6",
@@ -15070,6 +15110,13 @@
      "z": 387.498792,
      "feeds": "a20_rep2"
     }
+   ],
+   "repairBays": [
+    {
+     "id": "a20_repair1",
+     "x": 130.0,
+     "z": 366.0
+    }
    ]
   },
   {
@@ -16870,7 +16917,8 @@
      "height": 1.0,
      "shape": "box",
      "dressing": "aBoard",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a23_c11",
@@ -19910,7 +19958,8 @@
      "height": 1.0,
      "shape": "box",
      "dressing": "barrier",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a27_c17",

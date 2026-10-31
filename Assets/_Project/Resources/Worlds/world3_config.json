@@ -2573,6 +2573,13 @@
      "x": 134.0,
      "z": 9.0
     }
+   ],
+   "challenges": [
+    {
+     "id": "a5_challenge1",
+     "x": 118.0,
+     "z": 14.0
+    }
    ]
   },
   {
@@ -3021,6 +3028,13 @@
      "id": "a6_canister3",
      "x": 170.0,
      "z": 23.0
+    }
+   ],
+   "challenges": [
+    {
+     "id": "a6_challenge1",
+     "x": 152.5,
+     "z": 15.5
     }
    ]
   },
@@ -4394,7 +4408,8 @@
      "shape": "box",
      "dressing": "reef_pillar",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a9_k2",
@@ -4807,7 +4822,8 @@
      "shape": "box",
      "dressing": "reef_crate",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a10_c15",
@@ -6325,7 +6341,8 @@
      "kind": "bruiser",
      "level": 0,
      "x": 79.5,
-     "z": 101.5
+     "z": 101.5,
+     "carriesKey": true
     },
     {
      "kind": "heavy",
@@ -6520,6 +6537,16 @@
      "x": 86.0,
      "z": 140.0
     }
+   ],
+   "vaults": [
+    {
+     "id": "a13_vault1",
+     "x": 84.0,
+     "z": 130.0,
+     "w": 6,
+     "d": 6,
+     "door": "W"
+    }
    ]
   },
   {
@@ -6646,7 +6673,8 @@
      "shape": "cylinder",
      "dressing": "reef_drum",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a14_k2",
@@ -8192,7 +8220,8 @@
      "shape": "box",
      "dressing": "reef_manifold",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a17_c4",
@@ -9638,6 +9667,13 @@
      "id": "a19_canister2",
      "x": 66.0,
      "z": 30.0
+    }
+   ],
+   "repairBays": [
+    {
+     "id": "a19_repair1",
+     "x": 68.0,
+     "z": 50.0
     }
    ]
   },
@@ -12408,7 +12444,8 @@
      "shape": "box",
      "dressing": "reef_crate",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a24_c16",
@@ -14262,7 +14299,8 @@
      "kind": "bruiser",
      "level": 0,
      "x": 138.5,
-     "z": 171.5
+     "z": 171.5,
+     "carriesKey": true
     },
     {
      "kind": "bruiser",
@@ -14864,6 +14902,16 @@
      "x": 134.0,
      "z": 174.0
     }
+   ],
+   "vaults": [
+    {
+     "id": "a27_vault1",
+     "x": 161.0,
+     "z": 164.0,
+     "w": 6,
+     "d": 6,
+     "door": "W"
+    }
    ]
   },
   {
@@ -15023,7 +15071,8 @@
      "shape": "box",
      "dressing": "reef_crate",
      "coverKind": "solid",
-     "hp": 150.0
+     "hp": 150.0,
+     "secret": true
     },
     {
      "id": "a28_c14",
