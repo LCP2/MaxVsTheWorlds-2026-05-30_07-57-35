@@ -16,13 +16,12 @@ namespace MaxWorlds.Combat
     ///
     /// Every PRIMARY-family track on the City's own board (<c>rig_board.city.json</c>) resolves through
     /// an explicit per-level lookup here rather than one of <see cref="WeaponCatalog"/>'s shared linear
-    /// formulas — design v5's own numbers are not a straight line, and the ticket's "build them as
-    /// written" rule means reproducing that table exactly, not a close linear approximation. MV-1325:
-    /// play feedback on World 3 found RICOCHET too strong from the first second (floor: 12 damage, 2
-    /// bounces), so POWER's own curve was lowered at the start only — it still tops out at 40, same as
-    /// before. RICOCHETS (<c>p_ric</c>) is the one exception even to that: the board's own level IS the
-    /// bounce count (owned from level 1 as of MV-1325), so <see cref="BouncesPerDisc"/> just reads the
-    /// level directly.
+    /// formulas — design v5's own numbers are not a straight line (POWER: 12,15,18,22,26,30,35,40), and
+    /// the ticket's "build them as written" rule means reproducing that table exactly, not a close
+    /// linear approximation. RICOCHETS (<c>p_ric</c>) is the one exception even to that: the board's own
+    /// level IS the bounce count (owned from level 2), so <see cref="BouncesPerDisc"/> just reads the
+    /// level directly. MV-1330: restores both of the above to their pre-MV-1325 values — MV-1325's
+    /// World 3 nerf is reverted now that the real cause (Shoulder Rack rockets) is fixed elsewhere.
     /// </summary>
     [MaxWorlds.Core.PerfSection("combat")]
     public sealed class Ricochet : MonoBehaviour, IPrimaryEnergy
@@ -46,10 +45,9 @@ namespace MaxWorlds.Combat
 
         /// <summary>POWER (<c>p_dmg</c>), levels 1..8 — design v5's own table, reproduced exactly
         /// rather than approximated by <see cref="WeaponCatalog.EffectiveDamagePerTick"/>'s linear
-        /// curve. MV-1325: the curve was lowered at the start (level 1 was 12, now 8) since RICOCHET
-        /// was too strong from the first second against World 3's new support robots; it still tops
-        /// out at 40 (level 8), unchanged.</summary>
-        private static readonly float[] PowerDamageByLevel = { 8f, 11f, 14f, 18f, 22f, 27f, 33f, 40f };
+        /// curve (the real numbers step by 3,3,4,4,4,5,5, not a single constant). MV-1330: restored to
+        /// this pre-MV-1325 table; MV-1325's start-only lower (level 1: 8) is reverted.</summary>
+        private static readonly float[] PowerDamageByLevel = { 12f, 15f, 18f, 22f, 26f, 30f, 35f, 40f };
 
         /// <summary>RATE (<c>p_rof</c>), discs/second, levels 1..5.</summary>
         private static readonly float[] RateDiscsPerSecondByLevel = { 3.0f, 3.6f, 4.3f, 5.1f, 6.0f };
@@ -80,8 +78,8 @@ namespace MaxWorlds.Combat
         public float EnergyNormalized => _tank != null ? _tank.Normalized : 1f;
 
         /// <summary>RICOCHETS (<c>p_ric</c>): bounces a fresh disc has to spend. The board's own level
-        /// IS this number (owned from level 1 as of MV-1325, was level 2) — no clamp table, no
-        /// formula.</summary>
+        /// IS this number (owned from level 2 — MV-1330 restored this from MV-1325's level 1) — no
+        /// clamp table, no formula.</summary>
         public int BouncesPerDisc => Mathf.Max(0, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Ricochets));
 
         /// <summary>POWER (<c>p_dmg</c>): a disc's base damage right now, before the bank bonus.</summary>

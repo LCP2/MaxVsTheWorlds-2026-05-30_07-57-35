@@ -492,8 +492,8 @@ namespace MaxWorlds.Weapons
             // define, and no other primary's board carries p_spr at all.
             if (primary == WeaponCatalog.PrimaryKind.Undertow) preservedLevels["p_spr"] = 1;
             // MV-1195: RICOCHET's own RICOCHETS/RATE tracks are owned from a non-zero level the instant
-            // it's granted (rig_board.city.json's own authored p_ric/p_rof startLevel, MV-1325 lowered
-            // p_ric's) -- the same "RestoreSnapshot never defaults a missing id to its own RigBoard.StartLevel" gap
+            // it's granted (rig_board.city.json: p_ric startLevel 2, p_rof startLevel 1) -- the
+            // same "RestoreSnapshot never defaults a missing id to its own RigBoard.StartLevel" gap
             // p_dmg/p_spr already need an explicit seed for above. Read off the board's own authored
             // startLevel rather than a literal, so a retune of that file never drifts out of step with
             // this. A no-op whenever the granted primary isn't RICOCHET: RestoreSnapshot drops any id
