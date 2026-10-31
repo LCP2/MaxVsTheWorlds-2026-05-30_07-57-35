@@ -58,6 +58,13 @@ namespace MaxWorlds.Pickups
         /// <see cref="Ability"/> always being re-set on every <c>SpawnDrop</c> call.</summary>
         public string SecretId { get; set; }
 
+        /// <summary>For a VaultKey (MV-1321), the owning <see cref="MaxWorlds.Factories.Vault.Id"/> it
+        /// opens — null/empty for every other kind. Set by the director from
+        /// <see cref="PickupDirector.PlaceVaultKeyAt"/> when it's placed, and reset on every
+        /// <see cref="PickupDirector"/> drop (fresh or pooled reuse) so a pooled VaultKey never carries a
+        /// stale id forward, same reasoning as <see cref="SecretId"/>.</summary>
+        public string VaultId { get; set; }
+
         private Transform _spin;
         private float _baseY = FloatHeight;
         private GroundRing _glowRing;   // MV-698: only the Weapon Core carries one of its own

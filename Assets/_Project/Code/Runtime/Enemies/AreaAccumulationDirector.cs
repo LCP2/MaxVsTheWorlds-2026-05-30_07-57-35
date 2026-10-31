@@ -584,7 +584,11 @@ namespace MaxWorlds.Enemies
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
-                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                // MV-1321: the KEY elite always spawns elite, bypassing the chance roll AND the per-area
+                // cap entirely — never falls through to the ordinary EliteRoll.TryRoll below.
+                if (slots[i].CarriesKey)
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);
@@ -986,7 +990,10 @@ namespace MaxWorlds.Enemies
 
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
-                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                // MV-1321: see RestoreAreaAtLevel's own identical comment above.
+                if (slots[i].CarriesKey)
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);
@@ -1108,7 +1115,10 @@ namespace MaxWorlds.Enemies
                 EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
-                if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
+                // MV-1321: see RestoreAreaAtLevel's own identical comment above.
+                if (slots[i].CarriesKey)
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 
                 RobotEnemy e = Take(kind, archetype);

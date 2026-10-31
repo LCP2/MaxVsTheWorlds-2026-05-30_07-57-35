@@ -139,13 +139,21 @@ namespace MaxWorlds.Enemies
         /// elite (or for a non-elite archetype, where this is meaningless). See <see cref="Elite"/>.</summary>
         public readonly EliteAffix Affix;
 
+        /// <summary>MV-1321: this spawn is the KEY elite — stamped by the garrison call site when the
+        /// authored <see cref="MaxWorlds.Arena.WorldGarrisonEntry.carriesKey"/> entry is seeded, carried
+        /// on the archetype exactly the way <see cref="Elite"/> is. <see cref="RobotEnemy.Apply"/> wires
+        /// it to <see cref="RobotEnemy.CarriesKey"/>. False for every archetype value built without going
+        /// through <see cref="WithCarriesKey"/>.</summary>
+        public readonly bool CarriesKey;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
             float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
             float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f,
             string displayName = null, string skin = null, string colourRole = null,
-            bool splicer = false, bool elite = false, EliteAffix affix = EliteAffix.None)
+            bool splicer = false, bool elite = false, EliteAffix affix = EliteAffix.None,
+            bool carriesKey = false)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -162,6 +170,7 @@ namespace MaxWorlds.Enemies
             Splicer = splicer;
             Elite = elite;
             Affix = affix;
+            CarriesKey = carriesKey;
         }
 
         /// <summary>MV-1278: the same archetype, rolled elite — see <see cref="Elite"/>/<see cref="Affix"/>.
@@ -174,7 +183,18 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole, Splicer, elite: true, affix: affix);
+            DisplayName, Skin, ColourRole, Splicer, elite: true, affix: affix, carriesKey: CarriesKey);
+
+        /// <summary>MV-1321: the same archetype, stamped the KEY elite — the garrison call sites' own
+        /// fluent step, applied ALONGSIDE <see cref="WithElite"/> (never instead of it: a KEY elite is
+        /// still an ordinary elite underneath, just one that always spawns regardless of the chance roll
+        /// or the per-area cap).</summary>
+        public EnemyArchetype WithCarriesKey() => new EnemyArchetype(
+            Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
+            MoveSpeed, MaxHealth, ContactDamage, ContactRadius,
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
+            StandoffRange, TeleportCooldown, TouchDamage,
+            DisplayName, Skin, ColourRole, Splicer, elite: Elite, affix: Affix, carriesKey: true);
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
         public float SpawnHeight => ColliderHeight * 0.5f;

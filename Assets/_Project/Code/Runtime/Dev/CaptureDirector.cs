@@ -677,6 +677,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1295HatcheryClamLook());
             Add(BuildMv1299Gridlock());
             Add(BuildMv1320SecretCover());
+            Add(BuildMv1321Vault());
             return d;
         }
 
@@ -1740,6 +1741,125 @@ namespace MaxWorlds.Dev
                 {
                     if (ordinaryGo != null) Destroy(ordinaryGo);
                     if (secretGo != null) Destroy(secretGo);
+                },
+            };
+        }
+
+        // ---- Mv1321Vault (MV-1321) ------------------------------------------------------------
+
+        /// <summary>MV-1321 hand-off: one capture of a vault (closed, gold door, padlock icon) beside a
+        /// KEY elite's "ELITE  KEY" nameplate. Same "manual construction beside Max, not a scripted pose
+        /// of a built level" idiom <see cref="BuildMv1320SecretCover"/> uses — no world authors a vault
+        /// yet (placement is MV-1323/MV-1324's own ticket), so the walls/door are built directly here,
+        /// by hand, the same geometry <see cref="MapRuntime.BuildVault"/> builds from data. The KEY
+        /// elite reuses <see cref="BuildClusterRobot"/>'s own greybox recipe, then is re-stamped through
+        /// the real <see cref="RobotEnemy.Apply"/> API with a <see cref="EnemyArchetype.WithElite"/>/
+        /// <see cref="EnemyArchetype.WithCarriesKey"/> archetype — same "construct the real thing
+        /// directly" idiom <see cref="BuildMv1278EliteCheck"/> uses — ticked once to resolve its
+        /// nameplate before <see cref="RobotEnemy.SetCutsceneFrozen"/> holds the pose.</summary>
+        private static CapturePreset BuildMv1321Vault()
+        {
+            // Steep, near-production pitch (CLAUDE.md: "Camera is fixed angled top-down at ~72deg") —
+            // a shallow inspection angle like BuildMv1320SecretCover's own 30deg instead framed the
+            // Backyard spawn's own hedge rows chest-on, filling the whole shot (MV-1321's own first
+            // capture attempt). Looking down from height clears them.
+            const float pitch = 60f;
+            const float distance = 19f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject vaultGo = null;
+            GameObject robotGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                Vector3 focus = maxGo.transform.position + maxGo.transform.forward * 18f;
+
+                const float w = 6f, d = 6f;
+                float wallThickness = Factories.Vault.WallThickness, wallHeight = Factories.Vault.WallHeight, doorWidth = Factories.Vault.DoorWidth;
+                float halfW = w * 0.5f, halfD = d * 0.5f;
+
+                vaultGo = new GameObject("MV1321CaptureVault");
+                vaultGo.transform.position = focus;
+
+                GameObject BuildWall(string wallName, Vector3 localCenter, Vector3 size)
+                {
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    go.name = wallName;
+                    go.transform.SetParent(vaultGo.transform, false);
+                    go.transform.localPosition = localCenter;
+                    go.transform.localScale = size;
+                    // THIS IS THE MAGENTA (RuntimeSurfaceDirector's own doc comment): CreatePrimitive
+                    // hands out Unity's built-in default material, which URP draws magenta in a player
+                    // build. RuntimeSurfaceDirector's one-time sweep only catches scenery built while
+                    // the map assembles (MapRuntime.Build, before its own Start fires); this preset
+                    // builds its walls several frames into the capture, well after that sweep already
+                    // ran, so it must dress itself explicitly — same material a real wall would resolve
+                    // to via RuntimeSurfaceDirector's own MaterialFor.
+                    var renderer = go.GetComponent<MeshRenderer>();
+                    if (renderer != null) renderer.sharedMaterial = MaterialLibrary.Surface(WorldMaterials.KindOf(renderer));
+                    return go;
+                }
+
+                BuildWall("N", new Vector3(0f, wallHeight * 0.5f, halfD), new Vector3(w, wallHeight, wallThickness));
+                BuildWall("E", new Vector3(halfW, wallHeight * 0.5f, 0f), new Vector3(wallThickness, wallHeight, d));
+                BuildWall("W", new Vector3(-halfW, wallHeight * 0.5f, 0f), new Vector3(wallThickness, wallHeight, d));
+                float seg = (w - doorWidth) * 0.5f;
+                BuildWall("S_a", new Vector3(-halfW + seg * 0.5f, wallHeight * 0.5f, -halfD), new Vector3(seg, wallHeight, wallThickness));
+                BuildWall("S_b", new Vector3(halfW - seg * 0.5f, wallHeight * 0.5f, -halfD), new Vector3(seg, wallHeight, wallThickness));
+
+                GameObject door = BuildWall("Door", new Vector3(0f, wallHeight * 0.5f, -halfD), new Vector3(doorWidth, wallHeight, wallThickness));
+                MeshRenderer doorRenderer = door.GetComponent<MeshRenderer>();
+                if (doorRenderer != null) doorRenderer.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, new Color(0.90f, 0.70f, 0.18f)); // same gold MapRuntime.BuildVault's own door uses
+
+                var vault = vaultGo.AddComponent<Factories.Vault>();
+                vault.Configure("mv1321_capture_vault", door.transform, door.transform.localPosition,
+                    door.transform.localPosition + Vector3.right * doorWidth);
+                vault.Build();
+
+                // Placed opposite the hedge row that otherwise occludes the +right side of this frame
+                // (MV-1321's own earlier capture attempt) — the open grass in frame is to -right.
+                robotGo = BuildClusterRobot(EnemyKind.Rusher, focus - maxGo.transform.right * 5f);
+                var robot = robotGo.GetComponent<RobotEnemy>();
+                robot.Apply(EnemyArchetype.Of(EnemyKind.Rusher).WithElite(EliteAffix.None).WithCarriesKey());
+                robot.Tick(0.016f);           // resolve the "ELITE  KEY" nameplate once before freezing the pose
+                robot.SetCutsceneFrozen(true); // hold the pose — nothing in this shot for it to chase
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the icon/nameplate settle
+
+                Vector3 camFocus = focus + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1321vault",
+                LogTag = "[MV1321Capture]",
+                Flag = "-mv1321shot",
+                ArmFile = "Temp/mv1321.arm",
+                HeadlessMarker = "Temp/mv1321.headless",
+                DoneFileName = "_mv1321_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1321-vault-and-key-elite", Setup) },
+                Cleanup = () =>
+                {
+                    if (robotGo != null) Destroy(robotGo);
+                    if (vaultGo != null) Destroy(vaultGo);
                 },
             };
         }

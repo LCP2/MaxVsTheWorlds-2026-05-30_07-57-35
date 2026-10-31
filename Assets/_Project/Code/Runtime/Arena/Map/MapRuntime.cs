@@ -42,6 +42,9 @@ namespace MaxWorlds.Arena
         /// <summary>The repair bays this map built (MV-1319), in the order it authored them.</summary>
         public readonly List<RepairBay> RepairBays = new List<RepairBay>(4);
 
+        /// <summary>The vaults this map built (MV-1321), in the order it authored them.</summary>
+        public readonly List<Vault> Vaults = new List<Vault>(2);
+
         /// <summary>The bosses this map built (MV-561), in the order it authored them. Not always a
         /// <see cref="BigBermudaBoss"/> (MV-1127: a "sludgequeen" id dispatches to
         /// <see cref="SludgequeenBoss"/> instead), so this is keyed on the shared <see cref="MonoBehaviour"/>
@@ -1399,6 +1402,10 @@ namespace MaxWorlds.Arena
                 if (e != null && e.secret) secretTotal++;
             SecretCensus.SeedTotal(secretTotal);
 
+            // MV-1321: same reasoning again — a level loaded a second time must count its own vaults,
+            // not the previous level's (or the previous test's) ghosts.
+            Vault.ResetRegistry();
+
             // MV-829: a fresh level starts with no area-entered history — see AreaVisitCensus's own
             // doc comment for why "the last level's (or the last test's) areas" can never be trusted.
             AreaVisitCensus.Reset();
@@ -2588,6 +2595,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.RepairBay:
                         built.RepairBays.Add(BuildRepairBay(map, e, root, built, rendererZones));
                         break;
+
+                    case EntityKind.Vault:
+                        built.Vaults.Add(BuildVault(map, e, root, built, rendererZones));
+                        break;
                 }
             }
         }
@@ -2945,6 +2956,105 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = go;
             return bay;
+        }
+
+        private static readonly Color GoldDoorColor = new Color(0.90f, 0.70f, 0.18f); // ticket: "a 2.4 m gold door"
+
+        /// <summary>
+        /// A vault, from data (MV-1321) — a 4-wall greybox enclosure with a <see cref="Vault.DoorWidth"/>
+        /// gold door centred on its authored <see cref="MapEntity.facing"/> side, built directly here
+        /// (same "MapRuntime builds the box, AddComponent wires behaviour" split <see cref="BuildCover"/>
+        /// already uses for <see cref="DestructibleCover"/>) rather than inside <see cref="Vault.Build"/>
+        /// itself, since the walls need real collision and the door needs a live <see cref="Transform"/>
+        /// the component can slide. The three non-door walls are each one solid <see cref="Box"/>; the
+        /// door wall splits into two segments flanking the gap.
+        /// </summary>
+        private static Vault BuildVault(MapData map, MapEntity e, Transform root, MapBuild built,
+            Dictionary<Renderer, List<string>> rendererZones)
+        {
+            if (!WallEnums.TryParse(e.facing, out Wall doorWall)) doorWall = Wall.S;
+
+            var go = new GameObject(e.id);
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = new Vector3(e.x, 0f, e.z);
+            MarkDiscoverable(go);
+
+            float halfW = e.width * 0.5f, halfD = e.depth * 0.5f;
+            foreach (Wall wall in AllWalls)
+                BuildVaultWall(map, go.transform, e.id, wall, wall == doorWall, halfW, halfD, rendererZones);
+
+            bool doorAlongX = doorWall == Wall.N || doorWall == Wall.S;
+            Vector3 doorClosedLocal = doorWall switch
+            {
+                Wall.N => new Vector3(0f, Vault.WallHeight * 0.5f, halfD),
+                Wall.S => new Vector3(0f, Vault.WallHeight * 0.5f, -halfD),
+                Wall.E => new Vector3(halfW, Vault.WallHeight * 0.5f, 0f),
+                _ => new Vector3(-halfW, Vault.WallHeight * 0.5f, 0f), // W
+            };
+            Vector3 doorSize = doorAlongX
+                ? new Vector3(Vault.DoorWidth, Vault.WallHeight, Vault.WallThickness)
+                : new Vector3(Vault.WallThickness, Vault.WallHeight, Vault.DoorWidth);
+
+            GameObject door = Box(go.transform, $"{e.id}_door", doorClosedLocal, doorSize, blocksSight: true, isStatic: false);
+            MeshRenderer doorRenderer = door.GetComponent<MeshRenderer>();
+            if (doorRenderer != null) doorRenderer.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, GoldDoorColor);
+
+            // Slides sideways along the wall it sits in (greybox stand-in for "slides open" — there is
+            // no separate door-pocket mesh to retract into).
+            Vector3 slideAxis = doorAlongX ? Vector3.right : Vector3.forward;
+            Vector3 doorOpenLocal = doorClosedLocal + slideAxis * Vault.DoorWidth;
+
+            var vault = go.AddComponent<Vault>();
+            vault.Configure(e.id, door.transform, doorClosedLocal, doorOpenLocal);
+            vault.Build();
+
+            built.Actors[e.id] = go;
+            return vault;
+        }
+
+        /// <summary>One wall of a vault's 4-wall box (MV-1321) — a single solid <see cref="Box"/> on
+        /// every side but the door's, which splits into two segments flanking
+        /// <see cref="Vault.DoorWidth"/> so the gap sits centred on that side exactly as
+        /// authored.</summary>
+        private static void BuildVaultWall(MapData map, Transform vaultRoot, string vaultId, Wall wall, bool isDoorWall,
+            float halfW, float halfD, Dictionary<Renderer, List<string>> rendererZones)
+        {
+            bool alongX = wall == Wall.N || wall == Wall.S;
+            float length = alongX ? halfW * 2f : halfD * 2f;
+            float fixedCoord = wall switch
+            {
+                Wall.N => halfD,
+                Wall.S => -halfD,
+                Wall.E => halfW,
+                _ => -halfW, // W
+            };
+
+            if (!isDoorWall)
+            {
+                BuildVaultWallSegment(map, vaultRoot, $"{vaultId}_wall_{wall}", alongX, fixedCoord, -length * 0.5f, length * 0.5f, rendererZones);
+                return;
+            }
+
+            float segLength = (length - Vault.DoorWidth) * 0.5f;
+            if (segLength <= 0.05f) return; // the door fills (or exceeds) this side entirely — no wall segment to build
+            BuildVaultWallSegment(map, vaultRoot, $"{vaultId}_wall_{wall}_a", alongX, fixedCoord, -length * 0.5f, -length * 0.5f + segLength, rendererZones);
+            BuildVaultWallSegment(map, vaultRoot, $"{vaultId}_wall_{wall}_b", alongX, fixedCoord, length * 0.5f - segLength, length * 0.5f, rendererZones);
+        }
+
+        private static void BuildVaultWallSegment(MapData map, Transform vaultRoot, string segName,
+            bool alongX, float fixedCoord, float from, float to, Dictionary<Renderer, List<string>> rendererZones)
+        {
+            float mid = (from + to) * 0.5f;
+            float len = to - from;
+            Vector3 center = alongX
+                ? new Vector3(mid, Vault.WallHeight * 0.5f, fixedCoord)
+                : new Vector3(fixedCoord, Vault.WallHeight * 0.5f, mid);
+            Vector3 size = alongX
+                ? new Vector3(len, Vault.WallHeight, Vault.WallThickness)
+                : new Vector3(Vault.WallThickness, Vault.WallHeight, len);
+
+            GameObject wall = Box(vaultRoot, segName, center, size, blocksSight: true, isStatic: true);
+            TagStatic(map, wall, rendererZones);
         }
 
         /// <summary>N = world +Z, E = +X, W = -X, S (and anything unrecognised) = -Z — an Assembly

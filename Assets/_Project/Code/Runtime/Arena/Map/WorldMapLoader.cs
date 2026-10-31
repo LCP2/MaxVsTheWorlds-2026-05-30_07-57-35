@@ -799,6 +799,29 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-1321: an area's vaults — same "per-entity not per-area" shape as the repair bays above.
+            // width/depth/facing are the entity's own ordinary size/door-side fields, reused verbatim
+            // (same "reuse the shape, not the meaning" idiom as every other facing-carrying kind above).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldVault[] vaults = a.vaults ?? Array.Empty<WorldVault>();
+                for (int i = 0; i < vaults.Length; i++)
+                {
+                    WorldVault v = vaults[i];
+                    if (v == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(v.id) ? $"{a.id}_vault{i + 1}" : v.id,
+                        kind = "vault",
+                        x = v.x,
+                        z = v.z,
+                        width = v.w > 0f ? v.w : 6f,
+                        depth = v.d > 0f ? v.d : 6f,
+                        facing = string.IsNullOrEmpty(v.door) ? "S" : v.door,
+                    });
+                }
+            }
+
             map = new MapData
             {
                 name = string.IsNullOrEmpty(cfg.world) ? "World" : cfg.world,

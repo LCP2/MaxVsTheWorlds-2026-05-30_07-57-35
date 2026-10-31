@@ -404,6 +404,9 @@ namespace MaxWorlds.Enemies
             // separate heal-up call.
             IsElite = a.Elite;
             Affix = a.Affix;
+            // MV-1321: same "stamped unconditionally" reasoning as IsElite above — a pooled robot's last
+            // life's KEY status must never leak into a spawn that isn't one this time.
+            CarriesKey = a.CarriesKey;
             // MV-1282 point 3: a Hasted elite does NOT get the x2.0 health bonus — its max health
             // stays its kind's normal resolved value, the speed is the whole trade-off.
             if (IsElite && Affix != EliteAffix.Hasted) maxHealth *= EliteRoll.MaxHealthMultiplier;
@@ -841,6 +844,14 @@ namespace MaxWorlds.Enemies
         /// <summary>This elite's affix, <see cref="EliteAffix.None"/> for a plain elite or a non-elite.
         /// See <see cref="IsElite"/>.</summary>
         public EliteAffix Affix { get; private set; }
+
+        /// <summary>MV-1321: true for a garrison robot authored with <see cref="MaxWorlds.Arena.WorldGarrisonEntry.carriesKey"/>
+        /// — stamped once from the archetype in <see cref="Apply"/>, same "pooled robot, never carries a
+        /// previous life's flag forward" footing as <see cref="IsElite"/>. Drives the "ELITE  KEY"
+        /// nameplate (<see cref="MaxWorlds.UI.WorldHealthBar.SetEliteMarker"/>) and this robot's own
+        /// VaultKey drop on removal — a kill, a clean-up safety-net kill (<see cref="Die"/>, either way),
+        /// or a <see cref="Despawn"/>.</summary>
+        public bool CarriesKey { get; private set; }
 
         /// <summary>MV-1285: the other half of this Linked pair, or null if this robot never paired
         /// (point 2's "reroll"/"plain elite" fallback), its partner is dead, or the tether has snapped
@@ -2254,7 +2265,7 @@ namespace MaxWorlds.Enemies
             // call site of its own to hook. TickBody never runs for a Dormant/trapHeld robot (see Tick's
             // own early-returns), so the tag reads "shown while awake" for free, same as the ring
             // (VFX.GroundAnchorVfx) does via its own Dormant skip.
-            _bar?.SetEliteMarker(IsElite && _team == Team.Enemy);
+            _bar?.SetEliteMarker(IsElite && _team == Team.Enemy, CarriesKey);
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
@@ -4964,6 +4975,13 @@ namespace MaxWorlds.Enemies
             if (grantsDrops && IsElite)
                 MaxWorlds.Pickups.PickupDirector.EnsureInstalled()
                     .PlacePickupAt(MaxWorlds.Pickups.PickupKind.Supercell, transform.position);
+            // MV-1321: the KEY elite's VaultKey drops on ANY kill path through Die — a genuine kill OR a
+            // clean-up safety-net kill (grantsDrops false) — never gated on grantsDrops the way the
+            // elite Supercell bonus above is: the ticket calls this out by name ("if it is removed
+            // without a kill (despawn, finale clean-up), the key still drops"), so a KEY elite must never
+            // be the one robot whose loot a safety net can silently swallow. Despawn() below carries the
+            // identical call for the one removal path that never reaches Die at all.
+            if (CarriesKey) DropVaultKey();
             // MV-705: a Sludger's whole gimmick — killing it isn't the end. Gated on grantsDrops too
             // (MV-1122): a forced clean-up kill splitting into MORE robots would fight the exact thing
             // the thinning/hard-limit layers exist to guarantee (the area actually empties).
@@ -5077,8 +5095,24 @@ namespace MaxWorlds.Enemies
             if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; } // MV-428
             Current = State.Dead;
             _health = 0f;
+            // MV-1321: see Die's own identical comment — a KEY elite's key must drop even through the
+            // one removal path that never calls Die at all (Max dying resets the arena).
+            if (CarriesKey) DropVaultKey();
             Died?.Invoke(this);
             gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-1321: places this KEY elite's VaultKey at its own position — called by <see cref="Die"/>
+        /// (unconditionally of <c>grantsDrops</c>) and <see cref="Despawn"/>, the only two removal paths
+        /// this robot ever goes through. Resolves which vault the key opens via
+        /// <see cref="MaxWorlds.Factories.Vault.NearestId"/> (the nearest still-closed registered vault —
+        /// a tight-slice world authors one vault per area, so "nearest" stands in for "this area's
+        /// vault"); a no-op if no vault is registered at all (a world with no vaults authored anywhere).</summary>
+        private void DropVaultKey()
+        {
+            string vaultId = MaxWorlds.Factories.Vault.NearestId(transform.position);
+            if (string.IsNullOrEmpty(vaultId)) return;
+            MaxWorlds.Pickups.PickupDirector.EnsureInstalled().PlaceVaultKeyAt(transform.position, vaultId);
         }
 
         private void SetTell(Color c)

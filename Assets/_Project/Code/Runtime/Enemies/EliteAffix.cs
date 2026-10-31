@@ -69,6 +69,15 @@ namespace MaxWorlds.Enemies
             return true;
         }
 
+        /// <summary>MV-1321: the KEY elite's own forced roll — called instead of <see cref="TryRoll"/>
+        /// for a garrison entry authored with <see cref="MaxWorlds.Arena.WorldGarrisonEntry.carriesKey"/>
+        /// true, which bypasses the chance roll AND the per-area cap entirely (ticket: "always spawns as
+        /// an elite... bypasses the elite % roll and the per-area elite cap"), but still asks
+        /// <see cref="RollAffix"/> for its affix "normally from the world's list", exactly like an
+        /// ordinary elite roll would.</summary>
+        public static EliteAffix RollAffixForced(WorldDials dials, EnemyKind kind) =>
+            RollAffix(dials?.eliteAffixes, kind);
+
         /// <summary>Picks one IMPLEMENTED affix at random from <paramref name="authoredAffixes"/>
         /// (MV-1278 point 2) — <see cref="EliteAffix.None"/> (a plain elite) when the authored list is
         /// empty or every authored entry filters out as not-yet-implemented/kind-ineligible.

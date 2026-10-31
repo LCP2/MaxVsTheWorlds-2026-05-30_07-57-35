@@ -20,6 +20,10 @@ namespace MaxWorlds.Pickups
     /// 5's own finale drop: the Helmsman's death drop on the Bridge. What collecting it actually DOES
     /// (the viewport exit) is MV-1245's own ticket — this kind exists so it can drop and be told apart
     /// from every other pickup, not because this ticket wires the finale itself.
+    /// <see cref="PickupKind.VaultKey"/> (MV-1321) is a vault's own KEY elite's death drop: walking over
+    /// it (or Magneto pulling it in — unlike every other kind above, it IS pulled, see
+    /// <see cref="PickupDirector.MagnetoShouldPull"/>) banks it into
+    /// <see cref="MaxWorlds.Factories.VaultKeyState"/>, bound to the vault it opens.
     /// </summary>
     public enum PickupKind
     {
@@ -30,5 +34,6 @@ namespace MaxWorlds.Pickups
         WeaponCore,
         RackModule,
         HelmKey,
+        VaultKey,
     }
 }
