@@ -538,10 +538,17 @@ namespace MaxWorlds.Rendering
             ShadowTint = new Color(0.35f, 0.42f, 0.68f),
             HighlightTint = new Color(1f, 0.9f, 0.75f),
 
-            // Ticket's own "bloom on (threshold about 0.9) so emissive strips and lamps glow".
-            BloomThreshold = 0.9f,
+            // Ticket's own "bloom on (threshold about 0.9) so emissive strips and lamps glow" --
+            // MV-1332: that 0.9/0.6 pair was never exercised on Mobile, which stayed LDR (no pixel
+            // could exceed 1.0) until MV-1273 turned HDR on there. Under HDR, ShipHangar's own
+            // BloomIntensity/Scatter override (below) pushed the hazard-yellow rim's bloom wide
+            // enough to swallow Max on an iPhone. Threshold >=1.2 and scatter <=0.4 are the ticket's
+            // own caps (comment there); every Ship deck inherits them from here, so raising them once
+            // covers Assembly/Holds/Engineering/Command too, not just Hangar. See
+            // MV1332ShipBloomCapTests for the asserted caps.
+            BloomThreshold = 1.2f,
             BloomIntensity = 0.6f,
-            BloomScatter = 0.6f,
+            BloomScatter = 0.4f,
 
             VignetteIntensity = 0.14f,     // "vignette light"
             VignetteSmoothness = 0.5f,
@@ -614,12 +621,18 @@ namespace MaxWorlds.Rendering
                 // delta -- it collapsed the bloom pixel count to 0 (was 23721, PASS): Scatter widens the
                 // bloom kernel's spread at the cost of its peak, so already-modest post-tonemap peaks (the
                 // halved lamp pools above, the HDR neon lines) got diluted below the 230 threshold entirely
-                // rather than reading as bloom anywhere. Back at ShipBase's own 0.8; the hazard stripe's own
-                // neon source (ShipKit.BuildLaunchPadHazardStripes) is widened/boosted directly instead, so
-                // the biome-wide Bloom volume settings stay the ones already proven not to break AC3's count
-                // half.
-                l.BloomIntensity = 2.0f;
-                l.BloomScatter = 0.8f;
+                // rather than reading as bloom anywhere. That reasoning held at the pre-MV-1332 0.8 this
+                // deck used to override; it does not license 0.8 any more. MV-1332: 0.8 (vs ShipBase's own
+                // bloom-widening ceiling, now 0.4) plus this deck's own BloomIntensity=2.0 (3.3x
+                // ShipBase's 0.6) is what actually produced the screen-filling glow once Mobile had HDR
+                // (MV-1273) to push real pixels above threshold for the first time -- those two were never
+                // exercised together under HDR before. BloomIntensity capped to 1.0 (keeps Hangar reading
+                // hotter than the other four decks, half its old value) and the BloomScatter override is
+                // dropped entirely so Hangar inherits ShipBase's own 0.4 cap rather than re-opening the
+                // same hole from a per-deck override. The hazard stripe's own neon source
+                // (ShipKit.BuildLaunchPadHazardStripes) still carries the visible glow locally -- this is
+                // the biome-wide Bloom volume only.
+                l.BloomIntensity = 1.0f;
                 l.PostExposure = 0.85f;
                 return l;
             }

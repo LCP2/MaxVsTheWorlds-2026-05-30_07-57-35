@@ -277,6 +277,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1321Vault() => RunFromMenu(CapturePresets.All["mv1321vault"]);
         public static void CaptureMv1321Vault() => Run(CapturePresets.All["mv1321vault"]);
 
+        [MenuItem("MaxWorlds/Capture/Hangar Bloom Check (MV-1332)")]
+        public static void MenuMv1332HangarBloom() => RunFromMenu(CapturePresets.All["mv1332hangarbloom"]);
+        public static void CaptureMv1332HangarBloom() => Run(CapturePresets.All["mv1332hangarbloom"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

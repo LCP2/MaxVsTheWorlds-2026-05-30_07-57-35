@@ -678,6 +678,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1299Gridlock());
             Add(BuildMv1320SecretCover());
             Add(BuildMv1321Vault());
+            Add(BuildMv1332HangarBloomCheck());
             return d;
         }
 
@@ -6595,6 +6596,168 @@ namespace MaxWorlds.Dev
                            $"resolved camera: distance={resolvedDistance:F2}m pitch={resolvedPitch:F1}deg " +
                            $"(production rig default: distance={expectedDistance:F2}m pitch={expectedPitch:F1}deg)\n";
                 },
+            };
+        }
+
+        // ---- MV1332HangarBloomCheck (MV-1332 AC1/AC4) -----------------------------------------
+
+        /// <summary>MV-1332's own before/after evidence: the real Mothership Hangar (a1, same area
+        /// <see cref="BuildMv1274HangarCheck"/>/<see cref="BuildMv1266ReefPlayCameraCheck"/> already
+        /// use this technique for), under the Mobile quality tier (HDR on, MV-1273) at the LIVE play
+        /// camera. Measures the frame's own worst 200x200 px region (AC1's own size) by building a
+        /// summed-area table over the whole frame once rather than re-summing 200x200 pixels per
+        /// candidate window, then Max's own body-vs-30px-ring luminance delta if he is in frame.
+        /// Written to <c>Logs/</c> (not the shared <c>_screens</c> dir) per AC4's own instruction —
+        /// this is one-shot before/after evidence for the fix comment, not a design-review asset.</summary>
+        private static CapturePreset BuildMv1332HangarBloomCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float worstWindowMeanLuma = -1f;
+            float worstWindowMedianLuma = -1f;
+            int worstWindowX = -1, worstWindowY = -1;
+            float maxBodyLuma = float.NaN;
+            float maxRingLuma = float.NaN;
+            bool maxFound = false;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck uses -- let the camera's own
+                // damping/look-ahead reach its settled play pose before the shot, not a mid-teleport one.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                const int Window = 200; // AC1's own region size
+                const int Stride = 50;  // overlap so the true worst region isn't straddled by a tile boundary
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32(); // row 0 = bottom, Unity's own texture convention
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                // Summed-area table (one extra row/col of zeros) so any window's sum is 4 lookups,
+                // not a re-walk of its own 40000 pixels -- AC1 asks about EVERY 200x200 region, and a
+                // sliding window at Stride 50 over a 1920x1080 frame is ~650 candidates.
+                var sat = new double[(w + 1) * (h + 1)];
+                for (int y = 0; y < h; y++)
+                {
+                    double rowSum = 0;
+                    for (int x = 0; x < w; x++)
+                    {
+                        rowSum += Luma(px[y * w + x]);
+                        sat[(y + 1) * (w + 1) + (x + 1)] = rowSum + sat[y * (w + 1) + (x + 1)];
+                    }
+                }
+                double WindowSum(int x0, int y0) =>
+                    sat[(y0 + Window) * (w + 1) + (x0 + Window)] - sat[y0 * (w + 1) + (x0 + Window)] -
+                    sat[(y0 + Window) * (w + 1) + x0] + sat[y0 * (w + 1) + x0];
+
+                double bestMean = -1;
+                for (int y0 = 0; y0 + Window <= h; y0 += Stride)
+                {
+                    for (int x0 = 0; x0 + Window <= w; x0 += Stride)
+                    {
+                        double mean = WindowSum(x0, y0) / (Window * Window);
+                        if (mean > bestMean) { bestMean = mean; worstWindowX = x0; worstWindowY = y0; }
+                    }
+                }
+                worstWindowMeanLuma = (float)bestMean;
+
+                // True median, sampled every 2nd pixel, for just the one worst window -- affordable
+                // once, not for every one of the ~650 candidate windows above.
+                if (worstWindowX >= 0)
+                {
+                    var sample = new List<float>(Window * Window / 4);
+                    for (int dy = 0; dy < Window; dy += 2)
+                        for (int dx = 0; dx < Window; dx += 2)
+                            sample.Add(Luma(px[(worstWindowY + dy) * w + (worstWindowX + dx)]));
+                    sample.Sort();
+                    worstWindowMedianLuma = sample.Count == 0 ? 0f : sample[sample.Count / 2];
+                }
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo != null)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(maxGo.transform.position + Vector3.up * 0.8f);
+                    if (vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f)
+                    {
+                        int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+
+                        float SampleBox(int px0, int py0, int half)
+                        {
+                            double sum = 0; int count = 0;
+                            for (int dy = -half; dy <= half; dy++)
+                            {
+                                int y = py0 + dy;
+                                if (y < 0 || y >= h) continue;
+                                for (int dx = -half; dx <= half; dx++)
+                                {
+                                    int x = px0 + dx;
+                                    if (x < 0 || x >= w) continue;
+                                    sum += Luma(px[y * w + x]);
+                                    count++;
+                                }
+                            }
+                            return count > 0 ? (float)(sum / count) : float.NaN;
+                        }
+
+                        maxBodyLuma = SampleBox(cx, cy, 8);
+
+                        const int RingRadius = 30;
+                        double ringSum = 0; int ringCount = 0;
+                        for (int a = 0; a < 8; a++)
+                        {
+                            float rad = a * Mathf.PI * 2f / 8f;
+                            int rx = cx + Mathf.RoundToInt(Mathf.Cos(rad) * RingRadius);
+                            int ry = cy + Mathf.RoundToInt(Mathf.Sin(rad) * RingRadius);
+                            float s = SampleBox(rx, ry, 2);
+                            if (!float.IsNaN(s)) { ringSum += s; ringCount++; }
+                        }
+                        maxRingLuma = ringCount > 0 ? (float)(ringSum / ringCount) : float.NaN;
+                        maxFound = true;
+                    }
+                }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1332hangarbloom",
+                LogTag = "[MV1332Capture]",
+                Flag = "-mv1332shot",
+                ArmFile = "Temp/mv1332.arm",
+                HeadlessMarker = "Temp/mv1332.headless",
+                DoneFileName = "_mv1332_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the ticket's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1332-a1-hangar-bloom", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    $"worst 200x200 window at ({worstWindowX},{worstWindowY}): mean luma={worstWindowMeanLuma:F1}/255 " +
+                    $"median luma={worstWindowMedianLuma:F1}/255 (AC1 cap: median <=200)\n" +
+                    (maxFound
+                        ? $"Max body luma={maxBodyLuma:F1}/255 vs 30px ring luma={maxRingLuma:F1}/255 " +
+                          $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC1 floor: >=25)\n"
+                        : "Max not found in frame -- AC1's body/ring delta not measured this shot.\n"),
             };
         }
 
