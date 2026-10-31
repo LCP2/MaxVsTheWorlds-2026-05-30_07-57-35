@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -128,6 +129,8 @@ namespace MaxWorlds.Weapons
             float damage, float bankBonusPerBounce, float turnRateDegPerSec, float lookaheadMetres,
             float radius, float lifetime)
         {
+            PruneDestroyedPoolEntries();
+
             RicochetDisc disc = null;
             for (int i = 0; i < s_pool.Count; i++)
             {
@@ -189,12 +192,42 @@ namespace MaxWorlds.Weapons
 
         /// <summary>MV-1195 spec: "Freeze, death or resume: discs in flight are cleared." Deactivates
         /// every pooled disc without destroying the pool itself — the next <see cref="Spawn"/> reuses
-        /// them exactly as if they had expired normally.</summary>
+        /// them exactly as if they had expired normally.
+        ///
+        /// MV-1331: must never throw. A scene reload (quit-to-menu, cross-world RESUME) destroys every
+        /// disc's GameObject without going through <see cref="Retire"/> first, so a stale pool entry
+        /// must be dropped (see <see cref="PruneDestroyedPoolEntries"/>) rather than touched.</summary>
         public static void ClearAll()
         {
+            PruneDestroyedPoolEntries();
             for (int i = 0; i < s_pool.Count; i++)
                 if (s_pool[i]._active) s_pool[i].Retire();
         }
+
+        /// <summary>MV-1331: a scene reload (<c>RunFlow</c> quit-to-menu, cross-world RESUME — both call
+        /// <c>SceneManager.LoadScene</c>) destroys every pooled disc's GameObject, but nothing else ever
+        /// removed the stale entry from <see cref="s_pool"/>: the discs are ordinary scene objects, not
+        /// <c>DontDestroyOnLoad</c>. The next <see cref="Spawn"/>/<see cref="ClearAll"/> would then touch
+        /// a destroyed Unity Object and throw <c>MissingReferenceException</c>. Unity's own <c>== null</c>
+        /// check is the only way to detect "destroyed but the C# wrapper is still alive" — a plain field
+        /// read (like <c>_active</c>) would not catch it.</summary>
+        private static void PruneDestroyedPoolEntries()
+        {
+            for (int i = s_pool.Count - 1; i >= 0; i--)
+                if (s_pool[i] == null) s_pool.RemoveAt(i);
+        }
+
+        /// <summary>MV-1331: registered once (the empty unsubscribe-then-subscribe guards a re-run in the
+        /// same domain, e.g. between EditMode tests) so a scene unload empties the pool immediately
+        /// rather than waiting for the next <see cref="Spawn"/>/<see cref="ClearAll"/> to prune it lazily.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void RegisterSceneUnloadHook()
+        {
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
+            SceneManager.sceneUnloaded += OnSceneUnloaded;
+        }
+
+        private static void OnSceneUnloaded(Scene scene) => s_pool.Clear();
 
         /// <summary>Test-only teardown — destroys every pooled instance and empties the pool, so an
         /// EditMode test run doesn't leak GameObjects into whatever runs next in the same domain. Same

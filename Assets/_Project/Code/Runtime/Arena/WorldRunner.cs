@@ -508,15 +508,20 @@ namespace MaxWorlds.Arena
             if (plan.RecloseGate && _gateIntoArea.TryGetValue(plan.RestoreAreaIndex, out AreaGate gate) && gate != null)
                 gate.Reclose();
 
+            EnsurePlayer();
+            RespawnPlayer(plan);
+            _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
+
+            // MV-1331: clearing in-flight projectiles goes AFTER the player is placed, not before —
+            // RicochetDisc.ClearAll() used to throw on a stale pooled disc (fixed, MV-1331) and abort
+            // this method before Max was ever moved, leaving a RESUME stranded at the world's entry.
+            // This ordering is a second line of defence: a failure here must never again cost the
+            // player placement above.
             Sentinel.DestroyAllActive();
             // MV-1195: "Freeze, death or resume: discs in flight are cleared" — a RESUME is exactly as
             // much an area change as walking through a gate is, the same reason Sentinels are cleared
             // on the line above.
             RicochetDisc.ClearAll();
-
-            EnsurePlayer();
-            RespawnPlayer(plan);
-            _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
         }
 
         /// <summary>MV-1096: resolves <paramref name="gateId"/> to the area it leads into, that gate's
@@ -562,12 +567,13 @@ namespace MaxWorlds.Arena
 
             gate.ForceOpen();
 
-            Sentinel.DestroyAllActive();
-            RicochetDisc.ClearAll();   // MV-1195: same "resume clears discs" rule as ResumeCheckpoint
-
             EnsurePlayer();
             RespawnJustInsideGate(gate, areaIndex, level);
             _areaDirector.SetCurrentArea(areaIndex);
+
+            // MV-1331: same "place the player first" ordering as ResumeCheckpoint — see its comment.
+            Sentinel.DestroyAllActive();
+            RicochetDisc.ClearAll();   // MV-1195: same "resume clears discs" rule as ResumeCheckpoint
         }
 
         /// <summary>MV-1151: the pure area-selection half of <see cref="JumpToFinaleArea"/>, split out so
