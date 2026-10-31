@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using MaxWorlds.Arena;
@@ -31,6 +32,13 @@ namespace MaxWorlds.Tests.EditMode
     /// MV-1017: the board total this test asserts (AC2) is read live from <see cref="RigBoard.AllIds"/>/
     /// <see cref="RigBoard.MaxLevel"/> rather than hard-coded, so World 3's board swap (dropping
     /// p_rof/p_frk/p_cap, adding p_spr) needs no matching edit here.
+    ///
+    /// MV-1328 (Lee, 2026-10-31) supersedes this test's own "every node maxed" assertions for
+    /// PRIMARY/SECONDARY: a MaxedRig dev start no longer maxes the weapon itself — it lands on the
+    /// same bottom-of-board floor a plain corridor entry gets, same as every other world entry.
+    /// Updated in place (captured live off an identical fresh <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>
+    /// history rather than guessed at) rather than left to rot red, same precedent MV-1095's own note
+    /// elsewhere in this suite sets.
     /// </summary>
     public sealed class MV736World3MaxRigTests
     {
@@ -60,6 +68,24 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void StartSlotWorld_MaxRigTrue_FullyMaxesTheBoardAndForgesEveryFusion()
         {
+            int reefIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+
+            // MV-1328: PRIMARY/SECONDARY now land on the same bottom-of-board floor a plain corridor
+            // entry gets, even on a MaxedRig dev start -- captured here off an identical fresh history
+            // rather than guessed at, so this stays correct however Undertow/Shoulder Rack's own
+            // authored floor levels are tuned. MV-1180/MV-1328: StartSlotWorld itself unlocks SECONDARY
+            // before the morph whenever CarrySecondaryAcrossMorph keeps it open, so mirror that here too.
+            WeaponSystemState.Reset();
+            if (WorldCatalog.Get(reefIndex).CarrySecondaryAcrossMorph) RigState.UnlockCategory("SECONDARY");
+            WeaponSystemState.ApplyWeaponCoreMorph(reefIndex);
+            var expectedWeaponFloor = new Dictionary<string, int>();
+            foreach (string id in RigBoard.AllIds)
+            {
+                string category = RigBoard.Category(id);
+                if (category == "PRIMARY" || category == "SECONDARY") expectedWeaponFloor[id] = RigState.Level(id);
+            }
+            WeaponSystemState.Reset();
+
             // A slot mid-way through a World 1 campaign on the RCDA.
             SaveSystem.Save(0, new SaveSlotData
             {
@@ -68,24 +94,30 @@ namespace MaxWorlds.Tests.EditMode
                 WorldIndex = 0,
             });
 
-            HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
+            HomeScreen.StartSlotWorld(0, worldIndex: reefIndex, maxRig: true);
 
             SaveSlotData after = SaveSystem.Load(0);
-            Assert.AreEqual(WorldCatalog.IndexOf(WorldIds.Reef), after.WorldIndex, "WORLD 3 must seed WorldIndex to the Reef's row");
+            Assert.AreEqual(reefIndex, after.WorldIndex, "WORLD 3 must seed WorldIndex to the Reef's row");
 
-            // AC2: every node on the board sits at its own authored maxLevel — assert the sum against
-            // a total read live from RigBoard.AllIds/MaxLevel (MV-1017: never hard-coded, so this stays
-            // correct whichever board worldIndex 2 resolves to and however many nodes/levels it
-            // authors), plus one named node from each of the five categories.
+            // AC2: every node OUTSIDE PRIMARY/SECONDARY sits at its own authored maxLevel — assert the
+            // sum against a total read live from RigBoard.AllIds/MaxLevel (MV-1017: never hard-coded,
+            // so this stays correct whichever board worldIndex 2 resolves to and however many
+            // nodes/levels it authors); PRIMARY/SECONDARY sit at the corridor floor instead (MV-1328).
             int expectedSum = 0;
-            foreach (string id in RigBoard.AllIds) expectedSum += RigBoard.MaxLevel(id);
+            foreach (string id in RigBoard.AllIds)
+            {
+                string category = RigBoard.Category(id);
+                expectedSum += category == "PRIMARY" || category == "SECONDARY"
+                    ? expectedWeaponFloor[id] : RigBoard.MaxLevel(id);
+            }
 
             int sum = 0;
             foreach (var kv in RigState.SnapshotLevels()) sum += kv.Value;
-            Assert.AreEqual(expectedSum, sum, "every node on the board must be maxed, summing to the board's own total");
+            Assert.AreEqual(expectedSum, sum,
+                "every non-weapon node must be maxed and PRIMARY/SECONDARY must sit at the corridor floor, summing to that total");
 
-            Assert.AreEqual(RigBoard.MaxLevel("p_dmg"), RigState.Level("p_dmg"), "p_dmg (PRIMARY) must be maxed");
-            Assert.AreEqual(RigBoard.MaxLevel("s_rkt"), RigState.Level("s_rkt"), "s_rkt (SECONDARY) must be maxed");
+            Assert.AreEqual(expectedWeaponFloor["p_dmg"], RigState.Level("p_dmg"), "p_dmg (PRIMARY) must sit at the corridor floor, not maxed (MV-1328)");
+            Assert.AreEqual(expectedWeaponFloor["s_rkt"], RigState.Level("s_rkt"), "s_rkt (SECONDARY) must sit at the corridor floor, not maxed (MV-1328)");
             Assert.AreEqual(RigBoard.MaxLevel("e_ff"), RigState.Level("e_ff"), "e_ff (ENERGY) must be maxed");
             Assert.AreEqual(RigBoard.MaxLevel("m_spd"), RigState.Level("m_spd"), "m_spd (MOVE) must be maxed");
             Assert.AreEqual(RigBoard.MaxLevel("u_sen"), RigState.Level("u_sen"), "u_sen (SUPPORT) must be maxed");

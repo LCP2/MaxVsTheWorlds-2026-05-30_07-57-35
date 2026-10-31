@@ -454,8 +454,11 @@ namespace MaxWorlds.Weapons
                     // SLOTS) so RigState.UnlockCategory can restore it for free once the player
                     // re-earns the family through this world's own unlock cadence.
                     RigState.RememberSupportLevelIfOwned(kv.Key, kv.Value);
-                else if (world.CarrySecondaryAcrossMorph && category == "SECONDARY")
-                    preservedLevels[kv.Key] = kv.Value;
+                // MV-1328 (Lee, 2026-10-31): SECONDARY's own pre-morph level is deliberately never
+                // carried any more, even when world.CarrySecondaryAcrossMorph keeps the CATEGORY
+                // unlocked — a weapon maxed in an earlier world must not arrive pre-upgraded wherever
+                // it's taken. See the SECONDARY floor seed below (after the board switch), which is
+                // the replacement for what this branch used to do.
             }
 
             var preservedCategories = new List<string>();
@@ -505,8 +508,29 @@ namespace MaxWorlds.Weapons
             // stays locked until the World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not
             // the instant the morph lands. MV-694 used to add it here so s_rkt was immediately
             // cell-buyable; this ticket reverses that. MV-1017: the World 2 -> World 3 morph is
-            // different — SECONDARY's own preserved level/unlock (captured above) already carries
-            // whatever the player earned in World 2, so it must not be re-armed as a mystery below.
+            // different — SECONDARY's own category stays unlocked (captured above), carrying forward
+            // that the player already found the weapon in an earlier world; MV-1328 below is what now
+            // decides its LEVEL, not the capture above.
+
+            // MV-1328: whenever SECONDARY stays unlocked across this morph (world.CarrySecondaryAcrossMorph,
+            // captured into preservedCategories above), every SECONDARY node on the newly-composed board
+            // (RigBoard already switched by ApplyWorldLoadout above, so this reads whichever secondary is
+            // actually equipped — the world's native one, or a LOADOUT choice, MV-1289) resets to its own
+            // board startLevel, same floor PRIMARY gets above — a weapon maxed in an earlier world must
+            // not arrive pre-upgraded. One exception: the category's own root node (no parent) — the one
+            // that gates whether the weapon can fire at all — is raised to 1 when its authored startLevel
+            // is 0 (e.g. the Shoulder Rack's s_rkt), so the chosen secondary still works at its lowest
+            // level rather than arriving unlocked yet silent.
+            if (preservedCategories.Contains("SECONDARY"))
+            {
+                foreach (string id in RigBoard.AllIds)
+                {
+                    if (RigBoard.Category(id) != "SECONDARY") continue;
+                    int startLevel = RigBoard.StartLevel(id);
+                    if (startLevel <= 0 && string.IsNullOrEmpty(RigBoard.Parent(id))) startLevel = 1;
+                    if (startLevel > 0) preservedLevels[id] = startLevel;
+                }
+            }
 
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
             if (world.SecondaryMysteryLockedOnMorph) RigState.ActivateSecondaryMystery();

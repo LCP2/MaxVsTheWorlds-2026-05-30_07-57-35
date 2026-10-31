@@ -78,10 +78,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void CircularControlsGrow1_3xStayOnScreenAndNeverOverlap_MV1104()
         {
-            // World 3, every node (including p_trp) maxed — same real entry point MV1068's own fixture
-            // uses (HomeScreen's DEV WORLD 3 path, MV-736).
+            // World 3, every node maxed — same real entry point MV1068's own fixture uses (HomeScreen's
+            // DEV WORLD 3 path, MV-736). MV-1328 stopped this path maxing PRIMARY/SECONDARY (the weapon
+            // itself now lands on the same bottom-of-board floor a plain corridor entry gets, even
+            // here) — p_trp is a capture ability under PRIMARY, not a weapon stat that ticket cares
+            // about, so it's granted directly, same fix MV1068TrapButtonPositionTests uses.
             SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", WorldIndex = 0 });
             HomeScreen.StartSlotWorld(0, worldIndex: WorldCatalog.IndexOf(WorldIds.Reef), maxRig: true);
+            RigState.AcquireCap("p_trp");
 
             GameObject maxGo = null, hudGo = null;
             try

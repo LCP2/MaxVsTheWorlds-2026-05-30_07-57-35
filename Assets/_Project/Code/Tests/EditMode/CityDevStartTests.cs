@@ -22,6 +22,12 @@ namespace MaxWorlds.Tests.EditMode
     /// compile against that commit — the compile error is quoted in the fix comment, same shape
     /// MV-736's own "does not compile against that commit" fail-first proof used for a brand-new
     /// static entry point.
+    ///
+    /// MV-1328 (Lee, 2026-10-31) supersedes this test's own SECONDARY assertions: a dev start no
+    /// longer carries/maxes SECONDARY's level across (same rule the City's own corridor entry now
+    /// follows) — PRIMARY/SECONDARY land on their own board's bottom floor everywhere, including the
+    /// Reef's MaxedRig row. Updated in place rather than left to rot red, same precedent MV-1095's own
+    /// note elsewhere in this suite sets.
     /// </summary>
     public sealed class CityDevStartTests
     {
@@ -72,11 +78,15 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var kv in stormdrainMaxLevels)
             {
                 string category = RigBoard.Category(kv.Key);
-                if (category != "ENERGY" && category != "MOVE" && category != "SECONDARY") continue;
+                if (category != "ENERGY" && category != "MOVE") continue;
                 Assert.AreEqual(kv.Value, RigState.Level(kv.Key),
                     $"{kv.Key} ({category}) must cap at World 2's own authored maxLevel, carried in as the City's own exit rig");
             }
-            Assert.Greater(RigState.Level("s_rkt"), 0, "s_rkt (SECONDARY) must be owned, carried in from World 2");
+            // MV-1328: SECONDARY no longer carries/maxes to World 2's own level here -- it lands on the
+            // City's own board floor instead (s_rkt's own authored startLevel, 0, bumped to 1 so the
+            // rack the player already owns still fires), same floor a real corridor entry gets.
+            Assert.AreEqual(1, RigState.Level("s_rkt"),
+                "s_rkt (SECONDARY) must land on the City's own board floor, not carried/maxed from World 2");
 
             Assert.IsFalse(RigState.IsCategoryUnlocked("SUPPORT"), "SUPPORT must stay LOCKED on a City dev arrival");
             Assert.AreEqual(cityIndex, SaveSystem.Load(0).WorldIndex, "StartDevWorld must seed WorldIndex to the City's own row");
@@ -95,10 +105,36 @@ namespace MaxWorlds.Tests.EditMode
             }
             Assert.IsTrue(RigState.SecondaryLocked, "World 2's own dev start must still leave SECONDARY mystery-locked");
 
-            // Reef (MaxedRig) must still arrive fully maxed (MV-736), untouched by this ticket.
+            // Reef (MaxedRig, MV-736): every OTHER category still arrives fully maxed, but MV-1328
+            // stops PRIMARY/SECONDARY being maxed here too -- they land on the same bottom-of-board
+            // floor a plain corridor entry into the Reef gets (AC4), captured below by running that
+            // same ApplyWeaponCoreMorph entry on an identical fresh history before MaxOutRig's own
+            // extra maxing runs, rather than guessing at Undertow/Shoulder Rack's own authored ids.
+            WeaponSystemState.Reset();
+            // MV-1328/MV-1180: StartSlotWorld itself unlocks SECONDARY before the morph whenever
+            // CarrySecondaryAcrossMorph keeps it open (simulating a dev start arriving having actually
+            // played the previous world) -- mirror that here so the probe reads the same floor the
+            // real dev-start path does, not a still-locked one.
+            if (WorldCatalog.Get(reefIndex).CarrySecondaryAcrossMorph) RigState.UnlockCategory("SECONDARY");
+            WeaponSystemState.ApplyWeaponCoreMorph(reefIndex);
+            var expectedWeaponFloor = new Dictionary<string, int>();
+            foreach (string id in RigBoard.AllIds)
+            {
+                string category = RigBoard.Category(id);
+                if (category == "PRIMARY" || category == "SECONDARY") expectedWeaponFloor[id] = RigState.Level(id);
+            }
+            WeaponSystemState.Reset();
+
             HomeScreen.StartDevWorld(0, reefIndex);
             foreach (string id in RigBoard.AllIds)
-                Assert.AreEqual(RigBoard.MaxLevel(id), RigState.Level(id), $"{id} must be maxed on a Reef dev start");
+            {
+                string category = RigBoard.Category(id);
+                if (category == "PRIMARY" || category == "SECONDARY")
+                    Assert.AreEqual(expectedWeaponFloor[id], RigState.Level(id),
+                        $"{id} ({category}) must land on the same bottom-of-board floor a plain corridor entry gets, not maxed (MV-1328)");
+                else
+                    Assert.AreEqual(RigBoard.MaxLevel(id), RigState.Level(id), $"{id} must be maxed on a Reef dev start");
+            }
         }
     }
 }
