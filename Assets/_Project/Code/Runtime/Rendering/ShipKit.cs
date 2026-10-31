@@ -60,7 +60,21 @@ namespace MaxWorlds.Rendering
         private static readonly Color HazardYellow = Rgb(224, 182, 48);
         private static readonly Color GlassPane = Rgb(150, 205, 210);
 
+        /// <summary>MV-1333 (Lee: "Mothership neon ... slightly too strong on the iPhone ... must stay
+        /// neon"): every Mothership neon element's final emissive colour is multiplied by this before it
+        /// reaches a material — one named constant so Lee can retune the whole deck's neon strength
+        /// without re-deriving which call sites matter. Applied at this file's own emissive sinks
+        /// (<see cref="EmissiveBox"/>, <see cref="MeshPartGlow"/>, <see cref="AddGoldLamp"/>), never at a
+        /// light-pool builder (<see cref="CityKit.BuildPool"/>, <see cref="BuildGraduatedPool"/>) or a
+        /// deck look's own key/fill/ambient/rim light (<c>BackyardLook</c>/<c>MothershipDeckLighting</c>)
+        /// — both explicitly out of scope on the ticket.</summary>
+        public const float NeonStrength = 0.75f;
+
         private static Color Rgb(int r, int g, int b) => new Color(r / 255f, g / 255f, b / 255f);
+
+        /// <summary>Scales only RGB by <see cref="NeonStrength"/>, leaving alpha exactly as authored —
+        /// several callers rely on a specific alpha (e.g. <see cref="Hdr"/>'s own <c>r.a = 1f</c>).</summary>
+        private static Color Dim(Color c) => new Color(c.r * NeonStrength, c.g * NeonStrength, c.b * NeonStrength, c.a);
 
         // ---------------------------------------------------------------- reserved colour guard
 
@@ -107,7 +121,7 @@ namespace MaxWorlds.Rendering
 
         private static void AddGoldLamp(Transform root, string name, Vector3 pos, Vector3 facing)
         {
-            StormdrainKit.Glow(root, name, pos, new Vector3(0.22f, 0.14f, 1f), FacingInward(facing), GoldLamp);
+            StormdrainKit.Glow(root, name, pos, new Vector3(0.22f, 0.14f, 1f), FacingInward(facing), Dim(GoldLamp));
         }
 
         /// <summary>A solid prop's own compliance body: sized to 96%/94% of <paramref name="colliderSize"/>
@@ -238,7 +252,7 @@ namespace MaxWorlds.Rendering
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
             go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, 0f);
-            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(tone, name);
+            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(Dim(tone), name);
             return go;
         }
 
@@ -1592,7 +1606,7 @@ namespace MaxWorlds.Rendering
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(tone, name);
+            go.AddComponent<MeshRenderer>().sharedMaterial = StormdrainKit.Unlit(Dim(tone), name);
             return go;
         }
 
