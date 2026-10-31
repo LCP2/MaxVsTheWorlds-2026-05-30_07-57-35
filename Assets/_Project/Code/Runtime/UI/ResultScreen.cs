@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Factories;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
@@ -104,6 +105,14 @@ namespace MaxWorlds.UI
             AddStatRow(panel.rectTransform, "DEATHS", DeathRunState.DeathsTaken.ToString(), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
             AddStatRow(panel.rectTransform, "FACTORIES DESTROYED", stats.FactoriesDestroyed.ToString(), ref y);
+
+            // MV-1322: one extra line for this world's secret caches (MV-1320) — only when the loaded
+            // world actually authors any; Worlds 1-2 author none, so SecretCensus.Total is 0 there and
+            // this row never shows for them.
+            int worldIndex = backyardPath != null ? backyardPath.ResolvedWorldIndex : 0;
+            int secretsTotal = SecretCensus.Total(worldIndex);
+            if (secretsTotal > 0)
+                AddStatRow(panel.rectTransform, "SECRETS", $"{SecretCensus.Found(worldIndex)}/{secretsTotal}", ref y);
 
             // One CTA now that REPLAY is gone (MV-427) — centred on the panel rather than the old
             // two-button RightButtonX slot. MV-687: live once this Victory actually advanced the
