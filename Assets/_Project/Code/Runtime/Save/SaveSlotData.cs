@@ -258,6 +258,19 @@ namespace MaxWorlds.Save
         /// while one already found correctly places nothing.</summary>
         public string[] CheckpointFoundSecretIds = Array.Empty<string>();
 
+        /// <summary>Stable ids (<c>Vault.Id</c>) of every vault already OPEN by the time this checkpoint
+        /// was captured (MV-1321) — restored the same way as <see cref="CheckpointUsedRepairBayIds"/>:
+        /// silently re-applying OPEN onto whichever of the freshly-rebuilt level's vaults carry a
+        /// matching id, so a resume never places a second cache (one open per vault).</summary>
+        public string[] CheckpointOpenedVaultIds = Array.Empty<string>();
+
+        /// <summary>The vault id of a collected-but-unused VaultKey by the time this checkpoint was
+        /// captured (MV-1321), or empty if none is held — the persisted twin of
+        /// <see cref="MaxWorlds.Factories.VaultKeyState.HeldVaultId"/>, same reasoning as
+        /// <see cref="WeaponCorePending"/>: a cold-boot RESUME between collecting a key and reaching its
+        /// vault must not silently lose it.</summary>
+        public string CheckpointHeldVaultKeyId = "";
+
         /// <summary>Area indices whose boss(es) were ALL defeated by the time this checkpoint was
         /// captured (MV-995) — restored on RESUME by silently removing whichever of the freshly-rebuilt
         /// level's bosses stand in one of these areas, so a resume never resurrects a boss the player

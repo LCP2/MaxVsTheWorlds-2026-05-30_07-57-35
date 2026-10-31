@@ -106,6 +106,14 @@ namespace MaxWorlds.Arena
         /// <see cref="MaxWorlds.Enemies.RobotEnemy.SetLevel"/> reads to leash its steering to that same
         /// deck rather than letting it climb down.</summary>
         public int level;
+
+        /// <summary>MV-1321: this robot always spawns as the KEY elite — bypasses the ordinary elite %
+        /// roll AND the per-area elite cap (<see cref="MaxWorlds.Enemies.EliteRoll.TryRoll"/> is never
+        /// consulted for it), though its affix still rolls normally from the world's own list. Its
+        /// nameplate reads "ELITE  KEY" and it drops a <see cref="MaxWorlds.Pickups.PickupKind.VaultKey"/>
+        /// on any removal (a kill, a clean-up safety-net kill, or a Despawn) — see
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.CarriesKey"/>. Default false.</summary>
+        public bool carriesKey;
     }
 
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
@@ -670,6 +678,26 @@ namespace MaxWorlds.Arena
         public float z;
     }
 
+    /// <summary>A vault (MV-1321) — a 4-wall greybox enclosure with a gold door, opened by walking Max
+    /// into <see cref="MaxWorlds.Factories.Vault"/>'s open radius while he holds the VaultKey its own
+    /// area's KEY elite (<see cref="WorldGarrisonEntry.carriesKey"/>) dropped. <see cref="x"/>/
+    /// <see cref="z"/> are ABSOLUTE world metres (box centre), same convention as
+    /// <see cref="WorldChallenge"/>/<see cref="WorldRepairBay"/> above — not area-local.
+    /// <see cref="w"/>/<see cref="d"/> default to 6x6 m; <see cref="door"/> is which side the 2.4 m gold
+    /// door sits on ("N"/"E"/"S"/"W", same cardinal convention <see cref="WorldAirlock.facing"/> uses).
+    /// Optional; vaults are never required to clear an area or a world (ticket: "no gate or exit may
+    /// depend on one").</summary>
+    [Serializable]
+    public sealed class WorldVault
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w = 6f;
+        public float d = 6f;
+        public string door = "S";
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -736,6 +764,9 @@ namespace MaxWorlds.Arena
 
         /// <summary>Repair bays authored into this area (MV-1319). Optional; most areas carry none.</summary>
         public WorldRepairBay[] repairBays = Array.Empty<WorldRepairBay>();
+
+        /// <summary>Vaults authored into this area (MV-1321). Optional; most areas carry none.</summary>
+        public WorldVault[] vaults = Array.Empty<WorldVault>();
 
         public WorldBoss boss;
 

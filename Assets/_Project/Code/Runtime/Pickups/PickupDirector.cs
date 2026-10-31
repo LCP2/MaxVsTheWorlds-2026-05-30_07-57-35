@@ -134,6 +134,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _weaponCorePool = new Stack<Pickup>(1);
         private readonly Stack<Pickup> _rackModulePool = new Stack<Pickup>(1);
         private readonly Stack<Pickup> _helmKeyPool = new Stack<Pickup>(1);
+        private readonly Stack<Pickup> _vaultKeyPool = new Stack<Pickup>(1);
 
         /// <summary>MV-727: true once this run's ONE Rack Module has dropped — gates every Replicator
         /// after the first. Run-scoped like every other per-run flag in this codebase (RigState,
@@ -455,6 +456,12 @@ namespace MaxWorlds.Pickups
         /// document.</summary>
         public Pickup PlacePickupAt(PickupKind kind, Vector3 pos, string secretId) => SpawnDrop(kind, pos, secretId: secretId);
 
+        /// <summary>MV-1321: same thin public wrapper as <see cref="PlacePickupAt(PickupKind, Vector3, string)"/>,
+        /// but for a <see cref="PickupKind.VaultKey"/> — tags the placed key with the owning
+        /// <see cref="MaxWorlds.Factories.Vault.Id"/> it opens, what <see cref="Collect"/> reads to bind
+        /// <see cref="MaxWorlds.Factories.VaultKeyState"/>'s held key to that vault.</summary>
+        public Pickup PlaceVaultKeyAt(Vector3 pos, string vaultId) => SpawnDrop(PickupKind.VaultKey, pos, vaultId: vaultId);
+
         /// <summary>MV-964: banks any Weapon Core still on the ground exactly as if Max had walked over
         /// it — <see cref="MaxWorlds.Intro.WorldJoinSequence"/> calls this the instant Max crosses the
         /// world's finale door, so a core he never walked over in the open can't block progress into the
@@ -531,7 +538,7 @@ namespace MaxWorlds.Pickups
         }
 
         private Pickup SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
-                               AbilityKind ability = default, string secretId = null)
+                               AbilityKind ability = default, string secretId = null, string vaultId = null)
         {
             if (kind == PickupKind.PowerCell)
             {
@@ -551,6 +558,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.WeaponCore => _weaponCorePool,
                 PickupKind.RackModule => _rackModulePool,
                 PickupKind.HelmKey => _helmKeyPool,
+                PickupKind.VaultKey => _vaultKeyPool,
                 _ => _cellPool,
             };
             // MV-1147: a pooled entry can have been destroyed out from under the director while sitting
@@ -561,6 +569,7 @@ namespace MaxWorlds.Pickups
             p.Part = part;
             p.Ability = ability;
             p.SecretId = secretId; // MV-1320: reset on every drop, same "never carries a stale value out of the pool" reasoning as Part/Ability above
+            p.VaultId = vaultId;   // MV-1321: same reasoning as SecretId above
             p.transform.SetParent(transform, worldPositionStays: false);
             p.Place(pos);
             _live.Add(p);
@@ -806,10 +815,14 @@ namespace MaxWorlds.Pickups
         /// <summary>Whether Part Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled
         /// out as a pure function so the reserve-full guard is testable without a live scene. Public: the
         /// EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.</summary>
-        public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
-            kind == PickupKind.PowerCell && magnetoRadius > 0f
-            && squaredDistance <= magnetoRadius * magnetoRadius
-            && PickupWallet.PowerCells < PickupWallet.Capacity;
+        public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance)
+        {
+            if (magnetoRadius <= 0f || squaredDistance > magnetoRadius * magnetoRadius) return false;
+            if (kind == PickupKind.PowerCell) return PickupWallet.PowerCells < PickupWallet.Capacity;
+            // MV-1321: the VaultKey pulls too (ticket: "collected by walking over it (and by the
+            // magnet)") — no reserve to cap against, unlike a PowerCell.
+            return kind == PickupKind.VaultKey;
+        }
 
         /// <summary>Whether Cell Magneto (MV-848, e_cmg) should reel this pickup in this frame — same
         /// shape as <see cref="MagnetoShouldPull"/> but for <see cref="PickupKind.PowerCellSecondary"/>
@@ -891,6 +904,13 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "HELM KEY", new Color(0.98f, 0.80f, 0.14f));
                     WorldFinaleGate.Active?.OnHelmKeyCollected();
                     break;
+                case PickupKind.VaultKey:
+                    // MV-1321: banks into VaultKeyState, bound to the vault it opens (tagged on the
+                    // pickup by PlaceVaultKeyAt) — Vault.Tick reads VaultKeyState.HeldFor(Id) to decide
+                    // whether ITS OWN door may open.
+                    HudSignals.EmitPickup(p.transform.position, "VAULT KEY", new Color(0.90f, 0.70f, 0.18f));
+                    VaultKeyState.SetHeld(p.VaultId);
+                    break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
                     // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
@@ -923,6 +943,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.WeaponCore => _weaponCorePool,
                 PickupKind.RackModule => _rackModulePool,
                 PickupKind.HelmKey => _helmKeyPool,
+                PickupKind.VaultKey => _vaultKeyPool,
                 _ => _cellPool,
             };
             pool.Push(p);

@@ -273,6 +273,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1320SecretCover() => RunFromMenu(CapturePresets.All["mv1320secretcover"]);
         public static void CaptureMv1320SecretCover() => Run(CapturePresets.All["mv1320secretcover"]);
 
+        [MenuItem("MaxWorlds/Capture/Vault (MV-1321)")]
+        public static void MenuMv1321Vault() => RunFromMenu(CapturePresets.All["mv1321vault"]);
+        public static void CaptureMv1321Vault() => Run(CapturePresets.All["mv1321vault"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

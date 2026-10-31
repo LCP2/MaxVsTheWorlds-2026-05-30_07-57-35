@@ -28,6 +28,7 @@ namespace MaxWorlds.Arena
         Airlock,              // MV-1305
         Challenge,            // MV-1318
         RepairBay,            // MV-1319
+        Vault,                // MV-1321
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -233,8 +234,9 @@ namespace MaxWorlds.Arena
         /// time. Replicator only (MV-860) — which side is its IN face, resolved from
         /// <see cref="WorldReplicator.facing"/> ("S" when unauthored). Current only (MV-1300) — the
         /// lane's own flow direction, resolved from <see cref="WorldCurrent.dir"/>. Airlock only
-        /// (MV-1305) — cosmetic door-facing, resolved from <see cref="WorldAirlock.facing"/>. Empty for
-        /// every other kind.</summary>
+        /// (MV-1305) — cosmetic door-facing, resolved from <see cref="WorldAirlock.facing"/>. Vault only
+        /// (MV-1321) — which side its door sits on, resolved from <see cref="WorldVault.door"/> ("S" when
+        /// unauthored). Empty for every other kind.</summary>
         public string facing = "";
 
         /// <summary>Sludge only (MV-692) — the speed multiplier a mover standing inside this rect is

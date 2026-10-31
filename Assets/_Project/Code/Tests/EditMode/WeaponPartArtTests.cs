@@ -329,11 +329,12 @@ namespace MaxWorlds.Tests.EditMode
                 $"cell: {cellRenderers.Length} renderers, {cellBounds.size:F2}; gear: {gearRenderers.Length} renderers, {gearBounds.size:F2}.");
 
             // AC4 — this is an art-only ticket; PickupKind must not have gained/lost/reordered a member
-            // relative to what MV-725 shipped. MV-727 later appended RackModule, and MV-1239 later
-            // appended HelmKey (both real, intentional gameplay additions, per MV-727's own "append it
-            // to the enum; never renumber") — this guard is only against an ART ticket sneaking a
-            // member in, so the expected list is updated to match, still in append-only order.
-            var expectedKinds = new[] { "PowerCell", "Supercell", "Device", "PowerCellSecondary", "WeaponCore", "RackModule", "HelmKey" };
+            // relative to what MV-725 shipped. MV-727 later appended RackModule, MV-1239 later appended
+            // HelmKey, and MV-1321 later appended VaultKey (all real, intentional gameplay additions,
+            // per MV-727's own "append it to the enum; never renumber") — this guard is only against an
+            // ART ticket sneaking a member in, so the expected list is updated to match, still in
+            // append-only order.
+            var expectedKinds = new[] { "PowerCell", "Supercell", "Device", "PowerCellSecondary", "WeaponCore", "RackModule", "HelmKey", "VaultKey" };
             CollectionAssert.AreEqual(expectedKinds, System.Enum.GetNames(typeof(MaxWorlds.Pickups.PickupKind)),
                 "PickupKind's members or their order changed — MV-725 is art-only, the enum must be untouched.");
 

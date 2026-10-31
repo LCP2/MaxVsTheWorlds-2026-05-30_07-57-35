@@ -395,9 +395,12 @@ namespace MaxWorlds.UI
         /// track Team, which has no dedicated "just got captured" hook the way HELD/ALLY does). The two
         /// markers sharing this slot (replicator lure / elite) can in principle both want to show on the
         /// same World 2 robot at once — a known, accepted overlap this tight slice does not resolve.</summary>
-        public void SetEliteMarker(bool show)
+        public void SetEliteMarker(bool show, bool carriesKey = false)
         {
             if (_eliteMarker == null) return;
+            // MV-1321: the KEY elite's nameplate reads "ELITE  KEY" instead of the plain tag — same
+            // slot/shape, just a different string, re-evaluated every call exactly like the plain tag.
+            _eliteMarker.text = carriesKey ? "ELITE  KEY" : "ELITE";
             _eliteMarker.gameObject.SetActive(show);
         }
 
