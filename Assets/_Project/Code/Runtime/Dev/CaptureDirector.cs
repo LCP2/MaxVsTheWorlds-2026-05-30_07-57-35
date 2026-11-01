@@ -682,6 +682,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
             Add(BuildMv1336ShipGlowCapCheck());
+            Add(BuildMv1337CradleRingThinCheck());
             return d;
         }
 
@@ -7176,6 +7177,170 @@ namespace MaxWorlds.Dev
                           $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC1 floor: >=25)\n"
                         : "Max not found in frame -- AC1's body/ring delta not measured this shot.\n") +
                     $"Orbitals diagnostic: {orbitalsDiagnostic}\n",
+            };
+        }
+
+        // ---- Mv1337CradleRingThinCheck (MV-1337 AC2) -----------------------------------------
+
+        /// <summary>MV-1337's own AC2 evidence: a synthetic cradle placed beside Max (same recipe
+        /// <see cref="BuildMv1227AssemblyCradle"/> uses), shot at the real play camera
+        /// (<c>DisableBrain = false</c>, same convention <see cref="BuildMv1336ShipGlowCapCheck"/>
+        /// uses for "at the play camera"). The one saved PNG is the ring-shown frame; the ring-hidden
+        /// comparison frame is rendered a second time inside <c>Measure</c> purely for the pixel diff
+        /// and is never written to disk — AC4's "ONE capture... no further capture loops" is about
+        /// saved files, not about how many times the GPU renders.</summary>
+        private static CapturePreset BuildMv1337CradleRingThinCheck()
+        {
+            const int SuperSample = 2;
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            GameObject cradleGo = null;
+            AssemblyCradle cradleRef = null;
+            Camera capturedCam = null;
+            int farFieldSampleCount = -1;
+            float farFieldMeanDelta = -1f;
+            float farFieldMaxDelta = -1f;
+            string diagnostic = "(not measured)";
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same synthetic-cradle recipe BuildMv1227AssemblyCradle uses — well clear of any set
+                // dressing near Max's own spawn.
+                Vector3 focus = maxGo.transform.position + maxGo.transform.forward * 10f;
+                cradleGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cradleGo.name = "MV1337CaptureAssemblyCradle";
+                cradleGo.transform.position = focus;
+                cradleGo.transform.localScale = new Vector3(3f, 3f, 3f);
+                cradleRef = cradleGo.AddComponent<AssemblyCradle>(); // Awake runs Build() synchronously in Play mode
+
+                var spawner = cradleGo.GetComponent<EnemySpawner>();
+                spawner.ConfigureAreaComposition(new WorldComposition { rusher = 1 });
+                cradleRef.SetMaxInArea(true);
+                cradleRef.Tick(0.1f); // Tick shows the proximity ring unconditionally while alive
+
+                capturedCam = cam;
+
+                // DisableBrain is false below (the ticket's own "at the play camera") — let Cinemachine
+                // settle its real follow pose on Max, same settle window BuildMv1266ReefPlayCameraCheck
+                // uses, with the cradle already in frame beside him.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            void Measure(Texture2D texShown)
+            {
+                if (capturedCam == null || cradleRef == null)
+                {
+                    diagnostic = "no camera/cradle captured -- ring-hidden comparison skipped";
+                    return;
+                }
+
+                Camera cam = capturedCam;
+                int w = texShown.width, h = texShown.height;
+                Color32[] shownPx = texShown.GetPixels32();
+
+                DashedGroundRing ring = cradleRef.ProximityRingVisual;
+                bool wasVisible = ring != null && ring.Visible;
+                ring?.Hide();
+
+                // One extra, UNSAVED render for comparison only — same supersample-then-downsample
+                // procedure CaptureDirector.Capture() itself uses, so this second frame's own AA can
+                // never masquerade as a ring-caused luminance delta elsewhere in the shot.
+                var rt = new RenderTexture(w * SuperSample, h * SuperSample, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                var small = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                var texHidden = new Texture2D(w, h, TextureFormat.RGB24, false);
+                var prevTarget = cam.targetTexture;
+                var prevActive = RenderTexture.active;
+                Color32[] hiddenPx;
+                try
+                {
+                    cam.targetTexture = rt;
+                    cam.Render();
+                    cam.targetTexture = prevTarget;
+
+                    Graphics.Blit(rt, small);
+                    RenderTexture.active = small;
+                    texHidden.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                    texHidden.Apply();
+                    hiddenPx = texHidden.GetPixels32();
+                }
+                finally
+                {
+                    RenderTexture.active = prevActive;
+                    cam.targetTexture = prevTarget;
+                    Destroy(texHidden);
+                    rt.Release(); Destroy(rt);
+                    small.Release(); Destroy(small);
+                    if (wasVisible)
+                        ring?.Show(cradleRef.transform.position, GroundRing.GroundLift, AssemblyCradle.ProximityRadius,
+                            AssemblyCradle.ProximityRingLineWidth, AssemblyCradle.ProximityRingDashCount);
+                }
+
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                Vector3 centre = cradleRef.transform.position;
+                var ground = new Plane(Vector3.up, centre);
+
+                double sumAbsDelta = 0; float maxAbsDelta = 0f; int count = 0;
+                for (int y = 0; y < h; y += 2)
+                {
+                    for (int x = 0; x < w; x += 2)
+                    {
+                        // Viewport-space (not screen-space) rays — resolution-independent, so this
+                        // matches texShown's own pixel grid regardless of the live camera's actual
+                        // pixelWidth/pixelHeight in batchmode.
+                        Ray ray = cam.ViewportPointToRay(new Vector3((x + 0.5f) / w, (y + 0.5f) / h, 0f));
+                        if (!ground.Raycast(ray, out float enter)) continue;
+                        Vector3 world = ray.GetPoint(enter);
+                        float distFromRing = Mathf.Abs(
+                            Vector2.Distance(new Vector2(world.x, world.z), new Vector2(centre.x, centre.z))
+                            - AssemblyCradle.ProximityRadius);
+                        if (distFromRing <= 0.3f) continue; // AC2's own exclusion band around the ring itself
+
+                        int idx = y * w + x;
+                        float delta = Mathf.Abs(Luma(shownPx[idx]) - Luma(hiddenPx[idx]));
+                        sumAbsDelta += delta;
+                        if (delta > maxAbsDelta) maxAbsDelta = delta;
+                        count++;
+                    }
+                }
+
+                farFieldSampleCount = count;
+                farFieldMeanDelta = count > 0 ? (float)(sumAbsDelta / count) : -1f;
+                farFieldMaxDelta = maxAbsDelta;
+                diagnostic = $"far-field samples={count}";
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1337cradleringthin",
+                LogTag = "[MV1337Capture]",
+                Flag = "-mv1337shot",
+                ArmFile = "Temp/mv1337.arm",
+                HeadlessMarker = "Temp/mv1337.headless",
+                DoneFileName = "_mv1337_done.txt",
+                Width = 1920,
+                Height = 1080,
+                SuperSample = SuperSample,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the ticket's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () => { SaveSystem.ActiveSlot = 0; },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1337-cradle-ring-thin", Setup, measure: Measure) },
+                Cleanup = () => { if (cradleGo != null) Destroy(cradleGo); },
+                ExtraReport = () =>
+                    $"AC2 far-field luminance delta (ring shown vs ring hidden, >0.3m from the ring's own " +
+                    $"radius): mean={farFieldMeanDelta:F2} max={farFieldMaxDelta:F2} over {farFieldSampleCount} " +
+                    $"samples (AC2 ceiling: <=3)\n{diagnostic}\n",
             };
         }
 
