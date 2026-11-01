@@ -179,6 +179,17 @@ namespace MaxWorlds.Rendering
         /// picks between (MV-1256 ticket: "at least 4 inlay patterns").</summary>
         public const int ReefDeckInlayPatternCount = 4;
 
+        /// <summary>Deck emissive brightness on D3D (MV-1334 ticket, Change item 2: "on D3D 0.85 ->
+        /// 0.40"), named so <see cref="ReefDeckFloorMaterial"/>'s platform branch reads as a tuned
+        /// value rather than a bare literal next to <see cref="ReefDeckEmissionOther"/>.</summary>
+        public const float ReefDeckEmissionD3D = 0.40f;
+
+        /// <summary>Deck emissive brightness on every other backend - Metal/GLES/WebGL (MV-1334
+        /// ticket, Change item 2: "on non-D3D ... 0.55 -> 0.25"). MV-1316's own platform split
+        /// (see <see cref="ReefDeckFloorMaterial"/>'s doc comment) is unchanged; only the two values
+        /// it picks between are dimmer now, because MV-1273's Mobile-tier HDR made the old ones bloom.</summary>
+        public const float ReefDeckEmissionOther = 0.25f;
+
         public static Material M_ShipFloor => ReefDeckFloorMaterial();
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
         public static Material M_Circuit_Cyan => ReefMaterial("M_Circuit_Cyan", ReefCircuitCyan, emissive: true);
@@ -370,7 +381,10 @@ namespace MaxWorlds.Rendering
             // one compromise value that fails both. See MV-1316's fix comment for the measured numbers.
             bool isDirect3D = SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D11
                 || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D12;
-            float emission = isDirect3D ? 0.85f : 0.55f;
+            // MV-1334: the floor's traces were reading louder than the robots once MV-1273 put HDR on
+            // the Mobile tier and bloomed this mask - both platform values dialled down from MV-1316's
+            // own 0.85/0.55 pair, same platform split, just dimmer.
+            float emission = isDirect3D ? ReefDeckEmissionD3D : ReefDeckEmissionOther;
             if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(emission, emission, emission));
             m.EnableKeyword("_EMISSION");
             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;

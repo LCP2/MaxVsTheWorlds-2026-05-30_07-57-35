@@ -192,9 +192,23 @@ namespace MaxWorlds.Rendering
 
         // MV-1265: the circuit-inlay trace was 5 texels wide (cellSize * 0.03, rounded) - ~7.5 screen px
         // at play distance, under DECISIONS.md §3's ~10 px legibility floor, and mip-averaging crushed it
-        // further. Widened so the resolved bake is >=12 texels (actually 13 at the shipped 256px/4-cell
-        // bake) - the EditMode test measures the resolved bake, not this constant.
-        private const float ReefDeckTraceHalfWidthFraction = 0.1f;
+        // further. Widened so the resolved bake was >=12 texels (13 at the shipped 256px/4-cell bake).
+        //
+        // MV-1334: the floor read as busier than the robots once every cell carried this width at full
+        // brightness. Thinned to about two thirds of MV-1265's 0.1f (ticket, Change item 1) - the
+        // resolved bake drops from 13 to 9 texels (~13.5 screen px at the same 1.5 px/texel ratio
+        // MV-1265 measured), which still clears DECISIONS.md §3's ~10 px floor even though it falls
+        // under MV-1265's own, stricter 12-texel test floor - see that test's updated comment.
+        private const float ReefDeckTraceHalfWidthFraction = 0.1f * (2f / 3f);
+
+        /// <summary>Which roll of <see cref="ReefDeckPatternIndexAt"/>'s existing seeded hash counts as
+        /// "lit" (MV-1334 ticket, Change item 1: "draw an inlay in about 1 cell in 4 ... chosen by the
+        /// existing seeded hash ... so it is stable"). Any other roll leaves the cell black. Picking a
+        /// single fixed roll out of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> possible ones
+        /// is what gives the ~1-in-4 odds the ticket asks for, for free, off a hash that already exists
+        /// and already resolves 0..3 roughly uniformly (MV1256ReefDeckDetailTests pins all 4 values
+        /// appearing across the real floor) - no new hash needed.</summary>
+        private const int ReefDeckLitPatternIndex = 0;
 
         private const float ReefDeckRivetInset = 0.09f;      // how far a rivet sits from the plate's corner
         private const float ReefDeckRivetRadius = 0.045f;
@@ -330,15 +344,15 @@ namespace MaxWorlds.Rendering
             return Mathf.Lerp(0.85f, ReefDeckGrateBarMultiplier, bar);
         }
 
-        /// <summary>The deck's emissive mask (MV-1256 rework of MV-1053's own single-pattern bake):
-        /// each cell of the <see cref="WorldMaterials.ReefDeckGridCells"/>-square supertile draws one
-        /// of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> circuit-inlay layouts, chosen by
-        /// <see cref="ReefDeckPatternIndexAt"/>'s own seeded hash (ticket, Change item 2) — denser than
-        /// MV-1053's original two-seam/three-node bake, per the ticket's own "density of the frames".
-        /// Cyan is the dominant colour; <see cref="DrawDeckInlayPattern"/>'s own per-element hash swaps
-        /// roughly 1 trace/node in 8 to violet or magenta (ticket: "about 1 in 8 traces is magenta or
-        /// violet"). Baked as a real colour, not a multiplier — <see cref="WorldMaterials.M_ShipFloor"/>
-        /// leaves _EmissionColor white so this paints the floor's glow directly.</summary>
+        /// <summary>The deck's emissive mask (MV-1256 rework of MV-1053's own single-pattern bake, since
+        /// thinned and sparsened by MV-1334): of the <see cref="WorldMaterials.ReefDeckGridCells"/>-square
+        /// supertile's cells, only the ~1 in 4 <see cref="ReefDeckPatternIndexAt"/>'s own seeded hash
+        /// marks <see cref="ReefDeckLitPatternIndex"/> draws an inlay at all (MV-1334 ticket, Change
+        /// item 1) — every other cell stays plain black plate, seams only from the albedo. Cyan is the
+        /// dominant colour; <see cref="DrawDeckInlayPattern"/>'s own per-element hash swaps roughly 1
+        /// trace in 8 to violet or magenta (MV-1256 ticket: "about 1 in 8 traces is magenta or violet").
+        /// Baked as a real colour, not a multiplier — <see cref="WorldMaterials.M_ShipFloor"/> leaves
+        /// _EmissionColor white so this paints the floor's glow directly.</summary>
         public static Texture2D ReefDeckEmission(int size = 256)
         {
             const string key = "reefDeckEmission";
@@ -355,8 +369,10 @@ namespace MaxWorlds.Rendering
             for (int gy = 0; gy < cells; gy++)
             for (int gx = 0; gx < cells; gx++)
             {
-                int pattern = ReefDeckPatternIndexAt(gx, gy);
-                DrawDeckInlayPattern(px, size, gx * cellSize, gy * cellSize, cellSize, gx, gy, pattern);
+                // MV-1334: only the ~1-in-4 cells the hash marks "lit" carry an inlay now; every
+                // other cell stays plain black plate (seams only, from the albedo).
+                if (ReefDeckPatternIndexAt(gx, gy) != ReefDeckLitPatternIndex) continue;
+                DrawDeckInlayPattern(px, size, gx * cellSize, gy * cellSize, cellSize, gx, gy);
             }
 
             t.SetPixels32(px);
@@ -365,20 +381,20 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
-        /// <summary>One cell's own circuit-inlay layout (MV-1256) — four hand-authored variants (edge
-        /// traces + nodes in different combinations, pattern 2 being the densest "full frame" layout)
-        /// so <see cref="ReefDeckEmission"/> never bakes the same look into every cell. Every
-        /// trace/node asks <paramref name="gx"/>/<paramref name="gy"/>'s own per-element hash for its
-        /// colour, so the same cell always rolls the same accents (deterministic across Editor/WebGL/
-        /// CI, same reasoning as every other seeded-hash pick in this project).</summary>
+        /// <summary>The one inlay layout a "lit" cell draws (MV-1334 ticket, Change item 1: "remove the
+        /// round nodes/dots"). MV-1256's four node-bearing pattern variants are gone - <see cref="ReefDeckPatternIndexAt"/>'s
+        /// roll now only decides whether a cell is lit at all (<see cref="ReefDeckEmission"/>'s own
+        /// check), so there is nothing left to vary the layout BY once a cell is picked. Every trace
+        /// still asks <paramref name="gx"/>/<paramref name="gy"/>'s own per-element hash for its colour,
+        /// so the same cell always rolls the same accents (deterministic across Editor/WebGL/CI, same
+        /// reasoning as every other seeded-hash pick in this project).</summary>
         private static void DrawDeckInlayPattern(Color32[] px, int texSize, int originX, int originY,
-            int cellSize, int gx, int gy, int pattern)
+            int cellSize, int gx, int gy)
         {
             // MV-1265: this used to be ReefDeckSeamFraction * 0.5f (~0.015, right against the cell's own
-            // edge) - fine while the edge trace/node were only a couple of texels thick, but the
-            // widened stroke and node now clip almost entirely off the cell at that inset. 0.13 leaves
-            // enough margin for the widest node (ReefDeckTraceHalfWidthFraction-scaled, up to 8 texels
-            // at the shipped 64 px cell) to sit fully inside the cell while still reading as edge-hugging.
+            // edge) - fine while the edge trace was only a couple of texels thick, but the widened
+            // stroke clips almost entirely off the cell at that inset. 0.13 leaves enough margin for the
+            // stroke to sit fully inside the cell while still reading as edge-hugging.
             float half = Mathf.Max(ReefDeckSeamFraction * 0.5f, 0.13f);
             int elementIndex = 0;
 
@@ -392,37 +408,8 @@ namespace MaxWorlds.Rendering
                     : (Color32)WorldMaterials.ReefKelpMagenta;
             }
 
-            switch (pattern)
-            {
-                case 0:
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
-                    DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.30f, NextColor(), 0.12f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.30f, half, NextColor(), 0.12f);
-                    break;
-                case 1:
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.68f, NextColor(), 0.12f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.68f, 1f - half, NextColor(), 0.12f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.108f);
-                    break;
-                case 2:
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
-                    DrawCellTraceH(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, half, NextColor(), 0.108f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 1f - half, NextColor(), 0.108f);
-                    break;
-                default:
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
-                    DrawCellTraceV(px, texSize, originX, originY, cellSize, 1f - half, NextColor());
-                    PutCellNode(px, texSize, originX, originY, cellSize, half, 0.5f, NextColor(), 0.12f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 1f - half, 0.5f, NextColor(), 0.12f);
-                    PutCellNode(px, texSize, originX, originY, cellSize, 0.5f, 0.5f, NextColor(), 0.096f);
-                    break;
-            }
+            DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
+            DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
         }
 
         /// <summary>A vertical trace confined to one cell's own sub-rectangle of the texture, at local
@@ -463,23 +450,6 @@ namespace MaxWorlds.Rendering
                     if (yy < originY || yy >= originY + cellSize || yy >= texSize) continue;
                     px[yy * texSize + x] = c;
                 }
-            }
-        }
-
-        private static void PutCellNode(Color32[] px, int texSize, int originX, int originY, int cellSize,
-            float localU, float localV, Color32 c, float radiusFraction)
-        {
-            int cx = originX + Mathf.RoundToInt(localU * cellSize);
-            int cy = originY + Mathf.RoundToInt(localV * cellSize);
-            int r = Mathf.Max(1, Mathf.RoundToInt(radiusFraction * cellSize));
-            for (int dy = -r; dy <= r; dy++)
-            for (int dx = -r; dx <= r; dx++)
-            {
-                if (dx * dx + dy * dy > r * r) continue;
-                int x = cx + dx, y = cy + dy;
-                if (x < originX || x >= originX + cellSize || y < originY || y >= originY + cellSize) continue;
-                if (x < 0 || x >= texSize || y < 0 || y >= texSize) continue;
-                px[y * texSize + x] = c;
             }
         }
 

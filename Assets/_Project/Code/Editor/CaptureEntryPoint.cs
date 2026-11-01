@@ -281,6 +281,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1332HangarBloom() => RunFromMenu(CapturePresets.All["mv1332hangarbloom"]);
         public static void CaptureMv1332HangarBloom() => Run(CapturePresets.All["mv1332hangarbloom"]);
 
+        [MenuItem("MaxWorlds/Capture/Reef Deck Busy Check (MV-1334)")]
+        public static void MenuMv1334ReefDeckBusy() => RunFromMenu(CapturePresets.All["mv1334reefdeckbusy"]);
+        public static void CaptureMv1334ReefDeckBusy() => Run(CapturePresets.All["mv1334reefdeckbusy"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

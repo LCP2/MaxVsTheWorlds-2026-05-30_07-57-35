@@ -679,6 +679,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1320SecretCover());
             Add(BuildMv1321Vault());
             Add(BuildMv1332HangarBloomCheck());
+            Add(BuildMv1334ReefDeckBusyCheck());
             return d;
         }
 
@@ -6758,6 +6759,96 @@ namespace MaxWorlds.Dev
                         ? $"Max body luma={maxBodyLuma:F1}/255 vs 30px ring luma={maxRingLuma:F1}/255 " +
                           $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC1 floor: >=25)\n"
                         : "Max not found in frame -- AC1's body/ring delta not measured this shot.\n"),
+            };
+        }
+
+        // ---- MV1334ReefDeckBusyCheck (MV-1334 AC1/AC4) -----------------------------------------
+
+        /// <summary>MV-1334's own before/after evidence: the real Reef floor (a1, same
+        /// <see cref="BuildMv1266ReefPlayCameraCheck"/> route/settle technique, which already
+        /// established that the LIVE play camera — never a standalone zone-framing pose — is what any
+        /// Reef colour number must be measured from), under the Mobile quality tier (HDR on, MV-1273).
+        /// Measures the same two numbers AC1 states directly: median luminance (target 25-40) and the
+        /// share of sampled pixels with HSV saturation &gt; 0.4 and value &gt; 0.45 (target: &lt;=10%,
+        /// and &gt;2% so the traces are still visible, not merely dimmed to nothing). Written to
+        /// <c>Logs/</c> (not the shared <c>_screens</c> dir), same "one-shot before/after evidence for
+        /// the fix comment" reasoning <see cref="BuildMv1332HangarBloomCheck"/> already documents.</summary>
+        private static CapturePreset BuildMv1334ReefDeckBusyCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float medianLuminance = -1f;
+            float busySharePercent = -1f;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck uses -- let the camera's own
+                // damping/look-ahead reach its settled play pose before the shot, not a mid-teleport one.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                int busyCount = 0, sampleCount = 0;
+
+                for (int y = 0; y < h; y += 4)
+                {
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        Color32 c32 = px[y * w + x];
+                        lumas.Add(0.2126f * c32.r + 0.7152f * c32.g + 0.0722f * c32.b);
+
+                        Color.RGBToHSV((Color)c32, out _, out float s, out float v);
+                        sampleCount++;
+                        if (s > 0.4f && v > 0.45f) busyCount++;
+                    }
+                }
+
+                lumas.Sort();
+                medianLuminance = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                busySharePercent = sampleCount == 0 ? 0f : 100f * busyCount / sampleCount;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1334reefdeckbusy",
+                LogTag = "[MV1334Capture]",
+                Flag = "-mv1334shot",
+                ArmFile = "Temp/mv1334.arm",
+                HeadlessMarker = "Temp/mv1334.headless",
+                DoneFileName = "_mv1334_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // AC1's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1334-a1-reefdeckbusy", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    $"median luminance={medianLuminance:F1}/255 (AC1 target: 25-40)\n" +
+                    $"saturated&bright share={busySharePercent:F1}% of sampled pixels " +
+                    "(AC1 target: <=10%, traces still visible if >2%)\n",
             };
         }
 

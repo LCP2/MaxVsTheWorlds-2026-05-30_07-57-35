@@ -18,11 +18,18 @@ namespace MaxWorlds.Tests.EditMode
     /// orthogonal direction. Never a restated copy of the authored fraction constant.
     ///
     /// Fails on the base commit, where the baked trace measured 5 texels wide.
+    ///
+    /// MV-1334 since thinned the stroke to about two thirds of THIS ticket's own 13-texel width (ticket,
+    /// Change item 1: the floor was reading busier than the robots) - the resolved bake is 9 texels at
+    /// the shipped 256px/4-cell bake, below this test's original 12-texel floor but still above
+    /// DECISIONS.md §3's underlying ~10 screen px rule (9 texels * the ~1.5 screen-px/texel ratio this
+    /// test's own doc measured above = ~13.5 screen px). The floor below is updated to match that
+    /// deliberate, newer authored value rather than the no-longer-current one.
     /// </summary>
     public sealed class MV1265ReefDeckEmissionTraceWidthTests
     {
         [Test]
-        public void BakedEmission_TraceStrokeIsAtLeastTwelveTexelsWide()
+        public void BakedEmission_TraceStrokeIsAtLeastEightTexelsWide()
         {
             Texture2D tex = StylizedTextures.ReefDeckEmission();
             int size = tex.width;
@@ -83,9 +90,12 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsTrue(foundAny,
                 "expected at least one near-full-span trace run in the baked ReefDeckEmission texture");
-            Assert.GreaterOrEqual(minThickness, 12,
+            // MV-1334 thinned the authored stroke to ~9 texels (was 13); 8 is a safe floor under that
+            // resolved value while still clearing DECISIONS.md §3's underlying ~10 screen px rule (see
+            // this test's own class doc for the texel/screen-px conversion).
+            Assert.GreaterOrEqual(minThickness, 8,
                 $"resolved circuit-inlay trace stroke measured {minThickness} texels wide in the baked " +
-                "texture, below the ~12 texel floor DECISIONS.md section 3's legibility rule requires");
+                "texture, below MV-1334's 8 texel floor");
         }
 
         private static bool IsBlack(Color32 c) => c.r == 0 && c.g == 0 && c.b == 0;
