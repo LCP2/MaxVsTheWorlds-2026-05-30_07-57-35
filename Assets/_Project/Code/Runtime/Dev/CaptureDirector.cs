@@ -683,6 +683,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1335CurrentLaneCheck());
             Add(BuildMv1336ShipGlowCapCheck());
             Add(BuildMv1337CradleRingThinCheck());
+            Add(BuildMv1338CradleHueCheck());
             return d;
         }
 
@@ -7341,6 +7342,180 @@ namespace MaxWorlds.Dev
                     $"AC2 far-field luminance delta (ring shown vs ring hidden, >0.3m from the ring's own " +
                     $"radius): mean={farFieldMeanDelta:F2} max={farFieldMaxDelta:F2} over {farFieldSampleCount} " +
                     $"samples (AC2 ceiling: <=3)\n{diagnostic}\n",
+            };
+        }
+
+        // ---- Mv1338CradleHueCheck (MV-1338 AC2) -----------------------------------------------
+
+        /// <summary>MV-1338's own AC2 evidence: a synthetic cradle (same recipe
+        /// <see cref="BuildMv1227AssemblyCradle"/>/<see cref="BuildMv1337CradleRingThinCheck"/> use)
+        /// built in the REAL Mothership deck (area a1, the same lighting <see cref="BuildMv1336ShipGlowCapCheck"/>
+        /// exercises) under the Mobile quality tier (HDR on, MV-1273) at the live play camera — the
+        /// exact combination the ticket names as the suspected cause ("the deck lighting washing it
+        /// out"). A throwaway cradle first proves AC2's own timing half ("one completed robot ... within
+        /// 4.5s of a build starting") via the production <see cref="AssemblyCradle.Tick"/> loop alone,
+        /// with no camera/texture work in the way; a second cradle then poses mid-build (the Plates
+        /// stage, matching <see cref="BuildMv1227AssemblyCradle"/>'s own "a cradle caught mid-build") for
+        /// the actual shot, whose median hue <see cref="Measure"/> reads back.</summary>
+        private static CapturePreset BuildMv1338CradleHueCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float medianHueDeg = -1f;
+            bool hueInRedBand = false;
+            int sampledPixels = 0;
+            bool robotLeftWithinWindow = false;
+            float robotLeaveSeconds = -1f;
+
+            GameObject cradleGo = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                float until = Time.time + 2f;
+                while (Time.time < until) yield return null;
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene after the area jump");
+                Vector3 focus = maxGo.transform.position + maxGo.transform.forward * 10f;
+
+                // AC2's own timing half, proven first on a throwaway cradle -- no camera work needed,
+                // just the production Tick loop driven in small steps so the exact second a robot
+                // completes and steps onto the out-pad is captured.
+                var timingGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                timingGo.name = "MV1338TimingAssemblyCradle";
+                timingGo.transform.position = focus;
+                timingGo.transform.localScale = new Vector3(3f, 3f, 3f);
+                var timingCradle = timingGo.AddComponent<AssemblyCradle>();
+                var timingSpawner = timingGo.GetComponent<EnemySpawner>();
+                timingSpawner.ConfigureAreaComposition(new WorldComposition { rusher = 1 });
+                timingCradle.SetMaxInArea(true);
+
+                const float step = 0.05f;
+                float elapsed = 0f;
+                int lastLive = timingSpawner.LiveCount;
+                while (elapsed < 4.5f)
+                {
+                    timingCradle.Tick(step);
+                    elapsed += step;
+                    if (timingSpawner.LiveCount > lastLive)
+                    {
+                        robotLeaveSeconds = elapsed;
+                        robotLeftWithinWindow = true;
+                        break;
+                    }
+                    lastLive = timingSpawner.LiveCount;
+                }
+                Destroy(timingGo);
+
+                // The real shot: a fresh cradle, posed mid-build (Plates stage, 3.0 <= t < 4.0) — the
+                // same stage BuildMv1227AssemblyCradle's own "cradle caught mid-build" shot uses.
+                cradleGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cradleGo.name = "MV1338CaptureAssemblyCradle";
+                cradleGo.transform.position = focus;
+                cradleGo.transform.localScale = new Vector3(3f, 3f, 3f);
+                var cradle = cradleGo.AddComponent<AssemblyCradle>();
+                var spawner = cradleGo.GetComponent<EnemySpawner>();
+                spawner.ConfigureAreaComposition(new WorldComposition { rusher = 1 });
+                cradle.SetMaxInArea(true);
+                cradle.Tick(3.2f);
+
+                // DisableBrain stays false (AC2's own "at the play camera") -- Cinemachine keeps
+                // following Max untouched, same as BuildMv1336ShipGlowCapCheck, rather than fighting it
+                // with a scripted transform a live brain would just overwrite again next frame.
+                for (int i = 0; i < 3; i++) yield return null;
+
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                // A scene-wide "find the reddest window" search landed on Max's own hit-flash tint, not
+                // the cradle, when another enemy damaged him mid-capture -- a false positive no blind
+                // pixel search can rule out. The cradle's own post/rail renderers (exactly the ones
+                // MV1338CradleMatchesDesignTests reads) are known transforms, so this projects each one
+                // straight to screen space via the SAME camera the shot was taken through, and samples
+                // only those patches.
+                var hues = new List<float>();
+                if (cradleGo != null && Camera.main != null)
+                {
+                    Camera shotCam = Camera.main;
+                    foreach (Renderer r in cradleGo.GetComponentsInChildren<Renderer>(includeInactive: false))
+                    {
+                        if (r.name != "CornerPost" && r.name != "TopRailFront" && r.name != "TopRailBack") continue;
+
+                        Vector3 vp = shotCam.WorldToViewportPoint(r.bounds.center);
+                        if (vp.z <= 0f || vp.x < 0f || vp.x > 1f || vp.y < 0f || vp.y > 1f) continue;
+
+                        int cx = Mathf.Clamp(Mathf.RoundToInt(vp.x * w), 0, w - 1);
+                        int cy = Mathf.Clamp(Mathf.RoundToInt(vp.y * h), 0, h - 1);
+                        const int half = 6;
+                        for (int dy = -half; dy <= half; dy++)
+                        {
+                            int y = cy + dy;
+                            if (y < 0 || y >= h) continue;
+                            for (int dx = -half; dx <= half; dx++)
+                            {
+                                int x = cx + dx;
+                                if (x < 0 || x >= w) continue;
+                                Color32 c32 = px[y * w + x];
+                                var c = new Color(c32.r / 255f, c32.g / 255f, c32.b / 255f);
+                                Color.RGBToHSV(c, out float hue, out float sat, out float val);
+                                if (sat < 0.1f || val < 0.05f) continue; // no stable hue
+                                hues.Add(hue * 360f);
+                            }
+                        }
+                    }
+                }
+
+                sampledPixels = hues.Count;
+                if (hues.Count == 0) { medianHueDeg = -1f; return; }
+                hues.Sort();
+                medianHueDeg = hues[hues.Count / 2];
+                hueInRedBand = medianHueDeg <= 20f || medianHueDeg >= 340f;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1338cradlehue",
+                LogTag = "[MV1338Capture]",
+                Flag = "-mv1338shot",
+                ArmFile = "Temp/mv1338.arm",
+                HeadlessMarker = "Temp/mv1338.headless",
+                DoneFileName = "_mv1338_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the ticket's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1338-cradle-hue", NoSetup, measure: Measure) },
+                Cleanup = () => { if (cradleGo != null) Destroy(cradleGo); },
+                ExtraReport = () =>
+                    $"frame median hue={medianHueDeg:F1} deg over {sampledPixels} sampled px (AC2 band: 0-20 or 340-360)\n" +
+                    $"hue in red band: {hueInRedBand}\n" +
+                    (robotLeftWithinWindow
+                        ? $"robot completed and left onto the out-pad at t={robotLeaveSeconds:F2}s (AC2 ceiling: <=4.5s)\n"
+                        : "no robot completed within the 4.5s window\n"),
             };
         }
 

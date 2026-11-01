@@ -285,6 +285,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv1334ReefDeckBusy() => RunFromMenu(CapturePresets.All["mv1334reefdeckbusy"]);
         public static void CaptureMv1334ReefDeckBusy() => Run(CapturePresets.All["mv1334reefdeckbusy"]);
 
+        [MenuItem("MaxWorlds/Capture/Cradle Hue Check (MV-1338)")]
+        public static void MenuMv1338CradleHue() => RunFromMenu(CapturePresets.All["mv1338cradlehue"]);
+        public static void CaptureMv1338CradleHue() => Run(CapturePresets.All["mv1338cradlehue"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

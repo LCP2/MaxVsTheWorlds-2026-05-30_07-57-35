@@ -660,10 +660,25 @@ namespace MaxWorlds.VFX
             return mat;
         }
 
+        /// <summary>MV-1338: the Mothership deck's own bright ambient/key light washed
+        /// <see cref="CradleRed"/> toward grey — <c>StylizedCharacter.shader</c>'s <c>LitFrag</c>
+        /// computes <c>_BaseColor.rgb * (ambient + mainLight.color * ndotl * shadow)</c>, so a plain
+        /// diffuse red reads however bright the incident light happens to be, same mechanism documented
+        /// on every other reserved hazard tone in this project (<see cref="MaxWorlds.Rendering.WorldMaterials.M_Hazard"/>,
+        /// every emissive sink in <see cref="MaxWorlds.Rendering.ShipKit"/>) — all of which carry their
+        /// own emission for exactly that reason, and none of which the cradle's gantry ever got. Emission
+        /// is ADDED after the lit term, never multiplied by it, so it reads this exact red regardless of
+        /// how bright or dim the deck's own lighting is.</summary>
+        private static void TintCradleRedEmissive(Material m)
+        {
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", CradleRed);
+        }
+
         private static void EnsureCradleMaterials()
         {
             if (s_cradleRed != null) return;
             s_cradleRed = NewMaterial("Cradle_Red", CradleRed);
+            TintCradleRedEmissive(s_cradleRed);
             s_cradleGrey = NewMaterial("Cradle_Grey", CradlePreviewGrey);
             s_previewCool = NewMaterial("CradlePreview_Cool", CharacterSkin.RobotCool);
             s_previewDark = NewMaterial("CradlePreview_Dark", CharacterSkin.RobotDark);
