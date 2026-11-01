@@ -67,8 +67,13 @@ namespace MaxWorlds.Rendering
         /// (<see cref="EmissiveBox"/>, <see cref="MeshPartGlow"/>, <see cref="AddGoldLamp"/>), never at a
         /// light-pool builder (<see cref="CityKit.BuildPool"/>, <see cref="BuildGraduatedPool"/>) or a
         /// deck look's own key/fill/ambient/rim light (<c>BackyardLook</c>/<c>MothershipDeckLighting</c>)
-        /// — both explicitly out of scope on the ticket.</summary>
-        public const float NeonStrength = 0.75f;
+        /// — both explicitly out of scope on the ticket.
+        ///
+        /// MV-1336 (Lee, iPhone, World 5 Hangar): MV-1333's own 0.75 was never exercised against HDR on
+        /// Mobile (same gap MV-1332's own BloomThreshold fix closed for the deck look) — the hazard-yellow
+        /// lane/edge lines' own Hdr(..., 12.0f) boost still cleared the deck's 1.2 bloom threshold by a wide
+        /// margin at 0.75 and painted wide blooming bands. Cut further to 0.45.</summary>
+        public const float NeonStrength = 0.45f;
 
         private static Color Rgb(int r, int g, int b) => new Color(r / 255f, g / 255f, b / 255f);
 

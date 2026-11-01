@@ -44,7 +44,10 @@ namespace MaxWorlds.Weapons
 
         // #F3D27A — the ticket's own pinned gold glow colour.
         private static readonly Color GlowColor = new Color(0xF3 / 255f, 0xD2 / 255f, 0x7A / 255f);
-        private static readonly Color RingColor = new Color(0xF3 / 255f, 0xD2 / 255f, 0x7A / 255f, 0.55f);
+
+        /// <summary>MV-1336 (Lee, iPhone, World 5 Hangar: "spinning orbitals' trails merge into a solid
+        /// cream ring that blooms"): reach-ring alpha cut 0.55 -> 0.3 — change item 2's own number.</summary>
+        private static readonly Color RingColor = new Color(0xF3 / 255f, 0xD2 / 255f, 0x7A / 255f, 0.3f);
 
         private Orbitals _orbitals;
         private Transform[] _orbRoots;
@@ -62,6 +65,18 @@ namespace MaxWorlds.Weapons
         public Bounds ResolvedOrbBounds(int index) => _glows != null && _glows[index] != null
             ? _glows[index].GetComponent<Renderer>().bounds
             : new Bounds(transform.position, Vector3.zero);
+
+        /// <summary>MV-1336 (MV-465 Tier 2): the resolved per-vertex colour <see cref="Build"/> set on
+        /// orb <paramref name="index"/>'s own trail — read off the live <see cref="TrailRenderer"/>, not
+        /// the private <see cref="GlowColor"/> field that produced it.</summary>
+        public Color ResolvedTrailColor(int index) => _trails != null && _trails[index] != null
+            ? _trails[index].startColor
+            : Color.clear;
+
+        /// <summary>MV-1336 (MV-465 Tier 2): the resolved per-vertex colour <see cref="Build"/> set on
+        /// the reach ring — read off the live <see cref="LineRenderer"/>, not the private
+        /// <see cref="RingColor"/> field that produced it.</summary>
+        public Color ResolvedReachRingColor => _reachRing != null ? _reachRing.startColor : Color.clear;
 
         /// <summary>POWER's own diameter progression — a straight lerp from <see cref="MinVisualDiameter"/>
         /// at level 1 to <see cref="MaxVisualDiameter"/> at <paramref name="maxLevel"/>. Pure, so a test
@@ -97,8 +112,13 @@ namespace MaxWorlds.Weapons
             float brightnessT = WeaponCatalog.VisualStrengthFraction(Mathf.Max(1, powerLevel),
                 Mathf.Max(1, WeaponCatalog.MaxLevel(OrbitalsTrackKind.Power)));
 
-            Material glowMat = VfxMaterials.AdditiveTinted(GlowColor * Mathf.Lerp(1f, 1.6f, brightnessT));
-            Material coreMat = VfxMaterials.AdditiveTinted(Color.white * Mathf.Lerp(1.1f, 1.8f, brightnessT));
+            // MV-1336 change item 3 ("any other World 5 weapon/robot VFX: cap emissive/HDR colour so
+            // nothing exceeds the Ship looks' bloom threshold [1.2] by more than 20%" -> per-channel ceiling
+            // 1.44): the old 1.6x/1.8x boosts pushed GlowColor's own 0.953 peak channel to 1.525 and the
+            // core's white to 1.8, both past that ceiling. 1.5x/1.44x keep the orbs "clearly visible as gold
+            // balls" (ticket) while landing at/under 1.44 (0.953*1.5=1.430).
+            Material glowMat = VfxMaterials.AdditiveTinted(GlowColor * Mathf.Lerp(1f, 1.5f, brightnessT));
+            Material coreMat = VfxMaterials.AdditiveTinted(Color.white * Mathf.Lerp(1.1f, 1.44f, brightnessT));
 
             for (int i = 0; i < Orbitals.MaxOrbs; i++)
             {
@@ -114,7 +134,10 @@ namespace MaxWorlds.Weapons
                 _cores[i].localScale = Vector3.one * (diameter * CoreDiameterFraction);
                 SetMaterial(_cores[i], coreMat);
 
-                _trails[i].widthMultiplier = diameter * 0.5f;
+                // MV-1336 change item 2 ("trail width multiplier halved"): less overlap between the
+                // MaxOrbs trails riding the same circular path is what stops them merging into one
+                // solid blooming band.
+                _trails[i].widthMultiplier = diameter * 0.25f;
                 _trails[i].textureScale = new Vector2(3f / Mathf.Max(diameter, 0.01f), 1f);
             }
 

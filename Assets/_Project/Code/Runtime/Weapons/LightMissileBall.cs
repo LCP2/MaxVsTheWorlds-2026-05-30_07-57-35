@@ -121,6 +121,13 @@ namespace MaxWorlds.Weapons
             ? _halo.GetComponent<Renderer>().bounds
             : new Bounds(transform.position, Vector3.zero);
 
+        /// <summary>MV-1336 (MV-465 Tier 2): the resolved emissive colour <see cref="ApplyPowerVisual"/>
+        /// set on the white-hot core at the current POWER level — read off the live material, not the
+        /// private <see cref="CoreColor"/> field/multiplier that produced it.</summary>
+        public Color ResolvedCoreColor => _core != null
+            ? _core.GetComponent<MeshRenderer>().sharedMaterial.GetColor("_BaseColor")
+            : Color.clear;
+
         /// <summary>Whether this pooled instance is currently a live, flying ball.</summary>
         public bool IsActiveBall => _active;
 
@@ -494,7 +501,10 @@ namespace MaxWorlds.Weapons
             {
                 _core.localScale = Vector3.one * (d * CoreDiameterFraction);
                 float levelT = (Mathf.Clamp(powerLevel, 1, 8) - 1) / 7f;
-                SetMaterial(_core, VfxMaterials.AdditiveTinted(CoreColor * Mathf.Lerp(1f, 1.6f, levelT)));
+                // MV-1336 change item 3 ("Light Missile ... cap emissive/HDR colour so nothing exceeds
+                // the Ship looks' bloom threshold [1.2] by more than 20%" -> per-channel ceiling 1.44):
+                // the old 1.6x boost pushed CoreColor's own white channel to 1.6, past that ceiling.
+                SetMaterial(_core, VfxMaterials.AdditiveTinted(CoreColor * Mathf.Lerp(1f, 1.44f, levelT)));
             }
 
             Material spikeMat = VfxMaterials.AdditiveTinted(SpikeColor);
