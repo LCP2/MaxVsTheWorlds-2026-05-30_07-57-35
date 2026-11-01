@@ -49,8 +49,6 @@ namespace MaxWorlds.Tests.EditMode
             Material warm = WorldMaterials.M_ShipFloor;
             Assert.IsTrue(IsLive(warm.GetTexture("_BaseMap")),
                 "precondition: the corridor's own warm-up must leave a live base map");
-            Assert.IsTrue(IsLive(warm.GetTexture("_EmissionMap")),
-                "precondition: the corridor's own warm-up must leave a live emission map");
 
             var host = new GameObject("MV1103 Arrival Probe");
             GameObject wmHost = null;
@@ -74,7 +72,6 @@ namespace MaxWorlds.Tests.EditMode
 
                 Material floorMat = floorGo.GetComponent<Renderer>().sharedMaterial;
                 Texture baseMap = floorMat.GetTexture("_BaseMap");
-                Texture emissionMap = floorMat.GetTexture("_EmissionMap");
 
                 Assert.IsTrue(IsLive(baseMap),
                     "the area 1 floor's _BaseMap must be a LIVE texture after a same-frame Clear()+DressHull " +
@@ -83,11 +80,7 @@ namespace MaxWorlds.Tests.EditMode
                     "the floor's _BaseMap must be the SAME object StylizedTextures currently hands out for the " +
                     "deck albedo, not a stale reference to a swept one");
 
-                Assert.IsTrue(IsLive(emissionMap),
-                    "the area 1 floor's _EmissionMap must be a LIVE texture after a same-frame Clear()+DressHull");
-                Assert.AreSame(StylizedTextures.ReefDeckEmission(), emissionMap,
-                    "the floor's _EmissionMap must be the SAME object StylizedTextures currently hands out for the " +
-                    "deck emission mask, not a stale reference to a swept one");
+                // MV-1339: the deck carries no emission map any more (AC1) — nothing left to check here.
 
                 // --- b. EVERY REEF MATERIAL: nothing reachable through WorldMaterials holds a texture
                 // that was destroyed by this same sweep.
@@ -138,8 +131,6 @@ namespace MaxWorlds.Tests.EditMode
                 Material floorMat2 = floorGo2.GetComponent<Renderer>().sharedMaterial;
                 Assert.IsTrue(IsLive(floorMat2.GetTexture("_BaseMap")),
                     "with the hook unset (ordinary EditMode DestroyImmediate), the floor's _BaseMap must still be live");
-                Assert.IsTrue(IsLive(floorMat2.GetTexture("_EmissionMap")),
-                    "with the hook unset (ordinary EditMode DestroyImmediate), the floor's _EmissionMap must still be live");
             }
             finally
             {

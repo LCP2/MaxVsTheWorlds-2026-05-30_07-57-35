@@ -357,6 +357,7 @@ namespace MaxWorlds.Arena
             // reason ReefHydroponics.PlaceBeds itself runs here rather than inside ReefKit.DressHull.
             ReefFloorDetail.PlaceGrates(host, map, cfg, cover);
             ReefFloorDetail.PlaceDecals(host, map, cfg, cover);
+            ReefFloorDetail.PlaceGratingPatches(host, map, cfg, cover);
             ReefFloorDetail.DressFlood(host);
 
             // MV-1215, Change items 2/3/6: the glow hatch, window wall and wall-mounted dressing —

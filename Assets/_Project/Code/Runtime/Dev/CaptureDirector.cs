@@ -684,6 +684,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1336ShipGlowCapCheck());
             Add(BuildMv1337CradleRingThinCheck());
             Add(BuildMv1338CradleHueCheck());
+            Add(BuildMv1339ReefHullPanelCheck());
             return d;
         }
 
@@ -6853,6 +6854,182 @@ namespace MaxWorlds.Dev
                     $"median luminance={medianLuminance:F1}/255 (AC1 target: 25-40)\n" +
                     $"saturated&bright share={busySharePercent:F1}% of sampled pixels " +
                     "(AC1 target: <=10%, traces still visible if >2%)\n",
+            };
+        }
+
+        // ---- MV1339ReefHullPanelCheck (MV-1339 AC2/AC3/AC5) -----------------------------------
+
+        /// <summary>MV-1339's own one-shot evidence (direction C: big hull panels, no floor circuitry,
+        /// neon at the wall bases, lit reactor drums): two shots, a1 (ticket's own AC2 target area) and
+        /// a3 (the reactor_bay room type — <c>ReefKit.BuildReactorCore</c>'s own doc comment calls it
+        /// "the a3 central octagon"), both at the LIVE play camera under the Mobile quality tier, same
+        /// technique <see cref="BuildMv1334ReefDeckBusyCheck"/> already established for this exact
+        /// floor. a1's <c>Measure</c> is AC2's own two numbers (whole-frame median luminance and
+        /// saturated&amp;bright pixel share — <see cref="BuildMv1334ReefDeckBusyCheck"/>'s own doc notes
+        /// why a whole-frame sample is the honest proxy for a "floor crop" from this harness: fog/walls/
+        /// robots pull the median below a true floor-only crop's, so this undershoots conservatively
+        /// rather than overshoots). a3's <c>Measure</c> finds the brightest 100x100 window in the frame
+        /// (same summed-area-table technique <see cref="BuildMv1332HangarBloomCheck"/> uses) as the
+        /// stand-in for "a visible reactor drum's own lit top" and reports its luminance delta against
+        /// the frame's own median (AC3's "differs from the floor around it by at least 40 luminance"),
+        /// plus the share of sampled pixels landing in the cyan hue band (AC3's wall-base strip).</summary>
+        private static CapturePreset BuildMv1339ReefHullPanelCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float a1MedianLuminance = -1f;
+            float a1BusySharePercent = -1f;
+
+            float a3FloorMedian = -1f;
+            float a3DrumWindowMedian = -1f;
+            float a3CyanSharePercent = -1f;
+
+            IEnumerator JumpAndSettle(string areaId)
+            {
+                if (!DevModeController.TryJumpToArea(areaId))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{areaId}\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck/BuildMv1334ReefDeckBusyCheck use —
+                // let the camera's own damping/look-ahead reach its settled play pose before the shot.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                yield return JumpAndSettle("a1");
+            }
+
+            IEnumerator SetupA3(Camera cam) => JumpAndSettle("a3");
+
+            float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+            void MeasureA1(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                int busyCount = 0, sampleCount = 0;
+
+                for (int y = 0; y < h; y += 4)
+                {
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        Color32 c32 = px[y * w + x];
+                        lumas.Add(Luma(c32));
+
+                        Color.RGBToHSV((Color)c32, out _, out float s, out float v);
+                        sampleCount++;
+                        if (s > 0.4f && v > 0.45f) busyCount++;
+                    }
+                }
+
+                lumas.Sort();
+                a1MedianLuminance = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a1BusySharePercent = sampleCount == 0 ? 0f : 100f * busyCount / sampleCount;
+            }
+
+            void MeasureA3(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                int cyanCount = 0, sampleCount = 0;
+                for (int y = 0; y < h; y += 4)
+                {
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        Color32 c32 = px[y * w + x];
+                        lumas.Add(Luma(c32));
+
+                        Color.RGBToHSV((Color)c32, out float hue, out float s, out float v);
+                        sampleCount++;
+                        float hueDeg = hue * 360f;
+                        if (hueDeg > 150f && hueDeg < 210f && s > 0.35f && v > 0.4f) cyanCount++;
+                    }
+                }
+                lumas.Sort();
+                a3FloorMedian = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a3CyanSharePercent = sampleCount == 0 ? 0f : 100f * cyanCount / sampleCount;
+
+                // Worst (brightest) 100x100 window — the stand-in for a visible drum's own lit top —
+                // via a summed-area table, same technique BuildMv1332HangarBloomCheck already uses.
+                const int Window = 100, Stride = 25;
+                var sat = new double[(w + 1) * (h + 1)];
+                for (int y = 0; y < h; y++)
+                {
+                    double rowSum = 0;
+                    for (int x = 0; x < w; x++)
+                    {
+                        rowSum += Luma(px[y * w + x]);
+                        sat[(y + 1) * (w + 1) + (x + 1)] = rowSum + sat[y * (w + 1) + (x + 1)];
+                    }
+                }
+                double WindowSum(int x0, int y0) =>
+                    sat[(y0 + Window) * (w + 1) + (x0 + Window)] - sat[y0 * (w + 1) + (x0 + Window)] -
+                    sat[(y0 + Window) * (w + 1) + x0] + sat[y0 * (w + 1) + x0];
+
+                double best = -1; int bestX = -1, bestY = -1;
+                for (int y0 = 0; y0 + Window <= h; y0 += Stride)
+                {
+                    for (int x0 = 0; x0 + Window <= w; x0 += Stride)
+                    {
+                        double mean = WindowSum(x0, y0) / (Window * Window);
+                        if (mean > best) { best = mean; bestX = x0; bestY = y0; }
+                    }
+                }
+
+                if (bestX >= 0)
+                {
+                    var sample = new List<float>(Window * Window / 4);
+                    for (int dy = 0; dy < Window; dy += 2)
+                        for (int dx = 0; dx < Window; dx += 2)
+                            sample.Add(Luma(px[(bestY + dy) * w + (bestX + dx)]));
+                    sample.Sort();
+                    a3DrumWindowMedian = sample.Count == 0 ? 0f : sample[sample.Count / 2];
+                }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1339reefhullpanel",
+                LogTag = "[MV1339Capture]",
+                Flag = "-mv1339shot",
+                ArmFile = "Temp/mv1339.arm",
+                HeadlessMarker = "Temp/mv1339.headless",
+                DoneFileName = "_mv1339_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // AC2/AC3's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1339-a1-hullpanels", NoSetup, measure: MeasureA1),
+                    new CaptureShot("MV-1339-a3-reactorbay", SetupA3, measure: MeasureA3),
+                },
+                ExtraReport = () =>
+                    $"a1: median luminance={a1MedianLuminance:F1}/255 (AC2 target: 25-35), " +
+                    $"saturated&bright share={a1BusySharePercent:F1}% (AC2 target: <=3%)\n" +
+                    $"a3: frame median luminance={a3FloorMedian:F1}/255, brightest 100x100 window median=" +
+                    $"{a3DrumWindowMedian:F1}/255, delta={(a3DrumWindowMedian - a3FloorMedian):F1} " +
+                    "(AC3 target: >=40 if that window is a visible drum top), " +
+                    $"cyan-hue pixel share={a3CyanSharePercent:F1}% (AC3's wall-base strip presence)\n",
             };
         }
 

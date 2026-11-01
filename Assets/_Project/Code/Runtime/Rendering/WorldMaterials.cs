@@ -133,13 +133,19 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefOceanVoidCenter = HexColor(0x0B4C72);
         public static readonly Color ReefOceanVoidEdge = HexColor(0x031426);
 
-        // MV-1053: World 3's deck floor — plated hull, seams, rivets, a grate, and an emissive mask
-        // of circuit traces. Named separately from M_Circuit_Cyan/M_Circuit_Purple (MV-713) because
-        // those are shared by OTHER renderers (the wall-base circuit spine, the coolant turret) that
-        // this ticket never touches; giving the deck's own mask its own constants keeps a value tweak
-        // here from silently relighting something else.
-        public static readonly Color ReefFloorCircuitCyan = HexColor(0x27E6FF);
-        public static readonly Color ReefFloorCircuitViolet = HexColor(0xC25BFF);
+        // MV-1339: Reef floor redesign C — big hull panels, no floor circuitry. The two navy panel
+        // tones Lee's own mock-up used; StylizedTextures.ReefDeckAlbedo bakes each as a per-channel
+        // RATIO against ReefShipFloor (never a flat grey multiplier — the two targets aren't the same
+        // hue as the floor's own base colour), so the deck reads close to these hexes once the baked
+        // texture multiplies through _BaseColor, without ever touching _BaseColor itself (the value
+        // MV1019ReefFloorContrastTests pins).
+        public static readonly Color ReefHullPanelToneLight = HexColor(0x122232);
+        public static readonly Color ReefHullPanelToneDark = HexColor(0x0E1B28);
+
+        // MV-1339: the grating patches dressed onto the open floor (about one per area) — slightly
+        // lighter than the hull panels, decoration only, so it gets its own plain (non-emissive)
+        // material rather than riding the deck's own multiplier-texture idiom.
+        public static readonly Color ReefGratingPatchTone = HexColor(0x1E3040);
 
         // MV-1055: the hydroponic bed's kelp spikes and the hull-top accent lamp — the ticket's own
         // exact hex values, named separately from the MV-713/MV-1053 cyan/violet tones above (which
@@ -167,28 +173,17 @@ namespace MaxWorlds.Rendering
         /// instead of two that have to be kept in step by hand.</summary>
         public const float ReefDeckPlateSizeMetres = 2f;
 
-        /// <summary>How many plates across/down one baked deck "supertile" spans (MV-1256) — the
-        /// repeating unit <see cref="StylizedTextures.ReefDeckAlbedo"/>/<see cref="StylizedTextures.ReefDeckEmission"/>
-        /// now bake, instead of baking a single plate with no plate-to-plate variation at all (MV-1053's
-        /// own "reads as a uniform tile grid" gap). <see cref="MaxWorlds.Rendering.ReefKit.ApplyDeckTiling"/>
-        /// tiles the floor's material at <c>ReefDeckPlateSizeMetres * ReefDeckGridCells</c>, so the
-        /// floor's own world-space repeat period grows from 2 m to 8 m.</summary>
-        public const int ReefDeckGridCells = 4;
+        /// <summary>MV-1339: how many 2 m plates make up one 6 m hull panel (ticket, Change item 2).
+        /// </summary>
+        public const int ReefDeckPlatesPerPanel = 3;
 
-        /// <summary>How many distinct circuit-inlay patterns <see cref="StylizedTextures.ReefDeckPatternIndexAt"/>
-        /// picks between (MV-1256 ticket: "at least 4 inlay patterns").</summary>
-        public const int ReefDeckInlayPatternCount = 4;
-
-        /// <summary>Deck emissive brightness on D3D (MV-1334 ticket, Change item 2: "on D3D 0.85 ->
-        /// 0.40"), named so <see cref="ReefDeckFloorMaterial"/>'s platform branch reads as a tuned
-        /// value rather than a bare literal next to <see cref="ReefDeckEmissionOther"/>.</summary>
-        public const float ReefDeckEmissionD3D = 0.40f;
-
-        /// <summary>Deck emissive brightness on every other backend - Metal/GLES/WebGL (MV-1334
-        /// ticket, Change item 2: "on non-D3D ... 0.55 -> 0.25"). MV-1316's own platform split
-        /// (see <see cref="ReefDeckFloorMaterial"/>'s doc comment) is unchanged; only the two values
-        /// it picks between are dimmer now, because MV-1273's Mobile-tier HDR made the old ones bloom.</summary>
-        public const float ReefDeckEmissionOther = 0.25f;
+        /// <summary>MV-1339: how many plates across/down one baked deck "supertile" spans — a 2-panel
+        /// checker (<see cref="ReefDeckPlatesPerPanel"/> * 2), the smallest unit that still tiles
+        /// seamlessly while letting adjacent panels alternate tone. <see cref="MaxWorlds.Rendering.ReefKit.ApplyDeckTiling"/>
+        /// tiles the floor's material at <c>ReefDeckPlateSizeMetres * ReefDeckSuperTileCells</c>
+        /// (12 m — two 6 m panels), not <see cref="ReefDeckPlatesPerPanel"/>'s own 6 m, for the same
+        /// reason.</summary>
+        public const int ReefDeckSuperTileCells = ReefDeckPlatesPerPanel * 2;
 
         public static Material M_ShipFloor => ReefDeckFloorMaterial();
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
@@ -215,6 +210,10 @@ namespace MaxWorlds.Rendering
         /// its own material rather than <see cref="M_MetalDark"/> (shared by every other dark steel
         /// body on the Reef).</summary>
         public static Material M_OilSheen => ReefMaterial("M_OilSheen", ReefOilSheen);
+
+        /// <summary>MV-1339: the open-floor grating patches — plain and non-emissive, slightly lighter
+        /// than the hull panels, decoration only.</summary>
+        public static Material M_GratingPatch => ReefMaterial("M_GratingPatch", ReefGratingPatchTone);
 
         /// <summary>The Reef's own flooded-deck water (MV-1256, Change item 5) — replaces
         /// <c>MapRuntime.BuildSludge</c>'s shared Stormdrain acid-green tint for this biome only. See
@@ -273,16 +272,18 @@ namespace MaxWorlds.Rendering
         }
 
         /// <summary>
-        /// World 3's deck floor (MV-1053): a baked, tiled deck texture (plates, seams, corner
-        /// rivets, a grate — see <see cref="StylizedTextures.ReefDeckAlbedo"/>) plus an emissive mask
-        /// of cyan/violet circuit traces (<see cref="StylizedTextures.ReefDeckEmission"/>), replacing
-        /// the flat tint <see cref="ReefMaterial"/> gave this before.
+        /// World 3's deck floor: a baked, tiled deck texture — big 6 m hull panels split into 2 m
+        /// plates, faint plate seams, heavy near-black panel seams (MV-1339, direction C; see
+        /// <see cref="StylizedTextures.ReefDeckAlbedo"/>) — and, as of MV-1339, NO emission at all:
+        /// the floor's own circuit-inlay glow is gone, the room's glow lives at the wall bases now
+        /// (<see cref="MaxWorlds.Rendering.ReefKit.BuildCircuitSpine"/> and friends).
         ///
         /// <see cref="ReefShipFloor"/>'s own value is kept EXACTLY as MV-1019 tuned it — that number
         /// is also what anchors <c>MV1019ReefFloorContrastTests</c>'s "crate must read >= 1.6x the
         /// floor" margin, and <see cref="StylizedTextures.ReefDeckAlbedo"/> is baked as a MULTIPLIER
-        /// around a mean of 1 (plate interior ~1, seam ~0.46 — see its own comment), never as a
-        /// colour in its own right, so this never has to touch that number to add the new detail.
+        /// (each hull panel's own per-channel RATIO against <see cref="ReefShipFloor"/>, not a flat
+        /// grey — see its own comment), never as a colour in its own right, so this never has to touch
+        /// that number to add the new detail.
         ///
         /// Deliberately NOT built through <see cref="ReefMaterial"/>: this is the one Reef surface
         /// that shader-switches off the triplanar <see cref="MaterialLibrary.StylizedSurfaceShader"/>
@@ -360,51 +361,30 @@ namespace MaxWorlds.Rendering
 
             RefreshReefDeckTextures(m);
 
-            // Circuitry reads as LIT, not just coloured — same idiom ReefMaterial's own emissive
-            // branch uses. The mask already carries the real cyan/violet/magenta hues, so this is a
-            // brightness multiplier only, not a tint.
-            //
-            // MV-1275 baked 2.14x in here (the same factor that ticket removed from PostExposure) on
-            // the reasoning that the emissive trace's own partial-value edge/multiplied texels needed
-            // it back since they no longer rode the post lift. That reasoning assumed the emission
-            // BINDING itself was intact — on WebGL it was not (MV-1316): the mask never rendered there
-            // at all, at any multiplier, so 2.14x was never actually exercised on that platform. Now
-            // that MV-1316 fixes the binding, 2.14x on an already-full-value (255) baked mask blows the
-            // floor out white-cyan on both platforms.
-            //
-            // MV-1316: the two platforms don't converge on one shared value. Measured on local
-            // captures (floor-only crop, same AC3 band both times): D3D (Editor Mobile-tier substitute)
-            // reads median luminance ~0 (invisible) at 0.55x and 31.7/255 (in band) at 0.85x; WebGL
-            // reads 40.7/255 (in band) at 0.55x and 55.0/255 (over band) at 0.85x. A single scalar
-            // can't land both in the 25-45 band at once, so this reads the actual graphics backend —
-            // the same GLES/Metal-vs-D3D split the ticket's own hypothesis names — rather than guess
-            // one compromise value that fails both. See MV-1316's fix comment for the measured numbers.
-            bool isDirect3D = SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D11
-                || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Direct3D12;
-            // MV-1334: the floor's traces were reading louder than the robots once MV-1273 put HDR on
-            // the Mobile tier and bloomed this mask - both platform values dialled down from MV-1316's
-            // own 0.85/0.55 pair, same platform split, just dimmer.
-            float emission = isDirect3D ? ReefDeckEmissionD3D : ReefDeckEmissionOther;
-            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", new Color(emission, emission, emission));
-            m.EnableKeyword("_EMISSION");
-            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            // MV-1339 AC1: no circuit inlay on the floor — the room's glow moved to the wall bases.
+            // The template clone above may carry _EMISSION/an emission map from
+            // Resources/Materials/M_ReefDeckKeepEmission.mat (kept as the clone source rather than
+            // switched to the plain `new Material(shader)` path, so this never re-opens MV-1316's own
+            // WebGL shader-variant-stripping fix) — explicitly zeroed here rather than left to whatever
+            // the authored asset happens to carry.
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.black);
+            if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", null);
+            m.DisableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
 
             s_reefCache[key] = m;
             return m;
         }
 
-        /// <summary>(Re-)points the deck material's base/emission map slots at
-        /// <see cref="StylizedTextures.ReefDeckAlbedo"/>/<see cref="StylizedTextures.ReefDeckEmission"/>
-        /// — both self-rebuild on next access if <see cref="StylizedTextures.Clear"/> destroyed the
-        /// previous instance, so this always hands the material a live texture.</summary>
+        /// <summary>(Re-)points the deck material's base map at <see cref="StylizedTextures.ReefDeckAlbedo"/>
+        /// — self-rebuilds on next access if <see cref="StylizedTextures.Clear"/> destroyed the
+        /// previous instance, so this always hands the material a live texture. MV-1339: the deck
+        /// carries no emission map at all any more, so there is nothing else to re-point here.</summary>
         private static void RefreshReefDeckTextures(Material m)
         {
             Texture2D albedo = StylizedTextures.ReefDeckAlbedo();
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", albedo);
             if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", albedo);
-
-            Texture2D emission = StylizedTextures.ReefDeckEmission();
-            if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", emission);
         }
 
         /// <summary>(MV-1256) A dark-teal, high-smoothness surface standing in for "reflective" water

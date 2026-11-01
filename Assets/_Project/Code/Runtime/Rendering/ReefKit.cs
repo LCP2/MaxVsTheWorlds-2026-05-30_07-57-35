@@ -117,17 +117,6 @@ namespace MaxWorlds.Rendering
     {
     }
 
-    /// <summary>Records the resolved circuit-inlay pattern layout <see cref="ReefKit.ApplyDeckTiling"/>
-    /// baked into the floor it's attached to (MV-1256, AC1) — a RESOLVED value (testing policy Tier 2)
-    /// an EditMode test can read straight off the built floor, rather than re-deriving
-    /// <see cref="StylizedTextures.ReefDeckPatternIndexAt"/>'s own hash a second time in test code.
-    /// One entry per cell of the baked supertile, row-major (<c>gy * ReefDeckGridCells + gx</c>).
-    /// </summary>
-    public sealed class ReefDeckPlateField : MonoBehaviour
-    {
-        public int[] PatternIndices;
-    }
-
     /// <summary>
     /// World 3's Reef ship kit (MV-713) — the pieces the ticket's material/prefab pass adds that don't
     /// already fall out of the existing per-world plumbing.
@@ -175,6 +164,35 @@ namespace MaxWorlds.Rendering
         /// <summary>UV units/second the circuit spine's shared material scrolls (MV-745, ticket change
         /// item 2: "animated by a scrolling shader mask, never animated meshes").</summary>
         private static readonly Vector2 CircuitScrollSpeed = new Vector2(0f, 0.15f);
+
+        // MV-1339, Change item 4: "short magenta dashes (about 1.5 m every 6 m) on the wall faces just
+        // above" the cyan base strip — now the room's own glow, since the floor's circuit inlay is gone.
+        private const float ReefNeonDashLength = 1.5f;
+        private const float ReefNeonDashPitch = 6f;
+        private const float ReefNeonDashHeight = 0.06f;
+        private const float ReefNeonDashProud = 0.015f;
+        private const float ReefNeonDashGap = 0.03f;   // clear of the cyan strip below it
+
+        /// <summary>Short magenta dashes along one face, spaced <see cref="ReefNeonDashPitch"/> apart,
+        /// at local height <paramref name="y"/> (the caller's own "just above the cyan base strip"
+        /// offset) — same "(i + 0.5) / count" centring idiom <see cref="BuildWallLamps"/> already uses.
+        /// </summary>
+        private static void BuildNeonBaseDashes(Transform root, bool alongX, Vector3 faceNormal, float faceOffset,
+            float faceLength, float y)
+        {
+            int dashes = Mathf.Max(1, Mathf.FloorToInt(faceLength / ReefNeonDashPitch));
+            for (int i = 0; i < dashes; i++)
+            {
+                float t = (i + 0.5f) / dashes - 0.5f;
+                float along = t * faceLength;
+                Vector3 pos = faceNormal * faceOffset + new Vector3(0f, y, 0f)
+                    + (alongX ? new Vector3(along, 0f, 0f) : new Vector3(0f, 0f, along));
+                Vector3 size = alongX
+                    ? new Vector3(ReefNeonDashLength, ReefNeonDashHeight, ReefNeonDashProud * 2f)
+                    : new Vector3(ReefNeonDashProud * 2f, ReefNeonDashHeight, ReefNeonDashLength);
+                MeshBox(root, "Neon Dash", pos, size, WorldMaterials.M_KelpMagenta);
+            }
+        }
 
         /// <summary>
         /// Re-skins World 3's already-built floor and walls with the ticket's own named materials
@@ -243,21 +261,18 @@ namespace MaxWorlds.Rendering
         /// primitive scaled to its footprint, and a Unity cube's default face UVs already span 0..1
         /// across that exact footprint, so this tiling count is the real one, not an approximation.
         ///
-        /// MV-1256: the baked image is no longer one plate but a <see cref="WorldMaterials.ReefDeckGridCells"/>-
-        /// square "supertile" of individually varied plates (<see cref="StylizedTextures.ReefDeckAlbedo"/>/
-        /// <see cref="StylizedTextures.ReefDeckEmission"/>), so the repeat period this sets is
-        /// <c>ReefDeckPlateSizeMetres * ReefDeckGridCells</c>, not one plate's own size — the floor
-        /// still reads as 2 m plates (the mesh is just as fine-grained as before), only the texture
-        /// that no longer repeats every single one of them. Also attaches a
-        /// <see cref="ReefDeckPlateField"/> recording the supertile's own resolved pattern layout
-        /// (AC1) — same real hash <see cref="StylizedTextures.ReefDeckPatternIndexAt"/> the texture
-        /// bake itself used, read back rather than re-derived.</summary>
+        /// MV-1339: the baked image is a <see cref="WorldMaterials.ReefDeckSuperTileCells"/>-square
+        /// 2-panel checker (direction C's 6 m hull panels, each split into 2 m plates — see
+        /// <see cref="StylizedTextures.ReefDeckAlbedo"/>), so the repeat period this sets is
+        /// <c>ReefDeckPlateSizeMetres * ReefDeckSuperTileCells</c> (12 m), not one plate's own size —
+        /// the floor still reads as 2 m plates (the mesh is just as fine-grained as before), only the
+        /// texture that no longer repeats every single one of them.</summary>
         private static void ApplyDeckTiling(Renderer floorRenderer)
         {
             Vector3 size = floorRenderer.bounds.size;
             float plate = WorldMaterials.ReefDeckPlateSizeMetres;
-            int gridCells = WorldMaterials.ReefDeckGridCells;
-            float supertile = plate * gridCells;
+            int superTileCells = WorldMaterials.ReefDeckSuperTileCells;
+            float supertile = plate * superTileCells;
             Vector2 tiling = new Vector2(
                 Mathf.Max(1f, size.x / supertile),
                 Mathf.Max(1f, size.z / supertile));
@@ -268,21 +283,6 @@ namespace MaxWorlds.Rendering
             // silently no-ops on this shader. Naming the property directly is what actually reaches
             // the _BaseMap_ST the shader samples through.
             floorRenderer.sharedMaterial.SetTextureScale("_BaseMap", tiling);
-
-            // MV-1316: MV-1267's own SetTextureScale("_EmissionMap", ...) call used to sit here. Triage
-            // (MV-1275, 22 Oct) found it dead: URP/Lit has no separate _EmissionMap_ST property at all —
-            // every map samples through the one UV transform _BaseMap_ST already produces — so setting
-            // _EmissionMap's own texture scale never reached the shader. The deck's real invisible-on-
-            // WebGL/iPhone defect was the emission BINDING, not this tiling — see ReefDeckFloorMaterial's
-            // enableInstancing fix in WorldMaterials.cs.
-            var patterns = new int[gridCells * gridCells];
-            for (int gy = 0; gy < gridCells; gy++)
-            for (int gx = 0; gx < gridCells; gx++)
-                patterns[gy * gridCells + gx] = StylizedTextures.ReefDeckPatternIndexAt(gx, gy);
-
-            var field = floorRenderer.GetComponent<ReefDeckPlateField>();
-            if (field == null) field = floorRenderer.gameObject.AddComponent<ReefDeckPlateField>();
-            field.PatternIndices = patterns;
         }
 
         /// <summary>One strip per built wall, hugging its base, plus the single driver that scrolls
@@ -499,6 +499,12 @@ namespace MaxWorlds.Rendering
             }
 
             BuildWallConduit(root, alongX, faceNormal, faceOffset, faceLength, height);
+
+            // MV-1339, Change item 4: "short magenta dashes (about 1.5 m every 6 m) on the wall faces
+            // just above" the cyan base strip (BuildCircuitSpine) — the room's glow now lives here,
+            // since the floor's own circuit inlay is gone.
+            float dashY = -height * 0.5f + CircuitStripHeight + ReefNeonDashGap + ReefNeonDashHeight * 0.5f;
+            BuildNeonBaseDashes(root, alongX, faceNormal, faceOffset, faceLength, dashY);
         }
 
         /// <summary>A thin seam line flush with the wall's own face, down the centre of the recessed
@@ -993,9 +999,18 @@ namespace MaxWorlds.Rendering
             }, 20);
         }
 
-        /// <summary>D — a <see cref="CharacterMeshes.Lathe"/> tank with a domed top, two ribbed bands
-        /// and a glowing cyan core window set into the dome (ticket table: 3x3, solid).
-        /// <paramref name="size"/>'s X/Z is the tank's own diameter, same convention
+        /// <summary>MV-1339: how far in from the tank's own radius the bright orange rim ring sits —
+        /// just inside the dome's own top edge, so it reads as a lit collar from directly above.
+        /// </summary>
+        private const float ReefDrumRimOuterFraction = 0.94f;
+        private const float ReefDrumRimInnerFraction = 0.78f;
+
+        /// <summary>D — a <see cref="CharacterMeshes.Lathe"/> tank with a domed top, two ribbed bands,
+        /// a bright orange rim ring on the top edge and a glowing cyan core window set into the dome
+        /// (ticket table: 3x3, solid; MV-1339: "every reactor drum gets a bright orange rim on its top
+        /// edge and a glowing cyan core in the top centre, so from above it reads as a lit machine, not
+        /// a dark disc" — Lee's own complaint about the pre-MV-1339 drum, which carried only the small
+        /// cyan core below). <paramref name="size"/>'s X/Z is the tank's own diameter, same convention
         /// <see cref="ArenaCover"/> already uses for a cylinder's footprint.</summary>
         public static GameObject BuildDrum(Transform parent, Vector3 center, Vector3 size)
         {
@@ -1007,6 +1022,10 @@ namespace MaxWorlds.Rendering
             float radius = Mathf.Min(size.x, size.z) * 0.5f;
             Mesh tank = DrumTankProfile(radius, size.y);
             MeshPart(root.transform, "Tank", tank, new Vector3(0f, -size.y * 0.5f, 0f), WorldMaterials.M_MetalDark);
+
+            Mesh rim = CharacterMeshes.Ring(radius * ReefDrumRimInnerFraction, radius * ReefDrumRimOuterFraction,
+                thickness: size.y * 0.03f, segments: 20);
+            MeshPart(root.transform, "Rim", rim, new Vector3(0f, size.y * 0.42f, 0f), WorldMaterials.M_Hazard);
 
             float coreRadius = radius * 0.35f;
             Mesh core = CharacterMeshes.Lathe(new[]
@@ -1222,6 +1241,7 @@ namespace MaxWorlds.Rendering
 
             BuildBulkheadTopSeam(root.transform, size);
             BuildBulkheadTopPlate(root.transform, size);
+            BuildBulkheadBaseSeam(root.transform, size);
 
             return root;
         }
@@ -1267,6 +1287,12 @@ namespace MaxWorlds.Rendering
 
             BuildBulkheadConduits(root, pieceId, size, alongX, faceLength, faceNormal, faceOffset);
             BuildBulkheadDetails(root, pieceId, size, alongX, faceLength, faceNormal, faceOffset, side);
+
+            // MV-1339, Change item 4: the same "cyan base strip, magenta dashes just above" neon a
+            // regular wall carries (BuildWallFaceDetail) — a hull-fill block is the ticket's own
+            // "hull-fill block", not just an "edge wall".
+            float dashY = -size.y * 0.5f + BulkheadSeamThickness + ReefNeonDashGap + ReefNeonDashHeight * 0.5f;
+            BuildNeonBaseDashes(root, alongX, faceNormal, faceOffset, faceLength, dashY);
         }
 
         /// <summary>A bundle of 2-3 horizontal pipes (ticket: "a horizontal conduit bundle (2-3 pipes)
@@ -1396,6 +1422,22 @@ namespace MaxWorlds.Rendering
             MeshBox(root, "Seam East", new Vector3(size.x * 0.5f - BulkheadSeamThickness * 0.5f, y, 0f),
                 new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
             MeshBox(root, "Seam West", new Vector3(-size.x * 0.5f + BulkheadSeamThickness * 0.5f, y, 0f),
+                new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
+        }
+
+        /// <summary>MV-1339, Change item 4: "a thin continuous cyan strip ... along the foot of every
+        /// edge wall and hull-fill block" — the same perimeter shape <see cref="BuildBulkheadTopSeam"/>
+        /// already draws at the top edge, mirrored to the bottom edge instead.</summary>
+        private static void BuildBulkheadBaseSeam(Transform root, Vector3 size)
+        {
+            float y = -size.y * 0.5f + BulkheadSeamThickness * 0.5f;
+            MeshBox(root, "Base Seam North", new Vector3(0f, y, size.z * 0.5f - BulkheadSeamThickness * 0.5f),
+                new Vector3(size.x + BulkheadSeamProud, BulkheadSeamThickness, BulkheadSeamThickness), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Base Seam South", new Vector3(0f, y, -size.z * 0.5f + BulkheadSeamThickness * 0.5f),
+                new Vector3(size.x + BulkheadSeamProud, BulkheadSeamThickness, BulkheadSeamThickness), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Base Seam East", new Vector3(size.x * 0.5f - BulkheadSeamThickness * 0.5f, y, 0f),
+                new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
+            MeshBox(root, "Base Seam West", new Vector3(-size.x * 0.5f + BulkheadSeamThickness * 0.5f, y, 0f),
                 new Vector3(BulkheadSeamThickness, BulkheadSeamThickness, size.z + BulkheadSeamProud), WorldMaterials.M_Circuit_Cyan);
         }
 
@@ -1817,6 +1859,41 @@ namespace MaxWorlds.Rendering
                 new Vector2(0f, 0f), new Vector2(innerR * 0.9f, 0f), new Vector2(innerR * 0.9f, 0.01f), new Vector2(0f, 0.01f),
             }, 8);
             MeshPart(root.transform, "Glow", glow, new Vector3(0f, -FloorGrateRecess - 0.005f, 0f), WorldMaterials.M_GrateGlow);
+
+            return root;
+        }
+
+        // MV-1339, Change item 3: "about one 4x3 m grating patch per area (slatted, slightly lighter
+        // #1E3040), placed away from gates and garrisons, decoration only, no collision" — a flat base
+        // panel plus a few thin raised slats for the "slatted" read, same decoration-only contract
+        // BuildFloorGrate's own panel keeps (MeshBox/MeshPart never add a collider).
+        private const float GratingPatchWidth = 4f;
+        private const float GratingPatchDepth = 3f;
+        private const float GratingPatchThickness = 0.02f;
+        private const int GratingPatchSlatCount = 7;
+        private const float GratingPatchSlatWidth = 0.08f;
+
+        /// <summary>One grating patch, flat on the floor. <paramref name="rotated"/> swaps the 4x3 m
+        /// footprint to 3x4 m — WHERE picks whichever orientation clears the area (MaxWorlds.Arena.ReefFloorDetail).
+        /// </summary>
+        public static GameObject BuildFloorGratingPatch(Transform parent, Vector3 center, bool rotated)
+        {
+            var root = new GameObject("ReefFloorGratingPatch");
+            root.transform.SetParent(parent, false);
+            root.transform.position = center;
+            if (rotated) root.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            MarkDressed(root);
+
+            MeshBox(root.transform, "Base", new Vector3(0f, -GratingPatchThickness * 0.5f, 0f),
+                new Vector3(GratingPatchWidth, GratingPatchThickness, GratingPatchDepth), WorldMaterials.M_GratingPatch);
+
+            for (int i = 0; i < GratingPatchSlatCount; i++)
+            {
+                float t = (i + 0.5f) / GratingPatchSlatCount - 0.5f;
+                float z = t * GratingPatchDepth;
+                MeshBox(root.transform, $"Slat {i}", new Vector3(0f, 0.002f, z),
+                    new Vector3(GratingPatchWidth * 0.92f, 0.01f, GratingPatchSlatWidth), WorldMaterials.M_GratingPatch);
+            }
 
             return root;
         }

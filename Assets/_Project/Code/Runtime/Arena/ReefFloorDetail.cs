@@ -143,6 +143,58 @@ namespace MaxWorlds.Arena
             return true;
         }
 
+        // ---- MV-1339, Change item 3: grating patches --------------------------------------------
+
+        private const float GratingPatchGridStep = 2f;      // scan step while hunting for a clear spot
+        private const float GratingPatchZoneEdgeMargin = 2.5f; // half the 4x3 m patch's own diagonal, plus a margin
+
+        /// <summary>Places about one 4x3 m grating patch per area, "placed away from gates and
+        /// garrisons" (ticket, Change item 3) — reuses <see cref="ReefHydroponics.PointObstacles"/>/
+        /// <see cref="ReefHydroponics.ClearsEverything"/> directly, same clearance helper
+        /// <see cref="PlaceGrates"/> already reuses for the identical "gate mouths, factories,
+        /// Replicators and garrison points" exclusion list. One deterministic grid scan per
+        /// <see cref="WorldArea"/> (not per <see cref="MapZone"/> — the ticket's own "per area"), first
+        /// clear point wins, same "deterministic grid, not a random scatter" idiom <see cref="PlaceGrates"/>
+        /// keeps. Returns how many it built.</summary>
+        public static int PlaceGratingPatches(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
+        {
+            if (host == null || cfg?.areas == null) return 0;
+
+            List<Vector2> pointObstacles = ReefHydroponics.PointObstacles(map, cfg);
+            var placed = new List<Vector2>();
+            Transform root = null;
+            int count = 0;
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area == null) continue;
+
+                Vector2? spot = null;
+                for (float z = area.ZMin + GratingPatchZoneEdgeMargin; z <= area.ZMax - GratingPatchZoneEdgeMargin && spot == null; z += GratingPatchGridStep)
+                for (float x = area.XMin + GratingPatchZoneEdgeMargin; x <= area.XMax - GratingPatchZoneEdgeMargin && spot == null; x += GratingPatchGridStep)
+                {
+                    var candidate = new Vector2(x, z);
+                    if (ReefHydroponics.ClearsEverything(candidate, cover, pointObstacles, placed)) spot = candidate;
+                }
+
+                if (spot == null) continue;
+
+                if (root == null)
+                {
+                    root = new GameObject("Floor Grating Patches").transform;
+                    root.SetParent(host, false);
+                }
+
+                bool rotated = StableHash($"grating_{area.id}") % 2u == 0u;
+                ReefKit.BuildFloorGratingPatch(root, new Vector3(spot.Value.x, 0f, spot.Value.y), rotated);
+
+                placed.Add(spot.Value);
+                count++;
+            }
+
+            return count;
+        }
+
         /// <summary>Stable, cross-platform string hash (FNV-1a) — same algorithm/reasoning as
         /// <c>ReefKit.StableHash</c> (a private member of a different assembly's class, so this is its
         /// own small copy rather than a cross-assembly dependency for one pure function).</summary>

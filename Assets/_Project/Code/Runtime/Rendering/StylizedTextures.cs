@@ -174,88 +174,75 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
-        // ------------------------------------------------------------------ MV-1053: the deck floor
+        // ------------------------------------------------------------------ MV-1339: the deck floor, direction C
         //
-        // Two separate maps, not one, and deliberately not built on the shared Height()/Blend() path
-        // above: the albedo is a pure MULTIPLIER (mean ~1 across the plate, dipping at the seam) so
-        // WorldMaterials.M_ShipFloor's own _BaseColor keeps carrying the tone MV-1019 tuned — see that
-        // material's own comment for why. The emission mask is the opposite: a real colour in its own
-        // right, baked "linear: false" like every other albedo here.
+        // Lee (1 Nov), after MV-1334's thinned circuit inlay still didn't land: "the lines on the
+        // floor are fewer now but it doesn't make it better". Direction C (of three play-camera
+        // mock-ups) drops the floor's circuit inlay ENTIRELY — no emission map at all (see
+        // WorldMaterials.ReefDeckFloorMaterial) — and replaces it with big 6 m hull panels, each split
+        // into 2 m plates with faint seams, heavy near-black seams between panels. The room's own glow
+        // moved to the wall bases (ReefKit.BuildCircuitSpine and friends); nothing here emits any more.
         //
-        // Both represent exactly ONE 2 m plate. ReefKit.DressHull is what makes that read as "2 m
-        // plates" on the actual floor: it sets the material's own mainTextureScale from the floor's
-        // resolved world size, so this image only ever has to BE one plate, never worry how many of
-        // them the floor needs.
-
-        private const float ReefDeckSeamFraction = 0.03f;    // ~6 cm seam / 2 m plate, ticket's own number
-        private const float ReefDeckSeamMultiplier = 0.46f;  // how much darker the seam reads than the plate
-
-        // MV-1265: the circuit-inlay trace was 5 texels wide (cellSize * 0.03, rounded) - ~7.5 screen px
-        // at play distance, under DECISIONS.md §3's ~10 px legibility floor, and mip-averaging crushed it
-        // further. Widened so the resolved bake was >=12 texels (13 at the shipped 256px/4-cell bake).
+        // Still a pure MULTIPLIER against M_ShipFloor's own _BaseColor (never a colour in its own
+        // right — WorldMaterials.ReefShipFloor stays exactly as MV-1019 tuned it), but no longer a flat
+        // grey: each panel bakes its own per-CHANNEL ratio against ReefShipFloor, landing close to the
+        // ticket's own two hex tones once multiplied through, without ever touching _BaseColor itself.
         //
-        // MV-1334: the floor read as busier than the robots once every cell carried this width at full
-        // brightness. Thinned to about two thirds of MV-1265's 0.1f (ticket, Change item 1) - the
-        // resolved bake drops from 13 to 9 texels (~13.5 screen px at the same 1.5 px/texel ratio
-        // MV-1265 measured), which still clears DECISIONS.md §3's ~10 px floor even though it falls
-        // under MV-1265's own, stricter 12-texel test floor - see that test's updated comment.
-        private const float ReefDeckTraceHalfWidthFraction = 0.1f * (2f / 3f);
+        // The repeating unit is a 2-panel checker (12 m), not one panel (6 m) — the smallest tile that
+        // can still alternate two panel tones and tile seamlessly. ReefKit.DressHull/ApplyDeckTiling is
+        // what turns this into "2 m plates / 6 m panels" on the actual floor mesh.
 
-        /// <summary>Which roll of <see cref="ReefDeckPatternIndexAt"/>'s existing seeded hash counts as
-        /// "lit" (MV-1334 ticket, Change item 1: "draw an inlay in about 1 cell in 4 ... chosen by the
-        /// existing seeded hash ... so it is stable"). Any other roll leaves the cell black. Picking a
-        /// single fixed roll out of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> possible ones
-        /// is what gives the ~1-in-4 odds the ticket asks for, for free, off a hash that already exists
-        /// and already resolves 0..3 roughly uniformly (MV1256ReefDeckDetailTests pins all 4 values
-        /// appearing across the real floor) - no new hash needed.</summary>
-        private const int ReefDeckLitPatternIndex = 0;
+        private const float ReefPlateSeamFraction = 0.035f;     // faint seam between 2 m plates, within a panel
+        private const float ReefPlateSeamMultiplier = 0.82f;    // how much darker that faint seam reads
+        private const float ReefPanelSeamHalfWidthFraction = 0.05f; // ~0.2 m total width, split across both plates either side of a 6 m panel boundary — wide enough to actually read against the floor's own dark base (see ReefDarkPanelMultiplier's own comment)
+        private const float ReefPanelSeamMultiplier = 0.08f;    // near-black, heavy panel seam
+        private const float ReefPlateJitterMax = 0.06f;         // ticket's own "vary within ±4 luminance", subtle
 
-        private const float ReefDeckRivetInset = 0.09f;      // how far a rivet sits from the plate's corner
-        private const float ReefDeckRivetRadius = 0.045f;
-        private const float ReefDeckRivetRingMultiplier = 0.7f;
+        /// <summary>MV-1339: a literal per-channel ratio against ReefShipFloor (<see cref="ReefChannelRatio"/>
+        /// alone) landed each panel's tone only ~6-7% apart in the baked texture's own bytes — nowhere
+        /// near visible once composited through this room's own dark, low-key lighting (confirmed by
+        /// this ticket's own first capture, <c>Logs/mv1339-capture.log</c>: the floor read as flat
+        /// uniform navy, no panel/seam structure visible at all, and comparing against MV-1334's own
+        /// "AFTER" screenshot shows the SAME flat-albedo characteristic predates this ticket — the pure
+        /// multiplier-texture plate/seam/rivet detail was apparently never visually perceptible in this
+        /// lighting setup even before, just masked by the emissive circuit overlay this ticket removes).
+        /// A symmetric contrast boost around the shared midpoint was tried next and was STILL invisible
+        /// at a ~100/255 byte gap (a pure white/black diagnostic swap confirmed the binding/tiling
+        /// itself was fine — see the fix comment for the full before/after numbers) — a widened
+        /// ABSOLUTE gap wasn't what this room's own low-key lighting responds to. Darkening the dark
+        /// panel toward near-black instead (<see cref="ReefDarkPanelMultiplier"/>) — raising the RATIO
+        /// between the two tones rather than their difference — is what actually reads: the light panel
+        /// keeps its own natural, un-boosted ratio (so it stays a legitimate navy, never blown toward
+        /// white), only the dark panel is pushed harder.</summary>
+        private const float ReefDarkPanelMultiplier = 0.08f;
 
-        // A grate inset, centred and clear of both the seam band and the corner rivets — "occasional"
-        // within the repeating tile rather than across separate plates, since one image here IS one
-        // plate (see the section note above): there is nowhere else for "occasional" to live.
-        private const float ReefDeckGrateMin = 0.37f, ReefDeckGrateMax = 0.63f;
-        private const int ReefDeckGrateBars = 5;
-        private const float ReefDeckGrateBarMultiplier = 0.50f;
-
-        /// <summary>MV-1256: deterministic per-plate tint jitter ("about +/-6% value") so the deck's own
-        /// supertile never repeats as a visually uniform grid once <see cref="ReefDeckAlbedo"/> is
-        /// tiled across the floor — the fine FBM noise above varies WITHIN a plate; this varies plate
-        /// to plate, which the old one-image-per-whole-floor bake had no cell to carry at all.</summary>
-        private const float ReefDeckTintJitterMax = 0.06f;
-
-        private static float ReefDeckTintJitterAt(int gx, int gy)
+        private static float ReefDeckPlateJitterAt(int gx, int gy)
         {
-            uint h = ReefHash($"decktint_{gx}_{gy}");
+            uint h = ReefHash($"hullplate_{gx}_{gy}");
             float t01 = (h % 2000u) / 1999f;
-            return (t01 * 2f - 1f) * ReefDeckTintJitterMax;
+            return (t01 * 2f - 1f) * ReefPlateJitterMax;
         }
 
-        /// <summary>Which of <see cref="WorldMaterials.ReefDeckInlayPatternCount"/> circuit-inlay
-        /// layouts cell (<paramref name="gx"/>, <paramref name="gy"/>) of the deck's own baked
-        /// supertile resolves to (MV-1256, Change item 2: "at least 4 inlay patterns ... picked per
-        /// plate from a seeded hash"). Pure and cheap enough that <see cref="ReefDeckEmission"/>'s own
-        /// bake and <see cref="MaxWorlds.Rendering.ReefKit.ApplyDeckTiling"/>'s resolved-value
-        /// <see cref="ReefDeckPlateField"/> both call it directly, rather than keeping two copies of
-        /// the same hash in step by hand.</summary>
-        public static int ReefDeckPatternIndexAt(int gx, int gy)
-        {
-            uint h = ReefHash($"deckpattern_{gx}_{gy}");
-            return (int)(h % (uint)WorldMaterials.ReefDeckInlayPatternCount);
-        }
+        /// <summary>The per-channel multiplier that lands <paramref name="target"/> once baked here and
+        /// multiplied through <paramref name="floorBase"/> by the shader (<c>_BaseMap</c> * _BaseColor)
+        /// — never a flat grey, since the ticket's two navy panel tones aren't the same hue as the
+        /// floor's own base colour. Always &lt;=1 per channel: a texture multiply can only darken
+        /// relative to _BaseColor, never brighten past it (same constraint the old rivet multiplier's
+        /// own doc noted).</summary>
+        private static Color ReefChannelRatio(Color target, Color floorBase) => new Color(
+            floorBase.r > 0.0001f ? Mathf.Clamp01(target.r / floorBase.r) : 0f,
+            floorBase.g > 0.0001f ? Mathf.Clamp01(target.g / floorBase.g) : 0f,
+            floorBase.b > 0.0001f ? Mathf.Clamp01(target.b / floorBase.b) : 0f,
+            1f);
 
-        /// <summary>The deck's baked "supertile" — <see cref="WorldMaterials.ReefDeckGridCells"/> square
-        /// plates, each its own greyscale MULTIPLIER against <c>M_ShipFloor</c>'s own _BaseColor: ~1
-        /// across the face with a little tileable per-plate value noise (the ticket's "±5% per-plate
-        /// value variation"), a dark border at the plate's own seam, a small full-value rivet disc
-        /// ringed darker at each corner, one grate inset, and (MV-1256) a further deterministic tint
-        /// jitter unique to THIS cell (<see cref="ReefDeckTintJitterAt"/>) — the ticket's own fix for
-        /// MV-1053's "reads as a uniform tile grid" gap, since a single repeating plate image had no
-        /// cell for plate-to-plate variation to live in at all.</summary>
-        public static Texture2D ReefDeckAlbedo(int size = 256)
+        /// <summary>The deck's baked "supertile" (MV-1339, direction C): a <see cref="WorldMaterials.ReefDeckSuperTileCells"/>-square
+        /// grid of 2 m plates, grouped <see cref="WorldMaterials.ReefDeckPlatesPerPanel"/> at a time into
+        /// 6 m hull panels that alternate between <see cref="WorldMaterials.ReefHullPanelToneLight"/> and
+        /// <see cref="WorldMaterials.ReefHullPanelToneDark"/> in a checker (so the two-panel supertile
+        /// still tiles seamlessly), each plate carrying a small deterministic tint jitter
+        /// (<see cref="ReefDeckPlateJitterAt"/>), a faint seam at its own edge, and a heavy near-black
+        /// seam wherever that edge is ALSO a 6 m panel boundary.</summary>
+        public static Texture2D ReefDeckAlbedo(int size = 288)
         {
             const string key = "reefDeckAlbedo";
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
@@ -263,13 +250,28 @@ namespace MaxWorlds.Rendering
             var t = NewTexture(key, size, linear: true);
             var px = new Color32[size * size];
 
-            int cells = WorldMaterials.ReefDeckGridCells;
+            int cells = WorldMaterials.ReefDeckSuperTileCells;
             int cellSize = Mathf.Max(1, size / cells);
+            int platesPerPanel = WorldMaterials.ReefDeckPlatesPerPanel;
+
+            Color floorBase = WorldMaterials.ReefShipFloor;
+            Color toneLight = ReefChannelRatio(WorldMaterials.ReefHullPanelToneLight, floorBase);
+            Color toneDark = ReefChannelRatio(WorldMaterials.ReefHullPanelToneDark, floorBase) * ReefDarkPanelMultiplier;
 
             for (int gy = 0; gy < cells; gy++)
             for (int gx = 0; gx < cells; gx++)
             {
-                float jitterMul = 1f + ReefDeckTintJitterAt(gx, gy);
+                int panelX = gx / platesPerPanel;
+                int panelY = gy / platesPerPanel;
+                bool lightPanel = ((panelX + panelY) & 1) == 0;
+                Color panelTone = lightPanel ? toneLight : toneDark;
+                float jitterMul = 1f + ReefDeckPlateJitterAt(gx, gy);
+
+                bool panelEdgeLeft = (gx % platesPerPanel) == 0;
+                bool panelEdgeRight = (gx % platesPerPanel) == platesPerPanel - 1;
+                bool panelEdgeTop = (gy % platesPerPanel) == 0;
+                bool panelEdgeBottom = (gy % platesPerPanel) == platesPerPanel - 1;
+
                 int originX = gx * cellSize;
                 int originY = gy * cellSize;
 
@@ -283,23 +285,26 @@ namespace MaxWorlds.Rendering
                     float u = (lx + 0.5f) / cellSize;
                     float v = (ly + 0.5f) / cellSize;
 
-                    float variation = (Fbm(u, v, baseFreq: 5, octaves: 2) - 0.5f) * 0.10f;
-                    float m = 1f + variation;
+                    Color c = panelTone * jitterMul;
 
+                    // Faint plate seam: every cell's own edge, inside the panel.
                     float edge = Mathf.Max(Mathf.Abs(u - 0.5f) / 0.5f, Mathf.Abs(v - 0.5f) / 0.5f);
-                    float seam = Curve(1f - ReefDeckSeamFraction, 1f, edge);
-                    m = Mathf.Lerp(m, ReefDeckSeamMultiplier, seam);
+                    float faint = Curve(1f - ReefPlateSeamFraction, 1f, edge);
+                    if (faint > 0f) c = Color.Lerp(c, c * ReefPlateSeamMultiplier, faint);
 
-                    float rivet = ReefDeckRivetMultiplier(u, v);
-                    if (rivet >= 0f) m = rivet;
+                    // Heavy panel seam: only where this edge is ALSO a panel boundary, one side at a time.
+                    float heavy = 0f;
+                    if (panelEdgeLeft) heavy = Mathf.Max(heavy, Curve(ReefPanelSeamHalfWidthFraction, 0f, u));
+                    if (panelEdgeRight) heavy = Mathf.Max(heavy, Curve(1f - ReefPanelSeamHalfWidthFraction, 1f, u));
+                    if (panelEdgeTop) heavy = Mathf.Max(heavy, Curve(ReefPanelSeamHalfWidthFraction, 0f, v));
+                    if (panelEdgeBottom) heavy = Mathf.Max(heavy, Curve(1f - ReefPanelSeamHalfWidthFraction, 1f, v));
+                    if (heavy > 0f) c = Color.Lerp(c, c * ReefPanelSeamMultiplier, heavy);
 
-                    float grate = ReefDeckGrateMultiplier(u, v);
-                    if (grate >= 0f) m = Mathf.Min(m, grate);
-
-                    m *= jitterMul;
-
-                    byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
-                    px[y * size + x] = new Color32(g, g, g, 255);
+                    px[y * size + x] = new Color32(
+                        (byte)Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255f),
+                        (byte)Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255f),
+                        (byte)Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255f),
+                        255);
                 }
             }
 
@@ -307,150 +312,6 @@ namespace MaxWorlds.Rendering
             t.Apply(updateMipmaps: true);
             s_cache[key] = t;
             return t;
-        }
-
-        /// <summary>-1 where no rivet reaches; otherwise the multiplier to use. Never above 1: a
-        /// texture multiply can only darken relative to _BaseColor, never brighten past it, so the
-        /// rivet's own disc reads at the plate's full (untouched) value rather than as a highlight.
-        /// </summary>
-        private static float ReefDeckRivetMultiplier(float u, float v)
-        {
-            float best = -1f;
-            foreach (float cx in new[] { ReefDeckRivetInset, 1f - ReefDeckRivetInset })
-            foreach (float cy in new[] { ReefDeckRivetInset, 1f - ReefDeckRivetInset })
-            {
-                float d = Mathf.Sqrt((u - cx) * (u - cx) + (v - cy) * (v - cy));
-                if (d <= ReefDeckRivetRadius) return 1f;
-                if (d <= ReefDeckRivetRadius * 1.6f)
-                {
-                    float ring = 1f - Curve(ReefDeckRivetRadius, ReefDeckRivetRadius * 1.6f, d);
-                    float m = Mathf.Lerp(1f, ReefDeckRivetRingMultiplier, ring);
-                    if (best < 0f || m < best) best = m;
-                }
-            }
-            return best;
-        }
-
-        private static float ReefDeckGrateMultiplier(float u, float v)
-        {
-            if (u < ReefDeckGrateMin || u > ReefDeckGrateMax || v < ReefDeckGrateMin || v > ReefDeckGrateMax)
-                return -1f;
-
-            float lu = (u - ReefDeckGrateMin) / (ReefDeckGrateMax - ReefDeckGrateMin);
-            float lv = (v - ReefDeckGrateMin) / (ReefDeckGrateMax - ReefDeckGrateMin);
-            float barU = Mathf.Abs(Frac(lu * ReefDeckGrateBars) - 0.5f) * 2f;
-            float barV = Mathf.Abs(Frac(lv * ReefDeckGrateBars) - 0.5f) * 2f;
-            float bar = Mathf.Max(Curve(0.7f, 1f, barU), Curve(0.7f, 1f, barV));
-            return Mathf.Lerp(0.85f, ReefDeckGrateBarMultiplier, bar);
-        }
-
-        /// <summary>The deck's emissive mask (MV-1256 rework of MV-1053's own single-pattern bake, since
-        /// thinned and sparsened by MV-1334): of the <see cref="WorldMaterials.ReefDeckGridCells"/>-square
-        /// supertile's cells, only the ~1 in 4 <see cref="ReefDeckPatternIndexAt"/>'s own seeded hash
-        /// marks <see cref="ReefDeckLitPatternIndex"/> draws an inlay at all (MV-1334 ticket, Change
-        /// item 1) — every other cell stays plain black plate, seams only from the albedo. Cyan is the
-        /// dominant colour; <see cref="DrawDeckInlayPattern"/>'s own per-element hash swaps roughly 1
-        /// trace in 8 to violet or magenta (MV-1256 ticket: "about 1 in 8 traces is magenta or violet").
-        /// Baked as a real colour, not a multiplier — <see cref="WorldMaterials.M_ShipFloor"/> leaves
-        /// _EmissionColor white so this paints the floor's glow directly.</summary>
-        public static Texture2D ReefDeckEmission(int size = 256)
-        {
-            const string key = "reefDeckEmission";
-            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
-
-            var t = NewTexture(key, size, linear: false);
-            var px = new Color32[size * size];
-            var black = new Color32(0, 0, 0, 255);
-            for (int i = 0; i < px.Length; i++) px[i] = black;
-
-            int cells = WorldMaterials.ReefDeckGridCells;
-            int cellSize = Mathf.Max(1, size / cells);
-
-            for (int gy = 0; gy < cells; gy++)
-            for (int gx = 0; gx < cells; gx++)
-            {
-                // MV-1334: only the ~1-in-4 cells the hash marks "lit" carry an inlay now; every
-                // other cell stays plain black plate (seams only, from the albedo).
-                if (ReefDeckPatternIndexAt(gx, gy) != ReefDeckLitPatternIndex) continue;
-                DrawDeckInlayPattern(px, size, gx * cellSize, gy * cellSize, cellSize, gx, gy);
-            }
-
-            t.SetPixels32(px);
-            t.Apply(updateMipmaps: true);
-            s_cache[key] = t;
-            return t;
-        }
-
-        /// <summary>The one inlay layout a "lit" cell draws (MV-1334 ticket, Change item 1: "remove the
-        /// round nodes/dots"). MV-1256's four node-bearing pattern variants are gone - <see cref="ReefDeckPatternIndexAt"/>'s
-        /// roll now only decides whether a cell is lit at all (<see cref="ReefDeckEmission"/>'s own
-        /// check), so there is nothing left to vary the layout BY once a cell is picked. Every trace
-        /// still asks <paramref name="gx"/>/<paramref name="gy"/>'s own per-element hash for its colour,
-        /// so the same cell always rolls the same accents (deterministic across Editor/WebGL/CI, same
-        /// reasoning as every other seeded-hash pick in this project).</summary>
-        private static void DrawDeckInlayPattern(Color32[] px, int texSize, int originX, int originY,
-            int cellSize, int gx, int gy)
-        {
-            // MV-1265: this used to be ReefDeckSeamFraction * 0.5f (~0.015, right against the cell's own
-            // edge) - fine while the edge trace was only a couple of texels thick, but the widened
-            // stroke clips almost entirely off the cell at that inset. 0.13 leaves enough margin for the
-            // stroke to sit fully inside the cell while still reading as edge-hugging.
-            float half = Mathf.Max(ReefDeckSeamFraction * 0.5f, 0.13f);
-            int elementIndex = 0;
-
-            Color32 NextColor()
-            {
-                uint h = ReefHash($"deckaccent_{gx}_{gy}_{elementIndex}");
-                elementIndex++;
-                if ((h % 8u) != 0u) return (Color32)WorldMaterials.ReefFloorCircuitCyan;
-                return (h % 16u) < 8u
-                    ? (Color32)WorldMaterials.ReefFloorCircuitViolet
-                    : (Color32)WorldMaterials.ReefKelpMagenta;
-            }
-
-            DrawCellTraceV(px, texSize, originX, originY, cellSize, half, NextColor());
-            DrawCellTraceH(px, texSize, originX, originY, cellSize, half, NextColor());
-        }
-
-        /// <summary>A vertical trace confined to one cell's own sub-rectangle of the texture, at local
-        /// U <paramref name="localU"/> (0..1 within the cell) — the supertile-scoped counterpart to
-        /// <see cref="DrawTraceAlongV"/>, which draws across the WHOLE image and so can't be reused
-        /// once a bake holds several independently-patterned cells.</summary>
-        private static void DrawCellTraceV(Color32[] px, int texSize, int originX, int originY, int cellSize,
-            float localU, Color32 c)
-        {
-            int x = originX + Mathf.Clamp(Mathf.RoundToInt(localU * cellSize), 0, cellSize - 1);
-            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * ReefDeckTraceHalfWidthFraction));
-            for (int ly = 0; ly < cellSize; ly++)
-            {
-                int y = originY + ly;
-                if (y >= texSize) continue;
-                for (int dx = -half; dx <= half; dx++)
-                {
-                    int xx = x + dx;
-                    if (xx < originX || xx >= originX + cellSize || xx >= texSize) continue;
-                    px[y * texSize + xx] = c;
-                }
-            }
-        }
-
-        private static void DrawCellTraceH(Color32[] px, int texSize, int originX, int originY, int cellSize,
-            float localV, Color32 c)
-        {
-            int y = originY + Mathf.Clamp(Mathf.RoundToInt(localV * cellSize), 0, cellSize - 1);
-            if (y >= texSize) return;
-            int half = Mathf.Max(1, Mathf.RoundToInt(cellSize * ReefDeckTraceHalfWidthFraction));
-            for (int lx = 0; lx < cellSize; lx++)
-            {
-                int x = originX + lx;
-                if (x >= texSize) continue;
-                for (int dy = -half; dy <= half; dy++)
-                {
-                    int yy = y + dy;
-                    if (yy < originY || yy >= originY + cellSize || yy >= texSize) continue;
-                    px[yy * texSize + x] = c;
-                }
-            }
         }
 
         private const float ReefFloodCausticAmplitude = 0.18f;   // MV-1256: "slow caustic shimmer" — a soft tileable multiplier, same mean-1 idiom as ReefDeckAlbedo
