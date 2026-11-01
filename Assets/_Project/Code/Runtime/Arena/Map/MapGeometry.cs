@@ -352,8 +352,15 @@ namespace MaxWorlds.Arena
         /// same N=+Z/E=+X/S=-Z/W=-X convention <see cref="MapRuntime.ExitOutwardDir"/> and
         /// <see cref="WorldJoinDressing"/>'s own copy already keep, duplicated here rather than shared —
         /// the same "duplicate a two-line geometry helper rather than share it" idiom those two already
-        /// follow for this exact function.</summary>
-        private static Vector3 CurrentDirectionVector(string dir) => dir switch
+        /// follow for this exact function. Visibility widened to public by MV-1335 —
+        /// <see cref="MapRuntime.BuildCurrentLane"/> and <see cref="MapCurrentLaneVisual"/> need the same
+        /// authored direction vector <see cref="CurrentDriftAt"/> already resolves, so the lane's own
+        /// visual can never point a way the drift disagrees with; <c>MV1335CurrentLaneVisualTests</c>
+        /// also reads it directly to check AC1's "matching its ... dir" — this project's EditMode test
+        /// assembly carries no <c>InternalsVisibleTo</c> back to Gameplay (see
+        /// <see cref="MapStaticBatchRoot"/>'s own doc), so <c>internal</c> would compile everywhere
+        /// except the one place that needs it.</summary>
+        public static Vector3 CurrentDirectionVector(string dir) => dir switch
         {
             "N" => Vector3.forward,
             "S" => Vector3.back,
@@ -391,8 +398,11 @@ namespace MaxWorlds.Arena
         /// <see cref="WorldCurrent.dir"/> — the shared <see cref="MapCurrentReversalRunner.Age"/> clock
         /// cut into back-to-back <paramref name="reverseEverySec"/>-second intervals, odd-numbered ones
         /// reversed, even ones (including the first, [0, reverseEverySec)) as-authored. 0/unauthored (the
-        /// vast majority of lanes) never reverses.</summary>
-        private static bool IsReversedNow(float reverseEverySec)
+        /// vast majority of lanes) never reverses. Visibility widened to internal by MV-1335 —
+        /// <see cref="MapCurrentLaneVisual"/> resolves its own on-screen flow direction off this EXACT
+        /// rule so the lane visual can never show a direction the drift itself disagrees with (MV-1335
+        /// AC2).</summary>
+        internal static bool IsReversedNow(float reverseEverySec)
         {
             if (reverseEverySec <= 0f) return false;
             var interval = (int)(MapCurrentReversalRunner.Age / reverseEverySec);

@@ -1794,6 +1794,16 @@ namespace MaxWorlds.Arena
                         TagStatic(map, ventGo, rendererZones);
                         break;
                     }
+
+                    case EntityKind.Current:
+                    {
+                        // MV-1335: excluded from the static batch — MapCurrentLaneVisual scrolls and
+                        // pulses the lane's own material every frame, same reasoning as Sludge/Grate/
+                        // Vent above.
+                        GameObject laneGo = BuildCurrentLane(root, e);
+                        TagStatic(map, laneGo, rendererZones);
+                        break;
+                    }
                 }
             }
         }
@@ -1950,6 +1960,53 @@ namespace MaxWorlds.Arena
 
             body.AddComponent<PlasmaVentVisual>().Configure(body.GetComponent<Renderer>(), column.transform);
             return body;
+        }
+
+        /// <summary>Roughly one bubble emitter's worth of bubbles per this many square metres of lane
+        /// (MV-1335) — sparser than <see cref="SludgeBubbleDensityArea"/>: the ticket asks for "a few
+        /// small drifting bubbles", not the denser treatment a body of sludge gets.</summary>
+        private const float CurrentBubbleDensityArea = 20f;
+
+        /// <summary>Pale cyan-white (MV-1335) — a current lane's bubbles read as clear water, never the
+        /// sludge's own acid tone.</summary>
+        private static readonly Color CurrentBubbleTone = new Color(0.65f, 0.88f, 0.95f);
+
+        /// <summary>A current lane's own visual (MV-1335): a translucent band with scrolling chevrons
+        /// over the lane's exact rect (<see cref="ReefCurrentLaneKit.BuildLane"/>), a few drifting
+        /// bubbles (same low-density treatment every other body of water in this project gets), and
+        /// <see cref="MapCurrentLaneVisual"/> to resolve/apply the reversal and pre-flip pulse every
+        /// frame off the same shared clock <see cref="MapGeometry.CurrentDriftAt"/> itself reads.</summary>
+        private static GameObject BuildCurrentLane(Transform root, MapEntity e)
+        {
+            Vector3 dir = MapGeometry.CurrentDirectionVector(e.facing);
+            // ReefCurrentLaneKit.BuildLane's own quad mesh already offsets up by LaneY locally (the
+            // same "GameObject sits at the floor datum, mesh offsets up" idiom StormdrainKit.DressSludgeTile
+            // uses for its own flow surface) -- this must stay at floor height, not LaneY again, or the
+            // band would sit proud by 2x LaneY.
+            var center = new Vector3(e.x, 0f, e.z);
+
+            GameObject laneGo = ReefCurrentLaneKit.BuildLane(root, e.id, center, e.width, e.depth, dir, out Material material);
+            // MV-1335: the lane's flat, wide quad (bounds.y near 0, width/depth often > 4 m) is exactly
+            // the shape WorldMaterials.KindOf's flat-shape heuristic reads as SurfaceKind.Ground -- same
+            // "leave my own material alone" tag Tint() already stamps on Sludge/Vent's own bodies, needed
+            // here too since this GameObject is built by ReefCurrentLaneKit (a Rendering-assembly class
+            // that cannot call MapRuntime's own private Tint). Without it, WorldMaterials.Apply/
+            // ReefKit.DressHull's generic Ground sweep repaints this renderer onto the SHARED
+            // WorldMaterials.M_ShipFloor material and re-tiles that shared material from THIS lane's own
+            // tiny bounds, corrupting the real floor's plate tiling for every other renderer sharing it
+            // (caught by MV1053ReefDeckFloorTests going red the moment a Reef world grew its first lane).
+            laneGo.AddComponent<KeepsOwnMaterial>();
+
+            var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+            laneGo.AddComponent<MapCurrentLaneVisual>().Configure(
+                e.id, footprint, dir, e.CurrentSpeedMps, e.CurrentReverseEverySec, material);
+
+            int seed = Mathf.RoundToInt(e.x * 977f + e.z * 733f);
+            int bubbleCount = Mathf.Max(1, Mathf.RoundToInt((e.width * e.depth) / CurrentBubbleDensityArea));
+            SludgeBubbles.Attach(laneGo.transform, "Bubbles", new Vector2(e.width * 0.5f, e.depth * 0.5f),
+                ReefCurrentLaneKit.LaneY, seed, bubbleCount, CurrentBubbleTone);
+
+            return laneGo;
         }
 
         /// <summary>A deck's walkable top slab, built as an open raised walkway rather than a walled

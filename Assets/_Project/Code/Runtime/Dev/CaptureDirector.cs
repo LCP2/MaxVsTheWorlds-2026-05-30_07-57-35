@@ -680,6 +680,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1321Vault());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
+            Add(BuildMv1335CurrentLaneCheck());
             return d;
         }
 
@@ -6849,6 +6850,149 @@ namespace MaxWorlds.Dev
                     $"median luminance={medianLuminance:F1}/255 (AC1 target: 25-40)\n" +
                     $"saturated&bright share={busySharePercent:F1}% of sampled pixels " +
                     "(AC1 target: <=10%, traces still visible if >2%)\n",
+            };
+        }
+
+        // ---- MV1335CurrentLaneCheck (MV-1335 AC3/AC5) -----------------------------------------
+
+        /// <summary>MV-1335's own one-shot evidence: a16_cur1 (dir S, reverseEvery 10 — the same lane
+        /// <c>MV1335CurrentLaneVisualTests</c> reads back), captured at the live play camera under the
+        /// Mobile quality tier (HDR on, MV-1273) — same "LIVE play camera, never a standalone framing
+        /// pose" technique <see cref="BuildMv1266ReefPlayCameraCheck"/> established. Measures the two
+        /// numbers AC3 names: the band's own mean hue, sampled a couple of metres ahead of Max along
+        /// the lane's own flow direction (clear of his own character silhouette, still inside the
+        /// lane's rect), and its luminance delta against the plain floor beside it, sampled
+        /// perpendicular to the lane just outside its own half-width — both world points resolved from
+        /// the real loaded <see cref="MapEntity"/>, never guessed screen coordinates. Written to
+        /// <c>Logs/</c>, same "one-shot evidence for the fix comment" reasoning
+        /// <see cref="BuildMv1334ReefDeckBusyCheck"/> already documents — AC5's own "no further capture
+        /// loops" means this runs once and reports whatever it measures.</summary>
+        private static CapturePreset BuildMv1335CurrentLaneCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float bandMeanHue = -1f;
+            float bandLuma = -1f;
+            float floorLuma = -1f;
+            bool measured = false;
+            Vector3 lanePointWorld = default, floorPointWorld = default;
+            bool pointsResolved = false;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a16"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a16\") found no map/player to jump");
+
+                MapData map = EnemyNavigation.Map;
+                MapEntity lane = map?.Entity("a16_cur1");
+                if (lane == null)
+                    throw new CaptureAbortException("world3_config.json's own a16_cur1 did not resolve after the area jump");
+
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (playerObj == null)
+                    throw new CaptureAbortException("no Player found after the area jump");
+
+                Vector3 flow = MapGeometry.CurrentDirectionVector(lane.facing);
+                Vector3 across = new Vector3(flow.z, 0f, -flow.x);
+                Vector3 laneCenter = new Vector3(lane.x, 0f, lane.z);
+                // Offset FAR enough from where Max himself stands (laneCenter, below) that the sample
+                // box lands on the band, not on his own body/selection-ring glow — MV-1335's first
+                // capture stood Max exactly on lanePointWorld and then sampled that SAME point, so
+                // "lane band" luma/hue barely moved across two real material-colour edits because it was
+                // actually reading Max, not the lane.
+                lanePointWorld = laneCenter + flow * Mathf.Min(4f, lane.depth * 0.4f);
+                floorPointWorld = laneCenter + across * (lane.width * 0.5f + 3f);
+                pointsResolved = true;
+
+                // Same collider-disable/teleport/re-enable shape DevModeController.TryJumpToArea itself
+                // uses — stand Max at the lane's own centre so the play camera frames it, clear of
+                // where the band sample above is actually taken.
+                var cc = playerObj.GetComponent<CharacterController>();
+                bool wasEnabled = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                playerObj.transform.position = new Vector3(laneCenter.x, playerObj.transform.position.y, laneCenter.z);
+                if (cc != null) cc.enabled = wasEnabled;
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck/BuildMv1334ReefDeckBusyCheck use —
+                // let the camera's own damping/look-ahead reach its settled play pose before the shot.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            bool TrySampleBox(Texture2D tex, Color32[] px, int w, int h, Vector3 worldPos, out float meanLuma, out float meanHueDeg)
+            {
+                meanLuma = 0f; meanHueDeg = 0f;
+                if (Camera.main == null) return false;
+
+                Vector3 vp = Camera.main.WorldToViewportPoint(worldPos);
+                if (vp.z <= 0f || vp.x < 0f || vp.x > 1f || vp.y < 0f || vp.y > 1f) return false;
+
+                int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+                const int half = 10;
+                double sumLuma = 0, sumHue = 0; int count = 0;
+                for (int dy = -half; dy <= half; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= h) continue;
+                    for (int dx = -half; dx <= half; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= w) continue;
+                        Color32 c32 = px[y * w + x];
+                        sumLuma += 0.2126 * c32.r + 0.7152 * c32.g + 0.0722 * c32.b;
+                        Color.RGBToHSV((Color)c32, out float hue, out _, out _);
+                        sumHue += hue * 360f;
+                        count++;
+                    }
+                }
+                if (count == 0) return false;
+                meanLuma = (float)(sumLuma / count);
+                meanHueDeg = (float)(sumHue / count);
+                return true;
+            }
+
+            void Measure(Texture2D tex)
+            {
+                if (!pointsResolved) { measured = false; return; }
+
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                bool laneOk = TrySampleBox(tex, px, w, h, lanePointWorld, out bandLuma, out bandMeanHue);
+                bool floorOk = TrySampleBox(tex, px, w, h, floorPointWorld, out floorLuma, out _);
+                measured = laneOk && floorOk;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1335currentlane",
+                LogTag = "[MV1335Capture]",
+                Flag = "-mv1335shot",
+                ArmFile = "Temp/mv1335.arm",
+                HeadlessMarker = "Temp/mv1335.headless",
+                DoneFileName = "_mv1335_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // AC3's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1335-a16-current-lane", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    measured
+                        ? $"lane band: mean hue={bandMeanHue:F1} deg (AC3 target 180-215), luma={bandLuma:F1}/255\n" +
+                          $"plain floor beside it: luma={floorLuma:F1}/255, delta={Mathf.Abs(bandLuma - floorLuma):F1} (AC3 floor: >=20)\n"
+                        : "lane/floor sample point(s) fell outside the captured frame -- AC3 not measured this shot.\n",
             };
         }
 
