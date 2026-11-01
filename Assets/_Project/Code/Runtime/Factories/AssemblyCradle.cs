@@ -79,9 +79,22 @@ namespace MaxWorlds.Factories
         private const float BarHeightAboveCentre = 2.6f;
         private const float BarWorldWidth = 1.8f;
 
-        // --- MV-1297: the proximity ring's own thin-red tint and the STANDBY lens's dim rest colour. ---
-        private static readonly Color ProximityRingColor = new Color(0.9f, 0.15f, 0.15f, 0.5f);
+        // --- MV-1297/MV-1337: the proximity ring's own thin-red tint and the STANDBY lens's dim rest
+        // colour. Alpha 0.35 and the width/dash numbers below are MV-1337's fix for the ring reading
+        // as a huge blurred haze at this radius — see DashedRingMesh's own doc for why. ---
+        private static readonly Color ProximityRingColor = new Color(0.9f, 0.15f, 0.15f, 0.35f);
         private static readonly Color StandbyDimColor = new Color(0.22f, 0.18f, 0.08f);
+
+        /// <summary>MV-1337: the ring's full radial width (outer radius minus inner) — a real
+        /// geometric thinness that does not grow with <see cref="ProximityRadius"/>, unlike the old
+        /// <see cref="GroundRing"/> quad whose soft texture blurred into a metres-wide band once
+        /// scaled past a couple of metres. Public so <c>MV1337CradleRingThinTests</c> reads the number
+        /// the mesh actually uses, not a restated literal.</summary>
+        public const float ProximityRingLineWidth = 0.08f;
+
+        /// <summary>MV-1337: "about 48 dashes" per the ticket. Public for the same reason as
+        /// <see cref="ProximityRingLineWidth"/>.</summary>
+        public const int ProximityRingDashCount = 48;
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
@@ -95,7 +108,7 @@ namespace MaxWorlds.Factories
         private float _standbyRetryTimer;
         private bool _holdingGlobalSlot;
         private float _lensPulseT;
-        private GroundRing _proximityRing;
+        private DashedGroundRing _proximityRing;
         private MeshRenderer _topLens;
         private Transform _bodyRoot;
 
@@ -169,6 +182,10 @@ namespace MaxWorlds.Factories
         public Transform FrameStage => _frameStage;
         public Transform PlatesStage => _platesStage;
         public Transform DoneStage => _doneStage;
+
+        /// <summary>MV-1337: exposed so the capture preset can toggle the ring for its ring-hidden
+        /// comparison frame — never read by shipped gameplay.</summary>
+        public DashedGroundRing ProximityRingVisual => _proximityRing;
 
         /// <summary>0..1 through the current build cycle — for MV-1227's visual stages.</summary>
         public float BuildProgress => Mathf.Clamp01(_buildTimer / BuildSeconds);
@@ -249,7 +266,8 @@ namespace MaxWorlds.Factories
             // MV-1297: the proximity ring — a thin red floor circle at ProximityRadius, shown
             // continuously in Tick while alive, same lazy-ring-then-Show-every-frame idiom
             // RobotEnemy.TickJammerField already uses for its own persistent floor ring.
-            _proximityRing = GroundRing.Create("Assembly Cradle Proximity Ring");
+            // MV-1337: a dashed annulus mesh, not a GroundRing quad — see DashedRingMesh's own doc.
+            _proximityRing = DashedGroundRing.Create("Assembly Cradle Proximity Ring", ProximityRingColor);
         }
 
         /// <summary>MV-1246: one <see cref="ShedFitting"/> per housing, sitting exactly at the housing's
@@ -347,7 +365,8 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
 
-            _proximityRing?.Show(transform.position, ProximityRadius, ProximityRingColor);
+            _proximityRing?.Show(transform.position, GroundRing.GroundLift, ProximityRadius,
+                ProximityRingLineWidth, ProximityRingDashCount);
             TickTopLensVisual(dt);
 
             if (!_maxInArea)
