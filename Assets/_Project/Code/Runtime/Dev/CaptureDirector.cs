@@ -681,6 +681,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
+            Add(BuildMv1336ShipGlowCapCheck());
             return d;
         }
 
@@ -6993,6 +6994,188 @@ namespace MaxWorlds.Dev
                         ? $"lane band: mean hue={bandMeanHue:F1} deg (AC3 target 180-215), luma={bandLuma:F1}/255\n" +
                           $"plain floor beside it: luma={floorLuma:F1}/255, delta={Mathf.Abs(bandLuma - floorLuma):F1} (AC3 floor: >=20)\n"
                         : "lane/floor sample point(s) fell outside the captured frame -- AC3 not measured this shot.\n",
+            };
+        }
+
+        // ---- MV1336ShipGlowCapCheck (MV-1336 AC1/AC4) -----------------------------------------
+
+        /// <summary>MV-1336's own before/after evidence: the real Mothership Hangar (a1, same area
+        /// <see cref="BuildMv1332HangarBloomCheck"/> already uses this technique for), under the Mobile
+        /// quality tier (HDR on, MV-1273) at the LIVE play camera, with Orbitals forced to max level
+        /// (ORBS/REACH/POWER/SPIN all maxed, same <see cref="BuildMv1241OrbitalsLook"/> state-setting,
+        /// applied in <c>Prepare</c> rather than <c>BeforeSceneLoad</c> for the same reason that preset's
+        /// own comment documents: <c>HomeScreen</c>'s "fresh run start" <c>WeaponSystemState.Reset()</c>
+        /// fires during the boot window and would silently wipe an earlier override) so the real Max
+        /// carries spinning orbs next to the Hangar's own hazard-yellow launch-pad lane lines
+        /// (<see cref="ShipKit.BuildLaunchPadHazardStripes"/>, already dressed into area a1 by
+        /// <see cref="MaxWorlds.Arena.ShipDressing.Dress"/>) — Lee's own screenshot scenario. Measures the
+        /// same two AC1 numbers <see cref="BuildMv1332HangarBloomCheck"/> does (worst 200x200 px window,
+        /// Max's own body-vs-30px-ring delta), re-thresholded to THIS ticket's own AC1 (median &lt;=170,
+        /// not MV-1332's 200). Written to <c>Logs/</c>, same one-shot before/after reasoning
+        /// <see cref="BuildMv1334ReefDeckBusyCheck"/> already documents.</summary>
+        private static CapturePreset BuildMv1336ShipGlowCapCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float worstWindowMeanLuma = -1f;
+            float worstWindowMedianLuma = -1f;
+            int worstWindowX = -1, worstWindowY = -1;
+            float maxBodyLuma = float.NaN;
+            float maxRingLuma = float.NaN;
+            bool maxFound = false;
+            string orbitalsDiagnostic = "(not sampled)";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                // Same post-reset timing fix BuildMv1241OrbitalsLook's own comment documents: setting
+                // this in BeforeSceneLoad gets silently wiped by HomeScreen's run-start reset.
+                RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Mothership));   // s_orb/s_rad/s_odm/s_spd live only here
+                WeaponSystemState.SecondaryKind = SecondaryKind.Orbitals;
+                RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_orb", 4 }, { "s_rad", 4 }, { "s_odm", 5 }, { "s_spd", 4 } },
+                    new[] { "SECONDARY" });
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1332HangarBloomCheck uses, plus extra time for the Orbitals
+                // trail/ring to build and spin up to its own steady state.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+
+                // Diagnostic only (not an AC) -- confirms whether the override above actually stuck on
+                // the REAL player by shot time, so a dim/empty frame can be told apart from "Orbitals
+                // just never got equipped this run".
+                var diagPlayer = GameObject.FindGameObjectWithTag("Player");
+                var diagOrbitals = diagPlayer != null ? diagPlayer.GetComponent<Orbitals>() : null;
+                orbitalsDiagnostic = diagOrbitals != null
+                    ? $"SecondaryKind={WeaponSystemState.SecondaryKind} SECONDARYunlocked={RigState.IsCategoryUnlocked("SECONDARY")} " +
+                      $"OrbCount={diagOrbitals.OrbCount} Reach={diagOrbitals.Reach:F1}"
+                    : "no Orbitals component found on the Player after the jump";
+            }
+
+            void Measure(Texture2D tex)
+            {
+                const int Window = 200; // AC1's own region size
+                const int Stride = 50;  // overlap so the true worst region isn't straddled by a tile boundary
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32(); // row 0 = bottom, Unity's own texture convention
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+                var sat = new double[(w + 1) * (h + 1)];
+                for (int y = 0; y < h; y++)
+                {
+                    double rowSum = 0;
+                    for (int x = 0; x < w; x++)
+                    {
+                        rowSum += Luma(px[y * w + x]);
+                        sat[(y + 1) * (w + 1) + (x + 1)] = rowSum + sat[y * (w + 1) + (x + 1)];
+                    }
+                }
+                double WindowSum(int x0, int y0) =>
+                    sat[(y0 + Window) * (w + 1) + (x0 + Window)] - sat[y0 * (w + 1) + (x0 + Window)] -
+                    sat[(y0 + Window) * (w + 1) + x0] + sat[y0 * (w + 1) + x0];
+
+                double bestMean = -1;
+                for (int y0 = 0; y0 + Window <= h; y0 += Stride)
+                {
+                    for (int x0 = 0; x0 + Window <= w; x0 += Stride)
+                    {
+                        double mean = WindowSum(x0, y0) / (Window * Window);
+                        if (mean > bestMean) { bestMean = mean; worstWindowX = x0; worstWindowY = y0; }
+                    }
+                }
+                worstWindowMeanLuma = (float)bestMean;
+
+                if (worstWindowX >= 0)
+                {
+                    var sample = new List<float>(Window * Window / 4);
+                    for (int dy = 0; dy < Window; dy += 2)
+                        for (int dx = 0; dx < Window; dx += 2)
+                            sample.Add(Luma(px[(worstWindowY + dy) * w + (worstWindowX + dx)]));
+                    sample.Sort();
+                    worstWindowMedianLuma = sample.Count == 0 ? 0f : sample[sample.Count / 2];
+                }
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo != null)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(maxGo.transform.position + Vector3.up * 0.8f);
+                    if (vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f)
+                    {
+                        int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+
+                        float SampleBox(int px0, int py0, int half)
+                        {
+                            double sum = 0; int count = 0;
+                            for (int dy = -half; dy <= half; dy++)
+                            {
+                                int y = py0 + dy;
+                                if (y < 0 || y >= h) continue;
+                                for (int dx = -half; dx <= half; dx++)
+                                {
+                                    int x = px0 + dx;
+                                    if (x < 0 || x >= w) continue;
+                                    sum += Luma(px[y * w + x]);
+                                    count++;
+                                }
+                            }
+                            return count > 0 ? (float)(sum / count) : float.NaN;
+                        }
+
+                        maxBodyLuma = SampleBox(cx, cy, 8);
+
+                        const int RingRadius = 30;
+                        double ringSum = 0; int ringCount = 0;
+                        for (int a = 0; a < 8; a++)
+                        {
+                            float rad = a * Mathf.PI * 2f / 8f;
+                            int rx = cx + Mathf.RoundToInt(Mathf.Cos(rad) * RingRadius);
+                            int ry = cy + Mathf.RoundToInt(Mathf.Sin(rad) * RingRadius);
+                            float s = SampleBox(rx, ry, 2);
+                            if (!float.IsNaN(s)) { ringSum += s; ringCount++; }
+                        }
+                        maxRingLuma = ringCount > 0 ? (float)(ringSum / ringCount) : float.NaN;
+                        maxFound = true;
+                    }
+                }
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1336shipglowcap",
+                LogTag = "[MV1336Capture]",
+                Flag = "-mv1336shot",
+                ArmFile = "Temp/mv1336.arm",
+                HeadlessMarker = "Temp/mv1336.headless",
+                DoneFileName = "_mv1336_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the ticket's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1336-a1-ship-glow-cap", NoSetup, measure: Measure) },
+                ExtraReport = () =>
+                    $"worst 200x200 window at ({worstWindowX},{worstWindowY}): mean luma={worstWindowMeanLuma:F1}/255 " +
+                    $"median luma={worstWindowMedianLuma:F1}/255 (AC1 cap: median <=170)\n" +
+                    (maxFound
+                        ? $"Max body luma={maxBodyLuma:F1}/255 vs 30px ring luma={maxRingLuma:F1}/255 " +
+                          $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC1 floor: >=25)\n"
+                        : "Max not found in frame -- AC1's body/ring delta not measured this shot.\n") +
+                    $"Orbitals diagnostic: {orbitalsDiagnostic}\n",
             };
         }
 
