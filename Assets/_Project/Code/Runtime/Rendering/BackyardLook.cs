@@ -422,11 +422,22 @@ namespace MaxWorlds.Rendering
             // MV-1340: round 1 tried x1.4 (KeyIntensity 1.26) and recaptured mv1340reefbrightness —
             // median luminance came back at 16.1/255 (median hue 223deg, correctly in the 190-230
             // navy/teal target — so the HUE fix worked, round 1 just didn't put back enough of the
-            // brightness a 2.65-intensity RimIntensity used to contribute). Round 2: x2.1 instead,
-            // same reasoning (KeyColor is already cool navy-teal, see class doc), landing between the
-            // directional AmbientSky/Equator/Ground's own larger x3 round-2 bump (ambient lights every
-            // surface regardless of facing, so it is the more reliable lever for a FRAME-WIDE median —
-            // see those three terms' own comment below) and round 1's own under-shoot.
+            // brightness a 2.65-intensity RimIntensity used to contribute). Round 2 pushed Key/Fill to
+            // x2.1 and AmbientSky/Equator/Ground to x3 (see those three terms' own comment) — median
+            // only moved to 22.7/255 (strongly diminishing returns), AND the recapture showed the
+            // reactor drum's hazard-orange rim had washed out to pink: M_Hazard is emissive, but its
+            // _BaseColor is ALSO lit by the scene, so an ambient this bright and this blue starts to
+            // outweigh the fixed orange emission in the blend. Round 2's numbers are reverted here.
+            // Round 3 kept Key/Fill at round 1's level and found AmbientSky/Equator/Ground's own
+            // round-1-to-round-3 bump (x1.4 -> x1.8, see those three terms' own comment) changed
+            // Max-vs-30px-ring luma delta by nothing worth noting (20.6 -> 20.7, against a >= 25
+            // floor): ambient is uniform, so it lifts Max and the floor beside him by roughly the SAME
+            // amount, barely widening the gap between them. Round 2's Key/Fill bump (x2.1) is what
+            // actually moved that delta to 35.1 that round — a DIRECTIONAL light brightens Max's own
+            // rounded body and the flat floor beside him by different amounts, so it is the lever that
+            // actually helps AC4, not ambient. Round 4 puts Key/Fill back to round 2's x2.1 (not
+            // implicated in round 2's rim wash-out — round 1, at this same Key/Fill level, still read
+            // the rim as orange) while leaving Ambient at round 3's safer x1.8.
             KeyIntensity = 1.89f,
             KeyEuler = new Vector3(62f, -30f, 0f),
             ShadowStrength = 0.68f,
@@ -434,7 +445,7 @@ namespace MaxWorlds.Rendering
             // Teal bounce off the hull plating, not Stormdrain's sludge-green and not Default's sky-blue
             // — this is what keeps the shadow side of a pipe or bulkhead from crushing to pure black.
             FillColor = new Color(0.14f, 0.28f, 0.36f),
-            FillIntensity = 1.62f,  // MV-1275: x2.14 off MV-1250; MV-1340 round 2: x2.1 again, same reasoning as KeyIntensity above
+            FillIntensity = 1.62f,  // MV-1275: x2.14 off MV-1250; MV-1340 round 4: x2.1 again — see KeyIntensity's own comment for why
             FillEuler = new Vector3(20f, 140f, 0f),
 
             // The only warm light anywhere (see class doc) — hazard orange, matching Max's own body
@@ -445,26 +456,29 @@ namespace MaxWorlds.Rendering
             // but at 2.65 this one warm-orange directional outweighed the 0.90 key + 0.77 fill combined,
             // so it dominated the frame's own blend and tinted the whole room brown (Lee, iPhone
             // v0.24.0, World 4, 2 Nov: "W4 is just way too dark", measured median hue 23deg). MV-1340:
-            // back to a true subtle accent (class doc's own "not a second light source", <= 0.8) — the
+            // a true subtle accent (class doc's own "not a second light source", <= 0.8) — the
             // readability job (separating Max/a robot from the floor) still works at this level because
             // RimColor exactly matches Max's own hazard-orange body colour, which is what actually makes
-            // it legible, not raw intensity.
-            RimIntensity = 0.75f,
+            // it legible, not raw intensity. At the top of its own <= 0.8 ceiling (round 1's 0.75 measured
+            // Max-vs-ring delta 20.6, just under AC4's 25 floor) — Max is NOT emissive, so more direct
+            // Rim light increases his own contrast against the floor without the drum rim's wash-out risk.
+            RimIntensity = 0.8f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // Near-black navy, every term — sky, equator AND ground — per the ticket's own "a near-black
             // navy ambient gradient" line. No green/sludge equator band like Stormdrain's: the Reef has
             // no sludge, only hull plate and bio-glow. MV-1275: all three x2.14, same factor as the
             // lights above, to hold the same dark-navy ratios the MV-1250 values established. MV-1340
-            // round 1 tried x1.4 and measured median luminance 16.1/255 against a 55-70 target (see
-            // KeyIntensity's own comment for the full round-1 number and why) — round 2 pushes ambient
-            // specifically harder than Key/FillIntensity's own round-2 bump: ambient lights every pixel
-            // uniformly regardless of which way it faces, where Key/Fill only brighten surfaces angled
-            // toward them, so ambient is the more reliable lever for a frame-WIDE median in a room this
-            // enclosed. x3 off the round-1 (already x1.4'd) values below.
-            AmbientSky = new Color(0.402f, 0.672f, 1.032f),
-            AmbientEquator = new Color(0.315f, 0.537f, 0.852f),
-            AmbientGround = new Color(0.198f, 0.360f, 0.630f),
+            // round 1 tried x1.4 (median luminance 16.1/255 against a 55-70 target — see KeyIntensity's
+            // own comment). Round 2 pushed ambient specifically to x3 — ambient lights every pixel
+            // uniformly regardless of which way it faces, so it looked like the more reliable lever for
+            // a frame-wide median — but at x3 (AmbientSky peaking at 1.03) it was bright and blue enough
+            // to wash the reactor drum's fixed-orange hazard emission toward pink (see KeyIntensity's own
+            // comment for the full diagnosis). Round 3 settles for x1.8 instead: still above round 1,
+            // short of round 2's wash-out point.
+            AmbientSky = new Color(0.173f, 0.288f, 0.443f),
+            AmbientEquator = new Color(0.135f, 0.230f, 0.365f),
+            AmbientGround = new Color(0.085f, 0.155f, 0.270f),
 
             // Dense dark-teal fog — thicker than Stormdrain's 0.018 and City's 0.010, per the ticket's
             // own "dense dark-teal fog so far walls fall off into the deep": a flooded hull's far walls
