@@ -685,6 +685,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1337CradleRingThinCheck());
             Add(BuildMv1338CradleHueCheck());
             Add(BuildMv1339ReefHullPanelCheck());
+            Add(BuildMv1340ReefBrightnessCheck());
             return d;
         }
 
@@ -7030,6 +7031,228 @@ namespace MaxWorlds.Dev
                     $"{a3DrumWindowMedian:F1}/255, delta={(a3DrumWindowMedian - a3FloorMedian):F1} " +
                     "(AC3 target: >=40 if that window is a visible drum top), " +
                     $"cyan-hue pixel share={a3CyanSharePercent:F1}% (AC3's wall-base strip presence)\n",
+            };
+        }
+
+        // ---- MV1340ReefBrightnessCheck (MV-1340 AC1-AC4) --------------------------------------
+
+        /// <summary>MV-1340's own before/after evidence: the real Reef (a1, same
+        /// <see cref="BuildMv1266ReefPlayCameraCheck"/> play-camera/settle technique; a3, same
+        /// <see cref="BuildMv1339ReefHullPanelCheck"/> reactor-bay route), under the Mobile quality
+        /// tier (HDR on, MV-1273). Measures every number AC1-AC4 name directly: a1's median luminance,
+        /// 90th-10th percentile spread and median hue (AC1), the frame's own cyan-hue mean luma against
+        /// its overall median as the wall-base strip's own delta (AC3, same hue-band classification
+        /// <see cref="BuildMv1339ReefHullPanelCheck"/>'s own a3CyanSharePercent already uses), Max's own
+        /// body-vs-30px-ring luma delta (AC4, same technique <see cref="BuildMv1332HangarBloomCheck"/>
+        /// already uses), and — in the a3 reactor-bay shot — the orange-hue (rim) and cyan-hue (core)
+        /// mean luma against that frame's own floor-dominated median, as the drum rim/core delta's own
+        /// proxy (AC2). Written to <c>Logs/</c>, same "one-shot before/after evidence for the fix
+        /// comment" reasoning every capture preset above already documents — this ticket's own AC6
+        /// caps it at one before/after pair, no further capture loops.</summary>
+        private static CapturePreset BuildMv1340ReefBrightnessCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float a1MedianLuma = -1f, a1P10Luma = -1f, a1P90Luma = -1f, a1MedianHue = -1f;
+            float a1CyanMeanLuma = float.NaN;
+            float maxBodyLuma = float.NaN, maxRingLuma = float.NaN;
+            bool maxFound = false;
+
+            float a3FrameMedianLuma = -1f;
+            float a3RimMeanLuma = float.NaN, a3CoreMeanLuma = float.NaN;
+
+            float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+            IEnumerator JumpAndSettle(string areaId)
+            {
+                if (!DevModeController.TryJumpToArea(areaId))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{areaId}\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck/BuildMv1339ReefHullPanelCheck use —
+                // let the camera's own damping/look-ahead reach its settled play pose before the shot.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                yield return JumpAndSettle("a1");
+            }
+
+            IEnumerator SetupA3(Camera cam) => JumpAndSettle("a3");
+
+            void MeasureA1(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                var hues = new List<float>(w * h / 16 + 1);
+                double cyanSum = 0; int cyanCount = 0;
+
+                for (int y = 0; y < h; y += 4)
+                {
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        Color32 c32 = px[y * w + x];
+                        float luma = Luma(c32);
+                        lumas.Add(luma);
+
+                        Color.RGBToHSV((Color)c32, out float hue01, out float s, out float v);
+                        float hueDeg = hue01 * 360f;
+                        hues.Add(hueDeg);
+
+                        if (hueDeg > 150f && hueDeg < 210f && s > 0.35f && v > 0.4f)
+                        {
+                            cyanSum += luma;
+                            cyanCount++;
+                        }
+                    }
+                }
+
+                lumas.Sort();
+                hues.Sort();
+                a1MedianLuma = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a1P10Luma = lumas.Count == 0 ? 0f : lumas[(int)(lumas.Count * 0.10f)];
+                a1P90Luma = lumas.Count == 0 ? 0f : lumas[Mathf.Min(lumas.Count - 1, (int)(lumas.Count * 0.90f))];
+                a1MedianHue = hues.Count == 0 ? 0f : hues[hues.Count / 2];
+                a1CyanMeanLuma = cyanCount == 0 ? float.NaN : (float)(cyanSum / cyanCount);
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo != null)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(maxGo.transform.position + Vector3.up * 0.8f);
+                    if (vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f)
+                    {
+                        int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+
+                        float SampleBox(int px0, int py0, int half)
+                        {
+                            double sum = 0; int count = 0;
+                            for (int dy = -half; dy <= half; dy++)
+                            {
+                                int yy = py0 + dy;
+                                if (yy < 0 || yy >= h) continue;
+                                for (int dx = -half; dx <= half; dx++)
+                                {
+                                    int xx = px0 + dx;
+                                    if (xx < 0 || xx >= w) continue;
+                                    sum += Luma(px[yy * w + xx]);
+                                    count++;
+                                }
+                            }
+                            return count > 0 ? (float)(sum / count) : float.NaN;
+                        }
+
+                        maxBodyLuma = SampleBox(cx, cy, 8);
+
+                        const int RingRadius = 30;
+                        double ringSum = 0; int ringCount = 0;
+                        for (int a = 0; a < 8; a++)
+                        {
+                            float rad = a * Mathf.PI * 2f / 8f;
+                            int rx = cx + Mathf.RoundToInt(Mathf.Cos(rad) * RingRadius);
+                            int ry = cy + Mathf.RoundToInt(Mathf.Sin(rad) * RingRadius);
+                            float s = SampleBox(rx, ry, 2);
+                            if (!float.IsNaN(s)) { ringSum += s; ringCount++; }
+                        }
+                        maxRingLuma = ringCount > 0 ? (float)(ringSum / ringCount) : float.NaN;
+                        maxFound = true;
+                    }
+                }
+            }
+
+            void MeasureA3(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                double rimSum = 0; int rimCount = 0;
+                double coreSum = 0; int coreCount = 0;
+
+                for (int y = 0; y < h; y += 4)
+                {
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        Color32 c32 = px[y * w + x];
+                        float luma = Luma(c32);
+                        lumas.Add(luma);
+
+                        Color.RGBToHSV((Color)c32, out float hue01, out float s, out float v);
+                        float hueDeg = hue01 * 360f;
+
+                        if (hueDeg >= 15f && hueDeg <= 40f && s > 0.3f && v > 0.3f)
+                        {
+                            rimSum += luma;
+                            rimCount++;
+                        }
+                        else if (hueDeg >= 180f && hueDeg <= 200f && s > 0.3f && v > 0.3f)
+                        {
+                            coreSum += luma;
+                            coreCount++;
+                        }
+                    }
+                }
+
+                lumas.Sort();
+                a3FrameMedianLuma = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a3RimMeanLuma = rimCount == 0 ? float.NaN : (float)(rimSum / rimCount);
+                a3CoreMeanLuma = coreCount == 0 ? float.NaN : (float)(coreSum / coreCount);
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1340reefbrightness",
+                LogTag = "[MV1340Capture]",
+                Flag = "-mv1340shot",
+                ArmFile = "Temp/mv1340.arm",
+                HeadlessMarker = "Temp/mv1340.headless",
+                DoneFileName = "_mv1340_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // AC1-AC4's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1340-a1-playarea", NoSetup, measure: MeasureA1),
+                    new CaptureShot("MV-1340-a3-reactorbay", SetupA3, measure: MeasureA3),
+                },
+                ExtraReport = () =>
+                    $"a1: median luminance={a1MedianLuma:F1}/255 (AC1 target: 55-70), " +
+                    $"p90-p10 spread={(a1P90Luma - a1P10Luma):F1} (AC1 target: >=35), " +
+                    $"median hue={a1MedianHue:F0}deg (AC1 target: 190-230)\n" +
+                    (maxFound
+                        ? $"Max body luma={maxBodyLuma:F1}/255 vs 30px ring luma={maxRingLuma:F1}/255 " +
+                          $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC4 floor: >=25)\n"
+                        : "Max not found in frame -- AC4's body/ring delta not measured this shot.\n") +
+                    (float.IsNaN(a1CyanMeanLuma)
+                        ? "a1: no cyan-hue pixels found this shot -- AC3's wall-base strip delta not measured.\n"
+                        : $"a1: cyan-hue mean luma={a1CyanMeanLuma:F1}/255 vs frame median={a1MedianLuma:F1}/255 " +
+                          $"delta={(a1CyanMeanLuma - a1MedianLuma):F1} (AC3 floor: >=40)\n") +
+                    $"a3: frame median luminance={a3FrameMedianLuma:F1}/255 (floor-beside-it proxy)\n" +
+                    (float.IsNaN(a3RimMeanLuma)
+                        ? "a3: no orange-hue (rim) pixels found this shot -- AC2's rim delta not measured.\n"
+                        : $"a3: orange-hue (rim) mean luma={a3RimMeanLuma:F1}/255 delta vs frame median=" +
+                          $"{(a3RimMeanLuma - a3FrameMedianLuma):F1} (AC2 floor: >=40)\n") +
+                    (float.IsNaN(a3CoreMeanLuma)
+                        ? "a3: no cyan-hue (core) pixels found this shot -- AC2's core delta not measured.\n"
+                        : $"a3: cyan-hue (core) mean luma={a3CoreMeanLuma:F1}/255 delta vs frame median=" +
+                          $"{(a3CoreMeanLuma - a3FrameMedianLuma):F1} (AC2 floor: >=40)\n"),
             };
         }
 
