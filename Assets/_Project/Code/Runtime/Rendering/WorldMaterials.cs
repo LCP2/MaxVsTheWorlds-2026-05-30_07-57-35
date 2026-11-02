@@ -238,22 +238,64 @@ namespace MaxWorlds.Rendering
         /// has a <c>_DetailScale</c> property at all) rather than the plain Lit/SimpleLit/Standard
         /// chain every other Reef material uses — falling back to that chain if the stylised shader
         /// isn't in the build, same "flat but correctly coloured, never magenta" degrade every other
-        /// caller of <see cref="MaterialLibrary.SurfaceShader"/> already gets (YT-58).</summary>
+        /// caller of <see cref="MaterialLibrary.SurfaceShader"/> already gets (YT-58).
+        ///
+        /// MV-1340: when <paramref name="emissive"/> is true, this clones
+        /// <c>Resources/Materials/M_ReefDeckKeepEmission.mat</c> instead of building a bare
+        /// <c>new Material(shader)</c> and calling <c>EnableKeyword("_EMISSION")</c> at runtime — the
+        /// exact pattern <see cref="ReefDeckFloorMaterial"/> was rewritten off of for MV-1316, because
+        /// a runtime-only keyword has no SERIALIZED material for Unity's build-time shader-variant
+        /// stripper to discover the _EMISSION variant from, so it rendered on Windows D3D12 but was
+        /// invisible on WebGL/iPhone (GLES/Metal). Every emissive Reef material (the wall-base cyan
+        /// strip, the magenta kelp dashes, the drum's orange rim and cyan core, …) went through this
+        /// one method, so this one change fixes every one of them at once — confirmed by
+        /// <c>MV1340ReefBrightnessTests</c> asserting the resolved material inherits the template's
+        /// own _SPECULARHIGHLIGHTS_OFF keyword and _Smoothness, which only a clone of that asset
+        /// carries.</summary>
         private static Material ReefMaterial(string key, Color color, bool emissive = false, float detailScale = 0f)
         {
             if (s_reefCache.TryGetValue(key, out var cached) && cached != null) return cached;
 
-            Shader shader = detailScale > 0f
-                ? MaterialLibrary.StylizedSurfaceShader ?? MaterialLibrary.SurfaceShader
-                : MaterialLibrary.SurfaceShader;
-            if (shader == null) return null;
-
-            var m = new Material(shader)
+            Material m;
+            if (emissive)
             {
-                name = key,
-                hideFlags = HideFlags.HideAndDontSave,
-                enableInstancing = true,
-            };
+                Material template = Resources.Load<Material>("Materials/M_ReefDeckKeepEmission");
+                if (template != null)
+                {
+                    m = new Material(template)
+                    {
+                        name = key,
+                        hideFlags = HideFlags.HideAndDontSave,
+                        enableInstancing = true,
+                    };
+                }
+                else
+                {
+                    Shader fallbackShader = MaterialLibrary.SurfaceShader;
+                    if (fallbackShader == null) return null;
+                    m = new Material(fallbackShader)
+                    {
+                        name = key,
+                        hideFlags = HideFlags.HideAndDontSave,
+                        enableInstancing = true,
+                    };
+                }
+            }
+            else
+            {
+                Shader shader = detailScale > 0f
+                    ? MaterialLibrary.StylizedSurfaceShader ?? MaterialLibrary.SurfaceShader
+                    : MaterialLibrary.SurfaceShader;
+                if (shader == null) return null;
+
+                m = new Material(shader)
+                {
+                    name = key,
+                    hideFlags = HideFlags.HideAndDontSave,
+                    enableInstancing = true,
+                };
+            }
+
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
             if (detailScale > 0f && m.HasProperty("_DetailScale")) m.SetFloat("_DetailScale", detailScale);

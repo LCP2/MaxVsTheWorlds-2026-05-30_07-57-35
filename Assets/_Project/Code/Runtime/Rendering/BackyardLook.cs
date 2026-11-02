@@ -391,6 +391,24 @@ namespace MaxWorlds.Rendering
         /// floor and the light, not the robots (this ticket's own "Do not re-raise") — the readability
         /// floor route if a capture ever comes back with Max or a robot lost in the dark is a brighter
         /// <see cref="RimIntensity"/>, never a brighter room.
+        ///
+        /// MV-1340: that "brighter RimIntensity" floor route turned out to be the opposite of what a
+        /// live TestFlight build needed. Lee, iPhone v0.24.0, World 4, 2 Nov: "W4 is just way too
+        /// dark" — measured off his screenshot at median luminance 52/255, 90th percentile only 61 (so
+        /// almost no contrast), median hue 23deg (muddy brown-maroon) against this struct's own
+        /// authored navy. <see cref="RimIntensity"/> at 2.65 (MV-1275's own round-2 nudge, chasing a
+        /// D3D/Mobile-tier hue mismatch that round) was by far the single brightest, most saturated
+        /// light source in the room — a warm-orange directional at 2.65 outweighing a 0.90 key and a
+        /// 0.77 fill — so at the frame level it dominated the blend and tinted everything toward
+        /// brown, not navy. <see cref="RimIntensity"/> drops to a true "subtle accent, not a second
+        /// light source" (ticket's own phrase, <= 0.8); the brightness and contrast that removes is
+        /// put back into <see cref="KeyIntensity"/>/<see cref="FillIntensity"/>/the three ambient
+        /// terms instead — all four are cool navy-teal already (see class doc), so raising THEM lifts
+        /// the room without reopening the warm-cast problem RimIntensity caused. <see cref="Contrast"/>
+        /// also ticks up slightly: once the room is no longer crushed toward one muddy brown value,
+        /// the hull panel/seam ratio MV-1339 already baked into the floor texture (unchanged here —
+        /// floor design direction is this ticket's own "do not re-raise") has actual dynamic range to
+        /// express.
         /// </summary>
         public static BackyardLook Reef => new BackyardLook
         {
@@ -401,41 +419,52 @@ namespace MaxWorlds.Rendering
             KeyColor = new Color(0.45f, 0.68f, 0.85f),
             // MV-1275: x2.14 (the +1.1 stops this ticket moves out of PostExposure) off the MV-1250
             // value — see PostExposure's own comment below for why the lift moved here instead.
-            KeyIntensity = 0.90f,
+            // MV-1340: round 1 tried x1.4 (KeyIntensity 1.26) and recaptured mv1340reefbrightness —
+            // median luminance came back at 16.1/255 (median hue 223deg, correctly in the 190-230
+            // navy/teal target — so the HUE fix worked, round 1 just didn't put back enough of the
+            // brightness a 2.65-intensity RimIntensity used to contribute). Round 2: x2.1 instead,
+            // same reasoning (KeyColor is already cool navy-teal, see class doc), landing between the
+            // directional AmbientSky/Equator/Ground's own larger x3 round-2 bump (ambient lights every
+            // surface regardless of facing, so it is the more reliable lever for a FRAME-WIDE median —
+            // see those three terms' own comment below) and round 1's own under-shoot.
+            KeyIntensity = 1.89f,
             KeyEuler = new Vector3(62f, -30f, 0f),
             ShadowStrength = 0.68f,
 
             // Teal bounce off the hull plating, not Stormdrain's sludge-green and not Default's sky-blue
             // — this is what keeps the shadow side of a pipe or bulkhead from crushing to pure black.
             FillColor = new Color(0.14f, 0.28f, 0.36f),
-            FillIntensity = 0.77f,  // MV-1275: x2.14, same as KeyIntensity above
+            FillIntensity = 1.62f,  // MV-1275: x2.14 off MV-1250; MV-1340 round 2: x2.1 again, same reasoning as KeyIntensity above
             FillEuler = new Vector3(20f, 140f, 0f),
 
             // The only warm light anywhere (see class doc) — hazard orange, matching Max's own body
             // colour, so it reads as "the thing that separates Max from the floor" rather than mood
-            // lighting. Brighter than the key/fill on purpose: a dark biome needs ITS rim doing more of
-            // the readability work than a bright one does.
+            // lighting.
             RimColor = new Color(1f, 0.56f, 0.26f),
-            // MV-1275 round 2: x2.14 (1.05*2.14=2.25) measured hue=235deg on the D3D/Mobile-tier
-            // recheck (mv1266reefplaycam, MV-1266-a1-playcam.png) — 10deg over the 225 upper bound,
-            // even though every authored light/ambient colour above resolves to hue 201-214deg on its
-            // own (RimColor is the only warm one). Moving the Reef's "2.14x" from a uniform POST
-            // multiply to per-light SCENE intensities is not hue-neutral the way a pure post exposure
-            // lift is: Contrast/Saturation grading (both unchanged here) apply after lighting, so the
-            // same total brightness reached via a stronger ambient/key vs a stronger rim shifts the
-            // blend's dominant bucket. Rim is this biome's only warm counterweight (doc above); nudged
-            // from 2.25 to 2.65 (RimIntensity alone, no hue changed) to pull the blend back toward 225
-            // without re-opening PostExposure.
-            RimIntensity = 2.65f,
+            // MV-1275 round 2 pushed this to 2.65 chasing a D3D/Mobile-tier hue mismatch that round —
+            // but at 2.65 this one warm-orange directional outweighed the 0.90 key + 0.77 fill combined,
+            // so it dominated the frame's own blend and tinted the whole room brown (Lee, iPhone
+            // v0.24.0, World 4, 2 Nov: "W4 is just way too dark", measured median hue 23deg). MV-1340:
+            // back to a true subtle accent (class doc's own "not a second light source", <= 0.8) — the
+            // readability job (separating Max/a robot from the floor) still works at this level because
+            // RimColor exactly matches Max's own hazard-orange body colour, which is what actually makes
+            // it legible, not raw intensity.
+            RimIntensity = 0.75f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // Near-black navy, every term — sky, equator AND ground — per the ticket's own "a near-black
             // navy ambient gradient" line. No green/sludge equator band like Stormdrain's: the Reef has
             // no sludge, only hull plate and bio-glow. MV-1275: all three x2.14, same factor as the
-            // lights above, to hold the same dark-navy ratios the MV-1250 values established.
-            AmbientSky = new Color(0.096f, 0.160f, 0.246f),
-            AmbientEquator = new Color(0.075f, 0.128f, 0.203f),
-            AmbientGround = new Color(0.047f, 0.086f, 0.150f),
+            // lights above, to hold the same dark-navy ratios the MV-1250 values established. MV-1340
+            // round 1 tried x1.4 and measured median luminance 16.1/255 against a 55-70 target (see
+            // KeyIntensity's own comment for the full round-1 number and why) — round 2 pushes ambient
+            // specifically harder than Key/FillIntensity's own round-2 bump: ambient lights every pixel
+            // uniformly regardless of which way it faces, where Key/Fill only brighten surfaces angled
+            // toward them, so ambient is the more reliable lever for a frame-WIDE median in a room this
+            // enclosed. x3 off the round-1 (already x1.4'd) values below.
+            AmbientSky = new Color(0.402f, 0.672f, 1.032f),
+            AmbientEquator = new Color(0.315f, 0.537f, 0.852f),
+            AmbientGround = new Color(0.198f, 0.360f, 0.630f),
 
             // Dense dark-teal fog — thicker than Stormdrain's 0.018 and City's 0.010, per the ticket's
             // own "dense dark-teal fog so far walls fall off into the deep": a flooded hull's far walls
@@ -466,9 +495,14 @@ namespace MaxWorlds.Rendering
             // post colour paths differently. Every other biome lights the SCENE and takes little or no
             // post lift; the fix is to do the same here instead of depending on a lift with a platform-
             // dependent result. The 2.14x this removes from post is now baked into KeyIntensity/
-            // FillIntensity/RimIntensity/AmbientSky/AmbientEquator/AmbientGround above instead.
+            // FillIntensity/RimIntensity/AmbientSky/AmbientEquator/AmbientGround above instead. MV-1340
+            // deliberately leaves PostExposure itself alone for the same reason — the brightness lift
+            // that ticket needed went into scene intensities above, not here.
             PostExposure = 0.15f,
-            Contrast = 10f,
+            // MV-1340: 10 -> 11, a small nudge so the hull panel/seam ratio MV-1339 already baked into
+            // the floor texture (untouched here) has a touch more room to express once the scene is no
+            // longer crushed toward one muddy-brown value.
+            Contrast = 11f,
             Saturation = 4f,     // low — the only saturated colour left is the kit's own cyan/magenta emissives
             ColorFilter = Color.white,
             ShadowTint = new Color(0.30f, 0.46f, 0.66f),    // cool shadows lean navy
