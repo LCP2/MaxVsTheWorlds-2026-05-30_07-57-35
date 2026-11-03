@@ -36,8 +36,17 @@ Shader "MaxWorlds/CurrentLaneBand"
         // alpha-blended composite, pulling the measured hue up past the band's own baked ~204 deg.
         // Shifted both colours a few degrees more cyan (baked hue ~190) and a little more opaque so the
         // floor contributes less to the blend.
-        _BandColor    ("Band Color", Color) = (0.102, 0.725, 0.850, 0.40)
-        _ChevronColor ("Chevron Color", Color) = (0.146, 0.833, 0.970, 0.60)
+        //
+        // MV-1342: the Reef's own floor re-graded from navy (hue ~210-220deg) to teal-green (hue
+        // ~170-195deg, see BackyardLook.Reef/WorldMaterials.ReefHullPanelToneLight) -- this band's own
+        // baked ~190deg cyan now sits INSIDE the new floor's own hue band, where MV-1335's AC3 "clearly
+        // distinguishable... bluer and more saturated than the teal panels" (this ticket's own Change
+        // item 7) needs daylight between the two. Shifted both colours further blue (baked hue ~221deg,
+        // a comfortable >=25deg clear of the floor's own 170-195deg band) rather than leaning on
+        // luminance/opacity alone, which the floor's own much higher post-MV-1342 brightness would have
+        // to out-contrast on every capture angle.
+        _BandColor    ("Band Color", Color) = (0.15, 0.40, 0.95, 0.42)
+        _ChevronColor ("Chevron Color", Color) = (0.20, 0.45, 1.00, 0.65)
         _Span         ("Span Width (m)", Float) = 4
         _ChevronPeriod ("Chevron Period (m)", Float) = 2.5
         _ScrollOffset ("Scroll Offset Along Flow (m)", Float) = 0

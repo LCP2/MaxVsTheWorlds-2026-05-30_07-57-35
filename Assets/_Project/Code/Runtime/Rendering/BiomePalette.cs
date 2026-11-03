@@ -281,22 +281,31 @@ namespace MaxWorlds.Rendering
         /// (walls stay #1E3247; crates get their own named material — see
         /// <see cref="MaxWorlds.Rendering.WorldMaterials.M_CrateBody"/> — rather than reading Prop).
         ///
+        /// MV-1342: <see cref="GroundBase"/>/<see cref="GroundAccent"/>/<see cref="GroundDry"/>/
+        /// <see cref="Metal"/>/<see cref="Dirt"/> move from navy to teal-green, kept in sync with
+        /// <see cref="MaxWorlds.Rendering.WorldMaterials.ReefShipFloor"/>'s own MV-1342 re-grade (see
+        /// that field's own comment) — this is the generic Ground sweep a floor-level surface falls
+        /// back to when it isn't the explicit <c>M_ShipFloor</c> deck material, and letting it stay navy
+        /// while the real deck went teal would leave a visible seam between the two. <see cref="Wall"/>/
+        /// <see cref="Prop"/> stay out of scope, same as MV-1019 left them — the ticket's own
+        /// "Re-grade BackyardLook.Reef and the Reef deck albedo" names the deck only.
+        ///
         /// No wind, no clump relief, same as <see cref="Stormdrain"/>'s concrete — a riveted deck plate
         /// doesn't sway and doesn't tuft.
         /// </summary>
         public static BiomePalette Reef => new BiomePalette
         {
             Tint = Color.white,
-            GroundBase = new Color(0.1137f, 0.1725f, 0.2314f),    // #1D2C3B — MV-1019, sampled off the concept floor
-            GroundAccent = new Color(0.1804f, 0.2588f, 0.3412f),  // #2E4257 — MV-1019, the lighter panel-seam tone
-            GroundDry = new Color(0.1137f, 0.1725f, 0.2314f),     // MV-1019: raised to match GroundBase, not #0C1622
-            Wall = new Color(0.1176f, 0.1961f, 0.2784f),          // #1E3247 — M_ShipWall, unchanged (MV-1019 leaves walls alone)
+            GroundBase = new Color(0.1804f, 0.4196f, 0.4706f),    // #2E6B78 — MV-1342, == WorldMaterials.ReefShipFloor
+            GroundAccent = new Color(0.2275f, 0.4902f, 0.5412f),  // #3A7D8A — MV-1342, a touch lighter, the panel-seam tone
+            GroundDry = new Color(0.1804f, 0.4196f, 0.4706f),     // MV-1342: raised to match GroundBase, same as MV-1019 did
+            Wall = new Color(0.1176f, 0.1961f, 0.2784f),          // #1E3247 — M_ShipWall, unchanged (out of this ticket's scope)
             Prop = new Color(0.0471f, 0.0863f, 0.1333f),          // #0C1622 — unchanged; crates no longer read this (MV-1019)
 
             Wood = new Color(0.1176f, 0.1961f, 0.2784f),          // no timber on a ship — reuse the hull wall tone
             Stone = new Color(0.1176f, 0.1961f, 0.2784f),         // no stone either — same hull tone
-            Dirt = new Color(0.1137f, 0.1725f, 0.2314f),          // MV-1019: raised to match GroundBase, not #0C1622
-            Metal = new Color(0.1137f, 0.1725f, 0.2314f),         // MV-1019: raised to match GroundBase, not #0C1622
+            Dirt = new Color(0.1804f, 0.4196f, 0.4706f),          // MV-1342: raised to match GroundBase, same as MV-1019 did
+            Metal = new Color(0.1804f, 0.4196f, 0.4706f),         // MV-1342: raised to match GroundBase, same as MV-1019 did
             Foliage = new Color(0.3608f, 0.9490f, 0.6431f),       // #5CF2A4 — M_BioGlow, the growth on the machinery
 
             GroundDetailScale = 0.45f,     // deck plate seams, same coarseness as Stormdrain's slab joints

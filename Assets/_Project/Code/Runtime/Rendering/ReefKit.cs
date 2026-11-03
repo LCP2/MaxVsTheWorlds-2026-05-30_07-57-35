@@ -1567,8 +1567,18 @@ namespace MaxWorlds.Rendering
 
         /// <summary>The cargo hold's own landmark (Change item 3): a stacked wall of containers in
         /// varied widths — chamfered <see cref="CharacterMeshes.Bevelled"/> boxes two rows high,
-        /// alternating <see cref="WorldMaterials.M_CrateBody"/>/<see cref="WorldMaterials.M_Hazard"/>
-        /// so no run of same-coloured boxes reads as one slab.</summary>
+        /// alternating <see cref="WorldMaterials.M_CrateBody"/>/<see cref="WorldMaterials.M_CrateCap"/>
+        /// so no run of same-coloured boxes reads as one slab.
+        ///
+        /// MV-1342: the hazard variant was <see cref="WorldMaterials.M_Hazard"/> (emissive) until this
+        /// ticket — two full rows of a large footprint wearing an EMISSIVE hazard orange, lit by this
+        /// ticket's own much brighter key/fill, is exactly "a Reef set piece reading as a solid glowing
+        /// yellow block" (ticket, Change item 6 — Lee's own TestFlight screenshot showed this). Swapped
+        /// to <see cref="WorldMaterials.M_CrateCap"/> — the same warning-orange hue, but a plain lit
+        /// surface (no <c>_EmissionColor</c>), same material the crate corner caps already use, so this
+        /// stays safely under <see cref="MaxWorlds.Rendering.BackyardLook.BloomThreshold"/> instead of
+        /// blooming the whole wall white. <see cref="WorldMaterials.M_Hazard"/> itself is untouched —
+        /// the drum rims (MV-1339/MV-1340, AC4) still need it at full emissive strength.</summary>
         public static GameObject BuildContainerWall(Transform parent, Vector3 center, Vector3 size)
         {
             var root = new GameObject("ReefContainerWall");
@@ -1597,7 +1607,7 @@ namespace MaxWorlds.Rendering
                         ? new Vector3(width, rowHeight * 0.92f, depth * 0.9f)
                         : new Vector3(depth * 0.9f, rowHeight * 0.92f, width);
 
-                    Material mat = variant % 3 == 0 ? WorldMaterials.M_Hazard : WorldMaterials.M_CrateBody;
+                    Material mat = variant % 3 == 0 ? WorldMaterials.M_CrateCap : WorldMaterials.M_CrateBody;
                     MeshBox(root.transform, $"Container {row}-{i}", pos, boxSize, mat);
                     variant++;
                 }
