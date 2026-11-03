@@ -4,14 +4,18 @@ using MaxWorlds.Core;
 
 namespace MaxWorlds.Rendering
 {
-    /// <summary>The three render-load tiers <see cref="ThermalQualityGovernor"/> steps between.
+    /// <summary>The four render-load tiers <see cref="ThermalQualityGovernor"/> steps between.
     /// Ordered so plain relational comparison (<c>desired &gt;= AppliedTier</c>) tells "hotter" from
     /// "cooler" without a separate severity table.</summary>
     public enum ThermalTier
     {
         Nominal = 0,
-        Serious = 1,
-        Critical = 2,
+        /// <summary>MV-1343: acts the moment iOS reports "fair", instead of waiting for "serious" —
+        /// Lee's TestFlight 0.25.0 World 1 report measured gpu 9.2ms/frame at "fair" with nothing yet
+        /// throttled.</summary>
+        Fair = 1,
+        Serious = 2,
+        Critical = 3,
     }
 
     /// <summary>
@@ -43,6 +47,12 @@ namespace MaxWorlds.Rendering
         /// <summary>Seconds a cooler reading must hold before the governor steps back toward Nominal.</summary>
         public const float StepUpHysteresisSeconds = 20f;
 
+        /// <summary>MV-1343: Fair acts earlier than Serious and asks less of the GPU — soft shadows
+        /// off, a milder render-scale cut, a shorter shadow distance. Frame rate stays at nominal 60;
+        /// only Serious/Critical throttle that.</summary>
+        public const float FairRenderScale = 0.75f;
+        public const float FairShadowDistance = 18f;
+
         public const float SeriousRenderScale = 0.7f;
         public const float SeriousShadowDistance = 25f;
         public const float CriticalRenderScale = 0.55f;
@@ -70,6 +80,7 @@ namespace MaxWorlds.Rendering
         /// off-iOS "n/a") reads as Nominal — the safe, no-action default.</summary>
         private static ThermalTier TierFor(string thermalStateName) => thermalStateName switch
         {
+            "fair" => ThermalTier.Fair,
             "serious" => ThermalTier.Serious,
             "critical" => ThermalTier.Critical,
             _ => ThermalTier.Nominal,
@@ -79,6 +90,7 @@ namespace MaxWorlds.Rendering
         /// there when the thermal reading itself has a value, i.e. on-device.</summary>
         public static string TierTag(ThermalTier tier) => tier switch
         {
+            ThermalTier.Fair => "F",
             ThermalTier.Serious => "S",
             ThermalTier.Critical => "C",
             _ => "N",
@@ -141,6 +153,22 @@ namespace MaxWorlds.Rendering
                         MobileRenderTuning.ApplyShadowDistance(MobileRenderTuning.DefaultShadowDistance);
                     if (!DevTuning.MobileSoftShadows.HasValue)
                         MobileRenderTuning.ApplySoftShadows(MobileRenderTuning.DefaultSoftShadowsSupported);
+                    MobileRenderTuning.ApplyMainLightShadows(MobileRenderTuning.DefaultMainLightShadowsSupported);
+                    MobileRenderTuning.ApplyAdditionalLightsRenderingMode(MobileRenderTuning.DefaultAdditionalLightsRenderingMode);
+                    if (ModalFrameRateGate.OpenCount == 0)
+                        Application.targetFrameRate = ModalFrameRateGate.ActiveFrameRate;
+                    break;
+
+                case ThermalTier.Fair:
+                    // MV-1343: softer than Serious — render scale/shadow distance trimmed, soft
+                    // shadows off, but frame rate stays at nominal (ModalFrameRateGate decides it,
+                    // same as Nominal) since iOS has not throttled anything yet at "fair".
+                    if (!DevTuning.MobileRenderScale.HasValue)
+                        MobileRenderTuning.ApplyRenderScale(FairRenderScale);
+                    if (!DevTuning.MobileShadowDistance.HasValue)
+                        MobileRenderTuning.ApplyShadowDistance(FairShadowDistance);
+                    if (!DevTuning.MobileSoftShadows.HasValue)
+                        MobileRenderTuning.ApplySoftShadows(false);
                     MobileRenderTuning.ApplyMainLightShadows(MobileRenderTuning.DefaultMainLightShadowsSupported);
                     MobileRenderTuning.ApplyAdditionalLightsRenderingMode(MobileRenderTuning.DefaultAdditionalLightsRenderingMode);
                     if (ModalFrameRateGate.OpenCount == 0)

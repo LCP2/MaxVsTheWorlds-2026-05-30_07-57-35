@@ -252,6 +252,10 @@ namespace MaxWorlds.Arena
             // the moment the world it belongs to is applied.
             BackyardLighting.ActiveLook = world.Look;
 
+            // MV-1343: same hand-off as ActiveLook above -- BackyardLighting (Rendering) cannot see
+            // this catalog, so the row's own HDR choice is handed across the moment its world applies.
+            BackyardLighting.ActiveUsesHdr = world.UsesHdr;
+
             // MV-713: the hydroponic reactor and power hatch are IDamageable, so the shape-classified
             // sweep above explicitly leaves them alone (WorldMaterials.IsWorldSurface) — gameplay owns
             // their tint the same way it owns every other damageable's. Reef/Stormdrain are the two

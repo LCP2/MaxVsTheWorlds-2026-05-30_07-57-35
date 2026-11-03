@@ -33,6 +33,11 @@ namespace MaxWorlds.Rendering
             // override this session (e.g. a relaunch after Save, MV-662).
             if (!DevTuning.MobileRenderScale.HasValue)
                 MobileRenderTuning.ApplyRenderScale(MobileRenderTuning.DefaultRenderScale);
+
+            // MV-1343: same "a session that never leaves Nominal never gets Apply(Nominal) called on
+            // it" gap MV-974 already fixed for render scale, for the new iOS-off soft-shadows default.
+            if (!DevTuning.MobileSoftShadows.HasValue)
+                MobileRenderTuning.ApplySoftShadows(MobileRenderTuning.DefaultSoftShadowsSupported);
         }
 
         private void Awake() => ThermalQualityGovernor.Active = _governor;

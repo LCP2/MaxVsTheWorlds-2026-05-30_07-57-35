@@ -36,7 +36,17 @@ namespace MaxWorlds.Rendering
         // MV-969: mirrors Mobile_RPAsset.asset's own reduction from 55m to 25m — see this class's own
         // doc comment on why these consts have to track that file's authored values.
         public const float DefaultShadowDistance = 25f;
-        public const bool DefaultSoftShadowsSupported = true;
+
+        /// <summary>MV-1343: iOS defaults soft shadows OFF — Lee's TestFlight 0.25.0 World 1 report
+        /// (gpu 9.2ms/frame at thermal "fair") and the AC4 before/after capture at the play camera
+        /// (<c>Logs/MV-1343-a1-*.png</c>) showed no visible loss from turning them off there. Every
+        /// other platform (Editor, WebGL, desktop) keeps the authored true — same per-platform split
+        /// <see cref="DefaultRenderScaleFor"/> already follows, for the same reason: only the iOS
+        /// player ever paid the GPU-bandwidth cost this exists to cut.</summary>
+        public static bool DefaultSoftShadowsSupportedFor(RuntimePlatform platform) =>
+            platform != RuntimePlatform.IPhonePlayer;
+
+        public static bool DefaultSoftShadowsSupported => DefaultSoftShadowsSupportedFor(Application.platform);
         public const bool DefaultMainLightShadowsSupported = true;
         public const LightRenderingMode DefaultAdditionalLightsRenderingMode = LightRenderingMode.PerPixel;
 

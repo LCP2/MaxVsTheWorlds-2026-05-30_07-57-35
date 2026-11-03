@@ -687,6 +687,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1339ReefHullPanelCheck());
             Add(BuildMv1340ReefBrightnessCheck());
             Add(BuildMv1342ReefAquaticLookCheck());
+            Add(BuildMv1343ThermalCaptureCheck());
             return d;
         }
 
@@ -9910,6 +9911,85 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1245-end-shot", NoSetup) },
                 Cleanup = () => overlay?.DestroySelf(),
+            };
+        }
+
+        // ---- MV1343ThermalCaptureCheck (MV-1343 AC4) ------------------------------------------
+
+        /// <summary>MV-1343's own AC4 before/after evidence: World 1 (Backyard), area 1, at the live
+        /// play camera, under the Mobile quality tier. Two shots in one session, same pose both times
+        /// (nothing yields between them) — "before" forces back the pre-ticket defaults (HDR on,
+        /// soft shadows on) that <see cref="BackyardLighting.EnablePostProcessingOnCamera"/> and
+        /// <see cref="MobileRenderTuning"/> would otherwise have already moved past by the time this
+        /// preset's own Prepare finishes; "after" applies this ticket's resolved World 1 HDR choice
+        /// (off) plus the candidate AC3 change (soft shadows off) so the comment this capture feeds
+        /// can judge, by eye, whether AC3's "no visible loss" condition holds. Written to <c>Logs/</c>
+        /// (not <c>_screens</c>) — this is one-shot before/after evidence for the fix comment, same
+        /// "no further capture loops" restraint every other preset here already documents.</summary>
+        private static CapturePreset BuildMv1343ThermalCaptureCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake finish
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same settle window BuildMv1266ReefPlayCameraCheck/BuildMv1332HangarBloomCheck use --
+                // let the camera's own damping/look-ahead reach its settled play pose before the shot.
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator SetupBefore(Camera cam)
+            {
+                cam.allowHDR = true;
+                MobileRenderTuning.ApplySoftShadows(true);
+                yield break;
+            }
+
+            IEnumerator SetupAfter(Camera cam)
+            {
+                cam.allowHDR = BackyardLighting.ActiveUsesHdr;   // World 1's resolved choice (off, MV-1343)
+                MobileRenderTuning.ApplySoftShadows(false);      // the candidate AC3 change under judgement
+                yield break;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1343thermalcheck",
+                LogTag = "[MV1343Capture]",
+                Flag = "-mv1343shot",
+                ArmFile = "Temp/mv1343.arm",
+                HeadlessMarker = "Temp/mv1343.headless",
+                DoneFileName = "_mv1343_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,   // the live production camera, same route as MV-1274/MV-1332
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Backyard);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1343-a1-before-hdr-softshadows", SetupBefore),
+                    new CaptureShot("MV-1343-a1-after-ldr-hardshadows", SetupAfter),
+                },
+                ExtraReport = () =>
+                    $"before: allowHDR=true softShadows=true (pre-ticket World 1 defaults)\n" +
+                    $"after: allowHDR={BackyardLighting.ActiveUsesHdr} softShadows=false (this ticket's World 1 HDR choice + the candidate AC3 change)\n",
             };
         }
     }

@@ -15,13 +15,18 @@ namespace MaxWorlds.Tests.EditMode
     /// <c>Assets/Settings/Mobile_RPAsset.asset</c>.
     ///
     /// Drives the governor with an injected clock and thermal-state string (same "unit-testable with
-    /// no game running" shape as FpsMeter/FrameTimingProbe) through Fair -> Serious -> Critical -> Fair,
-    /// and asserts the RESOLVED URP <c>renderScale</c>/<c>shadowDistance</c> and the RESOLVED
-    /// <see cref="Application.targetFrameRate"/> at each step (Tier 2 — resolved values, per MV-465) —
-    /// never a literal read back off <see cref="ThermalQualityGovernor"/>'s own consts (Rule 2). Also
-    /// proves stepping back to Fair only happens once the 20s hysteresis window has actually elapsed,
-    /// not the instant the reading cools — the spiral this ticket exists to stop would otherwise just
-    /// re-trigger on the first flicker back toward Serious.
+    /// no game running" shape as FpsMeter/FrameTimingProbe) through Fair -> Serious -> Critical -> Fair
+    /// -> Nominal, and asserts the RESOLVED URP <c>renderScale</c>/<c>shadowDistance</c> and the
+    /// RESOLVED <see cref="Application.targetFrameRate"/> at each step (Tier 2 — resolved values, per
+    /// MV-465) — never a literal read back off <see cref="ThermalQualityGovernor"/>'s own consts (Rule
+    /// 2). Also proves stepping back down only happens once the 20s hysteresis window has actually
+    /// elapsed, not the instant the reading cools — the spiral this ticket exists to stop would
+    /// otherwise just re-trigger on the first flicker back toward Serious.
+    ///
+    /// MV-1343 gave "fair" its own Fair tier instead of folding it into Nominal (Lee's TestFlight
+    /// 0.25.0 World 1 report: iOS already reports "fair" with nothing throttled) — this test's own
+    /// "fair resolves to Nominal" premise is exactly what that ticket changed, so the sequence below
+    /// now asserts Fair's own resolved values and only reaches Nominal via an explicit "nominal" tick.
     /// </summary>
     public sealed class MV958ThermalQualityGovernorTests
     {
@@ -71,13 +76,14 @@ namespace MaxWorlds.Tests.EditMode
             var governor = new ThermalQualityGovernor();
 
             governor.Tick(0f, "fair");
-            Assert.AreEqual(ThermalTier.Nominal, governor.AppliedTier, "fair must resolve to the Nominal tier");
-            Assert.AreEqual(MobileRenderTuning.DefaultRenderScale, urp.renderScale,
-                "Nominal must leave renderScale at the authored default");
-            Assert.AreEqual(MobileRenderTuning.DefaultShadowDistance, urp.shadowDistance,
-                "Nominal must leave shadowDistance at the authored default");
+            Assert.AreEqual(ThermalTier.Fair, governor.AppliedTier,
+                "fair must resolve to its own Fair tier (MV-1343) — it must act immediately, same as any other hotter-or-equal reading");
+            Assert.AreEqual(ThermalQualityGovernor.FairRenderScale, urp.renderScale,
+                "Fair must resolve renderScale to 0.75");
+            Assert.AreEqual(ThermalQualityGovernor.FairShadowDistance, urp.shadowDistance,
+                "Fair must resolve shadowDistance to 18");
             Assert.AreEqual(ModalFrameRateGate.ActiveFrameRate, Application.targetFrameRate,
-                "Nominal must leave targetFrameRate at the active 60fps");
+                "Fair must leave targetFrameRate at the active 60fps — only Serious/Critical throttle that");
 
             governor.Tick(2f, "serious");
             Assert.AreEqual(ThermalTier.Serious, governor.AppliedTier, "serious must step to the Serious tier immediately");
@@ -108,10 +114,24 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(ThermalTier.Critical, governor.AppliedTier,
                 "18s of a cooler reading must still be short of the 20s hysteresis window");
 
-            // Now the window has actually elapsed (6 -> 26 is 20s).
+            // Now the window has actually elapsed (6 -> 26 is 20s) — steps down to Fair, the tier the
+            // "fair" reading itself resolves to (MV-1343), not all the way to Nominal.
             governor.Tick(26f, "fair");
+            Assert.AreEqual(ThermalTier.Fair, governor.AppliedTier,
+                "20s of a sustained cooler \"fair\" reading must restore the Fair tier, not skip past it to Nominal");
+            Assert.AreEqual(ThermalQualityGovernor.FairRenderScale, urp.renderScale,
+                "restoring Fair must resolve renderScale back to 0.75");
+            Assert.AreEqual(ThermalQualityGovernor.FairShadowDistance, urp.shadowDistance,
+                "restoring Fair must resolve shadowDistance back to 18");
+
+            // Cools further to nominal — again held for the hysteresis window before restoring.
+            governor.Tick(28f, "nominal");
+            Assert.AreEqual(ThermalTier.Fair, governor.AppliedTier,
+                "a cooler reading must not restore quality before the hysteresis window elapses, even from Fair");
+
+            governor.Tick(48f, "nominal");
             Assert.AreEqual(ThermalTier.Nominal, governor.AppliedTier,
-                "20s of a sustained cooler reading must restore the Nominal tier");
+                "20s of a sustained \"nominal\" reading must restore the Nominal tier");
             Assert.AreEqual(MobileRenderTuning.DefaultRenderScale, urp.renderScale,
                 "restoring Nominal must resolve renderScale back to the authored default");
             Assert.AreEqual(MobileRenderTuning.DefaultShadowDistance, urp.shadowDistance,

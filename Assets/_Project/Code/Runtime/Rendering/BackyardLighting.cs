@@ -45,6 +45,12 @@ namespace MaxWorlds.Rendering
         /// Backyard's own look, matching the pre-MV-1141 "no world resolved yet" case.</summary>
         public static BackyardLook ActiveLook { get; set; } = BackyardLook.Default;
 
+        /// <summary>MV-1343: the active world's own HDR choice (<c>MaxWorlds.Arena.WorldDefinition.UsesHdr</c>),
+        /// handed across the same way as <see cref="ActiveLook"/> — set by <c>BackyardPath.ApplyWorldMaterials</c>
+        /// before this component's own AfterSceneLoad install runs. Defaults to false (every world but
+        /// the Mothership), matching the pre-MV-1343 "no world resolved yet" case.</summary>
+        public static bool ActiveUsesHdr { get; set; }
+
         // The look is resolved from whatever Gameplay last applied — a serialized `look` that a scene
         // author actually changed still wins, which is what the inspector field is for.
         private void Awake()
@@ -288,6 +294,11 @@ namespace MaxWorlds.Rendering
         {
             var cam = Camera.main;
             if (cam == null) return;
+
+            // MV-1343: HDR per world, off here applies the moment the camera is found even if the
+            // URP camera data lookup below ever fails — it is a plain Camera property, no URP
+            // component required.
+            cam.allowHDR = ActiveUsesHdr;
 
             // Without this the whole volume stack is built and then ignored: URP only runs
             // post-processing on cameras that opt in.
