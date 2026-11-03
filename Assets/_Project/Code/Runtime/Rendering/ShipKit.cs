@@ -201,20 +201,37 @@ namespace MaxWorlds.Rendering
         // under AC3's >230/255 bloom-pixel threshold (measured 0 bloom pixels across the whole frame
         // at the original boosts) -- raised well past the curve's compression so the source itself
         // clips bright, not just the bloom halo around it.
-        private const float HangarCapNeonBoost = 6.0f;         // HDR multiplier, see Hdr() below
+        private const float HangarCapNeonBoost = 6.0f;         // HDR multiplier, see HdrCapped() below
         private static readonly Color GunmetalTone = Rgb(42, 46, 54);
 
         private static readonly Color SteelPipe = Rgb(150, 155, 162);
         private static readonly Color CopperPipe = Rgb(176, 108, 68);
 
-        /// <summary>Pushes <paramref name="c"/> past 1.0 so it clips <see cref="BackyardLook.BloomThreshold"/>
-        /// and reads as true HDR neon rather than a flat emissive tint — MV-1274's own "HDR emissive
-        /// above the bloom threshold" ask, applied only where a caller explicitly opts in (every existing
-        /// emissive tone in this file stays &lt;= 1.0 unless routed through this).</summary>
-        private static Color Hdr(Color c, float boost)
+        /// <summary>MV-1341 (Lee, iPhone, World 5 Hangar, after MV-1332/1333/1336): the Hangar launch
+        /// ring and hazard lines were still blinding at iPhone HDR because the old <c>Hdr(c, boost)</c>
+        /// pushed <paramref name="c"/> past <see cref="BackyardLook.BloomThreshold"/> (1.2) with no
+        /// ceiling — a boost chosen only to clear the tonemapper's compression (MV-1274), never checked
+        /// against how far past it landed once <see cref="NeonStrength"/> was applied. This is every
+        /// caller's one replacement: it still boosts <paramref name="c"/> by <paramref name="boost"/> so
+        /// the source clips the bloom threshold, but if the boosted colour would resolve above
+        /// <see cref="HdrCeilingAfterNeon"/> once the caller's own <see cref="Dim"/> call applies
+        /// <see cref="NeonStrength"/>, it is scaled back uniformly (never per-channel, so hue is
+        /// unchanged) until it lands exactly on that ceiling instead.</summary>
+        private const float HdrCeilingAfterNeon = 1.1f; // AC1's own "must not exceed 1.1 in any channel"
+
+        private static Color HdrCapped(Color c, float boost)
         {
             Color r = c * boost;
             r.a = 1f;
+
+            float maxAfterNeon = Mathf.Max(r.r, Mathf.Max(r.g, r.b)) * NeonStrength;
+            if (maxAfterNeon > HdrCeilingAfterNeon)
+            {
+                float scale = HdrCeilingAfterNeon / maxAfterNeon;
+                r.r *= scale;
+                r.g *= scale;
+                r.b *= scale;
+            }
             return r;
         }
 
@@ -572,7 +589,7 @@ namespace MaxWorlds.Rendering
 
             Vector3 neonPos = pos + n * (wallThickness * 0.5f - 0.01f) + Vector3.up * (BulkheadCapThickness * 0.5f + 0.003f);
             Vector3 neonSize = new Vector3(w * 0.96f, 0.012f, 0.02f).Oriented(dir);
-            GameObject neon = EmissiveBox(root, "Wall Top Cap Neon Edge", neonPos, neonSize, Hdr(deckGlow, HangarCapNeonBoost));
+            GameObject neon = EmissiveBox(root, "Wall Top Cap Neon Edge", neonPos, neonSize, HdrCapped(deckGlow, HangarCapNeonBoost));
             if (!visible) HideRenderer(neon);
             TagDressing(neon);
         }
@@ -858,9 +875,9 @@ namespace MaxWorlds.Rendering
             // reachable with more spill, not a brighter clamped source -- widened and boosted here rather
             // than touching BloomIntensity/PostExposure again (both already tuned against AC1/AC2's bands).
             EmissiveBox(root, "Hazard N Neon", new Vector3(area.center.x, 0.019f, area.yMax - stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), HdrCapped(HazardYellow, 12.0f));
             EmissiveBox(root, "Hazard S Neon", new Vector3(area.center.x, 0.019f, area.yMin + stripe * 0.5f),
-                new Vector3(area.width * 0.98f, 0.004f, neonWidth), Hdr(HazardYellow, 12.0f));
+                new Vector3(area.width * 0.98f, 0.004f, neonWidth), HdrCapped(HazardYellow, 12.0f));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
@@ -1594,10 +1611,10 @@ namespace MaxWorlds.Rendering
             Mesh outer = CharacterMeshes.Ring(radius * 0.92f, radius, 0.03f, 32);
             Mesh inner = CharacterMeshes.Ring(radius * 0.74f, radius * 0.82f, 0.03f, 32);
 
-            TagDressing(MeshPartGlow(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, Hdr(GoldLamp, 5.0f)));
-            TagDressing(MeshPartGlow(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, Hdr(HangarFieldTone, 5.0f)));
+            TagDressing(MeshPartGlow(root, "Ring Outer Gold", outer, groundCenter + Vector3.up * 0.02f, HdrCapped(GoldLamp, 5.0f)));
+            TagDressing(MeshPartGlow(root, "Ring Inner Cyan", inner, groundCenter + Vector3.up * 0.021f, HdrCapped(HangarFieldTone, 5.0f)));
             TagDressing(EmissiveBox(root, "Mark Roundel", groundCenter + Vector3.up * 0.022f,
-                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), Hdr(GoldLamp, 6.0f)));
+                new Vector3(radius * 0.5f, 0.01f, radius * 0.5f), HdrCapped(GoldLamp, 6.0f)));
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;

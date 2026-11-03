@@ -63,8 +63,21 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 Color hazardYellow = new Color(224f / 255f, 182f / 255f, 48f / 255f);
-                Color boosted = hazardYellow * 12.0f; // ShipKit's own private Hdr(..., 12.0f)
-                boosted.a = 1f; // Hdr() forces alpha back to 1 after the *12 multiply touches it too
+                Color boosted = hazardYellow * 12.0f; // ShipKit's own private HdrCapped(..., 12.0f)
+                boosted.a = 1f; // HdrCapped() forces alpha back to 1 after the *12 multiply touches it too
+
+                // MV-1341: HdrCapped scales the boosted colour back uniformly (hue unchanged) if Dim()
+                // would otherwise resolve it above 1.1 in any channel -- this hazard line clips that cap.
+                const float hdrCeilingAfterNeon = 1.1f;
+                float maxAfterNeon = Mathf.Max(boosted.r, Mathf.Max(boosted.g, boosted.b)) * pinnedNeonStrength;
+                if (maxAfterNeon > hdrCeilingAfterNeon)
+                {
+                    float scale = hdrCeilingAfterNeon / maxAfterNeon;
+                    boosted.r *= scale;
+                    boosted.g *= scale;
+                    boosted.b *= scale;
+                }
+
                 Color expected = new Color(boosted.r * pinnedNeonStrength, boosted.g * pinnedNeonStrength,
                     boosted.b * pinnedNeonStrength, boosted.a);
 
