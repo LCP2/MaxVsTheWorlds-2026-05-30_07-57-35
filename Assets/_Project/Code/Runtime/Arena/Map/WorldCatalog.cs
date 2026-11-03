@@ -170,6 +170,15 @@ namespace MaxWorlds.Arena
         /// on (its default case already resolves to the right tone by luck, not by design).</summary>
         public Color GuideLightAccent;
 
+        /// <summary>MV-1343: whether the play camera renders with HDR on for this world — true only
+        /// for the Mothership's own neon look (MV-1273), which is the one world that actually needs
+        /// HDR's headroom. HDR doubles colour-buffer bandwidth on a tile GPU (the earlier MV-662
+        /// thermal review named it the prime suspect), so every other world renders LDR. Read by
+        /// <see cref="MaxWorlds.Rendering.BackyardLighting.ActiveUsesHdr"/> — see
+        /// <see cref="BackyardPath.ApplyWorldMaterials"/> for the hand-off, the same "Arena sets, Rendering
+        /// reads" split <see cref="WorldDefinition.Look"/> already follows.</summary>
+        public bool UsesHdr;
+
         // --- MV-1142: weapons, RIG board and economy ---
 
         /// <summary>The <c>Resources</c> path for this world's own RIG board — see
@@ -559,6 +568,8 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Backyard,
                 RingAlphaScale = 1f,
                 GuideLightAccent = StormdrainKit.Status,
+                // MV-1343: World 1's look gains nothing from HDR -- render LDR.
+                UsesHdr = false,
                 RigBoardResourcePath = RigBoardLibrary.World1ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Rcda,
                 SecondaryWeapon = SecondaryKind.WaterBalloon,
@@ -604,6 +615,8 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = StormdrainRingAlphaScale,
                 GuideLightAccent = StormdrainKit.Status,
+                // MV-1343: unneeded in the Stormdrain's dark, enclosed look -- render LDR.
+                UsesHdr = false,
                 RigBoardResourcePath = RigBoardLibrary.World2ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Lppe,
                 SecondaryWeapon = SecondaryKind.ShoulderRack,
@@ -655,6 +668,8 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Stormdrain,
                 RingAlphaScale = StormdrainRingAlphaScale,
                 GuideLightAccent = CityKit.NeonPink,
+                // MV-1343: the City's neon reads fine LDR -- no HDR headroom needed.
+                UsesHdr = false,
                 RigBoardResourcePath = RigBoardLibrary.CityResourcePath,
                 // MV-1195: the City's own primary is RICOCHET now (Lee, 15 Oct: "we designed a
                 // completely new weapon for the city area") — World 2's Core morph grants it here;
@@ -709,6 +724,10 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Reef,
                 RingAlphaScale = 1f,
                 GuideLightAccent = WorldMaterials.ReefLampViolet,
+                // MV-1343: the Reef's MV-1342 relight (teal-green, caustics, light shafts) authors no
+                // HDR-boosted emission the way World 5's ShipKit does (MV-1341) -- LDR, like every
+                // other non-Mothership row.
+                UsesHdr = false,
                 RigBoardResourcePath = RigBoardLibrary.World3ResourcePath,
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.Undertow,
                 SecondaryWeapon = SecondaryKind.ShoulderRack,
@@ -772,6 +791,9 @@ namespace MaxWorlds.Arena
                 Music = MusicWorld.Mothership,
                 RingAlphaScale = 1f,
                 GuideLightAccent = WorldMaterials.ReefLampViolet,
+                // MV-1343: the one world whose neon look (MV-1230/MV-1341) actually needs HDR's
+                // headroom -- every other row renders LDR.
+                UsesHdr = true,
                 RigBoardResourcePath = RigBoardLibrary.ShipResourcePath,
                 // MV-1210: World 5's own primary is LIGHT MISSILE.
                 PrimaryWeapon = WeaponCatalog.PrimaryKind.LightMissile,
