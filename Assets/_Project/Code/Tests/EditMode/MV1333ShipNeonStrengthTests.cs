@@ -52,11 +52,11 @@ namespace MaxWorlds.Tests.EditMode
             var area = new Rect(0f, 0f, 16f, 11f);
             GameObject pad = ShipKit.BuildLaunchPadHazardStripes(parent, area);
 
-            // ShipKit's own HazardYellow (Rgb(224, 182, 48)) and its Hdr(..., 12.0f) boost on the
+            // ShipKit's own HazardYellow (Rgb(224, 182, 48)) and its HdrCapped(..., 12.0f) boost on the
             // centreline are both private to the kit -- duplicated here only to compute the expected
             // RESOLVED colour this check compares against, not to re-derive the dimming logic itself.
             Color hazardYellow = new Color(224f / 255f, 182f / 255f, 48f / 255f);
-            Color expected = Dim(Hdr(hazardYellow, 12.0f));
+            Color expected = Dim(HdrCapped(hazardYellow, 12.0f));
             AssertResolvedEmissiveColour(pad.transform, "Hazard N Neon", expected);
         }
 
@@ -66,7 +66,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             GameObject ring = ShipKit.BuildLaunchRingMarking(parent, Vector3.zero, radius: 6f);
 
-            Color expected = Dim(Hdr(ShipKit.GoldLamp, 5.0f));
+            Color expected = Dim(HdrCapped(ShipKit.GoldLamp, 5.0f));
             AssertResolvedEmissiveColour(ring.transform, "Ring Outer Gold", expected);
         }
 
@@ -74,10 +74,24 @@ namespace MaxWorlds.Tests.EditMode
 
         private static Color Dim(Color c) => new Color(c.r * ShipKit.NeonStrength, c.g * ShipKit.NeonStrength, c.b * ShipKit.NeonStrength, c.a);
 
-        private static Color Hdr(Color c, float boost)
+        // MV-1341: mirrors ShipKit's own private HdrCapped(c, boost) -- boost c, then if the colour
+        // Dim() would later resolve to exceeds 1.1 in any channel, scale it back uniformly (hue
+        // unchanged) until it lands exactly on that ceiling instead of clipping unpredictably per-channel.
+        private const float HdrCeilingAfterNeon = 1.1f;
+
+        private static Color HdrCapped(Color c, float boost)
         {
             Color r = c * boost;
             r.a = 1f;
+
+            float maxAfterNeon = Mathf.Max(r.r, Mathf.Max(r.g, r.b)) * ShipKit.NeonStrength;
+            if (maxAfterNeon > HdrCeilingAfterNeon)
+            {
+                float scale = HdrCeilingAfterNeon / maxAfterNeon;
+                r.r *= scale;
+                r.g *= scale;
+                r.b *= scale;
+            }
             return r;
         }
 
