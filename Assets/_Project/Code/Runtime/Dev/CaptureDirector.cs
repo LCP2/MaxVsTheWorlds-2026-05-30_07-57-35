@@ -686,6 +686,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1338CradleHueCheck());
             Add(BuildMv1339ReefHullPanelCheck());
             Add(BuildMv1340ReefBrightnessCheck());
+            Add(BuildMv1342ReefAquaticLookCheck());
             return d;
         }
 
@@ -7253,6 +7254,264 @@ namespace MaxWorlds.Dev
                         ? "a3: no cyan-hue (core) pixels found this shot -- AC2's core delta not measured.\n"
                         : $"a3: cyan-hue (core) mean luma={a3CoreMeanLuma:F1}/255 delta vs frame median=" +
                           $"{(a3CoreMeanLuma - a3FrameMedianLuma):F1} (AC2 floor: >=40)\n"),
+            };
+        }
+
+        // ---- MV1342ReefAquaticLookCheck (MV-1342 AC1/AC3/AC4/AC5) -----------------------------
+
+        /// <summary>MV-1342's own before/after evidence: the real Reef, under the Mobile quality tier
+        /// (HDR on, MV-1273), at the live play camera. Measures every AC this ticket's own build can
+        /// measure from inside one Reef session: a1's median luminance/hue/p90-p10 spread (AC1, same
+        /// technique <see cref="BuildMv1340ReefBrightnessCheck"/>'s own MeasureA1 already uses); whether
+        /// the caustics overlay actually moves, by diffing TWO a1 captures taken 2s apart with the camera
+        /// and Max both held still (AC3); the reactor bay's own drum rim/core delta against its floor
+        /// (AC4, same technique that preset's own MeasureA3 already uses); and the current lane's own
+        /// band vs. the new floor (AC5, same technique <see cref="BuildMv1335CurrentLaneCheck"/> already
+        /// uses). AC2 (Reef vs. Mothership Hangar) is NOT captured here — a cross-world comparison needs
+        /// two separate sessions (<c>BeforeSceneLoad</c> sets the world once per whole capture run), so
+        /// AC2 is evaluated against the Hangar's own shipped/documented median (31/255, MV-1249 AC3 /
+        /// BackyardLook.ShipHangar's own doc) instead of a fresh same-run capture — see this preset's own
+        /// <see cref="CapturePreset.ExtraReport"/> for the explicit margin that leaves. AC6 (no further
+        /// capture loops) means this runs once per before/after pair, same restraint every other preset
+        /// in this file already documents for its own ticket.</summary>
+        private static CapturePreset BuildMv1342ReefAquaticLookCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+
+            float a1MedianLuma = -1f, a1P10Luma = -1f, a1P90Luma = -1f, a1MedianHue = -1f;
+            Color32[] a1FirstPixels = null;
+            float causticsMeanAbsDiff = -1f;
+
+            float a3FrameMedianLuma = -1f;
+            float a3RimMeanLuma = float.NaN, a3CoreMeanLuma = float.NaN;
+
+            float laneBandMeanHue = -1f, laneBandLuma = -1f, laneFloorLuma = -1f;
+            bool laneMeasured = false;
+            Vector3 lanePointWorld = default, laneFloorPointWorld = default;
+            bool lanePointsResolved = false;
+
+            float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+            IEnumerator JumpAndSettle(string areaId)
+            {
+                if (!DevModeController.TryJumpToArea(areaId))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{areaId}\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                yield return JumpAndSettle("a1");
+            }
+
+            // AC3: hold position for exactly 2s (unscaled, same timing idiom every other preset in this
+            // file uses) between the two a1 shots -- camera and Max both already stationary at the play
+            // pose Prepare settled into, so nothing else needs to move.
+            IEnumerator Wait2Seconds(Camera cam)
+            {
+                float until = Time.unscaledTime + 2f;
+                while (Time.unscaledTime < until) yield return null;
+            }
+
+            IEnumerator SetupA3(Camera cam) => JumpAndSettle("a3");
+
+            IEnumerator SetupLane(Camera cam)
+            {
+                yield return JumpAndSettle("a16");
+
+                MapData map = EnemyNavigation.Map;
+                MapEntity lane = map?.Entity("a16_cur1");
+                if (lane == null)
+                    throw new CaptureAbortException("world3_config.json's own a16_cur1 did not resolve after the area jump");
+
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (playerObj == null)
+                    throw new CaptureAbortException("no Player found after the area jump");
+
+                Vector3 flow = MapGeometry.CurrentDirectionVector(lane.facing);
+                Vector3 across = new Vector3(flow.z, 0f, -flow.x);
+                Vector3 laneCenter = new Vector3(lane.x, 0f, lane.z);
+                lanePointWorld = laneCenter + flow * Mathf.Min(4f, lane.depth * 0.4f);
+                laneFloorPointWorld = laneCenter + across * (lane.width * 0.5f + 3f);
+                lanePointsResolved = true;
+
+                var cc = playerObj.GetComponent<CharacterController>();
+                bool wasEnabled = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                playerObj.transform.position = new Vector3(laneCenter.x, playerObj.transform.position.y, laneCenter.z);
+                if (cc != null) cc.enabled = wasEnabled;
+
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            void MeasureA1First(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                a1FirstPixels = px;
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                var hues = new List<float>(w * h / 16 + 1);
+                for (int y = 0; y < h; y += 4)
+                for (int x = 0; x < w; x += 4)
+                {
+                    Color32 c32 = px[y * w + x];
+                    lumas.Add(Luma(c32));
+                    Color.RGBToHSV((Color)c32, out float hue01, out _, out _);
+                    hues.Add(hue01 * 360f);
+                }
+                lumas.Sort();
+                hues.Sort();
+                a1MedianLuma = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a1P10Luma = lumas.Count == 0 ? 0f : lumas[(int)(lumas.Count * 0.10f)];
+                a1P90Luma = lumas.Count == 0 ? 0f : lumas[Mathf.Min(lumas.Count - 1, (int)(lumas.Count * 0.90f))];
+                a1MedianHue = hues.Count == 0 ? 0f : hues[hues.Count / 2];
+            }
+
+            void MeasureA1Second(Texture2D tex)
+            {
+                if (a1FirstPixels == null) return;
+                Color32[] px = tex.GetPixels32();
+                if (px.Length != a1FirstPixels.Length) return;
+
+                double sum = 0; int count = 0;
+                for (int i = 0; i < px.Length; i += 4)
+                {
+                    sum += Mathf.Abs(Luma(px[i]) - Luma(a1FirstPixels[i]));
+                    count++;
+                }
+                causticsMeanAbsDiff = count == 0 ? 0f : (float)(sum / count);
+            }
+
+            void MeasureA3(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+
+                var lumas = new List<float>(w * h / 16 + 1);
+                double rimSum = 0; int rimCount = 0;
+                double coreSum = 0; int coreCount = 0;
+
+                for (int y = 0; y < h; y += 4)
+                for (int x = 0; x < w; x += 4)
+                {
+                    Color32 c32 = px[y * w + x];
+                    float luma = Luma(c32);
+                    lumas.Add(luma);
+
+                    Color.RGBToHSV((Color)c32, out float hue01, out float s, out float v);
+                    float hueDeg = hue01 * 360f;
+
+                    if (hueDeg >= 15f && hueDeg <= 40f && s > 0.3f && v > 0.3f) { rimSum += luma; rimCount++; }
+                    else if (hueDeg >= 180f && hueDeg <= 200f && s > 0.3f && v > 0.3f) { coreSum += luma; coreCount++; }
+                }
+
+                lumas.Sort();
+                a3FrameMedianLuma = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                a3RimMeanLuma = rimCount == 0 ? float.NaN : (float)(rimSum / rimCount);
+                a3CoreMeanLuma = coreCount == 0 ? float.NaN : (float)(coreSum / coreCount);
+            }
+
+            bool TrySampleBox(Color32[] px, int w, int h, Vector3 worldPos, out float meanLuma, out float meanHueDeg)
+            {
+                meanLuma = 0f; meanHueDeg = 0f;
+                if (Camera.main == null) return false;
+
+                Vector3 vp = Camera.main.WorldToViewportPoint(worldPos);
+                if (vp.z <= 0f || vp.x < 0f || vp.x > 1f || vp.y < 0f || vp.y > 1f) return false;
+
+                int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+                const int half = 10;
+                double sumLuma = 0, sumHue = 0; int count = 0;
+                for (int dy = -half; dy <= half; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= h) continue;
+                    for (int dx = -half; dx <= half; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= w) continue;
+                        Color32 c32 = px[y * w + x];
+                        sumLuma += Luma(c32);
+                        Color.RGBToHSV((Color)c32, out float hue01, out _, out _);
+                        sumHue += hue01 * 360f;
+                        count++;
+                    }
+                }
+                if (count == 0) return false;
+                meanLuma = (float)(sumLuma / count);
+                meanHueDeg = (float)(sumHue / count);
+                return true;
+            }
+
+            void MeasureLane(Texture2D tex)
+            {
+                if (!lanePointsResolved) { laneMeasured = false; return; }
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                bool laneOk = TrySampleBox(px, w, h, lanePointWorld, out laneBandLuma, out laneBandMeanHue);
+                bool floorOk = TrySampleBox(px, w, h, laneFloorPointWorld, out laneFloorLuma, out _);
+                laneMeasured = laneOk && floorOk;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1342reefaquaticlook",
+                LogTag = "[MV1342Capture]",
+                Flag = "-mv1342shot",
+                ArmFile = "Temp/mv1342.arm",
+                HeadlessMarker = "Temp/mv1342.headless",
+                DoneFileName = "_mv1342_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // AC1/AC3's own "at the play camera"
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1342-a1-t0", NoSetup, measure: MeasureA1First),
+                    new CaptureShot("MV-1342-a1-t1", Wait2Seconds, measure: MeasureA1Second),
+                    new CaptureShot("MV-1342-a3-reactorbay", SetupA3, measure: MeasureA3),
+                    new CaptureShot("MV-1342-a16-current-lane", SetupLane, measure: MeasureLane),
+                },
+                ExtraReport = () =>
+                    $"a1: median luminance={a1MedianLuma:F1}/255 (AC1 target: 70-90), " +
+                    $"p90-p10 spread={(a1P90Luma - a1P10Luma):F1} (AC1 target: >=30), " +
+                    $"median hue={a1MedianHue:F0}deg (AC1 target: 170-195)\n" +
+                    $"AC2 (vs Mothership Hangar): not re-captured this run (cross-world, needs a separate " +
+                    $"session) -- compared against Hangar's own shipped median (31/255, MV-1249 AC3 / " +
+                    $"BackyardLook.ShipHangar), delta={(a1MedianLuma - 31f):F1} (AC2 floor: >=25)\n" +
+                    $"a1 caustics: mean abs pixel diff over 2s={causticsMeanAbsDiff:F1} (AC3 floor: >=3)\n" +
+                    $"a3: frame median luminance={a3FrameMedianLuma:F1}/255\n" +
+                    (float.IsNaN(a3RimMeanLuma)
+                        ? "a3: no orange-hue (rim) pixels found this shot -- AC4's rim delta not measured.\n"
+                        : $"a3: orange-hue (rim) mean luma={a3RimMeanLuma:F1}/255 delta vs frame median=" +
+                          $"{(a3RimMeanLuma - a3FrameMedianLuma):F1} (AC4 floor: >=40)\n") +
+                    (float.IsNaN(a3CoreMeanLuma)
+                        ? "a3: no cyan-hue (core) pixels found this shot -- AC4's core delta not measured.\n"
+                        : $"a3: cyan-hue (core) mean luma={a3CoreMeanLuma:F1}/255 delta vs frame median=" +
+                          $"{(a3CoreMeanLuma - a3FrameMedianLuma):F1} (AC4 floor: >=40)\n") +
+                    (laneMeasured
+                        ? $"a16 lane band: mean hue={laneBandMeanHue:F1}deg, luma={laneBandLuma:F1}/255 vs floor " +
+                          $"luma={laneFloorLuma:F1}/255, delta={Mathf.Abs(laneBandLuma - laneFloorLuma):F1} " +
+                          $"(AC5 floor: hue or luma delta >=20)\n"
+                        : "a16: lane/floor sample point(s) fell outside the captured frame -- AC5 not measured this shot.\n"),
             };
         }
 

@@ -58,6 +58,32 @@ namespace MaxWorlds.Arena
             BuildLightFlicker(host);
         }
 
+        // ---- MV-1342, Change item 2: floor-wide caustics overlay ----------------------------------
+
+        /// <summary>Spans every ground-level (<c>zone.level == 0</c>) zone's own combined footprint —
+        /// same level filter <see cref="MaxWorlds.Arena.ReefFloorDetail.PlaceGrates"/> already uses, so
+        /// the caustics overlay never reaches onto a raised overlay deck it has no business lighting.
+        /// Called from <see cref="BackyardPath"/>'s own <c>ApplyReefKit</c>, alongside this class's own
+        /// <see cref="Build"/>.</summary>
+        public static void BuildCausticsOverlay(Transform host, MapData map)
+        {
+            if (host == null || map?.zones == null) return;
+
+            float xMin = float.MaxValue, xMax = float.MinValue, zMin = float.MaxValue, zMax = float.MinValue;
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.level != 0) continue;
+                xMin = Mathf.Min(xMin, zone.XMin);
+                xMax = Mathf.Max(xMax, zone.XMax);
+                zMin = Mathf.Min(zMin, zone.ZMin);
+                zMax = Mathf.Max(zMax, zone.ZMax);
+            }
+            if (xMin >= xMax || zMin >= zMax) return;
+
+            Vector3 center = new Vector3((xMin + xMax) * 0.5f, 0f, (zMin + zMax) * 0.5f);
+            ReefCausticsOverlay.Build(host, center, xMax - xMin, zMax - zMin);
+        }
+
         // ---- drums: bubble streams (Change item 2) + core pulse (Change item 4) -------------------
 
         private static void BuildDrumLife(Transform host)

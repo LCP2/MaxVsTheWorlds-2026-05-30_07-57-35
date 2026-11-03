@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
 {
@@ -300,6 +301,154 @@ namespace MaxWorlds.VFX
                     _speedMin, _speedMax, _sizeMin, _sizeMax, _lifeMin, _lifeMax, _colorA, _colorB);
             }
             _burst.EndFrame();
+        }
+    }
+
+    /// <summary>
+    /// MV-1342, Change item 2: a floor-wide, drifting caustic-light overlay — a single quad spanning the
+    /// Reef's own floor footprint, just proud of <see cref="MaxWorlds.Rendering.WorldMaterials.M_ShipFloor"/>
+    /// (same "flush decal, proud by a hair" idiom <c>ReefCurrentLaneKit.LaneY</c> already uses, so it
+    /// never z-fights), alpha-blended, carrying <see cref="StylizedTextures.ReefCausticsRipple"/>'s own
+    /// tileable streak mask tinted pale-aqua at low strength. One quad for the whole floor, not one per
+    /// area: a single draw call reads identically to several smaller ones at this camera distance, and a
+    /// single shared material/driver is cheaper (same "one shared emitter per kind" budget reasoning
+    /// this file's class doc already cites for <see cref="ReefAmbientBurstEmitter"/>).
+    /// </summary>
+    [DisallowMultipleComponent]
+    [PerfSection("reef_ambient")]
+    public sealed class ReefCausticsOverlay : MonoBehaviour
+    {
+        private const float OverlayY = 0.03f;   // just proud of the floor
+        private const float TileMetres = 6f;    // one ripple-texture tile per 6 m, close to a hull panel's own span
+
+        private static readonly Color Tint = new Color(0.667f, 0.941f, 0.922f, 0.22f);   // #AAF0EB, low strength
+
+        // MV-1342 ticket: "slowly drifting (one full drift about every 8 s)" — a diagonal drift so the
+        // streaks read as moving water, not a single axis sliding.
+        private static readonly Vector2 DriftPerSecond = new Vector2(1f / 8f, 0.6f / 8f);
+
+        private Material _material;
+
+        /// <summary>Resolved UV offset this frame — a RESOLVED value (testing policy Tier 2) an
+        /// EditMode test can sample before/after a manual <see cref="Tick"/> without needing Play mode,
+        /// same "call the per-frame body directly" idiom <c>ReefDrumCorePulse</c>'s own tests use.</summary>
+        public Vector2 ResolvedOffset => _material != null && _material.HasProperty(BaseMapProperty)
+            ? _material.GetTextureOffset(BaseMapProperty)
+            : Vector2.zero;
+
+        private const string BaseMapProperty = "_BaseMap";
+        private const string MainTexProperty = "_MainTex";
+
+        public static GameObject Build(Transform host, Vector3 center, float width, float depth)
+        {
+            if (host == null || width <= 0f || depth <= 0f) return null;
+
+            var go = new GameObject("Reef Caustics Overlay");
+            go.transform.SetParent(host, false);
+            go.transform.position = new Vector3(center.x, OverlayY, center.z);
+
+            go.AddComponent<MeshFilter>().sharedMesh = BuildQuad(width, depth);
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
+            Material mat = VfxMaterials.AlphaBlendTinted(StylizedTextures.ReefCausticsRipple(), Tint);
+            mr.sharedMaterial = mat;
+
+            var overlay = go.AddComponent<ReefCausticsOverlay>();
+            overlay._material = mat;
+            return go;
+        }
+
+        private void Update() => Tick(Time.deltaTime);
+
+        /// <summary>The per-frame body, callable directly from an EditMode test (<c>Update</c> never
+        /// runs outside Play mode) the same way <c>ReefLightFlicker</c>/<c>ReefDrumCorePulse</c> already
+        /// document for their own visual drivers — except this one DOES carry a resolved-value EditMode
+        /// check (<see cref="ResolvedOffset"/>), since a UV offset is a plain float pair, not a rendered
+        /// pixel.</summary>
+        public void Tick(float deltaTime)
+        {
+            if (_material == null) return;
+            // HasProperty-guarded, same idiom every other material-property write in this codebase uses
+            // (e.g. WorldMaterials.RefreshReefDeckTextures) -- SetTextureOffset logs an error (which
+            // fails an EditMode test outright) rather than silently no-opping on a property the active
+            // shader doesn't carry, unlike SetTexture.
+            if (_material.HasProperty(BaseMapProperty))
+            {
+                Vector2 offset = _material.GetTextureOffset(BaseMapProperty) + DriftPerSecond * deltaTime;
+                _material.SetTextureOffset(BaseMapProperty, offset);
+            }
+            if (_material.HasProperty(MainTexProperty))
+            {
+                Vector2 offset = _material.GetTextureOffset(MainTexProperty) + DriftPerSecond * deltaTime;
+                _material.SetTextureOffset(MainTexProperty, offset);
+            }
+        }
+
+        private static Mesh BuildQuad(float width, float depth)
+        {
+            float hw = width * 0.5f, hd = depth * 0.5f;
+            float tilesX = Mathf.Max(1f, width / TileMetres);
+            float tilesZ = Mathf.Max(1f, depth / TileMetres);
+
+            var mesh = new Mesh { name = "ReefCausticsOverlayQuad", hideFlags = HideFlags.HideAndDontSave };
+            mesh.vertices = new[]
+            {
+                new Vector3(-hw, 0f, -hd), new Vector3(hw, 0f, -hd),
+                new Vector3(hw, 0f, hd), new Vector3(-hw, 0f, hd),
+            };
+            mesh.uv = new[]
+            {
+                new Vector2(0f, 0f), new Vector2(tilesX, 0f),
+                new Vector2(tilesX, tilesZ), new Vector2(0f, tilesZ),
+            };
+            mesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+            mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+    }
+
+    /// <summary>
+    /// MV-1342, Change item 3: a single decorative, slanted light shaft — a translucent tapered cone
+    /// (wide at the "ceiling" end, narrow at the floor), alpha-blended at a flat pale-aqua tint, alpha
+    /// <= 0.1. Built here (VFX/Gameplay assembly), not in <c>MaxWorlds.Rendering.ReefKit</c> alongside
+    /// the rest of the Reef kit's structural pieces: <c>VfxMaterials</c> (the translucent-material
+    /// helper every other soft overlay in this file already uses, same as
+    /// <see cref="ReefCausticsOverlay"/>'s own material) lives in this assembly, and
+    /// <c>MaxWorlds.Rendering.asmdef</c> has no reference back to it — the same one-directional
+    /// dependency <see cref="ReefFloorDetail"/>'s own class doc already documents for the WHERE/WHAT
+    /// split this ticket's own placement caller (<c>MaxWorlds.Arena.ReefAreaKit.BuildLightShafts</c>)
+    /// keeps with this class. Collider-free and decorative only (ticket: "no collision") — no renderer
+    /// here ever gets a collider, so there is nothing to strip.
+    /// </summary>
+    public static class ReefLightShaft
+    {
+        private static readonly Color ShaftColor = new Color(0.667f, 0.941f, 0.922f, 0.08f);   // #AAF0EB at alpha 0.08
+        private const int ShaftSides = 8;
+
+        public static GameObject Build(Transform parent, Vector3 floorPosition, float height,
+            float topRadius, float bottomRadius, Vector3 tiltEuler)
+        {
+            var root = new GameObject("ReefLightShaft");
+            root.transform.SetParent(parent, false);
+            root.transform.position = floorPosition;
+            root.transform.rotation = Quaternion.Euler(tiltEuler);
+            if (root.GetComponent<MaxWorlds.Core.KeepsOwnMaterial>() == null) root.AddComponent<MaxWorlds.Core.KeepsOwnMaterial>();
+
+            var shaft = new GameObject("Shaft");
+            shaft.transform.SetParent(root.transform, false);
+            shaft.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
+
+            Mesh cone = CharacterMeshes.Beam(height, bottomRadius, topRadius, ShaftSides);
+            shaft.AddComponent<MeshFilter>().sharedMesh = cone;
+            var r = shaft.AddComponent<MeshRenderer>();
+            r.sharedMaterial = VfxMaterials.AlphaBlendTinted(VfxMaterials.Solid(), ShaftColor);
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+
+            return root;
         }
     }
 }

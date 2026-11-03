@@ -107,7 +107,12 @@ namespace MaxWorlds.Rendering
         // MV-1019: was 0x132234 — the floor read near-black against the robots' own colouring
         // (linear luminance ~0.015). Lee: the floor changes, not the robots. Kept in sync with
         // BiomePalette.Reef.GroundBase, which samples the same concept-art tone.
-        public static readonly Color ReefShipFloor = HexColor(0x1D2C3B);
+        // MV-1342: 0x1D2C3B (navy) -> 0x2E6B78 (teal-green) — the ticket's own "re-grade the Reef deck
+        // albedo to teal-green" direction. Channel-wise brighter than both ReefHullPanelToneLight and
+        // ReefHullPanelToneDark below (ReefChannelRatio clamps each panel's own ratio against THIS value
+        // to [0,1] — see StylizedTextures.ReefDeckAlbedo's own comment — so a floor darker than either
+        // panel tone would clip the baked texture flat at 1.0 and lose the lighter panel's own colour).
+        public static readonly Color ReefShipFloor = HexColor(0x2E6B78);
         public static readonly Color ReefShipWall = HexColor(0x1E3247);
         public static readonly Color ReefCircuitCyan = HexColor(0x3CDCF2);
         public static readonly Color ReefCircuitPurple = HexColor(0xC455E8);
@@ -119,7 +124,18 @@ namespace MaxWorlds.Rendering
         // (BiomePalette.Reef.Prop, #0C1622) — darker than the floor it sits on. These give it its
         // own named material instead, per the ticket's own Reef art direction: blue-grey steel body,
         // hazard-orange corner caps (see ReefKit.ApplyCrateSkin).
-        public static readonly Color ReefCrateBody = HexColor(0x3A4250);
+        // MV-1342: 0x3A4250 -> 0x99A6BF. The Reef's own re-grade lifted ReefShipFloor's resolved
+        // linear luminance to ~0.1245 — MV1019ReefFloorContrastTests' own "crate >= 1.6x the floor"
+        // guard (>= ~0.199) no longer held at the old crate tone (~0.0538, now darker than the floor
+        // it sits on). MV1052CrateCoverGateVisibleTests adds a second, independent floor reading in its
+        // own test setup (~0.214, that test's own "Map Floor" renderer built without going through
+        // ReefKit.DressHull) with its own ">= 0.10 luminance delta" guard — satisfying both without
+        // retinting every shade in between needs the crate brighter than EITHER floor reading by a
+        // clear margin (~0.378 resolved luminance here), not just past MV1019's own 1.6x floor. Lifted
+        // to the same blue-grey hue, just brighter, rather than retinting it teal: this ticket's own
+        // scope is the floor and the light, not every prop (MV-1019's "do not re-raise" reasoning for
+        // the robots applies equally here).
+        public static readonly Color ReefCrateBody = HexColor(0x99A6BF);
         public static readonly Color ReefCrateCap = HexColor(0xE07A1F);
 
         /// <summary>The glass gradient's NEAR (top) tone — brighter, closer to the surface.</summary>
@@ -133,14 +149,19 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefOceanVoidCenter = HexColor(0x0B4C72);
         public static readonly Color ReefOceanVoidEdge = HexColor(0x031426);
 
-        // MV-1339: Reef floor redesign C — big hull panels, no floor circuitry. The two navy panel
-        // tones Lee's own mock-up used; StylizedTextures.ReefDeckAlbedo bakes each as a per-channel
-        // RATIO against ReefShipFloor (never a flat grey multiplier — the two targets aren't the same
-        // hue as the floor's own base colour), so the deck reads close to these hexes once the baked
-        // texture multiplies through _BaseColor, without ever touching _BaseColor itself (the value
-        // MV1019ReefFloorContrastTests pins).
-        public static readonly Color ReefHullPanelToneLight = HexColor(0x122232);
-        public static readonly Color ReefHullPanelToneDark = HexColor(0x0E1B28);
+        // MV-1339: Reef floor redesign C — big hull panels, no floor circuitry. StylizedTextures.
+        // ReefDeckAlbedo bakes each as a per-channel RATIO against ReefShipFloor (never a flat grey
+        // multiplier — the two targets aren't the same hue as the floor's own base colour), so the deck
+        // reads close to these hexes once the baked texture multiplies through _BaseColor, without ever
+        // touching _BaseColor itself (the value MV1019ReefFloorContrastTests pins).
+        // MV-1342: navy (0x122232/0x0E1B28) -> teal-green, the ticket's own literal panel hexes
+        // (#265C68 light / "about #20505C" dark — darkened a little further here, to 0x16343C, so the
+        // two panels keep a comfortable margin over ReefDeckPlateJitterAt's own +/-6% per-plate jitter;
+        // MV1339ReefHullPanelFloorTests's "plate reads close to its own panel's mean" check compares
+        // against the panel DELTA, and the ticket's own two hexes sit close enough together that the
+        // jitter alone could occasionally close that gap).
+        public static readonly Color ReefHullPanelToneLight = HexColor(0x265C68);
+        public static readonly Color ReefHullPanelToneDark = HexColor(0x16343C);
 
         // MV-1339: the grating patches dressed onto the open floor (about one per area) — slightly
         // lighter than the hull panels, decoration only, so it gets its own plain (non-emissive)

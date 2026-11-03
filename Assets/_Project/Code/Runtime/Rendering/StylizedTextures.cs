@@ -194,8 +194,13 @@ namespace MaxWorlds.Rendering
 
         private const float ReefPlateSeamFraction = 0.035f;     // faint seam between 2 m plates, within a panel
         private const float ReefPlateSeamMultiplier = 0.82f;    // how much darker that faint seam reads
-        private const float ReefPanelSeamHalfWidthFraction = 0.05f; // ~0.2 m total width, split across both plates either side of a 6 m panel boundary — wide enough to actually read against the floor's own dark base (see ReefDarkPanelMultiplier's own comment)
-        private const float ReefPanelSeamMultiplier = 0.08f;    // near-black, heavy panel seam
+        private const float ReefPanelSeamHalfWidthFraction = 0.05f; // ~0.2 m total width, split across both plates either side of a 6 m panel boundary
+        // MV-1342: 0.08 (near-black) -> 0.5. MV-1339 crushed the heavy panel seam toward near-black
+        // because the room it had to read against was itself near-black (see ReefDarkPanelMultiplier's
+        // own comment, below, for the full reasoning) — the ticket's own target seam, "about #12303A"
+        // against panels at #265C68/#20505C, is a seam roughly HALF its panel's own brightness, not a
+        // void.
+        private const float ReefPanelSeamMultiplier = 0.5f;
         private const float ReefPlateJitterMax = 0.06f;         // ticket's own "vary within ±4 luminance", subtle
 
         /// <summary>MV-1339: a literal per-channel ratio against ReefShipFloor (<see cref="ReefChannelRatio"/>
@@ -210,11 +215,18 @@ namespace MaxWorlds.Rendering
         /// at a ~100/255 byte gap (a pure white/black diagnostic swap confirmed the binding/tiling
         /// itself was fine — see the fix comment for the full before/after numbers) — a widened
         /// ABSOLUTE gap wasn't what this room's own low-key lighting responds to. Darkening the dark
-        /// panel toward near-black instead (<see cref="ReefDarkPanelMultiplier"/>) — raising the RATIO
-        /// between the two tones rather than their difference — is what actually reads: the light panel
-        /// keeps its own natural, un-boosted ratio (so it stays a legitimate navy, never blown toward
-        /// white), only the dark panel is pushed harder.</summary>
-        private const float ReefDarkPanelMultiplier = 0.08f;
+        /// panel toward near-black instead — raising the RATIO between the two tones rather than their
+        /// difference — is what actually read: the light panel kept its own natural, un-boosted ratio
+        /// (so it stayed a legitimate navy, never blown toward white), only the dark panel was pushed
+        /// harder.
+        ///
+        /// MV-1342 supersedes this: the room is no longer near-black (AC1 target median luminance
+        /// 70-90/255), so the two panel tones — the ticket's own #265C68/#20505C hexes — are both
+        /// meant to read as distinct, legitimate teal tones, not one lit and one crushed. The multiplier
+        /// is 1 (a no-op) rather than deleted outright, so a future dark-room biome reusing this bake can
+        /// still reach for the same lever MV-1339 proved out, without re-deriving the reasoning above.
+        /// </summary>
+        private const float ReefDarkPanelMultiplier = 1f;
 
         private static float ReefDeckPlateJitterAt(int gx, int gy)
         {
@@ -306,6 +318,45 @@ namespace MaxWorlds.Rendering
                         (byte)Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255f),
                         255);
                 }
+            }
+
+            t.SetPixels32(px);
+            t.Apply(updateMipmaps: true);
+            s_cache[key] = t;
+            return t;
+        }
+
+        // MV-1342: "soft pale-aqua ripple lines" over the whole floor, not just the flood-water tiles —
+        // elongated along one axis (stretching the Fbm sample grid before lookup, same "stretch the
+        // noise" idiom cheap caustics always use) rather than ReefFloodWaterAlbedo's own round blotches,
+        // so this reads as streaks instead of puddles. Alpha-only: this is a standalone translucent
+        // overlay (see ReefCausticsOverlay), never a multiplier against another surface's _BaseColor, so
+        // the RGB channels carry flat white and only alpha carries the ripple mask.
+        private const int ReefCausticsRippleStretch = 5;   // how much longer a streak reads than it is wide
+        private const float ReefCausticsRippleSoftness = 0.35f;   // how much of the alpha range is midtone vs. hard streak
+
+        /// <summary>A tileable, alpha-only ripple-streak mask (MV-1342, Change item 2) for
+        /// <see cref="MaxWorlds.VFX.ReefCausticsOverlay"/>'s own floor-wide caustics quad — RGB is flat
+        /// white (the overlay's own material tints via <c>_BaseColor</c>, same idiom every
+        /// <c>VfxMaterials</c>-built translucent overlay already uses), alpha carries the streak pattern
+        /// so a drifting UV offset reads as moving light, not a moving colour.</summary>
+        public static Texture2D ReefCausticsRipple(int size = 128)
+        {
+            const string key = "reefCausticsRipple";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var t = NewTexture(key, size, linear: true);
+            var px = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = (x + 0.5f) / size;
+                float v = (y + 0.5f) / size;
+                float streak = Fbm(u * ReefCausticsRippleStretch, v, baseFreq: 2, octaves: 3);
+                float alpha = Mathf.Clamp01((streak - ReefCausticsRippleSoftness) / (1f - ReefCausticsRippleSoftness));
+                byte a = (byte)Mathf.RoundToInt(alpha * 255f);
+                px[y * size + x] = new Color32(255, 255, 255, a);
             }
 
             t.SetPixels32(px);

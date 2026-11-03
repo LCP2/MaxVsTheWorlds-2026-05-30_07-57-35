@@ -253,5 +253,79 @@ namespace MaxWorlds.Arena
                 ReefKit.BuildFarWallStrip(host, match.transform, wallHeight);
             }
         }
+
+        // ---- MV-1342, Change item 3: per-area light shafts ---------------------------------------
+
+        // Well clear of every wall (0.3 of the area's own span, each side) — a gate always sits IN a
+        // wall, so insetting this far keeps a shaft out of a gate's own footprint without needing to
+        // cross-reference gate positions directly.
+        private const float LightShaftEdgeInsetFraction = 0.3f;
+        private const float LightShaftHeightFraction = 0.9f;   // most of the wall height, ceiling to floor
+        private const float LightShaftTopRadius = 0.6f;
+        private const float LightShaftBottomRadius = 0.18f;
+        private const float LightShaftMaxTiltDegrees = 18f;
+
+        /// <summary>Change item 3: three to four faint, soft, slanted light shafts per area, at
+        /// deterministic seeded positions well inside the area's own footprint (see
+        /// <see cref="LightShaftEdgeInsetFraction"/>'s own comment for why that alone keeps them off
+        /// the gates).</summary>
+        public static void BuildLightShafts(Transform host, WorldConfig cfg, float wallHeight)
+        {
+            if (host == null || cfg?.areas == null) return;
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area == null) continue;
+
+                float insetX = (area.XMax - area.XMin) * LightShaftEdgeInsetFraction;
+                float insetZ = (area.ZMax - area.ZMin) * LightShaftEdgeInsetFraction;
+                float xMin = area.XMin + insetX, xMax = area.XMax - insetX;
+                float zMin = area.ZMin + insetZ, zMax = area.ZMax - insetZ;
+                if (xMin >= xMax || zMin >= zMax) continue;
+
+                uint areaSeed = StableHash($"lightshaft_{area.id}");
+                int count = 3 + (int)(areaSeed % 2u);   // ticket: "three to four"
+
+                for (int i = 0; i < count; i++)
+                {
+                    float x = Mathf.Lerp(xMin, xMax, Hash01(areaSeed, i * 4 + 0));
+                    float z = Mathf.Lerp(zMin, zMax, Hash01(areaSeed, i * 4 + 1));
+                    float tiltX = (Hash01(areaSeed, i * 4 + 2) * 2f - 1f) * LightShaftMaxTiltDegrees;
+                    float tiltZ = (Hash01(areaSeed, i * 4 + 3) * 2f - 1f) * LightShaftMaxTiltDegrees;
+                    float yaw = Hash01(areaSeed, i * 4 + 100) * 360f;
+
+                    MaxWorlds.VFX.ReefLightShaft.Build(host, new Vector3(x, 0f, z), wallHeight * LightShaftHeightFraction,
+                        LightShaftTopRadius, LightShaftBottomRadius, new Vector3(tiltX, yaw, tiltZ));
+                }
+            }
+        }
+
+        /// <summary>Stable, cross-platform string hash (FNV-1a) — same algorithm/reasoning as
+        /// <c>ReefFloorDetail.StableHash</c>, its own small copy rather than a cross-class dependency
+        /// for one pure function.</summary>
+        private static uint StableHash(string s)
+        {
+            uint hash = 2166136261u;
+            if (s != null)
+                foreach (char c in s)
+                {
+                    hash ^= c;
+                    hash *= 16777619u;
+                }
+            return hash;
+        }
+
+        /// <summary>Same integer-hash idiom <c>MaxWorlds.VFX.ReefAmbientHash.Hash01</c> uses for its own
+        /// per-piece phase offsets — this file's own small copy since that one is VFX-assembly internal.</summary>
+        private static float Hash01(uint seed, int i)
+        {
+            unchecked
+            {
+                uint h = seed * 374761393u + (uint)i * 668265263u;
+                h = (h ^ (h >> 13)) * 1274126177u;
+                h ^= h >> 16;
+                return (h & 0xFFFFu) / 65535f;
+            }
+        }
     }
 }
