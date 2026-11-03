@@ -463,13 +463,19 @@ namespace MaxWorlds.Rendering
             // FillIntensity/RimIntensity/AmbientSky/AmbientEquator/AmbientGround above instead. MV-1340
             // deliberately leaves PostExposure itself alone for the same reason — the brightness lift
             // that ticket needed went into scene intensities above, not here.
-            // MV-1342: 0.15 -> 1.0 (2^1.0 = 2x). MV-1275/MV-1340 deliberately kept this near zero because
-            // a few tenths of a stop measurably shifted hue on GLES/Metal when the room sat near-black
-            // (MV-1275's own mauve-on-WebGL defect, see class doc) — AC1's 70-90/255 midtone target is
-            // far less sensitive to that per-platform rounding, and Mobile has carried real HDR since
-            // MV-1273, so this shares the brightness lift with KeyIntensity/FillIntensity/the ambient
-            // terms instead of asking scene intensity alone to cover a ~3x jump.
-            PostExposure = 1.0f,
+            // MV-1342: 0.15 -> 1.0 (2^1.0 = 2x) was this struct's own first pass, aiming to split the
+            // brightness lift between PostExposure and scene intensity (see the superseded reasoning
+            // this comment used to carry). That overshot badly: BuildMv1342ReefAquaticLookCheck's own
+            // first capture measured a1 median luminance 136.4/255 against AC1's 70-90 target (ratio
+            // ~1.7x over) and washed out the hull panel/seam bake, the caustics overlay (AC3 mean abs
+            // diff 0.7 against a >=3 floor) and the drum rim/core (AC4 deltas 16.9/-16.9 against a >=40
+            // floor each) along with it — a global 2x multiplier stacked on top of KeyIntensity/
+            // FillIntensity already raised ~2.4x (see those fields' own comments) double-counted the
+            // lift. 1.0 -> 0.3 (2^0.3 ~= 1.23x) removes most of that double-count while keeping a small
+            // post lift (same idiom this struct always used) — 136.4 * (1.23/2.0) ~= 84, inside AC1's
+            // target band — scene intensity above still carries the bulk of the brightness, same
+            // "lift the scene, not post" principle MV-1275/MV-1340 established for this struct.
+            PostExposure = 0.3f,
             // MV-1342: 11 -> 9. A much brighter base exposure already gives the hull panel/seam ratio
             // MV-1339 baked into the floor texture more raw dynamic range to work with; the extra push
             // MV-1340's +1 contrast nudge needed against a near-black room would now over-punch the
