@@ -4587,6 +4587,13 @@ namespace MaxWorlds.Enemies
         // --- MV-1344: ORBITAL semi-spiral light-missile battery ---------------------------------
 
         private OrbitalBattery _orbital;
+
+        /// <summary>MV-1345: the battery driving this ORBITAL's crown, read by <see cref="MaxWorlds.VFX.RobotRig"/>
+        /// (null until it first ticks).</summary>
+        public OrbitalBattery Orbital => _orbital;
+
+        /// <summary>MV-1345: set by <see cref="MaxWorlds.VFX.RobotRig"/> — world position of a crown tube's mouth.</summary>
+        public System.Func<int, Vector3?> OrbitalTubeMouth { get; set; }
         private float _orbitalHpApplied = OrbitalTuning.DefaultRobotHp;
 
         /// <summary>Fraction of its walk speed ORBITAL moves at while circling inside its standoff band.</summary>
@@ -4598,6 +4605,7 @@ namespace MaxWorlds.Enemies
         private void TickOrbital(float dt)
         {
             _orbital ??= new OrbitalBattery();
+            _orbital.TubeMouth = OrbitalTubeMouth;
 
             // "Robot HP" slider (10-200), live: scale max and current health by the change since last tick.
             float hp = OrbitalTuning.RobotHp;

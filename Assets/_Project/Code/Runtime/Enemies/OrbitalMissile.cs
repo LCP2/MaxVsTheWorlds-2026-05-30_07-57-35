@@ -83,7 +83,8 @@ namespace MaxWorlds.Enemies
         /// missile flies at <see cref="OrbitalTuning.FlightHeight"/> above it. Null when the world budget
         /// (<see cref="OrbitalTuning.WorldBudget"/>) is spent. <paramref name="areaIndex"/> &lt;= 0
         /// disables the "leaves its own area" rule.</summary>
-        public static OrbitalMissile Spawn(Vector3 feet, Vector3 heading, Transform target, int areaIndex)
+        public static OrbitalMissile Spawn(Vector3 feet, Vector3 heading, Transform target, int areaIndex,
+                                           Vector3? mouth = null)
         {
             PrunePool();
             if (FlyingCount >= OrbitalTuning.WorldBudget) return null;
@@ -105,7 +106,8 @@ namespace MaxWorlds.Enemies
             heading.Normalize();
 
             m.gameObject.SetActive(true);
-            m.transform.position = new Vector3(feet.x, feet.y + OrbitalTuning.FlightHeight, feet.z);
+            // MV-1345: it leaves from the firing tube's mouth when the body supplies one.
+            m.transform.position = mouth ?? new Vector3(feet.x, feet.y + OrbitalTuning.FlightHeight, feet.z);
             m.transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
             m._dir = heading;
             m.LaunchHeading = heading;
@@ -336,6 +338,19 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>MV-1345: world position of tube <c>i</c>'s mouth, supplied by the body (null for a
+        /// body-less battery, e.g. a test — missiles then leave from the feet at flight height).</summary>
+        public System.Func<int, Vector3?> TubeMouth;
+
+        /// <summary>The tube that fires next (the crown brings it round to the front).</summary>
+        public int NextTube => _step % RobotBodies.OrbitalTubeCount;
+
+        /// <summary>How far through the current shot interval it is, 0..1.</summary>
+        public float CycleFraction => Mathf.Clamp01(_cycle / OrbitalTuning.FireInterval);
+
+        /// <summary>True once spun up and firing — the crown's rotation is then phase-locked to the shots.</summary>
+        public bool IsFiring => _engaged && _spinUp >= OrbitalTuning.SpinUpSeconds;
+
         public IReadOnlyList<OrbitalMissile> Live { get { Prune(); return _live; } }
 
         /// <summary>Total missiles this battery has launched (the launch-sequence step).</summary>
@@ -377,7 +392,8 @@ namespace MaxWorlds.Enemies
 
             Vector3 line = dist > 1e-3f ? to / dist : Vector3.forward;
             Vector3 heading = Quaternion.AngleAxis(OrbitalTuning.LaunchAngle(_step), Vector3.up) * line;
-            OrbitalMissile m = OrbitalMissile.Spawn(feet, heading, target, areaIndex);
+            OrbitalMissile m = OrbitalMissile.Spawn(feet, heading, target, areaIndex,
+                                                    TubeMouth?.Invoke(NextTube));
             if (m == null) return 0;   // world budget spent — try again next tick
 
             _live.Add(m);
