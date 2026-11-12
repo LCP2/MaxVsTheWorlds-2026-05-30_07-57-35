@@ -1101,6 +1101,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Welder => c.Welder,
             EnemyKind.Projector => c.Projector,
             EnemyKind.Jammer => c.Jammer,
+            EnemyKind.Orbital => c.Orbital,
             _ => 0,
         };
 

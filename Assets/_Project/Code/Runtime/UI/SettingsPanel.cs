@@ -189,7 +189,9 @@ namespace MaxWorlds.UI
         private const int TabArena = 3;
         private const int TabFeel = 4;
         private const int TabSound = 5;
-        private static readonly string[] TabNames = { "ENEMIES", "ECONOMY", "WEAPONS", "ARENA", "FEEL", "SOUND" };
+        // MV-1344: the ORBITAL (test) robot's own tab — 11 sliders would swamp ENEMIES' column layout.
+        private const int TabOrbital = 6;
+        private static readonly string[] TabNames = { "ENEMIES", "ECONOMY", "WEAPONS", "ARENA", "FEEL", "SOUND", "ORBITAL" };
         private GameObject[] _pages;
         private Button[] _tabButtons;
         private int _tab;
@@ -619,6 +621,33 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.LungeTokenCap, RobotCompositionTuning.DefaultLungeTokenCap),
                 v => DevTuning.LungeTokenCap = v, tab: TabEnemies);
 
+            // ---- ORBITAL (test) tab (MV-1344): every number of the new light-missile robot, live —
+            // OrbitalTuning reads each through DevTuning on every tick, so a moved slider changes the
+            // missiles already in flight and every ORBITAL on the field at once. Included in "Copy
+            // current values" (per tab, like every knob) and in "Save settings" (DevTuning.Persisted).
+            Add("ORBITAL missile speed", "m/s", 3f, 12f, OrbitalTuning.DefaultMissileSpeed,
+                () => OrbitalTuning.MissileSpeed, v => DevTuning.OrbitalMissileSpeed = v, tab: TabOrbital);
+            Add("ORBITAL turn at launch", "deg/s", 10f, 120f, OrbitalTuning.DefaultTurnAtLaunch,
+                () => OrbitalTuning.TurnAtLaunch, v => DevTuning.OrbitalTurnAtLaunch = v, tab: TabOrbital);
+            Add("ORBITAL turn growth", "deg/s per s", 0f, 30f, OrbitalTuning.DefaultTurnGrowth,
+                () => OrbitalTuning.TurnGrowth, v => DevTuning.OrbitalTurnGrowth = v, tab: TabOrbital);
+            Add("ORBITAL missile life", "s", 2f, 10f, OrbitalTuning.DefaultLife,
+                () => OrbitalTuning.Life, v => DevTuning.OrbitalLife = v, tab: TabOrbital);
+            Add("ORBITAL fire interval", "s", 0.4f, 3f, OrbitalTuning.DefaultFireInterval,
+                () => OrbitalTuning.FireInterval, v => DevTuning.OrbitalFireInterval = v, tab: TabOrbital);
+            Add("ORBITAL max in flight", "missiles", 1f, 8f, OrbitalTuning.DefaultMaxInFlight,
+                () => OrbitalTuning.MaxInFlight, v => DevTuning.OrbitalMaxInFlight = v, tab: TabOrbital);
+            Add("ORBITAL outer launch angle", "deg", 0f, 180f, OrbitalTuning.DefaultOuterAngle,
+                () => OrbitalTuning.OuterAngle, v => DevTuning.OrbitalOuterAngle = v, tab: TabOrbital);
+            Add("ORBITAL inner launch angle", "deg", 0f, 180f, OrbitalTuning.DefaultInnerAngle,
+                () => OrbitalTuning.InnerAngle, v => DevTuning.OrbitalInnerAngle = v, tab: TabOrbital);
+            Add("ORBITAL missile damage", "hp", 0f, 30f, OrbitalTuning.DefaultDamage,
+                () => OrbitalTuning.Damage, v => DevTuning.OrbitalDamage = v, tab: TabOrbital);
+            Add("ORBITAL trail length", "s", 0f, 2f, OrbitalTuning.DefaultTrailSeconds,
+                () => OrbitalTuning.TrailSeconds, v => DevTuning.OrbitalTrailSeconds = v, tab: TabOrbital);
+            Add("ORBITAL robot HP", "hp", 10f, 200f, OrbitalTuning.DefaultRobotHp,
+                () => OrbitalTuning.RobotHp, v => DevTuning.OrbitalRobotHp = v, tab: TabOrbital);
+
             // ---- ECONOMY tab: cells are a vestigial display-only counter since MV-290 (nothing
             // spends them any more) — only their drop pacing/cap remain tunable — plus parts and
             // Hydro's burst timing. ----
@@ -938,7 +967,7 @@ namespace MaxWorlds.UI
 
             // Re-sized for 5 tabs (WV-234, was 3) — still clears the header's PanelW*0.34 title zone
             // with margin to spare.
-            const float TabW = 140f, TabGap = 8f;
+            const float TabW = 124f, TabGap = 8f;   // MV-1344: 140 -> 124 so seven tabs still clear the title zone
             _pages = new GameObject[TabNames.Length];
             _tabButtons = new Button[TabNames.Length];
             for (int t = 0; t < TabNames.Length; t++)

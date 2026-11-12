@@ -85,6 +85,10 @@ namespace MaxWorlds.Enemies
         /// that field itself is out of scope here.</summary>
         public const float Jammer = 1.6f;
 
+        /// <summary>MV-1344: ORBITAL — a 45 HP standoff shooter whose missiles are deliberately
+        /// low-damage obstacles; priced on the same placeholder footing as the Jammer.</summary>
+        public const float Orbital = 1.8f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -105,6 +109,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Welder => Welder,
             EnemyKind.Projector => Projector,
             EnemyKind.Jammer => Jammer,
+            EnemyKind.Orbital => Orbital,
             _ => Rusher,
         };
     }

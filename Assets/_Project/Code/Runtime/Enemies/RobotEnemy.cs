@@ -393,6 +393,9 @@ namespace MaxWorlds.Enemies
             _dreadnoughtTurretA = default;
             _dreadnoughtTurretB = default;
             _dreadnoughtTurretsInitialised = false;
+            // MV-1344: nor a previous ORBITAL life's missiles/cycle — and its HP slider scaling restarts.
+            _orbital?.Reset();
+            _orbitalHpApplied = OrbitalTuning.DefaultRobotHp;
             // MV-1228: a pooled instance must not carry a previous Breaker life's attack choice or
             // ram hit-list into this one either.
             _breakerIsRam = false;
@@ -763,6 +766,8 @@ namespace MaxWorlds.Enemies
         public float TelegraphProgress =>
             Kind == EnemyKind.Dreadnought
                 ? DreadnoughtTurretWarnProgress
+                : Kind == EnemyKind.Orbital
+                    ? (_orbital != null ? Mathf.Max(_orbital.GlowProgress, _orbital.SpinUpProgress < 1f ? _orbital.SpinUpProgress * 0.5f : 0f) : 0f)
                 : Current == State.Telegraph && telegraphTime > 0f
                     ? Mathf.Clamp01(_stateTimer / telegraphTime)
                     : 0f;
@@ -1087,6 +1092,7 @@ namespace MaxWorlds.Enemies
             CollapseDomeVisual();
             // MV-1286: a captured Jammer's own field drops at once, same reasoning.
             HideJammerFieldImmediate();
+            _orbital?.PopAll();   // MV-1344: a captured ORBITAL's missiles pop, and it stops firing.
             // MV-1285: a captured Linked elite's tether snaps too, same as on death — "not captured"
             // is one of the partner-eligibility conditions in TryEstablishLink, so this also keeps a
             // captured ally from ever being picked as a fresh pairing candidate.
@@ -2300,6 +2306,11 @@ namespace MaxWorlds.Enemies
             // regardless of state" footing as the corroded timer/Reef stealth visibility above.
             if (Kind == EnemyKind.Dreadnought) TickDreadnoughtTurrets(dt);
 
+            // MV-1344: ORBITAL's battery ticks every awake frame regardless of Current state, same
+            // "independent emitter" footing as the Dreadnought turrets above; Team.Enemy-gated so a
+            // captured ORBITAL stops firing (TryConvert pops its missiles).
+            if (Kind == EnemyKind.Orbital && Team == Team.Enemy) TickOrbital(dt);
+
             // MV-1281 point 3: a Shielded elite keeps turning to face Max regardless of Current state
             // (Telegraph/Recover/Search included, not just Chase) — see TickShieldedFacing's own doc
             // comment for the awake/lunge gate (which lives inside that method, not here) and why
@@ -3273,7 +3284,7 @@ namespace MaxWorlds.Enemies
             // regardless of this body's own state (see TickBody's TickDreadnoughtTurrets), not a single
             // body-wide wind-up/commit cycle the way every other ranged kind's single weapon is.
             bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher || Kind == EnemyKind.Bolter
-                          || Kind == EnemyKind.Dreadnought;
+                          || Kind == EnemyKind.Dreadnought || Kind == EnemyKind.Orbital;
             bool inStandoffBand = false;
             bool retreating = false;
             if (ranged && standoffRange > 0f && _sight.HasSight)
@@ -3320,7 +3331,19 @@ namespace MaxWorlds.Enemies
 
             // MV-447 cause 4: holding in the standoff band means standing still, not creeping — `dir`
             // is already the face-Max direction set above, so this only zeroes the move.
-            if (inStandoffBand) speed = 0f;
+            if (inStandoffBand)
+            {
+                if (Kind == EnemyKind.Orbital)
+                {
+                    // MV-1344: ORBITAL "circles slowly" inside its 7-9 m standoff band instead of
+                    // standing still: a tangent around Max at a fraction of its walk speed.
+                    Vector3 radial = to.normalized;
+                    float sign = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+                    dir = new Vector3(-radial.z, 0f, radial.x) * sign;
+                    speed *= OrbitalCircleSpeedFraction;
+                }
+                else speed = 0f;
+            }
 
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
 
@@ -3418,7 +3441,7 @@ namespace MaxWorlds.Enemies
             // independently of this body's own state (see TickBody's TickDreadnoughtTurrets), so there
             // is no single body-wide commit for it to walk into here the way every other ranged kind
             // (whose ONE weapon IS the body's commit) does.
-            if (Kind != EnemyKind.Dreadnought && _sight.HasSight && dist <= lungeRange && !retreating)
+            if (Kind != EnemyKind.Dreadnought && Kind != EnemyKind.Orbital && _sight.HasSight && dist <= lungeRange && !retreating)
             {
                 // MV-428 Change 2: Rusher/Blinker must hold an attack token to commit. Without one, a
                 // robot just keeps closing and pressuring at normal move speed (exactly what the
@@ -4561,6 +4584,38 @@ namespace MaxWorlds.Enemies
                 DreadnoughtTurretRangeMeters, EnemyArchetype.Bolter.ContactRadius);
         }
 
+        // --- MV-1344: ORBITAL semi-spiral light-missile battery ---------------------------------
+
+        private OrbitalBattery _orbital;
+        private float _orbitalHpApplied = OrbitalTuning.DefaultRobotHp;
+
+        /// <summary>Fraction of its walk speed ORBITAL moves at while circling inside its standoff band.</summary>
+        private const float OrbitalCircleSpeedFraction = 0.5f;
+
+        /// <summary>Ticks ORBITAL's HP slider scaling and its battery every awake frame. A line of
+        /// sight is NOT required (the missiles fly over cover at 1.7 m); a target on another combat
+        /// level never gets fired at, same MV-944 rule as every other ranged kind.</summary>
+        private void TickOrbital(float dt)
+        {
+            _orbital ??= new OrbitalBattery();
+
+            // "Robot HP" slider (10-200), live: scale max and current health by the change since last tick.
+            float hp = OrbitalTuning.RobotHp;
+            if (!Mathf.Approximately(hp, _orbitalHpApplied) && _orbitalHpApplied > 0f)
+            {
+                float ratio = hp / _orbitalHpApplied;
+                maxHealth *= ratio;
+                _health *= ratio;
+                _orbitalHpApplied = hp;
+            }
+
+            if (target == null || !CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
+                return;
+
+            Vector3 feet = transform.position - Vector3.up * (_cc != null ? _cc.height * 0.5f : 0.725f);
+            _orbital.Tick(dt, feet, target, AreaIndex);
+        }
+
         /// <summary>World-space bearing in degrees from <paramref name="from"/> to <paramref name="to"/>,
         /// 0 along +Z, matching <see cref="Quaternion.LookRotation(Vector3)"/>'s own convention — the
         /// same angle a body facing that direction reads on its own <c>transform.eulerAngles.y</c>.</summary>
@@ -4955,6 +5010,8 @@ namespace MaxWorlds.Enemies
             CollapseDomeVisual();
             // MV-1286: this robot's own Jammer field (if any) drops at once.
             HideJammerFieldImmediate();
+            // MV-1344: an ORBITAL's missiles pop within 0.3 s of its death.
+            _orbital?.PopAll();
             // MV-1285 point 4: this robot's death snaps the Linked tether and starts its live
             // partner's own revenge-heal countdown — read LinkedPartner BEFORE BreakLink clears it.
             if (IsElite && Affix == EliteAffix.Linked && LinkedPartner != null && LinkedPartner.IsAlive)
@@ -5095,6 +5152,7 @@ namespace MaxWorlds.Enemies
             if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; } // MV-428
             Current = State.Dead;
             _health = 0f;
+            _orbital?.PopAll();   // MV-1344
             // MV-1321: see Die's own identical comment — a KEY elite's key must drop even through the
             // one removal path that never calls Die at all (Max dying resets the arena).
             if (CarriesKey) DropVaultKey();

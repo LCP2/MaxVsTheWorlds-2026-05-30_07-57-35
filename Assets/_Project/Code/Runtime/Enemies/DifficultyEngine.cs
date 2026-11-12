@@ -110,21 +110,24 @@ namespace MaxWorlds.Enemies
             /// appears only where a world garrisons it by name.</summary>
             public readonly int Jammer;
 
+            /// <summary>MV-1344: ORBITAL — same "authored-composition only" footing as <see cref="Jammer"/>.</summary>
+            public readonly int Orbital;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
                 int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0,
-                int breaker = 0, int tractor = 0, int welder = 0, int projector = 0, int jammer = 0)
+                int breaker = 0, int tractor = 0, int welder = 0, int projector = 0, int jammer = 0, int orbital = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
                 Sludger = sludger; Charger = charger; Turret = turret; Dreadnought = dreadnought;
                 Skitter = skitter; Breaker = breaker; Tractor = tractor; Welder = welder; Projector = projector;
-                Jammer = jammer;
+                Jammer = jammer; Orbital = orbital;
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor + Welder + Projector + Jammer;
+                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor + Welder + Projector + Jammer + Orbital;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -148,7 +151,7 @@ namespace MaxWorlds.Enemies
                 Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter +
                 Breaker * ThreatValues.Breaker + Tractor * ThreatValues.Tractor +
                 Welder * ThreatValues.Welder + Projector * ThreatValues.Projector +
-                Jammer * ThreatValues.Jammer;
+                Jammer * ThreatValues.Jammer + Orbital * ThreatValues.Orbital;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

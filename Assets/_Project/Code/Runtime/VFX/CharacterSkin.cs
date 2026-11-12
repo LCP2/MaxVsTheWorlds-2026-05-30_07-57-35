@@ -35,6 +35,8 @@ namespace MaxWorlds.VFX
                      // as its other half (same two-lathe-half idiom as Dreadnought/Charger), distinct
                      // from both so the roster's three rust-family kinds (Bolter/Charger/Dreadnought)
                      // and this new one still tell apart by hue alone.
+        Orbital,     // MV-1344: the light-missile spiral shooter — crimson, matching its missiles' hue
+                     // family (never violet, which is Max's own Light Missile).
     }
 
     /// <summary>
@@ -237,6 +239,10 @@ namespace MaxWorlds.VFX
         /// already sits at.</summary>
         private static readonly Color SkitterBody = new Color(0.20f, 0.56f, 0.59f);
 
+        /// <summary>The ORBITAL (MV-1344): placeholder crimson body (the Launcher's silhouette tinted),
+        /// authored under <see cref="SunlitAlbedo.Ceiling"/> (0.6) like every other kind colour.</summary>
+        private static readonly Color OrbitalBody = new Color(0.55f, 0.07f, 0.18f);
+
         /// <summary>The Breaker (MV-1231): the ticket's own "rust/teal halves split by one hard line"
         /// colour call — its own deep rust, deliberately distinct from the Bolter's straight orange
         /// (0.55, 0.275, 0.061), the Charger's burnt rust-copper (0.50, 0.20, 0.07) and the
@@ -410,6 +416,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Dreadnought: return DreadnoughtBody;
                 case CharacterRole.Skitter: return SkitterBody;
                 case CharacterRole.Breaker: return BreakerBody;
+                case CharacterRole.Orbital: return OrbitalBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -438,6 +445,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Dreadnought: return CharacterRole.Dreadnought;
                 case EnemyKind.Skitter: return CharacterRole.Skitter;
                 case EnemyKind.Breaker: return CharacterRole.Breaker;
+                case EnemyKind.Orbital: return CharacterRole.Orbital;
                 default: return CharacterRole.Robot;
             }
         }
@@ -489,7 +497,7 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
             r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
             r == CharacterRole.Sludger || r == CharacterRole.Charger || r == CharacterRole.Dreadnought ||
-            r == CharacterRole.Skitter || r == CharacterRole.Breaker || r == CharacterRole.Boss;
+            r == CharacterRole.Skitter || r == CharacterRole.Breaker || r == CharacterRole.Orbital || r == CharacterRole.Boss;
 
         private void OnEnable()
         {
