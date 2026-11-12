@@ -688,6 +688,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1340ReefBrightnessCheck());
             Add(BuildMv1342ReefAquaticLookCheck());
             Add(BuildMv1343ThermalCaptureCheck());
+            Add(BuildMv1345OrbitalLook());
             return d;
         }
 
@@ -9990,6 +9991,73 @@ namespace MaxWorlds.Dev
                 ExtraReport = () =>
                     $"before: allowHDR=true softShadows=true (pre-ticket World 1 defaults)\n" +
                     $"after: allowHDR={BackyardLighting.ActiveUsesHdr} softShadows=false (this ticket's World 1 HDR choice + the candidate AC3 change)\n",
+            };
+        }
+
+        // ---- Mv1345OrbitalLook (MV-1345 AC3) --------------------------------------------------
+
+        /// <summary>MV-1345 AC3: one shot of World 4's (Reef) area-1 ORBITAL through the LIVE production
+        /// camera (brain left on, MV-1266's route). Jumps to "a1" like the Settings jump widget, then stands
+        /// Max ~5 m south of the nearest ORBITAL so it faces the camera, and lets the rig settle.</summary>
+        private static CapturePreset BuildMv1345OrbitalLook()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+            string found = "no ORBITAL found";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var player = FindFirstObjectByType<PlayerController>();
+                RobotEnemy orbital = null;
+                float best = float.MaxValue;
+                foreach (RobotEnemy e in FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include))
+                {
+                    if (e.Kind != EnemyKind.Orbital) continue;
+                    float d = player != null ? (e.transform.position - player.transform.position).sqrMagnitude : 0f;
+                    if (d < best) { best = d; orbital = e; }
+                }
+                if (orbital == null || player == null)
+                    throw new CaptureAbortException("MV-1345: no ORBITAL / player after jumping to World 4 a1");
+
+                found = $"ORBITAL at {orbital.transform.position}, area {orbital.AreaIndex}";
+                Vector3 p = orbital.transform.position + new Vector3(0f, 0f, -5f);
+                CharacterControllerSafety.SafeReposition(player.GetComponent<CharacterController>(), p, "MV1345Capture");
+
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1345orbitallook",
+                LogTag = "[MV1345Capture]",
+                Flag = "-mv1345shot",
+                ArmFile = "Temp/mv1345.arm",
+                HeadlessMarker = "Temp/mv1345.headless",
+                DoneFileName = "_mv1345_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1345-orbital-w4a1", NoSetup) },
+                ExtraReport = () => found + "\n",
             };
         }
     }

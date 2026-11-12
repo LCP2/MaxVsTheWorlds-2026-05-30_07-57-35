@@ -367,6 +367,15 @@ namespace MaxWorlds.VFX
         private Transform _breakerChainEnd;
         private Transform _breakerWallAnchor;
 
+        /// <summary>MV-1345: the ORBITAL's spinning crown, its tubes and tip lenses (see
+        /// <see cref="RobotBodies.Body.Crown"/>), null for every other kind.</summary>
+        private Transform _orbitalCrown;
+        private MeshRenderer[] _orbitalTips;
+        private float _orbitalCrownYaw;
+        private int _orbitalLitTube = -1;
+        private float _orbitalLitGlow = -1f;
+        private static readonly Color OrbitalTipDim = OrbitalMissile.BallColor * 0.3f;
+
         /// <summary>MV-1231: true once this robot's own chain has actually been subscribed to
         /// <see cref="ChainSignals.ChainSnapped"/> — guards against double-subscribing if
         /// <see cref="EnsureBuilt"/> were ever somehow re-entered, and lets <see cref="OnDestroy"/> know
@@ -699,6 +708,15 @@ namespace MaxWorlds.VFX
             _breakerChainPivot = body.BreakerChainPivot;
             _breakerChainEnd = body.BreakerChainEnd;
             _breakerWallAnchor = body.BreakerWallAnchor;
+            _orbitalCrown = body.Crown;
+            _orbitalTips = body.CrownTips;
+            if (_orbitalCrown != null)
+            {
+                Transform crown = _orbitalCrown;
+                _enemy.OrbitalTubeMouth = i => crown != null
+                    ? crown.TransformPoint(RobotBodies.OrbitalTubeMouthLocal(i))
+                    : (Vector3?)null;
+            }
             _restModelScale = _model.localScale;
 
             // MV-969: RobotBodies authors a wheel as TWO OR THREE co-located parts sharing one pivot
@@ -720,7 +738,7 @@ namespace MaxWorlds.VFX
             // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
             // exclusion set. MV-1231: the Breaker's chain pivot joins the same exclusion — it rotates on
             // ChainSnapped, and a combined static mesh would bake its TAUT pose in forever.
-            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _breakerChainPivot, _ownedMeshes);
+            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _breakerChainPivot, _orbitalCrown, _ownedMeshes);
             if (_combinedRenderer != null)
             {
                 Material[] mats = _combinedRenderer.sharedMaterials;
@@ -870,7 +888,7 @@ namespace MaxWorlds.VFX
         /// on first use, never during <see cref="Awake"/>), so it always sees the post-combine hierarchy.
         /// </summary>
         private static MeshRenderer CombineStaticParts(Transform root, MeshRenderer[] eyes, Transform[] wheels,
-            Transform inflatable, Transform breakerChainPivot, List<Mesh> ownedMeshes)
+            Transform inflatable, Transform breakerChainPivot, Transform orbitalCrown, List<Mesh> ownedMeshes)
         {
             var exclude = new HashSet<Renderer>();
             if (eyes != null)
@@ -882,6 +900,9 @@ namespace MaxWorlds.VFX
                 foreach (var r in inflatable.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
             if (breakerChainPivot != null)
                 foreach (var r in breakerChainPivot.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
+            // MV-1345: the ORBITAL's crown spins, so a baked-in static pose would freeze it.
+            if (orbitalCrown != null)
+                foreach (var r in orbitalCrown.GetComponentsInChildren<Renderer>(true)) exclude.Add(r);
 
             var byMaterial = new Dictionary<Material, List<MeshRenderer>>();
             foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
@@ -1009,6 +1030,7 @@ namespace MaxWorlds.VFX
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
 
+            UpdateOrbitalCrown(dt);
             UpdateStrike(dt);
 
             if (_flash > 0f) _flash = Mathf.Max(0f, _flash - flashDecay * dt);
@@ -1703,6 +1725,48 @@ namespace MaxWorlds.VFX
             }
             bounds = b;
             return any;
+        }
+
+        /// <summary>MV-1345: spins the ORBITAL's crown and lights the firing tube. Awake it free-spins at
+        /// one tube per shot interval; once its battery is firing the yaw is phase-locked so the tube
+        /// about to fire arrives at the front exactly as it launches (eased, so the hand-over from the
+        /// free spin never snaps). The firing tube's tip glows crimson over the 0.25 s before launch;
+        /// the other three sit dim.</summary>
+        private void UpdateOrbitalCrown(float dt)
+        {
+            if (_orbitalCrown == null) return;
+
+            OrbitalBattery battery = _enemy.Orbital;
+            float degPerSecond = 90f / OrbitalTuning.FireInterval;
+            int lit = -1;
+            float glow = 0f;
+
+            if (battery != null && battery.IsFiring)
+            {
+                float desired = 90f * (battery.Launched + battery.CycleFraction - 1f);
+                _orbitalCrownYaw = Mathf.MoveTowardsAngle(_orbitalCrownYaw, desired, 900f * dt);
+                lit = battery.NextTube;
+                glow = battery.GlowProgress;
+            }
+            else
+            {
+                _orbitalCrownYaw = Mathf.Repeat(_orbitalCrownYaw + degPerSecond * dt, 360f);
+            }
+            _orbitalCrown.localRotation = Quaternion.Euler(0f, _orbitalCrownYaw, 0f);
+
+            if (_orbitalTips == null || (lit == _orbitalLitTube && Mathf.Approximately(glow, _orbitalLitGlow))) return;
+            _orbitalLitTube = lit;
+            _orbitalLitGlow = glow;
+            for (int i = 0; i < _orbitalTips.Length; i++)
+            {
+                var r = _orbitalTips[i];
+                if (r == null) continue;
+                Color c = i == lit ? Color.Lerp(OrbitalTipDim, OrbitalMissile.BallColor, glow) : OrbitalTipDim;
+                c.a = 1f;
+                r.GetPropertyBlock(_eyeMpb);
+                _eyeMpb.SetColor(BaseColorId, c);
+                r.SetPropertyBlock(_eyeMpb);
+            }
         }
 
         private void ApplyEyes(Color c)

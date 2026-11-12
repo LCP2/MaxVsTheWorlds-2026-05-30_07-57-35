@@ -392,6 +392,68 @@ namespace MaxWorlds.VFX
             else { tris.Add(i); tris.Add(i + 2); tris.Add(i + 1); }
         }
 
+        // ------------------------------------------------------------------ SplitDrum (MV-1345)
+
+        /// <summary>
+        /// One half of a drum cut by a single hard diagonal line (MV-1345's ORBITAL plating): the
+        /// cylinder wall of <paramref name="radius"/> x <paramref name="height"/> (base on y = 0), cut
+        /// where its height is <paramref name="cutAtCentre"/> at the front-on centreline and rises by
+        /// <paramref name="cutRise"/> toward +X (falling by it toward -X), so seen from the front the
+        /// seam is one straight tilted line. <paramref name="upper"/> picks the half above the seam
+        /// (with the drum's top cap) or the half below it (open underneath — hidden by the base band).
+        /// Build both halves with identical parameters and they meet exactly on the seam.
+        /// </summary>
+        public static Mesh SplitDrum(float radius, float height, float cutAtCentre, float cutRise,
+                                     bool upper, int segments = 28)
+        {
+            int key = Hash(5, segments, new[]
+            {
+                new Vector2(radius, height), new Vector2(cutAtCentre, cutRise), new Vector2(upper ? 1f : 0f, 0f)
+            });
+            if (Cache.TryGetValue(key, out Mesh hit)) return hit;
+
+            var verts = new List<Vector3>(segments * 2 + segments + 1);
+            var tris = new List<int>();
+
+            for (int s = 0; s < segments; s++)
+            {
+                float a = (float)s / segments * Mathf.PI * 2f;
+                float cut = Mathf.Clamp(cutAtCentre + cutRise * Mathf.Cos(a), 0f, height);
+                float x = Mathf.Cos(a) * radius, z = Mathf.Sin(a) * radius;
+                verts.Add(new Vector3(x, upper ? cut : 0f, z));        // 2s: wall bottom
+                verts.Add(new Vector3(x, upper ? height : cut, z));    // 2s+1: wall top
+            }
+
+            for (int s = 0; s < segments; s++)
+            {
+                int n = (s + 1) % segments;
+                int a = 2 * s, b = 2 * n, c = 2 * s + 1, d = 2 * n + 1;
+                tris.Add(a); tris.Add(c); tris.Add(b);
+                tris.Add(b); tris.Add(c); tris.Add(d);
+            }
+
+            if (upper)
+            {
+                // The top cap gets its own ring so the rim stays a crisp edge under RecalculateNormals.
+                int centre = verts.Count;
+                verts.Add(new Vector3(0f, height, 0f));
+                int ring = verts.Count;
+                for (int s = 0; s < segments; s++)
+                {
+                    float a = (float)s / segments * Mathf.PI * 2f;
+                    verts.Add(new Vector3(Mathf.Cos(a) * radius, height, Mathf.Sin(a) * radius));
+                }
+                for (int s = 0; s < segments; s++)
+                {
+                    tris.Add(centre);
+                    tris.Add(ring + (s + 1) % segments);
+                    tris.Add(ring + s);
+                }
+            }
+
+            return Store(key, verts, tris, smooth: false);
+        }
+
         // ------------------------------------------------------------------ plumbing
 
         private static Mesh Store(int key, List<Vector3> verts, List<int> tris, bool smooth)
