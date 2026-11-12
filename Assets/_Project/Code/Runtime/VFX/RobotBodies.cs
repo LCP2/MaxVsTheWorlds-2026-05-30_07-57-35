@@ -121,6 +121,9 @@ namespace MaxWorlds.VFX
             switch (kind)
             {
                 case EnemyKind.Launcher: BuildLauncher(visualRoot, p, eyes, wheels, legs); break;
+                // MV-1344: ORBITAL's placeholder body is the Launcher's, tinted crimson by its own
+                // CharacterRole palette; MV-1345 replaces it with the real top-heavy drum.
+                case EnemyKind.Orbital:  BuildLauncher(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Blinker:  BuildBlinker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Gunner:   BuildGunner(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;

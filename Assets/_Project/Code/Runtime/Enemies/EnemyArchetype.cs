@@ -16,7 +16,8 @@ namespace MaxWorlds.Enemies
     // Welder (MV-1244) follows it too — a small repair drone that never attacks, appended after Tractor.
     // Projector (MV-1279) follows it too — a hang-back support drone that never attacks, appended after Welder.
     // Jammer (MV-1280) follows it too — a standoff-circling drone that never attacks, appended after Projector.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector, Jammer }
+    // Orbital (MV-1344) follows it too — a standoff-circling light-missile spiral shooter, appended after Jammer.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector, Jammer, Orbital }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -48,6 +49,7 @@ namespace MaxWorlds.Enemies
                 case "welder": kind = EnemyKind.Welder; return true;
                 case "projector": kind = EnemyKind.Projector; return true;
                 case "jammer": kind = EnemyKind.Jammer; return true;
+                case "orbital": kind = EnemyKind.Orbital; return true;
                 default: kind = default; return false;
             }
         }
@@ -743,6 +745,28 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "JAMMER");
 
+        /// <summary>
+        /// ORBITAL (MV-1344): fires slow-steering light missiles in a semi-spiral
+        /// (<see cref="OrbitalMissile"/>/<see cref="OrbitalBattery"/>) — an obstacle generator, not a
+        /// sniper. It never enters Telegraph/Lunge (<see cref="RobotEnemy"/>'s TickBody ticks its battery
+        /// every frame, same footing as the Dreadnought's turrets); <see cref="StandoffRange"/> 8 m with
+        /// the shared 0.85-1.15 band is the ticket's own 7-9 m standoff (6.8-9.2 m). Its live-tunable
+        /// numbers (HP, missile speed/turn/life/damage, cadence, launch angles) live on
+        /// <see cref="OrbitalTuning"/>, not here: <see cref="MaxHealth"/> is only the authored 45 default
+        /// that <see cref="OrbitalTuning.RobotHealth"/> overrides at spawn. <see cref="LungeRange"/>
+        /// doubles as the 11 m spin-up range. Placeholder body: the Launcher's, tinted crimson (MV-1345
+        /// is the real art).
+        /// </summary>
+        public static EnemyArchetype Orbital => new EnemyArchetype(
+            EnemyKind.Orbital, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
+            colliderHeight: 1.45f, colliderRadius: 0.42f,
+            moveSpeed: 0.9f, maxHealth: 45f,
+            contactDamage: 0f, contactRadius: 0.5f,
+            lungeRange: 11f, telegraphTime: 0.25f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
+            knockbackDecay: 28f,
+            standoffRange: 8f,
+            displayName: "ORBITAL");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -763,6 +787,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Welder => Welder,
             EnemyKind.Projector => Projector,
             EnemyKind.Jammer => Jammer,
+            EnemyKind.Orbital => Orbital,
             _ => Rusher,
         };
 

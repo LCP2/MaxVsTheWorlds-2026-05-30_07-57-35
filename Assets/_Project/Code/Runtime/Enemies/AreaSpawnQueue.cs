@@ -135,6 +135,8 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < composition.Dreadnought; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Dreadnought));
             // MV-1224: an ambient tiny phase-hopper, same footing as Bolter/Sludger/Charger above.
             for (int i = 0; i < composition.Skitter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Skitter));
+            // MV-1344: ORBITAL fills a NAMED garrison slot, same footing as Dreadnought above.
+            for (int i = 0; i < composition.Orbital; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Orbital));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

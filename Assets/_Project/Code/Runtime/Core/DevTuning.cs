@@ -408,6 +408,32 @@ namespace MaxWorlds.Core
         /// the Settings panel's SOUND-tab Music toggle, beside <see cref="MusicVolume"/>.</summary>
         public static float? MusicOn { get; set; }
 
+        // --- ORBITAL (MV-1344) — the light-missile spiral shooter's test knobs. Each one is read live
+        // through MaxWorlds.Enemies.OrbitalTuning, so a moved slider affects live missiles and robots at
+        // once. Authored defaults live on OrbitalTuning, not here. ---
+
+        public static float? OrbitalMissileSpeed { get; set; }
+
+        public static float? OrbitalTurnAtLaunch { get; set; }
+
+        public static float? OrbitalTurnGrowth { get; set; }
+
+        public static float? OrbitalLife { get; set; }
+
+        public static float? OrbitalFireInterval { get; set; }
+
+        public static float? OrbitalMaxInFlight { get; set; }
+
+        public static float? OrbitalOuterAngle { get; set; }
+
+        public static float? OrbitalInnerAngle { get; set; }
+
+        public static float? OrbitalDamage { get; set; }
+
+        public static float? OrbitalTrailSeconds { get; set; }
+
+        public static float? OrbitalRobotHp { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -465,7 +491,18 @@ namespace MaxWorlds.Core
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
             SfxVolume.HasValue || MusicVolume.HasValue ||
-            MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue;
+            MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue ||
+            OrbitalMissileSpeed.HasValue ||
+            OrbitalTurnAtLaunch.HasValue ||
+            OrbitalTurnGrowth.HasValue ||
+            OrbitalLife.HasValue ||
+            OrbitalFireInterval.HasValue ||
+            OrbitalMaxInFlight.HasValue ||
+            OrbitalOuterAngle.HasValue ||
+            OrbitalInnerAngle.HasValue ||
+            OrbitalDamage.HasValue ||
+            OrbitalTrailSeconds.HasValue ||
+            OrbitalRobotHp.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -561,6 +598,17 @@ namespace MaxWorlds.Core
             MutedSfxCuesMask = null;
             MutedSfxCuesMaskHigh = null;
             MusicOn = null;
+            OrbitalMissileSpeed = null;
+            OrbitalTurnAtLaunch = null;
+            OrbitalTurnGrowth = null;
+            OrbitalLife = null;
+            OrbitalFireInterval = null;
+            OrbitalMaxInFlight = null;
+            OrbitalOuterAngle = null;
+            OrbitalInnerAngle = null;
+            OrbitalDamage = null;
+            OrbitalTrailSeconds = null;
+            OrbitalRobotHp = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -664,6 +712,17 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MutedSfxCuesMask), () => MutedSfxCuesMask, v => MutedSfxCuesMask = v),
             (PrefsPrefix + nameof(MutedSfxCuesMaskHigh), () => MutedSfxCuesMaskHigh, v => MutedSfxCuesMaskHigh = v),
             (PrefsPrefix + nameof(MusicOn), () => MusicOn, v => MusicOn = v),
+            (PrefsPrefix + nameof(OrbitalMissileSpeed), () => OrbitalMissileSpeed, v => OrbitalMissileSpeed = v),
+            (PrefsPrefix + nameof(OrbitalTurnAtLaunch), () => OrbitalTurnAtLaunch, v => OrbitalTurnAtLaunch = v),
+            (PrefsPrefix + nameof(OrbitalTurnGrowth), () => OrbitalTurnGrowth, v => OrbitalTurnGrowth = v),
+            (PrefsPrefix + nameof(OrbitalLife), () => OrbitalLife, v => OrbitalLife = v),
+            (PrefsPrefix + nameof(OrbitalFireInterval), () => OrbitalFireInterval, v => OrbitalFireInterval = v),
+            (PrefsPrefix + nameof(OrbitalMaxInFlight), () => OrbitalMaxInFlight, v => OrbitalMaxInFlight = v),
+            (PrefsPrefix + nameof(OrbitalOuterAngle), () => OrbitalOuterAngle, v => OrbitalOuterAngle = v),
+            (PrefsPrefix + nameof(OrbitalInnerAngle), () => OrbitalInnerAngle, v => OrbitalInnerAngle = v),
+            (PrefsPrefix + nameof(OrbitalDamage), () => OrbitalDamage, v => OrbitalDamage = v),
+            (PrefsPrefix + nameof(OrbitalTrailSeconds), () => OrbitalTrailSeconds, v => OrbitalTrailSeconds = v),
+            (PrefsPrefix + nameof(OrbitalRobotHp), () => OrbitalRobotHp, v => OrbitalRobotHp = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

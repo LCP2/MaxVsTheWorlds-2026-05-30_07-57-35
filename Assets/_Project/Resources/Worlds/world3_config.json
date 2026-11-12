@@ -1076,8 +1076,18 @@
      "level": 0,
      "x": 26.5,
      "z": 35.5
+    },
+    {
+     "kind": "orbital",
+     "x": 21.5,
+     "z": 45.5,
+     "level": 0
     }
    ],
+   "composition": {
+    "orbital": 1,
+    "blendWithDial": true
+   },
    "decor": [
     {
      "kind": "hatch",
@@ -1538,8 +1548,18 @@
      "level": 0,
      "x": 26.5,
      "z": 1.5
+    },
+    {
+     "kind": "orbital",
+     "x": 10.75,
+     "z": 2.75,
+     "level": 0
     }
    ],
+   "composition": {
+    "orbital": 1,
+    "blendWithDial": true
+   },
    "windows": [
     {
      "wall": "S",
@@ -1839,8 +1859,18 @@
      "level": 0,
      "x": 60.5,
      "z": 1.5
+    },
+    {
+     "kind": "orbital",
+     "x": 60.5,
+     "z": 21.5,
+     "level": 0
     }
    ],
+   "composition": {
+    "orbital": 1,
+    "blendWithDial": true
+   },
    "decor": [
     {
      "kind": "hatch",
@@ -2164,6 +2194,12 @@
      "x": 84.5,
      "z": 14.0,
      "level": 0
+    },
+    {
+     "kind": "orbital",
+     "x": 97.5,
+     "z": 8.5,
+     "level": 0
     }
    ],
    "windows": [
@@ -2186,6 +2222,7 @@
    "wallDressing": "planters",
    "roomType": "gallery",
    "composition": {
+    "orbital": 1,
     "projector": 1,
     "blendWithDial": true
    },
