@@ -738,7 +738,7 @@ namespace MaxWorlds.VFX
             // AFTER _wheels/_eyes/_reefInflatable are captured above, since it needs exactly that
             // exclusion set. MV-1231: the Breaker's chain pivot joins the same exclusion — it rotates on
             // ChainSnapped, and a combined static mesh would bake its TAUT pose in forever.
-            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _breakerChainPivot, _orbitalCrown, _ownedMeshes);
+            _combinedRenderer = CombineStaticParts(feet, _eyes, _wheels, _reefInflatable, _breakerChainPivot, body.OrbitalHover != null ? body.OrbitalHover : _orbitalCrown, _ownedMeshes);
             if (_combinedRenderer != null)
             {
                 Material[] mats = _combinedRenderer.sharedMaterials;
