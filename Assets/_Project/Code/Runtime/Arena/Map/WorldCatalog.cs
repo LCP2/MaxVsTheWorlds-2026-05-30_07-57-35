@@ -231,6 +231,11 @@ namespace MaxWorlds.Arena
         /// the process, not just at <see cref="WorldCatalog.BuildShippedRows"/> time.</summary>
         public Func<float> PartsMultiplier;
 
+        /// <summary>MV-1359: Parts an idle-destroyed Assembly Cradle pays in this world, or 0 for the
+        /// shared default (<see cref="MaxWorlds.Factories.AssemblyCradle.PayoutParts"/>). Only the
+        /// Mothership overrides it. Resolve through <see cref="MaxWorlds.Factories.AssemblyCradle.PayoutPartsFor"/>.</summary>
+        public int CradlePayoutParts;
+
         /// <summary>A Supercell is granted every this-many areas in this world — 1 means every area.
         /// See <see cref="MaxWorlds.Pickups.PickupDirector"/>'s own Supercell rule.</summary>
         public int SupercellCadenceAreas;
@@ -808,7 +813,10 @@ namespace MaxWorlds.Arena
                 // Economy multipliers copy the Reef row's values (ticket's own instruction).
                 PrimarySecondaryCostMultiplier = PrimarySecondaryCostMultiplierWorld2Plus,
                 UpgradeCostScale = 1f,
-                PartsMultiplier = () => 1f,
+                // MV-1359 (Lee, 13 Nov): fully upgraded by area 21 -- World 5's robot Parts drops and
+                // cradle Parts payout are cut so full board coverage lands at areas 27-30.
+                PartsMultiplier = () => CellEconomyTuning.DefaultWorld5PartsMultiplier,
+                CradlePayoutParts = CellEconomyTuning.DefaultWorld5CradlePayoutParts,
                 SupercellCadenceAreas = 2,
                 RackModuleDropsHere = false,
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,

@@ -53,6 +53,12 @@ namespace MaxWorlds.Pickups
         /// (<see cref="MaxWorlds.Core.DevTuning.World3PartsMultiplier"/>).</summary>
         public const float DefaultWorld3PartsMultiplier = 2f;
 
+        /// <summary>MV-1359: World 5's robot Parts-drop multiplier (<see cref="MaxWorlds.Arena.WorldDefinition.PartsMultiplier"/>).</summary>
+        public const float DefaultWorld5PartsMultiplier = 0.7f;
+
+        /// <summary>MV-1359: World 5's idle-destroy cradle Parts payout (was 10 for every world).</summary>
+        public const int DefaultWorld5CradlePayoutParts = 7;
+
         /// <summary>The per-area cell budget's world-scale multiplier (MV-1029) — read off
         /// <see cref="MaxWorlds.Arena.WorldCatalog"/>'s own row (MV-1142): 1.0 for World 1 and World 2
         /// (untouched: "Worlds 1 and 2 must not change"), <see cref="DefaultWorld3PartsMultiplier"/> (or

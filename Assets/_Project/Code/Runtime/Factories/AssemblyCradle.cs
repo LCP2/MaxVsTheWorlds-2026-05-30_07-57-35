@@ -68,6 +68,14 @@ namespace MaxWorlds.Factories
         public const int PayoutCells = 15;
         public const int PayoutParts = 10;
 
+        /// <summary>MV-1359: the Parts an idle-destroyed cradle pays in 0-based <paramref name="worldIndex"/> --
+        /// the world row's <see cref="MaxWorlds.Arena.WorldDefinition.CradlePayoutParts"/> when set, else <see cref="PayoutParts"/>.</summary>
+        public static int PayoutPartsFor(int worldIndex)
+        {
+            int perWorld = MaxWorlds.Arena.WorldCatalog.Get(worldIndex).CradlePayoutParts;
+            return perWorld > 0 ? perWorld : PayoutParts;
+        }
+
         /// <summary>Same tier HP as every other machine (MowerHutch.factoryHealth / Replicator.ReplicatorHealth).</summary>
         private const float CradleHealth = 474.75f;
 
@@ -662,8 +670,9 @@ namespace MaxWorlds.Factories
             {
                 for (int i = 0; i < PayoutCells; i++)
                     director.PlacePickupAt(PickupKind.PowerCellSecondary, transform.position + ScatterOffset(i, PayoutCells));
-                for (int i = 0; i < PayoutParts; i++)
-                    director.PlacePickupAt(PickupKind.PowerCell, transform.position + ScatterOffset(i, PayoutParts));
+                int payoutParts = PayoutPartsFor(_areaDirector != null ? _areaDirector.ActiveWorldIndex : 0);
+                for (int i = 0; i < payoutParts; i++)
+                    director.PlacePickupAt(PickupKind.PowerCell, transform.position + ScatterOffset(i, payoutParts));
             }
             _buildTimer = 0f;
 
