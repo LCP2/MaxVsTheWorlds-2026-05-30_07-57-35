@@ -125,6 +125,44 @@ namespace MaxWorlds.Enemies
                 Jammer = jammer; Orbital = orbital;
             }
 
+            /// <summary>MV-1347: a copy of this composition with ONLY the Rusher count replaced; every other
+            /// kind is carried over unchanged. Callers that trim a composition must use this instead of
+            /// re-invoking the constructor, so a newly added kind can never be silently zeroed.</summary>
+            public Composition WithRusher(int rusher) =>
+                new Composition(rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker,
+                    Sludger, Charger, Turret, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector,
+                    Jammer, Orbital);
+
+            /// <summary>MV-1347: this composition's count for <paramref name="kind"/>. Lets callers walk
+            /// <c>Enum.GetValues(typeof(EnemyKind))</c> instead of naming every kind.</summary>
+            public int CountOf(EnemyKind kind)
+            {
+                switch (kind)
+                {
+                    case EnemyKind.Rusher: return Rusher;
+                    case EnemyKind.Bruiser: return Bruiser;
+                    case EnemyKind.Heavy: return Heavy;
+                    case EnemyKind.Brute: return Brute;
+                    case EnemyKind.Gunner: return Gunner;
+                    case EnemyKind.Launcher: return Launcher;
+                    case EnemyKind.Blinker: return Blinker;
+                    case EnemyKind.Bolter: return Bolter;
+                    case EnemyKind.Lurker: return Lurker;
+                    case EnemyKind.Turret: return Turret;
+                    case EnemyKind.Sludger: return Sludger;
+                    case EnemyKind.Charger: return Charger;
+                    case EnemyKind.Dreadnought: return Dreadnought;
+                    case EnemyKind.Skitter: return Skitter;
+                    case EnemyKind.Breaker: return Breaker;
+                    case EnemyKind.Tractor: return Tractor;
+                    case EnemyKind.Welder: return Welder;
+                    case EnemyKind.Projector: return Projector;
+                    case EnemyKind.Jammer: return Jammer;
+                    case EnemyKind.Orbital: return Orbital;
+                    default: throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "Composition.CountOf: unhandled EnemyKind");
+                }
+            }
+
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
                 Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor + Welder + Projector + Jammer + Orbital;

@@ -24,10 +24,7 @@ namespace MaxWorlds.Enemies
             int rusher = Mathf.Min(composition.Rusher, allowed);
 
             if (rusher == composition.Rusher) return composition;
-            return new DifficultyEngine.Composition(rusher, composition.Bruiser, composition.Heavy,
-                composition.Brute, composition.Gunner, composition.Launcher, composition.Blinker,
-                composition.Bolter, composition.Lurker, composition.Sludger, composition.Charger,
-                composition.Turret, composition.Dreadnought);
+            return composition.WithRusher(rusher);
         }
     }
 }
