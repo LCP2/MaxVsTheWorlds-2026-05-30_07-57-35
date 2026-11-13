@@ -58,26 +58,8 @@ namespace MaxWorlds.Arena
             BuildLightFlicker(host);
         }
 
-        // ---- MV-1342, Change item 2: floor-wide caustics overlay ----------------------------------
-
-        /// <summary>MV-1348: one caustics quad per ground-level (<c>zone.level == 0</c>) zone, each at that zone's own footprint —
-        /// same level filter <see cref="MaxWorlds.Arena.ReefFloorDetail.PlaceGrates"/> already uses, so
-        /// the caustics overlay never reaches onto a raised overlay deck it has no business lighting.
-        /// Called from <see cref="BackyardPath"/>'s own <c>ApplyReefKit</c>, alongside this class's own
-        /// <see cref="Build"/>.</summary>
-        public static void BuildCausticsOverlay(Transform host, MapData map)
-        {
-            if (host == null || map?.zones == null) return;
-
-            foreach (MapZone zone in map.zones)
-            {
-                if (zone == null || zone.level != 0) continue;
-                float w = zone.XMax - zone.XMin, d = zone.ZMax - zone.ZMin;
-                if (w <= 0f || d <= 0f) continue;
-                var center = new Vector3((zone.XMin + zone.XMax) * 0.5f, 0f, (zone.ZMin + zone.ZMax) * 0.5f);
-                ReefCausticsOverlay.Build(host, center, w, d);
-            }
-        }
+        // MV-1350: the drifting per-area caustics overlay (MV-1342/MV-1348) is gone; a static, very faint
+        // dapple is baked into the deck atlas instead (ReefDeckKit).
 
         // ---- drums: bubble streams (Change item 2) + core pulse (Change item 4) -------------------
 

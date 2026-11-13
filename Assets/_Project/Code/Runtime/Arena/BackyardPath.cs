@@ -361,7 +361,9 @@ namespace MaxWorlds.Arena
             // reason ReefHydroponics.PlaceBeds itself runs here rather than inside ReefKit.DressHull.
             ReefFloorDetail.PlaceGrates(host, map, cfg, cover);
             ReefFloorDetail.PlaceDecals(host, map, cfg, cover);
-            ReefFloorDetail.PlaceGratingPatches(host, map, cfg, cover);
+            // MV-1350: the riveted-plate deck replaces MV-1339's grating patches (the deck's own vent cells
+            // are the slatted read) and the caustics overlay (a static dapple is baked into the deck atlas).
+            ReefFloorDetail.PlaceDeck(host, cfg);
             ReefFloorDetail.DressFlood(host);
 
             // MV-1215, Change items 2/3/6: the glow hatch, window wall and wall-mounted dressing —
@@ -392,10 +394,6 @@ namespace MaxWorlds.Arena
             // flavour — runs last, after every drum/manifold/console/lamp/strip it reads back by name
             // has already been built by the calls above.
             ReefAmbientLife.Build(host);
-
-            // MV-1342: the floor-wide caustics overlay — needs the map's own zone bounds, so this
-            // reads map directly rather than folding into ReefAmbientLife.Build's own no-arg signature.
-            ReefAmbientLife.BuildCausticsOverlay(host, map);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

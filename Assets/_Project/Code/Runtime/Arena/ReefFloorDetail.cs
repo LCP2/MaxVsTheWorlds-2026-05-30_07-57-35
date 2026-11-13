@@ -62,7 +62,7 @@ namespace MaxWorlds.Arena
                             root.SetParent(host, false);
                         }
 
-                        GameObject grate = ReefKit.BuildFloorGrate(root, new Vector3(candidate.x, 0f, candidate.y));
+                        GameObject grate = ReefKit.BuildFloorGrate(root, new Vector3(candidate.x, ReefDeckKit.DeckY, candidate.y));
 
                         int seed = unchecked((int)StableHash($"grate_{candidate.x:F2}_{candidate.y:F2}"));
                         SludgeBubbles.Attach(grate.transform, "Particulate", new Vector2(0.3f, 0.3f),
@@ -116,7 +116,7 @@ namespace MaxWorlds.Arena
                         }
 
                         float yaw = h % 360u;
-                        var center = new Vector3(candidate.x, 0f, candidate.y);
+                        var center = new Vector3(candidate.x, ReefDeckKit.DeckY, candidate.y);
 
                         if (h % 2u == 0u)
                         {
@@ -141,6 +141,34 @@ namespace MaxWorlds.Arena
             foreach (CoverPiece piece in cover)
                 if (piece.Cover.DistanceTo(candidate) < DecalClearance) return false;
             return true;
+        }
+
+        // ---- MV-1350: the deck ---------------------------------------------------------------------
+
+        /// <summary>MV-1350: builds every area's riveted-plate deck, wear layer and wall-band props
+        /// (<see cref="ReefDeckKit"/>), replacing MV-1339's big plain hull panels, grating patches and
+        /// MV-1348's per-area caustics quads. One deck mesh, one wear mesh and 3-5 prop objects per
+        /// area. The map's own floor slab is left in place: it still carries the corridors between
+        /// areas, so it is not "fully covered" anywhere it could be hidden. Returns how many areas got a
+        /// deck.</summary>
+        public static int PlaceDeck(Transform host, WorldConfig cfg)
+        {
+            if (host == null || cfg?.areas == null) return 0;
+
+            var root = new GameObject("Reef Deck");
+            root.transform.SetParent(host, false);
+            int count = 0;
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area == null || area.size == null || area.size.w <= 0f || area.size.d <= 0f) continue;
+                Transform areaRoot = new GameObject($"Deck {area.id}").transform;
+                areaRoot.SetParent(root.transform, false);
+                ReefDeckKit.BuildDeck(areaRoot, area.id, area.XMin, area.ZMin, area.XMax, area.ZMax);
+                ReefDeckKit.BuildWear(areaRoot, area.id, area.XMin, area.ZMin, area.XMax, area.ZMax);
+                ReefDeckKit.BuildProps(areaRoot, area.id, area.XMin, area.ZMin, area.XMax, area.ZMax);
+                count++;
+            }
+            return count;
         }
 
         // ---- MV-1339, Change item 3: grating patches --------------------------------------------

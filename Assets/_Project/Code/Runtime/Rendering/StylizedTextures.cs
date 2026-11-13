@@ -326,45 +326,6 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
-        // MV-1342: "soft pale-aqua ripple lines" over the whole floor, not just the flood-water tiles —
-        // elongated along one axis (stretching the Fbm sample grid before lookup, same "stretch the
-        // noise" idiom cheap caustics always use) rather than ReefFloodWaterAlbedo's own round blotches,
-        // so this reads as streaks instead of puddles. Alpha-only: this is a standalone translucent
-        // overlay (see ReefCausticsOverlay), never a multiplier against another surface's _BaseColor, so
-        // the RGB channels carry flat white and only alpha carries the ripple mask.
-        private const int ReefCausticsRippleStretch = 5;   // how much longer a streak reads than it is wide
-        private const float ReefCausticsRippleSoftness = 0.35f;   // how much of the alpha range is midtone vs. hard streak
-
-        /// <summary>A tileable, alpha-only ripple-streak mask (MV-1342, Change item 2) for
-        /// <see cref="MaxWorlds.VFX.ReefCausticsOverlay"/>'s own floor-wide caustics quad — RGB is flat
-        /// white (the overlay's own material tints via <c>_BaseColor</c>, same idiom every
-        /// <c>VfxMaterials</c>-built translucent overlay already uses), alpha carries the streak pattern
-        /// so a drifting UV offset reads as moving light, not a moving colour.</summary>
-        public static Texture2D ReefCausticsRipple(int size = 128)
-        {
-            const string key = "reefCausticsRipple";
-            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
-
-            var t = NewTexture(key, size, linear: true);
-            var px = new Color32[size * size];
-
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float u = (x + 0.5f) / size;
-                float v = (y + 0.5f) / size;
-                float streak = Fbm(u * ReefCausticsRippleStretch, v, baseFreq: 2, octaves: 3);
-                float alpha = Mathf.Clamp01((streak - ReefCausticsRippleSoftness) / (1f - ReefCausticsRippleSoftness));
-                byte a = (byte)Mathf.RoundToInt(alpha * 255f);
-                px[y * size + x] = new Color32(255, 255, 255, a);
-            }
-
-            t.SetPixels32(px);
-            t.Apply(updateMipmaps: true);
-            s_cache[key] = t;
-            return t;
-        }
-
         private const float ReefFloodCausticAmplitude = 0.18f;   // MV-1256: "slow caustic shimmer" — a soft tileable multiplier, same mean-1 idiom as ReefDeckAlbedo
 
         /// <summary>The Reef's own flooded-deck water (MV-1256, Change item 5): a soft, tileable

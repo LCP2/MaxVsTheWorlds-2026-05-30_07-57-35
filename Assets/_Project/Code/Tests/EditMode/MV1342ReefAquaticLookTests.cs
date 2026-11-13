@@ -10,41 +10,35 @@ namespace MaxWorlds.Tests.EditMode
     /// dark and it looks too similar to W5 because of that." Both worlds were dark navy with neon, so
     /// they read as the same place. This re-grades the Reef from dark navy to a bright, teal-green
     /// "underwater" look (<see cref="BackyardLook.Reef"/>, the deck albedo panel tones) and adds a
-    /// drifting floor-wide caustics overlay (<see cref="ReefCausticsOverlay"/>); World 5 is untouched.
+    /// drifting floor-wide caustics overlay (removed again by MV-1350 for a static dapple baked into the deck atlas); World 5 is untouched.
     ///
     /// Three RESOLVED-value checks (testing policy Tier 2), none a restated authored constant:
     /// (a) the Reef's own resolved Key light colour after <see cref="BackyardLighting.Apply"/>, and the
     /// baked deck albedo's own actual pixel colour multiplied back through its base — not
     /// <see cref="BackyardLook.Reef"/>'s fields or <see cref="WorldMaterials.ReefHullPanelToneLight"/>
-    /// read back at themselves; (b) a built <see cref="ReefCausticsOverlay"/>'s own resolved UV offset
-    /// before/after a manual <see cref="ReefCausticsOverlay.Tick"/>, proving the caustic layer exists
-    /// and actually animates, not just that a GameObject with that name exists; (c) a built
+    /// read back at themselves; (b) withdrawn by MV-1350 (the animated caustics overlay no longer exists); (c) a built
     /// <see cref="ReefKit.BuildDrum"/>'s rim material's resolved keyword/float state against the
     /// MV-1316 <c>M_ReefDeckKeepEmission.mat</c> template, same technique
     /// <c>MV1340ReefBrightnessTests</c> already uses.
     ///
     /// Fails on main (pre-fix): the resolved Key light hue sits at ~206deg (navy) and the baked deck
-    /// panel's own resolved hue sits at ~210deg — both outside this test's 155-200deg teal band — and
-    /// <see cref="ReefCausticsOverlay"/> does not exist at all, so the build fails to compile before the
-    /// caustics-overlay code lands (quoted failure output in the fix comment).
+    /// panel's own resolved hue sits at ~210deg — both outside this test's 155-200deg teal band — .
     /// </summary>
     public sealed class MV1342ReefAquaticLookTests
     {
         private GameObject _lightingGo;
-        private GameObject _causticsHostGo;
         private GameObject _drumProbeGo;
 
         [TearDown]
         public void TearDown()
         {
             if (_lightingGo != null) Object.DestroyImmediate(_lightingGo);
-            if (_causticsHostGo != null) Object.DestroyImmediate(_causticsHostGo);
             if (_drumProbeGo != null) Object.DestroyImmediate(_drumProbeGo);
             RenderSettings.fog = false;
         }
 
         [Test]
-        public void ReefReadsAquaticTeal_CausticsAnimate_AndDrumRimsKeepEmission()
+        public void ReefReadsAquaticTeal_AndDrumRimsKeepEmission()
         {
             // --- (a1) resolved Key light colour must read teal-green, not the old navy band. ---
             _lightingGo = new GameObject("mv1342-reef-look-test");
@@ -81,21 +75,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(deckHueDeg, Is.InRange(155f, 200f),
                 $"the Reef deck's own resolved panel colour ({resolvedPanel}) hue ({deckHueDeg:F0}deg) " +
                 "must read teal-green (155-200deg).");
-
-            // --- (b) the caustics overlay exists and its own resolved UV offset actually animates. ---
-            _causticsHostGo = new GameObject("mv1342-caustics-host");
-            GameObject overlayGo = ReefCausticsOverlay.Build(_causticsHostGo.transform, Vector3.zero, 20f, 20f);
-            Assert.IsNotNull(overlayGo, "ReefCausticsOverlay.Build must build the floor-wide caustics overlay");
-
-            var overlay = overlayGo.GetComponent<ReefCausticsOverlay>();
-            Assert.IsNotNull(overlay, "the built overlay must carry a ReefCausticsOverlay driver");
-
-            Vector2 offsetBefore = overlay.ResolvedOffset;
-            overlay.Tick(1f);
-            Vector2 offsetAfter = overlay.ResolvedOffset;
-            Assert.AreNotEqual(offsetBefore, offsetAfter,
-                $"the caustics overlay's own resolved UV offset must change after a Tick (before " +
-                $"{offsetBefore}, after {offsetAfter}) -- proving it actually drifts, not just exists");
 
             // --- (c) the drum's rim material still resolves through the MV-1316 emission-keeping
             // template -- unchanged by this ticket, re-asserted here because AC6 names it explicitly. ---
