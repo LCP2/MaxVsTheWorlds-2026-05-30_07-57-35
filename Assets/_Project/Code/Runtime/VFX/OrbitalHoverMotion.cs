@@ -9,6 +9,7 @@ namespace MaxWorlds.VFX
     /// on the floor (smaller + darker at the low point) plus a faint crimson thruster glow on the drum's
     /// underside. Purely visual — the collider and the missile launch maths are not touched.
     /// </summary>
+    [MaxWorlds.Core.PerfSection("rig")]
     public sealed class OrbitalHoverMotion : MonoBehaviour
     {
         public const float BobAmplitude = 0.08f;
