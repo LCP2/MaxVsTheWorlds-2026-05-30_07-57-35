@@ -111,7 +111,7 @@ namespace MaxWorlds.VFX
             var legs = new List<Transform>(4);
             Transform inflatable = null;
             Transform breakerChainPivot = null, breakerChainEnd = null, breakerWallAnchor = null;
-            Transform crown = null;
+            Transform crown = null, orbitalHover = null;
             MeshRenderer[] crownTubes = null, crownTips = null;
             Transform visualRoot = VisualTrimRootFor(kind, root);
 
@@ -126,7 +126,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Launcher: BuildLauncher(visualRoot, p, eyes, wheels, legs); break;
                 // MV-1345: ORBITAL's own top-heavy drum on four spindly legs with a four-tube crown
                 // (MV-1344 shipped it on the Launcher's placeholder body).
-                case EnemyKind.Orbital:  BuildOrbital(visualRoot, p, eyes, out crown, out crownTubes, out crownTips); break;
+                case EnemyKind.Orbital:  BuildOrbital(visualRoot, p, eyes, out crown, out crownTubes, out crownTips, out orbitalHover); break;
                 case EnemyKind.Blinker:  BuildBlinker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Gunner:   BuildGunner(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;
@@ -167,7 +167,7 @@ namespace MaxWorlds.VFX
 
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null,
                             breakerChainPivot, breakerChainEnd, breakerWallAnchor,
-                            crown, crownTubes, crownTips);
+                            crown, crownTubes, crownTips, orbitalHover);
         }
 
         /// <summary>MV-800: World 2's shared faction signature — a hazard-yellow band ringing every
@@ -326,15 +326,20 @@ namespace MaxWorlds.VFX
             public readonly MeshRenderer[] CrownTubes;
             public readonly MeshRenderer[] CrownTips;
 
+            /// <summary>MV-1346: the ORBITAL's hover pivot — parent of the drum, eye and crown (and holder of
+            /// the shadow blob/thruster glow). Moves every frame, so it is excluded from static combining.</summary>
+            public readonly Transform OrbitalHover;
+
             public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs, Transform inflatable = null,
                         Transform breakerChainPivot = null, Transform breakerChainEnd = null,
                         Transform breakerWallAnchor = null, Transform crown = null,
-                        MeshRenderer[] crownTubes = null, MeshRenderer[] crownTips = null)
+                        MeshRenderer[] crownTubes = null, MeshRenderer[] crownTips = null,
+                        Transform orbitalHover = null)
             {
                 Eyes = eyes; Wheels = wheels; Legs = legs; Inflatable = inflatable;
                 BreakerChainPivot = breakerChainPivot; BreakerChainEnd = breakerChainEnd;
                 BreakerWallAnchor = breakerWallAnchor;
-                Crown = crown; CrownTubes = crownTubes; CrownTips = crownTips;
+                Crown = crown; CrownTubes = crownTubes; CrownTips = crownTips; OrbitalHover = orbitalHover;
             }
         }
 
@@ -378,46 +383,40 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>ORBITAL (MV-1345) — hand-authored, same exception as the other hand-authored kinds
-        /// above. A drum 1.6 m wide x 0.75 m tall carried 1.1 m up on four spindly jointed legs; the plating
+        /// above. A drum 1.6 m wide x 0.75 m tall hovering 1.1 m up (MV-1346: legs removed, see OrbitalHover); the plating
         /// is split by one hard diagonal seam (kind's crimson above, shared teal below) with a near-black
         /// base band; one big gold lens in a thick dark bezel, off-centre on the front. On top, a crown
         /// pivot carrying a dark plate and four launch tubes (each topped by a tip lens the rig lights
         /// crimson for the firing tell), and a small thin gold ring on the crown base.</summary>
         private static void BuildOrbital(Transform root, in RobotPalette p, List<MeshRenderer> eyes,
                                          out Transform crown, out MeshRenderer[] crownTubes,
-                                         out MeshRenderer[] crownTips)
+                                         out MeshRenderer[] crownTips, out Transform orbitalHover)
         {
             const float drumR = 0.8f, drumH = 0.75f, drumY = 1.1f;
 
-            // Four spindly jointed legs: hip under the drum, knee splayed out, foot splayed further.
-            for (int i = 0; i < 4; i++)
-            {
-                float th = (45f + i * 90f) * Mathf.Deg2Rad;
-                Vector3 dir = new Vector3(Mathf.Sin(th), 0f, Mathf.Cos(th));
-                Vector3 hip = dir * 0.55f + Vector3.up * (drumY + 0.02f);
-                Vector3 knee = dir * 0.85f + Vector3.up * 0.58f;
-                Vector3 foot = dir * 1.05f;
-                OrbitalStrut(root, hip, knee, p.Dark, "OrbitalUpperLeg");
-                OrbitalStrut(root, knee, foot, p.Dark, "OrbitalLowerLeg");
-                Add(root, CharacterMeshes.Sphere(10), p.Dark, knee, Quaternion.identity, Vector3.one * 0.13f, "OrbitalKnee");
-            }
+            // MV-1346: no legs. Everything that makes up the ORBITAL hangs off one hover pivot (the
+            // drum floats and bobs); the collider and the ground shadow stay put.
+            var hover = new GameObject("OrbitalHover").transform;
+            hover.SetParent(root, worldPositionStays: false);
+            hover.localPosition = Vector3.zero;
+            hover.localRotation = Quaternion.identity;
 
             // The drum: warm half above the seam, shared teal below, near-black base band.
             const float cutMid = 0.38f, cutRise = 0.18f;
             Vector3 drumAt = new Vector3(0f, drumY, 0f);
-            Add(root, CharacterMeshes.SplitDrum(drumR, drumH, cutMid, cutRise, upper: true), p.Warm, drumAt, Quaternion.identity, Vector3.one, "OrbitalDrumWarm");
-            Add(root, CharacterMeshes.SplitDrum(drumR, drumH, cutMid, cutRise, upper: false), p.Cool, drumAt, Quaternion.identity, Vector3.one, "OrbitalDrumTeal");
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.78f, 0f), new Vector2(0.815f, 0.02f), new Vector2(0.815f, 0.10f), new Vector2(0.80f, 0.12f) }, 28), p.Dark, drumAt, Quaternion.identity, Vector3.one, "OrbitalBase");
+            Add(hover, CharacterMeshes.SplitDrum(drumR, drumH, cutMid, cutRise, upper: true), p.Warm, drumAt, Quaternion.identity, Vector3.one, "OrbitalDrumWarm");
+            Add(hover, CharacterMeshes.SplitDrum(drumR, drumH, cutMid, cutRise, upper: false), p.Cool, drumAt, Quaternion.identity, Vector3.one, "OrbitalDrumTeal");
+            Add(hover, CharacterMeshes.Lathe(new[] { new Vector2(0.78f, 0f), new Vector2(0.815f, 0.02f), new Vector2(0.815f, 0.10f), new Vector2(0.80f, 0.12f) }, 28), p.Dark, drumAt, Quaternion.identity, Vector3.one, "OrbitalBase");
 
             // The eye: a thick dark socket set into the front, off-centre toward the high side of the seam,
             // with one big gold lens proud of it. Lathe's axis is Y; Euler(90,0,0) turns that onto +Z.
             Quaternion face = Quaternion.Euler(90f, 0f, 0f);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.17f, 0f), new Vector2(0.24f, 0.03f), new Vector2(0.24f, 0.32f), new Vector2(0.19f, 0.35f) }, 20), p.Dark, new Vector3(0.34f, drumY + cutMid, 0.45f), face, Vector3.one, "OrbitalBezel");
-            eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0.34f, drumY + cutMid, 0.79f), Quaternion.identity, new Vector3(0.32f, 0.32f, 0.12f)));
+            Add(hover, CharacterMeshes.Lathe(new[] { new Vector2(0.17f, 0f), new Vector2(0.24f, 0.03f), new Vector2(0.24f, 0.32f), new Vector2(0.19f, 0.35f) }, 20), p.Dark, new Vector3(0.34f, drumY + cutMid, 0.45f), face, Vector3.one, "OrbitalBezel");
+            eyes.Add(Lens(hover, CharacterMeshes.Sphere(20), new Vector3(0.34f, drumY + cutMid, 0.79f), Quaternion.identity, new Vector3(0.32f, 0.32f, 0.12f)));
 
             // The crown: pivot at the drum's top; plate + four tubes + a tip lens per tube.
             var pivot = new GameObject("OrbitalCrown").transform;
-            pivot.SetParent(root, worldPositionStays: false);
+            pivot.SetParent(hover, worldPositionStays: false);
             pivot.localPosition = new Vector3(0f, OrbitalCrownY, 0f);
             Add(pivot, CharacterMeshes.Lathe(new[] { new Vector2(0.30f, 0f), new Vector2(0.46f, 0.02f), new Vector2(0.46f, 0.10f), new Vector2(0.38f, 0.12f) }, 24), p.Dark, Vector3.zero, Quaternion.identity, Vector3.one, "OrbitalCrownPlate");
 
@@ -434,19 +433,13 @@ namespace MaxWorlds.VFX
             }
 
             // The small thin gold ring tell on the crown base — static, off to one side of the front.
-            Add(root, CharacterMeshes.Ring(0.035f, 0.060f, 0.02f, 14), p.Gold, new Vector3(-0.15f, OrbitalCrownY + 0.05f, 0.455f), face, Vector3.one, "OrbitalGoldRing");
+            Add(hover, CharacterMeshes.Ring(0.035f, 0.060f, 0.02f, 14), p.Gold, new Vector3(-0.15f, OrbitalCrownY + 0.05f, 0.455f), face, Vector3.one, "OrbitalGoldRing");
 
+            OrbitalHoverMotion.Attach(hover, root, drumY - 0.01f);
+            orbitalHover = hover;
             crown = pivot;
             crownTubes = tubes;
             crownTips = tips;
-        }
-
-        /// <summary>A straight spindly limb segment between two points (Beam is centred, along +Y).</summary>
-        private static void OrbitalStrut(Transform root, Vector3 a, Vector3 b, Material mat, string name)
-        {
-            Vector3 d = b - a;
-            Add(root, CharacterMeshes.Beam(d.magnitude, 0.04f, 0.03f, 6), mat, (a + b) * 0.5f,
-                Quaternion.FromToRotation(Vector3.up, d.normalized), Vector3.one, name);
         }
 
         /// <summary>Launcher — formerly "Bomber". A six-cell launcher block on a two-wheel chassis, missile noses visible in the cells. Wheels outboard so it is wide at the bottom and the block reads as payload.</summary>
