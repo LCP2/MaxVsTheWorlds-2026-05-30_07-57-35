@@ -1361,7 +1361,16 @@ namespace MaxWorlds.Enemies
         /// not <see cref="RotateToward"/>'s movement-coupled <c>Quaternion.RotateTowards</c> — this must
         /// turn in place while standing still mid-Telegraph/Recover, not only while walking, same idiom
         /// the Dreadnought's own turret aim (<see cref="DreadnoughtTurretTurnRateDegPerSec"/>) uses.</summary>
-        private const float ShieldedFaceTurnRateDegPerSec = 180f;
+        private const float ShieldedFaceTurnRateDegPerSec = 60f; // MV-1358: was 180 — a third, so Max can teleport behind the plate
+
+        /// <summary>MV-1358: yaw degrees a live Shielded elite may still turn THIS tick, from any
+        /// source. Refilled to <see cref="ShieldedFaceTurnRateDegPerSec"/> x dt by
+        /// <see cref="TickShieldedFacing"/>; <see cref="TickShieldedFacing"/> and
+        /// <see cref="RotateToward"/> both spend it, so facing + movement turning can never sum past the cap.</summary>
+        private float _shieldedYawBudget;
+
+        private bool IsShieldedTurnCapped => IsElite && Affix == EliteAffix.Shielded && Team == Team.Enemy
+            && Current != State.Lunge;
 
         /// <summary>MV-1281 point 3: while awake and not mid-lunge/charge (<see cref="State.Lunge"/>
         /// covers both an ordinary lunge and the Cart Charger's own ram — there is no separate "charge"
@@ -1373,13 +1382,16 @@ namespace MaxWorlds.Enemies
         /// <see cref="Current"/> (so it still tracks through Telegraph/Recover/Search, not just Chase),
         /// same unconditional-every-tick footing as <see cref="TickDreadnoughtTurrets"/>; its own
         /// IsElite/Affix/Team gate lives at the call site, the awake/lunge gate lives here.</summary>
-        private void TickShieldedFacing(float dt)
+        public void TickShieldedFacing(float dt)
         {
+            _shieldedYawBudget = ShieldedFaceTurnRateDegPerSec * dt; // MV-1358
             if (_playerTarget == null) return;
             if (!IsAwake || Current == State.Lunge) return;
 
             float bearing = BearingDegrees(transform.position, _playerTarget.position);
-            float yaw = Mathf.MoveTowardsAngle(transform.eulerAngles.y, bearing, ShieldedFaceTurnRateDegPerSec * dt);
+            float from = transform.eulerAngles.y;
+            float yaw = Mathf.MoveTowardsAngle(from, bearing, _shieldedYawBudget);
+            _shieldedYawBudget -= Mathf.Abs(Mathf.DeltaAngle(from, yaw));
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         }
 
@@ -4794,11 +4806,19 @@ namespace MaxWorlds.Enemies
         /// spin once a robot pinned against Max made <paramref name="dir"/> numerically unstable
         /// frame to frame. Capping the RATE means an unreliable direction still reads as a fast
         /// turn, however often it flips, rather than a strobe.</summary>
-        private void RotateToward(Vector3 dir, float dt)
+        public void RotateToward(Vector3 dir, float dt)
         {
             Quaternion target = Quaternion.LookRotation(dir, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation, target, EnemyBodySeparation.DefaultMaxTurnDegreesPerSecond * dt);
+            float maxDeg = EnemyBodySeparation.DefaultMaxTurnDegreesPerSecond * dt;
+            if (IsShieldedTurnCapped) // MV-1358: share the facing tick's per-frame yaw budget
+            {
+                maxDeg = Mathf.Min(maxDeg, Mathf.Max(0f, _shieldedYawBudget));
+                Quaternion before = transform.rotation;
+                transform.rotation = Quaternion.RotateTowards(before, target, maxDeg);
+                _shieldedYawBudget -= Quaternion.Angle(before, transform.rotation);
+                return;
+            }
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, target, maxDeg);
         }
 
         /// <summary>Enforces <see cref="MinBodyDistance"/> against Max's CURRENT position (MV-434)
