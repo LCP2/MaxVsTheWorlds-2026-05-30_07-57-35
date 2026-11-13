@@ -47,11 +47,18 @@ namespace MaxWorlds.Weapons
         /// <summary>Rule 4: TurnRate = TrackingBase + this much more per second airborne.</summary>
         public const float TurnRateGrowthPerSecPerSec = 60f;
 
-        /// <summary>MV-1211: POWER's own visible change — the ball's halo/core diameter at level 1.</summary>
-        public const float MinVisualDiameter = 0.45f;
+        /// <summary>MV-1354: the ball's halo diameter at EVERY POWER level - POWER no longer grows the
+        /// ball (it read as a screen of huge starbursts once HDR bloom was on); it shows as pulse + tinge.</summary>
+        public const float BallDiameter = 0.45f;
 
-        /// <summary>MV-1211: the ball's halo/core diameter at level 8.</summary>
-        public const float MaxVisualDiameter = 0.80f;
+        /// <summary>MV-1354: the ceiling per-channel brightness a pulsing halo/core may reach (MV-1336's
+        /// World 5 emissive ceiling).</summary>
+        public const float PeakChannelCeiling = 1.44f;
+
+        // MV-1354: POWER 1..8 pulse rate (Hz), amplitude (+/- scale and brightness) and red tinge.
+        private static readonly float[] PulseHzTable = { 0f, 0.8f, 1.0f, 1.2f, 1.5f, 1.8f, 2.1f, 2.5f };
+        private static readonly float[] PulseAmpTable = { 0f, 0.06f, 0.08f, 0.10f, 0.12f, 0.14f, 0.16f, 0.18f };
+        private static readonly float[] RedTingeTable = { 0f, 0f, 0f, 0f, 0.25f, 0.40f, 0.55f, 0.70f };
 
         private const float CoreDiameterFraction = 0.35f;
         private const float SpikeSpinDegPerSec = 90f;
@@ -61,12 +68,16 @@ namespace MaxWorlds.Weapons
         private static readonly Color HaloColor = new Color(176f / 255f, 64f / 255f, 1f);   // #B040FF
         private static readonly Color SpikeColor = new Color(230f / 255f, 90f / 255f, 1f);  // #E65AFF
         private static readonly Color CoreColor = new Color(1f, 240f / 255f, 1f);           // #FFF0FF
+        private static readonly Color TingeColor = new Color(1f, 42f / 255f, 42f / 255f);   // #FF2A2A
 
-        /// <summary>MV-1211: POWER's own diameter progression — a straight lerp from
-        /// <see cref="MinVisualDiameter"/> at level 1 to <see cref="MaxVisualDiameter"/> at level 8. Pure,
-        /// so a test can assert it without a live ball instance.</summary>
-        public static float DiameterForPowerLevel(int powerLevel) =>
-            Mathf.Lerp(MinVisualDiameter, MaxVisualDiameter, (Mathf.Clamp(powerLevel, 1, 8) - 1) / 7f);
+        /// <summary>MV-1354: pulse rate in Hz at a POWER level (0 = no pulse at level 1). Pure.</summary>
+        public static float PulseHzForPowerLevel(int powerLevel) => PulseHzTable[Mathf.Clamp(powerLevel, 1, 8) - 1];
+
+        /// <summary>MV-1354: pulse amplitude (fraction, +/- scale and brightness) at a POWER level. Pure.</summary>
+        public static float PulseAmplitudeForPowerLevel(int powerLevel) => PulseAmpTable[Mathf.Clamp(powerLevel, 1, 8) - 1];
+
+        /// <summary>MV-1354: how far the halo colour is lerped toward #FF2A2A at a POWER level. Pure.</summary>
+        public static float RedTingeForPowerLevel(int powerLevel) => RedTingeTable[Mathf.Clamp(powerLevel, 1, 8) - 1];
 
         /// <summary>MV-1211: POWER's own spike-count steps — 4 spikes at levels 1-3, 6 at 4-6, 8 at 7-8.
         /// Pure, so a test can assert it without a live ball instance.</summary>
@@ -104,6 +115,9 @@ namespace MaxWorlds.Weapons
         private Transform[] _spikes;
         private TrailRenderer _trail;
         private float _spikeSpinDeg;
+        private int _powerLevel = 1;
+        private float _pulsePhase;
+        private MaterialPropertyBlock _mpb;
 
         private static readonly Collider[] s_hitColliders = new Collider[16];
 
@@ -124,9 +138,26 @@ namespace MaxWorlds.Weapons
         /// <summary>MV-1336 (MV-465 Tier 2): the resolved emissive colour <see cref="ApplyPowerVisual"/>
         /// set on the white-hot core at the current POWER level — read off the live material, not the
         /// private <see cref="CoreColor"/> field/multiplier that produced it.</summary>
-        public Color ResolvedCoreColor => _core != null
-            ? _core.GetComponent<MeshRenderer>().sharedMaterial.GetColor("_BaseColor")
-            : Color.clear;
+        public Color ResolvedCoreColor => _core != null ? ReadBaseColor(_core.GetComponent<MeshRenderer>()) : Color.clear;
+
+        /// <summary>MV-1354: the halo's resolved emissive colour (pulse + tinge applied).</summary>
+        public Color ResolvedHaloColor => _halo != null ? ReadBaseColor(_halo.GetComponent<MeshRenderer>()) : Color.clear;
+
+        private static Color ReadBaseColor(MeshRenderer mr)
+        {
+            var block = new MaterialPropertyBlock();
+            mr.GetPropertyBlock(block);
+            return block.isEmpty ? mr.sharedMaterial.GetColor("_BaseColor") : block.GetColor("_BaseColor");
+        }
+
+        /// <summary>MV-1354 test seam: pins this ball's pulse phase (radians) and age-zero, then re-applies
+        /// the pulse, so a test can sample a deterministic point on the sine wave.</summary>
+        public void SetPulsePhaseForTests(float phaseRadians)
+        {
+            _pulsePhase = phaseRadians;
+            _age = 0f;
+            ApplyPulse();
+        }
 
         /// <summary>Whether this pooled instance is currently a live, flying ball.</summary>
         public bool IsActiveBall => _active;
@@ -198,6 +229,7 @@ namespace MaxWorlds.Weapons
             ball._targetTransform = null;
             ball._active = true;
             ball._spikeSpinDeg = 0f;
+            ball._pulsePhase = Random.value * Mathf.PI * 2f; // MV-1354: each ball throbs on its own phase
             // Spec: trails are cleared on reuse, not at retire, so the LAST shot's trail doesn't still
             // be fading when a freshly-reused pooled instance spawns somewhere else.
             if (ball._trail != null) ball._trail.Clear();
@@ -259,6 +291,7 @@ namespace MaxWorlds.Weapons
             _spikeSpinDeg += SpikeSpinDegPerSec * dt;
             if (_spikeSpinDeg >= 360f) _spikeSpinDeg -= 360f;
             if (_spikesRoot != null) _spikesRoot.localRotation = Quaternion.AngleAxis(_spikeSpinDeg, Vector3.up);
+            if (_powerLevel > 1) ApplyPulse();
 
             bool launchLegDone = _distanceTravelled >= LaunchLegMetres;
 
@@ -486,28 +519,20 @@ namespace MaxWorlds.Weapons
         /// level, replacing MV-1210's placeholder fixed-size violet sphere.</summary>
         private void ApplyPowerVisual(int powerLevel)
         {
-            float d = DiameterForPowerLevel(powerLevel);
+            float d = BallDiameter;
             int spikeCount = SpikeCountForPowerLevel(powerLevel);
             VisualDiameter = d;
             SpikeCount = spikeCount;
+            _powerLevel = Mathf.Clamp(powerLevel, 1, 8);
 
-            if (_halo != null)
-            {
-                _halo.localScale = Vector3.one * d;
-                SetMaterial(_halo, VfxMaterials.AdditiveTinted(HaloColor));
-            }
+            // MV-1354: halo/core colour and scale come from ApplyPulse (property block); the shared
+            // material underneath is just a plain additive base.
+            SetMaterial(_halo, VfxMaterials.AdditiveTinted(HaloColor));
+            SetMaterial(_core, VfxMaterials.AdditiveTinted(CoreColor));
+            ApplyPulse();
 
-            if (_core != null)
-            {
-                _core.localScale = Vector3.one * (d * CoreDiameterFraction);
-                float levelT = (Mathf.Clamp(powerLevel, 1, 8) - 1) / 7f;
-                // MV-1336 change item 3 ("Light Missile ... cap emissive/HDR colour so nothing exceeds
-                // the Ship looks' bloom threshold [1.2] by more than 20%" -> per-channel ceiling 1.44):
-                // the old 1.6x boost pushed CoreColor's own white channel to 1.6, past that ceiling.
-                SetMaterial(_core, VfxMaterials.AdditiveTinted(CoreColor * Mathf.Lerp(1f, 1.44f, levelT)));
-            }
-
-            Material spikeMat = VfxMaterials.AdditiveTinted(SpikeColor);
+            Material spikeMat = VfxMaterials.AdditiveTinted(
+                Color.Lerp(SpikeColor, TingeColor, RedTingeForPowerLevel(_powerLevel)));
             for (int i = 0; i < _spikes.Length; i++)
             {
                 Transform t = _spikes[i];
@@ -528,6 +553,46 @@ namespace MaxWorlds.Weapons
                 _trail.widthMultiplier = d * 0.4f;
                 _trail.textureScale = new Vector2(6f / Mathf.Max(d, 0.01f), 1f);
             }
+        }
+
+        /// <summary>MV-1354: POWER's level as a sine pulse (scale AND brightness together) plus a red tinge,
+        /// re-applied each tick. Peak per-channel brightness is clamped to <see cref="PeakChannelCeiling"/>.
+        /// Colour goes through a property block so the pulse never mints materials.</summary>
+        private void ApplyPulse()
+        {
+            if (_halo == null) return;
+            float amp = PulseAmplitudeForPowerLevel(_powerLevel);
+            float hz = PulseHzForPowerLevel(_powerLevel);
+            float s = hz > 0f ? Mathf.Sin(Mathf.PI * 2f * hz * _age + _pulsePhase) : 0f;
+            float k = 1f + amp * s;
+
+            _halo.localScale = Vector3.one * (BallDiameter * k);
+            if (_core != null) _core.localScale = Vector3.one * (BallDiameter * CoreDiameterFraction * k);
+
+            Color halo = Color.Lerp(HaloColor, TingeColor, RedTingeForPowerLevel(_powerLevel));
+            PaintBlock(_halo, ClampPeak(halo, k));
+            // Core keeps MV-1336's per-level brightening, then pulses; the product is clamped to the ceiling.
+            float levelMult = Mathf.Lerp(1f, PeakChannelCeiling, (_powerLevel - 1) / 7f);
+            PaintBlock(_core, ClampPeak(CoreColor * (levelMult / (1f + amp)), k));
+        }
+
+        private static Color ClampPeak(Color c, float mult)
+        {
+            float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b)) * mult;
+            if (peak > PeakChannelCeiling) mult *= PeakChannelCeiling / peak;
+            return new Color(c.r * mult, c.g * mult, c.b * mult, 1f);
+        }
+
+        private void PaintBlock(Transform t, Color c)
+        {
+            if (t == null) return;
+            var mr = t.GetComponent<MeshRenderer>();
+            if (mr == null) return;
+            _mpb ??= new MaterialPropertyBlock();
+            mr.GetPropertyBlock(_mpb);
+            _mpb.SetColor("_BaseColor", c);
+            _mpb.SetColor("_Color", c);
+            mr.SetPropertyBlock(_mpb);
         }
 
         /// <summary>A unit direction radiating outward from the ball's own centre, in the local XZ plane

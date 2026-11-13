@@ -24,12 +24,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void BallDiameterAndSpikeCountResolveFromPowerLevel()
         {
-            AssertBallAtPowerLevel(1, 0.45f, 4);
-            AssertBallAtPowerLevel(4, 0.60f, 6);
-            AssertBallAtPowerLevel(8, 0.80f, 8);
+            // MV-1354: POWER no longer changes the ball's size (see MV1354LightMissilePulseTests); only the
+            // spike count still steps with level.
+            AssertBallAtPowerLevel(1, 4);
+            AssertBallAtPowerLevel(4, 6);
+            AssertBallAtPowerLevel(8, 8);
         }
 
-        private static void AssertBallAtPowerLevel(int powerLevel, float expectedDiameter, int expectedSpikes)
+        private static void AssertBallAtPowerLevel(int powerLevel, int expectedSpikes)
         {
             LogAssert.ignoreFailingMessages = true; // VfxMaterials' one-time shader-resolve log line
             LightMissileBall ball;
@@ -43,11 +45,6 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(expectedSpikes, ball.SpikeCount,
                 $"POWER {powerLevel} must resolve {expectedSpikes} spikes");
-
-            float resolvedDiameter = ball.ResolvedBallBounds.size.x;
-            Assert.AreEqual(expectedDiameter, resolvedDiameter, 0.02f,
-                $"POWER {powerLevel}'s resolved renderer-bounds diameter must be ~{expectedDiameter}m, " +
-                $"was {resolvedDiameter:0.000}m");
         }
     }
 }

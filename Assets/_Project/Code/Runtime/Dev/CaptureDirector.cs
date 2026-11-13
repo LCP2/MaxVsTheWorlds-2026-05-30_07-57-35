@@ -688,6 +688,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1340ReefBrightnessCheck());
             Add(BuildMv1342ReefAquaticLookCheck());
             Add(BuildMv1349ReefLookCheck());
+            Add(BuildMv1354LightMissilePowerLook());
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
             return d;
@@ -7926,6 +7927,145 @@ namespace MaxWorlds.Dev
                           $"delta={Mathf.Abs(maxBodyLuma - maxRingLuma):F1} (AC1 floor: >=25)\n"
                         : "Max not found in frame -- AC1's body/ring delta not measured this shot.\n") +
                     $"Orbitals diagnostic: {orbitalsDiagnostic}\n",
+            };
+        }
+
+        // ---- Mv1354LightMissilePowerLook (MV-1354 AC2) ----------------------------------------
+
+        /// <summary>MV-1354 AC2: two shots through the live production camera (Mothership a1, Mobile tier,
+        /// HDR bloom on), each a 5-ball Light Missile volley held still in front of Max - POWER 1, then
+        /// POWER 8. Each ball's bright blob (pixels over 150 luma, 4-connected, flood-filled from the
+        /// ball's own projected pixel) gives a pixel diameter (equivalent circle) and a mean hue.
+        /// One capture each, no tuning loop.</summary>
+        private static CapturePreset BuildMv1354LightMissilePowerLook()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+            var diameters = new[] { new List<float>(), new List<float>() };
+            var hues = new[] { new List<float>(), new List<float>() };
+            var balls = new List<Vector3>();
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            Func<Camera, IEnumerator> SetupLevel(int level) => cam => SetupLevelRoutine(level);
+
+            IEnumerator SetupLevelRoutine(int level)
+            {
+                LightMissileBall.ClearAll();
+                balls.Clear();
+                var max = GameObject.FindGameObjectWithTag("Player");
+                Vector3 centre = (max != null ? max.transform.position : Vector3.zero) + new Vector3(0f, 0f, 3f);
+                centre.y = LightMissileBall.FlightHeight;
+                for (int i = 0; i < 5; i++)
+                {
+                    Vector3 p = centre + new Vector3((i - 2) * 2.0f, 0f, 0f);
+                    balls.Add(p);
+                    LightMissileBall.Spawn(p, Vector3.forward, speed: 0f, damage: 0f, trackingBase: 0f,
+                        areaIndex: 0, powerLevel: level);
+                }
+                for (int i = 0; i < 4; i++) yield return null;
+            }
+
+            Action<Texture2D> Measure(int slot) => tex =>
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+                var visited = new bool[w * h];
+                var stack = new Stack<int>();
+                const int Window = 200;
+
+                foreach (Vector3 wp in balls)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(wp);
+                    if (vp.z <= 0f) continue;
+                    int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+                    // seed = brightest pixel within 20 px of the projected centre
+                    int seed = -1; float best = 150f;
+                    for (int dy = -20; dy <= 20; dy++)
+                    for (int dx = -20; dx <= 20; dx++)
+                    {
+                        int x = cx + dx, y = cy + dy;
+                        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                        float l = Luma(px[y * w + x]);
+                        if (l > best) { best = l; seed = y * w + x; }
+                    }
+                    if (seed < 0) continue;
+
+                    int count = 0; double r = 0, g = 0, b = 0;
+                    stack.Clear(); stack.Push(seed); visited[seed] = true;
+                    while (stack.Count > 0)
+                    {
+                        int idx = stack.Pop();
+                        int x = idx % w, y = idx / w;
+                        Color32 c = px[idx];
+                        count++; r += c.r; g += c.g; b += c.b;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), ny = y + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                            if (Mathf.Abs(nx - cx) > Window || Mathf.Abs(ny - cy) > Window) continue;
+                            int ni = ny * w + nx;
+                            if (visited[ni] || Luma(px[ni]) <= 150f) continue;
+                            visited[ni] = true; stack.Push(ni);
+                        }
+                    }
+                    diameters[slot].Add(2f * Mathf.Sqrt(count / Mathf.PI));
+                    Color.RGBToHSV(new Color((float)(r / count) / 255f, (float)(g / count) / 255f, (float)(b / count) / 255f),
+                        out float hue, out _, out _);
+                    hues[slot].Add(hue * 360f);
+                }
+            };
+
+            string Summary(int slot, string label)
+            {
+                if (diameters[slot].Count == 0) return $"{label}: no blobs measured\n";
+                float d = 0f; foreach (float v in diameters[slot]) d += v; d /= diameters[slot].Count;
+                // hues sit near magenta (~280-330 deg); average on the circle via unit vectors
+                double sx = 0, sy = 0;
+                foreach (float hdeg in hues[slot]) { sx += Mathf.Cos(hdeg * Mathf.Deg2Rad); sy += Mathf.Sin(hdeg * Mathf.Deg2Rad); }
+                float hue = Mathf.Atan2((float)sy, (float)sx) * Mathf.Rad2Deg; if (hue < 0f) hue += 360f;
+                return $"{label}: {diameters[slot].Count} blobs, mean blob diameter={d:F1}px " +
+                       $"(per ball: {string.Join(", ", diameters[slot].ConvertAll(v => v.ToString("F1")))}), mean hue={hue:F1} deg\n";
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1354lightmissilepower",
+                LogTag = "[MV1354Capture]",
+                Flag = "-mv1354shot",
+                ArmFile = "Temp/mv1354.arm",
+                HeadlessMarker = "Temp/mv1354.headless",
+                DoneFileName = "_mv1354_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the live production camera
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1354-L1-volley", SetupLevel(1), measure: Measure(0)),
+                    new CaptureShot("MV-1354-L8-volley", SetupLevel(8), measure: Measure(1)),
+                },
+                Cleanup = () => LightMissileBall.DestroyPoolForTests(),
+                ExtraReport = () => Summary(0, "POWER 1") + Summary(1, "POWER 8"),
             };
         }
 
