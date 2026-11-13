@@ -681,7 +681,7 @@ namespace MaxWorlds.Rendering
         /// textured one) — this reuses that same flat-material idiom, so the "graduated" look is carried
         /// by genuinely stepped geometry instead, which is also the literal shape AC4's own acceptance
         /// test measures ("at least 4 distinct steps, each step at least 5 apart").</summary>
-        private static void BuildGraduatedPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
+        public static void BuildGraduatedPool(Transform parent, Vector3 groundCentre, float radius, Color tone)
         {
             // MV-1274 triage (21 Oct, Jira comment 15685): the original strengths put the pool centre at
             // ~224-232 luma, clipped flat against the Neutral tonemapper's shoulder -- AC4's own falloff

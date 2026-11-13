@@ -34,8 +34,8 @@ namespace MaxWorlds.Tests.EditMode
             // --- AC1: the eight materials exist with the exact hex values. ---
             AssertMaterialColor(WorldMaterials.M_ShipFloor, 0x2E, 0x6B, 0x78, "M_ShipFloor"); // MV-1342: was 0x1D2C3B (MV-1019: was 0x132234)
             AssertMaterialColor(WorldMaterials.M_ShipWall, 0x1E, 0x32, 0x47, "M_ShipWall");
-            AssertMaterialColor(WorldMaterials.M_Circuit_Cyan, 0x3C, 0xDC, 0xF2, "M_Circuit_Cyan");
-            AssertMaterialColor(WorldMaterials.M_Circuit_Purple, 0xC4, 0x55, 0xE8, "M_Circuit_Purple");
+            AssertMaterialColor(WorldMaterials.M_Circuit_Cyan, 0x5F, 0xF3, 0xE0, "M_Circuit_Cyan"); // MV-1349: accent cyan
+            AssertMaterialColor(WorldMaterials.M_Circuit_Purple, 0xFF, 0x5F, 0xA8, "M_Circuit_Purple"); // MV-1349: accent pink
             AssertMaterialColor(WorldMaterials.M_BioGlow, 0x5C, 0xF2, 0xA4, "M_BioGlow");
             AssertMaterialColor(WorldMaterials.M_Hazard, 0xFF, 0x8B, 0x2E, "M_Hazard");
             AssertMaterialColor(WorldMaterials.M_MetalDark, 0x0C, 0x16, 0x22, "M_MetalDark");

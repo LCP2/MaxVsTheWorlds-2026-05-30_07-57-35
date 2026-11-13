@@ -254,6 +254,166 @@ namespace MaxWorlds.Arena
             }
         }
 
+
+        // ---------------------------------------------------------------- MV-1349: wall work lamps
+
+        /// <summary>MV-1349: spacing of caged amber work lamps along a room-facing wall, metres.</summary>
+        public const float WallLampSpacing = 6f;
+        public const float WallLampMountHeight = 2.4f;
+        /// <summary>A wall no longer than this gets no lamp; every wall longer than it gets at least one.</summary>
+        public const float WallLampMinWallLength = 4f;
+        public const float WallLampPoolDiameter = 6f;
+        public const float WallLampPoolStrength = 0.5f;
+        /// <summary>At most this many realtime point lights per area (the lamps nearest its centre).</summary>
+        public const int MaxRealtimeLampsPerArea = 2;
+        private const float WallLampEndMargin = 0.8f;
+        private const float WallLampGateClearance = 0.9f;
+
+        public struct WallLampSite
+        {
+            public string areaId;
+            public Wall wall;
+            /// <summary>World position on the wall's inner face line (y = 0).</summary>
+            public Vector3 ground;
+            public Vector3 inward;
+            public Vector3 along;
+            public bool realtime;
+        }
+
+        /// <summary>Pure placement plan for one area's wall lamps - no scene needed. One lamp per
+        /// <see cref="WallLampSpacing"/> of wall, centred in its slot, nudged clear of any gate or
+        /// window on that wall; at most <see cref="MaxRealtimeLampsPerArea"/> sites (nearest the area
+        /// centre) are flagged <see cref="WallLampSite.realtime"/>.</summary>
+        public static List<WallLampSite> PlanWallLamps(WorldArea area, WorldConfig cfg, float wallThickness)
+        {
+            var sites = new List<WallLampSite>();
+            if (area == null) return sites;
+
+            foreach (Wall wall in AllWalls)
+            {
+                Span span = area.WallSpan(wall);
+                float length = span.Max - span.Min;
+                if (length <= WallLampMinWallLength) continue;
+
+                var blocked = new List<Vector2>();   // (min, max) world-along ranges
+                if (cfg?.gates != null)
+                    foreach (WorldGate g in cfg.gates)
+                    {
+                        if (g == null) continue;
+                        AddGateBlock(blocked, g.from, g.width, area, wall, span);
+                        AddGateBlock(blocked, g.to, g.width, area, wall, span);
+                    }
+                if (area.windows != null)
+                    foreach (WorldAreaWindow w in area.windows)
+                        if (w != null && WallEnums.TryParse(w.wall, out Wall parsed) && parsed == wall)
+                            blocked.Add(new Vector2(span.Min + length * Mathf.Min(w.from, w.to),
+                                                    span.Min + length * Mathf.Max(w.from, w.to)));
+
+                int count = Mathf.Max(1, Mathf.RoundToInt(length / WallLampSpacing));
+                bool alongX = area.WallRunsAlongX(wall);
+                float coord = area.WallCoord(wall);
+                Vector3 inward;
+                switch (wall)
+                {
+                    case Wall.N: inward = new Vector3(0f, 0f, -1f); break;
+                    case Wall.S: inward = new Vector3(0f, 0f, 1f); break;
+                    case Wall.E: inward = new Vector3(-1f, 0f, 0f); break;
+                    default: inward = new Vector3(1f, 0f, 0f); break;
+                }
+                Vector3 alongV = alongX ? Vector3.right : Vector3.forward;
+                float faceCoord = coord + (inward.x + inward.z) * wallThickness * 0.5f;
+
+                for (int i = 0; i < count; i++)
+                {
+                    float slot = span.Min + length * (i + 0.5f) / count;
+                    if (!TryClear(slot, blocked, span, out float at)) continue;
+                    Vector3 ground = alongX ? new Vector3(at, 0f, faceCoord) : new Vector3(faceCoord, 0f, at);
+                    sites.Add(new WallLampSite { areaId = area.id, wall = wall, ground = ground, inward = inward, along = alongV });
+                }
+            }
+
+            // The lamps nearest the area centre carry the only realtime lights.
+            var centre = new Vector3((area.XMin + area.XMax) * 0.5f, 0f, (area.ZMin + area.ZMax) * 0.5f);
+            var order = new List<int>();
+            for (int i = 0; i < sites.Count; i++) order.Add(i);
+            order.Sort((a, b) => (sites[a].ground - centre).sqrMagnitude.CompareTo((sites[b].ground - centre).sqrMagnitude));
+            for (int k = 0; k < order.Count && k < MaxRealtimeLampsPerArea; k++)
+            {
+                WallLampSite s = sites[order[k]];
+                s.realtime = true;
+                sites[order[k]] = s;
+            }
+            return sites;
+        }
+
+        private static void AddGateBlock(List<Vector2> blocked, WorldGateEndpoint e, float width, WorldArea area, Wall wall, Span span)
+        {
+            if (e == null || e.area != area.id) return;
+            if (!WallEnums.TryParse(e.wall, out Wall parsed) || parsed != wall) return;
+            float centre = span.Min + (span.Max - span.Min) * e.pos;
+            float half = width * 0.5f + WallLampGateClearance;
+            blocked.Add(new Vector2(centre - half, centre + half));
+        }
+
+        private static bool IsBlocked(float at, List<Vector2> blocked)
+        {
+            foreach (Vector2 r in blocked) if (at >= r.x && at <= r.y) return true;
+            return false;
+        }
+
+        /// <summary>The slot, or the nearest clear position within 3 m of it, kept off the wall's corners.</summary>
+        private static bool TryClear(float slot, List<Vector2> blocked, Span span, out float at)
+        {
+            float lo = span.Min + WallLampEndMargin, hi = span.Max - WallLampEndMargin;
+            for (float d = 0f; d <= 3f; d += 0.5f)
+                for (int sign = -1; sign <= 1; sign += 2)
+                {
+                    float c = slot + sign * d;
+                    if (c < lo || c > hi || IsBlocked(c, blocked)) continue;
+                    at = c;
+                    return true;
+                }
+            at = slot;
+            return false;
+        }
+
+        /// <summary>MV-1349 change 3: caged amber lamps on every room-facing wall - fitting plus a graduated
+        /// additive floor pool (shared per-tone material, no collider), and a realtime point light only
+        /// on each area's <see cref="MaxRealtimeLampsPerArea"/> centre-nearest lamps.</summary>
+        public static void BuildWallLamps(Transform host, WorldConfig cfg, float wallHeight, float wallThickness)
+        {
+            if (host == null || cfg?.areas == null) return;
+
+            var root = new GameObject("Reef Wall Lamps").transform;
+            root.SetParent(host, false);
+            Color amber = WorldMaterials.ReefWorkLampAmber;
+            float mount = Mathf.Min(WallLampMountHeight, wallHeight * 0.85f);
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                foreach (WallLampSite site in PlanWallLamps(area, cfg, wallThickness))
+                {
+                    string name = $"Wall Lamp {site.areaId} {site.wall} {site.ground.x:F0},{site.ground.z:F0}";
+                    GameObject lamp = StormdrainLightKit.BuildBulkheadLamp(root, name, site.ground, site.inward,
+                        site.along, amber, pulsing: false, mountHeight: mount, withPool: false);
+                    ShipKit.BuildGraduatedPool(lamp.transform,
+                        site.inward * (WallLampPoolDiameter * 0.5f * 0.55f),
+                        WallLampPoolDiameter * 0.5f, amber * WallLampPoolStrength);
+
+                    if (!site.realtime) continue;
+                    var lightGo = new GameObject("Lamp Light");
+                    lightGo.transform.SetParent(lamp.transform, false);
+                    lightGo.transform.localPosition = site.inward * (StormdrainLightKit.BulkheadStandoff + 0.4f) + Vector3.up * mount;
+                    var light = lightGo.AddComponent<Light>();
+                    light.type = LightType.Point;
+                    light.color = amber;
+                    light.range = 7f;
+                    light.intensity = 1.6f;
+                    light.shadows = LightShadows.None;
+                }
+            }
+        }
+
         /// <summary>Stable, cross-platform string hash (FNV-1a) — same algorithm/reasoning as
         /// <c>ReefFloorDetail.StableHash</c>, its own small copy rather than a cross-class dependency
         /// for one pure function.</summary>

@@ -380,6 +380,8 @@ namespace MaxWorlds.Arena
             // wall IS a given room's own north side, same reason the three calls above already live
             // here rather than inside ReefKit.DressHull itself.
             ReefAreaKit.BuildFarWallLight(host, cfg, walls, wallHeight);
+            // MV-1349: caged amber work lamps + floor pools on every room-facing wall.
+            ReefAreaKit.BuildWallLamps(host, cfg, wallHeight, wallThickness);
 
             // MV-1258: one hero set piece per room type (Lee's 17 Oct table) — needs every structure-kit/
             // wall/gate pass above to have already run, since a room's landmark either stands in its

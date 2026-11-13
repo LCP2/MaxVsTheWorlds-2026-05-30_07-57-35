@@ -401,19 +401,19 @@ namespace MaxWorlds.Rendering
             // Bright aqua-teal — light through water, not a flat white sun. Hue ~187deg, matching the
             // deck albedo's own #265C68/#20505C panel tones (see WorldMaterials) so the lit floor and
             // the light hitting it agree.
-            KeyColor = new Color(0.42f, 0.80f, 0.78f),
+            KeyColor = new Color(0.78f, 0.95f, 1.00f),          // MV-1349: cool white-cyan key
             // MV-1342: roughly 2.4x MV-1340's own 1.89 (itself x2.1 off MV-1250's 0.9) — AC1's 70-90/255
             // target is ~3x MV-1340's best measured median (22.7/255), and MV-1340's own round 1->2 data
             // point (x1.4->x2.1 moved median only 16.1->22.7, sublinear) says intensity alone won't get
             // there without PostExposure sharing the load (see PostExposure's own comment).
-            KeyIntensity = 4.5f,
-            KeyEuler = new Vector3(62f, -30f, 0f),
-            ShadowStrength = 0.6f,     // down slightly from 0.68 — a bright biome lets more fill through, same reasoning Default's own ShadowStrength comment gives
+            KeyIntensity = 2.3f,
+            KeyEuler = new Vector3(58f, -45f, 0f),       // MV-1349: high, from the south-east
+            ShadowStrength = 0.7f,     // down slightly from 0.68 — a bright biome lets more fill through, same reasoning Default's own ShadowStrength comment gives
 
             // Teal bounce off the hull plating — a shade darker/greener than the key, same role this
             // field always plays (keeps the shadow side of a pipe or bulkhead from crushing to black).
-            FillColor = new Color(0.20f, 0.56f, 0.55f),
-            FillIntensity = 3.6f,     // same x2.4-ish ratio to MV-1340's 1.62 as KeyIntensity's own jump
+            FillColor = new Color(0.14f, 0.34f, 0.42f),
+            FillIntensity = 1.2f,     // same x2.4-ish ratio to MV-1340's 1.62 as KeyIntensity's own jump
             FillEuler = new Vector3(20f, 140f, 0f),
 
             // The only warm light anywhere — hazard orange, matching Max's own body colour, so it reads
@@ -421,21 +421,21 @@ namespace MaxWorlds.Rendering
             // ceiling ("a subtle accent, not a second light source") is unchanged by this relight — a
             // brighter room needs this LESS, not more, to keep Max legible against the floor.
             RimColor = new Color(1f, 0.56f, 0.26f),
-            RimIntensity = 0.8f,
+            RimIntensity = 0.5f,
             RimEuler = new Vector3(12f, 200f, 0f),
 
             // Bright teal-green, every term — sky, equator AND ground — matching the deck's own panel
             // hue. No green/sludge equator band like Stormdrain's: the Reef has no sludge, only hull
             // plate and bio-glow.
-            AmbientSky = new Color(0.34f, 0.58f, 0.58f),
-            AmbientEquator = new Color(0.27f, 0.50f, 0.51f),
-            AmbientGround = new Color(0.17f, 0.34f, 0.35f),
+            AmbientSky = new Color(0.17f, 0.28f, 0.34f),   // MV-1349: cool blue-teal sky, Rec709 luma ~0.26
+            AmbientEquator = new Color(0.10f, 0.19f, 0.24f),
+            AmbientGround = new Color(0.03f, 0.06f, 0.08f), // MV-1349: dark ground
 
             // Teal fog, lighter than MV-1340's near-black navy (0.025/0.06/0.08) to match the room's own
             // new brightness — still denser than Stormdrain's 0.018/City's 0.010 (a flooded hull's far
             // walls still fall off into the deep, just a brighter deep).
-            FogColor = new Color(0.16f, 0.34f, 0.35f),
-            FogDensity = 0.016f,
+            FogColor = new Color(0.04f, 0.11f, 0.15f),       // MV-1349: dark blue-teal
+            FogDensity = 0.010f,
 
             // Unused — ApplySky nulls the skybox for this biome (BiomePalette.Reef.RemovesSkybox =
             // true) — but filled so the struct is honest (same reasoning Stormdrain's own doc gives).
@@ -475,26 +475,26 @@ namespace MaxWorlds.Rendering
             // post lift (same idiom this struct always used) — 136.4 * (1.23/2.0) ~= 84, inside AC1's
             // target band — scene intensity above still carries the bulk of the brightness, same
             // "lift the scene, not post" principle MV-1275/MV-1340 established for this struct.
-            PostExposure = 0.3f,
+            PostExposure = 0.1f,   // MV-1349: small lift (MV-1275 lesson)
             // MV-1342: 11 -> 9. A much brighter base exposure already gives the hull panel/seam ratio
             // MV-1339 baked into the floor texture more raw dynamic range to work with; the extra push
             // MV-1340's +1 contrast nudge needed against a near-black room would now over-punch the
             // highlights at this brightness.
-            Contrast = 9f,
+            Contrast = 10f,
             // MV-1342: 4 -> 9. The Reef's own hull panels carry real hue now (teal-green, not a flat
             // navy near black where saturation barely registers) — a bright biome needs enough
             // saturation to read as coloured rather than washed-out pastel, same reasoning Default's own
             // Saturation=10 gives for the Backyard.
-            Saturation = 9f,
+            Saturation = 8f,
             ColorFilter = Color.white,
-            ShadowTint = new Color(0.28f, 0.48f, 0.50f),    // cool shadows lean teal, not navy
-            HighlightTint = new Color(0.55f, 0.9f, 0.88f),  // cool highlights too — no warm grade anywhere
+            ShadowTint = new Color(0.22f, 0.38f, 0.48f),    // cool shadows lean teal, not navy
+            HighlightTint = new Color(0.70f, 0.92f, 0.95f),  // cool highlights too — no warm grade anywhere
 
             // Bloom threshold unchanged (MV-1340) — the kit's own cyan/magenta strips, the bio-glow
             // growth and the drum's hazard rim still need to read as glowing against this brighter room,
             // same idiom City/ShipBase already use.
-            BloomThreshold = 0.9f,
-            BloomIntensity = 0.6f,
+            BloomThreshold = 0.85f,
+            BloomIntensity = 0.45f,
             BloomScatter = 0.6f,
             BloomTint = new Color(0.6f, 0.9f, 1f),
 

@@ -114,10 +114,15 @@ namespace MaxWorlds.Rendering
         // panel tone would clip the baked texture flat at 1.0 and lose the lighter panel's own colour).
         public static readonly Color ReefShipFloor = HexColor(0x2E6B78);
         public static readonly Color ReefShipWall = HexColor(0x1E3247);
-        public static readonly Color ReefCircuitCyan = HexColor(0x3CDCF2);
-        public static readonly Color ReefCircuitPurple = HexColor(0xC455E8);
+        public static readonly Color ReefCircuitCyan = HexColor(0x3CDCF2);   // robots wear this (Lee: robot colours unchanged, MV-1349) -- block/strip geometry uses ReefAccentCyan
+        public static readonly Color ReefCircuitPurple = HexColor(0xFF5FA8);   // MV-1349: bioluminescent pink accent (no pastel violet)
         public static readonly Color ReefBioGlow = HexColor(0x5CF2A4);
         public static readonly Color ReefHazard = HexColor(0xFF8B2E);
+        /// <summary>MV-1349 accents: work-lamp amber, brass, copper — with cyan/pink above the only saturated colours in the Reef.</summary>
+        public static readonly Color ReefAccentCyan = HexColor(0x5FF3E0);
+        public static readonly Color ReefWorkLampAmber = HexColor(0xFFB35A);
+        public static readonly Color ReefBrass = HexColor(0xA07A3A);
+        public static readonly Color ReefCopper = HexColor(0xB06A34);
         public static readonly Color ReefMetalDark = HexColor(0x0C1622);
 
         // MV-1019: a bare cargo crate used to read SurfaceKind.Prop off the general biome sweep
@@ -173,7 +178,7 @@ namespace MaxWorlds.Rendering
         // are close but not identical) for the same reason those were split out: a value tweak to one
         // must never silently relight the other.
         public static readonly Color ReefKelpGreen = HexColor(0x46FF9A);
-        public static readonly Color ReefKelpMagenta = HexColor(0xFF4FD8);
+        public static readonly Color ReefKelpMagenta = HexColor(0xFF5FA8);   // MV-1349: accent pink
         public static readonly Color ReefLampViolet = HexColor(0xC45CFF);
 
         // MV-1256: the floor-detail pass's own two new surfaces — a DIM drainage-grate glow (its own
@@ -208,7 +213,7 @@ namespace MaxWorlds.Rendering
 
         public static Material M_ShipFloor => ReefDeckFloorMaterial();
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
-        public static Material M_Circuit_Cyan => ReefMaterial("M_Circuit_Cyan", ReefCircuitCyan, emissive: true);
+        public static Material M_Circuit_Cyan => ReefMaterial("M_Circuit_Cyan", ReefAccentCyan, emissive: true);
         public static Material M_Circuit_Purple => ReefMaterial("M_Circuit_Purple", ReefCircuitPurple, emissive: true);
         public static Material M_BioGlow => ReefMaterial("M_BioGlow", ReefBioGlow, emissive: true);
         public static Material M_Hazard => ReefMaterial("M_Hazard", ReefHazard, emissive: true);

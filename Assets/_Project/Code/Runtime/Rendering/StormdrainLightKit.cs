@@ -93,7 +93,7 @@ namespace MaxWorlds.Rendering
         /// </summary>
         public static GameObject BuildBulkheadLamp(Transform parent, string name, Vector3 groundAt,
                                                     Vector3 inward, Vector3 along, Color tone, bool pulsing,
-                                                    float mountHeight = BulkheadHeight)
+                                                    float mountHeight = BulkheadHeight, bool withPool = true)
         {
             var root = new GameObject(name);
             root.transform.SetParent(parent, false);
@@ -146,7 +146,8 @@ namespace MaxWorlds.Rendering
             AddAdditiveQuad(root.transform, "Bloom", fittingCenter + inward * 0.10f,
                 new Vector3(LensRadius * 2.6f, LensRadius * 2.6f, 1f), faceIntoRoom, tone * BloomStrength);
 
-            AddAdditiveQuad(root.transform, "Pool", inward * (PoolRadius * 0.55f) + Vector3.up * 0.012f,
+            if (withPool)
+                AddAdditiveQuad(root.transform, "Pool", inward * (PoolRadius * 0.55f) + Vector3.up * 0.012f,
                 new Vector3(PoolRadius * 2f, PoolRadius * 2f, 1f), Quaternion.Euler(90f, 0f, 0f), tone * PoolStrength);
 
             if (pulsing)

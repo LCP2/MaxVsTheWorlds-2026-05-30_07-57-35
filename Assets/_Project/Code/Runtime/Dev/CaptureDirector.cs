@@ -687,6 +687,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1339ReefHullPanelCheck());
             Add(BuildMv1340ReefBrightnessCheck());
             Add(BuildMv1342ReefAquaticLookCheck());
+            Add(BuildMv1349ReefLookCheck());
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
             return d;
@@ -7514,6 +7515,92 @@ namespace MaxWorlds.Dev
                           $"luma={laneFloorLuma:F1}/255, delta={Mathf.Abs(laneBandLuma - laneFloorLuma):F1} " +
                           $"(AC5 floor: hue or luma delta >=20)\n"
                         : "a16: lane/floor sample point(s) fell outside the captured frame -- AC5 not measured this shot.\n"),
+            };
+        }
+
+        // ---- Mv1349ReefLookCheck (MV-1349 AC3) -----------------------------------------------
+
+        /// <summary>MV-1349's one-shot evidence for the Reef relook: the real Reef under the Mobile tier at
+        /// the live play camera (Cinemachine live, Max teleported by
+        /// <see cref="DevModeController.TryJumpToArea"/>, same route as
+        /// <see cref="BuildMv1266ReefPlayCameraCheck"/>). Shoots a1 (10, 37), a2 (13, 13) and a3 (37.5, 8.5)
+        /// and reports each frame's median and 90th-percentile luminance. Runs once; the hand-off quotes
+        /// whatever it measures (targets a1 54, a2 54, a3 47, +/-10).</summary>
+        private static CapturePreset BuildMv1349ReefLookCheck()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+            var median = new float[3] { -1f, -1f, -1f };
+            var p90 = new float[3] { -1f, -1f, -1f };
+
+            IEnumerator JumpAndSettle(string areaId)
+            {
+                if (!DevModeController.TryJumpToArea(areaId))
+                    throw new CaptureAbortException($"DevModeController.TryJumpToArea(\"{areaId}\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                yield return JumpAndSettle("a1");
+            }
+
+            IEnumerator SetupA2(Camera cam) => JumpAndSettle("a2");
+            IEnumerator SetupA3(Camera cam) => JumpAndSettle("a3");
+
+            Action<Texture2D> Measure(int slot) => tex =>
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                var lumas = new List<float>(w * h / 16 + 1);
+                for (int y = 0; y < h; y += 4)
+                for (int x = 0; x < w; x += 4)
+                {
+                    Color32 c = px[y * w + x];
+                    lumas.Add(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b);
+                }
+                lumas.Sort();
+                median[slot] = lumas.Count == 0 ? 0f : lumas[lumas.Count / 2];
+                p90[slot] = lumas.Count == 0 ? 0f : lumas[Mathf.Min(lumas.Count - 1, (int)(lumas.Count * 0.90f))];
+            };
+
+            return new CapturePreset
+            {
+                Key = "mv1349reeflook",
+                LogTag = "[MV1349Capture]",
+                Flag = "-mv1349shot",
+                ArmFile = "Temp/mv1349.arm",
+                HeadlessMarker = "Temp/mv1349.headless",
+                DoneFileName = "_mv1349_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Reef);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1349-a1-cargo-bay", NoSetup, measure: Measure(0)),
+                    new CaptureShot("MV-1349-a2-companionway", SetupA2, measure: Measure(1)),
+                    new CaptureShot("MV-1349-a3-reactor-junction", SetupA3, measure: Measure(2)),
+                },
+                ExtraReport = () =>
+                    $"a1 (10,37): median luminance={median[0]:F1}/255 p90={p90[0]:F1} (target 54 +/-10)\n" +
+                    $"a2 (13,13): median luminance={median[1]:F1}/255 p90={p90[1]:F1} (target 54 +/-10)\n" +
+                    $"a3 (37.5,8.5): median luminance={median[2]:F1}/255 p90={p90[2]:F1} (target 47 +/-10)\n",
             };
         }
 
