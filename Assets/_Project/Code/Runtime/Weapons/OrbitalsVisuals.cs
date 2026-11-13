@@ -57,6 +57,7 @@ namespace MaxWorlds.Weapons
         private LineRenderer _reachRing;
         private Material _ringMaterial;
         private bool _built;
+        private EasedValue _diameterEase;
 
         /// <summary>Orb <paramref name="index"/>'s own resolved world-space bounds (MV-465 Tier 2) —
         /// read off the glow's live <see cref="Renderer"/> after <see cref="Tick"/> has scaled it, not
@@ -85,14 +86,19 @@ namespace MaxWorlds.Weapons
             Mathf.Lerp(MinVisualDiameter, MaxVisualDiameter,
                 WeaponCatalog.VisualStrengthFraction(Mathf.Max(1, powerLevel), Mathf.Max(1, maxLevel)));
 
-        private void Update() => Tick();
+        private void Update() => Tick(Time.deltaTime);
 
         /// <summary>The real per-frame refresh — public so an EditMode test can drive it deterministically
         /// without a live PlayerLoop, same seam <see cref="Orbitals.Tick"/> itself carries. Resolves
         /// <see cref="_orbitals"/> lazily rather than in <c>Awake</c> — <c>Awake</c> never runs as a side
         /// effect of <c>AddComponent</c> outside Play mode, the same reason <c>Orbitals</c> itself and
         /// every sibling weapon component here carry no Awake-set state of their own.</summary>
-        public void Tick()
+        public void Tick() => Tick(0f);
+
+        /// <summary>MV-1355: <paramref name="dt"/> drives the 0.6 s ease-out of the orb diameter after a
+        /// POWER upgrade (the first call adopts the real diameter outright, so a fresh component never
+        /// eases in from zero).</summary>
+        public void Tick(float dt)
         {
             if (_orbitals == null) _orbitals = GetComponent<Orbitals>();
 
@@ -108,7 +114,9 @@ namespace MaxWorlds.Weapons
 
             int count = Mathf.Clamp(_orbitals.OrbCount, 0, Orbitals.MaxOrbs);
             int powerLevel = WeaponSystemState.OrbitalsTrackLevel(OrbitalsTrackKind.Power);
-            float diameter = DiameterForPowerLevel(powerLevel, WeaponCatalog.MaxLevel(OrbitalsTrackKind.Power));
+            _diameterEase.Step(DiameterForPowerLevel(powerLevel, WeaponCatalog.MaxLevel(OrbitalsTrackKind.Power)),
+                dt, Orbitals.GrowthEaseSeconds);
+            float diameter = _diameterEase.Value;
             float brightnessT = WeaponCatalog.VisualStrengthFraction(Mathf.Max(1, powerLevel),
                 Mathf.Max(1, WeaponCatalog.MaxLevel(OrbitalsTrackKind.Power)));
 

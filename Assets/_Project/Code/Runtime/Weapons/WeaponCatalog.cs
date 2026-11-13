@@ -316,14 +316,14 @@ namespace MaxWorlds.Weapons
         };
 
         /// <summary>The level cap for an ORBITALS-only track (MV-1236), matching
-        /// <c>rig_board.ship.json</c>'s own per-node <c>maxLevel</c> — ORBS caps at 4, REACH at 4,
-        /// POWER at 5, SPIN at 4 (all owned from level 1).</summary>
+        /// <c>rig_board.ship.json</c>'s own per-node <c>maxLevel</c> — ORBS caps at 7, REACH at 4,
+        /// POWER at 5, SPIN at 6 (all owned from level 1).</summary>
         public static int MaxLevel(OrbitalsTrackKind kind) => kind switch
         {
-            OrbitalsTrackKind.OrbCount => 4,
+            OrbitalsTrackKind.OrbCount => 7,
             OrbitalsTrackKind.Reach => 4,
             OrbitalsTrackKind.Power => 5,
-            OrbitalsTrackKind.Spin => 4,
+            OrbitalsTrackKind.Spin => 6,
             _ => 1,
         };
 

@@ -24,14 +24,26 @@ namespace MaxWorlds.Weapons
         /// <summary>Rule: orbs circle at this height over Max's own root — "over cover".</summary>
         public const float OrbitHeight = 1.2f;
 
-        /// <summary>Rule: the 2D (XZ) contact radius against a Team.Enemy IDamageable.</summary>
-        public const float ContactRadius = 0.35f;
+        /// <summary>Rule: the 2D (XZ) contact radius against a Team.Enemy IDamageable. MV-1355: 0.35 -> 0.7
+        /// (Lee, iPhone: "only does damage in quite a narrow band").</summary>
+        public const float ContactRadius = 0.7f;
+
+        /// <summary>MV-1355: each tick tests the orb's whole path since last tick, sampled so no step is
+        /// longer than this many metres of arc (each sample is a <see cref="ContactRadius"/> disc, so the
+        /// samples overlap into a continuous swept band and a fast orb cannot step past a robot).</summary>
+        public const float SweepStepMetres = 0.3f;
+
+        /// <summary>MV-1355: seconds a POWER/REACH upgrade eases the orbit radius (and the orb diameter)
+        /// from the old value to the new one instead of snapping.</summary>
+        public const float GrowthEaseSeconds = 0.6f;
+
+        private const int MaxSweepSamples = 64;
 
         /// <summary>Rule: the same orb cannot hit the same target again this soon.</summary>
         public const float PerTargetHitCooldownSeconds = 0.8f;
 
-        /// <summary>Rule: at most 5 orbs, whatever ORBS's own level resolves to.</summary>
-        public const int MaxOrbs = 5;
+        /// <summary>Rule: at most 8 orbs, whatever ORBS's own level resolves to (MV-1355: 5 -> 8).</summary>
+        public const int MaxOrbs = 8;
 
         private static readonly Collider[] s_hitColliders = new Collider[16];
 
@@ -41,6 +53,7 @@ namespace MaxWorlds.Weapons
         private readonly Dictionary<IDamageable, float>[] _slotCooldowns = BuildSlotCooldowns();
 
         private float _spinAngleDeg;
+        private EasedValue _reachEase;
 
         private static Dictionary<IDamageable, float>[] BuildSlotCooldowns()
         {
@@ -57,10 +70,15 @@ namespace MaxWorlds.Weapons
                 AbilityTuning.DefaultOrbitalsBaseOrbCount, AbilityTuning.DefaultOrbitalsOrbCountPerLevel),
             0, MaxOrbs);
 
-        /// <summary>The orbit radius right now — REACH's (<c>s_rad</c>) current level.</summary>
-        public float Reach => AbilityTuning.OrbitalsReachMetres(
+        /// <summary>The orbit radius REACH's (<c>s_rad</c>) current level calls for.</summary>
+        public float TargetReach => AbilityTuning.OrbitalsReachMetres(
             WeaponSystemState.OrbitalsTrackLevel(OrbitalsTrackKind.Reach),
             AbilityTuning.DefaultOrbitalsBaseReachMetres, AbilityTuning.DefaultOrbitalsReachPerLevel);
+
+        /// <summary>The orbit radius right now (MV-1355): <see cref="TargetReach"/>, eased in over
+        /// <see cref="GrowthEaseSeconds"/> after an upgrade. Orb positions, the hit test and the visuals
+        /// all read this, so what you see is what hits.</summary>
+        public float Reach => _reachEase.IsStarted ? _reachEase.Value : TargetReach;
 
         /// <summary>Damage dealt per touch right now — POWER's (<c>s_odm</c>) current level.</summary>
         public float TouchDamage => AbilityTuning.OrbitalsTouchDamage(
@@ -75,14 +93,15 @@ namespace MaxWorlds.Weapons
         /// <summary>Orb <paramref name="index"/>'s current world position, evenly spaced over
         /// <see cref="OrbCount"/> around Max at <see cref="Reach"/> and <see cref="OrbitHeight"/>.
         /// Public for MV-1241's own visuals to read, and for a test to assert without reflection.</summary>
-        public Vector3 OrbPosition(int index)
+        public Vector3 OrbPosition(int index) => OrbPositionAt(index, _spinAngleDeg, Reach);
+
+        private Vector3 OrbPositionAt(int index, float spinAngleDeg, float reach)
         {
             int count = OrbCount;
             if (count <= 0) return transform.position + Vector3.up * OrbitHeight;
 
-            float angleDeg = _spinAngleDeg + index * (360f / count);
-            float rad = angleDeg * Mathf.Deg2Rad;
-            Vector3 offset = new Vector3(Mathf.Cos(rad), 0f, Mathf.Sin(rad)) * Reach;
+            float rad = (spinAngleDeg + index * (360f / count)) * Mathf.Deg2Rad;
+            Vector3 offset = new Vector3(Mathf.Cos(rad), 0f, Mathf.Sin(rad)) * reach;
             return transform.position + Vector3.up * OrbitHeight + offset;
         }
 
@@ -102,8 +121,19 @@ namespace MaxWorlds.Weapons
             int count = OrbCount;
             if (count <= 0) return;
 
-            _spinAngleDeg += SpinDegPerSec * dt;
-            if (_spinAngleDeg >= 360f) _spinAngleDeg -= 360f;
+            // MV-1355: sweep from where each orb WAS to where it is now, at the radius it had then and the
+            // eased radius it has now.
+            float prevAngle = _spinAngleDeg;
+            float prevReach = Reach;
+            _reachEase.Step(TargetReach, dt, GrowthEaseSeconds);
+            float curReach = _reachEase.Value;
+
+            float deltaDeg = SpinDegPerSec * dt;
+            _spinAngleDeg += deltaDeg;
+            while (_spinAngleDeg >= 360f) _spinAngleDeg -= 360f;
+
+            float arcMetres = Mathf.Max(prevReach, curReach) * Mathf.Abs(deltaDeg) * Mathf.Deg2Rad;
+            int samples = Mathf.Clamp(Mathf.CeilToInt(arcMetres / SweepStepMetres), 1, MaxSweepSamples);
 
             float damage = TouchDamage;
             MapData map = EnemyNavigation.Map;
@@ -112,7 +142,12 @@ namespace MaxWorlds.Weapons
             {
                 Dictionary<IDamageable, float> cooldowns = _slotCooldowns[slot];
                 TickCooldowns(cooldowns, dt);
-                HitAtPosition(OrbPosition(slot), cooldowns, damage, map);
+                for (int k = 1; k <= samples; k++)
+                {
+                    float f = k / (float)samples;
+                    Vector3 p = OrbPositionAt(slot, prevAngle + deltaDeg * f, Mathf.Lerp(prevReach, curReach, f));
+                    HitAtPosition(p, cooldowns, damage, map);
+                }
             }
         }
 
