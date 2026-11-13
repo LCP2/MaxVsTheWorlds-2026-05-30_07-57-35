@@ -54,16 +54,15 @@ namespace MaxWorlds.UI
             return pivotViewportLocal - contentLocal * newZoom;
         }
 
-        /// <summary>Clamps <paramref name="pan"/> so the zoomed content can never be dragged entirely off
-        /// screen: on an axis where the zoomed content exceeds the viewport, pan is clamped to at most
-        /// half the excess; on an axis where it doesn't (true of both axes at the opening fit zoom, by
-        /// construction of <see cref="FitScale"/>), pan on that axis is pinned to 0 — centred, not
-        /// draggable.</summary>
+        /// <summary>Clamps <paramref name="pan"/> to at most half the scaled content size per axis, so
+        /// the zoomed content can never be dragged entirely off screen.</summary>
         public static Vector2 ClampPan(Vector2 pan, Vector2 viewportSize, Vector2 contentSize, float zoom)
         {
             Vector2 scaledContent = contentSize * zoom;
-            float maxX = Mathf.Max(0f, (scaledContent.x - viewportSize.x) * 0.5f);
-            float maxY = Mathf.Max(0f, (scaledContent.y - viewportSize.y) * 0.5f);
+            // MV-1357: half the scaled content on each axis, so any map point (a corner included) can sit
+            // at the viewport centre; the content can still never leave the screen entirely.
+            float maxX = scaledContent.x * 0.5f;
+            float maxY = scaledContent.y * 0.5f;
             return new Vector2(Mathf.Clamp(pan.x, -maxX, maxX), Mathf.Clamp(pan.y, -maxY, maxY));
         }
     }

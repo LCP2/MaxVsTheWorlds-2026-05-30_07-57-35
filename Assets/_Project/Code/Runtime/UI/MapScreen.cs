@@ -143,6 +143,13 @@ namespace MaxWorlds.UI
         /// <summary>Closes the map and resumes at whatever speed it paused from. Persists the zoom
         /// the player leaves it at (MV-1206) — once per close, not per gesture frame, so a pinch never
         /// pays a PlayerPrefs disk flush while it's actually moving.</summary>
+        // MV-1357: the app going to the background while the map is up saves the zoom too, so the
+        // "last zoom" survives an app switch even if CLOSE is never pressed.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused && _open) MapZoomMemory.Save(CurrentWorldId(), _zoom);
+        }
+
         public void Close()
         {
             if (!_open) return;
@@ -689,6 +696,16 @@ namespace MaxWorlds.UI
         {
             _zoom = MapPanZoomModel.ClampZoom(MapZoomMemory.Load(CurrentWorldId()), _maxZoomMultiplier);
             _pan = Vector2.zero;
+            // MV-1357: open centred on Max's live position at the loaded zoom. Content is pivoted at the
+            // viewport centre and markers are anchored to its lower-left, so a content point sits at
+            // scale * (point - contentSize/2) from the centre; pan cancels that.
+            if (_contentBuilt && _player != null)
+            {
+                Vector3 p = _player.transform.position;
+                Vector2 cp = ContentPoint(p.x, p.z);
+                float scale = _fitScale * _zoom;
+                _pan = MapPanZoomModel.ClampPan(-(cp - _contentSize * 0.5f) * scale, ViewportSize(), _contentSize, scale);
+            }
             _lastPointers.Clear();
             ApplyTransform();
         }
