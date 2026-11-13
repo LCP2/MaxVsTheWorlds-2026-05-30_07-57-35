@@ -350,6 +350,17 @@ namespace MaxWorlds.Rendering
                 float blotch = Fbm(u, v, baseFreq: 3, octaves: 3);
                 float m = 1f + (blotch - 0.5f) * 2f * ReefFloodCausticAmplitude;
                 byte g = (byte)Mathf.RoundToInt(Mathf.Clamp01(m) * 255f);
+                // MV-1352: a few iridescent oil highlights - sparse blotches whose channel ratios lean
+                // teal or magenta (the texture multiplies the dark olive base, so they shift hue only).
+                float irid = Fbm(u + 0.37f, v + 0.61f, baseFreq: 5, octaves: 2);
+                if (irid > 0.72f)
+                {
+                    bool magenta = Fbm(u + 0.11f, v + 0.83f, baseFreq: 2, octaves: 1) > 0.5f;
+                    px[y * size + x] = magenta
+                        ? new Color32(g, (byte)(g * 0.55f), g, 255)
+                        : new Color32((byte)(g * 0.55f), g, g, 255);
+                    continue;
+                }
                 px[y * size + x] = new Color32(g, g, g, 255);
             }
 

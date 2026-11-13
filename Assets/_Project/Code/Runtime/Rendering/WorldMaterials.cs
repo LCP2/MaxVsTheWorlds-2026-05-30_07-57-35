@@ -186,7 +186,7 @@ namespace MaxWorlds.Rendering
         // this ticket never touches) and the Reef's own flooded-deck water, replacing the Stormdrain-
         // shared acid-green sludge tint for this biome only (see ReefFloorDetail.DressFlood).
         public static readonly Color ReefGrateGlowCyan = HexColor(0x1B7A8C);
-        public static readonly Color ReefFloodWaterTeal = HexColor(0x0C3A42);
+        public static readonly Color ReefFloodWaterTeal = HexColor(0x24331A); // MV-1352: oily dark olive (was teal 0C3A42)
 
         // MV-1258: the engine room's own propeller-shaft landmark — a dark, non-emissive oil-sheen
         // patch on the floor beneath it. Its own material rather than reusing M_MetalDark (shared by
@@ -220,6 +220,38 @@ namespace MaxWorlds.Rendering
         public static Material M_MetalDark => ReefMaterial("M_MetalDark", ReefMetalDark);
         public static Material M_CrateBody => ReefMaterial("M_CrateBody", ReefCrateBody);
         public static Material M_CrateCap => ReefMaterial("M_CrateCap", ReefCrateCap);
+
+        // MV-1352 (Reef relook 4/4): the cover pieces' own surface palette. One shared material per
+        // surface type; the four container paints are the ticket's own hexes.
+        public static readonly Color ReefContainerRust = HexColor(0xB5572E);
+        public static readonly Color ReefContainerTeal = HexColor(0x2F7F85);
+        public static readonly Color ReefContainerOchre = HexColor(0xC79A3A);
+        public static readonly Color ReefContainerOxide = HexColor(0x8A3A2A);
+        public static Material M_ContainerRust => ReefMaterial("M_ContainerRust", ReefContainerRust);
+        public static Material M_ContainerTeal => ReefMaterial("M_ContainerTeal", ReefContainerTeal);
+        public static Material M_ContainerOchre => ReefMaterial("M_ContainerOchre", ReefContainerOchre);
+        public static Material M_ContainerOxide => ReefMaterial("M_ContainerOxide", ReefContainerOxide);
+        public static Material M_Copper => ReefMaterial("M_Copper", HexColor(0xB8662E));
+        public static Material M_Brass => ReefMaterial("M_Brass", HexColor(0xC9A24A));
+        public static Material M_Steel => ReefMaterial("M_Steel", HexColor(0x4B5C6B));
+        public static Material M_StrapYellow => ReefMaterial("M_StrapYellow", HexColor(0xE3B72A));
+        public static Material M_StencilWhite => ReefMaterial("M_StencilWhite", HexColor(0xDDE6E8));
+        public static Material M_Barnacle => ReefMaterial("M_Barnacle", HexColor(0x8E9A92));
+        public static Material M_RustPatch => ReefMaterial("M_RustPatch", HexColor(0x6B3420));
+        public static Material M_ValveRed => ReefMaterial("M_ValveRed", HexColor(0xC4302A));
+        public static Material M_LampAmber => ReefMaterial("M_LampAmber", ReefWorkLampAmber, emissive: true);
+
+        /// <summary>The four seeded container paints, in a fixed order (index = seed % 4).</summary>
+        public static Material ContainerMaterial(uint seed)
+        {
+            switch (seed % 4u)
+            {
+                case 0: return M_ContainerRust;
+                case 1: return M_ContainerTeal;
+                case 2: return M_ContainerOchre;
+                default: return M_ContainerOxide;
+            }
+        }
 
         // MV-1055: bioluminescent kelp and the hull-top accent lamp all read as LIT, same reasoning as
         // M_Circuit_Cyan's own emissive branch above.
@@ -486,7 +518,7 @@ namespace MaxWorlds.Rendering
 
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ReefFloodWaterTeal);
             if (m.HasProperty("_Color")) m.SetColor("_Color", ReefFloodWaterTeal);
-            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.8f);   // wetter/more reflective than M_GlassOcean's 0.6
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.95f);   // MV-1352: high-gloss oily sheen
 
             RefreshReefFloodWaterTexture(m);
 

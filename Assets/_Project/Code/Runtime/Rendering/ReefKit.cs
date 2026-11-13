@@ -150,7 +150,7 @@ namespace MaxWorlds.Rendering
     /// keeps them independently testable and keeps this pass from reaching into BackyardDressing's kit-
     /// import/Strip/KitSurfaces ordering, which nothing about a material/prefab ticket needs to touch.
     /// </summary>
-    public static class ReefKit
+    public static partial class ReefKit
     {
         /// <summary>Height of a hull-base strip light (MV-745, ticket change item 3: "a strip light
         /// along [each wall's] base"). Low and thin — a baseboard glow, not a second wall.</summary>
@@ -804,7 +804,11 @@ namespace MaxWorlds.Rendering
             }
 
             var rend = crateBody.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = WorldMaterials.M_CrateBody;
+            // MV-1352: a seeded container paint (rust/teal/ochre/oxide), keyed on the piece's own name
+            // and position so the same crate always gets the same colour.
+            Vector3 bp = crateBody.transform.position;
+            string seedKey = crateBody.name + "@" + Mathf.RoundToInt(bp.x) + "," + Mathf.RoundToInt(bp.z);
+            if (rend != null) rend.sharedMaterial = WorldMaterials.ContainerMaterial(StableHash(seedKey));
             MarkDressed(crateBody);
 
             if (!addCornerCaps) return;
@@ -818,6 +822,16 @@ namespace MaxWorlds.Rendering
 
             var caps = new GameObject("Corner Caps");
             caps.transform.SetParent(crateBody.transform, false);
+
+            // MV-1352: the container detailing lives under "Corner Caps" too (MapRuntime's zone tagging
+            // finds it there), in a metre-space root that cancels the body's footprint scale.
+            if (crateBody.GetComponent<BoxCollider>() != null || addCornerCaps)
+            {
+                var detail = new GameObject("Container Detail");
+                detail.transform.SetParent(caps.transform, false);
+                detail.transform.localScale = new Vector3(1f / size.x, 1f / size.y, 1f / size.z);
+                BuildContainerDetail(detail.transform, size, seedKey);
+            }
 
             // Same "fraction of the parent's own local unit cube" idiom the cube primitive these caps
             // used to be relied on: crateBody's own cumulative scale does the metric conversion, so the
@@ -921,6 +935,7 @@ namespace MaxWorlds.Rendering
             Mesh seam = CharacterMeshes.Beam(size.y * 0.92f, seamR, seamR, 6);
             MeshPart(root.transform, "Seam Light", seam, new Vector3(0f, 0f, radius * 0.82f + seamR), WorldMaterials.M_Circuit_Cyan);
 
+            BuildPillarDetail(root.transform, size, radius);
             return root;
         }
 
@@ -1023,11 +1038,9 @@ namespace MaxWorlds.Rendering
             Mesh tank = DrumTankProfile(radius, size.y);
             MeshPart(root.transform, "Tank", tank, new Vector3(0f, -size.y * 0.5f, 0f), WorldMaterials.M_MetalDark);
 
-            Mesh rim = CharacterMeshes.Ring(radius * ReefDrumRimInnerFraction, radius * ReefDrumRimOuterFraction,
-                thickness: size.y * 0.03f, segments: 20);
-            MeshPart(root.transform, "Rim", rim, new Vector3(0f, size.y * 0.42f, 0f), WorldMaterials.M_Hazard);
-
-            float coreRadius = radius * 0.35f;
+            // MV-1352: the lid is dark and bolted now (BuildDrumDetail), the hazard colour moved to the
+            // skirt, and the cyan core is a SMALL DIM one - no white blow-out from above.
+            float coreRadius = radius * 0.14f;
             Mesh core = CharacterMeshes.Lathe(new[]
             {
                 new Vector2(0f, 0f),
@@ -1035,8 +1048,9 @@ namespace MaxWorlds.Rendering
                 new Vector2(coreRadius, size.y * 0.05f),
                 new Vector2(0f, size.y * 0.08f),
             }, 16);
-            MeshPart(root.transform, "Core", core, new Vector3(0f, size.y * 0.47f, 0f), WorldMaterials.M_Circuit_Cyan);
+            MeshPart(root.transform, "Core", core, new Vector3(0f, size.y * 0.5f - size.y * 0.02f, 0f), WorldMaterials.M_GrateGlow);
 
+            BuildDrumDetail(root.transform, size, radius);
             return root;
         }
 
@@ -1052,25 +1066,13 @@ namespace MaxWorlds.Rendering
             root.transform.position = center;
             MarkDressed(root);
 
-            float deskHeight = size.y * 0.5f;
+            float deskHeight = size.y * 0.8f;
             Mesh desk = CharacterMeshes.Prism(4, Diag, Diag, deskHeight, 0.1f);
             MeshPart(root.transform, "Desk", desk, new Vector3(0f, -size.y * 0.5f + deskHeight * 0.5f, 0f),
                 WorldMaterials.M_MetalDark, localScale: new Vector3(size.x * 0.5f, 1f, size.z * 0.5f));
 
-            float screenHeight = size.y - deskHeight;
-            MeshBox(root.transform, "Screen",
-                new Vector3(0f, -size.y * 0.5f + deskHeight + screenHeight * 0.5f, -size.z * 0.5f + size.z * 0.2f),
-                new Vector3(size.x * 0.85f, screenHeight, size.z * 0.4f + ConsoleScreenProud), WorldMaterials.M_Circuit_Cyan);
-
-            Mesh lamp = CharacterMeshes.Sphere(8);
-            int lamps = Mathf.Max(2, Mathf.FloorToInt(size.x / 0.3f));
-            for (int i = 0; i < lamps; i++)
-            {
-                float t = (i + 0.5f) / lamps - 0.5f;
-                MeshPart(root.transform, $"Lamp {i}", lamp,
-                    new Vector3(t * size.x * 0.8f, -size.y * 0.5f + deskHeight + 0.02f, size.z * 0.3f),
-                    WorldMaterials.M_Circuit_Cyan, localScale: Vector3.one * 0.06f);
-            }
+            BuildConsoleScreen(root.transform, size, -size.y * 0.5f + deskHeight);
+            BuildConsoleExtras(root.transform, size);
 
             return root;
         }
@@ -1145,7 +1147,7 @@ namespace MaxWorlds.Rendering
             Quaternion lie = alongX ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(90f, 0f, 0f);
 
             Mesh pipe = CharacterMeshes.Beam(runLength, radius * 1.05f, radius * 0.9f, 10);
-            MeshPart(root.transform, "Pipe", pipe, Vector3.zero, WorldMaterials.M_MetalDark, lie);
+            MeshPart(root.transform, "Pipe", pipe, Vector3.zero, WorldMaterials.M_Copper, lie);
 
             Mesh highlight = CharacterMeshes.Beam(runLength * 0.96f, radius * 0.12f, radius * 0.12f, 6);
             MeshPart(root.transform, "Highlight", highlight, new Vector3(0f, radius * 0.75f, 0f),
@@ -1164,8 +1166,10 @@ namespace MaxWorlds.Rendering
                     alongX ? FloorPipeBracketWidth : radius * 1.6f,
                     radius,
                     alongX ? radius * 1.6f : FloorPipeBracketWidth);
-                MeshBox(root.transform, $"Bracket {i}", pos, bracketSize, WorldMaterials.M_Circuit_Cyan);
+                MeshBox(root.transform, $"Saddle {i}", pos, bracketSize, WorldMaterials.M_Steel);
             }
+
+            BuildFloorPipeDetail(root.transform, size, alongX, runLength, radius);
 
             return root;
         }
@@ -1242,6 +1246,7 @@ namespace MaxWorlds.Rendering
             BuildBulkheadTopSeam(root.transform, size);
             BuildBulkheadTopPlate(root.transform, size);
             BuildBulkheadBaseSeam(root.transform, size);
+            BuildBulkheadDressing(root.transform, pieceId, size, alongX, faceLength, faceDepth);
 
             return root;
         }

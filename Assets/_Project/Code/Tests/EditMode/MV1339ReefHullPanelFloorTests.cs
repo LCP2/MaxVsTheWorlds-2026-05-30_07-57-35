@@ -99,19 +99,19 @@ namespace MaxWorlds.Tests.EditMode
                 GameObject drum = ReefKit.BuildDrum(probeRoot.transform, Vector3.zero, new Vector3(3f, 2f, 3f));
                 Assert.IsNotNull(drum, "BuildDrum must still build a drum");
 
-                Transform rim = FindChildNamed(drum.transform, "Rim");
-                Assert.IsNotNull(rim, "the drum must build a top-edge rim so it reads as lit, not a dark disc");
+                Transform rim = FindChildNamed(drum.transform, "Skirt"); // MV-1352: the hazard colour moved from the top rim to a base skirt
+                Assert.IsNotNull(rim, "the drum must build a hazard-stripe skirt so it reads as a lit machine");
                 Renderer rimRenderer = rim.GetComponent<Renderer>();
                 Assert.IsNotNull(rimRenderer, "the rim must carry a renderer");
                 Assert.AreSame(WorldMaterials.M_Hazard, rimRenderer.sharedMaterial,
-                    "the drum's rim must wear the bright orange hazard material");
+                    "the drum's skirt must wear the bright orange hazard material");
 
                 Transform core = FindChildNamed(drum.transform, "Core");
                 Assert.IsNotNull(core, "the drum must keep its glowing cyan core");
                 Renderer coreRenderer = core.GetComponent<Renderer>();
                 Assert.IsNotNull(coreRenderer, "the core must carry a renderer");
-                Assert.AreSame(WorldMaterials.M_Circuit_Cyan, coreRenderer.sharedMaterial,
-                    "the drum's core must wear the glowing cyan circuit material");
+                Assert.AreSame(WorldMaterials.M_GrateGlow, coreRenderer.sharedMaterial,
+                    "the drum's core must wear the DIM cyan glow material (MV-1352: no white blow-out)");
             }
             finally
             {

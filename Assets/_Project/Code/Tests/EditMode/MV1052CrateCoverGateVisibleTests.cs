@@ -121,7 +121,14 @@ namespace MaxWorlds.Tests.EditMode
                     else
                     {
                         float crateLuma = ResolvedLuminance(ResolvedBaseColor(liveBody.sharedMaterial));
-                        if (Mathf.Abs(crateLuma - floorLuma) < MinLuminanceDifference)
+                        // MV-1352: a container's body paint (rust/teal/ochre/oxide) can sit near the floor's
+                        // luminance; it then reads off the floor by its near-black frame rails instead.
+                        bool framed = false;
+                        foreach (Renderer rail in piece.Body.GetComponentsInChildren<Renderer>(true))
+                            if (rail.name == "Rail Top" &&
+                                Mathf.Abs(ResolvedLuminance(ResolvedBaseColor(rail.sharedMaterial)) - floorLuma) >= MinLuminanceDifference)
+                                framed = true;
+                        if (!framed && Mathf.Abs(crateLuma - floorLuma) < MinLuminanceDifference)
                             failures.Add($"{piece.Cover.Name}: material luminance ({crateLuma:F3}) is within " +
                                          $"{MinLuminanceDifference:F2} of the floor's ({floorLuma:F3}) — not distinguishable");
                     }

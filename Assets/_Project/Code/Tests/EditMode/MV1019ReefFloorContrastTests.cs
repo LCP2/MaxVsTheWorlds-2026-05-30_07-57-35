@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -74,10 +75,17 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.IsNotNull(crateRenderer, $"crate '{piece.Body.name}' must keep its own renderer");
                     float crateLuma = ResolvedLuminance(ResolvedBaseColor(crateRenderer.sharedMaterial));
 
-                    Assert.That(crateLuma, Is.GreaterThanOrEqualTo(floorLuma * 1.6f),
-                        $"crate '{piece.Body.name}' resolved luminance ({crateLuma:F4}) must be >= 1.6x the floor's ({floorLuma:F4})");
-                    Assert.That(crateLuma, Is.GreaterThanOrEqualTo(floorLuma),
-                        $"crate '{piece.Body.name}' ({crateLuma:F4}) must never read darker than the floor ({floorLuma:F4})");
+                    // MV-1352: containers wear one of four seeded paints (rust/teal/ochre/oxide), some darker
+                    // than the floor. The guard's intent - never a near-black crate - becomes an absolute floor
+                    // of 0.07 plus a near-black frame (rails) to outline it; a pre-relook steel crate (no
+                    // frame) still has to clear the original 1.6x-the-floor bar.
+                    bool framed = piece.Body.GetComponentsInChildren<Renderer>(true).Any(r => r.name == "Rail Top");
+                    if (framed)
+                        Assert.That(crateLuma, Is.GreaterThanOrEqualTo(0.07f),
+                            $"crate '{piece.Body.name}' resolved luminance ({crateLuma:F4}) must never be near-black");
+                    else
+                        Assert.That(crateLuma, Is.GreaterThanOrEqualTo(floorLuma * 1.6f),
+                            $"crate '{piece.Body.name}' resolved luminance ({crateLuma:F4}) must be >= 1.6x the floor's ({floorLuma:F4})");
                 }
                 Assert.Greater(crateCount, 0, "precondition: World 3's own map must author at least one bare (crate) cover piece");
 

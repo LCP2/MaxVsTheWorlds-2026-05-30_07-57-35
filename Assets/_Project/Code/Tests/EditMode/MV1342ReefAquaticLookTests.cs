@@ -83,8 +83,8 @@ namespace MaxWorlds.Tests.EditMode
 
             _drumProbeGo = new GameObject("mv1342-drum-probe");
             GameObject drum = ReefKit.BuildDrum(_drumProbeGo.transform, Vector3.zero, new Vector3(3f, 2f, 3f));
-            Transform rim = FindChildNamed(drum.transform, "Rim");
-            Assert.IsNotNull(rim, "the drum must build a top-edge rim so it reads as lit, not a dark disc");
+            Transform rim = FindChildNamed(drum.transform, "Skirt"); // MV-1352: hazard moved from the top rim to the base skirt
+            Assert.IsNotNull(rim, "the drum must build a hazard skirt so it reads as lit");
 
             Material rimMat = rim.GetComponent<Renderer>().sharedMaterial;
             Assert.AreEqual(template.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF"), rimMat.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF"),
