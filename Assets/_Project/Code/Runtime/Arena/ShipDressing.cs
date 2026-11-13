@@ -27,7 +27,7 @@ namespace MaxWorlds.Arena
         /// hull masses) for every room-facing wall face in all 30 areas.</summary>
         public static int Dress(Transform host, MapData map, WorldConfig cfg, IReadOnlyList<CoverPiece> cover)
         {
-            int dressed = DressCover(host, cover);
+            int dressed = DressCover(host, cover, map);
             BuildFloors(host, map);
             BuildLaunchPad(host, cfg);
 
@@ -73,7 +73,7 @@ namespace MaxWorlds.Arena
                 if (areaIndex <= 0) continue;
 
                 Color seamGlow = MothershipDecks.LookFor(areaIndex).RimColor;
-                bool darkBase = MothershipDecks.ForArea(areaIndex) == MothershipDeck.Hangar;    // MV-1274
+                bool darkBase = true;    // MV-1274 -> MV-1356: every deck shares the dark-navy panel floor
                 ShipKit.BuildAtlasFloor(floors, zone.Footprint, areaIndex, seamGlow, darkBase);
                 atlasFootprints.Add(zone.Footprint);
             }
@@ -134,7 +134,7 @@ namespace MaxWorlds.Arena
         /// <see cref="ArenaCover.Dressing"/> this kit owns, and hides that entry's own box renderer —
         /// the collider itself is left exactly as <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/>
         /// built it. Returns how many pieces were dressed.</summary>
-        public static int DressCover(Transform parent, IReadOnlyList<CoverPiece> cover)
+        public static int DressCover(Transform parent, IReadOnlyList<CoverPiece> cover, MapData map = null)
         {
             int dressed = 0;
             if (cover == null) return dressed;
@@ -144,7 +144,7 @@ namespace MaxWorlds.Arena
             {
                 if (piece.Body == null) continue;
 
-                GameObject art = BuildPiece(ref kit, parent, piece.Cover);
+                GameObject art = BuildPiece(ref kit, parent, piece.Cover, map);
                 if (art == null) continue; // unhandled dressing: the box stays visible
 
                 var renderer = piece.Body.GetComponent<Renderer>();
@@ -155,7 +155,7 @@ namespace MaxWorlds.Arena
             return dressed;
         }
 
-        private static GameObject BuildPiece(ref Transform kit, Transform parent, ArenaCover cover)
+        private static GameObject BuildPiece(ref Transform kit, Transform parent, ArenaCover cover, MapData map)
         {
             if (kit == null)
             {
@@ -170,16 +170,26 @@ namespace MaxWorlds.Arena
             // which is the OTHER, ReefKit-only convention, so it is deliberately not used here.
             Vector3 at = new Vector3(cover.CenterXz.x, 0f, cover.CenterXz.y);
 
+            // MV-1356: the neon edge carries the deck's own accent (deck identity by accents only).
+            Color? accent = null;
+            if (map?.zones != null)
+                foreach (MapZone zone in map.zones)
+                    if (zone != null && zone.level == 0 && zone.AreaIndex > 0 && zone.Footprint.Contains(cover.CenterXz))
+                    {
+                        accent = MothershipDecks.LookFor(zone.AreaIndex).RimColor;
+                        break;
+                    }
+
             return cover.Dressing switch
             {
-                CoverDressing.ShipDropship => ShipKit.BuildDropship(kit, at, cover.Size),
-                CoverDressing.ShipDropPod => ShipKit.BuildDropPod(kit, at, cover.Size),
-                CoverDressing.ShipCrate => ShipKit.BuildCrate(kit, at, cover.Size),
-                CoverDressing.ShipCrateLow => ShipKit.BuildCrate(kit, at, cover.Size),
+                CoverDressing.ShipDropship => ShipKit.BuildDropship(kit, at, cover.Size, accent),
+                CoverDressing.ShipDropPod => ShipKit.BuildDropPod(kit, at, cover.Size, accent),
+                CoverDressing.ShipCrate => ShipKit.BuildCrate(kit, at, cover.Size, accent),
+                CoverDressing.ShipCrateLow => ShipKit.BuildCrate(kit, at, cover.Size, accent),
                 CoverDressing.ShipGlassCase => ShipKit.BuildGlassCase(kit, at, cover.Size),
                 CoverDressing.ShipConveyor => ShipKit.BuildConveyor(kit, at, cover.Size),
-                CoverDressing.ShipConsoleBank => ShipKit.BuildConsoleBank(kit, at, cover.Size),
-                CoverDressing.ShipBulkheadStub => ShipKit.BuildBulkheadStub(kit, at, cover.Size),
+                CoverDressing.ShipConsoleBank => ShipKit.BuildConsoleBank(kit, at, cover.Size, accent),
+                CoverDressing.ShipBulkheadStub => ShipKit.BuildBulkheadStub(kit, at, cover.Size, accent),
                 _ => null,
             };
         }
