@@ -633,22 +633,7 @@ namespace MaxWorlds.Enemies
             foreach (WorldGarrisonEntry g in entries)
             {
                 if (g == null || !EnemyKindNames.TryParse(g.kind, out EnemyKind kind)) continue;
-                switch (kind)
-                {
-                    case EnemyKind.Rusher: c.rusher++; break;
-                    case EnemyKind.Bruiser: c.bruiser++; break;
-                    case EnemyKind.Heavy: c.heavy++; break;
-                    case EnemyKind.Brute: c.brute++; break;
-                    case EnemyKind.Gunner: c.gunner++; break;
-                    case EnemyKind.Launcher: c.launcher++; break;
-                    case EnemyKind.Blinker: c.blinker++; break;
-                    case EnemyKind.Bolter: c.bolter++; break;
-                    case EnemyKind.Lurker: c.lurker++; break;
-                    case EnemyKind.Turret: c.turret++; break;
-                    case EnemyKind.Sludger: c.sludger++; break;
-                    case EnemyKind.Charger: c.charger++; break;
-                    case EnemyKind.Skitter: c.skitter++; break;
-                }
+                c.Add(kind);
             }
             return c.ToEngineComposition();
         }

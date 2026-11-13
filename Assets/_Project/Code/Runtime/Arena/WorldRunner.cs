@@ -406,21 +406,9 @@ namespace MaxWorlds.Arena
             foreach (WorldGarrisonEntry g in area.garrison)
             {
                 if (g == null || !EnemyKindNames.TryParse(g.kind, out EnemyKind kind)) continue;
-                switch (kind)
-                {
-                    case EnemyKind.Rusher: composition.rusher++; break;
-                    case EnemyKind.Bruiser: composition.bruiser++; break;
-                    case EnemyKind.Heavy: composition.heavy++; break;
-                    case EnemyKind.Brute: composition.brute++; break;
-                    case EnemyKind.Gunner: composition.gunner++; break;
-                    case EnemyKind.Launcher: composition.launcher++; break;
-                    case EnemyKind.Blinker: composition.blinker++; break;
-                    case EnemyKind.Bolter: composition.bolter++; break;
-                    case EnemyKind.Sludger: composition.sludger++; break;
-                    case EnemyKind.Charger: composition.charger++; break;
-                    case EnemyKind.Skitter: composition.skitter++; break;
-                    // Lurker/Turret: placed, not emitted — skipped on purpose.
-                }
+                // Lurker/Turret: placed, not emitted — skipped on purpose. Every other kind is counted.
+                if (kind == EnemyKind.Lurker || kind == EnemyKind.Turret) continue;
+                composition.Add(kind);
             }
             return composition;
         }

@@ -110,33 +110,17 @@ namespace MaxWorlds.Enemies
         public void FillExact(DifficultyEngine.Composition composition, int areaIndex = 0)
         {
             FillInternal(areaIndex, composition.Bruiser, composition.Rusher, _ => EnemyKind.Bruiser);
-            for (int i = 0; i < composition.Heavy; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Heavy));
-            for (int i = 0; i < composition.Brute; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Brute));
-            for (int i = 0; i < composition.Gunner; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Gunner));
-            for (int i = 0; i < composition.Launcher; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Launcher));
-            for (int i = 0; i < composition.Blinker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Blinker));
-            for (int i = 0; i < composition.Bolter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Bolter));
-            // MV-688: a Lurker only ever fills a NAMED garrison slot (TryTakeForGarrison's exact-kind
-            // path) — it still has to be queued here or that lookup finds nothing and silently
-            // substitutes the wrong kind at the Lurker's own grate.
-            for (int i = 0; i < composition.Lurker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Lurker));
-            // MV-691/MV-700: a static wall-mounted lobber, always garrison-placed — still has to be
-            // queued here for the same reason as Lurker above, or its garrison slot's exact-kind
-            // TryTakeForGarrison lookup finds nothing and substitutes the wrong kind.
-            for (int i = 0; i < composition.Turret; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Turret));
-            // MV-705: an ambient sapper, same footing as Bolter above — queued exactly like every other
-            // authored-composition-only kind, no grate coincidence required.
-            for (int i = 0; i < composition.Sludger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Sludger));
-            // MV-707: a floor-only rammer, same footing as Bolter/Sludger above.
-            for (int i = 0; i < composition.Charger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Charger));
-            // MV-1217/MV-1221: a twin-turret platform, same footing as Bolter/Sludger/Charger above —
-            // it still has to be queued here or its garrison slot's exact-kind TryTakeForGarrison lookup
-            // finds nothing and substitutes the wrong kind.
-            for (int i = 0; i < composition.Dreadnought; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Dreadnought));
-            // MV-1224: an ambient tiny phase-hopper, same footing as Bolter/Sludger/Charger above.
-            for (int i = 0; i < composition.Skitter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Skitter));
-            // MV-1344: ORBITAL fills a NAMED garrison slot, same footing as Dreadnought above.
-            for (int i = 0; i < composition.Orbital; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Orbital));
+            // MV-1347: every remaining kind, walked off the enum (Rusher/Bruiser were interleaved above),
+            // so a kind added later queues with no edit here — the hand-listed version silently dropped
+            // Breaker/Tractor/Welder/Projector/Jammer. Enum order == the old hand-written order. Kinds
+            // that fill NAMED garrison slots (Lurker, Turret, Dreadnought, Orbital...) must be queued
+            // here or their exact-kind TryTakeForGarrison lookup finds nothing and substitutes the wrong kind.
+            foreach (EnemyKind kind in (EnemyKind[])Enum.GetValues(typeof(EnemyKind)))
+            {
+                if (kind == EnemyKind.Rusher || kind == EnemyKind.Bruiser) continue;
+                int n = composition.CountOf(kind);
+                for (int i = 0; i < n; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, kind));
+            }
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

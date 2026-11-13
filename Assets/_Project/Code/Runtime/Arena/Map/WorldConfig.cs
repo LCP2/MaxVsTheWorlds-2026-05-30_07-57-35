@@ -269,6 +269,38 @@ namespace MaxWorlds.Arena
         /// alone reads a blended area as hand-designed, letting its dial-derived Rushers skip the cap.</summary>
         public bool IsAuthoredExclusive => IsAuthored && !blendWithDial;
 
+        /// <summary>MV-1347: counts one <paramref name="kind"/> into this composition. The single place
+        /// every garrison-to-composition tally goes through, so a kind added to
+        /// <see cref="MaxWorlds.Enemies.EnemyKind"/> can't be silently dropped by a per-caller switch.
+        /// Throws on an unhandled kind so a new enum value fails loudly here.</summary>
+        public void Add(MaxWorlds.Enemies.EnemyKind kind)
+        {
+            switch (kind)
+            {
+                case MaxWorlds.Enemies.EnemyKind.Rusher: rusher++; break;
+                case MaxWorlds.Enemies.EnemyKind.Bruiser: bruiser++; break;
+                case MaxWorlds.Enemies.EnemyKind.Heavy: heavy++; break;
+                case MaxWorlds.Enemies.EnemyKind.Brute: brute++; break;
+                case MaxWorlds.Enemies.EnemyKind.Gunner: gunner++; break;
+                case MaxWorlds.Enemies.EnemyKind.Launcher: launcher++; break;
+                case MaxWorlds.Enemies.EnemyKind.Blinker: blinker++; break;
+                case MaxWorlds.Enemies.EnemyKind.Bolter: bolter++; break;
+                case MaxWorlds.Enemies.EnemyKind.Lurker: lurker++; break;
+                case MaxWorlds.Enemies.EnemyKind.Turret: turret++; break;
+                case MaxWorlds.Enemies.EnemyKind.Sludger: sludger++; break;
+                case MaxWorlds.Enemies.EnemyKind.Charger: charger++; break;
+                case MaxWorlds.Enemies.EnemyKind.Dreadnought: dreadnought++; break;
+                case MaxWorlds.Enemies.EnemyKind.Skitter: skitter++; break;
+                case MaxWorlds.Enemies.EnemyKind.Breaker: breaker++; break;
+                case MaxWorlds.Enemies.EnemyKind.Tractor: tractor++; break;
+                case MaxWorlds.Enemies.EnemyKind.Welder: welder++; break;
+                case MaxWorlds.Enemies.EnemyKind.Projector: projector++; break;
+                case MaxWorlds.Enemies.EnemyKind.Jammer: jammer++; break;
+                case MaxWorlds.Enemies.EnemyKind.Orbital: orbital++; break;
+                default: throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "WorldComposition.Add: unhandled EnemyKind");
+            }
+        }
+
         public DifficultyEngine.Composition ToEngineComposition() =>
             new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought, skitter, breaker, tractor, welder, projector, jammer, orbital);
 

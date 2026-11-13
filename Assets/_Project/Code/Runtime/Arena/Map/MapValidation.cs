@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.Enemies;
@@ -966,8 +967,17 @@ namespace MaxWorlds.Arena
         /// draw from.</summary>
         private static void WorldGarrison(WorldConfig cfg, List<string> violations)
         {
-            foreach (WorldArea a in cfg.areas)
+            // MV-1347: compare against the composition AFTER the cumulative Rusher cap (what the
+            // director really queues), not the raw solve — the uncapped check hid a trim that dropped
+            // every newer authored kind. Areas are walked in index order so the running total matches.
+            int rushersUsed = 0;
+            foreach (WorldArea a in cfg.areas.OrderBy(x => x.index))
             {
+                DifficultyEngine.Composition rawSolved = cfg.SolveComposition(a.index);
+                bool authoredExclusive = a.composition != null && a.composition.IsAuthoredExclusive;
+                DifficultyEngine.Composition solved = authoredExclusive ? rawSolved : RusherCap.Apply(rawSolved, rushersUsed);
+                rushersUsed += solved.Rusher;
+
                 WorldGarrisonEntry[] garrison = a.garrison;
                 if (garrison == null || garrison.Length == 0) continue;
 
@@ -1032,7 +1042,6 @@ namespace MaxWorlds.Arena
                     countByKind[kind] = countByKind.TryGetValue(kind, out int existing) ? existing + 1 : 1;
                 }
 
-                DifficultyEngine.Composition solved = cfg.SolveComposition(a.index);
                 foreach (KeyValuePair<EnemyKind, int> kv in countByKind)
                 {
                     int authoredCount = CompositionCount(solved, kv.Key);
