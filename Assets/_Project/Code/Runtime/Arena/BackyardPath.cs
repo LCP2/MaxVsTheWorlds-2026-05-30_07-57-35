@@ -384,6 +384,8 @@ namespace MaxWorlds.Arena
             ReefAreaKit.BuildFarWallLight(host, cfg, walls, wallHeight);
             // MV-1349: caged amber work lamps + floor pools on every room-facing wall.
             ReefAreaKit.BuildWallLamps(host, cfg, wallHeight, wallThickness);
+            // MV-1351: banded riveted plating, ribs, cable tray + pipes, portholes and wall-base life.
+            ReefAreaKit.BuildWallRelook(host, cfg, wallHeight, wallThickness);
 
             // MV-1258: one hero set piece per room type (Lee's 17 Oct table) — needs every structure-kit/
             // wall/gate pass above to have already run, since a room's landmark either stands in its

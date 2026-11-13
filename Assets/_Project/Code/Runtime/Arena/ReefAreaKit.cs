@@ -102,14 +102,12 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>Change item 6 (decided 17 Oct 2026): an area's authored <see cref="WorldArea.wallDressing"/>
-        /// mounts <c>racks</c>/<c>planters</c>/<c>pipes</c> on the inner face of every one of its OWN edge
-        /// walls — never a window run (<see cref="WorldArea.windows"/> on the same wall), never a gate
-        /// opening (<see cref="WorldConfig.gates"/> on the same wall) — by skipping the whole wall rather
-        /// than carving an exact sub-run around either, which this tight a slice has no authored data to
-        /// need yet (nothing ships it: the V8 layout ticket is what will). Mounted within the wall's own
-        /// thickness: decoration only, no collider, no change to the wall's own sight/movement blocking.
-        /// </summary>
+        /// <summary>MV-1351 (supersedes MV-1215's whole-wall racks/planters/pipes slabs): an area's authored
+        /// <see cref="WorldArea.wallDressing"/> mounts one piece every ~4.3 m along each of its room-facing walls —
+        /// <c>racks</c> a two-shelf bottle frame, <c>pipes</c> a vertical pipe bundle with a red valve wheel,
+        /// <c>planters</c> a glass coral tank — skipping gates, wall lamps and authored cover (a slot is nudged up to
+        /// 1.5 m to clear them, else dropped). Windows no longer block it (portholes sit at 1.7 m, dressing
+        /// stands below 1.5 m). Collider-free, generated meshes, static-batched per area.</summary>
         public static void BuildWallDressing(Transform host, WorldConfig cfg, List<StructuralWall> walls,
             float wallHeight, float wallThickness)
         {
@@ -118,34 +116,195 @@ namespace MaxWorlds.Arena
             foreach (WorldArea area in cfg.areas)
             {
                 if (area == null || string.IsNullOrEmpty(area.wallDressing)) continue;
+                var areaRoot = new GameObject($"Reef Wall Dressing {area.id}");
+                areaRoot.transform.SetParent(host, false);
+                List<WallLampSite> lamps = PlanWallLamps(area, cfg, wallThickness);
 
                 foreach (Wall wall in AllWalls)
                 {
-                    if (HasWindowOn(area, wall) || HasGateOn(cfg, area, wall)) continue;
-
-                    StructuralWall match = FindEdgeWall(walls, area, wall);
-                    if (match == null) continue;
-
+                    WallFrame fr = FrameOf(area, wall, wallThickness);
                     Span span = area.WallSpan(wall);
-                    float coord = area.WallCoord(wall);
-                    float depth = wallThickness * WallDressingDepthFraction;
-                    bool runsAlongX = area.WallRunsAlongX(wall);
+                    float length = span.Max - span.Min;
+                    if (length < WallDressingSpacing * 0.5f) continue;
+                    List<Vector2> gates = GateBlocks(cfg, area, wall, span, WallDressingGateClearance);
 
-                    Vector3 position = runsAlongX
-                        ? new Vector3(span.Mid, wallHeight * 0.4f, coord)
-                        : new Vector3(coord, wallHeight * 0.4f, span.Mid);
-                    Vector3 size = runsAlongX
-                        ? new Vector3(span.Length, wallHeight * WallDressingHeightFraction, depth)
-                        : new Vector3(depth, wallHeight * WallDressingHeightFraction, span.Length);
-
-                    switch (area.wallDressing)
+                    int count = Mathf.Max(1, Mathf.RoundToInt(length / WallDressingSpacing));
+                    for (int i = 0; i < count; i++)
                     {
-                        case "racks": ReefKit.BuildWallRacks(host, position, size); break;
-                        case "planters": ReefKit.BuildWallPlanters(host, position, size); break;
-                        case "pipes": ReefKit.BuildWallPipes(host, position, size); break;
+                        float slot = span.Min + length * (i + 0.5f) / count;
+                        if (!TryPlaceDressing(slot, span, gates, lamps, wall, area, fr, out float at)) continue;
+
+                        Vector3 ground = fr.origin + fr.along * at;
+                        switch (area.wallDressing)
+                        {
+                            case "racks": ReefWallKit.BuildRack(areaRoot.transform, ground, fr.inward); break;
+                            case "pipes": ReefWallKit.BuildPipeBundle(areaRoot.transform, ground, fr.inward, wallHeight); break;
+                            case "planters": ReefWallKit.BuildCoralTank(areaRoot.transform, ground, fr.inward); break;
+                        }
                     }
                 }
+                if (Application.isPlaying) StaticBatchingUtility.Combine(areaRoot);
             }
+        }
+
+        private const float WallDressingSpacing = 4.3f;
+        private const float WallDressingGateClearance = 0.9f;   // beyond half the gate width
+        private const float WallDressingHalfWidth = 0.65f;
+        private const float WallDressingDepth = 0.7f;
+
+        private struct WallFrame { public Vector3 origin, inward, along; public float coord, faceCoord; public bool alongX; }
+
+        /// <summary>Run origin/inward/along for one of an area's own walls, on the same inner face line the
+        /// MV-1349 lamps use.</summary>
+        private static WallFrame FrameOf(WorldArea area, Wall wall, float wallThickness)
+        {
+            Vector3 inward;
+            switch (wall)
+            {
+                case Wall.N: inward = new Vector3(0f, 0f, -1f); break;
+                case Wall.S: inward = new Vector3(0f, 0f, 1f); break;
+                case Wall.E: inward = new Vector3(-1f, 0f, 0f); break;
+                default: inward = new Vector3(1f, 0f, 0f); break;
+            }
+            bool alongX = area.WallRunsAlongX(wall);
+            float coord = area.WallCoord(wall);
+            float face = coord + (inward.x + inward.z) * wallThickness * 0.5f;
+            return new WallFrame
+            {
+                inward = inward, alongX = alongX, coord = coord, faceCoord = face,
+                along = alongX ? Vector3.right : Vector3.forward,
+                origin = alongX ? new Vector3(0f, 0f, face) : new Vector3(face, 0f, 0f),
+            };
+        }
+
+        /// <summary>World run-ranges blocked by gates on one wall of <paramref name="area"/>, each widened by
+        /// half the gate width plus <paramref name="clearance"/>.</summary>
+        private static List<Vector2> GateBlocks(WorldConfig cfg, WorldArea area, Wall wall, Span span, float clearance)
+        {
+            var blocked = new List<Vector2>();
+            if (cfg?.gates == null) return blocked;
+            foreach (WorldGate g in cfg.gates)
+            {
+                if (g == null) continue;
+                AddGateBlock(blocked, g.from, g.width, area, wall, span, clearance);
+                AddGateBlock(blocked, g.to, g.width, area, wall, span, clearance);
+            }
+            return blocked;
+        }
+
+        /// <summary>True when a footprint <paramref name="halfAlong"/> either side of run position
+        /// <paramref name="at"/>, reaching <paramref name="depth"/> into the room, overlaps authored cover.</summary>
+        private static bool OverlapsCover(WorldArea area, WallFrame fr, float at, float halfAlong, float depth)
+        {
+            if (area.cover == null) return false;
+            float a0 = at - halfAlong, a1 = at + halfAlong;
+            float d0 = fr.faceCoord, d1 = fr.faceCoord + (fr.inward.x + fr.inward.z) * depth;
+            if (d1 < d0) { float tmp = d0; d0 = d1; d1 = tmp; }
+            foreach (WorldCover c in area.cover)
+            {
+                if (c == null) continue;
+                float cAlongMin = fr.alongX ? c.x - c.width * 0.5f : c.z - c.depth * 0.5f;
+                float cAlongMax = fr.alongX ? c.x + c.width * 0.5f : c.z + c.depth * 0.5f;
+                float cDepthMin = fr.alongX ? c.z - c.depth * 0.5f : c.x - c.width * 0.5f;
+                float cDepthMax = fr.alongX ? c.z + c.depth * 0.5f : c.x + c.width * 0.5f;
+                if (cAlongMax > a0 && cAlongMin < a1 && cDepthMax > d0 && cDepthMin < d1) return true;
+            }
+            return false;
+        }
+
+        private static bool TryPlaceDressing(float slot, Span span, List<Vector2> gates, List<WallLampSite> lamps,
+            Wall wall, WorldArea area, WallFrame fr, out float at)
+        {
+            float lo = span.Min + 1.0f, hi = span.Max - 1.0f;
+            for (float d = 0f; d <= 1.5f; d += 0.5f)
+                for (int sign = -1; sign <= 1; sign += 2)
+                {
+                    float c = slot + sign * d;
+                    if (c < lo || c > hi || IsBlocked(c, gates)) continue;
+                    if (IsBlocked(c - WallDressingHalfWidth, gates) || IsBlocked(c + WallDressingHalfWidth, gates)) continue;
+                    bool nearLamp = false;
+                    foreach (WallLampSite s in lamps)
+                    {
+                        if (s.wall != wall) continue;
+                        float lampAt = fr.alongX ? s.ground.x : s.ground.z;
+                        if (Mathf.Abs(lampAt - c) < 1.0f + WallDressingHalfWidth) { nearLamp = true; break; }
+                    }
+                    if (nearLamp || OverlapsCover(area, fr, c, WallDressingHalfWidth, WallDressingDepth)) continue;
+                    at = c;
+                    return true;
+                }
+            at = slot;
+            return false;
+        }
+
+        /// <summary>MV-1351: every room-facing wall of every Reef area gets banded riveted plating, near-black
+        /// rib frames, a top cable tray with copper and steel pipes, portholes on the config's window ranges and
+        /// seeded wall-base coral/kelp clusters. One root per area, static-batched in play.</summary>
+        public static void BuildWallRelook(Transform host, WorldConfig cfg, float wallHeight, float wallThickness)
+        {
+            if (host == null || cfg?.areas == null) return;
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (area == null) continue;
+                var areaRoot = new GameObject($"Reef Wall Relook {area.id}");
+                areaRoot.transform.SetParent(host, false);
+
+                foreach (Wall wall in AllWalls)
+                {
+                    Span span = area.WallSpan(wall);
+                    if (span.Max - span.Min < 1f) continue;
+                    WallFrame fr = FrameOf(area, wall, wallThickness);
+                    List<Vector2> gates = GateBlocks(cfg, area, wall, span, 0.15f);
+
+                    var face = new ReefWallKit.Face
+                    {
+                        areaId = area.id, wallName = wall.ToString(),
+                        origin = fr.origin, inward = fr.inward, along = fr.along,
+                        spanMin = span.Min, spanMax = span.Max, height = wallHeight,
+                        segments = FreeSegments(span, gates),
+                        windows = new List<Vector2>(),
+                    };
+                    if (area.windows != null)
+                        foreach (WorldAreaWindow w in area.windows)
+                            if (w != null && WallEnums.TryParse(w.wall, out Wall parsed) && parsed == wall)
+                                face.windows.Add(new Vector2(span.Min + span.Length * Mathf.Clamp01(Mathf.Min(w.from, w.to)),
+                                                              span.Min + span.Length * Mathf.Clamp01(Mathf.Max(w.from, w.to))));
+
+                    ReefWallKit.BuildFace(areaRoot.transform, face);
+
+                    // Wall base: about 40% of the 1 m steps, never in a gate or on cover.
+                    uint seed = ReefWallKit.Hash($"basesteps_{area.id}_{wall}");
+                    var clusters = new List<float>();
+                    List<Vector2> baseGates = GateBlocks(cfg, area, wall, span, 0.5f);
+                    int steps = Mathf.FloorToInt(span.Length - 1f);
+                    for (int k = 0; k < steps; k++)
+                    {
+                        if (ReefWallKit.Hash01(seed, k) >= 0.4f) continue;
+                        float at = span.Min + 1f + k;
+                        if (IsBlocked(at, baseGates) || OverlapsCover(area, fr, at, 0.5f, 0.7f)) continue;
+                        clusters.Add(at);
+                    }
+                    ReefWallKit.BuildBaseLife(areaRoot.transform, face, clusters);
+                }
+                if (Application.isPlaying) StaticBatchingUtility.Combine(areaRoot);
+            }
+        }
+
+        /// <summary>The parts of a wall's span that are not inside any gate block.</summary>
+        private static List<Vector2> FreeSegments(Span span, List<Vector2> blocked)
+        {
+            var sorted = new List<Vector2>(blocked);
+            sorted.Sort((a, b) => a.x.CompareTo(b.x));
+            var free = new List<Vector2>();
+            float cursor = span.Min;
+            foreach (Vector2 b in sorted)
+            {
+                if (b.x > cursor + 0.6f) free.Add(new Vector2(cursor, Mathf.Min(b.x, span.Max)));
+                cursor = Mathf.Max(cursor, b.y);
+            }
+            if (span.Max > cursor + 0.6f) free.Add(new Vector2(cursor, span.Max));
+            return free;
         }
 
         private static bool HasWindowOn(WorldArea area, Wall wall)
@@ -346,12 +505,13 @@ namespace MaxWorlds.Arena
             return sites;
         }
 
-        private static void AddGateBlock(List<Vector2> blocked, WorldGateEndpoint e, float width, WorldArea area, Wall wall, Span span)
+        private static void AddGateBlock(List<Vector2> blocked, WorldGateEndpoint e, float width, WorldArea area, Wall wall, Span span,
+            float clearance = WallLampGateClearance)
         {
             if (e == null || e.area != area.id) return;
             if (!WallEnums.TryParse(e.wall, out Wall parsed) || parsed != wall) return;
             float centre = span.Min + (span.Max - span.Min) * e.pos;
-            float half = width * 0.5f + WallLampGateClearance;
+            float half = width * 0.5f + clearance;
             blocked.Add(new Vector2(centre - half, centre + half));
         }
 
