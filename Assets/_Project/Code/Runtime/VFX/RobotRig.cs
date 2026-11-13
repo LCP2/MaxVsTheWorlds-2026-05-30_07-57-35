@@ -298,6 +298,40 @@ namespace MaxWorlds.VFX
         /// into a combined submesh (should not happen; guarded defensively).</summary>
         private int _bodyMaterialIndex = -1;
 
+        /// <summary>MV-1353: the kind/world body material this rig was built with, kept so a pooled robot
+        /// that was an elite last life can swap back to it. <see cref="_bodyMat"/> is whichever of this and
+        /// the shared elite-red material is currently on the combined renderer.</summary>
+        private Material _normalBodyMat;
+        private bool _eliteBodyShown;
+
+        /// <summary>MV-1353: the elite body (warm half) colour — a pure, bright red, deliberately clear of
+        /// Max's orange-red and the Heavy/Cable Tentacle's dark crimson.</summary>
+        public static readonly Color EliteRed = new Color(0.88f, 0.06f, 0.10f);
+
+        /// <summary>MV-1353: puts the shared <c>Robot_Elite_Body</c> material on the body submesh while this
+        /// robot is a live, non-captured elite, and the kind's own body material otherwise. Idempotent and
+        /// cheap (one compare) — called on every enable and every LateUpdate, since a pooled robot's elite
+        /// flag is stamped by <see cref="RobotEnemy.Apply"/> AFTER OnEnable, and a Linked partner is
+        /// promoted mid-life.</summary>
+        public void RefreshEliteBody()
+        {
+            if (!_built || _enemy == null || _normalBodyMat == null) return;
+            bool wantElite = _enemy.IsElite && !_enemy.IsConverted && !_enemy.IsTrapConverting;
+            if (wantElite == _eliteBodyShown) return;
+            _eliteBodyShown = wantElite;
+            _bodyMat = wantElite ? SharedCharacterMaterial("Robot_Elite_Body", EliteRed) : _normalBodyMat;
+            if (_combinedRenderer != null && _bodyMaterialIndex >= 0)
+            {
+                Material[] mats = _combinedRenderer.sharedMaterials;
+                if (_bodyMaterialIndex < mats.Length)
+                {
+                    mats[_bodyMaterialIndex] = _bodyMat;
+                    _combinedRenderer.sharedMaterials = mats;
+                }
+            }
+            _lastAppliedBodyHeat = null; // force the heat block to re-assert on the swapped submesh
+        }
+
         /// <summary>MV-1274 AC5 round 7: how many distinct submesh/material slots <see cref="_combinedRenderer"/>
         /// actually has, cached once at build time so the Hangar-only rim write below can touch every
         /// one of them (kind body AND the shared Cool/Dark/Gold slots) without re-querying
@@ -471,6 +505,7 @@ namespace MaxWorlds.VFX
         private void OnEnable()
         {
             EnsureBuilt();
+            RefreshEliteBody();
             HudSignals.DamageDealt += OnDamage;
             HudSignals.BlinkerTeleported += OnBlinkerTeleported;
 
@@ -612,6 +647,7 @@ namespace MaxWorlds.VFX
             Color gold = reef ? WorldMaterials.ReefBioGlow : CharacterSkin.RobotGold;
 
             _bodyMat = SharedCharacterMaterial($"Robot_{role}_Body", body);
+            _normalBodyMat = _bodyMat;
             _coolMat = SharedCharacterMaterial("Robot_Cool", cool);
             _darkMat = SharedCharacterMaterial("Robot_Dark", dark);
             _goldMat = SharedCharacterMaterial("Robot_Gold", gold);
@@ -985,6 +1021,7 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (!_built || _enemy == null) return;
+            RefreshEliteBody();
 
             // MV-980: a Dormant robot is motionless the whole time it's asleep (its CharacterController
             // is disabled, see RobotEnemy.BeginDormant) — nothing here has moved since last frame, so
