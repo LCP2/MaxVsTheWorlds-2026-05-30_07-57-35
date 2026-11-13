@@ -25,6 +25,14 @@ namespace MaxWorlds.Rendering
         /// <c>MapRuntime.DeckShadowProud</c>, so the band never z-fights the Reef floor slab beneath it.</summary>
         public const float LaneY = 0.02f;
 
+        // MV-1348: fixed render queues for the Reef's transparent floor layers. Unity sorts same-queue
+        // transparents by camera distance to each object's centre, so a map-wide overlay and a
+        // follow-the-player particle system swapped order as Max moved (the flicker). Pinning each to
+        // its own queue makes the draw order independent of the camera: caustics < lanes < snow.
+        public const int CausticsRenderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent - 20;
+        public const int CurrentLaneRenderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent - 10;
+        public const int MarineSnowRenderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 10;
+
         /// <summary>Real-world metres one chevron tile repeats across (MV-1335) — the ticket names no
         /// exact count, only "chevron streaks"; this is dense enough to read as a flow at every lane
         /// length the Reef authors (MV-1301's shortest lane is several metres).</summary>
@@ -69,6 +77,7 @@ namespace MaxWorlds.Rendering
         {
             Shader shader = Shader.Find("MaxWorlds/CurrentLaneBand");
             var m = new Material(shader) { name = $"CurrentLane_{name}", hideFlags = HideFlags.HideAndDontSave };
+            m.renderQueue = CurrentLaneRenderQueue;
             m.SetFloat("_Span", span);
             m.SetFloat("_ChevronPeriod", ChevronPeriodMetres);
             m.SetFloat("_ScrollOffset", 0f);

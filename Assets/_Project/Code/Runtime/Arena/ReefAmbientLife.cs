@@ -60,7 +60,7 @@ namespace MaxWorlds.Arena
 
         // ---- MV-1342, Change item 2: floor-wide caustics overlay ----------------------------------
 
-        /// <summary>Spans every ground-level (<c>zone.level == 0</c>) zone's own combined footprint —
+        /// <summary>MV-1348: one caustics quad per ground-level (<c>zone.level == 0</c>) zone, each at that zone's own footprint —
         /// same level filter <see cref="MaxWorlds.Arena.ReefFloorDetail.PlaceGrates"/> already uses, so
         /// the caustics overlay never reaches onto a raised overlay deck it has no business lighting.
         /// Called from <see cref="BackyardPath"/>'s own <c>ApplyReefKit</c>, alongside this class's own
@@ -69,19 +69,14 @@ namespace MaxWorlds.Arena
         {
             if (host == null || map?.zones == null) return;
 
-            float xMin = float.MaxValue, xMax = float.MinValue, zMin = float.MaxValue, zMax = float.MinValue;
             foreach (MapZone zone in map.zones)
             {
                 if (zone == null || zone.level != 0) continue;
-                xMin = Mathf.Min(xMin, zone.XMin);
-                xMax = Mathf.Max(xMax, zone.XMax);
-                zMin = Mathf.Min(zMin, zone.ZMin);
-                zMax = Mathf.Max(zMax, zone.ZMax);
+                float w = zone.XMax - zone.XMin, d = zone.ZMax - zone.ZMin;
+                if (w <= 0f || d <= 0f) continue;
+                var center = new Vector3((zone.XMin + zone.XMax) * 0.5f, 0f, (zone.ZMin + zone.ZMax) * 0.5f);
+                ReefCausticsOverlay.Build(host, center, w, d);
             }
-            if (xMin >= xMax || zMin >= zMax) return;
-
-            Vector3 center = new Vector3((xMin + xMax) * 0.5f, 0f, (zMin + zMax) * 0.5f);
-            ReefCausticsOverlay.Build(host, center, xMax - xMin, zMax - zMin);
         }
 
         // ---- drums: bubble streams (Change item 2) + core pulse (Change item 4) -------------------

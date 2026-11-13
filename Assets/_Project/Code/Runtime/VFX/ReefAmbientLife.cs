@@ -113,7 +113,12 @@ namespace MaxWorlds.VFX
 
             var r = ps.GetComponent<ParticleSystemRenderer>();
             r.renderMode = ParticleSystemRenderMode.Billboard;
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            // MV-1348: its own material instance (the shared additive glow material also serves
+            // sparks) pinned above the floor overlays, so snow never swaps draw order with them.
+            Material shared = VfxMaterials.Additive(VfxMaterials.Glow());
+            var snowMat = new Material(shared) { name = "ReefMarineSnow", hideFlags = HideFlags.HideAndDontSave };
+            snowMat.renderQueue = ReefCurrentLaneKit.MarineSnowRenderQueue;
+            r.sharedMaterial = snowMat;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             r.receiveShadows = false;
 
@@ -305,8 +310,8 @@ namespace MaxWorlds.VFX
     }
 
     /// <summary>
-    /// MV-1342, Change item 2: a floor-wide, drifting caustic-light overlay — a single quad spanning the
-    /// Reef's own floor footprint, just proud of <see cref="MaxWorlds.Rendering.WorldMaterials.M_ShipFloor"/>
+    /// MV-1342, Change item 2: a floor-wide, drifting caustic-light overlay — one quad per area spanning that
+    /// area's own floor footprint, just proud of <see cref="MaxWorlds.Rendering.WorldMaterials.M_ShipFloor"/>
     /// (same "flush decal, proud by a hair" idiom <c>ReefCurrentLaneKit.LaneY</c> already uses, so it
     /// never z-fights), alpha-blended, carrying <see cref="StylizedTextures.ReefCausticsRipple"/>'s own
     /// tileable streak mask tinted pale-aqua at low strength. One quad for the whole floor, not one per
@@ -352,7 +357,11 @@ namespace MaxWorlds.VFX
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
 
-            Material mat = VfxMaterials.AlphaBlendTinted(StylizedTextures.ReefCausticsRipple(), Tint);
+            // MV-1348: a private material per quad (the cached tinted one is shared, so several
+            // overlays would each advance the same UV offset), pinned BELOW every other Reef transparent.
+            Material shared = VfxMaterials.AlphaBlendTinted(StylizedTextures.ReefCausticsRipple(), Tint);
+            var mat = new Material(shared) { name = "ReefCaustics", hideFlags = HideFlags.HideAndDontSave };
+            mat.renderQueue = ReefCurrentLaneKit.CausticsRenderQueue;
             mr.sharedMaterial = mat;
 
             var overlay = go.AddComponent<ReefCausticsOverlay>();
@@ -407,48 +416,6 @@ namespace MaxWorlds.VFX
             mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
             mesh.RecalculateBounds();
             return mesh;
-        }
-    }
-
-    /// <summary>
-    /// MV-1342, Change item 3: a single decorative, slanted light shaft — a translucent tapered cone
-    /// (wide at the "ceiling" end, narrow at the floor), alpha-blended at a flat pale-aqua tint, alpha
-    /// <= 0.1. Built here (VFX/Gameplay assembly), not in <c>MaxWorlds.Rendering.ReefKit</c> alongside
-    /// the rest of the Reef kit's structural pieces: <c>VfxMaterials</c> (the translucent-material
-    /// helper every other soft overlay in this file already uses, same as
-    /// <see cref="ReefCausticsOverlay"/>'s own material) lives in this assembly, and
-    /// <c>MaxWorlds.Rendering.asmdef</c> has no reference back to it — the same one-directional
-    /// dependency <see cref="ReefFloorDetail"/>'s own class doc already documents for the WHERE/WHAT
-    /// split this ticket's own placement caller (<c>MaxWorlds.Arena.ReefAreaKit.BuildLightShafts</c>)
-    /// keeps with this class. Collider-free and decorative only (ticket: "no collision") — no renderer
-    /// here ever gets a collider, so there is nothing to strip.
-    /// </summary>
-    public static class ReefLightShaft
-    {
-        private static readonly Color ShaftColor = new Color(0.667f, 0.941f, 0.922f, 0.08f);   // #AAF0EB at alpha 0.08
-        private const int ShaftSides = 8;
-
-        public static GameObject Build(Transform parent, Vector3 floorPosition, float height,
-            float topRadius, float bottomRadius, Vector3 tiltEuler)
-        {
-            var root = new GameObject("ReefLightShaft");
-            root.transform.SetParent(parent, false);
-            root.transform.position = floorPosition;
-            root.transform.rotation = Quaternion.Euler(tiltEuler);
-            if (root.GetComponent<MaxWorlds.Core.KeepsOwnMaterial>() == null) root.AddComponent<MaxWorlds.Core.KeepsOwnMaterial>();
-
-            var shaft = new GameObject("Shaft");
-            shaft.transform.SetParent(root.transform, false);
-            shaft.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
-
-            Mesh cone = CharacterMeshes.Beam(height, bottomRadius, topRadius, ShaftSides);
-            shaft.AddComponent<MeshFilter>().sharedMesh = cone;
-            var r = shaft.AddComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.AlphaBlendTinted(VfxMaterials.Solid(), ShaftColor);
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            r.receiveShadows = false;
-
-            return root;
         }
     }
 }

@@ -394,9 +394,6 @@ namespace MaxWorlds.Arena
             // MV-1342: the floor-wide caustics overlay — needs the map's own zone bounds, so this
             // reads map directly rather than folding into ReefAmbientLife.Build's own no-arg signature.
             ReefAmbientLife.BuildCausticsOverlay(host, map);
-
-            // MV-1342: three to four faint, soft, slanted light shafts per area.
-            ReefAreaKit.BuildLightShafts(host, cfg, wallHeight);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the
