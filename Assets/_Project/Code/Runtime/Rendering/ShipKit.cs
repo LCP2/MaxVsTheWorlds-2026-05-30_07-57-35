@@ -144,17 +144,49 @@ namespace MaxWorlds.Rendering
         /// by ONE hard straight horizontal line into a rust-orange lower half and a teal upper half,
         /// with a near-black rib marking the seam. Every solid ShipKit piece below is built from this.</summary>
         private static void BuildSplitBody(Transform root, string name, Vector3 centre, Vector3 colliderSize,
-                                           SurfaceKind kind = SurfaceKind.Metal)
+                                           SurfaceKind kind = SurfaceKind.Metal, Color? accent = null)
         {
+            // MV-1356: framed machinery, not a two-colour slab (MV-1274 addendum, rolled out to all 30
+            // areas). A dark gunmetal frame carries the box; a recessed top inset (0.62^2 = ~38% of the
+            // top, under the ticket's 40% cap) and four rust side panels carry the rust/teal; four corner
+            // end caps and a deck-accent neon edge round it off. No wood-grain anywhere: every surface is
+            // SurfaceKind.Metal.
+            Color neon = accent ?? CoverDefaultAccent;
             Vector3 size = new Vector3(colliderSize.x * 0.96f, colliderSize.y * 0.94f, colliderSize.z * 0.96f);
-            SolidBody(root, name, centre, colliderSize, RustOrange, kind);
+            SolidBody(root, name, centre, colliderSize, GunmetalTone, kind);
 
-            float halfY = size.y * 0.5f;
-            StormdrainKit.Box(root, $"{name} Upper", centre + Vector3.up * (halfY + halfY * 0.5f),
-                new Vector3(size.x + 0.01f, halfY, size.z + 0.01f), Teal, kind);
-            StormdrainKit.Box(root, $"{name} Seam", centre + Vector3.up * halfY,
-                new Vector3(size.x + 0.015f, size.y * 0.05f, size.z + 0.015f), NearBlack, kind);
+            float top = size.y;
+            StormdrainKit.Box(root, $"{name} Upper", centre + Vector3.up * (top + 0.005f),
+                new Vector3(size.x * 0.62f, 0.02f, size.z * 0.62f), Teal, kind);
+
+            float panelH = size.y * 0.55f;
+            float panelY = size.y * 0.42f;
+            const float proud = 0.012f;
+            foreach (float sx in new[] { -1f, 1f })
+                StormdrainKit.Box(root, $"{name} Panel X{(sx < 0 ? "-" : "+")}",
+                    centre + new Vector3(sx * (size.x * 0.5f + proud * 0.5f), panelY, 0f),
+                    new Vector3(proud, panelH, size.z * 0.7f), RustOrange, kind);
+            foreach (float sz in new[] { -1f, 1f })
+                StormdrainKit.Box(root, $"{name} Panel Z{(sz < 0 ? "-" : "+")}",
+                    centre + new Vector3(0f, panelY, sz * (size.z * 0.5f + proud * 0.5f)),
+                    new Vector3(size.x * 0.7f, panelH, proud), RustOrange, kind);
+
+            float capW = Mathf.Min(0.12f, Mathf.Min(size.x, size.z) * 0.12f);
+            foreach (float sx in new[] { -1f, 1f })
+                foreach (float sz in new[] { -1f, 1f })
+                    StormdrainKit.Box(root, $"{name} End Cap",
+                        centre + new Vector3(sx * (size.x * 0.5f - capW * 0.5f), size.y * 0.5f, sz * (size.z * 0.5f - capW * 0.5f)),
+                        new Vector3(capW + 0.02f, size.y + 0.01f, capW + 0.02f), NearBlack, kind);
+
+            Color neonHdr = HdrCapped(neon, 3.0f);
+            foreach (float sz in new[] { -1f, 1f })
+                EmissiveBox(root, $"{name} Neon Edge", centre + new Vector3(0f, top + 0.006f, sz * (size.z * 0.5f - 0.02f)),
+                    new Vector3(size.x * 0.9f, 0.012f, 0.02f), neonHdr);
         }
+
+        /// <summary>MV-1356: the neon edge's colour when a builder isn't told its deck's accent (tests,
+        /// capture helpers) -- the Hangar's own cold cyan.</summary>
+        private static readonly Color CoverDefaultAccent = Rgb(120, 200, 235);
 
         // ---------------------------------------------------------------- wall / floor dressing
 
@@ -322,7 +354,7 @@ namespace MaxWorlds.Rendering
         /// namespace keeps.</summary>
         public static GameObject BuildBulkheadPanel(Transform parent, Vector2 a, Vector2 b, Vector3 inward,
             float wallHeight, float wallThickness, Color deckGlow, bool isOuterEdge, int wallSeed, bool capVisible = true,
-            bool hangarStyle = false)
+            bool hangarStyle = true)
         {
             Transform root = NewRoot(parent, "Bulkhead Wall");
             Vector2 d = b - a;
@@ -492,7 +524,7 @@ namespace MaxWorlds.Rendering
         /// owns — not a "lift one 0.01 m" patch, since the actual duplicate geometry here is removed
         /// rather than hidden behind an offset.</summary>
         private static void BuildWallTopCap(Transform root, Vector2 a, Vector2 b, Vector2 dir, Vector3 n,
-            float wallHeight, float wallThickness, Color deckGlow, int panels, bool visible, bool hangarStyle = false)
+            float wallHeight, float wallThickness, Color deckGlow, int panels, bool visible, bool hangarStyle = true)
         {
             float capY = wallHeight + BulkheadCapThickness * 0.5f;
 
@@ -651,7 +683,7 @@ namespace MaxWorlds.Rendering
         /// (a single hard-edged radius — the ticket's own "not flat discs") for <see cref="BuildGraduatedPool"/>'s
         /// stepped radial falloff, at <see cref="HangarLightPoolRadius"/> (1.6 m) instead of the shared
         /// <see cref="BulkheadLightPoolRadius"/> — every other deck's own lamp pool is untouched (AC8).</summary>
-        private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow, bool hangarStyle = false)
+        private static void BuildWallLamp(Transform root, Vector2 at, Vector3 n, float wallHeight, Color deckGlow, bool hangarStyle = true)
         {
             Vector3 lampPos = new Vector3(at.x, wallHeight * 0.72f, at.y) + n * (BulkheadBackingDepth + BulkheadLampSize * 0.5f + 0.02f);
             TagDressing(EmissiveBox(root, "Wall Lamp", lampPos, new Vector3(BulkheadLampSize, BulkheadLampSize * 0.7f, 0.05f), deckGlow));
@@ -697,6 +729,30 @@ namespace MaxWorlds.Rendering
                 (1.00f, 0.035f),
             };
 
+            BuildPoolSteps(parent, groundCentre, radius, tone, steps);
+        }
+
+        /// <summary>MV-1356: a wide, bright wash for a hero set piece whose MV-1249 target median (Reactor
+        /// Ring 87, Bridge 55) can only be reached by the piece's own light filling most of the frame --
+        /// <see cref="BuildGraduatedPool"/>'s lamp-sized steps are far too dim and small for that. Same
+        /// stepped-additive-ring idiom, six steps falling from <paramref name="centreStrength"/>.</summary>
+        public static void BuildWashPool(Transform parent, Vector3 groundCentre, float radius, Color tone, float centreStrength)
+        {
+            var steps = new (float outerFraction, float strength)[]
+            {
+                (0.30f, centreStrength),
+                (0.48f, centreStrength * 0.82f),
+                (0.64f, centreStrength * 0.62f),
+                (0.78f, centreStrength * 0.42f),
+                (0.90f, centreStrength * 0.18f),
+                (1.00f, centreStrength * 0.05f),
+            };
+            BuildPoolSteps(parent, groundCentre, radius, tone, steps);
+        }
+
+        private static void BuildPoolSteps(Transform parent, Vector3 groundCentre, float radius, Color tone,
+                                           (float outerFraction, float strength)[] steps)
+        {
             float innerR = 0f;
             for (int i = 0; i < steps.Length; i++)
             {
@@ -947,7 +1003,7 @@ namespace MaxWorlds.Rendering
         /// this file's own header documents) — swaps in the darker navy atlas (target plate albedo RGB
         /// 26/34/50, MV-1274 AC2) and HDR-boosts the seam glow lines. Every other deck still builds the
         /// original MV-1259 atlas unchanged (AC8).</summary>
-        public static GameObject BuildAtlasFloor(Transform parent, Rect area, int areaIndex, Color seamGlow, bool darkBase = false)
+        public static GameObject BuildAtlasFloor(Transform parent, Rect area, int areaIndex, Color seamGlow, bool darkBase = true)
         {
             Transform root = NewRoot(parent, $"Atlas Floor A{areaIndex}");
 
@@ -1427,10 +1483,13 @@ namespace MaxWorlds.Rendering
         /// The wings deliberately stand outside the hull's own Z footprint — the same "a deliberate new
         /// form, not the AC1 fit regression" exemption <see cref="CityKit.BuildTruck"/>'s Tail Lift
         /// already uses, excluded from a fit check by name, not by being inside the collider.</summary>
-        public static GameObject BuildDropship(Transform parent, Vector3 center, Vector3 colliderSize)
+        public static GameObject BuildDropship(Transform parent, Vector3 center, Vector3 colliderSize) => BuildDropship(parent, center, colliderSize, null);
+
+        /// <summary>MV-1356: as above with the deck accent the neon edge wears.</summary>
+        public static GameObject BuildDropship(Transform parent, Vector3 center, Vector3 colliderSize, Color? accent)
         {
             Transform root = NewRoot(parent, "Dropship");
-            BuildSplitBody(root, "Hull", center, colliderSize, SurfaceKind.Metal);
+            BuildSplitBody(root, "Hull", center, colliderSize, SurfaceKind.Metal, accent);
 
             var wingSize = new Vector3(4f, 0.8f, 1.4f);
             float wingReach = colliderSize.z * 0.5f + wingSize.z * 0.5f - 0.05f;
@@ -1445,10 +1504,13 @@ namespace MaxWorlds.Rendering
         }
 
         /// <summary><c>drop_pod</c> cover (ticket: 1.4 m square, 1.2 m tall).</summary>
-        public static GameObject BuildDropPod(Transform parent, Vector3 center, Vector3 colliderSize)
+        public static GameObject BuildDropPod(Transform parent, Vector3 center, Vector3 colliderSize) => BuildDropPod(parent, center, colliderSize, null);
+
+        /// <summary>MV-1356: as above with the deck accent the neon edge wears.</summary>
+        public static GameObject BuildDropPod(Transform parent, Vector3 center, Vector3 colliderSize, Color? accent)
         {
             Transform root = NewRoot(parent, "Drop Pod");
-            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal);
+            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal, accent);
             AddGoldLamp(root, "Hatch Lamp", center + new Vector3(0f, colliderSize.y * 0.72f, colliderSize.z * 0.46f), Vector3.forward);
 
             StormdrainKit.Strip(root.gameObject);
@@ -1458,10 +1520,13 @@ namespace MaxWorlds.Rendering
         /// <summary><c>crate</c>/<c>crate_low</c> cover (ticket: full 3 x 3 m at 1.6 m, low at 1.0 m) —
         /// one builder for both: the only difference is the authored <paramref name="colliderSize"/>'s
         /// own height.</summary>
-        public static GameObject BuildCrate(Transform parent, Vector3 center, Vector3 colliderSize)
+        public static GameObject BuildCrate(Transform parent, Vector3 center, Vector3 colliderSize) => BuildCrate(parent, center, colliderSize, null);
+
+        /// <summary>MV-1356: as above with the deck accent the neon edge wears.</summary>
+        public static GameObject BuildCrate(Transform parent, Vector3 center, Vector3 colliderSize, Color? accent)
         {
             Transform root = NewRoot(parent, "Crate");
-            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal);
+            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal, accent);
 
             StormdrainKit.Strip(root.gameObject);
             return root.gameObject;
@@ -1508,10 +1573,13 @@ namespace MaxWorlds.Rendering
 
         /// <summary><c>console_bank</c> cover (ticket: 1.0 m tall) — a split-panel desk with a row of
         /// gold indicator lamps along its front face.</summary>
-        public static GameObject BuildConsoleBank(Transform parent, Vector3 center, Vector3 colliderSize)
+        public static GameObject BuildConsoleBank(Transform parent, Vector3 center, Vector3 colliderSize) => BuildConsoleBank(parent, center, colliderSize, null);
+
+        /// <summary>MV-1356: as above with the deck accent the neon edge wears.</summary>
+        public static GameObject BuildConsoleBank(Transform parent, Vector3 center, Vector3 colliderSize, Color? accent)
         {
             Transform root = NewRoot(parent, "Console Bank");
-            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal);
+            BuildSplitBody(root, "Body", center, colliderSize, SurfaceKind.Metal, accent);
 
             int lights = Mathf.Max(1, Mathf.FloorToInt(colliderSize.x / 0.4f));
             for (int i = 0; i < lights; i++)
@@ -1528,10 +1596,13 @@ namespace MaxWorlds.Rendering
         /// <summary><c>bulkhead_stub</c> cover (ticket: 1.4 m wide, 1.6 m tall) — a standalone upright
         /// split panel, the free-standing-cover counterpart of <see cref="BuildBulkheadPanel"/>'s own
         /// wall-run dressing.</summary>
-        public static GameObject BuildBulkheadStub(Transform parent, Vector3 center, Vector3 colliderSize)
+        public static GameObject BuildBulkheadStub(Transform parent, Vector3 center, Vector3 colliderSize) => BuildBulkheadStub(parent, center, colliderSize, null);
+
+        /// <summary>MV-1356: as above with the deck accent the neon edge wears.</summary>
+        public static GameObject BuildBulkheadStub(Transform parent, Vector3 center, Vector3 colliderSize, Color? accent)
         {
             Transform root = NewRoot(parent, "Bulkhead Stub");
-            BuildSplitBody(root, "Panel", center, colliderSize, SurfaceKind.Metal);
+            BuildSplitBody(root, "Panel", center, colliderSize, SurfaceKind.Metal, accent);
             AddGoldLamp(root, "Lamp", center + new Vector3(0f, colliderSize.y * 0.82f, colliderSize.z * 0.46f), Vector3.forward);
 
             StormdrainKit.Strip(root.gameObject);
@@ -1778,6 +1849,13 @@ namespace MaxWorlds.Rendering
             Mesh ring = CharacterMeshes.Ring(radius * 1.3f, radius * 1.38f, 0.04f, 32);
             MeshPart(root, "Outer Ring Line", ring, groundCenter + Vector3.up * 0.015f, HangarFieldTone);
 
+            // MV-1356: Engineering's identity is heat orange + cyan, carried by the reactor's own light, and
+            // MV-1249's 87/255 target median only holds if that light fills most of the frame. A glowing
+            // cyan lid plus a wide heat-orange wash on the deck around it.
+            EmissiveBox(root, "Core Lid Glow", groundCenter + Vector3.up * (height * 1.02f),
+                new Vector3(radius * 1.1f, 0.02f, radius * 1.1f), HdrCapped(HangarFieldTone, 3.0f));
+            BuildWashPool(root, groundCenter, radius * 3.0f, new Color(1.0f, 0.55f, 0.22f), 0.50f);
+
             for (int i = 0; i < 3; i++)
             {
                 float a = (i + 0.5f) / 3f * Mathf.PI * 2f;
@@ -1830,6 +1908,10 @@ namespace MaxWorlds.Rendering
                 new Vector3(w, wallHeight * 0.8f, 0.08f).Oriented(dir), NearBlack);
             EmissiveBox(root, "Viewport Pane", new Vector3(mid.x, wallHeight * 0.56f, mid.y) + n * 0.04f,
                 new Vector3(w * 0.95f, wallHeight * 0.72f, 0.02f).Oriented(dir), SotamiTone);
+
+            // MV-1356: Command's identity is gold + deep navy; MV-1249's 55/255 target median needs the
+            // bridge's own light to fill most of the frame -- a wide gold wash around the holo table.
+            BuildWashPool(root, tableGroundCenter, Mathf.Min(areaFootprint.width, areaFootprint.height) * 0.42f, new Color(1.0f, 0.82f, 0.45f), 0.36f);
 
             Mesh tableBase = CharacterMeshes.Ring(0f, 1.1f, 0.06f, 24);
             MeshPart(root, "Holo Table Base", tableBase, tableGroundCenter + Vector3.up * 0.9f, NearBlack);

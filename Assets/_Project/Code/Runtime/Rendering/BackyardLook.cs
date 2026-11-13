@@ -572,23 +572,12 @@ namespace MaxWorlds.Rendering
             FilmGrain = 0.08f,
         };
 
-        /// <summary>Hangar deck (areas 1-5) — cold blue with a hazard-yellow rim, the ticket's own
-        /// deck identity. Target capture median luminance 31/255 (MV-1249 AC3).
-        ///
-        /// MV-1274: cuts the global key/fill well below MV-1249's own 0.55/0.40 and drops
-        /// <see cref="PostExposure"/> back down from <see cref="ShipBase"/>'s shared 1.1x — that lift
-        /// was ShipBase's own one-stop compensation for the "still-undressed void" every Mothership
-        /// deck had at MV-1249 (its own doc comment on <see cref="ShipBase"/>, above). MV-1259/1260/1269
-        /// have since dressed the Hangar's own floor/walls, and this ticket darkens them further still
-        /// (target floor-plate albedo 26/34/50 — see <see cref="ShipKit.BuildAtlasFloor"/>'s own
-        /// <c>darkBase</c> palette), so the Hangar no longer needs — and actively overshoots under —
-        /// that shared lift. ONLY this deck's own override changes: <see cref="ShipBase"/> itself, and
-        /// every other deck built on it (Assembly/Holds/Engineering/Command, areas 6-30), keeps its own
-        /// exact PostExposure/Key/Fill/Ambient values unchanged (MV-1274 AC8's own "areas 6-30
-        /// unchanged" gate). The ticket's own "darkness plus local light is the target" (its "Do not
-        /// re-raise" list) — the lamp pools/neon <see cref="ShipKit"/> now builds carry the brightness
-        /// instead of this flat global wash.</summary>
-        public static BackyardLook ShipHangar
+        /// <summary>MV-1356: the ONE dark base every Mothership deck shares (Lee, 13 Nov: "by area 6 it's a
+        /// patchwork"). It is MV-1274's measured Hangar lighting -- key/fill/ambient/fog/exposure/bloom --
+        /// lifted out of <see cref="ShipHangar"/> unchanged, so crossing a deck boundary changes the
+        /// accents (rim colour, bloom tint, and the lamp pools / neon / set-piece lights ShipKit builds
+        /// from <c>LookFor(area).RimColor</c>), never the whole screen.</summary>
+        private static BackyardLook ShipDarkBase
         {
             get
             {
@@ -616,17 +605,14 @@ namespace MaxWorlds.Rendering
                 // holds part of the blue floor regardless of light colour), so landing exactly on 50 needs
                 // a much larger cut than the naive ratio predicts. x0.55 gives headroom inside the +/-12
                 // band rather than chasing the exact centre.
-                l.KeyColor = new Color(0.62f, 0.78f, 0.54f);    // b: 0.98 -> 0.54 (x0.55)
+                l.KeyColor = new Color(0.62f, 0.88f, 0.54f);   // MV-1356: G 0.78 -> 0.88, lifts the floor-patch G channel into the +/-12 band    // b: 0.98 -> 0.54 (x0.55)
                 l.KeyIntensity = 0.30f;
-                l.FillColor = new Color(0.30f, 0.42f, 0.32f);  // b: 0.58 -> 0.32 (x0.55)
+                l.FillColor = new Color(0.30f, 0.47f, 0.32f);  // b: 0.58 -> 0.32 (x0.55)
                 l.FillIntensity = 0.20f;
-                l.RimColor = new Color(1.0f, 0.85f, 0.25f);    // hazard yellow
-                l.RimIntensity = 1.0f;
                 l.AmbientSky = new Color(0.045f, 0.058f, 0.085f);      // luminance ~0.058
                 l.AmbientEquator = new Color(0.032f, 0.042f, 0.062f);
                 l.AmbientGround = new Color(0.018f, 0.026f, 0.040f);
                 l.FogColor = new Color(0.05f, 0.07f, 0.10f);
-                l.BloomTint = new Color(0.85f, 0.92f, 1.0f);
                 // MV-1274 triage: lamp-pool centres measured at ~224-232 luma, clipped flat against the
                 // Neutral tonemapper's shoulder -- 2.6x the target image's own p90 (87.6). That plateau is
                 // what AC4 was actually failing on ("the probe starts inside a clipped plateau, so no
@@ -655,6 +641,21 @@ namespace MaxWorlds.Rendering
             }
         }
 
+        /// <summary>Hangar deck (areas 1-5) -- hazard-yellow rim over the shared <see cref="ShipDarkBase"/>
+        /// (MV-1274's measured look; MV-1356 moved its lighting into that shared base). Target capture
+        /// median luminance 31/255 (MV-1249 AC3).</summary>
+        public static BackyardLook ShipHangar
+        {
+            get
+            {
+                BackyardLook l = ShipDarkBase;
+                l.RimColor = new Color(1.0f, 0.85f, 0.25f);    // hazard yellow
+                l.RimIntensity = 1.0f;
+                l.BloomTint = new Color(0.85f, 0.92f, 1.0f);
+                return l;
+            }
+        }
+
         /// <summary>Assembly deck (areas 6-12) — amber work light, the ticket's own single-colour deck
         /// identity (no named second accent, unlike the other four decks). Target capture median
         /// luminance 28/255 (MV-1249 AC3).</summary>
@@ -662,17 +663,10 @@ namespace MaxWorlds.Rendering
         {
             get
             {
-                BackyardLook l = ShipBase;
-                l.KeyColor = new Color(0.95f, 0.80f, 0.55f);
-                l.KeyIntensity = 0.60f;
-                l.FillColor = new Color(0.42f, 0.33f, 0.22f);
-                l.FillIntensity = 0.40f;
-                l.RimColor = new Color(1.0f, 0.78f, 0.42f);    // the work light itself
+                BackyardLook l = ShipDarkBase;   // MV-1356: shared dark base, identity by accents only
+                l.KeyColor = new Color(0.68f, 0.94f, 0.50f);   // MV-1356: barely-warm tint (amber)
+                l.RimColor = new Color(1.0f, 0.78f, 0.42f);    // amber work light
                 l.RimIntensity = 0.95f;
-                l.AmbientSky = new Color(0.16f, 0.12f, 0.08f);        // luminance ~0.126
-                l.AmbientEquator = new Color(0.13f, 0.10f, 0.07f);
-                l.AmbientGround = new Color(0.08f, 0.06f, 0.04f);
-                l.FogColor = new Color(0.08f, 0.06f, 0.045f);
                 l.BloomTint = new Color(1.0f, 0.85f, 0.55f);
                 return l;
             }
@@ -684,17 +678,10 @@ namespace MaxWorlds.Rendering
         {
             get
             {
-                BackyardLook l = ShipBase;
-                l.KeyColor = new Color(0.55f, 0.85f, 0.88f);
-                l.KeyIntensity = 0.50f;
-                l.FillColor = new Color(0.22f, 0.42f, 0.44f);
-                l.FillIntensity = 0.38f;
-                l.RimColor = new Color(1.0f, 0.87f, 0.55f);    // gold
+                BackyardLook l = ShipDarkBase;   // MV-1356: shared dark base, identity by accents only
+                l.KeyColor = new Color(0.60f, 1.0f, 0.64f);    // MV-1356: barely-teal tint
+                l.RimColor = new Color(1.0f, 0.87f, 0.55f);    // gold (teal comes from the lamp pools/neon)
                 l.RimIntensity = 0.9f;
-                l.AmbientSky = new Color(0.07f, 0.13f, 0.14f);        // luminance ~0.118
-                l.AmbientEquator = new Color(0.06f, 0.11f, 0.12f);
-                l.AmbientGround = new Color(0.04f, 0.07f, 0.08f);
-                l.FogColor = new Color(0.045f, 0.08f, 0.085f);
                 l.BloomTint = new Color(0.75f, 0.95f, 0.85f);
                 return l;
             }
@@ -708,17 +695,9 @@ namespace MaxWorlds.Rendering
         {
             get
             {
-                BackyardLook l = ShipBase;
-                l.KeyColor = new Color(0.98f, 0.68f, 0.45f);
-                l.KeyIntensity = 0.62f;
-                l.FillColor = new Color(0.46f, 0.28f, 0.18f);
-                l.FillIntensity = 0.42f;
-                l.RimColor = new Color(0.40f, 0.90f, 0.95f);   // cyan
+                BackyardLook l = ShipDarkBase;   // MV-1356: shared dark base, identity by accents only
+                l.RimColor = new Color(0.40f, 0.90f, 0.95f);   // cyan (heat orange comes from the lamp pools/neon)
                 l.RimIntensity = 1.05f;
-                l.AmbientSky = new Color(0.17f, 0.11f, 0.07f);        // luminance ~0.120
-                l.AmbientEquator = new Color(0.14f, 0.09f, 0.06f);
-                l.AmbientGround = new Color(0.09f, 0.055f, 0.035f);
-                l.FogColor = new Color(0.09f, 0.055f, 0.035f);
                 l.BloomTint = new Color(1.0f, 0.75f, 0.55f);
                 return l;
             }
@@ -730,17 +709,9 @@ namespace MaxWorlds.Rendering
         {
             get
             {
-                BackyardLook l = ShipBase;
-                l.KeyColor = new Color(0.95f, 0.82f, 0.55f);
-                l.KeyIntensity = 0.58f;
-                l.FillColor = new Color(0.40f, 0.33f, 0.22f);
-                l.FillIntensity = 0.38f;
-                l.RimColor = new Color(0.25f, 0.35f, 0.75f);   // deep blue
+                BackyardLook l = ShipDarkBase;   // MV-1356: shared dark base, identity by accents only
+                l.RimColor = new Color(0.25f, 0.35f, 0.75f);   // deep navy (gold comes from the lamp pools/neon)
                 l.RimIntensity = 0.9f;
-                l.AmbientSky = new Color(0.15f, 0.12f, 0.09f);        // luminance ~0.124
-                l.AmbientEquator = new Color(0.12f, 0.10f, 0.075f);
-                l.AmbientGround = new Color(0.08f, 0.065f, 0.045f);
-                l.FogColor = new Color(0.08f, 0.065f, 0.045f);
                 l.BloomTint = new Color(1.0f, 0.88f, 0.6f);
                 return l;
             }

@@ -664,6 +664,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1242HelmsmanLook());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
+            Add(BuildMv1356LookRolloutCheck());
             Add(BuildMv1278EliteCheck());
             Add(BuildMv1274HangarCheck());
             Add(BuildMv1250ReefLookCheck());
@@ -5406,6 +5407,231 @@ namespace MaxWorlds.Dev
                         sb.Append($"{h.label} (a{h.area}): median={median:F1}/255 p90={p90:F1}/255 " +
                                   $"(target {h.targetMedian:F0} +/-10 -- {(within ? "PASS" : "OUT OF RANGE")})\n");
                     }
+                    return sb.ToString();
+                },
+            };
+        }
+
+        // ---- Mv1356LookRolloutCheck (MV-1356 AC1/AC2/AC4) --------------------------------------
+
+        /// <summary>MV-1356: one production-camera capture (HUD hidden) of each hero area (1, 8, 15, 22,
+        /// 30) plus areas 5 and 6 each framed 3 m inside their own footprint, measuring whole-frame p10 /
+        /// median and a bare-floor patch's mean RGB. The patch is picked live off the built scene: the
+        /// on-screen, unoccluded floor point farthest (and at least 2 m) from every Light, "Wall Lamp",
+        /// pool, neon, ring and hazard piece. Same route as <see cref="BuildMv1249MothershipLookCheck"/>.</summary>
+        /// <summary>MV-1356 (Lee's 13 Nov ruling): the bare-floor patch for a22 / a30 is read at these fixed world points, chosen once.</summary>
+        private static readonly Dictionary<int, Vector3> MV1356FixedFloorPoints = new Dictionary<int, Vector3>
+        {
+            { 22, new Vector3(484f, 0f, 392f) },   // dark west edge of the Reactor floor, outside the wash; scan-chosen once
+            { 30, new Vector3(664f, 0f, 546f) },   // dark west side of the Bridge floor, outside the key wash; scan-chosen once
+        };
+
+        private static CapturePreset BuildMv1356LookRolloutCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            var shotsSpec = new (int area, bool insideCorner, float targetMedian)[]
+            {
+                (1, false, 31f), (8, false, 28f), (15, false, 29f), (22, false, 87f), (30, false, 55f),
+                (5, true, -1f), (6, true, -1f),
+            };
+            var results = new Dictionary<string, string>();
+            var patchByShot = new Dictionary<string, Color32>();
+
+            IEnumerator Frame(int area, bool insideCorner)
+            {
+                if (!DevModeController.TryJumpToArea($"a{area}"))
+                    throw new CaptureAbortException($"jump to a{area} failed");
+                if (insideCorner)
+                {
+                    MapData map = EnemyNavigation.Map;
+                    MapZone z = map != null ? map.Zone($"area{area}") : null;
+                    GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                    if (z != null && playerObj != null)
+                    {
+                        Rect fp = z.Footprint;
+                        var cc = playerObj.GetComponent<CharacterController>();
+                        bool was = cc != null && cc.enabled;
+                        if (cc != null) cc.enabled = false;
+                        playerObj.transform.position = new Vector3(fp.xMin + 3f, playerObj.transform.position.y, fp.yMin + 3f);
+                        if (cc != null) cc.enabled = was;
+                    }
+                }
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                yield return Frame(shotsSpec[0].area, shotsSpec[0].insideCorner);
+            }
+
+            float Luma255(Color32 c) => (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b);
+            float Pct(List<float> sorted, float p)
+            {
+                float idx = p * (sorted.Count - 1);
+                int lo = Mathf.FloorToInt(idx), hi = Mathf.CeilToInt(idx);
+                return lo == hi ? sorted[lo] : Mathf.Lerp(sorted[lo], sorted[hi], idx - lo);
+            }
+
+            void Measure(string name, int area, Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                var lumas = new List<float>((w / 4 + 1) * (h / 4 + 1));
+                for (int y = 0; y < h; y += 4)
+                    for (int x = 0; x < w; x += 4) lumas.Add(Luma255(px[y * w + x]));
+                lumas.Sort();
+                float p10 = Pct(lumas, 0.10f), median = Pct(lumas, 0.50f);
+
+                Camera cam = Camera.main;
+                var lightPos = new List<Vector3>();
+                var lightRadius = new List<(Vector3 pos, float r)>();
+                foreach (Light l in FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                    if (l.type != LightType.Directional) lightPos.Add(l.transform.position);
+                foreach (Transform t in FindObjectsByType<Transform>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                {
+                    string n = t.name;
+                    if (n.StartsWith("Pool Step"))
+                    {
+                        // a pool is a light out to the outer edge of its 4th step; steps 4+ carry <= ~8% of the centre strength
+                        if (n == "Pool Step 0" || n == "Pool Step 1" || n == "Pool Step 2" || n == "Pool Step 3") lightRadius.Add((t.position, t.localScale.x));
+                    }
+                    else if (n.Contains("Lamp") || n.Contains("Pool") || n.Contains("Neon") || n.Contains("Ring") || n.Contains("Hazard") || n.Contains("Glow"))
+                        lightPos.Add(t.position);
+                }
+
+                string patchText = "no on-screen unoccluded floor candidate";
+                MapData map = EnemyNavigation.Map;
+                MapZone zone = map != null ? map.Zone($"area{area}") : null;
+                // Lee's 13 Nov ruling: a22 / a30 measure at a FIXED world point (chosen once), not a live search.
+                if (cam != null && (area == 22 || area == 30) && !name.Contains("inside3m"))
+                {
+                    if (MV1356FixedFloorPoints.TryGetValue(area, out Vector3 fixedWp))
+                    {
+                        Vector3 fvp = cam.WorldToViewportPoint(fixedWp);
+                        int fx0 = Mathf.RoundToInt(fvp.x * w), fy0 = Mathf.RoundToInt(fvp.y * h);
+                        long fr = 0, fg = 0, fb = 0; int fn = 0;
+                        for (int dy = -6; dy <= 6; dy++)
+                            for (int dx = -6; dx <= 6; dx++)
+                            {
+                                int x = Mathf.Clamp(fx0 + dx, 0, w - 1), y = Mathf.Clamp(fy0 + dy, 0, h - 1);
+                                Color32 c = px[y * w + x]; fr += c.r; fg += c.g; fb += c.b; fn++;
+                            }
+                        var fmean = new Color32((byte)(fr / fn), (byte)(fg / fn), (byte)(fb / fn), 255);
+                        patchByShot[name] = fmean;
+                        results[name] = $"p10={p10:F1} median={median:F1} FIXED floor patch RGB {fmean.r}/{fmean.g}/{fmean.b} at {fixedWp} (viewport {fvp.x:F2},{fvp.y:F2})";
+                        return;
+                    }
+                    var scan = new System.Text.StringBuilder();
+                    Rect sfp = zone != null ? zone.Footprint : default;
+                    for (float sx = sfp.xMin + 1f; sx <= sfp.xMax - 1f; sx += 2f)
+                        for (float sz = sfp.yMin + 1f; sz <= sfp.yMax - 1f; sz += 2f)
+                        {
+                            var swp = new Vector3(sx, 0f, sz);
+                            Vector3 svp = cam.WorldToViewportPoint(swp);
+                            if (svp.z <= 0f || svp.x < 0.08f || svp.x > 0.92f || svp.y < 0.08f || svp.y > 0.92f) continue;
+                            Vector3 sfrom = cam.transform.position; Vector3 sdir = swp - sfrom;
+                            if (Physics.Raycast(sfrom, sdir.normalized, out RaycastHit shit, sdir.magnitude - 0.3f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                            int cx0 = Mathf.RoundToInt(svp.x * w), cy0 = Mathf.RoundToInt(svp.y * h);
+                            long sr = 0, sg = 0, sb2 = 0; int sn = 0;
+                            for (int dy = -6; dy <= 6; dy++)
+                                for (int dx = -6; dx <= 6; dx++)
+                                {
+                                    int x = Mathf.Clamp(cx0 + dx, 0, w - 1), y = Mathf.Clamp(cy0 + dy, 0, h - 1);
+                                    Color32 c = px[y * w + x]; sr += c.r; sg += c.g; sb2 += c.b; sn++;
+                                }
+                            scan.Append($"\n   SCAN ({sx:F0},{sz:F0}) vp {svp.x:F2},{svp.y:F2} RGB {sr / sn}/{sg / sn}/{sb2 / sn}");
+                        }
+                    results[name] = $"p10={p10:F1} median={median:F1} NO FIXED POINT YET{scan}";
+                    return;
+                }
+                if (cam != null && zone != null)
+                {
+                    Rect fp = zone.Footprint;
+                    float best = -1f; Vector3 bestPos = default; Vector3 bestVp = default;
+                    foreach (float margin in new[] { 0.25f, 0.12f })
+                    {
+                        for (float fx = fp.xMin + 1f; fx <= fp.xMax - 1f; fx += 1f)
+                            for (float fz = fp.yMin + 1f; fz <= fp.yMax - 1f; fz += 1f)
+                            {
+                                var wp = new Vector3(fx, 0f, fz);
+                                Vector3 vp = cam.WorldToViewportPoint(wp);
+                                if (vp.z <= 0f || vp.x < margin || vp.x > 1f - margin || vp.y < margin || vp.y > 1f - margin) continue;
+                                float minD = 999f;
+                                foreach (Vector3 lp in lightPos) minD = Mathf.Min(minD, Vector2.Distance(new Vector2(fx, fz), new Vector2(lp.x, lp.z)));
+                                foreach (var lr in lightRadius) minD = Mathf.Min(minD, Vector2.Distance(new Vector2(fx, fz), new Vector2(lr.pos.x, lr.pos.z)) - lr.r);
+                                float centreScore = 1f - Vector2.Distance(new Vector2(vp.x, vp.y), new Vector2(0.5f, 0.5f));
+                                if (minD < 2f || centreScore <= best) continue;
+                                Vector3 from = cam.transform.position;
+                                Vector3 dir = wp - from;
+                                if (Physics.Raycast(from, dir.normalized, out RaycastHit hit, dir.magnitude - 0.3f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                                best = centreScore; bestPos = wp; bestVp = vp;
+                            }
+                        if (best >= 0f) break;
+                    }
+                    if (best >= 0f)
+                    {
+                        int cx = Mathf.RoundToInt(bestVp.x * w), cy = Mathf.RoundToInt(bestVp.y * h);
+                        long r = 0, g = 0, b = 0; int n = 0;
+                        for (int dy = -6; dy <= 6; dy++)
+                            for (int dx = -6; dx <= 6; dx++)
+                            {
+                                int x = Mathf.Clamp(cx + dx, 0, w - 1), y = Mathf.Clamp(cy + dy, 0, h - 1);
+                                Color32 c = px[y * w + x]; r += c.r; g += c.g; b += c.b; n++;
+                            }
+                        var mean = new Color32((byte)(r / n), (byte)(g / n), (byte)(b / n), 255);
+                        patchByShot[name] = mean;
+                        patchText = $"floor patch RGB {mean.r}/{mean.g}/{mean.b} at {bestPos} (>= 2 m from every light)";
+                    }
+                }
+                results[name] = $"p10={p10:F1} median={median:F1} {patchText}";
+            }
+
+            var shots = new List<CaptureShot>();
+            for (int i = 0; i < shotsSpec.Length; i++)
+            {
+                var spec = shotsSpec[i];
+                string name = spec.insideCorner ? $"MV-1356-a{spec.area}-inside3m" : $"MV-1356-a{spec.area}";
+                Func<Camera, IEnumerator> setup = i == 0 ? NoSetup : (cam => Frame(spec.area, spec.insideCorner));
+                shots.Add(new CaptureShot(name, setup, measure: tex => Measure(name, spec.area, tex)));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1356lookrollout",
+                LogTag = "[MV1356Capture]",
+                Flag = "-mv1356shot",
+                ArmFile = "Temp/mv1356.arm",
+                HeadlessMarker = "Temp/mv1356.headless",
+                DoneFileName = "_mv1356_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 240,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = shots,
+                ExtraReport = () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    foreach (var spec in shotsSpec)
+                    {
+                        string name = spec.insideCorner ? $"MV-1356-a{spec.area}-inside3m" : $"MV-1356-a{spec.area}";
+                        results.TryGetValue(name, out string line);
+                        sb.Append($"{name}: {line ?? "NOT MEASURED"}" + (spec.targetMedian > 0 ? $" (target median {spec.targetMedian:F0} +/-10, p10 <= 22, floor 26/34/50 +/-12)" : "") + "\n");
+                    }
+                    if (patchByShot.TryGetValue("MV-1356-a5-inside3m", out Color32 a) && patchByShot.TryGetValue("MV-1356-a6-inside3m", out Color32 b))
+                        sb.Append($"AC2 deck boundary delta (a5 vs a6) per channel: {Mathf.Abs(a.r - b.r)}/{Mathf.Abs(a.g - b.g)}/{Mathf.Abs(a.b - b.b)} (limit 8)\n");
                     return sb.ToString();
                 },
             };

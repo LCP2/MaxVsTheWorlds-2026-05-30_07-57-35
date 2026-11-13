@@ -76,7 +76,7 @@ namespace MaxWorlds.Arena
                     Color deckGlow = MothershipDecks.LookFor(area.index).RimColor;
                     int wallSeed = area.index * 4 + (int)wall;
                     bool capVisible = cappedWalls.Add(match);
-                    bool hangarStyle = MothershipDecks.ForArea(area.index) == MothershipDeck.Hangar;    // MV-1274
+                    bool hangarStyle = true;    // MV-1274 -> MV-1356: every deck wears the Hangar framed-machinery wall cap
 
                     GameObject wallGo = ShipKit.BuildBulkheadPanel(
                         root.transform, a, b, inward, wallHeight, wallThickness, deckGlow, match.IsOuterEdge, wallSeed, capVisible, hangarStyle);
