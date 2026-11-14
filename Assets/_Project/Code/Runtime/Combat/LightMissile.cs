@@ -194,7 +194,7 @@ namespace MaxWorlds.Combat
                 float angleOffset = (i - (count - 1) / 2f) * DefaultFanDegrees;
                 Vector3 dir = Quaternion.Euler(0f, angleOffset, 0f) * forward;
                 LightMissileBall.Spawn(origin, dir, DefaultSpeed, damage, trackingBase, areaIndex,
-                    powerLevel, claimed);
+                    powerLevel, claimed, projectorPriority: i == 0);
             }
         }
 

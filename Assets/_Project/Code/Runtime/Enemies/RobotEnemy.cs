@@ -4316,6 +4316,28 @@ namespace MaxWorlds.Enemies
             return IsProtectedByAnyDome() ? 0f : 1f;
         }
 
+        /// <summary>MV-1374: true while a player-side hit on this robot would be deflected by a dome
+        /// (x0) - the exact gate <see cref="ProjectorDomeMultiplier"/> applies, exposed so the Light
+        /// Missile's targeting can steer around protected robots. Never true for a Projector, a
+        /// captured ally, or a dead robot.</summary>
+        public bool IsDomeProtected =>
+            IsAlive && Kind != EnemyKind.Projector && Team == Team.Enemy && IsProtectedByAnyDome();
+
+        /// <summary>MV-1374: true while <paramref name="worldPos"/> (XZ) lies inside any live dome - lets a
+        /// homing ball ripple the dome surface as it crosses it.</summary>
+        public static bool IsPointInsideAnyDome(Vector3 worldPos)
+        {
+            worldPos.y = 0f;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy r = _active[i];
+                if (r == null || r.Kind != EnemyKind.Projector || !r.HasDome) continue;
+                Vector3 center = r.DomeCenter; center.y = 0f;
+                if ((worldPos - center).sqrMagnitude <= ProjectorDomeRadius * ProjectorDomeRadius) return true;
+            }
+            return false;
+        }
+
         /// <summary>Point 2: true while this robot's own XZ position sits within
         /// <see cref="ProjectorDomeRadius"/> of ANY live <see cref="HasDome"/> Projector in its own
         /// <see cref="AreaIndex"/> — a robot can be shielded by a neighbour's dome, not only its own

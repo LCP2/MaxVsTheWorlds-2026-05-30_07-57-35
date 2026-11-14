@@ -104,6 +104,8 @@ namespace MaxWorlds.Weapons
         private float _distanceTravelled;
         private bool _initialTargetResolved;
         private HashSet<IDamageable> _volleyClaimed;
+        private bool _projectorPriority;
+        private bool _insideDome;
         private IDamageable _target;
         private Transform _targetTransform;
 
@@ -184,7 +186,8 @@ namespace MaxWorlds.Weapons
         /// targets") — this ball adds its own pick to it, once, when it resolves its initial target at
         /// the end of its launch leg.</summary>
         public static LightMissileBall Spawn(Vector3 origin, Vector3 direction, float speed, float damage,
-            float trackingBase, int areaIndex, int powerLevel = 1, HashSet<IDamageable> volleyClaimed = null)
+            float trackingBase, int areaIndex, int powerLevel = 1, HashSet<IDamageable> volleyClaimed = null,
+            bool projectorPriority = false)
         {
             PruneDestroyedPoolEntries();
 
@@ -225,6 +228,8 @@ namespace MaxWorlds.Weapons
             ball._distanceTravelled = 0f;
             ball._initialTargetResolved = false;
             ball._volleyClaimed = volleyClaimed;
+            ball._projectorPriority = projectorPriority;
+            ball._insideDome = false;
             ball._target = null;
             ball._targetTransform = null;
             ball._active = true;
@@ -300,8 +305,12 @@ namespace MaxWorlds.Weapons
                 if (!_initialTargetResolved)
                 {
                     _initialTargetResolved = true;
-                    IDamageable picked = SelectInitialTarget(transform.position, _direction, _areaIndex,
-                        TargetRangeMetres, _volleyClaimed);
+                    // MV-1374: the first ball of each volley locks a live Shield Projector in range.
+                    IDamageable picked = _projectorPriority
+                        ? NearestProjector(transform.position, _areaIndex, TargetRangeMetres) : null;
+                    if (picked == null)
+                        picked = SelectInitialTarget(transform.position, _direction, _areaIndex,
+                            TargetRangeMetres, _volleyClaimed);
                     if (picked != null) _volleyClaimed?.Add(picked);
                     SetTarget(picked);
                     _volleyClaimed = null; // one-shot — a later retarget (rule 5) ignores distinctness
@@ -329,7 +338,21 @@ namespace MaxWorlds.Weapons
             _distanceTravelled += _speed * dt;
             transform.position = next;
 
-            if (TryFindContact(transform.position, out IDamageable hit))
+            // MV-1374: a ball homing on an unprotected target flies through dome-protected robots
+            // (no hit), rippling the dome surface as it crosses it.
+            bool passThroughDome = _target != null && _target.IsAlive
+                && !(_target is RobotEnemy homing && homing.IsDomeProtected);
+            if (passThroughDome)
+            {
+                bool inside = RobotEnemy.IsPointInsideAnyDome(transform.position);
+                if (inside != _insideDome)
+                {
+                    _insideDome = inside;
+                    MaxWorlds.UI.HudSignals.EmitDomeBlocked(transform.position);
+                }
+            }
+
+            if (TryFindContact(transform.position, passThroughDome, out IDamageable hit))
             {
                 if (hit is RobotEnemy robot && robot.IsDormant) robot.Activate();
                 hit.TakeDamage(new DamageInfo(_damage, transform.position, _direction, Team.Player,
@@ -364,6 +387,9 @@ namespace MaxWorlds.Weapons
             RobotEnemy best = null;
             float bestAngle = float.MaxValue;
             float bestDistSq = float.MaxValue;
+            RobotEnemy bestProtected = null;
+            float protAngle = float.MaxValue;
+            float protDistSq = float.MaxValue;
             float rangeSq = range * range;
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
 
@@ -379,6 +405,15 @@ namespace MaxWorlds.Weapons
                 if (distSq > rangeSq) continue;
 
                 float angle = distSq < 1e-6f ? 0f : Vector3.Angle(heading, to.normalized);
+                // MV-1374: dome-protected robots only count while no unprotected candidate exists.
+                if (candidate.IsDomeProtected)
+                {
+                    if (angle < protAngle - 1e-4f || (Mathf.Abs(angle - protAngle) <= 1e-4f && distSq < protDistSq))
+                    {
+                        protAngle = angle; protDistSq = distSq; bestProtected = candidate;
+                    }
+                    continue;
+                }
                 if (angle < bestAngle - 1e-4f || (Mathf.Abs(angle - bestAngle) <= 1e-4f && distSq < bestDistSq))
                 {
                     bestAngle = angle;
@@ -388,6 +423,7 @@ namespace MaxWorlds.Weapons
             }
 
             if (best != null) return best;
+            if (bestProtected != null) return bestProtected;
 
             // No unclaimed robot candidate — if every robot in range was claimed by an earlier ball this
             // volley, rule 1 says prefer distinct targets only "while unclaimed candidates remain": fall
@@ -401,6 +437,8 @@ namespace MaxWorlds.Weapons
         {
             RobotEnemy best = null;
             float bestDistSq = float.MaxValue;
+            RobotEnemy bestProtected = null;
+            float protDistSq = float.MaxValue;
             float rangeSq = range * range;
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
 
@@ -414,11 +452,37 @@ namespace MaxWorlds.Weapons
                 float distSq = to.sqrMagnitude;
                 if (distSq > rangeSq) continue;
 
+                // MV-1374: protected robots only count while no unprotected candidate exists.
+                if (candidate.IsDomeProtected)
+                {
+                    if (distSq < protDistSq) { protDistSq = distSq; bestProtected = candidate; }
+                    continue;
+                }
                 if (distSq < bestDistSq) { bestDistSq = distSq; best = candidate; }
             }
 
             if (best != null) return best;
+            if (bestProtected != null) return bestProtected;
             return NearestCradle(origin, areaIndex, range);
+        }
+
+        /// <summary>MV-1374: the nearest live, awake Shield Projector within range (any angle), or null.</summary>
+        public static IDamageable NearestProjector(Vector3 origin, int areaIndex, float range)
+        {
+            RobotEnemy best = null;
+            float bestDistSq = range * range;
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy c = active[i];
+                if (c == null || c.Kind != EnemyKind.Projector || c.Team != Team.Enemy) continue;
+                if (!IsEligibleRobot(c, origin, areaIndex)) continue;
+                Vector3 to = c.transform.position - origin;
+                to.y = 0f;
+                float d = to.sqrMagnitude;
+                if (d <= bestDistSq) { bestDistSq = d; best = c; }
+            }
+            return best;
         }
 
         private static bool IsEligibleRobot(RobotEnemy candidate, Vector3 origin, int areaIndex) =>
@@ -487,7 +551,7 @@ namespace MaxWorlds.Weapons
         /// (robots, machines, gates). Cover-layer geometry is ignored (rule 7: "balls pass over it").
         /// Reuses <see cref="RicochetDisc.TryResolveDamageable"/> for the AreaGateThresholdLink sibling
         /// fallback rather than a second copy of it.</summary>
-        private static bool TryFindContact(Vector3 pos, out IDamageable target)
+        private static bool TryFindContact(Vector3 pos, bool skipDomeProtected, out IDamageable target)
         {
             target = null;
             Vector3 bottom = new Vector3(pos.x, -1000f, pos.z);
@@ -501,6 +565,7 @@ namespace MaxWorlds.Weapons
                 if (CoverLayer.Exists && c.gameObject.layer == CoverLayer.Index) continue;
                 if (!RicochetDisc.TryResolveDamageable(c, out IDamageable d)) continue;
                 if (!d.IsAlive || d.Team != Team.Enemy) continue;
+                if (skipDomeProtected && d is RobotEnemy prot && prot.IsDomeProtected) continue;
                 target = d;
                 return true;
             }
