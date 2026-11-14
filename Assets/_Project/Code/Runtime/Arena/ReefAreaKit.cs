@@ -97,7 +97,9 @@ namespace MaxWorlds.Arena
                     var backdropAnchor = new GameObject("Ocean Backdrop Anchor");
                     backdropAnchor.transform.SetParent(host, false);
                     backdropAnchor.transform.position = window.transform.position;
-                    ReefKit.BuildOceanBackdrop(backdropAnchor.transform);
+                    // MV-1364: oriented OUT of the wall and fitted to this window's run (see the overload's doc).
+                    Vector3 outward = -FrameOf(area, wall, wallThickness).inward;
+                    ReefKit.BuildOceanBackdrop(backdropAnchor.transform, outward, runLength, size.y, wallThickness);
                 }
             }
         }

@@ -369,10 +369,16 @@ namespace MaxWorlds.Rendering
                     WorldMaterials.M_MetalDark, Quaternion.Euler(0f, -a * Mathf.Rad2Deg + 90f, 0f));
             }
 
-            // Two cyan cooling rings.
+            // Two dark cooling collars, each with a thin cyan reactor ring on its face (MV-1364: the collar
+            // itself was solid emissive cyan and read as a rough bright rim).
             for (int i = 0; i < 2; i++)
-                MeshPart(root, "Cooling Ring", CharacterMeshes.Ring(radius * 1.0f, radius * 1.09f, 0.07f, 20),
-                    new Vector3(0f, floorY + size.y * (0.32f + i * 0.22f), 0f), WorldMaterials.M_Circuit_Cyan);
+            {
+                float ringY = floorY + size.y * (0.32f + i * 0.22f);
+                MeshPart(root, "Cooling Ring", CharacterMeshes.Ring(radius * 1.0f, radius * 1.09f, 0.07f, 24),
+                    new Vector3(0f, ringY, 0f), WorldMaterials.M_MetalDark);
+                MeshPart(root, "Reactor Ring", CharacterMeshes.Ring(radius * 1.085f, radius * 1.1f, 0.015f, 24),
+                    new Vector3(0f, ringY, 0f), WorldMaterials.M_Circuit_Cyan);
+            }
 
             // Dark bolted lid.
             float lidY = size.y * 0.5f - size.y * 0.06f;

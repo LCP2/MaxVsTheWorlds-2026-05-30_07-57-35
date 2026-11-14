@@ -48,6 +48,16 @@ namespace MaxWorlds.Rendering
         private float _whalePhase;
         private bool _whaleActive;
 
+        private float _driftRange = float.PositiveInfinity;
+
+        /// <summary>MV-1364: when the backdrop is fitted to a window run, every lateral drift stays inside
+        /// <paramref name="driftRange"/> metres of the layer's own centre, so no layer slides past the run.</summary>
+        public void Configure(Transform fish, Transform jelly, Transform manta, Transform whale, int seed, float driftRange)
+        {
+            _driftRange = driftRange;
+            Configure(fish, jelly, manta, whale, seed);
+        }
+
         public void Configure(Transform fish, Transform jelly, Transform manta, Transform whale, int seed)
         {
             _fish = fish;
@@ -70,11 +80,11 @@ namespace MaxWorlds.Rendering
             float t = Time.time;
 
             if (_fish != null)
-                _fish.localPosition = _fishBase + Vector3.right * Mathf.Sin(t * 0.18f) * 1.4f;
+                _fish.localPosition = _fishBase + Vector3.right * Mathf.Sin(t * 0.18f) * Mathf.Min(1.4f, _driftRange);
             if (_jelly != null)
                 _jelly.localPosition = _jellyBase + Vector3.up * Mathf.Sin(t * 0.25f + 1.3f) * 0.3f;
             if (_manta != null)
-                _manta.localPosition = _mantaBase + Vector3.right * Mathf.Sin(t * 0.12f + 2.1f) * 1.8f;
+                _manta.localPosition = _mantaBase + Vector3.right * Mathf.Sin(t * 0.12f + 2.1f) * Mathf.Min(1.8f, _driftRange);
 
             if (_whale == null) return;
 
@@ -92,7 +102,8 @@ namespace MaxWorlds.Rendering
             {
                 float p = u / passFraction;
                 Vector3 pos = _whale.localPosition;
-                pos.x = Mathf.Lerp(-6f, 6f, p);
+                float whaleRange = Mathf.Min(6f, _driftRange);
+                pos.x = Mathf.Lerp(-whaleRange, whaleRange, p);
                 _whale.localPosition = pos;
             }
         }
@@ -2056,15 +2067,34 @@ namespace MaxWorlds.Rendering
         /// explicitly out of scope for this pass; what ships here is the four static, correctly-tinted,
         /// collider-free layers the AC actually asks for.</summary>
         public static GameObject BuildOceanBackdrop(Transform parent)
+            => BuildOceanBackdrop(parent, Vector3.forward, 6f, 3f, 0f, 1.5f, float.PositiveInfinity);
+
+        /// <summary>MV-1364: the same four layers, fitted to ONE window in a wall. The layers face back toward
+        /// the room, sit wholly on the OUTER side of the wall (<paramref name="wallThickness"/> half-depth plus a
+        /// 0.1 m gap, then the usual depth steps) and are no wider than 70% of <paramref name="runWidth"/>, with
+        /// their side-to-side drift capped so they never leave the run. Unoriented layers (the old build) ran
+        /// east-west through a west wall and stood in the room as stacked cyan/green/magenta slabs.</summary>
+        public static GameObject BuildOceanBackdrop(Transform parent, Vector3 outward, float runWidth, float height, float wallThickness)
+        {
+            float width = Mathf.Min(6f, runWidth * 0.7f);
+            return BuildOceanBackdrop(parent, outward, width, height, wallThickness, 0f, (runWidth - width) * 0.5f);
+        }
+
+        private static GameObject BuildOceanBackdrop(Transform parent, Vector3 outward, float width, float height,
+            float wallThickness, float layerY, float driftRange)
         {
             var root = new GameObject("Ocean Backdrop");
             root.transform.SetParent(parent, false);
+            if (outward.sqrMagnitude > 0.0001f && outward != Vector3.forward)
+                root.transform.localRotation = Quaternion.LookRotation(outward.normalized, Vector3.up);
             MarkDressed(root);
 
-            GameObject fish = BuildLayer(root.transform, OceanLayerKind.FishSchool, WorldMaterials.ReefCircuitCyan, 0f * LayerDepthStep, instanced: true);
-            GameObject jelly = BuildLayer(root.transform, OceanLayerKind.Jellyfish, WorldMaterials.ReefBioGlow, 1f * LayerDepthStep, instanced: false);
-            GameObject manta = BuildLayer(root.transform, OceanLayerKind.Manta, WorldMaterials.ReefCircuitPurple, 2f * LayerDepthStep, instanced: false);
-            GameObject whale = BuildLayer(root.transform, OceanLayerKind.Whale, WorldMaterials.ReefMetalDark, 3f * LayerDepthStep, instanced: false);
+            float gap = wallThickness * 0.5f + (wallThickness > 0f ? 0.1f : 0f);
+            Vector2 size = new Vector2(width, height);
+            GameObject fish = BuildLayer(root.transform, OceanLayerKind.FishSchool, WorldMaterials.ReefCircuitCyan, gap + 0f * LayerDepthStep, true, size, layerY);
+            GameObject jelly = BuildLayer(root.transform, OceanLayerKind.Jellyfish, WorldMaterials.ReefBioGlow, gap + 1f * LayerDepthStep, false, size, layerY);
+            GameObject manta = BuildLayer(root.transform, OceanLayerKind.Manta, WorldMaterials.ReefCircuitPurple, gap + 2f * LayerDepthStep, false, size, layerY);
+            GameObject whale = BuildLayer(root.transform, OceanLayerKind.Whale, WorldMaterials.ReefMetalDark, gap + 3f * LayerDepthStep, false, size, layerY);
 
             // MV-1257, Change item 3: "animated fish shoals ... roughly every 60-90 s one large whale
             // silhouette gliding past" — the parent's own InstanceID seeds each window's cycle so two
@@ -2074,18 +2104,18 @@ namespace MaxWorlds.Rendering
                 jelly != null ? jelly.transform : null,
                 manta != null ? manta.transform : null,
                 whale != null ? whale.transform : null,
-                parent.GetInstanceID());
+                parent.GetInstanceID(), driftRange);
 
             return root;
         }
 
-        private static GameObject BuildLayer(Transform parent, OceanLayerKind kind, Color tint, float depth, bool instanced)
+        private static GameObject BuildLayer(Transform parent, OceanLayerKind kind, Color tint, float depth, bool instanced, Vector2 size, float y)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
             go.name = $"Ocean_{kind}";
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, 1.5f, depth);
-            go.transform.localScale = new Vector3(6f, 3f, 1f);
+            go.transform.localPosition = new Vector3(0f, y, depth);
+            go.transform.localScale = new Vector3(size.x, size.y, 1f);
             StripColliders(go);
             go.AddComponent<OceanLayer>().Kind = kind;
 
@@ -2118,7 +2148,7 @@ namespace MaxWorlds.Rendering
         private const float BedSoilHeight = 0.12f;
         private const float KelpSpikeHeight = 0.10f;
         private const float KelpSpikeThickness = 0.05f;
-        private const int BedRimSides = 6;
+        private const int BedRingSegments = 24;
 
         /// <summary>Tallest point any of a bed's own pieces reaches (the kelp spikes, planted on top
         /// of the soil pad) — kept below the ticket's own 0.3 m ceiling with headroom, so it can never
@@ -2146,54 +2176,23 @@ namespace MaxWorlds.Rendering
 
         private static void BuildBedSoil(Transform parent)
         {
+            // MV-1364: a generated lathe disc (BedRingSegments sides) instead of the 20-sided primitive.
             float radius = BedRadius - BedSoilInset;
-
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            go.name = "Soil";
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, BedSoilHeight * 0.5f, 0f);
-            // A default Unity cylinder is 2 units tall, 1 unit across at scale 1 — halving the
-            // requested height into the Y scale and doubling the radius into X/Z is what turns those
-            // unit dimensions into the actual metres asked for.
-            go.transform.localScale = new Vector3(radius * 2f, BedSoilHeight * 0.5f, radius * 2f);
-            StripColliders(go);
-
-            var rend = go.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = WorldMaterials.M_MetalDark;
+            MeshPart(parent, "Soil", CharacterMeshes.Lathe(new[]
+            {
+                new Vector2(0f, BedSoilHeight), new Vector2(radius, BedSoilHeight), new Vector2(radius, 0f),
+            }, BedRingSegments), Vector3.zero, WorldMaterials.M_MetalDark);
         }
 
-        /// <summary>Six bar segments joining the vertices of a regular hexagon — a regular hexagon's
-        /// own side length equals its circumradius, so each bar's length is just <see cref="BedRadius"/>,
-        /// no extra trig beyond the vertex positions themselves. Same "CreatePrimitive(Cube), scale
-        /// and rotate to fit" idiom every other edge-hugging piece in this file already uses (the glass
-        /// mullions, the crate corner caps) — never a hand-authored mesh.</summary>
+        /// <summary>MV-1364: the bed's rim is a round, dark-metal kerb (generated <see cref="CharacterMeshes.Ring"/>,
+        /// <see cref="BedRingSegments"/> sides) with only a thin cyan inlay ring sitting on top of it. It used to be
+        /// six thick emissive-cyan cube bars forming a hexagon, which read as a rough bright hex outline.</summary>
         private static void BuildBedRim(Transform parent)
         {
-            var verts = new Vector3[BedRimSides];
-            for (int i = 0; i < BedRimSides; i++)
-            {
-                float angle = Mathf.Deg2Rad * (60f * i);
-                verts[i] = new Vector3(Mathf.Cos(angle) * BedRadius, 0f, Mathf.Sin(angle) * BedRadius);
-            }
-
-            for (int i = 0; i < BedRimSides; i++)
-            {
-                Vector3 a = verts[i];
-                Vector3 b = verts[(i + 1) % BedRimSides];
-                Vector3 mid = (a + b) * 0.5f;
-                Vector3 dir = b - a;
-
-                var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                bar.name = $"Rim {i}";
-                bar.transform.SetParent(parent, false);
-                bar.transform.localPosition = new Vector3(mid.x, BedRimHeight * 0.5f, mid.z);
-                bar.transform.localRotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
-                bar.transform.localScale = new Vector3(BedRimThickness, BedRimHeight, dir.magnitude);
-                StripColliders(bar);
-
-                var rend = bar.GetComponent<Renderer>();
-                if (rend != null) rend.sharedMaterial = WorldMaterials.M_Circuit_Cyan;
-            }
+            MeshPart(parent, "Rim", CharacterMeshes.Ring(BedRadius - BedRimThickness, BedRadius, BedRimHeight, BedRingSegments),
+                new Vector3(0f, BedRimHeight * 0.5f, 0f), WorldMaterials.M_MetalDark);
+            MeshPart(parent, "Rim Inlay", CharacterMeshes.Ring(BedRadius - BedRimThickness * 0.6f, BedRadius - BedRimThickness * 0.3f, 0.02f, BedRingSegments),
+                new Vector3(0f, BedRimHeight + 0.005f, 0f), WorldMaterials.M_Circuit_Cyan);
         }
 
         // Fixed local offsets, not a per-instance random scatter (same "deterministic, never Random"
