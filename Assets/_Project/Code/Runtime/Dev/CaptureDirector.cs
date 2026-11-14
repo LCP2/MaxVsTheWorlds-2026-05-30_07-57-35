@@ -692,6 +692,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1349ReefLookCheck());
             Add(BuildMv1354LightMissilePowerLook());
             Add(BuildMv1373OrbitalsPowerLook());
+            Add(BuildMv1375ProjectorLimeLook());
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
             return d;
@@ -8421,6 +8422,105 @@ namespace MaxWorlds.Dev
                 },
                 ExtraReport = () => Summary(0, "POWER 1") + Summary(1, "POWER 5") +
                     $"ratio POWER5/POWER1 blob diameter = {(Mean(0) > 0f ? Mean(1) / Mean(0) : 0f):F3} (AC2: <= 1.3)\n",
+            };
+        }
+
+        // ---- Mv1375ProjectorLimeLook (MV-1375 AC2) --------------------------------------------
+
+        /// <summary>MV-1375 AC2: World 5 (Mothership) area a4, one Shield Projector with a live dome over four
+        /// Rushers, one capture through the live production camera. Reports the mean hue of the Projector's lime
+        /// pixels and of the dome's greenish pixels.</summary>
+        private static CapturePreset BuildMv1375ProjectorLimeLook()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+            string imagesDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            RobotEnemy projector = null;
+            var rushers = new List<RobotEnemy>();
+            GameObject spawnerGo = null;
+            string report = "(not measured)\n";
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a4"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a4\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                var max = GameObject.FindGameObjectWithTag("Player");
+                if (max == null) throw new CaptureAbortException("no Player-tagged Max");
+                Vector3 fwd = max.transform.forward; fwd.y = 0f; fwd.Normalize();
+                Vector3 right = Vector3.Cross(Vector3.up, fwd);
+                Vector3 centre = max.transform.position + fwd * 9f;
+                centre.y = 0f;
+
+                spawnerGo = new GameObject("MV1375CaptureSpawner");
+                spawnerGo.transform.position = centre;
+                var spawner = spawnerGo.AddComponent<EnemySpawner>();
+                var pl = spawner.SpawnExact(EnemyKind.Projector, 1);
+                if (pl.Count == 0) throw new CaptureAbortException("could not spawn a Projector");
+                projector = pl[0];
+                projector.transform.position = centre + right * 5f + Vector3.up * EnemyArchetype.Of(EnemyKind.Projector).SpawnHeight;
+                Vector3[] offs = { -right * 1.5f, -right * 3f + fwd * 1.5f, -right * 3f - fwd * 1.5f, -right * 4.5f };
+                var rl = spawner.SpawnExact(EnemyKind.Rusher, offs.Length);
+                for (int i = 0; i < rl.Count; i++)
+                {
+                    rl[i].transform.position = centre + offs[i] + Vector3.up * EnemyArchetype.Of(EnemyKind.Rusher).SpawnHeight;
+                    rushers.Add(rl[i]);
+                }
+                float until = Time.time + 2f;
+                while (Time.time < until) yield return null;
+                if (!projector.HasDome) throw new CaptureAbortException("Projector has no live dome after 2 s");
+            }
+
+            void Measure(Texture2D tex)
+            {
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                float MeanHue(Vector3 world, int half, Func<float, float, float, bool> accept, out int n)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(world);
+                    n = 0; float sum = 0f;
+                    int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+                    for (int y = Mathf.Max(0, cy - half); y < Mathf.Min(h, cy + half); y++)
+                    for (int x = Mathf.Max(0, cx - half); x < Mathf.Min(w, cx + half); x++)
+                    {
+                        Color.RGBToHSV((Color)px[y * w + x], out float hh, out float ss, out float vv);
+                        if (!accept(hh, ss, vv)) continue;
+                        sum += hh; n++;
+                    }
+                    return n > 0 ? sum / n * 360f : -1f;
+                }
+                float projHue = MeanHue(projector.transform.position + Vector3.up * 1.4f, 160,
+                    (hh, ss, vv) => hh > 0.2f && hh < 0.4f && ss > 0.5f && vv > 0.6f, out int pn);
+                float domeHue = MeanHue(projector.DomeCenter + Vector3.up * 1f, 260,
+                    (hh, ss, vv) => hh > 0.2f && hh < 0.4f && ss > 0.3f, out int dn);
+                report = $"Projector lime pixels: n={pn} mean hue={projHue:F1} deg (#7CFF3A = 100.3 deg)\n" +
+                         $"Dome greenish pixels: n={dn} mean hue={domeHue:F1} deg\n";
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1375projectorlime",
+                LogTag = "[MV1375Capture]",
+                Flag = "-mv1375shot",
+                ArmFile = "Temp/mv1375.arm",
+                HeadlessMarker = "Temp/mv1375.headless",
+                DoneFileName = "_mv1375_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,
+                OutputDirs = new[] { outDir, imagesDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1375", Setup, measure: Measure) },
+                ExtraReport = () => report,
             };
         }
 

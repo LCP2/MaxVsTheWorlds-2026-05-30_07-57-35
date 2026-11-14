@@ -117,8 +117,9 @@ namespace MaxWorlds.VFX
         // The Shield Projector's own dome (MV-1284 point 2): a white-blue ripple, matching the
         // dome's own translucent white-blue fill colour rather than the gold hit-spark or the
         // Shielded plate's cool-steel family.
-        private static readonly Color DomeRippleCore = new Color(0.75f, 0.92f, 1.0f, 1f);
-        private static readonly Color DomeRippleDeep = new Color(0.45f, 0.70f, 0.95f, 1f);
+        // MV-1375: the ripple turns the Projector's neon lime with the dome and beam.
+        private static readonly Color DomeRippleCore = new Color(0.80f, 1.0f, 0.60f, 1f);
+        private static readonly Color DomeRippleDeep = new Color(0.486f, 1.0f, 0.227f, 1f);
 
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits

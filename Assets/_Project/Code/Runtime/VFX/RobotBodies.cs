@@ -22,6 +22,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
 {
@@ -815,6 +816,26 @@ namespace MaxWorlds.VFX
             eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0f, 0.5f, 0.24f), Quaternion.Euler(-40f, 0f, 0f), new Vector3(0.12f, 0.12f, 0.055f)));
         }
 
+        /// <summary>MV-1375: the Shield Projector's neon lime (#7CFF3A) emissive material, shared by every
+        /// Projector. Emission 1.2x lime (G channel 1.2) — under every world's per-channel ceiling
+        /// (World 5: 1.44).</summary>
+        public static Material ProjectorLimeMaterial()
+        {
+            if (s_projectorLime != null) return s_projectorLime;
+            var template = MaterialLibrary.Character();
+            var m = template != null ? new Material(template) : new Material(MaterialLibrary.SurfaceShader);
+            m.name = "Robot_Projector_Lime";
+            m.hideFlags = HideFlags.HideAndDontSave;
+            Color lime = MaxWorlds.Enemies.ProjectorDome.Lime;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", lime);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", lime);
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", lime * 1.2f);
+            s_projectorLime = m;
+            return m;
+        }
+
+        private static Material s_projectorLime;
+
         /// <summary>Half the Shield Projector's own leg-beam length — same "Beam is centred on its own
         /// local origin" idiom as <see cref="GunnerLegBeamHalfLength"/>, which this is directly scaled
         /// from (see <see cref="BuildProjector"/>'s own doc comment).</summary>
@@ -849,13 +870,13 @@ namespace MaxWorlds.VFX
             // and foot profile alike), so AddLeg's hip/foot math — already proven correct there — still
             // resolves correctly here, just smaller.
             Transform leg1Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(0f, 0.085f, 0.0825f), Quaternion.Euler(22f, 0f, 0f), Vector3.one);
-            Transform leg1Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(0f, 0.015f, 0.15f), Quaternion.identity, Vector3.one);
+            Transform leg1Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), ProjectorLimeMaterial(), new Vector3(0f, 0.015f, 0.15f), Quaternion.identity, Vector3.one);
             legs.Add(AddLeg(root, leg1Beam, leg1Foot, ProjectorLegBeamHalfLength));
             Transform leg2Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(0.07145f, 0.085f, -0.04125f), Quaternion.Euler(-11f, 120f, -19.0526f), Vector3.one);
-            Transform leg2Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
+            Transform leg2Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), ProjectorLimeMaterial(), new Vector3(0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
             legs.Add(AddLeg(root, leg2Beam, leg2Foot, ProjectorLegBeamHalfLength));
             Transform leg3Beam = Add(root, CharacterMeshes.Beam(0.17f, 0.018f, 0.011f, 6), p.Dark, new Vector3(-0.07145f, 0.085f, -0.04125f), Quaternion.Euler(-11f, 240f, 19.0526f), Vector3.one);
-            Transform leg3Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), p.Dark, new Vector3(-0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
+            Transform leg3Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0275f, 0f), new Vector2(0.019f, 0.015f), new Vector2(0.0075f, 0.03f) }, 8), ProjectorLimeMaterial(), new Vector3(-0.1299f, 0.015f, -0.075f), Quaternion.identity, Vector3.one);
             legs.Add(AddLeg(root, leg3Beam, leg3Foot, ProjectorLegBeamHalfLength));
 
             // The hull — two lathe halves, same "cool lower / warm upper" idiom as every other kind,
@@ -868,12 +889,18 @@ namespace MaxWorlds.VFX
             const float hullTopY = hullY + 0.38f;
             const float dishBaseY = 2.3f;
             float mastLength = dishBaseY - hullTopY;
-            Add(root, CharacterMeshes.Beam(mastLength, 0.035f, 0.02f, 8), p.Dark,
+            // MV-1375: dish, mast and a rim ring on the hull are neon lime emissive (shared material).
+            Material lime = ProjectorLimeMaterial();
+            Add(root, CharacterMeshes.Beam(mastLength, 0.035f, 0.02f, 8), lime,
                 new Vector3(0f, hullTopY + mastLength * 0.5f, 0f), Quaternion.identity, Vector3.one, "Mast");
 
             // The dish — a shallow lens shape capping the mast, reaching ~2.5 m total height.
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.3f, 0.03f), new Vector2(0.32f, 0.1f), new Vector2(0.26f, 0.16f), new Vector2(0f, 0.2f) }, 24), p.Cool,
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.3f, 0.03f), new Vector2(0.32f, 0.1f), new Vector2(0.26f, 0.16f), new Vector2(0f, 0.2f) }, 24), lime,
                 new Vector3(0f, dishBaseY, 0f), Quaternion.identity, Vector3.one, "Dish");
+
+            // Lime rim glow band around the hull's waist.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.158f, 0f), new Vector2(0.17f, 0.015f), new Vector2(0.17f, 0.035f), new Vector2(0.158f, 0.05f) }, 18), lime,
+                new Vector3(0f, hullY + 0.1f, 0f), Quaternion.identity, Vector3.one, "RimBand");
 
             // The one gold eye lens, OFF-CENTRE on the base — the ticket's own "gold off-centre eye on
             // the base" — per the roster's one-eye rule.

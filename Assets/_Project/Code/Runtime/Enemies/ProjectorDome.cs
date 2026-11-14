@@ -29,9 +29,18 @@ namespace MaxWorlds.Enemies
 
         // Point 5's own "<=20% opacity fill" / "a brighter rim >=3 px" — translucent white-blue, a
         // noticeably brighter near-white rim, matching ForceFieldBubble's fill/rim split shape.
-        private static readonly Color FillColor = new Color(0.72f, 0.88f, 1f, 0.18f);
-        private static readonly Color RimColor = new Color(0.85f, 0.95f, 1f, 1f);
-        private static readonly Color BeamColor = new Color(0.80f, 0.92f, 1f, 0.9f);
+        // MV-1375: the dome, beam and the Projector's own body share one neon lime (#7CFF3A) so you
+        // can see who makes the shield. Fill alpha unchanged from MV-1284.
+        public static readonly Color Lime = new Color(0.486f, 1f, 0.227f, 1f);
+        private static readonly Color FillColor = new Color(Lime.r, Lime.g, Lime.b, 0.18f);
+        private static readonly Color RimColor = Lime;
+        private static readonly Color BeamColor = new Color(Lime.r, Lime.g, Lime.b, 0.95f);
+
+        /// <summary>MV-1375: beam width, metres (was 0.025).</summary>
+        public const float BeamWidth = 0.25f;
+        /// <summary>MV-1375: beam pulse rate, Hz. The pulse only ever widens the beam above
+        /// <see cref="BeamWidth"/> and dims its alpha.</summary>
+        public const float BeamPulseHz = 1.5f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
@@ -85,7 +94,7 @@ namespace MaxWorlds.Enemies
             beamGo.transform.SetParent(transform, worldPositionStays: false);
             _beam = beamGo.AddComponent<LineRenderer>();
             _beam.positionCount = 2;
-            _beam.widthMultiplier = 0.025f;
+            _beam.widthMultiplier = BeamWidth;
             _beam.useWorldSpace = true;
             _beam.material = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
             _beam.startColor = _beam.endColor = BeamColor;
@@ -137,7 +146,16 @@ namespace MaxWorlds.Enemies
         /// death, so no fade.</summary>
         public void DestroyImmediateSelf() => DestroySelf();
 
-        private void Update() => Tick(Time.deltaTime);
+        private void Update()
+        {
+            Tick(Time.deltaTime);
+            if (_collapsing || _beam == null) return;
+            // MV-1375: 1.5 Hz pulse — width swells 0.25 -> 0.30 m, alpha dips to 0.7 at the trough.
+            float k = 0.5f + 0.5f * Mathf.Sin(Time.time * BeamPulseHz * 2f * Mathf.PI);
+            _beam.widthMultiplier = BeamWidth * (1f + 0.2f * k);
+            Color c = BeamColor; c.a *= Mathf.Lerp(0.7f, 1f, k);
+            _beam.startColor = _beam.endColor = c;
+        }
 
         /// <summary>Public and dt-parameterised, same "an EditMode test can drive it directly"
         /// reasoning as <see cref="MoltenPatch.Tick"/> — <c>Update()</c> never runs outside Play mode
