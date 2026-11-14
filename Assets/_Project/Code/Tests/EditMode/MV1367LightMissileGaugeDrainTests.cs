@@ -25,7 +25,7 @@ namespace MaxWorlds.Tests.EditMode
         private static readonly MethodInfo LightMissileTick = typeof(LightMissile).GetMethod("Tick", NonPublicInstance);
 
         [SetUp] public void SetUp() { WeaponSystemState.Reset(); DevTuning.Reset(); DevMode.Reset(); }
-        [TearDown] public void TearDown() { WeaponSystemState.Reset(); DevTuning.Reset(); DevMode.Reset(); }
+        [TearDown] public void TearDown() { WeaponSystemState.Reset(); RigState.Reset(); RigBoard.ResetForTests(); DevTuning.Reset(); DevMode.Reset(); }
 
         [Test]
         public void LightMissileGaugeDrainsUnderHeldFire_MV1367()
