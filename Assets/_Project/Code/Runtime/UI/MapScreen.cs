@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
@@ -177,6 +178,7 @@ namespace MaxWorlds.UI
             if (!_open) return;
 
             HandleGesture();
+            HandleWheelAndKeys();
             UpdateCurrentArea();
             UpdatePlayerMarker();
             UpdateObjectiveBlink();
@@ -764,6 +766,53 @@ namespace MaxWorlds.UI
             Vector3 pos = _player.transform.position;
             Vector2 rot = MinimapModel.NormalizedPosition(_worldBounds, pos.x, pos.z);
             _playerMarker.anchoredPosition = new Vector2(rot.x * _contentSize.x, rot.y * _contentSize.y);
+        }
+
+        // ------------------------------------------------------------------ wheel / keys zoom (MV-1368)
+
+        /// <summary>Zoom multiplier per wheel notch / key press (MV-1368).</summary>
+        public const float WheelZoomStep = 1.15f;
+
+        /// <summary>Zooms by <paramref name="notches"/> steps of <see cref="WheelZoomStep"/> (positive = in)
+        /// about <paramref name="pivotViewportLocal"/> (relative to viewport centre), through the same
+        /// ClampZoom / ZoomAboutPoint / ClampPan path a pinch uses. Does nothing while the map is closed.</summary>
+        public void ZoomByNotches(float notches, Vector2 pivotViewportLocal)
+        {
+            if (!_open || _content == null || Mathf.Approximately(notches, 0f)) return;
+            float oldFull = _fitScale * _zoom;
+            float newMul = MapPanZoomModel.ClampZoom(_zoom * Mathf.Pow(WheelZoomStep, notches), _maxZoomMultiplier);
+            float newFull = _fitScale * newMul;
+            _pan = MapPanZoomModel.ZoomAboutPoint(_pan, oldFull, newFull, pivotViewportLocal);
+            SetZoom(newMul);
+            _pan = MapPanZoomModel.ClampPan(_pan, ViewportSize(), _contentSize, _fitScale * _zoom);
+            ApplyTransform();
+        }
+
+        private void HandleWheelAndKeys()
+        {
+            if (_content == null) return;
+            var mouse = Mouse.current;
+            if (mouse != null)
+            {
+                // Browsers report a trackpad pinch as ctrl + wheel; the delta lands here either way.
+                float y = mouse.scroll.ReadValue().y;
+                if (!Mathf.Approximately(y, 0f))
+                {
+                    // Unity reports ~120 per notch on desktop/WebGL; treat any non-zero tick as sign * (|y|/120 clamped to >= small).
+                    float notches = Mathf.Abs(y) >= 60f ? y / 120f : Mathf.Sign(y);
+                    Vector2 pivot = Vector2.zero;
+                    if (_viewport != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                            _viewport, mouse.position.ReadValue(), null, out Vector2 local))
+                        pivot = local - _viewport.rect.center;
+                    ZoomByNotches(notches, pivot);
+                }
+            }
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (kb.equalsKey.wasPressedThisFrame || kb.numpadPlusKey.wasPressedThisFrame) ZoomByNotches(1f, Vector2.zero);
+                if (kb.minusKey.wasPressedThisFrame || kb.numpadMinusKey.wasPressedThisFrame) ZoomByNotches(-1f, Vector2.zero);
+            }
         }
 
         // ------------------------------------------------------------------ pinch/pan gesture
