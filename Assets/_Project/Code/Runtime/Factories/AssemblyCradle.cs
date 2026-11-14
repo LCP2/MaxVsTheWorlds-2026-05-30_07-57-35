@@ -439,6 +439,12 @@ namespace MaxWorlds.Factories
             }
             List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true, ignoreGlobalRoom: true);
             PlaceOnOutPad(spawned);
+            if (spawned.Count > 0) // MV-1366: preview hides in the very frame the real robot takes its place
+            {
+                SetStageRenderersEnabled(_frameStage, false);
+                SetStageRenderersEnabled(_platesStage, false);
+                SetStageRenderersEnabled(_doneStage, false);
+            }
         }
 
         /// <summary>MV-1297: lazily resolves Max's transform once, shared by <see cref="TickTurrets"/>'s
@@ -629,9 +635,23 @@ namespace MaxWorlds.Factories
                 ? map.SnapToWalkableSurface(transform.position, raw, OutPadHalfWidth * 0.5f)
                 : raw;
 
-            e.transform.position = point;
-            if (dir.sqrMagnitude > 0.0001f) e.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            // MV-1366: the real robot appears exactly where the preview body stood (same frame the
+            // preview hides), is held, and walks the straight line out to the pad over WalkOutSeconds.
+            Vector3 bay = PreviewBodyPosition;
+            Quaternion bayRot = _doneStage != null ? _doneStage.rotation : transform.rotation;
+            var cc = e.GetComponent<CharacterController>();
+            if (cc != null) CharacterControllerSafety.SafeReposition(cc, bay, "AssemblyCradle.PlaceOnOutPad");
+            else e.transform.position = bay;
+            e.transform.rotation = bayRot;
+            e.BeginHeldWalkOut(bay, point, WalkOutSeconds);
         }
+
+        /// <summary>MV-1366: seconds the freshly built robot takes to walk from the bay centre to the pad.</summary>
+        public const float WalkOutSeconds = 1.0f;
+
+        /// <summary>MV-1366: world position of the bay's preview body (where the robot spawns).</summary>
+        public Vector3 PreviewBodyPosition => _doneStage != null ? _doneStage.position
+            : _bayRoot != null ? _bayRoot.position : transform.position;
 
         public void TakeDamage(in DamageInfo info)
         {
