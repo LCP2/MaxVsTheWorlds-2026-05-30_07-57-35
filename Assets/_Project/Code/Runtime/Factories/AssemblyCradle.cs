@@ -439,12 +439,6 @@ namespace MaxWorlds.Factories
             }
             List<RobotEnemy> spawned = _spawner.SpawnExact(_previewKind, 1, ignorePerFactoryCap: true, ignoreGlobalRoom: true);
             PlaceOnOutPad(spawned);
-            if (spawned.Count > 0) // MV-1366: preview hides in the very frame the real robot takes its place
-            {
-                SetStageRenderersEnabled(_frameStage, false);
-                SetStageRenderersEnabled(_platesStage, false);
-                SetStageRenderersEnabled(_doneStage, false);
-            }
         }
 
         /// <summary>MV-1297: lazily resolves Max's transform once, shared by <see cref="TickTurrets"/>'s
