@@ -164,6 +164,11 @@ namespace MaxWorlds.VFX
         /// grows along the beam (muzzle 0, end 0.12 s)".</summary>
         private const float WhipLagAtEnd = 0.12f;
 
+        /// <summary>MV-1362: 0 while the beam's tip is in its launch snap (the centreline follows the
+        /// tip with no whip lag, so the DRAWN beam reaches full length as fast as the tip does), 1 after.
+        /// Set by <see cref="MaxWorlds.Combat.Undertow"/> each frame before <see cref="UpdateStream"/>.</summary>
+        public float WhipLagScale { get; set; } = 1f;
+
         /// <summary>MV-1128 spec #8: "beams 1 and 2 are drawn with every line width at 0.72 of beam 0's."</summary>
         public const float SecondaryWidthScale = 0.72f;
 
@@ -425,7 +430,7 @@ namespace MaxWorlds.VFX
                 else
                 {
                     // Whip on aim changes: lag grows along the beam (muzzle 0, end WhipLagAtEnd).
-                    float lag = WhipLagAtEnd * t;
+                    float lag = WhipLagAtEnd * t * WhipLagScale;
                     float easeFactor = lag > 1e-5f ? 1f - Mathf.Exp(-dt / lag) : 1f;
                     beam.Centerline[i] = Vector3.Lerp(beam.Centerline[i], target, easeFactor);
                 }
