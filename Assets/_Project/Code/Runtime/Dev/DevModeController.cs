@@ -59,6 +59,7 @@ namespace MaxWorlds.Dev
             // idiom as DevMode itself above — see PerfLogEnabled/TryJumpToArea's own doc comments.
             if (UrlRequestsPerfLog()) PerfLogEnabled = true;
             if (TryGetUrlAreaParam(out string area)) _mv940PendingAreaSpec = area;
+            _mv1376ReadyWanted = UrlWorldOverride() >= 0;
 
             // MV-1270: the HudController this needs to hide may not exist yet at this Awake — it is
             // applied every frame in TickMv940PerfDebug below, not just once here, so a HUD that
@@ -267,11 +268,13 @@ namespace MaxWorlds.Dev
                 if (EnemyNavigation.Map != null && GameObject.FindGameObjectWithTag("Player") != null)
                 {
                     TryJumpToArea(_mv940PendingAreaSpec);
+                    _mv1376JumpDone = true;
                     _mv940PendingAreaSpec = null;
                 }
             }
 
             if (_mv1270HudHideRequested) ApplyHudHide(FindFirstObjectByType<HudController>(), true);
+            TickMv1376Ready();
 
             if (!PerfLogEnabled) return;
 
@@ -279,6 +282,78 @@ namespace MaxWorlds.Dev
             if (now - _mv940PerfLogLoggedAt < Mv940PerfLogIntervalSeconds) return;
             _mv940PerfLogLoggedAt = now;
             Debug.Log(BuildMvPerfLine());
+        }
+
+        // =================================================================================================
+        // MV-1376 — capture harness boot. `?world=N` (1-based) boots a WebGL build straight into World N
+        // with no menu clicks (BackyardPath.ActiveWorldIndex consults UrlWorldOverride), and once the map
+        // is built, the player spawned, the ?area= jump done, the HUD hidden (when ?hud=0) it logs ONE
+        // "[MV-1376] READY ..." line that cc-webgl-capture.bat waits for. Folded into this file per the
+        // Runtime/Dev guardrail (MV-592).
+        // =================================================================================================
+
+        private bool _mv1376ReadyWanted;
+        private bool _mv1376JumpDone;
+
+        /// <summary>Parses <c>?world=N&amp;area=aK</c> out of <paramref name="url"/>. <paramref name="worldNumber"/>
+        /// is 1-based (0 when absent). <paramref name="area"/> is the lower-cased spec or null. Returns
+        /// false (and zeroes both outputs) if <c>world</c> is present but not a positive integer, or
+        /// <c>area</c> is present but not a valid area spec ("a12", "12", "a12up"...).</summary>
+        public static bool TryParseBootSpec(string url, out int worldNumber, out string area)
+        {
+            worldNumber = 0;
+            area = null;
+            if (string.IsNullOrEmpty(url)) return true;
+            int q = url.IndexOf('?');
+            if (q < 0) return true;
+            string query = url.Substring(q + 1);
+            int hash = query.IndexOf('#');
+            if (hash >= 0) query = query.Substring(0, hash);
+
+            foreach (string pair in query.Split('&'))
+            {
+                int eq = pair.IndexOf('=');
+                if (eq < 0) continue;
+                string key = pair.Substring(0, eq);
+                string val = Uri.UnescapeDataString(pair.Substring(eq + 1)).Trim();
+                if (string.Equals(key, "world", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!int.TryParse(val, out int w) || w <= 0) { worldNumber = 0; area = null; return false; }
+                    worldNumber = w;
+                }
+                else if (string.Equals(key, "area", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!TryParseMv940AreaSpec(val, out _, out _)) { worldNumber = 0; area = null; return false; }
+                    area = val.ToLowerInvariant();
+                }
+            }
+            return true;
+        }
+
+        /// <summary>0-based world index requested by <c>?world=N</c> on the page URL, or -1 if absent or
+        /// malformed. Read by <see cref="MaxWorlds.Arena.BackyardPath.ActiveWorldIndex"/>.</summary>
+        public static int UrlWorldOverride()
+        {
+            if (!TryParseBootSpec(Application.absoluteURL, out int w, out _) || w <= 0) return -1;
+            return w - 1;
+        }
+
+        private void TickMv1376Ready()
+        {
+            if (!_mv1376ReadyWanted) return;
+            if (EnemyNavigation.Map == null || GameObject.FindGameObjectWithTag("Player") == null) return;
+            if (_mv940PendingAreaSpec != null && !_mv1376JumpDone) return;
+
+            var hud = FindFirstObjectByType<HudController>();
+            bool hudHidden = hud == null || !hud.gameObject.activeSelf;
+            if (_mv1270HudHideRequested && !hudHidden) return;
+
+            _mv1376ReadyWanted = false;
+            string quality = QualitySettings.names[QualitySettings.GetQualityLevel()];
+            var path = FindFirstObjectByType<MaxWorlds.Arena.BackyardPath>();
+            int world = path != null ? path.ResolvedWorldIndex + 1 : 0;
+            TryGetUrlAreaParam(out string area);
+            Debug.Log($"[MV-1376] READY world={world} area={area ?? "none"} hud={(hudHidden ? "hidden" : "visible")} quality={quality} map=built player=spawned");
         }
 
         private static bool UrlRequestsPerfLog()

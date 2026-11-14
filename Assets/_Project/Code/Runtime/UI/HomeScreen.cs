@@ -107,7 +107,8 @@ namespace MaxWorlds.UI
         private void Start()
         {
             bool captureBypass = PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
-                MaxWorlds.Dev.PerfCaptureDirector.Armed() || MaxWorlds.Dev.CaptureDirector.Armed();
+                MaxWorlds.Dev.PerfCaptureDirector.Armed() || MaxWorlds.Dev.CaptureDirector.Armed() ||
+                MaxWorlds.Dev.DevModeController.UrlWorldOverride() >= 0;   // MV-1376: ?world=N capture boot
 
             // MV-1032: a CaptureDirector preset's own BeforeSceneLoad often seeds ActiveSlot = 0 itself
             // (so time is never paused in the first place — see CaptureDirector's own presets), which

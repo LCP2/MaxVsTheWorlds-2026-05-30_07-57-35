@@ -186,6 +186,10 @@ namespace MaxWorlds.Arena
         {
             if (SaveSystem.PendingResume.HasValue) return SaveSystem.PendingResume.Value.WorldIndex;
 
+            // MV-1376: ?world=N on a WebGL page URL boots straight into World N (capture harness).
+            int urlWorld = MaxWorlds.Dev.DevModeController.UrlWorldOverride();
+            if (urlWorld >= 0) return urlWorld;
+
             int slot = SaveSystem.ActiveSlot;
             return slot >= 0 ? SaveSystem.Load(slot).WorldIndex : 0;
         }
