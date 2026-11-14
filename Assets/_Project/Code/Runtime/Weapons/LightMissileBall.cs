@@ -66,6 +66,8 @@ namespace MaxWorlds.Weapons
         private const int MaxSpikeSlots = 8;
 
         private static readonly Color HaloColor = new Color(176f / 255f, 64f / 255f, 1f);   // #B040FF
+        /// <summary>MV-1367: the base halo colour, shared with the gauge above Max.</summary>
+        public static Color BaseHaloColor => HaloColor;
         private static readonly Color SpikeColor = new Color(230f / 255f, 90f / 255f, 1f);  // #E65AFF
         private static readonly Color CoreColor = new Color(1f, 240f / 255f, 1f);           // #FFF0FF
         private static readonly Color TingeColor = new Color(1f, 42f / 255f, 42f / 255f);   // #FF2A2A

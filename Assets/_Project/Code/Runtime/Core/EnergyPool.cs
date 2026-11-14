@@ -38,6 +38,11 @@ namespace MaxWorlds.Core
             set => _regenPerSec = Mathf.Max(0f, value);
         }
 
+        /// <summary>MV-1367: while true the tank does not regenerate AND the post-drain regen delay is
+        /// held at zero, so regen resumes only <c>regenDelay</c> seconds after this is cleared. Set by a
+        /// primary every frame its trigger is held (LIGHT MISSILE), so the gauge visibly drains.</summary>
+        public bool RegenSuspended { get; set; }
+
         private float _regenPerSec;
         private readonly float _regenDelay;
         private float _timeSinceDrain;
@@ -82,6 +87,7 @@ namespace MaxWorlds.Core
         public void Tick(float dt)
         {
             if (Current >= Max) return;
+            if (RegenSuspended) { _timeSinceDrain = 0f; return; }
             _timeSinceDrain += dt;
             if (_timeSinceDrain < _regenDelay) return;
             float before = Current;

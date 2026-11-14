@@ -115,7 +115,13 @@ namespace MaxWorlds.Player
         /// primary rather than hard-wired to the RCDA — so a World 4 primary is one further case here,
         /// not a special branch bolted on elsewhere.</summary>
         private static Color PrimaryGaugeColor =>
-            WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe ? LppeGaugeColor : WaterColor;
+            WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe ? LppeGaugeColor
+            : WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.LightMissile ? LightMissile.GaugeColor
+            : WaterColor;
+
+        /// <summary>MV-1367: the gauge's colour for the primary equipped right now — re-read every frame
+        /// by the bar, since the loadout can change after the bar is built.</summary>
+        public static Color ResolvedPrimaryGaugeColor() => PrimaryGaugeColor;
 
         private WaterBlaster _blaster;
         private PulseLaser _pulseLaser;
@@ -159,6 +165,7 @@ namespace MaxWorlds.Player
             // tank; MV-760 widens it from "the RCDA's tank" to "whichever primary is actually equipped").
             WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
                                   secondary: PrimaryEnergyNormalized, secondaryColor: PrimaryGaugeColor,
+                                  secondaryColorSource: ResolvedPrimaryGaugeColor,
                                   isPlayerBar: true, desaturateWhenHealthy: true,
                                   shieldActive: () => Abilities != null && Abilities.ForceFieldActive,
                                   shieldFraction: () => Abilities != null ? Abilities.ForceFieldAbsorbFraction : 0f);
