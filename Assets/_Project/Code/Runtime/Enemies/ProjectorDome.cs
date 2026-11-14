@@ -29,9 +29,30 @@ namespace MaxWorlds.Enemies
 
         // Point 5's own "<=20% opacity fill" / "a brighter rim >=3 px" — translucent white-blue, a
         // noticeably brighter near-white rim, matching ForceFieldBubble's fill/rim split shape.
-        private static readonly Color FillColor = new Color(0.72f, 0.88f, 1f, 0.18f);
-        private static readonly Color RimColor = new Color(0.85f, 0.95f, 1f, 1f);
-        private static readonly Color BeamColor = new Color(0.80f, 0.92f, 1f, 0.9f);
+        // MV-1375: retinted the Projector's neon lime so body, beam and dome read as one thing.
+        private static readonly Color Lime = MaxWorlds.VFX.RobotBodies.ProjectorLime;
+        private static readonly Color FillColor = new Color(Lime.r, Lime.g, Lime.b, 0.18f);
+        private static readonly Color RimColor = new Color(Lime.r, Lime.g, Lime.b, 1f);
+        private static readonly Color BeamColor = new Color(Lime.r, Lime.g, Lime.b, 0.95f);
+
+        /// <summary>MV-1375: the dish-to-apex beam's width in metres.</summary>
+        public const float BeamWidth = 0.25f;
+        /// <summary>MV-1375: the beam's brightness pulse rate.</summary>
+        public const float BeamPulseHz = 1.5f;
+
+        /// <summary>Resolved dome fill tint (what the renderer's property block carries).</summary>
+        public Color ResolvedFillTint
+        {
+            get
+            {
+                var mpb = new MaterialPropertyBlock();
+                _domeRenderer.GetPropertyBlock(mpb);
+                return mpb.GetColor(BaseColorId);
+            }
+        }
+
+        /// <summary>Resolved beam width in metres.</summary>
+        public float ResolvedBeamWidth => _beam != null ? _beam.widthMultiplier : 0f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
@@ -85,7 +106,7 @@ namespace MaxWorlds.Enemies
             beamGo.transform.SetParent(transform, worldPositionStays: false);
             _beam = beamGo.AddComponent<LineRenderer>();
             _beam.positionCount = 2;
-            _beam.widthMultiplier = 0.025f;
+            _beam.widthMultiplier = BeamWidth;
             _beam.useWorldSpace = true;
             _beam.material = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
             _beam.startColor = _beam.endColor = BeamColor;
@@ -137,7 +158,14 @@ namespace MaxWorlds.Enemies
         /// death, so no fade.</summary>
         public void DestroyImmediateSelf() => DestroySelf();
 
-        private void Update() => Tick(Time.deltaTime);
+        /// <summary>MV-1375: 1.5 Hz brightness pulse, 0.6..1.</summary>
+        public static float PulseFactor(float time) => 0.8f + 0.2f * Mathf.Sin(time * BeamPulseHz * 2f * Mathf.PI);
+
+        private void Update()
+        {
+            Tick(Time.deltaTime);
+            if (!_collapsing) ApplyFraction(1f);
+        }
 
         /// <summary>Public and dt-parameterised, same "an EditMode test can drive it directly"
         /// reasoning as <see cref="MoltenPatch.Tick"/> — <c>Update()</c> never runs outside Play mode
@@ -161,7 +189,7 @@ namespace MaxWorlds.Enemies
             _domeRenderer.SetPropertyBlock(_mpb);
             if (_beam != null)
             {
-                Color beam = BeamColor; beam.a *= t;
+                Color beam = BeamColor; beam.a *= t * PulseFactor(Time.time);
                 _beam.startColor = _beam.endColor = beam;
             }
         }
