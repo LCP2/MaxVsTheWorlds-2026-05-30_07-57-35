@@ -356,11 +356,8 @@ namespace MaxWorlds.Arena
             ReefDressing.DressCover(host, cover);
             ReefHydroponics.PlaceBeds(host, map, cfg, cover);
 
-            // MV-1256, Change items 3-5: grates/decals on the open floor and the flooded-deck water
-            // re-skin — needs the already-built cover/sludge tiles the calls above produced, same
-            // reason ReefHydroponics.PlaceBeds itself runs here rather than inside ReefKit.DressHull.
-            ReefFloorDetail.PlaceGrates(host, map, cfg, cover);
-            ReefFloorDetail.PlaceDecals(host, map, cfg, cover);
+            // MV-1361: the legacy grates/decals (MV-1256) are gone — coplanar with the deck below, they
+            // z-fought it. The deck atlas carries vents, hatches, manholes and drains itself.
             // MV-1350: the riveted-plate deck replaces MV-1339's grating patches (the deck's own vent cells
             // are the slatted read) and the caustics overlay (a static dapple is baked into the deck atlas).
             ReefFloorDetail.PlaceDeck(host, cfg);
