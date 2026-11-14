@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Weapons;
