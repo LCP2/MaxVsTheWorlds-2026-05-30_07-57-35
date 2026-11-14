@@ -42,7 +42,7 @@ namespace MaxWorlds.Tests.EditMode
         public void OrbResolvedBoundsGrowWithPowerLevel()
         {
             AssertOrbDiameterAtPowerLevel(1, 0.35f);
-            AssertOrbDiameterAtPowerLevel(5, 0.6f);
+            AssertOrbDiameterAtPowerLevel(5, 0.42f); // MV-1373: was 0.6
         }
 
         private static void AssertOrbDiameterAtPowerLevel(int powerLevel, float expectedDiameter)
