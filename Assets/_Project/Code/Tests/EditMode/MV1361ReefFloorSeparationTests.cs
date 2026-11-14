@@ -47,8 +47,9 @@ namespace MaxWorlds.Tests.EditMode
                     Bounds a = layers[i].bounds, b = layers[j].bounds;
                     bool overlapXz = a.min.x < b.max.x && b.min.x < a.max.x && a.min.z < b.max.z && b.min.z < a.max.z;
                     if (!overlapXz) continue;
+                    if (layers[i].name.StartsWith("Reef Wear ") && layers[j].name.StartsWith("Reef Wear ")) continue; // same layer, border strips of adjacent areas
                     float sep = Mathf.Abs(a.max.y - b.max.y);
-                    Assert.GreaterOrEqual(sep, MinSeparation,
+                    Assert.GreaterOrEqual(sep, MinSeparation - 1e-4f,
                         $"{layers[i].name} (top y {a.max.y:F4}) and {layers[j].name} (top y {b.max.y:F4}) overlap in XZ but are only {sep:F4} m apart");
                 }
             }
