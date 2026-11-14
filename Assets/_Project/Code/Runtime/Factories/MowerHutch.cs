@@ -1034,6 +1034,9 @@ namespace MaxWorlds.Factories
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "VulnerableCore";
+            // MV-1363: generated bevelled mesh, not the built-in Cube primitive mesh.
+            var coreMf = go.GetComponent<MeshFilter>();
+            if (coreMf != null) coreMf.sharedMesh = CharacterMeshes.Bevelled(Vector3.one, 0.1f);
             var col = go.GetComponent<Collider>();
             if (col != null)
             {
