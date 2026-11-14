@@ -39,8 +39,28 @@ namespace MaxWorlds.CameraRig
             }
         }
 
+        private Transform _focus;
+        private float _focusLeft;
+
+        /// <summary>Holds the camera's follow target on <paramref name="focus"/> for
+        /// <paramref name="seconds"/>, then hands it back to the subject (MV-1370: the Helmsman's
+        /// P1 -> P2 beat). Cinemachine's own damping still smooths the move.</summary>
+        public void ApplyFocusOverride(Transform focus, float seconds)
+        {
+            _focus = focus;
+            _focusLeft = focus != null ? Mathf.Max(0f, seconds) : 0f;
+        }
+
         private void LateUpdate()
         {
+            if (_focusLeft > 0f && _focus != null)
+            {
+                _focusLeft -= Time.deltaTime;
+                transform.position = _focus.position;
+                if (subject != null) _lastSubjectPos = subject.position;
+                return;
+            }
+
             if (subject == null)
             {
                 return;

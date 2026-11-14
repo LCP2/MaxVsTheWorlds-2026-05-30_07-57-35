@@ -436,6 +436,65 @@ namespace MaxWorlds.VFX
         {
             if (_eyeLens == null) return;
             ApplyLensColor(_eyeLens, _boss.LensTelling ? GoldBrightColor : GoldColor);
+            UpdateBeams();
+        }
+
+        // ---------------------------------------------------------------- twin lens beams (MV-1370)
+
+        private LineRenderer[] _beamLines;
+        private MeshRenderer[] _nodeLenses;
+
+        /// <summary>Phase 1: the two opposite lit nodes go gold, a thin gold floor line shows for the
+        /// tell, then the live beam is drawn wide and bright. Read straight off the boss, never written back.</summary>
+        private void UpdateBeams()
+        {
+            if (_beamLines == null)
+            {
+                _beamLines = new LineRenderer[2];
+                _nodeLenses = new MeshRenderer[LensNodeCount];
+                for (int i = 0; i < LensNodeCount; i++)
+                {
+                    Transform lens = _lensNodes[i] != null ? _lensNodes[i].Find("NodeLens") : null;
+                    if (lens != null) _nodeLenses[i] = lens.GetComponent<MeshRenderer>();
+                }
+                for (int i = 0; i < 2; i++)
+                {
+                    var go = new GameObject($"HelmsmanBeam{i}");   // world-space, never parented under the rig's facing
+                    var lr = go.AddComponent<LineRenderer>();
+                    lr.positionCount = 2;
+                    lr.useWorldSpace = true;
+                    lr.numCapVertices = 4;
+                    lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    lr.receiveShadows = false;
+                    lr.sharedMaterial = VfxMaterials.AdditiveTinted(GoldBrightColor);
+                    lr.startColor = lr.endColor = GoldBrightColor;
+                    lr.enabled = false;
+                    _beamLines[i] = lr;
+                }
+            }
+
+            bool showing = _boss.BeamsShowing;
+            int pair = _boss.BeamNodePair;
+            for (int i = 0; i < LensNodeCount; i++)
+                ApplyLensColor(_nodeLenses[i], showing && (i % (LensNodeCount / 2)) == pair ? GoldBrightColor : CyanColor);
+
+            for (int i = 0; i < 2; i++)
+            {
+                _beamLines[i].enabled = showing;
+                if (!showing) continue;
+                const float floorY = 0.06f;
+                Vector3 a = _boss.BeamOrigin, b = _boss.BeamEnd(i);
+                _beamLines[i].SetPosition(0, new Vector3(a.x, floorY, a.z));
+                _beamLines[i].SetPosition(1, new Vector3(b.x, floorY, b.z));
+                _beamLines[i].widthMultiplier = _boss.BeamsLive ? HelmsmanTuning.BeamHalfWidth * 2f : 0.18f;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_beamLines == null) return;
+            for (int i = 0; i < _beamLines.Length; i++)
+                if (_beamLines[i] != null) Destroy(_beamLines[i].gameObject);
         }
 
         private void ApplyLensColor(MeshRenderer r, Color c)
@@ -451,6 +510,9 @@ namespace MaxWorlds.VFX
         {
             // Same MV-625 guard every other boss rig's own OnDefeated uses.
             if (_boss == null || !_boss.IsDead) return;
+            if (_beamLines != null)
+                for (int i = 0; i < _beamLines.Length; i++)
+                    if (_beamLines[i] != null) _beamLines[i].enabled = false;
             gameObject.SetActive(false);
         }
     }

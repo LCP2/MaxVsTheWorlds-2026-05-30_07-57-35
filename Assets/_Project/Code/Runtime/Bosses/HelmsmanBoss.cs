@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -31,7 +32,7 @@ namespace MaxWorlds.Bosses
     [PerfSection("bosses")]
     public sealed class HelmsmanBoss : MonoBehaviour, IDamageable
     {
-        private enum Phase { Dormant, Seated, Walking, Dead }
+        private enum Phase { Dormant, Seated, Transition, Walking, Dead }
 
         private const string BossName = "HELMSMAN";
         private const float Gravity = 20f;
@@ -59,6 +60,21 @@ namespace MaxWorlds.Bosses
         private float _podTimer;
         private Transform _podRoot;
 
+        // ---------------------------------------------------------------- phase 1 "Wired In" (MV-1370)
+        private readonly HelmsmanBeamClock _beams = new HelmsmanBeamClock();
+        private float _beamBaseYaw;
+        private float _beamDir = 1f;
+        private readonly Vector3[] _beamEnd = new Vector3[2];
+        private Vector3 _beamOrigin;
+        private readonly Dictionary<int, float> _beamNextHit = new Dictionary<int, float>();
+        private float _beamNow;
+        private float _spiralTimer;
+        private int _volleyLeft;
+        private int _volleyFired;
+        private float _volleyGap;
+        private float _volleyBaseYaw;
+        private float _transitionLeft;
+
         // ---------------------------------------------------------------- Bridge airlocks (MV-1313)
         private AirlockPanel[] _bridgeAirlocks;
         private bool _bridgeAirlocksResolved;
@@ -75,11 +91,41 @@ namespace MaxWorlds.Bosses
 
         /// <summary>True once Phase 2 has begun (torn free of the throne, walking) — what an EditMode
         /// test reads instead of the private phase enum.</summary>
-        public bool IsWalking => _phase == Phase.Walking;
+        public bool IsWalking => _phase == Phase.Transition || _phase == Phase.Walking;
 
-        /// <summary>The lens-sweep's tell is drawn and visible right now (MV-1242) — <see cref="HelmsmanRig"/>'s
-        /// cue to glow the lens brighter, straight off <see cref="LensSweepTelegraph.IsTelling"/>.</summary>
-        public bool LensTelling => _sweep.IsTelling;
+        /// <summary>The 2 s invulnerable P1 -> P2 beat is running (MV-1370).</summary>
+        public bool IsTransitioning => _phase == Phase.Transition;
+
+        /// <summary>1, 2 or 3 (MV-1370): P1 100-66%, P2 66-33%, P3 33-0%. 0 before it wakes.</summary>
+        public int PhaseNumber
+        {
+            get
+            {
+                if (_phase == Phase.Dormant || _health == null) return 0;
+                if (_phase == Phase.Seated) return 1;
+                return _health.Normalized <= HelmsmanTuning.PhaseThreeThreshold ? 3 : 2;
+            }
+        }
+
+        /// <summary>The lens attack's tell is drawn and visible right now (MV-1242) — <see cref="HelmsmanRig"/>'s
+        /// cue to glow the lens brighter. Phase 1: the beam tell; walking: the old sweep's tell.</summary>
+        public bool LensTelling => _phase == Phase.Seated
+            ? _beams.Current == HelmsmanBeamClock.Stage.Tell
+            : _sweep.IsTelling;
+
+        /// <summary>Phase 1's twin beams are showing (floor line or live) right now.</summary>
+        public bool BeamsShowing => _phase == Phase.Seated && _beams.Current != HelmsmanBeamClock.Stage.Idle;
+
+        /// <summary>Phase 1's twin beams are live (sweeping, doing damage) right now.</summary>
+        public bool BeamsLive => _phase == Phase.Seated && _beams.Current == HelmsmanBeamClock.Stage.Sweep;
+
+        public Vector3 BeamOrigin => _beamOrigin;
+
+        /// <summary>Where beam <paramref name="i"/> (0 or 1) ends - its full range, or the cover that blocks it.</summary>
+        public Vector3 BeamEnd(int i) => _beamEnd[i];
+
+        /// <summary>Which two opposite <see cref="HelmsmanRig.LensNodes"/> are lit: the returned index and +4.</summary>
+        public int BeamNodePair => Mathf.Max(0, _beams.Cycles - 1) % (HelmsmanRig.LensNodeCount / 2);
 
         /// <summary>Hands this boss its own authoring area's floor, same convention as
         /// <see cref="SludgequeenBoss.SetWakeArea"/>.</summary>
@@ -138,8 +184,8 @@ namespace MaxWorlds.Bosses
             }
 
             _phase = Phase.Seated;
-            // 2 phases -> HUD bar shows the half-health segment, same as every other boss.
-            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, areaIndex);
+            // 3 phases -> HUD bar shows the 66% and 33% segments.
+            BossCensus.Register(this, BossName, 3, _health.Current, _health.Max, areaIndex);
         }
 
         private int ResolveAreaIndex()
@@ -175,6 +221,7 @@ namespace MaxWorlds.Bosses
             {
                 case Phase.Dormant: TickDormant(); break;
                 case Phase.Seated: TickSeated(dt); break;
+                case Phase.Transition: TickTransition(dt); break;
                 case Phase.Walking: TickWalking(dt); break;
             }
             ApplyGravity(dt);
@@ -182,16 +229,16 @@ namespace MaxWorlds.Bosses
 
         private void Update() => Tick(Time.deltaTime);
 
-        /// <summary>Phase 1: stationary on the throne. Faces Max, sweeps its lens on a 5 s cadence, and
-        /// flings a pod volley from the side hatches every 10 s.</summary>
+        /// <summary>Phase 1 "Wired In" (MV-1370): stationary, cabled to the ceiling. Faces Max and runs
+        /// three clocks: twin lens beams every 10 s, an 8-missile spiral volley every 7 s, hatch pods
+        /// every 12 s.</summary>
         private void TickSeated(float dt)
         {
             if (_target == null) { AcquireTarget(); return; }
             FaceTarget();
 
-            _sweep.SetCooldownSeconds(HelmsmanTuning.SweepCooldownPhase1);
-            _sweep.Tick(dt);
-            if (_sweep.JustActivated) ApplyLensSweepDamage();
+            TickBeams(dt);
+            TickSpiral(dt);
 
             _podTimer += dt;
             if (_podTimer >= HelmsmanTuning.PodVolleyInterval)
@@ -202,6 +249,145 @@ namespace MaxWorlds.Bosses
 
             _brain.Tick(dt, _health.Normalized);
             BossCensus.ReportSpawnLevel(this, _brain.SpawnLevel, _brain.SpawnLevelProgress01);
+        }
+
+        /// <summary>The P1 -> P2 beat: invulnerable and motionless; the rig unfolds its legs and drops
+        /// its cables (it reads <see cref="IsWalking"/>); then it walks.</summary>
+        private void TickTransition(float dt)
+        {
+            FaceTarget();
+            _transitionLeft -= dt;
+            if (_transitionLeft <= 0f) _phase = Phase.Walking;
+        }
+
+        private void BeginTransition()
+        {
+            _phase = Phase.Transition;
+            _transitionLeft = HelmsmanTuning.TransitionSeconds;
+            _beams.Reset();
+            _volleyLeft = 0;
+            var cam = Object.FindFirstObjectByType<CameraTargetRig>();
+            if (cam != null) cam.ApplyFocusOverride(transform, HelmsmanTuning.TransitionSeconds);
+        }
+
+        private static Vector3 YawDir(float yawDeg)
+        {
+            float r = yawDeg * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(r), 0f, Mathf.Cos(r));
+        }
+
+        private float BearingTo(Vector3 worldPoint)
+        {
+            Vector3 to = worldPoint - transform.position; to.y = 0f;
+            return to.sqrMagnitude < 1e-4f ? transform.eulerAngles.y : Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+        }
+
+        // ---------------------------------------------------------------- twin lens beams (phase 1)
+
+        private void TickBeams(float dt)
+        {
+            _beamNow += dt;
+            _beams.Tick(dt);
+            if (_beams.TellStarted)
+            {
+                _beamDir = (_beams.Cycles % 2 == 0) ? -1f : 1f;
+                // Built so the pair sweeps across Max's bearing at the middle of the sweep.
+                _beamBaseYaw = BearingTo(_target.position) - _beamDir * HelmsmanTuning.BeamSweepDegrees * 0.5f;
+            }
+            if (_beams.Current == HelmsmanBeamClock.Stage.Idle) return;
+
+            float yaw = _beamBaseYaw + _beamDir * HelmsmanTuning.BeamSweepDegrees * _beams.SweepProgress01;
+            Vector3 p = transform.position;
+            // Height is absolute (floors are at y = 0, like the rig's own Follow), so cover's 1.6 m is always
+            // taller than the cast no matter where this boss's collider origin sits.
+            _beamOrigin = new Vector3(p.x, HelmsmanTuning.BeamHeight, p.z);
+            for (int i = 0; i < 2; i++)
+            {
+                Vector3 dir = YawDir(yaw + 180f * i);
+                _beamEnd[i] = _beamOrigin + dir * BeamLength(dir);
+            }
+
+            if (_beams.Current != HelmsmanBeamClock.Stage.Sweep) return;
+
+            ApplyBeamDamage(_target);
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+                ApplyBeamDamage(sentinels[i] != null ? sentinels[i].transform : null);
+        }
+
+        /// <summary>A beam runs to its full range unless cover (the 1.6 m bulkheads and every other
+        /// cover collider - what <see cref="LineOfSight"/> raycasts) stops it first.</summary>
+        private float BeamLength(Vector3 dir)
+        {
+            if (Physics.Raycast(_beamOrigin, dir, out RaycastHit hit, HelmsmanTuning.BeamRange,
+                                CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+                return hit.distance;
+            return HelmsmanTuning.BeamRange;
+        }
+
+        private void ApplyBeamDamage(Transform t)
+        {
+            if (t == null) return;
+            int id = t.GetInstanceID();
+            if (_beamNextHit.TryGetValue(id, out float next) && _beamNow < next) return;
+
+            Vector3 v = t.position - _beamOrigin; v.y = 0f;
+            float reach = HelmsmanTuning.BeamHalfWidth + TargetRadius(t);
+            bool hit = false;
+            for (int i = 0; i < 2 && !hit; i++)
+            {
+                Vector3 axis = _beamEnd[i] - _beamOrigin; axis.y = 0f;
+                float len = axis.magnitude;
+                if (len < 1e-3f) continue;
+                axis /= len;
+                float along = Vector3.Dot(v, axis);
+                if (along < 0f || along > len) continue;   // behind it, or beyond the cover that stops it
+                hit = Mathf.Abs(v.x * axis.z - v.z * axis.x) <= reach;
+            }
+            if (!hit) return;
+
+            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return;
+            _beamNextHit[id] = _beamNow + HelmsmanTuning.BeamRehitSeconds;
+            Vector3 dir = v.sqrMagnitude > 1e-4f ? v.normalized : Vector3.forward;
+            damageable.TakeDamage(new DamageInfo(HelmsmanTuning.BeamDamage, transform.position, dir, Team.Enemy));
+        }
+
+        // ---------------------------------------------------------------- spiral volley (phase 1)
+
+        private void TickSpiral(float dt)
+        {
+            _spiralTimer += dt;
+            if (_spiralTimer >= HelmsmanTuning.SpiralInterval)
+            {
+                _spiralTimer -= HelmsmanTuning.SpiralInterval;
+                _volleyLeft = HelmsmanTuning.SpiralMissiles;
+                _volleyFired = 0;
+                _volleyGap = 0f;
+                _volleyBaseYaw = BearingTo(_target.position);
+            }
+
+            if (_volleyLeft <= 0) return;
+            _volleyGap -= dt;
+            while (_volleyLeft > 0 && _volleyGap <= 0f)
+            {
+                LaunchSpiralMissile();
+                _volleyLeft--;
+                _volleyFired++;
+                _volleyGap += HelmsmanTuning.SpiralLaunchGapSeconds;
+            }
+        }
+
+        /// <summary>Missile n of the volley leaves n x 45 deg round the wheel from the line to Max, so the
+        /// eight together draw one spiral. It is ORBITAL's own missile (<see cref="OrbitalMissile"/>,
+        /// MV-1344) - slow steer, long trail - carrying this boss's damage.</summary>
+        private void LaunchSpiralMissile()
+        {
+            float step = 360f / HelmsmanTuning.SpiralMissiles;
+            Vector3 heading = YawDir(_volleyBaseYaw + step * _volleyFired);
+            Vector3 p = transform.position;
+            Vector3 mouth = new Vector3(p.x, OrbitalTuning.FlightHeight, p.z) + heading * 2.6f;
+            OrbitalMissile.Spawn(new Vector3(p.x, 0f, p.z), heading, _target, _areaIndex, mouth,
+                HelmsmanTuning.SpiralDamage, HelmsmanTuning.SpiralTrailSeconds);
         }
 
         /// <summary>Phase 2: torn free of the throne. Walks Max down to a 3 m stand-off, hurts on
@@ -404,7 +590,9 @@ namespace MaxWorlds.Bosses
         private void SpawnPods()
         {
             int alive = CountLivePodsInArea();
-            int want = Mathf.Min(HelmsmanTuning.PodsPerVolley, Mathf.Max(0, HelmsmanTuning.MaxConcurrentPods - alive));
+            int volley = _health.Normalized < HelmsmanTuning.PodLowHealthFraction
+                ? HelmsmanTuning.PodsPerVolleyLow : HelmsmanTuning.PodsPerVolley;
+            int want = Mathf.Min(volley, Mathf.Max(0, HelmsmanTuning.MaxConcurrentPods - alive));
             if (want <= 0) return;
 
             Vector3 pos = transform.position;
@@ -514,14 +702,14 @@ namespace MaxWorlds.Bosses
 
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
+            if (_phase == Phase.Transition) return;   // MV-1370: the P1 -> P2 beat is invulnerable
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
             _health.TakeDamage(info.Amount);
             BossCensus.ReportHealth(this, _health.Current, _health.Max);
 
-            // No tell: the ticket's own "below half health: tears free of the throne, walks" is an
-            // immediate switch, unlike Sludgequeen's 3 s enrage tell.
+            // MV-1370: below 66% it tears free - a 2 s invulnerable beat first, then it walks.
             if (_phase == Phase.Seated && _health.Normalized <= HelmsmanTuning.PhaseTwoThreshold)
-                _phase = Phase.Walking;
+                BeginTransition();
         }
 
         private void OnDeath()

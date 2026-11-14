@@ -108,6 +108,10 @@ namespace MaxWorlds.Tests.EditMode
                 boss.TakeDamage(new DamageInfo(health.Max * 0.51f, bossGo.transform.position, Vector3.forward, Team.Player));
                 Assert.IsTrue(boss.IsWalking, "damage down to 49% HP must switch the Helmsman to Phase 2");
 
+                // MV-1370: Phase 2 opens with a 2 s invulnerable beat before it walks and its airlock cycle
+                // starts; the "within 13 s of Phase 2" clock below starts after it.
+                for (float t = 0f; t < 2.05f; t += Dt) boss.Tick(Dt);
+
                 // --- Phase 2: one airlock must blow within 13 s, the other within the next 12 s, and the
                 // two blows must land on DIFFERENT airlocks ("alternating sides"). ---
                 float? firstBlowAt = null, secondBlowAt = null;

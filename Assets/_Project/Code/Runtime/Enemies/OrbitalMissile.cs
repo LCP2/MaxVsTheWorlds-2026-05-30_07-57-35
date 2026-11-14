@@ -45,6 +45,8 @@ namespace MaxWorlds.Enemies
         private bool _popping;
         private float _popTimer;
         private float _scheduledPopIn = -1f;
+        private float _damageOverride = -1f;       // MV-1370: the Helmsman's spiral volley hits for its own number
+        private float _trailOverride = -1f;
         private TrailRenderer _trail;
         private GameObject _ballRoot;
         private SphereCollider _collider;
@@ -84,7 +86,7 @@ namespace MaxWorlds.Enemies
         /// (<see cref="OrbitalTuning.WorldBudget"/>) is spent. <paramref name="areaIndex"/> &lt;= 0
         /// disables the "leaves its own area" rule.</summary>
         public static OrbitalMissile Spawn(Vector3 feet, Vector3 heading, Transform target, int areaIndex,
-                                           Vector3? mouth = null)
+                                           Vector3? mouth = null, float damage = -1f, float trailSeconds = -1f)
         {
             PrunePool();
             if (FlyingCount >= OrbitalTuning.WorldBudget) return null;
@@ -119,6 +121,8 @@ namespace MaxWorlds.Enemies
             m._popping = false;
             m._popTimer = 0f;
             m._scheduledPopIn = -1f;
+            m._damageOverride = damage;
+            m._trailOverride = trailSeconds;
             m._active = true;
             m._ballRoot.SetActive(true);
             m._collider.enabled = true;
@@ -190,7 +194,7 @@ namespace MaxWorlds.Enemies
             if (_age >= OrbitalTuning.Life) { Pop(0f); return; }
 
             // Live trail length (the Settings knob) — Pop reuses it for the fade-out.
-            _trail.time = Mathf.Max(0.01f, OrbitalTuning.TrailSeconds);
+            _trail.time = Mathf.Max(0.01f, _trailOverride > 0f ? _trailOverride : OrbitalTuning.TrailSeconds);
 
             // Steer toward Max's CURRENT position, but only after the first straight metre (rule 4).
             if (_target != null && _travelled >= OrbitalTuning.StraightMetres)
@@ -231,7 +235,7 @@ namespace MaxWorlds.Enemies
             float dealt = 0f;
             if (_targetDamageable != null && _targetDamageable.IsAlive && _targetDamageable.Team != Team.Enemy)
             {
-                dealt = OrbitalTuning.Damage;
+                dealt = _damageOverride >= 0f ? _damageOverride : OrbitalTuning.Damage;
                 _targetDamageable.TakeDamage(new DamageInfo(dealt, transform.position, _dir, Team.Enemy));
                 if (_target != null && _target.TryGetComponent(out PlayerController player))
                     player.ApplyForcedMove(_dir * ShoveSpeed, ShoveSeconds, ForcedMoveSource.Knockback);
