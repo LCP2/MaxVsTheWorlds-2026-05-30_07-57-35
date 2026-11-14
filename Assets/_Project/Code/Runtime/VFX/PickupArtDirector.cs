@@ -74,9 +74,71 @@ namespace MaxWorlds.VFX
             public GroundRing Ring;
             public GroundRing RingOuter;
             public GroundRing RingInner;
+            public Transform Beacon;
+            public MeshRenderer BeaconCore;
         }
 
         private readonly Dictionary<Pickup, ArtState> _artState = new Dictionary<Pickup, ArtState>();
+
+        // --- MV-1360: the part beacon ----------------------------------------------------------------
+        // A dropped part on W4's teal riveted deck read as a small yellow-grey cog over a pale ring,
+        // lost among the deck's rivets/stencils/hatch marks. Under the prop: a dark contrast disc and, on
+        // top of it, a saturated warm core disc (#FFB35A, flat additive = unlit, no HDR/MSAA needed) that
+        // pulses gently. Both are flat, world-pinned to the surface like the ground ring, and use
+        // generated meshes only. Shared by every world's part drop: a dark disc + amber glow reads on
+        // grass/concrete too.
+        public const string BeaconName = "PartBeacon";
+        public const float BeaconDiscRadius = 0.62f;
+        public const float BeaconCoreRadius = 0.42f;
+        private const float BeaconLift = 0.024f;
+        private static readonly Color BeaconCoreColor = new Color(1f, 0.70f, 0.35f);   // #FFB35A
+        private static readonly Color BeaconDiscColor = new Color(0.02f, 0.03f, 0.04f, 0.85f);
+        private const float BeaconPulseSpeed = 2.6f;
+
+        /// <summary>Builds the beacon (dark disc + warm core) as a child of <paramref name="pickup"/> and
+        /// returns the core renderer. Generated primitives only; colliders stripped.</summary>
+        public static MeshRenderer BuildPartBeacon(Transform pickup)
+        {
+            var root = new GameObject(BeaconName).transform;
+            root.SetParent(pickup, worldPositionStays: false);
+
+            MakeBeaconDisc(root, "Disc", BeaconDiscRadius, 0f,
+                VfxMaterials.AlphaBlendTinted(VfxMaterials.Solid(), BeaconDiscColor));
+            return MakeBeaconDisc(root, "Core", BeaconCoreRadius, 0.004f,
+                VfxMaterials.AdditiveTinted(BeaconCoreColor));
+        }
+
+        private static MeshRenderer MakeBeaconDisc(Transform parent, string name, float radius, float lift, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            if (go.TryGetComponent<Collider>(out var col))
+            {
+                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+            }
+            go.transform.SetParent(parent, worldPositionStays: false);
+            go.transform.localPosition = new Vector3(0f, lift, 0f);
+            go.transform.localScale = new Vector3(radius * 2f, 0.004f, radius * 2f);
+            var r = go.GetComponent<MeshRenderer>();
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return r;
+        }
+
+        private static void PinBeacon(Pickup pickup, ArtState state)
+        {
+            if (state.Beacon == null) return;
+            Vector3 g = GroundMarkHeights.SurfaceAt(pickup.transform.position);
+            state.Beacon.position = new Vector3(pickup.transform.position.x, g.y + BeaconLift, pickup.transform.position.z);
+            state.Beacon.rotation = Quaternion.identity;
+            if (state.BeaconCore != null)
+            {
+                // Gentle pulse: radius breathes +/-8% so the core reads as alive, not a decal.
+                float s = 1f + 0.08f * Mathf.Sin(Time.unscaledTime * BeaconPulseSpeed);
+                state.BeaconCore.transform.localScale = new Vector3(BeaconCoreRadius * 2f * s, 0.004f, BeaconCoreRadius * 2f * s);
+            }
+        }
 
         /// <summary>The most glint dots any single prop wears (the power cell's four) — resolving up to
         /// this many per build covers every kind; a design with fewer just leaves the extra slots null,
@@ -243,6 +305,21 @@ namespace MaxWorlds.VFX
                 _artState[pickup] = state;
             }
 
+            if (pickup.Kind == PickupKind.Supercell)
+            {
+                if (state.Beacon == null)
+                {
+                    var existing = pickup.transform.Find(BeaconName);
+                    state.Beacon = existing != null ? existing : null;
+                    if (state.Beacon != null) state.BeaconCore = ResolveRenderer(state.Beacon, "Core");
+                    else
+                    {
+                        state.BeaconCore = BuildPartBeacon(pickup.transform);
+                        state.Beacon = state.BeaconCore.transform.parent;
+                    }
+                }
+            }
+
             state.Art = art;
             state.Core = null;
             state.Glisten = null;
@@ -334,6 +411,7 @@ namespace MaxWorlds.VFX
                     }
                 }
 
+                PinBeacon(pickup, state);
                 DressGroundRing(pickup.transform, pickup.Kind, state);
             }
         }
