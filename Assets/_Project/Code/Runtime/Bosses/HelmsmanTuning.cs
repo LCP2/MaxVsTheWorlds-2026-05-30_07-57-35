@@ -50,12 +50,30 @@ namespace MaxWorlds.Bosses
 
         // ---------------------------------------------------------------- phase 2: walks, touches
 
-        public const float MoveSpeed = BossTuning.MoveSpeed;
+        /// <summary>MV-1371: 2.2 m/s on the four legs (was BossTuning's 0.9).</summary>
+        public const float MoveSpeed = 2.2f;
         public const float WalkStandoff = 3f;
 
         public const float ContactDamagePerTick = BossTuning.ContactDamagePerTick;
         public const float ContactCooldown = BossTuning.ContactCooldown;
         public const float ContactSkin = BossTuning.ContactSkin;
+
+        // ---------------------------------------------------------------- phase 2: single beam + leap slam (MV-1371)
+
+        public const float SingleBeamInterval = 8f;
+
+        public const float SlamInterval = 6f;
+        public const float SlamTellSeconds = 1f;
+        public const float SlamLeapSeconds = 0.5f;
+        public const float SlamLeapHeight = 3f;
+        public const float SlamRadius = 3f;
+        public const float SlamDamage = 40f;
+        public const float ShockwaveRadius = 12f;
+        public const float ShockwaveSeconds = 1.2f;
+        public const float ShockwaveGapDegrees = 40f;
+        public const float ShockwaveDamage = 15f;
+        /// <summary>Height the shockwave's cover check is cast at - below the 1.6 m cover so cover blocks it.</summary>
+        public const float ShockwaveCastHeight = 1f;
 
         // ---------------------------------------------------------------- pod volley (phase 1 only,
         // from the side hatches — reuses Big Bermuda's own brood-volley shape: BigBermudaBrain for the

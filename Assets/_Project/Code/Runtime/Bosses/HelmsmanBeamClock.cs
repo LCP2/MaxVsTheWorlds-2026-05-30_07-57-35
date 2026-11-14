@@ -15,6 +15,9 @@ namespace MaxWorlds.Bosses
 
         private float _clock;   // seconds since the current cycle's tell started (Idle: since the last one's)
 
+        /// <summary>Tell start to tell start. Phase 1 twin beams: 10 s; phase 2 single beam: 8 s (MV-1371).</summary>
+        public float Interval { get; set; } = HelmsmanTuning.BeamInterval;
+
         public Stage Current { get; private set; } = Stage.Idle;
 
         /// <summary>How many cycles have started (the first one is 1).</summary>
@@ -36,8 +39,8 @@ namespace MaxWorlds.Bosses
 
             if (Current == Stage.Idle)
             {
-                if (_clock < HelmsmanTuning.BeamInterval) return;
-                _clock -= HelmsmanTuning.BeamInterval;   // keep the cadence exact across dt jitter
+                if (_clock < Interval) return;
+                _clock -= Interval;   // keep the cadence exact across dt jitter
                 Current = Stage.Tell;
                 Cycles++;
                 TellStarted = true;

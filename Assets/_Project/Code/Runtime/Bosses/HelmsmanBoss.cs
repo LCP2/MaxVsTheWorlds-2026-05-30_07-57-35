@@ -56,7 +56,6 @@ namespace MaxWorlds.Bosses
         private int _areaIndex;
 
         private readonly BigBermudaBrain _brain = new BigBermudaBrain(HelmsmanTuning.PhaseTwoThreshold);
-        private readonly LensSweepTelegraph _sweep = new LensSweepTelegraph(HelmsmanTuning.SweepCooldownPhase1);
         private float _podTimer;
         private Transform _podRoot;
 
@@ -74,6 +73,20 @@ namespace MaxWorlds.Bosses
         private float _volleyGap;
         private float _volleyBaseYaw;
         private float _transitionLeft;
+        private bool _transitionToPhase3;
+        private bool _phase3Begun;
+
+        // ---------------------------------------------------------------- phase 2 "Torn Free" leap slam (MV-1371)
+        public enum SlamStage { Idle, Tell, Leap, Wave }
+
+        private SlamStage _slamStage = SlamStage.Idle;
+        private float _slamCycle;      // seconds since the current cycle's tell started (runs through every stage)
+        private float _slamStageT;
+        private Vector3 _slamStart;
+        private Vector3 _slamCenter;
+        private float _waveRadius;
+        private float _waveGapYaw;
+        private readonly HashSet<int> _waveHit = new HashSet<int>();
 
         // ---------------------------------------------------------------- Bridge airlocks (MV-1313)
         private AirlockPanel[] _bridgeAirlocks;
@@ -109,15 +122,35 @@ namespace MaxWorlds.Bosses
 
         /// <summary>The lens attack's tell is drawn and visible right now (MV-1242) — <see cref="HelmsmanRig"/>'s
         /// cue to glow the lens brighter. Phase 1: the beam tell; walking: the old sweep's tell.</summary>
-        public bool LensTelling => _phase == Phase.Seated
-            ? _beams.Current == HelmsmanBeamClock.Stage.Tell
-            : _sweep.IsTelling;
+        public bool LensTelling => (_phase == Phase.Seated || _phase == Phase.Walking)
+            && _beams.Current == HelmsmanBeamClock.Stage.Tell;
 
-        /// <summary>Phase 1's twin beams are showing (floor line or live) right now.</summary>
-        public bool BeamsShowing => _phase == Phase.Seated && _beams.Current != HelmsmanBeamClock.Stage.Idle;
+        /// <summary>The lens beam(s) are showing (floor line or live) right now.</summary>
+        public bool BeamsShowing => (_phase == Phase.Seated || _phase == Phase.Walking)
+            && _beams.Current != HelmsmanBeamClock.Stage.Idle;
 
-        /// <summary>Phase 1's twin beams are live (sweeping, doing damage) right now.</summary>
-        public bool BeamsLive => _phase == Phase.Seated && _beams.Current == HelmsmanBeamClock.Stage.Sweep;
+        /// <summary>The lens beam(s) are live (sweeping, doing damage) right now.</summary>
+        public bool BeamsLive => (_phase == Phase.Seated || _phase == Phase.Walking)
+            && _beams.Current == HelmsmanBeamClock.Stage.Sweep;
+
+        /// <summary>Phase 1 fires twin beams; phase 2 one (MV-1371).</summary>
+        public int BeamCount => _phase == Phase.Seated ? 2 : 1;
+
+        /// <summary>The P2 -> P3 beat (invulnerable, wheel spinning up) is running (MV-1371).</summary>
+        public bool TransitionToPhase3 => _phase == Phase.Transition && _transitionToPhase3;
+
+        public SlamStage Slam => _slamStage;
+        public Vector3 SlamCenter => _slamCenter;
+
+        /// <summary>0..1 through the 1 s red tell; 0 outside it.</summary>
+        public float SlamTell01 => _slamStage == SlamStage.Tell
+            ? Mathf.Clamp01(_slamStageT / HelmsmanTuning.SlamTellSeconds) : 0f;
+
+        /// <summary>Current shockwave radius in metres while it expands; 0 otherwise.</summary>
+        public float WaveRadius => _slamStage == SlamStage.Wave ? Mathf.Max(0f, _waveRadius) : 0f;
+
+        /// <summary>Compass yaw (degrees) of one of the shockwave's two opposite 40 degree gaps.</summary>
+        public float WaveGapYaw => _waveGapYaw;
 
         public Vector3 BeamOrigin => _beamOrigin;
 
@@ -224,7 +257,7 @@ namespace MaxWorlds.Bosses
                 case Phase.Transition: TickTransition(dt); break;
                 case Phase.Walking: TickWalking(dt); break;
             }
-            ApplyGravity(dt);
+            if (_slamStage != SlamStage.Leap) ApplyGravity(dt);
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -257,11 +290,21 @@ namespace MaxWorlds.Bosses
         {
             FaceTarget();
             _transitionLeft -= dt;
-            if (_transitionLeft <= 0f) _phase = Phase.Walking;
+            if (_transitionLeft > 0f) return;
+
+            _phase = Phase.Walking;
+            // Phase 2's cadence: one beam every 8 s, a slam every 6 s (a fresh clock after the beat).
+            _beams.Interval = HelmsmanTuning.SingleBeamInterval;
+            _beams.Reset();
+            _slamCycle = 0f;
         }
 
-        private void BeginTransition()
+        private void BeginTransition(bool toPhase3)
         {
+            _transitionToPhase3 = toPhase3;
+            if (toPhase3) _phase3Begun = true;
+            _slamStage = SlamStage.Idle;
+            _verticalVel = 0f;
             _phase = Phase.Transition;
             _transitionLeft = HelmsmanTuning.TransitionSeconds;
             _beams.Reset();
@@ -301,7 +344,8 @@ namespace MaxWorlds.Bosses
             // Height is absolute (floors are at y = 0, like the rig's own Follow), so cover's 1.6 m is always
             // taller than the cast no matter where this boss's collider origin sits.
             _beamOrigin = new Vector3(p.x, HelmsmanTuning.BeamHeight, p.z);
-            for (int i = 0; i < 2; i++)
+            int beamCount = BeamCount;
+            for (int i = 0; i < beamCount; i++)
             {
                 Vector3 dir = YawDir(yaw + 180f * i);
                 _beamEnd[i] = _beamOrigin + dir * BeamLength(dir);
@@ -334,7 +378,7 @@ namespace MaxWorlds.Bosses
             Vector3 v = t.position - _beamOrigin; v.y = 0f;
             float reach = HelmsmanTuning.BeamHalfWidth + TargetRadius(t);
             bool hit = false;
-            for (int i = 0; i < 2 && !hit; i++)
+            for (int i = 0; i < BeamCount && !hit; i++)
             {
                 Vector3 axis = _beamEnd[i] - _beamOrigin; axis.y = 0f;
                 float len = axis.magnitude;
@@ -390,20 +434,133 @@ namespace MaxWorlds.Bosses
                 HelmsmanTuning.SpiralDamage, HelmsmanTuning.SpiralTrailSeconds);
         }
 
-        /// <summary>Phase 2: torn free of the throne. Walks Max down to a 3 m stand-off, hurts on
-        /// contact, and keeps sweeping its lens on a slower 6 s cadence.</summary>
+        /// <summary>Phase 2 "Torn Free" (MV-1371): walks at 2.2 m/s, hurts on contact, one lens beam every
+        /// 8 s, a leap slam every 6 s, and the Bridge airlocks blowing every 12 s.</summary>
         private void TickWalking(float dt)
         {
             if (_target == null) { AcquireTarget(); return; }
-            Approach(dt);
+            bool planted = _slamStage == SlamStage.Tell || _slamStage == SlamStage.Leap;
+            if (!planted) Approach(dt);
             FaceTarget();
             TickContactDamage(dt);
 
-            _sweep.SetCooldownSeconds(HelmsmanTuning.SweepCooldownPhase2);
-            _sweep.Tick(dt);
-            if (_sweep.JustActivated) ApplyLensSweepDamage();
-
+            TickBeams(dt);
+            TickSlam(dt);
             TickAirlockCycle(dt);
+        }
+
+        // ---------------------------------------------------------------- leap slam + shockwave (phase 2)
+
+        private void TickSlam(float dt)
+        {
+            _slamCycle += dt;
+            switch (_slamStage)
+            {
+                case SlamStage.Idle:
+                    if (_slamCycle >= HelmsmanTuning.SlamInterval)
+                    {
+                        _slamCycle -= HelmsmanTuning.SlamInterval;
+                        _slamStage = SlamStage.Tell;
+                        _slamStageT = 0f;
+                        // The ring marks Max's spot as it is NOW; moving away is the dodge.
+                        _slamCenter = new Vector3(_target.position.x, 0f, _target.position.z);
+                    }
+                    break;
+                case SlamStage.Tell:
+                    _slamStageT += dt;
+                    if (_slamStageT >= HelmsmanTuning.SlamTellSeconds)
+                    {
+                        _slamStage = SlamStage.Leap;
+                        _slamStageT = 0f;
+                        _slamStart = transform.position;
+                    }
+                    break;
+                case SlamStage.Leap:
+                    TickLeap(dt);
+                    break;
+                case SlamStage.Wave:
+                    TickShockwave(dt);
+                    break;
+            }
+        }
+
+        private void TickLeap(float dt)
+        {
+            _slamStageT += dt;
+            float f = Mathf.Clamp01(_slamStageT / HelmsmanTuning.SlamLeapSeconds);
+            Vector3 p = transform.position;
+            Vector3 want = new Vector3(
+                Mathf.Lerp(_slamStart.x, _slamCenter.x, f),
+                _slamStart.y + 4f * HelmsmanTuning.SlamLeapHeight * f * (1f - f),
+                Mathf.Lerp(_slamStart.z, _slamCenter.z, f));
+            CharacterControllerMotion.SafeMove(_cc, want - p);
+            if (f < 1f) return;
+
+            _verticalVel = 0f;
+            Land();
+        }
+
+        /// <summary>The landing: 40 damage inside 3 m of the ring's centre, then the shockwave starts with
+        /// two opposite 40 degree gaps at a random angle.</summary>
+        private void Land()
+        {
+            ForEachTarget(t =>
+            {
+                Vector3 to = t.position - _slamCenter; to.y = 0f;
+                if (to.magnitude <= HelmsmanTuning.SlamRadius) Hurt(t, HelmsmanTuning.SlamDamage, to);
+            });
+
+            _slamStage = SlamStage.Wave;
+            _slamStageT = 0f;
+            _waveRadius = 0f;
+            _waveGapYaw = UnityEngine.Random.Range(0f, 360f);
+            _waveHit.Clear();
+        }
+
+        private void TickShockwave(float dt)
+        {
+            _slamStageT += dt;
+            float prev = _waveRadius;
+            _waveRadius = HelmsmanTuning.ShockwaveRadius
+                * Mathf.Clamp01(_slamStageT / HelmsmanTuning.ShockwaveSeconds);
+            float cur = _waveRadius;
+
+            ForEachTarget(t =>
+            {
+                Vector3 to = t.position - _slamCenter; to.y = 0f;
+                float d = to.magnitude;
+                if (d <= prev || d > cur) return;                 // not crossed this tick
+                if (!_waveHit.Add(t.GetInstanceID())) return;     // once per wave
+
+                float bearing = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+                float half = HelmsmanTuning.ShockwaveGapDegrees * 0.5f;
+                bool inGap = Mathf.Abs(Mathf.DeltaAngle(bearing, _waveGapYaw)) <= half
+                          || Mathf.Abs(Mathf.DeltaAngle(bearing, _waveGapYaw + 180f)) <= half;
+                if (inGap) return;
+
+                // 1.6 m cover between the landing and the target stops it.
+                Vector3 from = new Vector3(_slamCenter.x, HelmsmanTuning.ShockwaveCastHeight, _slamCenter.z);
+                if (Physics.Raycast(from, to / d, d, CoverLayer.Mask, QueryTriggerInteraction.Ignore)) return;
+
+                Hurt(t, HelmsmanTuning.ShockwaveDamage, to);
+            });
+
+            if (_slamStageT >= HelmsmanTuning.ShockwaveSeconds) _slamStage = SlamStage.Idle;
+        }
+
+        private void ForEachTarget(System.Action<Transform> act)
+        {
+            if (_target != null) act(_target);
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+                if (sentinels[i] != null) act(sentinels[i].transform);
+        }
+
+        private void Hurt(Transform t, float amount, Vector3 away)
+        {
+            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return;
+            Vector3 dir = away.sqrMagnitude > 1e-4f ? away.normalized : Vector3.forward;
+            damageable.TakeDamage(new DamageInfo(amount, transform.position, dir, Team.Enemy));
         }
 
         /// <summary>Phase 2's own airlock cycle (MV-1313): the two Bridge airlocks (MV-1310) blow in
@@ -547,39 +704,6 @@ namespace MaxWorlds.Bosses
             return cc.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
         }
 
-        // ---------------------------------------------------------------- lens sweep (both phases)
-
-        /// <summary>The arc going live: 25 damage once to Max or any Sentinel inside the 90° frontal arc
-        /// (centred on this boss's current facing — set by <see cref="FaceTarget"/> every tick) with a
-        /// clear line of sight. Approximates the ticket's "only the 1.6 m bulkheads block it" with the
-        /// shared <see cref="LineOfSight"/> check every boss already uses for its own wake rule — the
-        /// Bridge's bulkheads (mothership_config.json's own 1.6 m "ship_bulkhead_stub" cover) are solid
-        /// colliders LineOfSight already raycasts against, while the shorter console-bank cover is not
-        /// tall enough to occlude it.</summary>
-        private void ApplyLensSweepDamage()
-        {
-            TryHitLensSweep(_target);
-
-            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
-            for (int i = 0; i < sentinels.Count; i++)
-                TryHitLensSweep(sentinels[i] != null ? sentinels[i].transform : null);
-        }
-
-        private void TryHitLensSweep(Transform t)
-        {
-            if (t == null) return;
-            Vector3 to = t.position - transform.position; to.y = 0f;
-            if (to.sqrMagnitude < 0.0001f) return;
-
-            float angle = Vector3.Angle(transform.forward, to);
-            if (angle > LensSweepTelegraph.ArcDegrees * 0.5f) return;
-            if (!LineOfSight.Between(transform, t)) return;
-
-            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return;
-            Vector3 dir = to.normalized;
-            damageable.TakeDamage(new DamageInfo(LensSweepTelegraph.Damage, transform.position, dir, Team.Enemy));
-        }
-
         // ---------------------------------------------------------------- pod volley (phase 1 only)
 
         /// <summary>Releases a pod volley down the side hatches, never taking the Helmsman's own live pod
@@ -709,7 +833,10 @@ namespace MaxWorlds.Bosses
 
             // MV-1370: below 66% it tears free - a 2 s invulnerable beat first, then it walks.
             if (_phase == Phase.Seated && _health.Normalized <= HelmsmanTuning.PhaseTwoThreshold)
-                BeginTransition();
+                BeginTransition(false);
+            // MV-1371: below 33% the wheel spins up for a 2 s invulnerable beat (phase 3 itself is ticket 4/4).
+            else if (_phase == Phase.Walking && !_phase3Begun && _health.Normalized <= HelmsmanTuning.PhaseThreeThreshold)
+                BeginTransition(true);
         }
 
         private void OnDeath()

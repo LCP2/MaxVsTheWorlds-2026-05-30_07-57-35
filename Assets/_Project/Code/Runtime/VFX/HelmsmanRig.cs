@@ -437,6 +437,55 @@ namespace MaxWorlds.VFX
             if (_eyeLens == null) return;
             ApplyLensColor(_eyeLens, _boss.LensTelling ? GoldBrightColor : GoldColor);
             UpdateBeams();
+            UpdateSlamRings();
+        }
+
+        // ---------------------------------------------------------------- leap slam rings (MV-1371)
+
+        private LineRenderer _tellRing, _waveRing;
+        private const int RingSegments = 48;
+
+        private static LineRenderer MakeRing(string name, Color c)
+        {
+            var go = new GameObject(name);   // world-space, never parented under the rig's facing
+            var lr = go.AddComponent<LineRenderer>();
+            lr.positionCount = RingSegments;
+            lr.loop = true;
+            lr.useWorldSpace = true;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.sharedMaterial = VfxMaterials.AdditiveTinted(c);
+            lr.startColor = lr.endColor = c;
+            lr.enabled = false;
+            return lr;
+        }
+
+        private static void SetRing(LineRenderer lr, Vector3 center, float radius, float width)
+        {
+            for (int i = 0; i < RingSegments; i++)
+            {
+                float a = i * Mathf.PI * 2f / RingSegments;
+                lr.SetPosition(i, new Vector3(center.x + Mathf.Sin(a) * radius, 0.07f, center.z + Mathf.Cos(a) * radius));
+            }
+            lr.widthMultiplier = width;
+        }
+
+        /// <summary>The 3 m red tell ring on Max's marked spot, then the expanding shockwave ring.
+        /// Read straight off the boss, never written back.</summary>
+        private void UpdateSlamRings()
+        {
+            if (_tellRing == null)
+            {
+                _tellRing = MakeRing("HelmsmanSlamTell", new Color(1f, 0.25f, 0.25f, 1f));
+                _waveRing = MakeRing("HelmsmanShockwave", new Color(1f, 0.55f, 0.5f, 1f));
+            }
+            bool tell = _boss.Slam == HelmsmanBoss.SlamStage.Tell;
+            _tellRing.enabled = tell;
+            if (tell) SetRing(_tellRing, _boss.SlamCenter, HelmsmanTuning.SlamRadius, 0.12f + 0.18f * _boss.SlamTell01);
+
+            bool wave = _boss.Slam == HelmsmanBoss.SlamStage.Wave && _boss.WaveRadius > 0.05f;
+            _waveRing.enabled = wave;
+            if (wave) SetRing(_waveRing, _boss.SlamCenter, _boss.WaveRadius, 0.3f);
         }
 
         // ---------------------------------------------------------------- twin lens beams (MV-1370)
@@ -480,8 +529,9 @@ namespace MaxWorlds.VFX
 
             for (int i = 0; i < 2; i++)
             {
-                _beamLines[i].enabled = showing;
-                if (!showing) continue;
+                bool on = showing && i < _boss.BeamCount;   // phase 2 fires one beam, phase 1 two
+                _beamLines[i].enabled = on;
+                if (!on) continue;
                 const float floorY = 0.06f;
                 Vector3 a = _boss.BeamOrigin, b = _boss.BeamEnd(i);
                 _beamLines[i].SetPosition(0, new Vector3(a.x, floorY, a.z));
@@ -492,6 +542,8 @@ namespace MaxWorlds.VFX
 
         private void OnDestroy()
         {
+            if (_tellRing != null) Destroy(_tellRing.gameObject);
+            if (_waveRing != null) Destroy(_waveRing.gameObject);
             if (_beamLines == null) return;
             for (int i = 0; i < _beamLines.Length; i++)
                 if (_beamLines[i] != null) Destroy(_beamLines[i].gameObject);
