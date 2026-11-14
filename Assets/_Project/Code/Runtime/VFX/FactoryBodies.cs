@@ -417,6 +417,9 @@ namespace MaxWorlds.VFX
 
         private static Material s_cradleRed;
         private static Material s_cradleGrey;
+        private static Material s_cradlePlinth;
+        private static Material s_cradleSeam;
+        private static Material s_cradleAmber;
         private static Material s_previewCool;
         private static Material s_previewDark;
         private static Material s_previewGold;
@@ -442,9 +445,16 @@ namespace MaxWorlds.VFX
             /// tell, restoring <see cref="CradleGold"/> the rest of the time.</summary>
             public readonly MeshRenderer TopLens;
 
-            public CradleGantry(Transform[] arms, Transform bayRoot, Transform[] turretHousings, MeshRenderer topLens)
+            /// <summary>MV-1365: every welding spark (per arm: one tip point then three burst bits), each
+            /// a lens renderer that starts disabled; <see cref="MaxWorlds.Factories.AssemblyCradle"/> lights
+            /// them only while a build runs.</summary>
+            public readonly Transform[] Sparks;
+
+            public CradleGantry(Transform[] arms, Transform bayRoot, Transform[] turretHousings, MeshRenderer topLens,
+                                Transform[] sparks = null)
             {
                 Arms = arms; BayRoot = bayRoot; TurretHousings = turretHousings; TopLens = topLens;
+                Sparks = sparks ?? System.Array.Empty<Transform>();
             }
         }
 
@@ -477,23 +487,62 @@ namespace MaxWorlds.VFX
             EnsureCradleMaterials();
 
             float hw = size.x * 0.5f, hh = size.y * 0.5f, hd = size.z * 0.5f;
-            const float postSize = 0.22f;
+            const float postSize = 0.35f;     // MV-1365: thick corner posts
+            const float plinthSize = 3.4f;    // MV-1365: solid deck plinth under the frame
+            const float plinthHeight = 0.15f;
+            float plinthHalf = plinthSize * 0.5f;
+            float floorY = -hh;
+            float plinthTop = floorY + plinthHeight;
 
+            // MV-1365: the solid gunmetal plinth, with panel seams, so the cradle reads as a machine
+            // standing on the deck from the 72 degree camera instead of loose sticks on the floor.
+            Add(root, CharacterMeshes.Bevelled(new Vector3(plinthSize, plinthHeight, plinthSize), 0.025f), s_cradlePlinth,
+                new Vector3(0f, floorY + plinthHeight * 0.5f, 0f), Quaternion.identity, Vector3.one, "Plinth");
+            const float seamThickness = 0.01f, seamWidth = 0.035f;
+            foreach (float s in new[] { -0.55f, 0.55f })
+            {
+                Add(root, CharacterMeshes.Bevelled(new Vector3(plinthSize - 0.1f, seamThickness, seamWidth), 0.004f), s_cradleSeam,
+                    new Vector3(0f, plinthTop + seamThickness * 0.5f, s), Quaternion.identity, Vector3.one, "PlinthSeamX");
+                Add(root, CharacterMeshes.Bevelled(new Vector3(seamWidth, seamThickness, plinthSize - 0.1f), 0.004f), s_cradleSeam,
+                    new Vector3(s, plinthTop + seamThickness * 0.5f, 0f), Quaternion.identity, Vector3.one, "PlinthSeamZ");
+            }
+
+            // MV-1365: the amber neon bay outline, inset 0.4 m inside the plinth (a 2.6 m square).
+            float bayHalf = plinthHalf - 0.4f;
+            const float neonThickness = 0.02f, neonWidth = 0.07f;
+            float neonY = plinthTop + seamThickness + neonThickness * 0.5f;
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Add(root, CharacterMeshes.Bevelled(new Vector3(bayHalf * 2f + neonWidth, neonThickness, neonWidth), 0.005f), s_cradleAmber,
+                    new Vector3(0f, neonY, s * bayHalf), Quaternion.identity, Vector3.one, "BayOutlineX");
+                Add(root, CharacterMeshes.Bevelled(new Vector3(neonWidth, neonThickness, bayHalf * 2f + neonWidth), 0.005f), s_cradleAmber,
+                    new Vector3(s * bayHalf, neonY, 0f), Quaternion.identity, Vector3.one, "BayOutlineZ");
+            }
+
+            // Posts sit on the plinth's corners, outer faces flush with its edge.
+            float postCentre = plinthHalf - postSize * 0.5f;
             foreach (float sx in new[] { -1f, 1f })
             {
                 foreach (float sz in new[] { -1f, 1f })
                 {
-                    Add(root, CharacterMeshes.Bevelled(new Vector3(postSize, size.y, postSize), 0.02f), s_cradleRed,
-                        new Vector3(sx * (hw - postSize * 0.5f), 0f, sz * (hd - postSize * 0.5f)), Quaternion.identity,
+                    Add(root, CharacterMeshes.Bevelled(new Vector3(postSize, size.y, postSize), 0.03f), s_cradleRed,
+                        new Vector3(sx * postCentre, 0f, sz * postCentre), Quaternion.identity,
                         Vector3.one, "CornerPost");
                 }
             }
 
             const float railSize = 0.14f;
-            Add(root, CharacterMeshes.Bevelled(new Vector3(size.x, railSize, railSize), 0.015f), s_cradleRed,
-                new Vector3(0f, hh - railSize * 0.5f, hd - postSize * 0.5f), Quaternion.identity, Vector3.one, "TopRailFront");
-            Add(root, CharacterMeshes.Bevelled(new Vector3(size.x, railSize, railSize), 0.015f), s_cradleRed,
-                new Vector3(0f, hh - railSize * 0.5f, -(hd - postSize * 0.5f)), Quaternion.identity, Vector3.one, "TopRailBack");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(postCentre * 2f, railSize, railSize), 0.015f), s_cradleRed,
+                new Vector3(0f, hh - railSize * 0.5f, postCentre), Quaternion.identity, Vector3.one, "TopRailFront");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(postCentre * 2f, railSize, railSize), 0.015f), s_cradleRed,
+                new Vector3(0f, hh - railSize * 0.5f, -postCentre), Quaternion.identity, Vector3.one, "TopRailBack");
+
+            // MV-1365: roof crossbeams in a + across the top, so it reads as a solid gantry from above.
+            const float beamWidth = 0.3f, beamHeight = 0.2f;
+            Add(root, CharacterMeshes.Bevelled(new Vector3(plinthSize - 0.1f, beamHeight, beamWidth), 0.03f), s_cradleRed,
+                new Vector3(0f, hh - beamHeight * 0.5f, 0f), Quaternion.identity, Vector3.one, "RoofBeamX");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(beamWidth, beamHeight, plinthSize - 0.1f), 0.03f), s_cradleRed,
+                new Vector3(0f, hh - beamHeight * 0.5f, 0f), Quaternion.identity, Vector3.one, "RoofBeamZ");
 
             // The gold lens on top (ticket).
             MeshRenderer topLens = CharacterPart.AddLens(root, CharacterMeshes.Sphere(14),
@@ -501,23 +550,47 @@ namespace MaxWorlds.VFX
             topLens.gameObject.name = "TopLens";
             TintLens(topLens, CradleGold);
 
-            // Two articulated arms reaching into the bay, hinged at the top rail so AssemblyCradle can
-            // swing them while a build is in progress (ticket's own "arms move while building").
+            // MV-1365: two jointed welding arms from the rear (+Z) posts to the bay centre. The hinge
+            // keeps an identity rotation (AssemblyCradle sways it about X while building), so both
+            // links are positioned and aimed in the hinge's own frame.
             var arms = new Transform[2];
+            var sparks = new List<Transform>(8);
+            Vector3 tip = new Vector3(0f, plinthTop + 0.55f, 0.1f);
             for (int i = 0; i < 2; i++)
             {
                 float sx = i == 0 ? -1f : 1f;
+                Vector3 shoulder = new Vector3(sx * (postCentre - postSize * 0.5f), hh - 0.45f, postCentre - postSize * 0.5f);
+                Vector3 elbow = new Vector3(sx * 0.8f, hh - 0.15f, 0.7f);
                 var hinge = new GameObject($"Arm{i}").transform;
                 hinge.SetParent(root, worldPositionStays: false);
-                hinge.localPosition = new Vector3(sx * (hw - postSize), hh - railSize, -(hd - postSize) * 0.4f);
-                Add(hinge, CharacterMeshes.Beam(hh * 0.9f, 0.05f, 0.03f, 6), s_cradleRed,
-                    new Vector3(0f, -hh * 0.45f, 0f), Quaternion.Euler(0f, 0f, -sx * 35f), Vector3.one, "ArmLink");
+                hinge.localPosition = shoulder;
+                AddArmLink(hinge, Vector3.zero, elbow - shoulder, "ArmUpper");
+                Add(hinge, CharacterMeshes.Sphere(8), s_cradleGrey, elbow - shoulder, Quaternion.identity,
+                    Vector3.one * 0.14f, "ArmJoint");
+                AddArmLink(hinge, elbow - shoulder, tip - shoulder, "ArmLower");
+
+                MeshRenderer spark = CharacterPart.AddLens(hinge, CharacterMeshes.Sphere(10),
+                    tip - shoulder, Quaternion.identity, Vector3.one * 0.16f);
+                spark.gameObject.name = "SparkTip";
+                TintLens(spark, new Color(1.4f, 1.3f, 1.0f));
+                spark.enabled = false; // lit only while a build is running (AssemblyCradle.LateUpdate)
+                sparks.Add(spark.transform);
+                for (int k = 0; k < 3; k++) // short spark bursts, scattered every frame by AssemblyCradle
+                {
+                    MeshRenderer burst = CharacterPart.AddLens(hinge, CharacterMeshes.Sphere(6),
+                        tip - shoulder, Quaternion.identity, Vector3.one * 0.07f);
+                    burst.gameObject.name = "SparkBurst";
+                    TintLens(burst, new Color(1.4f, 0.9f, 0.3f));
+                    burst.enabled = false;
+                    sparks.Add(burst.transform);
+                }
                 arms[i] = hinge;
             }
 
             // The 2x2 m out pad (ticket), dashed red, flat, clear of the front face (-Z, the same
             // player-facing convention BuildReplicator's own hatch uses).
             BuildOutPadOutline(root, new Vector3(0f, -hh + 0.01f, -(hd + 1.3f)), 2f, 2f);
+            BuildOutPadChevrons(root, new Vector3(0f, -hh + 0.012f, -(hd + 1.3f)));
 
             // The two front-top turrets — never plain cubes (Lee, 1/3 Oct: "the big ones looked
             // ridiculous"): a hexagonal housing with a long visible barrel.
@@ -532,9 +605,9 @@ namespace MaxWorlds.VFX
 
             var bayRoot = new GameObject("Bay").transform;
             bayRoot.SetParent(root, worldPositionStays: false);
-            bayRoot.localPosition = new Vector3(0f, -hh, 0f);
+            bayRoot.localPosition = new Vector3(0f, plinthTop, 0f); // the bay's floor is the plinth's top
 
-            return new CradleGantry(arms, bayRoot, turrets, topLens);
+            return new CradleGantry(arms, bayRoot, turrets, topLens, sparks.ToArray());
         }
 
         /// <summary>The front-top turret housing plus barrel — a hexagonal drum, never a plain cube
@@ -556,6 +629,40 @@ namespace MaxWorlds.VFX
                 Vector3.one, "Barrel");
 
             return housing;
+        }
+
+        /// <summary>MV-1365: one welding-arm segment, a tapered beam centred between <paramref name="from"/>
+        /// and <paramref name="to"/> (hinge-local), its long Y axis aimed along the segment.</summary>
+        private static void AddArmLink(Transform hinge, Vector3 from, Vector3 to, string name)
+        {
+            Vector3 delta = to - from;
+            float length = delta.magnitude;
+            if (length < 0.01f) return;
+            Add(hinge, CharacterMeshes.Beam(length, 0.06f, 0.04f, 6), s_cradleRed, (from + to) * 0.5f,
+                Quaternion.FromToRotation(Vector3.up, delta / length), Vector3.one, name);
+        }
+
+        /// <summary>MV-1365: three chevrons on the out pad pointing away from the bay (-Z), each two flat
+        /// bars meeting at the apex. Generated beams only.</summary>
+        private static void BuildOutPadChevrons(Transform root, Vector3 centre)
+        {
+            var chevrons = new GameObject("OutPadChevrons").transform;
+            chevrons.SetParent(root, worldPositionStays: false);
+            chevrons.localPosition = centre;
+
+            const float barLength = 0.42f, barWidth = 0.07f, barThickness = 0.012f, spread = 40f;
+            float sin = Mathf.Sin(spread * Mathf.Deg2Rad), cos = Mathf.Cos(spread * Mathf.Deg2Rad);
+            for (int c = 0; c < 3; c++)
+            {
+                float apexZ = -0.45f + (1 - c) * 0.5f; // toward -Z along the pad
+                foreach (float sx in new[] { -1f, 1f })
+                {
+                    Vector3 dir = new Vector3(sx * sin, 0f, cos);
+                    Add(chevrons, CharacterMeshes.Bevelled(new Vector3(barLength, barThickness, barWidth), 0.004f), s_cradleRed,
+                        new Vector3(0f, 0f, apexZ) + dir * (barLength * 0.5f),
+                        Quaternion.FromToRotation(Vector3.right, dir), Vector3.one, $"Chevron{c}");
+                }
+            }
         }
 
         /// <summary>The out pad's dashed red outline (ticket: "2x2 m in front, dashed red outline,
@@ -680,6 +787,12 @@ namespace MaxWorlds.VFX
             s_cradleRed = NewMaterial("Cradle_Red", CradleRed);
             TintCradleRedEmissive(s_cradleRed);
             s_cradleGrey = NewMaterial("Cradle_Grey", CradlePreviewGrey);
+            s_cradlePlinth = NewMaterial("Cradle_Plinth", new Color(0.19f, 0.20f, 0.24f));
+            s_cradleSeam = NewMaterial("Cradle_PlinthSeam", new Color(0.32f, 0.33f, 0.38f));
+            // MV-1365: amber neon, HDR emissive with the peak channel at 1.4 -- inside MV-1336's 1.44 ceiling.
+            Color amber = new Color(1.0f, 0.70f, 0.12f);
+            s_cradleAmber = NewMaterial("Cradle_BayNeon", amber);
+            if (s_cradleAmber.HasProperty("_EmissionColor")) s_cradleAmber.SetColor("_EmissionColor", amber * 1.4f);
             s_previewCool = NewMaterial("CradlePreview_Cool", CharacterSkin.RobotCool);
             s_previewDark = NewMaterial("CradlePreview_Dark", CharacterSkin.RobotDark);
             s_previewGold = NewMaterial("CradlePreview_Gold", CharacterSkin.RobotGold);
