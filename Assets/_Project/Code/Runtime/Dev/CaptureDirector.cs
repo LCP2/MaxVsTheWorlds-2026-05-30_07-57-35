@@ -691,6 +691,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1342ReefAquaticLookCheck());
             Add(BuildMv1349ReefLookCheck());
             Add(BuildMv1354LightMissilePowerLook());
+            Add(BuildMv1373OrbitalsPowerLook());
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
             return d;
@@ -8293,6 +8294,133 @@ namespace MaxWorlds.Dev
                 },
                 Cleanup = () => LightMissileBall.DestroyPoolForTests(),
                 ExtraReport = () => Summary(0, "POWER 1") + Summary(1, "POWER 8"),
+            };
+        }
+
+        // ---- Mv1373OrbitalsPowerLook (MV-1373 AC2) --------------------------------------------
+
+        /// <summary>MV-1373 AC2: 8 orbs on the real Max at POWER 1 then POWER 5 through the live production
+        /// camera (HDR Mobile tier). Measures each orb's bright blob (connected pixels over 150 luma, same
+        /// method as MV-1354) and reports the POWER 5 / POWER 1 mean-diameter ratio. One capture each.</summary>
+        private static CapturePreset BuildMv1373OrbitalsPowerLook()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+            var diameters = new[] { new List<float>(), new List<float>() };
+            var diag = new[] { "(not sampled)", "(not sampled)" };
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a1"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a1\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                float until = Time.time + 1f;
+                while (Time.time < until) yield return null;
+            }
+
+            Func<Camera, IEnumerator> SetupLevel(int slot, int power) => cam => SetupLevelRoutine(slot, power);
+
+            IEnumerator SetupLevelRoutine(int slot, int power)
+            {
+                RigBoard.UseWorld(WorldCatalog.IndexOf(WorldIds.Mothership));
+                WeaponSystemState.SecondaryKind = SecondaryKind.Orbitals;
+                RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_orb", 7 }, { "s_rad", 4 }, { "s_odm", power }, { "s_spd", 4 } },
+                    new[] { "SECONDARY" });
+                float until = Time.time + 3f;   // 0.6 s eased growth + trail build-up
+                while (Time.time < until) yield return null;
+                var player = GameObject.FindGameObjectWithTag("Player");
+                var o = player != null ? player.GetComponent<Orbitals>() : null;
+                diag[slot] = o != null ? $"POWER={power} OrbCount={o.OrbCount} Reach={o.Reach:F1}" : "no Orbitals on Player";
+            }
+
+            Action<Texture2D> Measure(int slot) => tex =>
+            {
+                var player = GameObject.FindGameObjectWithTag("Player");
+                var o = player != null ? player.GetComponent<Orbitals>() : null;
+                if (o == null) return;
+                int w = tex.width, h = tex.height;
+                Color32[] px = tex.GetPixels32();
+                float Luma(Color32 c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+                var visited = new bool[w * h];
+                var stack = new Stack<int>();
+                const int Window = 200;
+                for (int n = 0; n < o.OrbCount; n++)
+                {
+                    Vector3 vp = Camera.main.WorldToViewportPoint(o.OrbPosition(n));
+                    if (vp.z <= 0f) continue;
+                    int cx = Mathf.RoundToInt(vp.x * w), cy = Mathf.RoundToInt(vp.y * h);
+                    int seed = -1; float best = 150f;
+                    for (int dy = -20; dy <= 20; dy++)
+                    for (int dx = -20; dx <= 20; dx++)
+                    {
+                        int x = cx + dx, y = cy + dy;
+                        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                        float l = Luma(px[y * w + x]);
+                        if (l > best) { best = l; seed = y * w + x; }
+                    }
+                    if (seed < 0 || visited[seed]) continue;
+                    int count = 0;
+                    stack.Clear(); stack.Push(seed); visited[seed] = true;
+                    while (stack.Count > 0)
+                    {
+                        int idx = stack.Pop();
+                        int x = idx % w, y = idx / w;
+                        count++;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), ny = y + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                            if (Mathf.Abs(nx - cx) > Window || Mathf.Abs(ny - cy) > Window) continue;
+                            int ni = ny * w + nx;
+                            if (visited[ni] || Luma(px[ni]) <= 150f) continue;
+                            visited[ni] = true; stack.Push(ni);
+                        }
+                    }
+                    diameters[slot].Add(2f * Mathf.Sqrt(count / Mathf.PI));
+                }
+            };
+
+            float Mean(int slot)
+            {
+                if (diameters[slot].Count == 0) return 0f;
+                float d = 0f; foreach (float v in diameters[slot]) d += v;
+                return d / diameters[slot].Count;
+            }
+
+            string Summary(int slot, string label) =>
+                $"{label}: {diag[slot]}; {diameters[slot].Count} blobs, mean blob diameter={Mean(slot):F1}px " +
+                $"(per orb: {string.Join(", ", diameters[slot].ConvertAll(v => v.ToString("F1")))})\n";
+
+            return new CapturePreset
+            {
+                Key = "mv1373orbitalspower",
+                LogTag = "[MV1373Capture]",
+                Flag = "-mv1373shot",
+                ArmFile = "Temp/mv1373.arm",
+                HeadlessMarker = "Temp/mv1373.headless",
+                DoneFileName = "_mv1373_done.txt",
+                Width = 1920,
+                Height = 1080,
+                QualityLevelName = "Mobile",
+                DisableBrain = false,   // the live production camera
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1373-P1-orbs8", SetupLevel(0, 1), measure: Measure(0)),
+                    new CaptureShot("MV-1373-P5-orbs8", SetupLevel(1, 5), measure: Measure(1)),
+                },
+                ExtraReport = () => Summary(0, "POWER 1") + Summary(1, "POWER 5") +
+                    $"ratio POWER5/POWER1 blob diameter = {(Mean(0) > 0f ? Mean(1) / Mean(0) : 0f):F3} (AC2: <= 1.3)\n",
             };
         }
 
