@@ -6,6 +6,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Factories
@@ -76,7 +77,9 @@ namespace MaxWorlds.Factories
         private float _clamPhaseElapsed;
         private bool _clamOpen = true;
         private Transform _clamLidHinge;
+        private Renderer _clamGlow;   // MV-1363: teal glow strip, lit only while open
         private Image _clamBandFill;
+        private Renderer _wreckPlate; // MV-1363: the one renderer left on after a clam dies
 
         // --- Mobile shed (MV-548, shed roadmap stage 3) — levitate, then pursue Max while still
         // spawning. Only ever engages for a shed MapRuntime built with WorldShed.mobile true
@@ -242,6 +245,7 @@ namespace MaxWorlds.Factories
             if (_label != null) _label.text = "HATCHERY CLAM";
             if (_spawner != null) _spawner.SetEmissionGateOpen(true);
 
+            ReskinClamBody();
             BuildClamLid();
             BuildClamPhaseBand();
             ApplyClamPhaseLook();
@@ -282,6 +286,7 @@ namespace MaxWorlds.Factories
             if (_clamLidHinge != null)
                 _clamLidHinge.localRotation = Quaternion.Euler(_clamOpen ? -ClamLidOpenAngle : 0f, 0f, 0f);
 
+            if (_clamGlow != null) _clamGlow.enabled = _clamOpen;
             coreColor = _clamOpen ? WorldMaterials.ReefCircuitPurple : WorldMaterials.ReefMetalDark;
             if (_clamBandFill != null)
                 _clamBandFill.color = _clamOpen ? WorldMaterials.ReefCircuitCyan : WorldMaterials.ReefHazard;
@@ -300,22 +305,77 @@ namespace MaxWorlds.Factories
             hinge.SetParent(transform, false);
             hinge.localPosition = new Vector3(0f, 0.5f, -0.5f); // top-back edge, body's own unit-cube space
 
-            var lidGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            lidGo.name = "ClamLid";
-            var col = lidGo.GetComponent<Collider>();
-            if (col != null)
-            {
-                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-            }
-            lidGo.transform.SetParent(hinge, false);
-            lidGo.transform.localPosition = new Vector3(0f, 0f, 0.5f); // reaches from the hinge to the front edge
-            lidGo.transform.localScale = new Vector3(1f, 0.16f, 1f);
-
-            var rend = lidGo.GetComponent<Renderer>();
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, WorldMaterials.ReefMetalDark);
-            if (mat != null) rend.sharedMaterial = mat;
+            // MV-1363: generated bevelled meshes only (no Unity Cube) in the Reef kit - dark hull-metal shell,
+            // a brass rim proud of it, and a teal glow strip under the lip that shows while the clam is open.
+            var lid = NewClamPart("ClamLid", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.08f),
+                WorldMaterials.M_MetalDark, new Vector3(0f, 0f, 0.5f), new Vector3(1f, 0.16f, 1f));
+            NewClamPart("ClamRim", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.03f),
+                WorldMaterials.M_Brass, new Vector3(0f, -0.07f, 0.5f), new Vector3(1.03f, 0.04f, 1.03f));
+            _clamGlow = NewClamPart("ClamGlow", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.03f),
+                WorldMaterials.M_Circuit_Cyan, new Vector3(0f, -0.1f, 0.5f), new Vector3(0.9f, 0.03f, 0.9f));
+            _clamGlow.enabled = _clamOpen;
 
             _clamLidHinge = hinge;
+        }
+
+        /// <summary>MV-1363: one generated-mesh, collider-free cosmetic piece of the clam.</summary>
+        private static Renderer NewClamPart(string partName, Transform parent, Mesh mesh, Material mat,
+            Vector3 localPos, Vector3 localScale)
+        {
+            var go = new GameObject(partName);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = localScale;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var r = go.AddComponent<MeshRenderer>();
+            if (mat != null) r.sharedMaterial = mat;
+            return r;
+        }
+
+        /// <summary>MV-1363: swaps the body's built-in Cube mesh for a bevelled unit box (same bounds, so the
+        /// collider and every scale-derived size are unchanged) and gives it the dark hull-metal material.</summary>
+        private void ReskinClamBody()
+        {
+            var mf = GetComponent<MeshFilter>();
+            if (mf != null) mf.sharedMesh = CharacterMeshes.Bevelled(Vector3.one, 0.05f);
+            var rend = GetComponent<Renderer>();
+            if (rend != null)
+            {
+                Material mat = WorldMaterials.M_MetalDark;
+                if (mat != null) rend.sharedMaterial = mat;
+            }
+            TintBody();
+        }
+
+        /// <summary>MV-1363: a small dark scorched plate left where a destroyed clam stood. World 2.4 m x 2.4 m,
+        /// 0.04 m thick, its underside 0.01 m above the deck; generated mesh, scale cancelled for the body's own scale.</summary>
+        private void BuildWreckPlate()
+        {
+            Vector3 lossy = transform.lossyScale;
+            if (Mathf.Abs(lossy.x) < 1e-4f || Mathf.Abs(lossy.y) < 1e-4f || Mathf.Abs(lossy.z) < 1e-4f) return;
+            const float thickness = 0.04f;
+            float deckY = transform.position.y - lossy.y * 0.5f;
+            var go = new GameObject("ClamWreckPlate");
+            go.transform.SetParent(transform, false);
+            go.transform.position = new Vector3(transform.position.x, deckY + 0.01f + thickness * 0.5f, transform.position.z);
+            go.transform.localScale = new Vector3(2.4f / Mathf.Abs(lossy.x), thickness / Mathf.Abs(lossy.y), 2.4f / Mathf.Abs(lossy.z));
+            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(Vector3.one, 0.1f);
+            var r = go.AddComponent<MeshRenderer>();
+            Material mat = WorldMaterials.M_MetalDark;
+            if (mat != null) r.sharedMaterial = mat;
+            var mpb = new MaterialPropertyBlock();
+            mpb.SetColor("_BaseColor", new Color(0.02f, 0.02f, 0.025f));
+            r.SetPropertyBlock(mpb);
+            _wreckPlate = r;
+        }
+
+        /// <summary>MV-1363: true for a renderer riding in the Robots container the spawner parents under this
+        /// body - those robots must keep fighting after the shed dies, so the hide-everything sweep skips them.</summary>
+        private bool IsRobotRenderer(Renderer r)
+        {
+            for (Transform t = r.transform; t != null && t != transform; t = t.parent)
+                if (t.name == "Robots" || t.GetComponent<RobotEnemy>() != null) return true;
+            return false;
         }
 
         /// <summary>The rim-light band (ticket: "a light band round the shell's rim that fills as the
@@ -556,12 +616,14 @@ namespace MaxWorlds.Factories
             // The source is gone: hide the body, collider, and bar — but keep the GameObject
             // ALIVE, because the robots it already spawned are parented here and must keep
             // fighting until the player clears them (deactivating the GO would freeze them).
-            var rend = GetComponent<Renderer>();
-            if (rend != null)
+            // MV-1363: hide EVERY renderer this shed owns, not just the body - the clam's lid/rim/glow and any
+            // other dressing child used to stay behind as a pale box. Robots the shed spawned (parented here)
+            // are skipped. Each is marked permanently hidden so the area gate never re-enables it (MV-972).
+            if (_isHatcheryClam) BuildWreckPlate();
+            foreach (var rend in GetComponentsInChildren<Renderer>(true))
             {
+                if (rend == _wreckPlate || IsRobotRenderer(rend)) continue;
                 rend.enabled = false;
-                // MV-972: the area gate must never re-enable a destroyed shed just because its own
-                // zone comes back into the active set — see MarkPermanentlyHidden's own doc.
                 MapStaticBatchRoot.Active?.MarkPermanentlyHidden(rend);
             }
             var col = GetComponent<Collider>();
