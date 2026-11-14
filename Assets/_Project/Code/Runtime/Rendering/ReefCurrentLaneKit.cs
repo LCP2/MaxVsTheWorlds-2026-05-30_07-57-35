@@ -23,7 +23,7 @@ namespace MaxWorlds.Rendering
     {
         /// <summary>Just proud of the floor (MV-1335) — same "flush decal, proud by a hair" idiom as
         /// <c>MapRuntime.DeckShadowProud</c>, so the band never z-fights the Reef floor slab beneath it.</summary>
-        public const float LaneY = 0.02f;
+        public const float LaneY = ReefDeckKit.WearY + 0.01f;   // MV-1361: 0.01 m clear of the wear layer (was coplanar with it)
 
         // MV-1348: fixed render queues for the Reef's transparent floor layers. Unity sorts same-queue
         // transparents by camera distance to each object's centre, so a map-wide overlay and a
