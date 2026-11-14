@@ -57,13 +57,16 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(got.b, Is.EqualTo(want.b).Within(0.02f), $"gauge b {got} vs halo {want}");
 
                 // Time to empty (from ticks), starting loadout: 25 s +/- 5.
-                float tStart = SecondsToEmpty(lm);
+                float tStart = 10f + SecondsToEmpty(lm);   // the first 10 s were already ticked above
                 Assert.That(tStart, Is.EqualTo(25f).Within(5f), "starting loadout time-to-empty");
 
                 // Full loadout (COUNT 5, RATE 5, CAPACITY 5): 10 s +/- 3.
-                for (int i = 0; i < 4; i++) { RigState.RaiseLevel("p_cnt"); RigState.RaiseLevel("p_rof"); }
+                RigState.AcquireCap("p_cnt");
                 RigState.AcquireCap("p_cap");
-                for (int i = 0; i < 5; i++) RigState.RaiseLevel("p_cap");
+                RigState.AcquireCap("p_rof");
+                for (int i = 0; i < 4; i++) { RigState.RaiseLevel("p_cnt"); RigState.RaiseLevel("p_rof"); RigState.RaiseLevel("p_cap"); }
+                Assert.That(new[] { RigState.Level("p_cnt"), RigState.Level("p_rof"), RigState.Level("p_cap") },
+                    Is.EqualTo(new[] { 5, 5, 5 }), "precondition: full loadout levels p_cnt/p_rof/p_cap");
                 LightMissileAwake.Invoke(lm, null);
                 float tFull = SecondsToEmpty(lm);
                 Assert.That(tFull, Is.EqualTo(10f).Within(3f), "full loadout time-to-empty");
