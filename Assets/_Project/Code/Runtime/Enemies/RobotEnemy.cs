@@ -1928,7 +1928,8 @@ namespace MaxWorlds.Enemies
             _health = maxHealth;
             Current = State.Chase;
             _stateTimer = 0f;
-            _wallLatch.Reset();       // a pooled robot doesn't inherit the last one's wall
+            _walkOutActive = false; // MV-1366
+            _wallLatch.Reset();      // a pooled robot doesn't inherit the last one's wall
             _zoneHysteresis.Reset();  // ...nor its idea of which room it was routing from
             _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
             _routeDwell.Reset();       // ...nor its committed route decision (MV-477)
@@ -2557,8 +2558,47 @@ namespace MaxWorlds.Enemies
             SetTell(idleTell);
         }
 
+        // MV-1366: a held, timed straight-line walk (Assembly Cradle bay centre -> out pad).
+        private bool _walkOutActive;
+        private Vector3 _walkOutFrom, _walkOutTo;
+        private float _walkOutSeconds;
+
+        /// <summary>MV-1366: the robot is already standing at <paramref name="from"/> (the Assembly Cradle's
+        /// bay centre); for <paramref name="seconds"/> it is held — no AI, not engageable (State.Emerging)
+        /// but collider on — and walks a straight line to <paramref name="to"/>, then drops into Chase.
+        /// Position is written absolutely each tick (not CharacterController-swept) because the bay centre
+        /// sits inside the cradle's own collider; the walk animation reads the resulting motion.</summary>
+        public void BeginHeldWalkOut(Vector3 from, Vector3 to, float seconds)
+        {
+            if (Current == State.Dead) return;
+            _walkOutActive = true;
+            _walkOutFrom = from;
+            _walkOutTo = to;
+            _walkOutSeconds = Mathf.Max(0.01f, seconds);
+            _emergeTarget = to;
+            Current = State.Emerging;
+            _stateTimer = 0f;
+            SetTell(idleTell);
+        }
+
+        private void TickHeldWalkOut()
+        {
+            float t = Mathf.Clamp01(_stateTimer / _walkOutSeconds);
+            Vector3 p = Vector3.Lerp(_walkOutFrom, _walkOutTo, t);
+            Vector3 flat = _walkOutTo - _walkOutFrom; flat.y = 0f;
+            if (flat.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(flat, Vector3.up);
+            CharacterControllerSafety.SafeReposition(_cc, p, "RobotEnemy.TickHeldWalkOut");
+            if (t >= 1f)
+            {
+                _walkOutActive = false;
+                Current = State.Chase; // AI starts
+                _stateTimer = 0f;
+            }
+        }
+
         private void TickEmerge(float dt)
         {
+            if (_walkOutActive) { TickHeldWalkOut(); return; }
             Vector3 to = _emergeTarget - transform.position;
             to.y = 0f;
 
