@@ -206,6 +206,7 @@ namespace MaxWorlds.UI
         // robots, who carry only a life bar.
         private System.Func<float> _secondary;
         private Color _secondaryColor;
+        private System.Func<Color> _secondaryColorSource;
         private Image _secondaryFill;
 
         private float _worldWidth;
@@ -303,7 +304,8 @@ namespace MaxWorlds.UI
                                             System.Func<bool> isTarget = null,
                                             bool desaturateWhenHealthy = false,
                                             System.Func<bool> shieldActive = null,
-                                            System.Func<float> shieldFraction = null)
+                                            System.Func<float> shieldFraction = null,
+                                            System.Func<Color> secondaryColorSource = null)
         {
             if (owner == null || source == null) return null;
 
@@ -316,6 +318,7 @@ namespace MaxWorlds.UI
             bar._alwaysShow = alwaysShow;
             bar._secondary = secondary;
             bar._secondaryColor = secondaryColor;
+            bar._secondaryColorSource = secondaryColorSource;
             bar._showNumber = showNumber;
             bar._isPlayerBar = isPlayerBar;
             bar._groupable = groupable;
@@ -329,6 +332,9 @@ namespace MaxWorlds.UI
 
         /// <summary>Is the secondary (water) gauge present? Exposed for the tests.</summary>
         public bool HasSecondary => _secondaryFill != null;
+
+        /// <summary>MV-1367: the secondary gauge's resolved fill colour (Tier 2), after the last Refresh.</summary>
+        public Color ResolvedSecondaryColor => _secondaryFill != null ? _secondaryFill.color : Color.clear;
 
         /// <summary>MV-569: hide (or release) this bar independent of health/<see cref="_alwaysShow"/>.
         /// Applied immediately when hiding, so a caller never has to wait for the next
@@ -1088,6 +1094,8 @@ namespace MaxWorlds.UI
 
                 if (_secondaryFill != null && _secondary != null)
                     _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());
+                if (_secondaryFill != null && _secondaryColorSource != null)
+                    _secondaryFill.color = _secondaryColorSource();
 
                 // Only rebuild the string when the printed number actually changes. At ~25 robots a
                 // per-frame ToString is 1500 allocations a second for text nobody can read changing.

@@ -33,6 +33,20 @@ namespace MaxWorlds.Combat
         /// a flat authored number, not track-scaled, same shape as <see cref="Ricochet.DefaultEnergyPerDisc"/>.</summary>
         public const float DefaultEnergyPerBall = Ricochet.DefaultEnergyPerDisc;
 
+        /// <summary>MV-1367: a volley costs <c>VolleyEnergyBase + VolleyEnergyPerBall * COUNT</c> =
+        /// 2.8 * (COUNT + 1). With no regen while firing this empties a full tank in ~25 s at the
+        /// starting loadout (COUNT 1, RATE 1.0 s, 140 energy: 5.6/volley) and ~10 s fully upgraded
+        /// (COUNT 5, RATE 0.6 s, 280 energy: 16.8/volley). Per ball that is VolleyCost / COUNT.</summary>
+        public const float VolleyEnergyBase = 2.8f;
+        public const float VolleyEnergyPerBall = 2.8f;
+
+        /// <summary>The gauge colour while LIGHT MISSILE is the active primary: the ball's own base halo
+        /// colour (#B040FF), not the POWER red tinge.</summary>
+        public static readonly Color GaugeColor = LightMissileBall.BaseHaloColor;
+
+        /// <summary>Energy one whole volley of <paramref name="balls"/> costs.</summary>
+        public static float VolleyCostFor(int balls) => VolleyEnergyBase + VolleyEnergyPerBall * Mathf.Max(1, balls);
+
         /// <summary>Rule 1: a volley's balls fan out 15 degrees apart, centred on the aim.</summary>
         public const float DefaultFanDegrees = 15f;
 
@@ -79,7 +93,7 @@ namespace MaxWorlds.Combat
         public float TrackingBaseDegPerSec => TrackingBaseDegPerSecByLevel[
             Mathf.Clamp(WeaponSystemState.LightMissileTrackLevel(LightMissileTrackKind.Tracking), 0, TrackingBaseDegPerSecByLevel.Length - 1)];
 
-        public float EnergyPerBall => DefaultEnergyPerBall;
+        public float EnergyPerBall => VolleyCostFor(BallsPerVolley) / BallsPerVolley;
 
         /// <summary>MV-1210 CAPACITY (<c>p_cap</c>): the tank's own max right now — 140 at level 0,
         /// rising to 280 at this board's own level-5 cap. Same formula and shape as
@@ -116,7 +130,6 @@ namespace MaxWorlds.Combat
             // Buying a CAPACITY level must raise the tank's max immediately and hand the difference
             // straight to the current charge — same EnergyPool.Retune rule Ricochet.Tick already uses.
             _tank.Retune(EffectiveMaxEnergy);
-            _tank.Tick(dt);
 
             if (aimSource != null)
             {
@@ -130,7 +143,12 @@ namespace MaxWorlds.Combat
 
             // Rule 1: "a volley fires only if the tank can pay for the whole volley" — the cost check
             // below is for the FULL volley, not one ball at a time.
-            float volleyCost = EnergyPerBall * BallsPerVolley;
+            float volleyCost = VolleyCostFor(BallsPerVolley);
+            // MV-1367: no regen while fire is held (so the gauge visibly drains); regen resumes, after
+            // its usual delay, on release or once the tank is depleted (RechargeFraction rule below).
+            _tank.RegenSuspended = IsFiring && !_depleted
+                && WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.LightMissile;
+            _tank.Tick(dt);
             if (_depleted && _tank.Normalized >= BlasterTuning.RechargeFraction) _depleted = false;
             else if (!_depleted && !_tank.CanSpend(volleyCost)) _depleted = true;
 
