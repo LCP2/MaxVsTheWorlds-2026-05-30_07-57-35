@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 
@@ -53,18 +54,20 @@ namespace MaxWorlds.Tests.EditMode
 
             Vector3 prev = robot.transform.position;
             float maxStep = 0f;
-            for (int i = 0; i < 10; i++)
+            var trace = new System.Text.StringBuilder("spawn=" + prev.ToString("F2") + " state=" + robot.Current);
+            for (int i = 0; i < 60; i++)
             {
-                robot.Tick(0.1f);
+                robot.Tick(1f / 60f);
                 maxStep = Mathf.Max(maxStep, Vector3.Distance(prev, robot.transform.position));
                 prev = robot.transform.position;
+                if (i % 6 == 5) trace.Append(" | " + prev.ToString("F2") + " " + robot.Current);
             }
 
-            Vector3 exit = FactoryMouth.ExitPoint(RigOrigin, _cradleGo.transform.forward, 1.0f, RigOrigin.y);
+            Vector3 exit = FactoryMouth.ExitPoint(_cradleGo.transform.position, _cradleGo.transform.forward, 1.0f, _cradleGo.transform.position.y);
             Vector3 pad = FactoryMouth.MusterPoint(exit, _cradleGo.transform.forward, 0);
             Assert.AreEqual(0f, Vector3.Distance(pad, robot.transform.position), 0.2f,
-                "after 1.0 s the robot must be within 0.2 m of the out-pad centre");
-            Assert.LessOrEqual(maxStep, 0.3f, "no single-frame step above 0.3 m across the walk-out");
+                "after 1.0 s the robot must be within 0.2 m of the out-pad centre; pad=" + pad.ToString("F2") + " " + trace);
+            Assert.LessOrEqual(maxStep, 0.3f, "no single-frame step above 0.3 m across the walk-out; maxStep=" + maxStep);
         }
     }
 }

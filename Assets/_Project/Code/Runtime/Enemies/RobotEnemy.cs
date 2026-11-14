@@ -2416,7 +2416,7 @@ namespace MaxWorlds.Enemies
             bool inGuaranteedArrivalGlide = Current == State.ReplicatorSeeking
                 && _seekElapsedSeconds >= GuaranteedArrivalSeconds;
 
-            if (!inGuaranteedArrivalGlide)
+            if (!inGuaranteedArrivalGlide && !_walkOutActive /* MV-1366: held walk writes position absolutely */)
             {
                 FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
                 ApplyGravity(dt);
