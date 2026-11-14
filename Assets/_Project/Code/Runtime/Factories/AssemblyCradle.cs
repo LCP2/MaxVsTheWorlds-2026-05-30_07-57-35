@@ -165,6 +165,7 @@ namespace MaxWorlds.Factories
 
         // --- MV-1227: the gantry's own moving/measurable parts, built once in Build(). ---
         private Transform[] _arms;
+        private Transform[] _sparks; // MV-1365: per arm, the tip point then its burst bits
         private Transform _bayRoot;
         private Transform _frameStage;
         private Transform _platesStage;
@@ -266,6 +267,7 @@ namespace MaxWorlds.Factories
             _bodyRoot = bodyRoot; // MV-1297: hidden wholesale on death, see ApplyDestructionEffects
             FactoryBodies.CradleGantry gantry = FactoryBodies.BuildAssemblyCradle(bodyRoot, transform.lossyScale);
             _arms = gantry.Arms;
+            _sparks = gantry.Sparks;
             _bayRoot = gantry.BayRoot;
             TurretHousings = gantry.TurretHousings;
             _topLens = gantry.TopLens; // MV-1297: the STANDBY dim/pulse tell
@@ -575,6 +577,38 @@ namespace MaxWorlds.Factories
                 if (_arms[i] == null) continue;
                 float sway = building ? Mathf.Sin(Time.time * 2.5f + i * Mathf.PI) * 12f : 0f;
                 _arms[i].localRotation = Quaternion.Euler(sway, 0f, 0f);
+            }
+            TickSparks(building);
+        }
+
+        /// <summary>MV-1365: the welding sparks — a bright point at each arm tip plus short bursts, lit only
+        /// while a build is progressing (and never once the cradle is dead). Cosmetic, like the sway above.
+        /// Each arm owns four consecutive entries: the tip point, then three burst bits that flick on in
+        /// short ~0.12 s windows and scatter around the tip.</summary>
+        private void TickSparks(bool building)
+        {
+            if (_sparks == null) return;
+            for (int i = 0; i < _sparks.Length; i++)
+            {
+                Transform t = _sparks[i];
+                if (t == null) continue;
+                var r = t.GetComponent<Renderer>();
+                if (r == null) continue;
+                int slot = i % 4;
+                if (slot == 0)
+                {
+                    r.enabled = building;
+                    continue;
+                }
+                float phase = Time.time * 8f + i * 0.37f;
+                bool on = building && Mathf.Repeat(phase, 1f) < 0.35f;
+                r.enabled = on;
+                if (!on) continue;
+                int burstId = Mathf.FloorToInt(phase) * 31 + i;
+                float a = Mathf.Repeat(burstId * 2.399f, Mathf.PI * 2f);
+                float reach = 0.12f + 0.1f * Mathf.Repeat(burstId * 0.618f, 1f);
+                Vector3 tip = _sparks[i - slot].localPosition;
+                t.localPosition = tip + new Vector3(Mathf.Cos(a) * reach, 0.05f + reach * 0.4f, Mathf.Sin(a) * reach);
             }
         }
 
