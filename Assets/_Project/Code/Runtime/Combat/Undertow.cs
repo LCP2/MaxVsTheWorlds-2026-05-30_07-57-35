@@ -130,6 +130,16 @@ namespace MaxWorlds.Combat
         /// big EditMode tick — physically identical.</summary>
         private const float TipSubstep = 1f / 120f;
 
+        /// <summary>MV-1362: the tip travels from the muzzle to its target in this long on a fresh
+        /// activation (5 frames at 60 fps; the ticket allows 0.1 s), ease-out so it leaves the hand fast.</summary>
+        public const float LaunchSeconds = 0.08f;
+
+        /// <summary>MV-1362 lasso feel: after arriving the tip overshoots along the beam by this much...</summary>
+        public const float LaunchOvershootMetres = 0.25f;
+
+        /// <summary>...and settles back onto the target over this long (ticket: within 0.08 s).</summary>
+        public const float LaunchSettleSeconds = 0.08f;
+
         private const int MaxTipSubsteps = 4096;
 
         [Header("Lance")]
@@ -247,6 +257,10 @@ namespace MaxWorlds.Combat
             public Vector3 TipPosition;
             public Vector3 TipVelocity;
             public bool TipValid;
+
+            /// <summary>MV-1362: seconds since this activation's launch began; the launch phase is over once
+            /// it reaches <see cref="LaunchSeconds"/> + <see cref="LaunchSettleSeconds"/>.</summary>
+            public float LaunchElapsed;
             public float SwayTime;
 
             /// <summary>The robot/boss the tip is currently pursuing (seeking OR already latched onto) —
@@ -423,6 +437,7 @@ namespace MaxWorlds.Combat
                 // Animate the crackle strands/prongs every frame the stream is up, not just on the tick
                 // cadence — the fire tick above (if it ran this frame) already refreshed StreamEndPoint
                 // indirectly via the tip, but UpdateStream also needs to run every frame regardless.
+                _vfx.WhipLagScale = _branch.LaunchElapsed < LaunchSeconds + LaunchSettleSeconds ? 0f : 1f;
                 _vfx.UpdateStream(transform.position, StreamEndPoint, dir, dt);
 
                 for (int i = 1; i < MaxBeamCount; i++)
@@ -501,10 +516,50 @@ namespace MaxWorlds.Combat
                 b.TipPosition = origin;
                 b.TipVelocity = Vector3.zero;
                 b.TipValid = true;
+                b.LaunchElapsed = 0f;
+            }
+
+            // MV-1362: launch snap. For the first LaunchSeconds the tip is driven straight from the muzzle
+            // to the target (ease-out), then overshoots along the beam by LaunchOvershootMetres and settles
+            // back over LaunchSettleSeconds; the seek spring takes over from the target with zero velocity.
+            // Any dt left over once the launch ends goes to the spring, so one big EditMode tick and many
+            // small frames still integrate alike.
+            float launchTotal = LaunchSeconds + LaunchSettleSeconds;
+            if (b.LaunchElapsed < launchTotal)
+            {
+                float before = b.LaunchElapsed;
+                float spent = Mathf.Min(dt, launchTotal - before);
+                b.LaunchElapsed = before + spent;
+                float e = b.LaunchElapsed;
+                if (e < LaunchSeconds)
+                {
+                    float u = e / LaunchSeconds;
+                    float eased = 1f - (1f - u) * (1f - u);
+                    b.TipPosition = Vector3.LerpUnclamped(origin, target, eased);
+                }
+                else
+                {
+                    float u = (e - LaunchSeconds) / LaunchSettleSeconds;
+                    Vector3 along = target - origin;
+                    Vector3 axis = along.sqrMagnitude > 1e-6f ? along.normalized : dir;
+                    b.TipPosition = target + axis * (LaunchOvershootMetres * Mathf.Sin(Mathf.PI * u));
+                }
+                b.TipVelocity = Vector3.zero;
+                dt -= spent;
+                if (dt <= 1e-6f)
+                {
+                    PromoteLatch(b);
+                    return;
+                }
             }
 
             IntegrateSpring(ref b.TipPosition, ref b.TipVelocity, target, dt, TipSpringHz, TipDampingRatio, TipMaxSpeed);
 
+            PromoteLatch(b);
+        }
+
+        private static void PromoteLatch(Branch b)
+        {
             if (b.SeekTarget != null)
             {
                 if (b.LatchedTarget == null && Vector3.Distance(b.TipPosition, SeekCentre(b)) <= LatchDistance)
