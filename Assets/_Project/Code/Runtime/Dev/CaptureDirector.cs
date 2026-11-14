@@ -662,6 +662,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1232HangarBayCheck());
             Add(BuildMv1241OrbitalsLook());
             Add(BuildMv1242HelmsmanLook());
+            Add(BuildMv1369HelmsmanBridge());
             Add(BuildMv1245EndShotCheck());
             Add(BuildMv1249MothershipLookCheck());
             Add(BuildMv1356LookRolloutCheck());
@@ -10314,6 +10315,72 @@ namespace MaxWorlds.Dev
                     if (rig != null) Destroy(rig.gameObject);
                     if (bossGo != null) Destroy(bossGo);
                 },
+            };
+        }
+
+        // ---- MV1369HelmsmanBridge (MV-1369 AC2) -----------------------------------------------
+
+        /// <summary>MV-1369 AC2: ONE production-camera capture of the Bridge (a30) with the real seated
+        /// Helmsman the map spawned. HUD hidden, Cinemachine brain live, same jump route as
+        /// <see cref="BuildMv1249MothershipLookCheck"/>. One shot, never iterated.</summary>
+        private static CapturePreset BuildMv1369HelmsmanBridge()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                if (!DevModeController.TryJumpToArea("a30"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a30\") found no map/player to jump");
+
+                float until = Time.time + 3f;
+                while (Time.time < until) yield return null;
+
+                var boss = FindFirstObjectByType<HelmsmanBoss>();
+                GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+                if (boss != null && playerObj != null)
+                {
+                    // The jump lands Max at the area's entry; stand him 9 m south of the boss so the
+                    // live production camera frames the seated Helmsman.
+                    var cc = playerObj.GetComponent<CharacterController>();
+                    bool was = cc != null && cc.enabled;
+                    if (cc != null) cc.enabled = false;
+                    Vector3 bp = boss.transform.position;
+                    playerObj.transform.position = new Vector3(bp.x, playerObj.transform.position.y, bp.z - 9f);
+                    if (cc != null) cc.enabled = was;
+                    float settle = Time.time + 3f;
+                    while (Time.time < settle) yield return null;
+                }
+                Debug.Log("[MV1369Capture] HelmsmanBoss present: " + (boss != null) +
+                          (boss != null ? " at " + boss.transform.position + " seated=" + !boss.IsWalking : ""));
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1369helmsmanbridge",
+                LogTag = "[MV1369Capture]",
+                Flag = "-mv1369shot",
+                ArmFile = "Temp/mv1369.arm",
+                HeadlessMarker = "Temp/mv1369.headless",
+                DoneFileName = "_mv1369_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.Mothership);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1369", NoSetup) },
             };
         }
 
