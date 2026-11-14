@@ -6,9 +6,9 @@ namespace MaxWorlds.Bosses
     /// </summary>
     public static class HelmsmanTuning
     {
-        /// <summary>MV-1370: 18,000 flat (was <c>BossTuning.Health * 1.25</c>). Tuned only in the fight-time
-        /// ticket (4/4), with measured fight time - not here.</summary>
-        public const float Health = 18000f;
+        /// <summary>MV-1372: tuned with <see cref="HelmsmanFightModel"/> so the whole fight (first hit to
+        /// death, both 2 s beats included) lands at 90-120 s against the full loadout (was 18,000, ~66 s).</summary>
+        public const float Health = 29000f;
 
         /// <summary>Below this fraction, Phase 1 (seated, "Wired In") ends: <see cref="TransitionSeconds"/>
         /// of invulnerable beat, then it walks. Phases are P1 100-66%, P2 66-33%, P3 33-0%.</summary>
@@ -102,5 +102,38 @@ namespace MaxWorlds.Bosses
 
         /// <summary>How long before each blow its panel shows the white warning flash.</summary>
         public const float AirlockWarnSeconds = 1f;
+        // ---------------------------------------------------------------- phase 3 "Overload" (MV-1372)
+
+        /// <summary>Seconds between ring bursts.</summary>
+        public const float RingInterval = 4f;
+        public const int RingMissiles = 16;
+        /// <summary>Adjacent missiles left out of each ring (the gap Max stands in).</summary>
+        public const int RingGapMissiles = 2;
+        /// <summary>The gap rotates this far every burst.</summary>
+        public const float RingGapStepDegrees = 45f;
+        public const float RingDamage = 10f;
+        public const float RingTrailSeconds = 1.2f;
+
+        /// <summary>A hit landing within <see cref="CoreHitRadius"/> of the exposed core takes this much more.</summary>
+        public const float CoreDamageMultiplier = 1.25f;
+        public const float CoreHitRadius = 0.9f;
+
+        /// <summary>Breakers that snap their chains at the start of phase 3.</summary>
+        public const int BreakerCount = 2;
+        public const float BreakerSide = 3.5f;
+
+        public const int VentCount = 4;
+        public const float VentInterval = 5f;
+        public const float VentSize = 2.5f;
+        /// <summary>Vent offsets from the area centre (quadrant centres, clear of every a30 cover box).</summary>
+        public const float VentOffsetX = 15f;
+        public const float VentOffsetZ = 10f;
+
+        /// <summary>At or below this health fraction the lights go red and every P3 cooldown shrinks.</summary>
+        public const float LastStandThreshold = 0.15f;
+        public const float LastStandCooldownMultiplier = 0.75f;
+
+        /// <summary>The death beat: collapse, the wheel shears off and rolls, then the key drops.</summary>
+        public const float DeathSeconds = 3f;
     }
 }

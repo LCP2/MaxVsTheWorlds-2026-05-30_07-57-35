@@ -59,6 +59,16 @@ namespace MaxWorlds.Combat
         /// <summary>RATE (<c>p_rof</c>) volley interval, seconds, levels 1..5.</summary>
         private static readonly float[] RateIntervalSecondsByLevel = { 1.0f, 0.9f, 0.8f, 0.7f, 0.6f };
 
+        /// <summary>POWER damage per ball at track level <paramref name="level"/> (1..8) - the same table
+        /// <see cref="EffectiveDamagePerBall"/> reads, for the Helmsman fight model (MV-1372).</summary>
+        public static float DamagePerBallAtLevel(int level) =>
+            PowerDamageByLevel[Mathf.Clamp(level, 1, PowerDamageByLevel.Length) - 1];
+
+        /// <summary>RATE volley interval at track level <paramref name="level"/> (1..5) - the same table
+        /// <see cref="FireInterval"/> reads, for the Helmsman fight model (MV-1372).</summary>
+        public static float FireIntervalAtLevel(int level) =>
+            RateIntervalSecondsByLevel[Mathf.Clamp(level, 1, RateIntervalSecondsByLevel.Length) - 1];
+
         [Header("Aim source")]
         [Tooltip("Optional. If set, fires while the player aims and orients to their facing. " +
                  "If null, IsFiring drives it directly (useful for isolated testing).")]

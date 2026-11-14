@@ -32,7 +32,7 @@ namespace MaxWorlds.Bosses
     [PerfSection("bosses")]
     public sealed class HelmsmanBoss : MonoBehaviour, IDamageable
     {
-        private enum Phase { Dormant, Seated, Transition, Walking, Dead }
+        private enum Phase { Dormant, Seated, Transition, Walking, Dying, Dead }
 
         private const string BossName = "HELMSMAN";
         private const float Gravity = 20f;
@@ -88,6 +88,20 @@ namespace MaxWorlds.Bosses
         private float _waveGapYaw;
         private readonly HashSet<int> _waveHit = new HashSet<int>();
 
+        // ---------------------------------------------------------------- phase 3 "Overload" (MV-1372)
+        private Vector3 _home;                  // where the throne stands (set on wake)
+        private HelmsmanRig _rig;
+        private float _ringTimer;
+        private int _ringCount;
+        private float _ringGapYaw;
+        private bool _lastStand;
+        private float _deathT;
+        private Vector3[] _ventCenters;
+        private float _ventClock;
+        private float _ventColumnLeft;
+
+        public const float VentGlowSeconds = 1f;
+
         // ---------------------------------------------------------------- Bridge airlocks (MV-1313)
         private AirlockPanel[] _bridgeAirlocks;
         private bool _bridgeAirlocksResolved;
@@ -102,9 +116,43 @@ namespace MaxWorlds.Bosses
 
         public bool IsDead => _phase == Phase.Dead;
 
+        /// <summary>The 3 s death beat is running: collapse, wheel shears off and rolls, then the key drops.</summary>
+        public bool IsDying => _phase == Phase.Dying;
+
+        /// <summary>0..1 through the death beat; 0 outside it (1 once dead).</summary>
+        public float DeathT01 => _phase == Phase.Dying ? Mathf.Clamp01(_deathT / HelmsmanTuning.DeathSeconds)
+            : _phase == Phase.Dead ? 1f : 0f;
+
+        /// <summary>Phase 3 proper is running (the spin-up beat is over): ring bursts, vents, exposed core.</summary>
+        public bool InPhase3 => _phase == Phase.Walking && _phase3Begun;
+
+        /// <summary>The red core is open and takes <see cref="HelmsmanTuning.CoreDamageMultiplier"/> hits.</summary>
+        public bool CoreExposed => InPhase3;
+
+        /// <summary>At or below 15% in phase 3: lights red, every P3 cooldown x0.75.</summary>
+        public bool LastStand => _lastStand;
+
+        private float CooldownScale => _lastStand ? HelmsmanTuning.LastStandCooldownMultiplier : 1f;
+
+        /// <summary>Compass yaw (degrees) of the middle of the current ring's two-missile gap.</summary>
+        public float RingGapYaw => _ringGapYaw;
+        public int RingCount => _ringCount;
+
+        public int VentCount => _ventCenters != null ? _ventCenters.Length : 0;
+        public Vector3 VentCenter(int i) => _ventCenters[i];
+
+        /// <summary>0..1 through the 1 s orange glow before the vents fire; 0 outside it.</summary>
+        public float VentGlow01 => _ventCenters == null ? 0f
+            : Mathf.Clamp01(1f - (HelmsmanTuning.VentInterval * CooldownScale - _ventClock) / VentGlowSeconds);
+
+        /// <summary>The flame columns are up (0.6 s after each firing).</summary>
+        public bool VentColumnOn => _ventColumnLeft > 0f;
+
+        internal void SetRig(HelmsmanRig rig) => _rig = rig;
+
         /// <summary>True once Phase 2 has begun (torn free of the throne, walking) — what an EditMode
         /// test reads instead of the private phase enum.</summary>
-        public bool IsWalking => _phase == Phase.Transition || _phase == Phase.Walking;
+        public bool IsWalking => _phase == Phase.Transition || _phase == Phase.Walking || _phase == Phase.Dying;
 
         /// <summary>The 2 s invulnerable P1 -> P2 beat is running (MV-1370).</summary>
         public bool IsTransitioning => _phase == Phase.Transition;
@@ -180,7 +228,7 @@ namespace MaxWorlds.Bosses
             FitColliderToRenderedBody();
             _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
             _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, HelmsmanTuning.Health));
-            _health.Destroyed += OnDeath;
+            _health.Destroyed += BeginDeath;
             _contactCooldownTimer = HelmsmanTuning.ContactCooldown; // no free first hit
             AcquireTarget();
         }
@@ -217,6 +265,7 @@ namespace MaxWorlds.Bosses
             }
 
             _phase = Phase.Seated;
+            _home = transform.position;
             // 3 phases -> HUD bar shows the 66% and 33% segments.
             BossCensus.Register(this, BossName, 3, _health.Current, _health.Max, areaIndex);
         }
@@ -256,6 +305,7 @@ namespace MaxWorlds.Bosses
                 case Phase.Seated: TickSeated(dt); break;
                 case Phase.Transition: TickTransition(dt); break;
                 case Phase.Walking: TickWalking(dt); break;
+                case Phase.Dying: TickDying(dt); break;
             }
             if (_slamStage != SlamStage.Leap) ApplyGravity(dt);
         }
@@ -297,6 +347,20 @@ namespace MaxWorlds.Bosses
             _beams.Interval = HelmsmanTuning.SingleBeamInterval;
             _beams.Reset();
             _slamCycle = 0f;
+            if (_transitionToPhase3) BeginPhase3();
+        }
+
+        /// <summary>Phase 3 "Overload" opens (MV-1372): the Breakers snap their chains, the four vents
+        /// start their 5 s clock, the first ring bursts one full interval in.</summary>
+        private void BeginPhase3()
+        {
+            _ringTimer = 0f;
+            _ringCount = 0;
+            _ringGapYaw = 0f;
+            _ventClock = 0f;
+            _ventColumnLeft = 0f;
+            BuildVents();
+            ReleaseBreakers();
         }
 
         private void BeginTransition(bool toPhase3)
@@ -447,6 +511,134 @@ namespace MaxWorlds.Bosses
             TickBeams(dt);
             TickSlam(dt);
             TickAirlockCycle(dt);
+            if (_phase3Begun)
+            {
+                TickRing(dt);
+                TickVents(dt);
+            }
+        }
+
+        // ---------------------------------------------------------------- phase 3: ring burst, vents, Breakers (MV-1372)
+
+        private void TickRing(float dt)
+        {
+            _ringTimer += dt;
+            if (_ringTimer < HelmsmanTuning.RingInterval * CooldownScale) return;
+            _ringTimer = 0f;
+            FireRing();
+        }
+
+        /// <summary>16 light missiles leave the wheel in a ring, one adjacent pair left out; the gap turns
+        /// 45 degrees every burst. The first gap faces Max so the first ring is always readable.</summary>
+        private void FireRing()
+        {
+            if (_ringCount == 0) _ringGapYaw = BearingTo(_target.position);
+            else _ringGapYaw += HelmsmanTuning.RingGapStepDegrees;
+            _ringGapYaw = Mathf.Repeat(_ringGapYaw, 360f);
+            _ringCount++;
+
+            int n = HelmsmanTuning.RingMissiles;
+            float step = 360f / n;
+            // The two missiles straddling the gap's centre sit at gapYaw -/+ step/2 and are skipped.
+            float first = _ringGapYaw + step * 0.5f;
+            Vector3 p = transform.position;
+            for (int i = 0; i < n - HelmsmanTuning.RingGapMissiles; i++)
+            {
+                Vector3 heading = YawDir(first + step * (i + 1));
+                Vector3 mouth = new Vector3(p.x, OrbitalTuning.FlightHeight, p.z) + heading * 2.6f;
+                OrbitalMissile.Spawn(new Vector3(p.x, 0f, p.z), heading, _target, _areaIndex, mouth,
+                    HelmsmanTuning.RingDamage, HelmsmanTuning.RingTrailSeconds, straight: true);
+            }
+        }
+
+        private void BuildVents()
+        {
+            if (_ventCenters != null) return;
+            Vector3 c = _wakeArea.width > 1f
+                ? new Vector3(_wakeArea.center.x, 0f, _wakeArea.center.y)
+                : new Vector3(_home.x, 0f, _home.z - HelmsmanTuning.VentOffsetZ * 1.5f);
+            _ventCenters = new[]
+            {
+                c + new Vector3(-HelmsmanTuning.VentOffsetX, 0f, -HelmsmanTuning.VentOffsetZ),
+                c + new Vector3( HelmsmanTuning.VentOffsetX, 0f, -HelmsmanTuning.VentOffsetZ),
+                c + new Vector3(-HelmsmanTuning.VentOffsetX, 0f,  HelmsmanTuning.VentOffsetZ),
+                c + new Vector3( HelmsmanTuning.VentOffsetX, 0f,  HelmsmanTuning.VentOffsetZ),
+            };
+        }
+
+        private void TickVents(float dt)
+        {
+            if (_ventCenters == null) return;
+            if (_ventColumnLeft > 0f) _ventColumnLeft -= dt;
+            _ventClock += dt;
+            if (_ventClock < HelmsmanTuning.VentInterval * CooldownScale) return;
+            _ventClock = 0f;
+            _ventColumnLeft = MapVentDamage.ColumnDuration;
+            FireVents();
+        }
+
+        private bool InVent(Vector3 pos)
+        {
+            float half = HelmsmanTuning.VentSize * 0.5f;
+            for (int i = 0; i < _ventCenters.Length; i++)
+                if (Mathf.Abs(pos.x - _ventCenters[i].x) <= half && Mathf.Abs(pos.z - _ventCenters[i].z) <= half)
+                    return true;
+            return false;
+        }
+
+        private void BurnIfInVent(Transform t, IDamageable d)
+        {
+            if (t == null || d == null || !d.IsAlive || !InVent(t.position)) return;
+            d.TakeDamage(new DamageInfo(MapVentDamage.DamagePerCycle, t.position, Vector3.up, Team.Neutral,
+                source: DamageSource.Environment));
+        }
+
+        /// <summary>Once per cycle, <see cref="MapVentDamage.DamagePerCycle"/> to anything standing in a vent:
+        /// Max, Sentinels and robots alike (the shared MV-1240 rule), never the Helmsman himself.</summary>
+        private void FireVents()
+        {
+            if (_target != null) BurnIfInVent(_target, _target.GetComponent<IDamageable>());
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+                if (sentinels[i] != null) BurnIfInVent(sentinels[i].transform, sentinels[i]);
+            IReadOnlyList<RobotEnemy> robots = RobotEnemy.Active;
+            for (int i = 0; i < robots.Count; i++)
+                if (robots[i] != null) BurnIfInVent(robots[i].transform, robots[i]);
+        }
+
+        /// <summary>The two Breakers chained beside the throne snap their chains and charge, once.</summary>
+        private void ReleaseBreakers()
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(EnemyKind.Breaker);
+            for (int i = 0; i < HelmsmanTuning.BreakerCount; i++)
+            {
+                float side = (i % 2 == 0) ? -1f : 1f;
+                Vector3 pos = _home + new Vector3(side * HelmsmanTuning.BreakerSide, archetype.SpawnHeight, -1.5f);
+
+                RobotEnemy breaker = CreatePod(archetype);
+                breaker.gameObject.name = "Helmsman Breaker";
+                breaker.transform.position = pos;
+                breaker.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+                breaker.TagNoReplicatePermanent();
+                breaker.SetAreaIndex(_areaIndex);
+
+                var cc = breaker.GetComponent<CharacterController>();
+                if (!CharacterControllerSafety.CanCreate(breaker.transform, cc, out string reason))
+                {
+                    CharacterControllerSafety.LogRefusal("HelmsmanBoss.ReleaseBreakers", breaker.gameObject.name,
+                        reason, pos, breaker.transform.lossyScale);
+                    Destroy(breaker.gameObject);
+                    continue;
+                }
+                breaker.gameObject.SetActive(true);
+                breaker.Activate();   // the chain snaps (ChainSignals) and it charges
+            }
+        }
+
+        private void TickDying(float dt)
+        {
+            _deathT += dt;
+            if (_deathT >= HelmsmanTuning.DeathSeconds) OnDeath();
         }
 
         // ---------------------------------------------------------------- leap slam + shockwave (phase 2)
@@ -457,9 +649,9 @@ namespace MaxWorlds.Bosses
             switch (_slamStage)
             {
                 case SlamStage.Idle:
-                    if (_slamCycle >= HelmsmanTuning.SlamInterval)
+                    if (_slamCycle >= HelmsmanTuning.SlamInterval * CooldownScale)
                     {
-                        _slamCycle -= HelmsmanTuning.SlamInterval;
+                        _slamCycle -= HelmsmanTuning.SlamInterval * CooldownScale;
                         _slamStage = SlamStage.Tell;
                         _slamStageT = 0f;
                         // The ring marks Max's spot as it is NOW; moving away is the dodge.
@@ -827,16 +1019,46 @@ namespace MaxWorlds.Bosses
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             if (_phase == Phase.Transition) return;   // MV-1370: the P1 -> P2 beat is invulnerable
-            HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
-            _health.TakeDamage(info.Amount);
+            float amount = info.Amount;
+            if (CoreExposed && IsCoreHit(info.Point)) amount *= HelmsmanTuning.CoreDamageMultiplier;
+            HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, amount);
+            _health.TakeDamage(amount);
             BossCensus.ReportHealth(this, _health.Current, _health.Max);
 
             // MV-1370: below 66% it tears free - a 2 s invulnerable beat first, then it walks.
             if (_phase == Phase.Seated && _health.Normalized <= HelmsmanTuning.PhaseTwoThreshold)
                 BeginTransition(false);
-            // MV-1371: below 33% the wheel spins up for a 2 s invulnerable beat (phase 3 itself is ticket 4/4).
+            // MV-1371: below 33% the wheel spins up for a 2 s invulnerable beat, then phase 3 (MV-1372).
             else if (_phase == Phase.Walking && !_phase3Begun && _health.Normalized <= HelmsmanTuning.PhaseThreeThreshold)
                 BeginTransition(true);
+
+            if (InPhase3 && !_lastStand && _health.IsAlive && _health.Normalized <= HelmsmanTuning.LastStandThreshold)
+            {
+                _lastStand = true;
+                _beams.Interval = HelmsmanTuning.SingleBeamInterval * HelmsmanTuning.LastStandCooldownMultiplier;
+            }
+        }
+
+        /// <summary>A hit lands on the core when its point is within <see cref="HelmsmanTuning.CoreHitRadius"/>
+        /// of the core's world position (the rig's chest hex).</summary>
+        private bool IsCoreHit(Vector3 point)
+        {
+            if (_rig == null) return false;
+            return (point - _rig.CoreWorldPosition).sqrMagnitude
+                <= HelmsmanTuning.CoreHitRadius * HelmsmanTuning.CoreHitRadius;
+        }
+
+        /// <summary>The killing blow starts the 3 s death beat (MV-1372): inert while the rig collapses and
+        /// the wheel shears off and rolls; <see cref="OnDeath"/> then drops the key.</summary>
+        private void BeginDeath()
+        {
+            if (_phase == Phase.Dying || _phase == Phase.Dead) return;
+            _phase = Phase.Dying;
+            _deathT = 0f;
+            _slamStage = SlamStage.Idle;
+            _beams.Reset();
+            _volleyLeft = 0;
+            _ventColumnLeft = 0f;
         }
 
         private void OnDeath()

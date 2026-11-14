@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
@@ -111,6 +112,7 @@ namespace MaxWorlds.VFX
         private Transform _cablesRoot;
         private Transform _legsRoot;
         private Transform _coreRoot;
+        private Transform _wheelRoot;     // rim, neon, spokes, lens nodes: shears off in the death beat (MV-1372)
         private Transform _plateLeft, _plateRight;
         private bool _coreExposed;
 
@@ -139,6 +141,9 @@ namespace MaxWorlds.VFX
 
         public bool CoreExposed => _coreExposed;
 
+        /// <summary>World position of the red core hex - what the boss measures a core hit from (MV-1372).</summary>
+        public Vector3 CoreWorldPosition => _coreRoot != null ? _coreRoot.position : transform.position;
+
         public HelmsmanBoss Boss => _boss;
 
         /// <summary>Ticket 4 opens the chest plates; closed by default.</summary>
@@ -158,6 +163,7 @@ namespace MaxWorlds.VFX
         private void Bind(HelmsmanBoss boss)
         {
             _boss = boss;
+            boss.SetRig(this);
             gameObject.AddComponent<KeepsOwnMaterial>();
             _mpb = new MaterialPropertyBlock();
 
@@ -200,11 +206,15 @@ namespace MaxWorlds.VFX
 
         private void BuildWheel()
         {
-            CharacterPart.Add(_bodyRoot, CharacterMeshes.Ring(WheelInnerRadius, WheelOuterRadius, WheelThickness, 48),
+            var wheelGo = new GameObject("Wheel");
+            wheelGo.transform.SetParent(_bodyRoot, worldPositionStays: false);
+            _wheelRoot = wheelGo.transform;
+
+            CharacterPart.Add(_wheelRoot, CharacterMeshes.Ring(WheelInnerRadius, WheelOuterRadius, WheelThickness, 48),
                 s_gunmetal, Vector3.zero, Upright, Vector3.one, "WheelRim");
 
             // Thin cyan neon line around the inner edge (a hair thicker than the rim so it shows from the front).
-            var neon = CharacterPart.AddLens(_bodyRoot,
+            var neon = CharacterPart.AddLens(_wheelRoot,
                 CharacterMeshes.Ring(WheelInnerRadius - 0.06f, WheelInnerRadius + 0.02f, WheelThickness + 0.02f, 48),
                 Vector3.zero, Upright, Vector3.one);
             neon.gameObject.name = "WheelNeon";
@@ -214,11 +224,11 @@ namespace MaxWorlds.VFX
             {
                 Vector3 d = RimDir(i);
                 float len = WheelInnerRadius + 0.1f;
-                CharacterPart.Add(_bodyRoot, CharacterMeshes.Beam(len, 0.1f, 0.1f, 6), s_gunmetal,
+                CharacterPart.Add(_wheelRoot, CharacterMeshes.Beam(len, 0.1f, 0.1f, 6), s_gunmetal,
                     d * (len * 0.5f), Quaternion.FromToRotation(Vector3.up, d), Vector3.one, $"Spoke{i}");
 
                 var node = new GameObject($"LensNode{i}").transform;
-                node.SetParent(_bodyRoot, worldPositionStays: false);
+                node.SetParent(_wheelRoot, worldPositionStays: false);
                 node.localPosition = d * ((WheelInnerRadius + WheelOuterRadius) * 0.5f);
                 _lensNodes[i] = node;
 
@@ -407,6 +417,7 @@ namespace MaxWorlds.VFX
             Follow();
             ApplyPhase(force: false);
             UpdateLensGlow();
+            UpdateOverload();
         }
 
         private void Follow()
@@ -540,8 +551,121 @@ namespace MaxWorlds.VFX
             }
         }
 
+        // ---------------------------------------------------------------- phase 3 look + death beat (MV-1372)
+
+        private MeshRenderer[] _ventPads, _ventColumns;
+        private Light _redLight;
+        private bool _wheelDetached;
+        private Vector3 _wheelStart, _rollDir;
+        private static readonly Color VentIdle = new Color(0.55f, 0.30f, 0.10f);
+        private static readonly Color VentGlow = new Color(1f, 0.55f, 0.18f);
+        private static readonly Color VentColumn = new Color(1f, 0.78f, 0.45f);
+
+        private void UpdateOverload()
+        {
+            if (_boss.CoreExposed != _coreExposed) SetCoreExposed(_boss.CoreExposed);
+            UpdateVents();
+            UpdateLastStandLight();
+            UpdateDeath();
+        }
+
+        private void UpdateVents()
+        {
+            int n = _boss.VentCount;
+            if (n == 0 || _boss.IsDead) return;
+            if (_ventPads == null)
+            {
+                _ventPads = new MeshRenderer[n];
+                _ventColumns = new MeshRenderer[n];
+                float size = HelmsmanTuning.VentSize;
+                for (int i = 0; i < n; i++)
+                {
+                    Vector3 c = _boss.VentCenter(i);
+                    // World-space, never parented under the rig's facing.
+                    _ventPads[i] = CharacterPart.AddLens(null, CharacterMeshes.Bevelled(new Vector3(size, 0.06f, size), 0.02f),
+                        new Vector3(c.x, 0.04f, c.z), Quaternion.identity, Vector3.one);
+                    _ventPads[i].gameObject.name = "HelmsmanVent" + i;
+                    _ventColumns[i] = CharacterPart.AddLens(null,
+                        CharacterMeshes.Bevelled(new Vector3(size * 0.8f, MapVentDamage.ColumnHeight, size * 0.8f), 0.05f),
+                        new Vector3(c.x, 0.04f + MapVentDamage.ColumnHeight * 0.5f, c.z), Quaternion.identity, Vector3.one);
+                    _ventColumns[i].gameObject.name = "HelmsmanVentColumn" + i;
+                }
+            }
+
+            float glow = _boss.VentGlow01;
+            bool column = _boss.VentColumnOn;
+            for (int i = 0; i < n; i++)
+            {
+                ApplyLensColor(_ventPads[i], column ? VentColumn : Color.Lerp(VentIdle, VentGlow, glow));
+                _ventColumns[i].enabled = column;
+                if (column) ApplyLensColor(_ventColumns[i], VentColumn);
+            }
+        }
+
+        /// <summary>Last stand (15%): the Bridge lights go red - one big red light over the Bridge.</summary>
+        private void UpdateLastStandLight()
+        {
+            if (!_boss.LastStand || _boss.IsDead)
+            {
+                if (_redLight != null) _redLight.enabled = false;
+                return;
+            }
+            if (_redLight == null)
+            {
+                var go = new GameObject("HelmsmanLastStandLight");
+                go.transform.position = new Vector3(transform.position.x, 8f, transform.position.z);
+                _redLight = go.AddComponent<Light>();
+                _redLight.type = LightType.Point;
+                _redLight.color = new Color(1f, 0.1f, 0.08f);
+                _redLight.range = 40f;
+                _redLight.intensity = 6f;
+                _redLight.shadows = LightShadows.None;
+            }
+            _redLight.enabled = true;
+            ApplyLensColor(_eyeLens, new Color(1f, 0.15f, 0.12f));
+        }
+
+        /// <summary>Death beat: 0-1 s the body collapses onto its legs, at 1 s the wheel shears off and rolls
+        /// across the floor to 2.2 s (slowing), then falls flat by 3 s.</summary>
+        private void UpdateDeath()
+        {
+            if (!_boss.IsDying) return;
+            float t = _boss.DeathT01 * HelmsmanTuning.DeathSeconds;
+
+            float sink = Mathf.Clamp01(t / 1f);
+            _bodyRoot.localPosition = new Vector3(0f, Mathf.Lerp(WalkingHubY, 1.6f, sink), 0f);
+
+            if (t < 1f) return;
+            if (!_wheelDetached)
+            {
+                _wheelDetached = true;
+                _wheelRoot.SetParent(null, worldPositionStays: true);
+                _wheelStart = _wheelRoot.position;
+                _rollDir = transform.right;   // the wheel's plane is XY: it rolls along its own side
+            }
+
+            float roll = Mathf.Clamp01((t - 1f) / 1.2f);
+            float dist = 8f * (1f - (1f - roll) * (1f - roll));          // ease-out, 8 m
+            float radius = WheelOuterRadius * _rigScale;
+            float fall = Mathf.Clamp01((t - 2.2f) / 0.8f);
+            Vector3 pos = _wheelStart + _rollDir * dist;
+            pos.y = Mathf.Lerp(radius, 0.25f, fall);
+            Quaternion facing = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+            Quaternion spin = Quaternion.AngleAxis(-dist / radius * Mathf.Rad2Deg, facing * Vector3.forward);
+            Quaternion tip = Quaternion.AngleAxis(90f * fall, _rollDir);
+            _wheelRoot.SetPositionAndRotation(pos, tip * spin * facing);
+        }
+
         private void OnDestroy()
         {
+            if (_wheelDetached && _wheelRoot != null) Destroy(_wheelRoot.gameObject);
+            if (_redLight != null) Destroy(_redLight.gameObject);
+            if (_ventPads != null)
+                for (int i = 0; i < _ventPads.Length; i++)
+                {
+                    if (_ventPads[i] != null) Destroy(_ventPads[i].gameObject);
+                    if (_ventColumns[i] != null) Destroy(_ventColumns[i].gameObject);
+                }
             if (_tellRing != null) Destroy(_tellRing.gameObject);
             if (_waveRing != null) Destroy(_waveRing.gameObject);
             if (_beamLines == null) return;
@@ -565,6 +689,13 @@ namespace MaxWorlds.VFX
             if (_beamLines != null)
                 for (int i = 0; i < _beamLines.Length; i++)
                     if (_beamLines[i] != null) _beamLines[i].enabled = false;
+            if (_redLight != null) _redLight.enabled = false;
+            if (_ventPads != null)
+                for (int i = 0; i < _ventPads.Length; i++)
+                {
+                    if (_ventPads[i] != null) _ventPads[i].enabled = false;
+                    if (_ventColumns[i] != null) _ventColumns[i].enabled = false;
+                }
             gameObject.SetActive(false);
         }
     }

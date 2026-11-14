@@ -47,6 +47,7 @@ namespace MaxWorlds.Enemies
         private float _scheduledPopIn = -1f;
         private float _damageOverride = -1f;       // MV-1370: the Helmsman's spiral volley hits for its own number
         private float _trailOverride = -1f;
+        private bool _straight;                    // MV-1372: ring-burst missile - flies dead straight, never steers, outside the world budget
         private TrailRenderer _trail;
         private GameObject _ballRoot;
         private SphereCollider _collider;
@@ -86,10 +87,10 @@ namespace MaxWorlds.Enemies
         /// (<see cref="OrbitalTuning.WorldBudget"/>) is spent. <paramref name="areaIndex"/> &lt;= 0
         /// disables the "leaves its own area" rule.</summary>
         public static OrbitalMissile Spawn(Vector3 feet, Vector3 heading, Transform target, int areaIndex,
-                                           Vector3? mouth = null, float damage = -1f, float trailSeconds = -1f)
+                                           Vector3? mouth = null, float damage = -1f, float trailSeconds = -1f, bool straight = false)
         {
             PrunePool();
-            if (FlyingCount >= OrbitalTuning.WorldBudget) return null;
+            if (!straight && FlyingCount >= OrbitalTuning.WorldBudget) return null;
 
             OrbitalMissile m = null;
             for (int i = 0; i < s_pool.Count; i++)
@@ -123,6 +124,7 @@ namespace MaxWorlds.Enemies
             m._scheduledPopIn = -1f;
             m._damageOverride = damage;
             m._trailOverride = trailSeconds;
+            m._straight = straight;
             m._active = true;
             m._ballRoot.SetActive(true);
             m._collider.enabled = true;
@@ -197,7 +199,7 @@ namespace MaxWorlds.Enemies
             _trail.time = Mathf.Max(0.01f, _trailOverride > 0f ? _trailOverride : OrbitalTuning.TrailSeconds);
 
             // Steer toward Max's CURRENT position, but only after the first straight metre (rule 4).
-            if (_target != null && _travelled >= OrbitalTuning.StraightMetres)
+            if (!_straight && _target != null && _travelled >= OrbitalTuning.StraightMetres)
             {
                 Vector3 want = _target.position - transform.position;
                 want.y = 0f;
