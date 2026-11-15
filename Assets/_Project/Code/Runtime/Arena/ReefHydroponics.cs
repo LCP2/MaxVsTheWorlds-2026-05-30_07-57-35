@@ -72,8 +72,8 @@ namespace MaxWorlds.Arena
             return placed;
         }
 
-        /// <summary>Internal, not private (MV-1256): <see cref="MaxWorlds.Arena.ReefFloorDetail.PlaceGrates"/>
-        /// reuses this directly rather than re-deriving the same cover/gate/garrison/already-placed
+        /// <summary>Internal, not private (MV-1256): the Reef floor-detail pass
+        /// reused this directly rather than re-deriving the same cover/gate/garrison/already-placed
         /// clearance check a second time — the ticket's own "using the existing ReefHydroponics
         /// clearance helper or an equivalent".</summary>
         internal static bool ClearsEverything(

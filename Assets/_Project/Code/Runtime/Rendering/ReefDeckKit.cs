@@ -35,7 +35,8 @@ namespace MaxWorlds.Rendering
         public const float PlateMetres = 2f;
         /// <summary>The deck sits this far above the map's own floor slab (rule: overlays at least 0.01 m).</summary>
         public const float DeckY = 0.015f;
-        public const float WearY = 0.02f;
+        /// <summary>MV-1361: at least 0.01 m above the deck, so the wear mesh never z-fights it.</summary>
+        public const float WearY = DeckY + 0.01f;
         public const float PropBandMetres = 2.5f;
         public const float SiltWidthMetres = 1.5f;
         public const float WalkwayInsetMetres = 2.2f;
