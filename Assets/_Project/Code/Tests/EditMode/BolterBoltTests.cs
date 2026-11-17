@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
@@ -175,6 +176,41 @@ namespace MaxWorlds.Tests.EditMode
                 "7% of 200 should be 14 — on base commit 5159d43 (10% fraction) this resolved to 20");
             Assert.AreEqual(21f, BolterBolt.DamageFor(300f), 1e-4f,
                 "7% of 300 should be 21 — on base commit 5159d43 (10% fraction) this resolved to 30");
+        }
+
+        // ---------------------------------------------------------------- MV-1382: cover stops a bolt
+
+        [Test]
+        public void ABoltFiredAtMaxWithCoverBetween_DespawnsAtTheCoverFaceAndNeverDamagesMax_MV1382()
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var targetGo = new GameObject("MV-1382 test Max", typeof(CharacterController));
+            BolterBolt bolt = null;
+            try
+            {
+                wall.transform.position = new Vector3(0f, 1f, 5f);
+                wall.transform.localScale = new Vector3(4f, 3f, 0.6f);   // near face at z = 4.7
+                CoverLayer.Assign(wall);
+
+                var health = targetGo.AddComponent<PlayerHealth>();
+                health.Initialize();
+                targetGo.transform.position = new Vector3(0f, 0f, 10f);
+                Physics.SyncTransforms();
+
+                float healthBefore = health.Current;
+                bolt = BolterBolt.Fire(Vector3.zero, targetGo.transform, 14f, 20f, 0.35f);
+                for (int i = 0; i < 100 && bolt != null; i++) bolt.Tick(0.05f);
+
+                Assert.AreEqual(healthBefore, health.Current, 1e-4f, "a bolt passed through cover and hurt Max");
+                Assert.AreEqual(4.7f, bolt.ImpactPoint.z, 0.05f,
+                    "the bolt must despawn at the cover's near face, not carry on to Max at z=10");
+            }
+            finally
+            {
+                if (bolt != null) Object.DestroyImmediate(bolt.gameObject);
+                Object.DestroyImmediate(wall);
+                Object.DestroyImmediate(targetGo);
+            }
         }
     }
 }

@@ -1,9 +1,11 @@
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Factories;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Enemies
 {
@@ -47,6 +49,16 @@ namespace MaxWorlds.Enemies
         private float _hitRadius;
         private float _maxDistance;
         private float _traveled;
+
+        /// <summary>Damage a bolt deals a <see cref="DestructibleCover"/> piece it strikes (MV-1382) —
+        /// the same 14 a bolt deals Max at his authored 200 HP. Cover has no "max health" to take a
+        /// percentage of, so this is a flat figure.</summary>
+        public const float CoverDamage = 14f;
+
+        /// <summary>Where this bolt last ended its flight (MV-1382) — the Cover-layer hit point if
+        /// geometry stopped it, else its final position. A plain field so it stays readable after the
+        /// bolt's GameObject is destroyed.</summary>
+        public Vector3 ImpactPoint { get; private set; }
 
         /// <summary>Fire one bolt from <paramref name="origin"/> straight at <paramref name="target"/>'s
         /// position at THIS instant ("fired at Max's position at fire time") — never re-aimed, never
@@ -134,6 +146,21 @@ namespace MaxWorlds.Enemies
             Vector3 previous = transform.position;
             Vector3 next = Step(previous, _direction, _speed, dt);
             _traveled += Vector3.Distance(previous, next);
+
+            // MV-1382: a wall, fence, cover piece or shut gate stops a bolt exactly as it stops a
+            // HomingMissile (MV-364) -- same test, same Cover layer. Checked before the hit test so a
+            // bolt can never reach a target standing behind cover.
+            if (HomingSteering.BlockedByGeometry(previous, next, out RaycastHit coverHit))
+            {
+                transform.position = coverHit.point;
+                var cover = coverHit.collider != null ? coverHit.collider.GetComponentInParent<DestructibleCover>() : null;
+                if (cover != null && cover.IsAlive)
+                {
+                    cover.TakeDamage(new DamageInfo(CoverDamage, coverHit.point, _direction, Team.Enemy));
+                }
+                DestroySelf();
+                return;
+            }
 
             // MV-1173: swept across the whole step, not just its endpoint. The Bolter's own authored
             // numbers give an endpoint sample EXACTLY zero worst-case margin (lungeSpeed * Dt ==
@@ -237,6 +264,7 @@ namespace MaxWorlds.Enemies
         /// <c>Application.isPlaying</c> split <see cref="Strip"/> already uses for this exact reason.</summary>
         private void DestroySelf()
         {
+            ImpactPoint = transform.position;
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);
         }
