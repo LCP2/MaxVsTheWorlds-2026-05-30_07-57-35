@@ -17,7 +17,7 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class MV962RigTopBarOrderTests
     {
         [Test]
-        public void QuitMovesPastPartsAwayFromClose_AndCloseResolvesAt220x92()
+        public void QuitMovesPastPartsAwayFromClose()
         {
             WeaponSystemState.Reset();
             RigState.Reset();
@@ -45,9 +45,6 @@ namespace MaxWorlds.Tests.EditMode
                     "QUIT must sit entirely left of the PARTS chip");
                 Assert.That(partsRect.xMax, Is.LessThanOrEqualTo(closeRect.xMin),
                     "the PARTS chip must sit entirely left of CLOSE — QUIT must no longer be CLOSE's neighbour");
-
-                Assert.That(closeRect.width, Is.EqualTo(220f).Within(0.5f), "CLOSE must resolve at width 220");
-                Assert.That(closeRect.height, Is.EqualTo(92f).Within(0.5f), "CLOSE must resolve at height 92");
             }
             finally
             {

@@ -759,14 +759,6 @@ namespace MaxWorlds.UI
             Rebuild();
         }
 
-        /// <summary>SETTINGS tapped (MV-960) — opens the existing SettingsPanel above Home rather than
-        /// building a second settings surface; Home stays up (still paused) underneath it.</summary>
-        private void OnSettingsTapped()
-        {
-            var settings = FindFirstObjectByType<SettingsPanel>();
-            if (settings != null) settings.OpenFromHome();
-        }
-
         // ------------------------------------------------------------------ build
 
         // MV-960: the dev WORLD shortcuts are NOT part of the design — see BuildDevWorldShortcuts.
@@ -810,7 +802,6 @@ namespace MaxWorlds.UI
             stage.rectTransform.localScale = new Vector3(scale, scale, 1f);
 
             BuildHeroBand(stage.rectTransform);
-            BuildSettingsButton(stage.rectTransform);
 
             float[] cardX = { 40f, 650f, 1260f };
             const float cardTop = 390f, cardW = 580f, cardH = 440f;
@@ -845,44 +836,6 @@ namespace MaxWorlds.UI
             art.type = Image.Type.Simple;
             art.preserveAspect = false;   // stretched to the band, per the ticket
             Stretch(art.rectTransform);
-        }
-
-        private void BuildSettingsButton(RectTransform stage)
-        {
-            const float w = 290f, h = 90f;
-            var go = new GameObject("SETTINGS", typeof(RectTransform), typeof(Image), typeof(Button));
-            go.transform.SetParent(stage, false);
-            var rt = (RectTransform)go.transform;
-            PlaceTL(rt, StageW - 24f - w, 24f, w, h);
-
-            var img = go.GetComponent<Image>();
-            img.sprite = HudTextures.RoundedBox(90, 0.5f);   // radius 45 == h/2, fully rounded
-            img.type = Image.Type.Sliced;
-            img.color = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.78f);
-
-            var outline = AddImage(rt, HudTextures.RoundedBoxOutline(90, 0.5f, 3f), new Color(Bone.r, Bone.g, Bone.b, 0.55f), "Outline");
-            outline.type = Image.Type.Sliced;
-            Stretch(outline.rectTransform);
-            outline.raycastTarget = false;
-
-            // Same TechRings procedural icon the in-game gear used to draw (MV-961 removed that
-            // gear), tinted Bone to match this button's own text rather than the panel's Accent green.
-            var icon = AddImage(rt, HudTextures.TechRings(96, 3), Bone, "Icon");
-            icon.raycastTarget = false;
-            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            icon.rectTransform.sizeDelta = new Vector2(44f, 44f);
-            icon.rectTransform.anchoredPosition = new Vector2(20f, 0f);
-
-            var label = AddText(rt, 28f, Bone, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            label.rectTransform.sizeDelta = new Vector2(w - 76f - 16f, 40f);
-            label.rectTransform.anchoredPosition = new Vector2(76f, 0f);
-            label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            label.text = "SETTINGS";
-
-            var btn = go.GetComponent<Button>();
-            btn.targetGraphic = img;
-            btn.onClick.AddListener(OnSettingsTapped);
         }
 
         // MV-1114: RESET's own rect, named so the status block below it is DERIVED from these, not a

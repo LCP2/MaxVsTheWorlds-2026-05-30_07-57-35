@@ -72,7 +72,7 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- AC6: THE RIG top bar has no tray; the cell chip is dominant
 
         [Test]
-        public void TheRigTopBarHasNoSupercellTray_AndTheCellReadoutIsTheLargestTextInIt()
+        public void TheRigTopBarHasNoSupercellTray_AndOverCapReadsDistinctly()
         {
             WeaponSystemState.Reset();
             var go = new GameObject("WeaponsScreen");
@@ -90,17 +90,8 @@ namespace MaxWorlds.Tests.EditMode
                 var cellsText = cellsChip.GetComponentInChildren<Text>();
                 Assert.That(cellsText, Is.Not.Null, "the PARTS chip must carry a label");
 
-                float cellsSize = ResolvedFontSize(cellsText);
-                float loudestOther = 0f;
-                foreach (var text in screen.TopBar.GetComponentsInChildren<Text>(true))
-                {
-                    if (text == cellsText) continue;
-                    float size = text.resizeTextForBestFit ? ResolvedFontSize(text) : text.fontSize;
-                    loudestOther = Mathf.Max(loudestOther, size);
-                }
-
-                Assert.That(cellsSize, Is.GreaterThan(loudestOther),
-                    $"the cell readout ({cellsSize}) must be the largest text in the top bar (next loudest: {loudestOther}) — includes \"THE RIG\" at its fixed 38pt");
+                // MV-1390: the old 'cell readout is the largest text in the bar' assertion is retired —
+                // the PARTS chip is now one of four equal buttons sharing one font size.
 
                 // Change item 5: an over-cap balance must read as a deliberate bonus, not a bug — the
                 // chip's own resolved text colour must visibly change once a Supercell pushes it past

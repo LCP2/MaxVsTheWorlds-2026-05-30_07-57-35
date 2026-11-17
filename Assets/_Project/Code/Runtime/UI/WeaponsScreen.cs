@@ -2967,73 +2967,117 @@ namespace MaxWorlds.UI
             subtitle.fontStyle = FontStyle.Bold;
             subtitle.text = "MAX'S WORKBENCH";
 
-            // MV-962: right-to-left CLOSE, 24 gap, PARTS chip, 40 gap, QUIT TO MENU — QUIT used to sit
-            // directly beside CLOSE, so reaching for CLOSE (dismiss) risked tapping QUIT (abandons the
-            // run) instead. Moving QUIT past the PARTS chip puts real distance between them.
-            float cursor = -16f;
-            cursor = BuildCloseButton(bar, cursor) - 24f;
+            // MV-1390: right-to-left CLOSE, PARTS, SETTINGS, QUIT TO MENU — four buttons of ONE shared
+            // width/height/font size (QUIT stays furthest from CLOSE, MV-962). The width is the widest
+            // label at the shared font size plus TopBarButtonPad each side; if four of those do not fit
+            // beside the title (phone safe area), all four shrink equally (width, height and font).
+            float barWidth = (parent.rect.width >= 1000f ? parent.rect.width : RefW)   // unlaid-out canvas (batchmode) reports ~0: assume the reference width
+                 - 2f * ContentMargin;
+            const string worstPartsLabel = "999/999 PARTS";
+            string[] labels = { CloseLabel, worstPartsLabel, SettingsLabel, QuitLabel };
+            float widest = 0f;
+            foreach (var l in labels) widest = Mathf.Max(widest, MeasureLabelWidth(bar, l, TopBarButtonFont));
+            float natural = widest + 2f * TopBarButtonPad;
+            float available = barWidth * (1f - TopBarTitleFraction) - 16f - 3f * TopBarButtonGap;
+            float shrink = Mathf.Min(1f, available / (4f * natural));
+            _topBarButtonWidth = natural * shrink;
+            _topBarButtonHeight = TopBarButtonHeight * shrink;
+            _topBarButtonFont = Mathf.Max(10, Mathf.FloorToInt(TopBarButtonFont * shrink));
+            float step = _topBarButtonWidth + TopBarButtonGap;
 
-            // MV-519: cells are the only currency now — the SUPERCELLS tray this used to sit beside is
-            // gone (a Supercell grants its cells on pickup, never banked/cashed here), so the CELLS chip
-            // is amped up to be the dominant element in the bar: bigger box (DominantCellsChipWidth/
-            // Height, up from the old 190x52 shared BuildChip size) and a taller font cap
-            // (DominantCellsChipTextMaxSize, above the 38pt title) so it reads as the number every
-            // decision on the board is measured against, ahead of "THE RIG / MAX'S WORKBENCH".
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), DominantCellsChipWidth, CellsColor, out _cellsText,
-                height: DominantCellsChipHeight, textMaxSize: DominantCellsChipTextMaxSize);
+            float cursor = -16f;
+            BuildCloseButton(bar, cursor);
+            cursor -= step;
+
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out _cellsText,
+                height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
             cellsChip.name = "Parts Chip";
+            _cellsText.resizeTextForBestFit = false;   // fixed shared size: the width above already fits 999/999
+            _cellsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
+            _cellsText.rectTransform.offsetMin = new Vector2(TopBarButtonPad, -20f);
+            _cellsText.rectTransform.offsetMax = new Vector2(-TopBarButtonPad, 20f);
 
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
             _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
             _cellsChipButton.transition = Selectable.Transition.None;
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
 
-            // MV-443 defect 7, MV-445 defect 6: a real rounded pill (radius 25, matching BuildChip's own
-            // background corner) with a 2.5px colours.sec border — was a flat, borderless chip.
-            float cellsCornerFraction = Mathf.Clamp(25f / (Mathf.Min(DominantCellsChipWidth, DominantCellsChipHeight) * 0.5f), 0.05f, 0.5f);
-            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(32, cellsCornerFraction, 2.5f), CellsColor, "Parts Border");
-            Stretch(cellsBorder.rectTransform);
-            cellsBorder.type = Image.Type.Sliced;
-            cellsBorder.raycastTarget = false;
-            _cellsBorder = cellsBorder;
+            _cellsBorder = AddChipBorder(cellsChip, CellsColor, "Parts Border");
+            cursor -= step;
 
-            cursor = cursor - DominantCellsChipWidth - 40f;
+            var settingsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out var settingsText,
+                height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
+            settingsChip.name = "Settings Button";
+            settingsText.resizeTextForBestFit = false;
+            settingsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
+            settingsText.text = SettingsLabel;
+            var settingsBtn = settingsChip.Find("BG").gameObject.AddComponent<Button>();
+            settingsBtn.transition = Selectable.Transition.None;
+            settingsBtn.onClick.AddListener(OnSettingsTapped);
+            AddChipBorder(settingsChip, CellsColor, "Settings Border");
+            cursor -= step;
+
             BuildQuitButton(bar, cursor);
         }
 
-        /// <summary>MV-519 AC9: wide/tall enough that a typical cell count best-fits near its own
-        /// <see cref="DominantCellsChipTextMaxSize"/> — comfortably clearing the 38pt "THE RIG" title,
-        /// the bar's previous loudest element, so the chip reads as dominant by resolved size, not just
-        /// by construction.</summary>
-        private const float DominantCellsChipWidth = 280f;
-        private const float DominantCellsChipHeight = 76f;
-        private const float DominantCellsChipTextMaxSize = 48f;
+        private const string CloseLabel = "× CLOSE", SettingsLabel = "SETTINGS", QuitLabel = "QUIT TO MENU";
+        private const float TopBarButtonHeight = 76f;
+        private const float TopBarButtonFont = 24f;
+        private const float TopBarButtonPad = 24f;
+        private const float TopBarButtonGap = 20f;
+        private const float TopBarTitleFraction = 0.34f;   // the title accent's own anchor, above
+
+        private float _topBarButtonWidth, _topBarButtonHeight, _topBarButtonFont;
+
+        /// <summary>Resolved (not authored) width of <paramref name="text"/> in bold at <paramref name="fontSize"/>.</summary>
+        private static float MeasureLabelWidth(RectTransform under, string text, float fontSize)
+        {
+            var t = AddText(under, Mathf.RoundToInt(fontSize), Color.white, TextAnchor.MiddleCenter);
+            t.fontStyle = FontStyle.Bold;
+            t.text = text;
+            float w = t.preferredWidth;
+            UnityEngine.Object.DestroyImmediate(t.gameObject);
+            return w;
+        }
+
+        private static Image AddChipBorder(RectTransform chip, Color color, string name)
+        {
+            var sz = chip.sizeDelta;
+            float frac = Mathf.Clamp(25f / (Mathf.Min(sz.x, sz.y) * 0.5f), 0.05f, 0.5f);
+            var border = AddImage(chip, HudTextures.RoundedBoxOutline(32, frac, 2.5f), color, name);
+            Stretch(border.rectTransform);
+            border.type = Image.Type.Sliced;
+            border.raycastTarget = false;
+            return border;
+        }
+
+        private void OnSettingsTapped()
+        {
+            var settings = FindFirstObjectByType<SettingsPanel>();
+            if (settings != null) settings.OpenFromRig();
+        }
 
         /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
         private float BuildCloseButton(RectTransform bar, float rightEdge)
         {
-            const float w = 220f, h = 92f;
+            float w = _topBarButtonWidth, h = _topBarButtonHeight;
             var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), SupercellColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
             bg.rectTransform.sizeDelta = new Vector2(w, h);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
-            // MV-962: Lee was hitting QUIT (right beside CLOSE) when reaching for CLOSE. Moving QUIT away
-            // fixes the main cause; padding the raycast beyond the drawn pill (248x120 total) makes CLOSE
-            // itself an easier target without drawing a bigger shape.
+            // MV-962: padded raycast beyond the drawn pill keeps CLOSE an easy target.
             bg.raycastPadding = new Vector4(-14f, -14f, -14f, -14f);
 
             var button = bg.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(Close);
 
-            var label = AddText(bg.rectTransform, 32, PanelColor, TextAnchor.MiddleCenter);
+            var label = AddText(bg.rectTransform, Mathf.RoundToInt(_topBarButtonFont), PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            // MV-445 defect 6: was U+2715 (heavy multiplication X, a dingbat) — HudFont's LegacyRuntime.ttf
-            // has no coverage for it (same class of gap as the draft band's own ASCII-hyphen note), so it
-            // rendered as a dropped/missing glyph. U+00D7 (the plain Latin-1 multiplication sign) is.
-            label.text = "× CLOSE";
+            // MV-445 defect 6: U+00D7 (Latin-1 multiplication sign) — HudFont has no glyph for U+2715.
+            label.text = CloseLabel;
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 
@@ -3043,7 +3087,7 @@ namespace MaxWorlds.UI
         /// <summary>MV-257: abandons the run and returns to Home via <see cref="RunFlow.QuitToMenu"/>.</summary>
         private float BuildQuitButton(RectTransform bar, float rightEdge)
         {
-            const float w = 200f, h = 56f;
+            float w = _topBarButtonWidth, h = _topBarButtonHeight;
             var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), QuitColor, "Quit Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
@@ -3055,9 +3099,9 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(RunFlow.QuitToMenu);
 
-            var label = AddText(bg.rectTransform, 22, TextColor, TextAnchor.MiddleCenter);
+            var label = AddText(bg.rectTransform, Mathf.RoundToInt(_topBarButtonFont), TextColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            label.text = "QUIT TO MENU";
+            label.text = QuitLabel;
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 
@@ -3071,7 +3115,7 @@ namespace MaxWorlds.UI
         /// fixed 52px height) over a dark fill, not the lighter RowColor every other row uses.</summary>
         /// <summary><paramref name="height"/>/<paramref name="textMaxSize"/> default to the original
         /// 52px/24pt chip (MV-519 gives the CELLS chip its own larger override, see
-        /// <see cref="DominantCellsChipWidth"/>).</summary>
+        /// the shared top-bar button width (MV-1390)).</summary>
         private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
             out Text label, float height = 52f, float textMaxSize = 24f)
         {

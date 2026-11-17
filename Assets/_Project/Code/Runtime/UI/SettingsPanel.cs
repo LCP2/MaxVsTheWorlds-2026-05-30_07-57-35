@@ -1283,6 +1283,17 @@ namespace MaxWorlds.UI
             SetOpen(true);
         }
 
+        /// <summary>MV-1390: opens this panel ABOVE the RIG (WeaponsScreen canvas sorts at 210) from the
+        /// RIG top bar's SETTINGS button. Same presentation as <see cref="OpenFromHome"/>; the RIG already
+        /// parked <see cref="Time.timeScale"/> at 0, and <see cref="TimeScaleCapture.ClampForCapture"/>
+        /// would turn that 0 into 1 on close, un-pausing the RIG underneath — so the restore value is
+        /// pinned back to 0.</summary>
+        public void OpenFromRig()
+        {
+            OpenFromHome();
+            _prevTimeScale = 0f;
+        }
+
         private void SetOpen(bool open)
         {
             // Only touch the timescale on an actual transition — Build() calls this once with the
