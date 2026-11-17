@@ -288,6 +288,23 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
         }
 
+        /// <summary>MV-1384: the ONE per-area Supercell budget, shared by every automatic area drop — the
+        /// last-Bruiser grant, a destroyed shed's cache, and an elite's bonus. W4 area 1 paid 3 (last
+        /// Bruiser + shed cache + elite bonus), each guarded only by its own rule. Backed by
+        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>, so it also holds across deaths.
+        /// No live area context (a headless test scene) always allows.</summary>
+        private bool ClaimAreaSupercell()
+        {
+            int area = ResolveCurrentArea();
+            return area <= 0 || MaxWorlds.Arena.DeathRunState.TryGrantAreaPart(area);
+        }
+
+        /// <summary>MV-1384: an elite robot's bonus Supercell (MV-1278), within the area's one-Supercell budget.</summary>
+        public void PlaceEliteSupercell(Vector3 pos)
+        {
+            if (ClaimAreaSupercell()) SpawnDrop(PickupKind.Supercell, pos);
+        }
+
         /// <summary>MV-767/MV-1142: grants a Supercell every <see cref="WorldDefinition.SupercellCadenceAreas"/>
         /// areas on the played world's own row — World 1's row cadence is 1 (every area, as before);
         /// World 2+'s row cadence is 2 (every SECOND area — halving its contribution to that world's
@@ -429,7 +446,7 @@ namespace MaxWorlds.Pickups
         /// <see cref="PickupKind.Device"/> — a shed-free area has no shed to justify handing out an
         /// ability FAMILY unlock, which is what a Device grants. Only a destroyed shed
         /// (<see cref="OnFactoryDestroyed"/>) may do that.</summary>
-        public List<Pickup> PlacePartsCache(Vector3 pos) => SpawnCellCache(pos);
+        public List<Pickup> PlacePartsCache(Vector3 pos) => SpawnCellCache(pos, areaCapped: false);
 
         /// <summary>Places World 1's finale drop (MV-698) at <paramref name="pos"/> — the one
         /// <see cref="PickupKind.WeaponCore"/> <c>BossVictoryPayoff</c> requests when the world's final
@@ -497,7 +514,7 @@ namespace MaxWorlds.Pickups
             bool anyLocked = false;
             foreach (var _ in RigState.LockedCategoryIds()) { anyLocked = true; break; }
 
-            if (!anyLocked || !IsDeviceShedOrdinal()) SpawnCellCache(pos);
+            if (!anyLocked || !IsDeviceShedOrdinal()) SpawnCellCache(pos, areaCapped: true);
             else SpawnDrop(PickupKind.Device, pos);
 
             // MV-727/MV-1142: the FIRST Replicator destroyed in the Rack Module's own world (today,
@@ -522,10 +539,12 @@ namespace MaxWorlds.Pickups
         /// <summary>MV-972: returns every pickup it actually created — <see cref="MapRuntime.BuildProps"/>'s
         /// own map-authored <c>EntityKind.Pickup</c> case needs these to tag them with the area gate
         /// itself (the gate doesn't exist yet at that call time; see <see cref="SpawnDrop"/>'s own doc).</summary>
-        private List<Pickup> SpawnCellCache(Vector3 pos)
+        private List<Pickup> SpawnCellCache(Vector3 pos, bool areaCapped)
         {
             var created = new List<Pickup>(1 + ShedCellCacheAmount);
-            Pickup supercell = SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
+            // MV-1384: a destroyed shed's Supercell shares the area's one-Supercell budget (see
+            // ClaimAreaSupercell); the power-cell ring is untouched.
+            Pickup supercell = !areaCapped || ClaimAreaSupercell() ? SpawnDrop(PickupKind.Supercell, pos, DecorativeKind()) : null;
             if (supercell != null) created.Add(supercell);
             for (int i = 0; i < ShedCellCacheAmount; i++)
             {

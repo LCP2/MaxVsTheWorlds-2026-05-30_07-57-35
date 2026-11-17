@@ -5183,7 +5183,7 @@ namespace MaxWorlds.Enemies
             // (grantsDrops false) — a robot the player never fought must not pay out extra either.
             if (grantsDrops && IsElite)
                 MaxWorlds.Pickups.PickupDirector.EnsureInstalled()
-                    .PlacePickupAt(MaxWorlds.Pickups.PickupKind.Supercell, transform.position);
+                    .PlaceEliteSupercell(transform.position);   // MV-1384: counts against the area's one Supercell
             // MV-1321: the KEY elite's VaultKey drops on ANY kill path through Die — a genuine kill OR a
             // clean-up safety-net kill (grantsDrops false) — never gated on grantsDrops the way the
             // elite Supercell bonus above is: the ticket calls this out by name ("if it is removed
