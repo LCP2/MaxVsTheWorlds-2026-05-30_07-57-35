@@ -787,7 +787,11 @@ namespace MaxWorlds.Combat
             for (int i = 0; i < count; i++)
             {
                 if (_hits[i] == null) continue;
-                if (!(_hits[i].TryGetComponent<IDamageable>(out var d) && d is AreaGate) || !d.IsAlive) continue;
+                // MV-1379: a destructible cover piece is damageable by an un-latched beam too — MV-1070
+                // narrowed this to AreaGate only, which silently stopped UNDERTOW (the Reef's primary)
+                // from ever reaching DestructibleCover.TakeDamage (cover is Team.Neutral, never a seek
+                // target, never a gate), so the Reef's 69 hp-150 pieces could not be broken.
+                if (!(_hits[i].TryGetComponent<IDamageable>(out var d) && (d is AreaGate || d is MaxWorlds.Factories.DestructibleCover)) || !d.IsAlive) continue;
                 if (s_buffer.Contains(d)) continue;
 
                 // MV-1044: an AreaGate needs the same gate-aware hit test WaterBlaster.FireTick has

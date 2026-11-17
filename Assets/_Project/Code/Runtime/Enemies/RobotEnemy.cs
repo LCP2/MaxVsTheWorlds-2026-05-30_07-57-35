@@ -1219,6 +1219,14 @@ namespace MaxWorlds.Enemies
         /// <see cref="TickContactTouch"/>.</summary>
         private float _contactCooldownTimer;
 
+        // MV-1379: blocked-melee cover break-through state — see TickBlockedByDestructibleCover.
+        private const float CoverBreakStallSeconds = 1f;   // ticket: "has not decreased for 1.0 s"
+        private const float CoverBreakRange = 1.5f;        // ticket: "within 1.5 m of the piece"
+        private const float CoverBreakProgressEpsilon = 0.05f;
+        private float _coverBreakBestDist = float.MaxValue;
+        private float _coverBreakStallTimer;
+        private float _coverBreakHitTimer;
+
         /// <summary>True while this robot holds a slot in <see cref="LungeTokenPool"/> (MV-428) —
         /// only ever set for a Rusher/Blinker that is mid-Telegraph or mid-Lunge. Tracked per-instance
         /// so <see cref="Die"/>/<see cref="Despawn"/> can hand the token back even if death interrupts
@@ -3195,6 +3203,8 @@ namespace MaxWorlds.Enemies
 
             RetargetIfNeeded();
 
+            TickBlockedByDestructibleCover(dt);
+
             // The destination is MEMORY, not Max. While it can see him the two are the same thing;
             // the moment it can't, this is where cover starts paying — it commits to a stale spot.
             Vector3 goal = _sight.Destination(target.position);
@@ -3543,6 +3553,47 @@ namespace MaxWorlds.Enemies
         private static bool NeedsAttackToken(EnemyKind kind) =>
             kind == EnemyKind.Rusher || kind == EnemyKind.Blinker;
 
+        /// <summary>MV-1379: a melee (grid-routed touch) robot chasing Max whose path is blocked by a
+        /// destructible cover piece hits that piece with its normal attack until it breaks, then resumes
+        /// the chase. Applies ONLY when all three hold: the piece intersects the straight segment
+        /// robot -&gt; Max; the robot is within <see cref="CoverBreakRange"/> of the piece; and the
+        /// robot's distance to Max has not decreased for <see cref="CoverBreakStallSeconds"/>. Never
+        /// targets cover in any other case. Called from both <see cref="TickChase"/> and
+        /// <see cref="TickSearch"/> — a piece that breaks Max's sight sends the robot to Search, and the
+        /// hit must keep landing there; once the piece is gone <see cref="TickSearch"/>'s own sight
+        /// check returns it to Chase.</summary>
+        private void TickBlockedByDestructibleCover(float dt)
+        {
+            if (!UsesGridRoute(Kind) || target == null) return;
+
+            _coverBreakHitTimer -= dt;
+
+            Vector3 to = target.position - transform.position; to.y = 0f;
+            float dist = to.magnitude;
+            if (dist < _coverBreakBestDist - CoverBreakProgressEpsilon)
+            {
+                _coverBreakBestDist = dist;
+                _coverBreakStallTimer = 0f;
+                return;
+            }
+
+            _coverBreakStallTimer += dt;
+            if (_coverBreakStallTimer < CoverBreakStallSeconds || _coverBreakHitTimer > 0f) return;
+
+            DestructibleCover piece = DestructibleCover.FindBlocking(transform.position, target.position, CoverBreakRange);
+            if (piece == null) return;
+
+            _coverBreakHitTimer = EffectiveContactCooldown;
+            piece.TakeDamage(new DamageInfo(touchDamage, transform.position, to.sqrMagnitude > 1e-6f ? to.normalized : transform.forward, _team));
+
+            if (!piece.IsAlive)
+            {
+                // The way is open: forget the stall so the chase gets a fresh 1 s of grace.
+                _coverBreakBestDist = float.MaxValue;
+                _coverBreakStallTimer = 0f;
+            }
+        }
+
         /// <summary>Bruiser/Heavy/Brute's whole attack (MV-428 Change 1): no wind-up, no commit — just
         /// <see cref="touchDamage"/> on <see cref="EffectiveContactCooldown"/> while standing within
         /// <see cref="contactRadius"/> of Max, ticked every Chase frame regardless of range so the
@@ -3576,6 +3627,8 @@ namespace MaxWorlds.Enemies
         private void TickSearch(float dt)
         {
             if (target == null) { AcquireTarget(); return; }
+
+            TickBlockedByDestructibleCover(dt);
 
             if (_sight.HasSight)
             {

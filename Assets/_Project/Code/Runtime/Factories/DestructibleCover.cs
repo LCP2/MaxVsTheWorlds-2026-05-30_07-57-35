@@ -69,6 +69,40 @@ namespace MaxWorlds.Factories
         /// building.</summary>
         public static void ResetRegistry() => Registered.Clear();
 
+        /// <summary>MV-1379: the live, still-blocking destructible piece that stands on the straight
+        /// planar segment <paramref name="from"/> -&gt; <paramref name="to"/> AND within
+        /// <paramref name="withinMeters"/> (planar) of <paramref name="from"/> — the two geometric halves
+        /// of the "blocked melee robot breaks through" rule (<see cref="MaxWorlds.Enemies.RobotEnemy"/>
+        /// adds the third, stalled-for-1 s, half). Nearest such piece wins. Null when none.</summary>
+        public static DestructibleCover FindBlocking(Vector3 from, Vector3 to, float withinMeters)
+        {
+            DestructibleCover best = null;
+            float bestSqr = float.MaxValue;
+
+            foreach (DestructibleCover c in Registered)
+            {
+                if (c == null || !c.IsAlive || c.IsBroken || c._collider == null || !c._collider.enabled) continue;
+
+                Bounds b = c._collider.bounds;
+                Vector3 flatFrom = new Vector3(from.x, b.center.y, from.z);
+                Vector3 flatTo = new Vector3(to.x, b.center.y, to.z);
+
+                Vector3 near = b.ClosestPoint(flatFrom);
+                float sqr = (near - flatFrom).sqrMagnitude;
+                if (sqr > withinMeters * withinMeters || sqr >= bestSqr) continue;
+
+                Vector3 seg = flatTo - flatFrom;
+                float len = seg.magnitude;
+                if (len < 1e-4f) continue;
+                if (!b.IntersectRay(new Ray(flatFrom, seg / len), out float hitDist) || hitDist > len) continue;
+
+                best = c;
+                bestSqr = sqr;
+            }
+
+            return best;
+        }
+
         /// <summary>The stable ids of every registered destructible cover piece already broken this run
         /// (MV-1298) — what a mid-run checkpoint capture persists so a resume can re-apply the exact
         /// same broken set onto the fresh instances a level rebuild creates. Same shape as
