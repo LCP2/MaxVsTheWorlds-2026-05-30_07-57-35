@@ -123,6 +123,7 @@ namespace MaxWorlds.Rendering
         public static readonly Color ReefWorkLampAmber = HexColor(0xFFB35A);
         public static readonly Color ReefBrass = HexColor(0xA07A3A);
         public static readonly Color ReefCopper = HexColor(0xB06A34);
+        public static readonly Color ReefClamRampAmber = HexColor(0xFFB35A);   // MV-1378: Hatchery Clam exit ramp
         public static readonly Color ReefMetalDark = HexColor(0x0C1622);
 
         // MV-1019: a bare cargo crate used to read SurfaceKind.Prop off the general biome sweep
@@ -217,6 +218,8 @@ namespace MaxWorlds.Rendering
         public static Material M_Circuit_Purple => ReefMaterial("M_Circuit_Purple", ReefCircuitPurple, emissive: true);
         public static Material M_BioGlow => ReefMaterial("M_BioGlow", ReefBioGlow, emissive: true);
         public static Material M_Hazard => ReefMaterial("M_Hazard", ReefHazard, emissive: true);
+        public static Material M_ClamRampAmber => ReefMaterial("M_ClamRampAmber", ReefClamRampAmber, emissive: true);
+        public static Material M_ClamRampGlowDim => ReefMaterial("M_ClamRampGlowDim", ReefCircuitPurple * 0.22f, emissive: false);
         public static Material M_MetalDark => ReefMaterial("M_MetalDark", ReefMetalDark);
         public static Material M_CrateBody => ReefMaterial("M_CrateBody", ReefCrateBody);
         public static Material M_CrateCap => ReefMaterial("M_CrateCap", ReefCrateCap);

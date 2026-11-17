@@ -79,6 +79,15 @@ namespace MaxWorlds.Factories
         private Transform _clamLidHinge;
         private Renderer _clamGlow;   // MV-1363: teal glow strip, lit only while open
         private Image _clamBandFill;
+        // MV-1378: the clam's bar always draws over robot (0) and Max (10) nameplates, and steps aside
+        // (screen-horizontally, away from Max) while Max is inside ClamBarYieldRadius so the two never overlap.
+        private const int ClamBarSortingOrder = 20;
+        private const float ClamBarYieldRadius = 4f;
+        private const float ClamBarSideShift = 2.4f;   // metres; > clam half-bar 0.9 + Max's half-bar 1.05
+        private Vector3 _barBaseLocalPos;
+        private Transform _maxTransform;
+        private FactoryDoorway _clamDoor;
+        private bool _clamRampDressed;
         private Renderer _wreckPlate; // MV-1363: the one renderer left on after a clam dies
 
         // --- Mobile shed (MV-548, shed roadmap stage 3) — levitate, then pursue Max while still
@@ -248,7 +257,51 @@ namespace MaxWorlds.Factories
             ReskinClamBody();
             BuildClamLid();
             BuildClamPhaseBand();
+            // MV-1378: the bar (built earlier, in Build) and the phase band both draw over every nameplate.
+            if (_barPivot != null)
+                foreach (var c in _barPivot.GetComponentsInChildren<Canvas>(true))
+                {
+                    c.overrideSorting = true;
+                    c.sortingOrder = ClamBarSortingOrder;
+                }
             ApplyClamPhaseLook();
+        }
+
+        /// <summary>MV-1378: the doorway is installed by the map build, not by this class, so it is looked up
+        /// lazily on the first tick and dressed once (amber ramp, hazard stripes, magenta glow strip).</summary>
+        private void DressClamRampOnce()
+        {
+            if (_clamRampDressed) return;
+            _clamDoor = FactoryDoorway.DoorFor(this);
+            if (_clamDoor == null) return;
+            _clamRampDressed = true;
+            _clamDoor.DressAsClamRamp();
+            _clamDoor.SetClamRampOpen(_clamOpen);
+        }
+
+        /// <summary>MV-1378: the sorting order the clam's bar canvases draw at (test seam).</summary>
+        public int ClamBarSortOrder => _barCanvas != null ? _barCanvas.GetComponent<Canvas>().sortingOrder : 0;
+
+        /// <summary>MV-1378: the bar's own RectTransform, for resolved-screen-rect assertions.</summary>
+        public RectTransform ClamBarRect => _barCanvas;
+
+        /// <summary>MV-1378: whichever side of the clam (screen-horizontal) the bar should sit on given where
+        /// Max is — 0 while Max is further than <see cref="ClamBarYieldRadius"/>, else the sign pointing AWAY
+        /// from Max along the camera's right axis (+1 if Max is dead-centre).</summary>
+        private float ClamBarSide()
+        {
+            if (_camera == null) return 0f;
+            if (_maxTransform == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return 0f;
+                _maxTransform = p.transform;
+            }
+            Vector3 d = _maxTransform.position - transform.position;
+            d.y = 0f;
+            if (d.sqrMagnitude > ClamBarYieldRadius * ClamBarYieldRadius) return 0f;
+            float along = Vector3.Dot(d, _camera.transform.right);
+            return along > 0.01f ? -1f : 1f;
         }
 
         /// <summary>Advances the open/shut cycle (MV-1295) — public and dt-parameterized, same
@@ -260,6 +313,7 @@ namespace MaxWorlds.Factories
         public void TickClamPhase(float dt)
         {
             if (!_isHatcheryClam || !IsAlive) return;
+            DressClamRampOnce();
 
             _clamPhaseElapsed += dt;
             float cycle = ClamOpenSeconds + ClamShutSeconds;
@@ -287,6 +341,7 @@ namespace MaxWorlds.Factories
                 _clamLidHinge.localRotation = Quaternion.Euler(_clamOpen ? -ClamLidOpenAngle : 0f, 0f, 0f);
 
             if (_clamGlow != null) _clamGlow.enabled = _clamOpen;
+            if (_clamDoor != null) _clamDoor.SetClamRampOpen(_clamOpen);
             coreColor = _clamOpen ? WorldMaterials.ReefCircuitPurple : WorldMaterials.ReefMetalDark;
             if (_clamBandFill != null)
                 _clamBandFill.color = _clamOpen ? WorldMaterials.ReefCircuitCyan : WorldMaterials.ReefHazard;
@@ -950,6 +1005,13 @@ namespace MaxWorlds.Factories
                 // Billboard the health bar toward the fixed camera.
                 _barPivot.rotation = Quaternion.LookRotation(
                     _barPivot.position - _camera.transform.position, Vector3.up);
+                if (_isHatcheryClam)
+                {
+                    // MV-1378: step aside from Max (set absolute each frame, so it can never drift).
+                    _barPivot.localPosition = _barBaseLocalPos;
+                    float side = ClamBarSide();
+                    if (side != 0f) _barPivot.position += _camera.transform.right * (side * ClamBarSideShift);
+                }
             }
             PulseCore();
         }
@@ -990,6 +1052,7 @@ namespace MaxWorlds.Factories
             _barPivot.localScale = WorldBar.Unscale(body);
             _barPivot.localPosition = new Vector3(
                 0f, WorldBar.LocalOffsetY(BarHeightAboveCentre, body.y), 0f);
+            _barBaseLocalPos = _barPivot.localPosition;
 
             var canvasGo = new GameObject("Canvas", typeof(Canvas));
             var canvas = canvasGo.GetComponent<Canvas>();

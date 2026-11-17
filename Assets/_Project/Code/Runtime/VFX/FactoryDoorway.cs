@@ -545,6 +545,49 @@ namespace MaxWorlds.VFX
                 r.enabled = false;
         }
 
+        // --- MV-1378: Hatchery Clam exit ramp ---------------------------------------------------------
+        private Renderer _clamRampGlow;
+
+        /// <summary>MV-1378: repaints this door's ramp as the Hatchery Clam's — amber #FFB35A with near-black
+        /// hazard stripes across it and a magenta #FF5FA8 glow strip down its length. Generated meshes only;
+        /// idempotent. The glow is lit/dimmed by <see cref="SetClamRampOpen"/>.</summary>
+        public void DressAsClamRamp()
+        {
+            if (_ramp == null || _clamRampGlow != null) return;
+            var rr = _ramp.GetComponent<MeshRenderer>();
+            Material amber = WorldMaterials.M_ClamRampAmber;
+            if (rr != null && amber != null) rr.sharedMaterial = amber;
+
+            float length = Mathf.Sqrt(RampRun * RampRun + SillHeight * SillHeight);
+            float top = RampThickness * 0.5f;
+            float width = _rampHalfWidth * 2f;
+            const float stripeLen = 0.2f, pitch = 0.5f;
+            for (float z = -length * 0.5f + 0.25f; z < length * 0.5f - 0.1f; z += pitch)
+                ClamRampPart("RampStripe", WorldMaterials.M_MetalDark,
+                    new Vector3(width * 0.96f, 0.016f, stripeLen), new Vector3(0f, top + 0.008f, z));
+            _clamRampGlow = ClamRampPart("RampGlow", WorldMaterials.M_Circuit_Purple,
+                new Vector3(0.16f, 0.03f, length * 0.92f), new Vector3(0f, top + 0.03f, 0f));
+        }
+
+        /// <summary>MV-1378: bright magenta while the clam is open, dim while it is shut.</summary>
+        public void SetClamRampOpen(bool open)
+        {
+            if (_clamRampGlow == null) return;
+            Material m = open ? WorldMaterials.M_Circuit_Purple : WorldMaterials.M_ClamRampGlowDim;
+            if (m != null) _clamRampGlow.sharedMaterial = m;
+        }
+
+        private Renderer ClamRampPart(string partName, Material mat, Vector3 size, Vector3 localPos)
+        {
+            var go = new GameObject(partName);
+            go.transform.SetParent(_ramp, false);
+            go.transform.localPosition = localPos;
+            go.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, Mathf.Min(0.01f, size.y * 0.4f));
+            var r = go.AddComponent<MeshRenderer>();
+            if (mat != null) r.sharedMaterial = mat;
+            return r;
+        }
+
         private static void Paint(GameObject go, SurfaceKind kind)
         {
             var r = go.GetComponent<MeshRenderer>();
