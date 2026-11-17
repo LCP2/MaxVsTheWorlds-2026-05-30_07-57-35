@@ -600,6 +600,11 @@ namespace MaxWorlds.VFX
         private Transform _armL, _armR;
         private Transform _handL, _handR;
         private Transform _head;
+        private Vector3 _headRestLocalPos;
+        /// <summary>MV-1386: the neck point in Head-local space (matches MaxBody's ChinUpPivot). The Head
+        /// pivot sits at the body root (feet level), so a pitch about its origin swings the skull on a
+        /// 1.47 m lever; the wave's head pitch must rotate about this point instead.</summary>
+        private static readonly Vector3 HeadNeckLocal = new Vector3(0f, 1.474f, 0f);
         private readonly Transform[] _hips = new Transform[2];
 
         /// <summary>MV-851: one knee pivot per leg, child of the matching <see cref="_hips"/> entry —
@@ -973,6 +978,7 @@ namespace MaxWorlds.VFX
             // pose — nothing ever moved this before, so there is nothing to re-seat it against.
             _head = body.Head;
             _head.SetParent(_torso, worldPositionStays: true);
+            _headRestLocalPos = _head.localPosition;   // MV-1386: the neck-fixed pitch offsets from this
 
             // MV-854: the 31 flowing locks, built once here (like everything else in this method) and
             // driven every LateUpdate from TickHair below. MV-1161: rooted under FaceTilt rather than
@@ -1245,8 +1251,15 @@ namespace MaxWorlds.VFX
             if (_head != null)
                 // MV-1162: step 2/6 of the idle wave — the further chin-up and its own return — as an
                 // additive local pitch on top of the existing yaw-only head-lag (0 outside a wave).
-                _head.localRotation = Quaternion.Euler(WaveHeadPitch(),
+            {
+                Quaternion rot = Quaternion.Euler(WaveHeadPitch(),
                     Mathf.DeltaAngle(facingYaw, _laggedFacingYaw) + _headStrideYaw, 0f);
+                _head.localRotation = rot;
+                // MV-1386: keep the neck point fixed under the rotation (zero offset for a pure yaw,
+                // since the neck lies on the yaw axis, so outside a wave the head is unchanged).
+                Vector3 neck = Vector3.Scale(_head.localScale, HeadNeckLocal);
+                _head.localPosition = _headRestLocalPos + (neck - rot * neck);
+            }
         }
 
         /// <summary>
