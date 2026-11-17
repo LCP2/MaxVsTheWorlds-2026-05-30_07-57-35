@@ -1623,8 +1623,17 @@ namespace MaxWorlds.Rendering
                         ? new Vector3(width, rowHeight * 0.92f, depth * 0.9f)
                         : new Vector3(depth * 0.9f, rowHeight * 0.92f, width);
 
-                    Material mat = variant % 3 == 0 ? WorldMaterials.M_CrateCap : WorldMaterials.M_CrateBody;
+                    // MV-1381: the pale M_CrateBody columns read as grey boxes - dark hull metal now, with a
+                    // brass band round each so the stack still reads as separate containers.
+                    bool cap = variant % 3 == 0;
+                    Material mat = cap ? WorldMaterials.M_CrateCap : WorldMaterials.M_HullPlate;
                     MeshBox(root.transform, $"Container {row}-{i}", pos, boxSize, mat);
+                    if (!cap)
+                    {
+                        Vector3 bandSize = boxSize + new Vector3(0.04f, 0f, 0.04f);
+                        bandSize.y = boxSize.y * 0.1f;
+                        MeshBox(root.transform, $"Container Band {row}-{i}", pos, bandSize, WorldMaterials.M_BrassRim);
+                    }
                     variant++;
                 }
             }

@@ -363,9 +363,9 @@ namespace MaxWorlds.Factories
             // MV-1363: generated bevelled meshes only (no Unity Cube) in the Reef kit - dark hull-metal shell,
             // a brass rim proud of it, and a teal glow strip under the lip that shows while the clam is open.
             var lid = NewClamPart("ClamLid", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.08f),
-                WorldMaterials.M_MetalDark, new Vector3(0f, 0f, 0.5f), new Vector3(1f, 0.16f, 1f));
+                WorldMaterials.M_HullPlate, new Vector3(0f, 0f, 0.5f), new Vector3(1f, 0.16f, 1f));
             NewClamPart("ClamRim", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.03f),
-                WorldMaterials.M_Brass, new Vector3(0f, -0.07f, 0.5f), new Vector3(1.03f, 0.04f, 1.03f));
+                WorldMaterials.M_BrassRim, new Vector3(0f, -0.07f, 0.5f), new Vector3(1.03f, 0.04f, 1.03f));
             _clamGlow = NewClamPart("ClamGlow", hinge, CharacterMeshes.Bevelled(Vector3.one, 0.03f),
                 WorldMaterials.M_Circuit_Cyan, new Vector3(0f, -0.1f, 0.5f), new Vector3(0.9f, 0.03f, 0.9f));
             _clamGlow.enabled = _clamOpen;
@@ -384,6 +384,10 @@ namespace MaxWorlds.Factories
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var r = go.AddComponent<MeshRenderer>();
             if (mat != null) r.sharedMaterial = mat;
+            // MV-1381: CharacterSkinDirector's one-shot sweep re-skins EVERY renderer under a MowerHutch as
+            // painted-steel grey (Structure) - the real reason the clam read as a pale box. SelfDrivenTint is
+            // its documented opt-out ("whoever drives a block owns it").
+            go.AddComponent<SelfDrivenTint>();
             return r;
         }
 
@@ -396,10 +400,39 @@ namespace MaxWorlds.Factories
             var rend = GetComponent<Renderer>();
             if (rend != null)
             {
-                Material mat = WorldMaterials.M_MetalDark;
+                Material mat = WorldMaterials.M_HullPlate;
                 if (mat != null) rend.sharedMaterial = mat;
             }
+            // MV-1381: dark hull metal (#2A3A44) - the per-renderer tint must agree with the material, so the
+            // body never reads pale whichever of the two the platform honours.
+            bodyColor = WorldMaterials.ReefHullPlate;
+            if (GetComponent<SelfDrivenTint>() == null) gameObject.AddComponent<SelfDrivenTint>();
             TintBody();
+            BuildClamBand();
+        }
+
+        /// <summary>MV-1381: a brass band round the body's middle with a row of rivets on each face.
+        /// Children inherit the body's (w,h,d) scale, so the rivets cancel it to stay round.</summary>
+        private void BuildClamBand()
+        {
+            NewClamPart("ClamBand", transform, CharacterMeshes.Bevelled(Vector3.one, 0.03f),
+                WorldMaterials.M_BrassRim, new Vector3(0f, -0.1f, 0f), new Vector3(1.03f, 0.1f, 1.03f));
+            Vector3 lossy = transform.lossyScale;
+            if (Mathf.Abs(lossy.x) < 1e-4f || Mathf.Abs(lossy.y) < 1e-4f || Mathf.Abs(lossy.z) < 1e-4f) return;
+            Mesh rivet = CharacterMeshes.Sphere(8);
+            const float rivetDiameter = 0.08f;
+            for (int face = 0; face < 4; face++)
+            {
+                Quaternion q = Quaternion.Euler(0f, face * 90f, 0f);
+                for (int i = 0; i < 5; i++)
+                {
+                    float u = (i - 2) * 0.2f;
+                    Vector3 local = q * new Vector3(u, -0.1f, 0.5f + 0.03f);
+                    NewClamPart("ClamRivet", transform, rivet, WorldMaterials.M_BrassRim, local,
+                        new Vector3(rivetDiameter / Mathf.Abs(lossy.x), rivetDiameter / Mathf.Abs(lossy.y),
+                            rivetDiameter / Mathf.Abs(lossy.z)));
+                }
+            }
         }
 
         /// <summary>MV-1363: a small dark scorched plate left where a destroyed clam stood. World 2.4 m x 2.4 m,

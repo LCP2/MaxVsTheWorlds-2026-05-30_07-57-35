@@ -221,6 +221,12 @@ namespace MaxWorlds.Rendering
         public static Material M_ClamRampAmber => ReefMaterial("M_ClamRampAmber", ReefClamRampAmber, emissive: true);
         public static Material M_ClamRampGlowDim => ReefMaterial("M_ClamRampGlowDim", ReefCircuitPurple * 0.22f, emissive: false);
         public static Material M_MetalDark => ReefMaterial("M_MetalDark", ReefMetalDark);
+        // MV-1381: dark wet hull metal + brass rim for the Hatchery Clam and the cargo-hold container
+        // columns (M_CrateBody's pale #99A6BF read as a plain grey box against the dark deck).
+        public static readonly Color ReefHullPlate = HexColor(0x2A3A44);
+        public static readonly Color ReefBrassRim = HexColor(0xB08D57);
+        public static Material M_HullPlate => ReefMaterial("M_HullPlate", ReefHullPlate);
+        public static Material M_BrassRim => ReefMaterial("M_BrassRim", ReefBrassRim);
         public static Material M_CrateBody => ReefMaterial("M_CrateBody", ReefCrateBody);
         public static Material M_CrateCap => ReefMaterial("M_CrateCap", ReefCrateCap);
 
