@@ -333,6 +333,9 @@ namespace MaxWorlds.VFX
         /// (MV-1278) — same fixed-tint, Annulus-texture idiom as <see cref="CreateRing"/>, just pale
         /// gold and drawn twice (outer/inner, by <paramref name="lift"/>) for the "double ring" the
         /// design image shows.</summary>
+        /// <summary>MV-1380: builds one elite ring exactly as production does, for a Tier 2 colour read.</summary>
+        public GroundRing BuildEliteRingForTests() => CreateEliteRing(GroundAnchorTuning.EliteRingOuterLift);
+
         private GroundRing CreateEliteRing(float lift)
         {
             Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Annulus(), GroundAnchorTuning.EliteRing);

@@ -57,6 +57,9 @@ namespace MaxWorlds.Audio
             VentFire,
             HelmsmanLensSweep,
             ViewportRising,
+
+            // MV-1380: a fully deflected hit (Shielded plate or Projector dome) - appended, never inserted.
+            ShieldBlocked,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -106,6 +109,7 @@ namespace MaxWorlds.Audio
             { Cue.VentFire, "Vent fire" },
             { Cue.HelmsmanLensSweep, "Helmsman lens sweep" },
             { Cue.ViewportRising, "Viewport rising" },
+            { Cue.ShieldBlocked, "Blocked hit" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -150,6 +154,7 @@ namespace MaxWorlds.Audio
             { Cue.VentFire, 10 },
             { Cue.HelmsmanLensSweep, 6 },
             { Cue.ViewportRising, 4 },
+            { Cue.ShieldBlocked, 8 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -422,6 +427,12 @@ namespace MaxWorlds.Audio
             [Cue.ViewportRising] = new[]
             {
                 P(SfxWaveform.Square, freq: 70f, slide: 50f, attack: 0.1f, sustain: 0.15f, decay: 0.15f, lowPass: 900f, duty: 0.3f, volume: 0.55f),
+            },
+
+            // MV-1380: short metallic 'tink' - a hit that did no damage.
+            [Cue.ShieldBlocked] = new[]
+            {
+                P(SfxWaveform.Square, freq: 1900f, slide: -700f, attack: 0.001f, sustain: 0.01f, decay: 0.07f, duty: 0.25f, lowPass: 5000f, volume: 0.5f),
             },
         };
 

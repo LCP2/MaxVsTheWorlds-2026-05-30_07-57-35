@@ -91,6 +91,10 @@ namespace MaxWorlds.VFX
 
         public bool Visible => gameObject.activeSelf;
 
+        /// <summary>MV-1380: the ring's resolved material tint (a fixed-tint ring), Tier 2.</summary>
+        public Color ResolvedTint => _renderer != null && _renderer.sharedMaterial != null
+            ? _renderer.sharedMaterial.GetColor(BaseColorId) : Color.clear;
+
         /// <summary>Place and tint the ring. <paramref name="radius"/> is in world units.</summary>
         public void Show(Vector3 groundPos, float radius, Color color)
         {

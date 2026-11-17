@@ -77,7 +77,7 @@ namespace MaxWorlds.VFX
         /// ELITE tag (<see cref="MaxWorlds.UI.WorldHealthBar"/>). Deliberately clear of every reserved
         /// ground-layer colour per the design image: red/amber (the danger telegraph), cyan (a
         /// Replicator-relay robot's own status ring, MV-834), green (a captured ally).</summary>
-        public static readonly Color EliteRing = new Color(0.90f, 0.77f, 0.35f, 0.9f);
+        public static readonly Color EliteRing = new Color(0.898f, 0.224f, 0.208f, 0.9f); // MV-1380: red #E53935 (was pale gold)
 
         // --- Size --------------------------------------------------------------------------------
 

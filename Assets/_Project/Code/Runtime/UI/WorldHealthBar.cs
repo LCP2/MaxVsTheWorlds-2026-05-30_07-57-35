@@ -78,7 +78,8 @@ namespace MaxWorlds.UI
 
         // MV-1278: the ELITE tag — pale gold, matching the elite ground ring's own tint
         // (GroundAnchorTuning.EliteRingColor).
-        private static readonly Color EliteMarkerColor = new Color(0.90f, 0.77f, 0.35f, 0.95f);
+        // MV-1380: red #E53935 (was pale gold) - an elite reads as dangerous at a glance.
+        private static readonly Color EliteMarkerColor = new Color(0.898f, 0.224f, 0.208f, 0.95f);
 
         /// <summary>MV-991: the shield-% readout above Max's own name label — big enough (double
         /// <see cref="LabelFontSize"/>) that his eyes catch it without hunting the corner HUD button
@@ -401,14 +402,38 @@ namespace MaxWorlds.UI
         /// track Team, which has no dedicated "just got captured" hook the way HELD/ALLY does). The two
         /// markers sharing this slot (replicator lure / elite) can in principle both want to show on the
         /// same World 2 robot at once — a known, accepted overlap this tight slice does not resolve.</summary>
-        public void SetEliteMarker(bool show, bool carriesKey = false)
+        public void SetEliteMarker(bool show, bool carriesKey = false, string affixLabel = null)
         {
             if (_eliteMarker == null) return;
+            // MV-1380: an elite always shows its bar (a fully-deflecting Shielded elite never takes
+            // damage, so the damage trigger alone left it with no bar at all).
+            _eliteAlwaysShow = show;
             // MV-1321: the KEY elite's nameplate reads "ELITE  KEY" instead of the plain tag — same
             // slot/shape, just a different string, re-evaluated every call exactly like the plain tag.
-            _eliteMarker.text = carriesKey ? "ELITE  KEY" : "ELITE";
+            string text = carriesKey ? "ELITE  KEY" : "ELITE";
+            // MV-1380: affix on the plate, ASCII only (MV-600), e.g. "ELITE - SHIELDED".
+            if (!string.IsNullOrEmpty(affixLabel)) text += " - " + affixLabel;
+            if (_eliteMarker.text != text) _eliteMarker.text = text;
             _eliteMarker.gameObject.SetActive(show);
         }
+
+        private bool _eliteAlwaysShow;
+
+        /// <summary>MV-1380: the elite nameplate tag's resolved text (Tier 2).</summary>
+        public string EliteMarkerText => _eliteMarker != null ? _eliteMarker.text : null;
+
+        /// <summary>MV-1380: whether the elite tag is active on the plate (Tier 2).</summary>
+        public bool EliteMarkerActive => _eliteMarker != null && _eliteMarker.gameObject.activeSelf;
+
+        /// <summary>MV-1380: the elite tag's resolved colour (Tier 2).</summary>
+        public Color EliteMarkerResolvedColor => _eliteMarker != null ? _eliteMarker.color : Color.clear;
+
+        /// <summary>MV-1380: whether the bar strip itself (outline/track/fill) is active right now,
+        /// after the last Refresh (Tier 2).</summary>
+        public bool BarStripActive => _barVisuals != null && _barVisuals.gameObject.activeSelf;
+
+        /// <summary>MV-1380: run one visibility/refresh pass now (a test has no LateUpdate).</summary>
+        public void RefreshForTests() { SyncToBody(); Refresh(); }
 
         /// <summary>MV-1089: true once this robot's TRAP conversion has completed — see
         /// <see cref="SetTrapMarker"/>'s own doc comment for where it's set. Read by <see cref="Refresh"/>
@@ -782,7 +807,7 @@ namespace MaxWorlds.UI
         /// <summary>MV-1089: a captured robot (<see cref="_capturedAlwaysShow"/>) is hit-live forever —
         /// it must always show its own plate per the ticket's "permanently", never folded into a
         /// same-name group leader's "NAME x N" the moment its own fade-out tail starts.</summary>
-        private bool IsHitLive => _capturedAlwaysShow || _secondsSinceTrigger <= TriggerHoldSeconds;
+        private bool IsHitLive => _capturedAlwaysShow || _eliteAlwaysShow || _secondsSinceTrigger <= TriggerHoldSeconds;
 
         private static int Find(List<int> parent, int i)
         {
@@ -1021,7 +1046,7 @@ namespace MaxWorlds.UI
 
             // MV-1089: a captured robot shows its bar permanently, same as _alwaysShow — it earned
             // that by being converted, not by the fade timer below.
-            float visibilityAlpha = (_alwaysShow || _capturedAlwaysShow) ? 1f : AlphaSinceTrigger(_secondsSinceTrigger);
+            float visibilityAlpha = (_alwaysShow || _capturedAlwaysShow || _eliteAlwaysShow) ? 1f : AlphaSinceTrigger(_secondsSinceTrigger);
             if (_canvasGroup != null) _canvasGroup.alpha = visibilityAlpha;
 
             bool wouldShowBar = _alwaysShow || visibilityAlpha > 0f;

@@ -1845,6 +1845,9 @@ namespace MaxWorlds.Enemies
 
         private WorldHealthBar _bar;
 
+        /// <summary>MV-1380: this robot's own nameplate/bar (Tier 2 test read).</summary>
+        public WorldHealthBar HealthBar => _bar;
+
         /// <summary>Metres above a robot's origin its bar floats — per archetype (MV-473), since a flat
         /// 1.15 m cleared a Rusher's 1.4 m collider with room to spare but barely cleared a Brute's
         /// 1.9 m one. <see cref="HeadClearance"/> is the same world-space margin for every kind; the
@@ -2274,6 +2277,12 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>MV-1380: pushes this robot's elite state (tag, affix text, always-show) to its bar.
+        /// Called every awake tick; public so a test can drive it without a full Tick.</summary>
+        public void SyncEliteMarker() =>
+            _bar?.SetEliteMarker(IsElite && _team == Team.Enemy, CarriesKey,
+                                 Affix == EliteAffix.None ? null : Affix.ToString().ToUpperInvariant());
+
         /// <summary>MV-940: split out of <see cref="Tick"/> purely so the sub-phase try/finally above
         /// has a single call to wrap — no behaviour here changed by this split.</summary>
         private void TickBody(float dt)
@@ -2284,7 +2293,7 @@ namespace MaxWorlds.Enemies
             // call site of its own to hook. TickBody never runs for a Dormant/trapHeld robot (see Tick's
             // own early-returns), so the tag reads "shown while awake" for free, same as the ring
             // (VFX.GroundAnchorVfx) does via its own Dormant skip.
-            _bar?.SetEliteMarker(IsElite && _team == Team.Enemy, CarriesKey);
+            SyncEliteMarker();
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
             _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
