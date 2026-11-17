@@ -1313,20 +1313,44 @@ namespace MaxWorlds.UI
             v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), lit);
             v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), lit);
             v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), lit);
-            v.Label.text = CategoryHeaderText(cat.Id);
+            v.Label.text = CategoryHeaderText(cat.Id, out string slotLine);
+            if (v.SlotLabel != null)
+            {
+                v.SlotLabel.gameObject.SetActive(slotLine != null);
+                if (slotLine != null)
+                {
+                    v.SlotLabel.text = slotLine;
+                    v.SlotLabel.color = v.Label.color;
+                }
+            }
         }
 
-        /// <summary>MV-689: SECONDARY's header text after a Weapon Core morph — "?" while
-        /// <see cref="RigState.SecondaryLocked"/> (the Shoulder Rack hasn't been bought into yet),
-        /// "SHOULDER RACK" once it has. Every other category (and SECONDARY on a run that never
-        /// morphed, still <see cref="SecondaryKind.WaterBalloon"/>) keeps the plain category id it has
-        /// always shown.</summary>
-        private static string CategoryHeaderText(string categoryId)
+        /// <summary>MV-1391: the weapon column headers (PRIMARY / SECONDARY) are two lines — a small slot
+        /// line and a larger line naming the equipped weapon, read from <see cref="WeaponCatalog"/>
+        /// (never a literal). SECONDARY reads "?" while <see cref="RigState.SecondaryLocked"/>. Every
+        /// other category keeps its plain id and no slot line (<paramref name="slotLine"/> null).</summary>
+        private static string CategoryHeaderText(string categoryId, out string slotLine)
         {
-            if (categoryId != "SECONDARY") return categoryId;
-            if (RigState.SecondaryLocked) return "?";
-            return WeaponSystemState.SecondaryKind == SecondaryKind.ShoulderRack ? "SHOULDER RACK" : categoryId;
+            slotLine = null;
+            if (categoryId == "PRIMARY")
+            {
+                slotLine = categoryId;
+                return WeaponCatalog.DisplayName(WeaponSystemState.ActivePrimary);
+            }
+            if (categoryId == "SECONDARY")
+            {
+                slotLine = categoryId;
+                return RigState.SecondaryLocked ? "?" : WeaponCatalog.DisplayName(WeaponSystemState.SecondaryKind);
+            }
+            return categoryId;
         }
+
+        /// <summary>MV-1391: test-only access to a category header's slot line (null if it has none).</summary>
+        public Text CategorySlotLabel(string id) =>
+            _categoryNodes.TryGetValue(id, out var v) && v.SlotLabel != null && v.SlotLabel.gameObject.activeSelf ? v.SlotLabel : null;
+
+        /// <summary>MV-1391: test-only access to a category header's name line.</summary>
+        public Text CategoryNameLabel(string id) => _categoryNodes.TryGetValue(id, out var v) ? v.Label : null;
 
         /// <summary>MV-689: rebuilds the whole board from scratch against whichever world
         /// <see cref="RigBoard.ActiveWorldIndex"/> currently reads — needed because a Weapon Core morph
@@ -2505,6 +2529,30 @@ namespace MaxWorlds.UI
             shell.Label.resizeTextMaxSize = Mathf.RoundToInt(CategoryLabelFontSize);
             shell.Label.fontSize = shell.Label.resizeTextMaxSize;   // MV-489: keep in lockstep with the cap above — see note 1
 
+            // MV-1391: PRIMARY/SECONDARY carry a small slot line in the gap between the hex and the
+            // weapon-name line (the name line keeps its place, so nothing below it moves).
+            if (cat.Id == "PRIMARY" || cat.Id == "SECONDARY")
+            {
+                // The name line may be long ("CONDENSATION DIRECTIONAL ACCELERATOR"): let best-fit shrink it
+                // well below the plain category floor rather than overflow into the next column.
+                shell.Label.resizeTextMinSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.55f));
+                // Best-fit only shrinks on the wrap axis: with Overflow it fits height alone and a long
+                // name just runs wide. Wrap + a one-line-tall box makes it shrink until it fits the width.
+                shell.Label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                shell.Label.verticalOverflow = VerticalWrapMode.Truncate;   // Overflow here would also stop best-fit shrinking
+                shell.Label.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, Mathf.Max(shell.Label.rectTransform.sizeDelta.y, 2.5f * shell.Label.resizeTextMinSize));
+                int slotSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.5f));
+                var slot = AddText(shell.Label.transform.parent, slotSize, shell.Label.color, TextAnchor.LowerCenter);
+                Anchor(slot.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0f));
+                slot.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, slotSize + 4f);
+                slot.rectTransform.anchoredPosition = shell.Label.rectTransform.anchoredPosition
+                    + new Vector2(0f, shell.Label.rectTransform.sizeDelta.y * 0.5f - 2f);
+                slot.fontStyle = FontStyle.Bold;
+                slot.raycastTarget = false;
+                slot.name = "SlotLabel";
+                shell.SlotLabel = slot;
+            }
+
             // MV-443 defect 5: a lit category additionally gets a solid outer ring at
             // capOuterRingOffset — reusing the shared Outer Ring image, but with a SOLID (not dashed)
             // sprite of its own; RefreshCategoryNode only ever toggles/tints it.
@@ -2896,6 +2944,8 @@ namespace MaxWorlds.UI
             public RectTransform Root;
             public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PillBg, PillBorder, DraftBadge;
             public Text PillText, Label, DraftBadgeText;
+            /// <summary>MV-1391: PRIMARY/SECONDARY category only — the small slot line above the weapon-name <see cref="Label"/>.</summary>
+            public Text SlotLabel;
             public Button Button;
             public float Radius;
 
