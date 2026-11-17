@@ -67,6 +67,17 @@ namespace MaxWorlds.UI
         /// actually see it land (MV-1100).</summary>
         public Vector3 LandingCirclePosition => _circleGo != null ? _circleGo.transform.position : Vector3.zero;
 
+        /// <summary>The landing circle's resolved material render queue (MV-1385).</summary>
+        public int LandingCircleRenderQueue
+        {
+            get
+            {
+                if (_circleGo == null) return -1;
+                var mat = _circleGo.GetComponent<MeshRenderer>().sharedMaterial;
+                return mat != null ? mat.renderQueue : -1;
+            }
+        }
+
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Teleport);
 
         protected override bool AbilityReady => _abilities != null && _abilities.TeleportReady;
@@ -140,7 +151,7 @@ namespace MaxWorlds.UI
             // on the floor below a raised World 2 deck Max was aiming from.
             float surfaceY = GroundMarkHeights.SurfaceAt(landing).y;
             _circleGo.transform.SetPositionAndRotation(
-                new Vector3(landing.x, surfaceY + 0.01f, landing.z), Quaternion.identity);
+                new Vector3(landing.x, surfaceY + GroundMarkHeights.TeleportLandingLift, landing.z), Quaternion.identity);
             WaterBalloonAimMesh.BuildLandingCircleInto(RetainedMesh(_circleGo), LandingRadius);
 
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);

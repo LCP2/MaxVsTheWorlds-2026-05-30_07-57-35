@@ -131,12 +131,12 @@ namespace MaxWorlds.Tests.EditMode
 
             _teleportOrigin.transform.position = deckPos;
             teleportControl.OnPointerDown(At(Vector2.zero));
-            Assert.AreEqual(deck.height + 0.01f, teleportControl.LandingCirclePosition.y, 0.02f,
+            Assert.AreEqual(deck.height + GroundMarkHeights.TeleportLandingLift, teleportControl.LandingCirclePosition.y, 0.02f,
                 "MV-1100: the teleport landing circle must draw on the deck Max is aiming from, not the floor below");
 
             _teleportOrigin.transform.position = floorPos;
             teleportControl.OnPointerDown(At(Vector2.zero));
-            Assert.AreEqual(0.01f, teleportControl.LandingCirclePosition.y, 0.02f,
+            Assert.AreEqual(GroundMarkHeights.TeleportLandingLift, teleportControl.LandingCirclePosition.y, 0.02f,
                 "MV-1100: the teleport landing circle on the floor must resolve to the floor's own height");
 
             // --- 3. Water Balloon's landing circle (same audit finding) -----------------------------
@@ -195,7 +195,7 @@ namespace MaxWorlds.Tests.EditMode
 
             _teleportOrigin.transform.position = lawnPos;
             teleportControl.OnPointerDown(At(Vector2.zero));
-            Assert.AreEqual(0.01f, teleportControl.LandingCirclePosition.y, 0.02f,
+            Assert.AreEqual(GroundMarkHeights.TeleportLandingLift, teleportControl.LandingCirclePosition.y, 0.02f,
                 "MV-1100: World 1's lawn must be unaffected by this fix — the teleport circle still " +
                 "resolves to the undecorated 0.01 lift it always has");
 

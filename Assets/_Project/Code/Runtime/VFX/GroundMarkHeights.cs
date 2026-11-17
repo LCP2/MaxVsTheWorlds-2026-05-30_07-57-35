@@ -35,6 +35,11 @@ namespace MaxWorlds.VFX
         public const float DressingCeiling = 0.026f;
 
         public const float AimReticleLift = 0.040f;
+
+        /// <summary>MV-1385: the teleport landing circle. It used to sit 0.01 above the surface, which is
+        /// UNDER the Reef deck (0.015), wear (0.025), current lanes (0.035) and wall-kit pools (0.03), so
+        /// aiming inside an area drew nothing. 0.050 clears every floor overlay by well over 1 cm.</summary>
+        public const float TeleportLandingLift = 0.050f;
         public const float ContactShadowLift = 0.046f;
         public const float AnchorRingLift = 0.052f;
 
