@@ -18,9 +18,9 @@ namespace MaxWorlds.Enemies
         public const float DefaultMaxInFlight = 4f;
         public const float DefaultOuterAngle = 110f;
         public const float DefaultInnerAngle = 70f;
-        public const float DefaultDamage = 8f;
+        public const float DefaultDamage = 16f;
         public const float DefaultTrailSeconds = 0.8f;
-        public const float DefaultRobotHp = 45f;
+        public const float DefaultRobotHp = 90f;
 
         /// <summary>The 0.25 s glow on the firing tube before each launch (rule 3).</summary>
         public const float GlowSeconds = 0.25f;

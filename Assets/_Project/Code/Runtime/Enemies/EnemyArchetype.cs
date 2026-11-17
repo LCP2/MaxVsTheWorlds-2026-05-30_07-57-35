@@ -752,15 +752,15 @@ namespace MaxWorlds.Enemies
         /// every frame, same footing as the Dreadnought's turrets); <see cref="StandoffRange"/> 8 m with
         /// the shared 0.85-1.15 band is the ticket's own 7-9 m standoff (6.8-9.2 m). Its live-tunable
         /// numbers (HP, missile speed/turn/life/damage, cadence, launch angles) live on
-        /// <see cref="OrbitalTuning"/>, not here: <see cref="MaxHealth"/> is only the authored 45 default
-        /// that <see cref="OrbitalTuning.RobotHealth"/> overrides at spawn. <see cref="LungeRange"/>
+        /// <see cref="OrbitalTuning"/>, not here: <see cref="MaxHealth"/> is only the authored 90 default (MV-1383)
+        /// that <see cref="OrbitalTuning.RobotHp"/> overrides. <see cref="LungeRange"/>
         /// doubles as the 11 m spin-up range. Placeholder body: the Launcher's, tinted crimson (MV-1345
         /// is the real art).
         /// </summary>
         public static EnemyArchetype Orbital => new EnemyArchetype(
             EnemyKind.Orbital, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
             colliderHeight: 1.45f, colliderRadius: 0.42f,
-            moveSpeed: 0.9f, maxHealth: 45f,
+            moveSpeed: 0.9f, maxHealth: 90f,
             contactDamage: 0f, contactRadius: 0.5f,
             lungeRange: 11f, telegraphTime: 0.25f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
             knockbackDecay: 28f,
