@@ -305,19 +305,29 @@ namespace MaxWorlds.VFX
                 _artState[pickup] = state;
             }
 
-            if (pickup.Kind == PickupKind.Supercell)
+            // MV-1387: the beacon's state is set on EVERY registration, from this placement's Kind alone,
+            // independent of the art-key cache: active exactly when the pickup is a Supercell. Built when
+            // missing; hidden (not destroyed) on anything else so a later Supercell reuse just re-shows it.
+            bool wantBeacon = pickup.Kind == PickupKind.Supercell;
+            if (state.Beacon == null)
             {
-                if (state.Beacon == null)
+                var existing = pickup.transform.Find(BeaconName);
+                if (existing != null)
                 {
-                    var existing = pickup.transform.Find(BeaconName);
-                    state.Beacon = existing != null ? existing : null;
-                    if (state.Beacon != null) state.BeaconCore = ResolveRenderer(state.Beacon, "Core");
-                    else
-                    {
-                        state.BeaconCore = BuildPartBeacon(pickup.transform);
-                        state.Beacon = state.BeaconCore.transform.parent;
-                    }
+                    state.Beacon = existing;
+                    state.BeaconCore = ResolveRenderer(existing, "Core");
                 }
+                else if (wantBeacon)
+                {
+                    state.BeaconCore = BuildPartBeacon(pickup.transform);
+                    state.Beacon = state.BeaconCore.transform.parent;
+                }
+            }
+            if (state.Beacon != null)
+            {
+                state.Beacon.gameObject.SetActive(wantBeacon);
+                if (wantBeacon && !pickup.IsBlinkHidden)
+                    foreach (var r in state.Beacon.GetComponentsInChildren<Renderer>(true)) r.enabled = true;
             }
 
             state.Art = art;
