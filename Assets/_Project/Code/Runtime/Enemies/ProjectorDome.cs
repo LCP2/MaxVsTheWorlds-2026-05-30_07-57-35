@@ -36,11 +36,29 @@ namespace MaxWorlds.Enemies
         private static readonly Color RimColor = Lime;
         private static readonly Color BeamColor = new Color(Lime.r, Lime.g, Lime.b, 0.95f);
 
-        /// <summary>MV-1375: beam width, metres (was 0.025).</summary>
-        public const float BeamWidth = 0.25f;
-        /// <summary>MV-1375: beam pulse rate, Hz. The pulse only ever widens the beam above
-        /// <see cref="BeamWidth"/> and dims its alpha.</summary>
+        /// <summary>MV-1389: the thin bright core's width, metres (was a 0.25 m flat bar).</summary>
+        public const float BeamWidth = 0.07f;
+        /// <summary>MV-1389: the additive glow sheath's width, metres.</summary>
+        public const float GlowWidth = 0.3f;
+        /// <summary>MV-1389: end flare diameter, metres (spec cap 0.4).</summary>
+        public const float FlareSize = 0.35f;
+        /// <summary>MV-1389: streak scroll speed along the beam, metres/second (spec >= 1.5).</summary>
+        public const float FlowSpeed = 2f;
+        public const int BeamPoints = 12;
+        public const float WobbleAmplitude = 0.06f;
+        /// <summary>MV-1375: beam pulse rate, Hz. MV-1389: applied as brightness/alpha only, never width.</summary>
         public const float BeamPulseHz = 1.5f;
+
+        private static readonly Color CoreColor = new Color(0.847f, 1f, 0.69f, 1f); // #D8FFB0
+        private static Texture2D s_streak;
+        private static Texture2D s_flare;
+
+        private LineRenderer _glow;
+        private Material _coreMat;
+        private Transform _flareA, _flareB;
+        private Vector3 _from, _to;
+        private float _flow;
+        private float _pulse = 1f;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
@@ -93,13 +111,32 @@ namespace MaxWorlds.Enemies
             var beamGo = new GameObject("Beam");
             beamGo.transform.SetParent(transform, worldPositionStays: false);
             _beam = beamGo.AddComponent<LineRenderer>();
-            _beam.positionCount = 2;
+            _beam.positionCount = BeamPoints;
             _beam.widthMultiplier = BeamWidth;
             _beam.useWorldSpace = true;
-            _beam.material = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
-            _beam.startColor = _beam.endColor = BeamColor;
+            _beam.textureMode = LineTextureMode.Tile;
+            // Own material instance: the scrolling offset must not leak into shared VfxMaterials.
+            _coreMat = new Material(VfxMaterials.Additive(Streak())) { name = "ProjectorBeamCore", hideFlags = HideFlags.HideAndDontSave };
+            _coreMat.mainTexture = Streak();
+            _beam.material = _coreMat;
+            _beam.startColor = _beam.endColor = CoreColor;
             _beam.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _beam.receiveShadows = false;
+
+            var glowGo = new GameObject("BeamGlow");
+            glowGo.transform.SetParent(transform, worldPositionStays: false);
+            _glow = glowGo.AddComponent<LineRenderer>();
+            _glow.positionCount = BeamPoints;
+            _glow.widthMultiplier = GlowWidth;
+            _glow.useWorldSpace = true;
+            _glow.textureMode = LineTextureMode.Stretch;
+            _glow.material = VfxMaterials.Additive(VfxMaterials.LineGlow());
+            _glow.startColor = _glow.endColor = BeamColor;
+            _glow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _glow.receiveShadows = false;
+
+            _flareA = MakeFlare("FlareDish");
+            _flareB = MakeFlare("FlareDome");
 
             ApplyFraction(1f);
         }
@@ -116,8 +153,88 @@ namespace MaxWorlds.Enemies
             transform.position = center;
             gameObject.SetActive(true);
             if (_beam == null) return;
-            _beam.SetPosition(0, beamOrigin);
-            _beam.SetPosition(1, center + Vector3.up * _radius);
+            _from = beamOrigin;
+            _to = center + Vector3.up * _radius;
+            ApplyBeamShape();
+        }
+
+        private Transform MakeFlare(string n)
+        {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = n;
+            var c = q.GetComponent<Collider>();
+            if (c != null) { if (Application.isPlaying) Destroy(c); else DestroyImmediate(c); }
+            q.transform.SetParent(transform, worldPositionStays: false);
+            q.transform.localScale = Vector3.one * FlareSize;
+            var r = q.GetComponent<MeshRenderer>();
+            var fm = new Material(VfxMaterials.Additive(Flare())) { name = "ProjectorFlare", hideFlags = HideFlags.HideAndDontSave };
+            fm.SetColor("_BaseColor", BeamColor);
+            fm.SetColor("_Color", BeamColor);
+            r.sharedMaterial = fm;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            q.AddComponent<SelfDrivenTint>();
+            return q.transform;
+        }
+
+        private static Texture2D Streak()
+        {
+            if (s_streak != null) return s_streak;
+            // u along the beam: bright dashes with soft tails (reads as flow); v: constant.
+            const int w = 64, h = 4;
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { name = "projbeam_streak", wrapMode = TextureWrapMode.Repeat, hideFlags = HideFlags.HideAndDontSave };
+            for (int x = 0; x < w; x++)
+            {
+                float u = x / (float)w;
+                float a = Mathf.Clamp01(0.35f + 0.65f * Mathf.Pow(Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(u * 2f, 1f) - 0.25f) * 4f), 1.5f));
+                for (int y = 0; y < h; y++) t.SetPixel(x, y, new Color(a, a, a, a));
+            }
+            t.Apply();
+            return s_streak = t;
+        }
+
+        private static Texture2D Flare()
+        {
+            if (s_flare != null) return s_flare;
+            return s_flare = VfxMaterials.Glow();
+        }
+
+        /// <summary>MV-1389: sine wobble over <see cref="BeamPoints"/> points, ends pinned; flares at both ends.</summary>
+        private void ApplyBeamShape()
+        {
+            if (_beam == null) return;
+            Vector3 d = _to - _from;
+            Vector3 side = Vector3.Cross(d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward, Vector3.up);
+            if (side.sqrMagnitude < 1e-6f) side = Vector3.right;
+            side.Normalize();
+            for (int i = 0; i < BeamPoints; i++)
+            {
+                float k = i / (float)(BeamPoints - 1);
+                float env = Mathf.Sin(k * Mathf.PI);
+                float w = Mathf.Sin(k * 6f * Mathf.PI - _flow * 3f) * WobbleAmplitude * env;
+                Vector3 p = Vector3.Lerp(_from, _to, k) + side * w;
+                _beam.SetPosition(i, p);
+                if (_glow != null) _glow.SetPosition(i, p);
+            }
+            _beam.textureMode = LineTextureMode.Tile;
+            _coreMat.mainTextureScale = new Vector2(1f / 0.5f, 1f);
+            if (_flareA != null) _flareA.position = _from;
+            if (_flareB != null) _flareB.position = _to;
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                if (_flareA != null) _flareA.rotation = cam.transform.rotation;
+                if (_flareB != null) _flareB.rotation = cam.transform.rotation;
+            }
+        }
+
+        private void ApplyBeamColor(float fade)
+        {
+            if (_beam == null) return;
+            Color c = CoreColor; c.a *= fade * _pulse;
+            _beam.startColor = _beam.endColor = c;
+            Color g = BeamColor; g.a *= fade * _pulse;
+            if (_glow != null) _glow.startColor = _glow.endColor = g;
         }
 
         /// <summary>No robots left in range (point 1: "with no such robots, no dome") — hides the
@@ -149,12 +266,10 @@ namespace MaxWorlds.Enemies
         private void Update()
         {
             Tick(Time.deltaTime);
-            if (_collapsing || _beam == null) return;
-            // MV-1375: 1.5 Hz pulse — width swells 0.25 -> 0.30 m, alpha dips to 0.7 at the trough.
+            // MV-1389: 1.5 Hz brightness pulse (alpha only, width never changes).
             float k = 0.5f + 0.5f * Mathf.Sin(Time.time * BeamPulseHz * 2f * Mathf.PI);
-            _beam.widthMultiplier = BeamWidth * (1f + 0.2f * k);
-            Color c = BeamColor; c.a *= Mathf.Lerp(0.7f, 1f, k);
-            _beam.startColor = _beam.endColor = c;
+            _pulse = Mathf.Lerp(0.7f, 1f, k);
+            if (!_collapsing) ApplyBeamColor(1f);
         }
 
         /// <summary>Public and dt-parameterised, same "an EditMode test can drive it directly"
@@ -162,6 +277,13 @@ namespace MaxWorlds.Enemies
         /// and this project authors no PlayMode tests.</summary>
         public void Tick(float dt)
         {
+            if (_coreMat != null)
+            {
+                // Flow dish -> dome: FlowSpeed m/s; Tile mode maps 0.5 m of beam to one texture repeat.
+                _flow += dt;
+                _coreMat.mainTextureOffset = new Vector2(-Mathf.Repeat(_flow * FlowSpeed / 0.5f, 1f), 0f);
+                ApplyBeamShape();
+            }
             if (!_collapsing) return;
             _collapseRemaining -= dt;
             float t = Mathf.Clamp01(_collapseRemaining / CollapseSeconds);
@@ -177,11 +299,7 @@ namespace MaxWorlds.Enemies
             _mpb.SetColor(BaseColorId, fill);
             _mpb.SetColor(RimColorId, rim);
             _domeRenderer.SetPropertyBlock(_mpb);
-            if (_beam != null)
-            {
-                Color beam = BeamColor; beam.a *= t;
-                _beam.startColor = _beam.endColor = beam;
-            }
+            ApplyBeamColor(t);
         }
 
         private void DestroySelf()

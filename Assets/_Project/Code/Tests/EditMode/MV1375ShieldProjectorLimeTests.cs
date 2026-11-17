@@ -49,9 +49,7 @@ namespace MaxWorlds.Tests.EditMode
                 dome.GetComponentInChildren<MeshRenderer>().GetPropertyBlock(mpb);
                 AssertLime(mpb.GetColor("_BaseColor"), "dome fill tint");
                 AssertLime(mpb.GetColor("_RimColor"), "dome rim tint");
-
-                var beam = dome.GetComponentInChildren<LineRenderer>();
-                Assert.GreaterOrEqual(beam.widthMultiplier, 0.25f, "beam width");
+                // Beam width assertion superseded by MV-1389 (energy tether: thin core + glow sheath).
             }
             finally
             {
