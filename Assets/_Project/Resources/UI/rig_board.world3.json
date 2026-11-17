@@ -235,7 +235,7 @@
       "x": 250,
       "y": 740,
       "icon": "flw",
-      "label": "HOLD",
+      "label": "SLOTS",
       "maxLevel": 3,
       "kind": "cap",
       "parent": "p_trp",
