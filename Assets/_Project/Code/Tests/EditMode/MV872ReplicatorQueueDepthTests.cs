@@ -133,8 +133,9 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < 8; i++)
                 if (robotsB[i].IsAssignedToReplicator) assignedCountB++;
 
-            Assert.AreEqual(3, assignedCountB,
-                "with capacity 3 (below MaxQueueSlots), the queue must be capped at the box's own remaining capacity, not MaxQueueSlots");
+            // MV-1394: was 3 ("queue capped at remaining capacity"); capacity no longer limits anything.
+            Assert.AreEqual(6, assignedCountB,
+                "capacity 3 must not shrink the queue any more (MV-1394) — it is MaxQueueSlots deep");
         }
     }
 }

@@ -142,8 +142,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.LessOrEqual(elapsedA, 4.5f, "must land well under the pre-MV-812 4.4 s ceiling");
             Assert.AreEqual(2, spawnerA.LiveCountOf(EnemyKind.Rusher),
                 "well under the global budget, the opportunistic second twin must also emerge");
-            Assert.AreEqual(1, replicatorA.Capacity,
-                "the box's own state must stay consistent: a cycle that gives back the full pair spends exactly one capacity");
+            // MV-1394: was Capacity == 1 (spends exactly one capacity); now CompletedPairs.
+            Assert.AreEqual(1, replicatorA.CompletedPairs,
+                "the box's own state must stay consistent: a cycle that gives back the full pair counts exactly one pair");
 
             var liveA = (IList)LiveField.GetValue(spawnerA);
             RobotEnemy twinA = null;

@@ -178,7 +178,6 @@ namespace MaxWorlds.Factories
         // that the replication beacon/status-ring/hatch-glow are green, so idle drops to a dim amber.
         [SerializeField] private Color ledIdleColor = new Color(0.60f, 0.45f, 0.15f);    // amber: idle, can take a robot
         [SerializeField] private Color ledBusyColor = new Color(1.00f, 0.18f, 0.14f);    // red: consuming/cycling a robot
-        [SerializeField] private Color ledSpentColor = new Color(0.9f, 0.15f, 0.1f);     // red: spent, still a target
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
@@ -324,9 +323,12 @@ namespace MaxWorlds.Factories
         public float HealthCurrent => _health?.Current ?? 0f;
         public string ReadoutName => "REPLICATOR";
 
-        /// <summary>Doublings this box has left. 0 means spent — it lures nothing but remains a
-        /// destructible target.</summary>
+        /// <summary>Authored doubling count. MV-1394: ignored — a relay never goes spent.</summary>
         public int Capacity => capacity;
+
+        /// <summary>MV-1394: full pairs (both twins) this box has emitted. Replaces the old capacity
+        /// countdown as the "a cycle completed" signal — nothing is limited by it.</summary>
+        public int CompletedPairs { get; private set; }
 
         /// <summary>MV-869: true once <see cref="Start"/> resolved an <see cref="AreaAccumulationDirector"/>
         /// and subscribed to its <see cref="AreaAccumulationDirector.PlayerCrossedIntoArea"/> — the "sub"
@@ -736,7 +738,7 @@ namespace MaxWorlds.Factories
         /// (MV-820): an eligible robot's distance and area membership are the only things that matter.</summary>
         public void TickLure()
         {
-            if (!IsAlive || capacity <= 0) return;
+            if (!IsAlive) return;
 
             while (_queue.Count < EffectiveQueueCap)
             {
@@ -752,7 +754,7 @@ namespace MaxWorlds.Factories
         /// slot the box can no longer pay off. <see cref="MaxQueueSlots"/> is the separate physical
         /// ceiling (how many can ever fit in the line at once); this is whichever of the two is
         /// smaller.</summary>
-        private int EffectiveQueueCap => Mathf.Min(MaxQueueSlots, capacity);
+        private int EffectiveQueueCap => MaxQueueSlots; // MV-1394: capacity no longer limits anything
 
         /// <summary>MV-820 Change 1's filter, factored out (MV-869) so the population/Replicator probe
         /// can fold an eligible-count for a given area into its own single walk of
@@ -983,17 +985,22 @@ namespace MaxWorlds.Factories
                     // Emitted (monotonic, this spawner only) rather than assuming success, since
                     // SpawnExact silently emits 0 when GlobalHasRoom is false. MV-817: ignorePerFactoryCap
                     // true, same reasoning as the first twin above.
+                    // MV-1394: the second twin re-queues (no NoReplicate tag) while Max is in this area
+                    // and the line has a free slot; otherwise it chases Max with the usual tag.
+                    bool requeue = _playerInArea && _queue.Count < MaxQueueSlots;
                     int emittedBefore = _spawner.Emitted;
-                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
+                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1,
+                        requeue ? 0f : TwinNoReplicateSeconds, ignorePerFactoryCap: true);
                     if (_spawner.Emitted > emittedBefore)
                     {
                         PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808
-                        // Capacity is spent only when the cycle actually gave back the full pair — a
-                        // cycle that could only manage the guaranteed replacement must not burn it.
-                        capacity = Mathf.Max(0, capacity - 1);
                         _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
-                        // MV-820 Change 2: spent — release whatever's still queued to ordinary attack AI.
-                        if (capacity == 0) ReleaseAllAssignees();
+                        CompletedPairs++;
+                        if (requeue && spawned.Count > 0)
+                        {
+                            _queue.Add(spawned[0]);
+                            spawned[0].SeekReplicator(QueueSlotPosition(_queue.Count - 1));
+                        }
                     }
                     _pending.RemoveAt(i);
                     continue;
@@ -1017,7 +1024,7 @@ namespace MaxWorlds.Factories
             // left to drift) the instant the condition stops holding, so it always fires promptly again
             // the next time a slot actually opens rather than however much of a stale interval happens
             // to be left over.
-            if (_playerInArea && capacity > 0 && _queue.Count < EffectiveQueueCap)
+            if (_playerInArea && _queue.Count < EffectiveQueueCap)
             {
                 _lureRetryTimer -= dt;
                 if (_lureRetryTimer <= 0f)
@@ -1349,7 +1356,8 @@ namespace MaxWorlds.Factories
             // instant Intake begins until the second twin emits (removing the pending entry below).
             // A merely-queued robot (still walking to slot 0) does NOT count; only Intake onward.
             bool busy = _intakeRobot != null || _pending.Count > 0;
-            Color c = capacity > 0 ? (busy ? ledBusyColor : ledIdleColor) : ledSpentColor;
+            // MV-1394: a relay never goes spent — the spent colour is gone.
+            Color c = busy ? ledBusyColor : ledIdleColor;
 
             if (_led != null)
             {
@@ -1375,7 +1383,7 @@ namespace MaxWorlds.Factories
                 else
                 {
                     float multiplier = 1f;
-                    if (capacity > 0 && busy)
+                    if (busy)
                     {
                         float phase = Mathf.Sin(_statusRingPulseTime * StatusRingPulseHz * Mathf.PI * 2f) * 0.5f + 0.5f;
                         multiplier = Mathf.Lerp(StatusRingPulseMin, StatusRingPulseMax, phase);

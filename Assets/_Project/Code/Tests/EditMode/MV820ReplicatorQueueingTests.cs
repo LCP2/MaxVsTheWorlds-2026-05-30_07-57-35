@@ -107,19 +107,19 @@ namespace MaxWorlds.Tests.EditMode
             // === (a) On the area-entry signal, exactly the 2 nearest of 6 robots at known distances ===
             // === become ReplicatorSeeking; the other 4 do not. ===
             Replicator boxA = NewBox(RigOriginA, area: 1, capacity: 2);
-            var robotsA = new RobotEnemy[6];
-            for (int i = 0; i < 6; i++)
+            // MV-1394: the queue cap is MaxQueueSlots (6) regardless of capacity, so 8 robots -> nearest 6.
+            var robotsA = new RobotEnemy[8];
+            for (int i = 0; i < 8; i++)
                 robotsA[i] = NewRobot(EnemyArchetype.Rusher, RigOriginA + new Vector3(3f + i, 0f, 0f), area: 1);
 
             boxA.OnAreaEntered(1);
 
-            Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robotsA[0].Current,
-                "the nearest robot (3 m) must be assigned on area entry (MV-820 R1)");
-            Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robotsA[1].Current,
-                "the second-nearest robot (4 m) must be assigned on area entry (MV-820 R1)");
-            for (int i = 2; i < 6; i++)
+            for (int i = 0; i < 6; i++)
+                Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robotsA[i].Current,
+                    $"robot {i} ({3 + i} m) is one of the 6 nearest and must be assigned on area entry (MV-820 R1)");
+            for (int i = 6; i < 8; i++)
                 Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, robotsA[i].Current,
-                    $"robot {i} ({3 + i} m) is not one of the 2 nearest and must not be assigned");
+                    $"robot {i} ({3 + i} m) is not one of the 6 nearest and must not be assigned");
 
             RobotEnemy.ResetRegistry();
             EnemySpawner.ResetReplicatorReservations();
@@ -174,13 +174,16 @@ namespace MaxWorlds.Tests.EditMode
             Replicator boxD = NewBox(RigOriginD, area: 1, capacity: 2);
             RobotEnemy slot0D = NewRobot(EnemyArchetype.Rusher, RigOriginD + new Vector3(3f, 0f, 0f), area: 1);
             RobotEnemy slot1D = NewRobot(EnemyArchetype.Rusher, RigOriginD + new Vector3(4f, 0f, 0f), area: 1);
-            RobotEnemy refillD = NewRobot(EnemyArchetype.Rusher, RigOriginD + new Vector3(5f, 0f, 0f), area: 1);
+            // MV-1394: the queue is 6 deep now, so four more fillers (5..8 m) fill it and the 7th (9 m) waits.
+            for (int i = 0; i < 4; i++)
+                NewRobot(EnemyArchetype.Rusher, RigOriginD + new Vector3(5f + i, 0f, 0f), area: 1);
+            RobotEnemy refillD = NewRobot(EnemyArchetype.Rusher, RigOriginD + new Vector3(9f, 0f, 0f), area: 1);
 
             boxD.OnAreaEntered(1);
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, slot0D.Current, "setup failure: nearest must be assigned to slot 0");
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, slot1D.Current, "setup failure: second-nearest must be assigned to slot 1");
             Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, refillD.Current,
-                "setup failure: with a full 2-deep queue, the third-nearest must not be assigned yet");
+                "setup failure: with a full 6-deep queue, the seventh-nearest must not be assigned yet");
 
             slot0D.transform.position = slot0D.ReplicatorSeekTarget; // at slot 0 — Intake begins this tick
             // MV-823 rebuilt the draw-in as a walk-speed-derived AnimSequence rather than a flat

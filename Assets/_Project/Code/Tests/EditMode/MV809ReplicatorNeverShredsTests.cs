@@ -166,8 +166,9 @@ namespace MaxWorlds.Tests.EditMode
                 "a Replicator must never reduce the field's population");
             Assert.AreEqual(5, RobotEnemy.ActiveCount,
                 "one below the ceiling, the cycle must emit the full doubled pair (net +1)");
-            Assert.AreEqual(1, belowReplicator.Capacity,
-                "a cycle that emits the full pair must spend exactly one capacity");
+            // MV-1394: was Capacity == 1 (spends one capacity); now CompletedPairs.
+            Assert.AreEqual(1, belowReplicator.CompletedPairs,
+                "a cycle that emits the full pair must count exactly one completed pair");
 
             // --- At the ceiling: the box must still give back at least what it took - never a shredder. ---
             RobotEnemy.ResetRegistry();
@@ -184,8 +185,9 @@ namespace MaxWorlds.Tests.EditMode
                 "a Replicator must never reduce the field's population, even right at the ceiling");
             Assert.AreEqual(activeBefore, RobotEnemy.ActiveCount,
                 "at the ceiling the box can give back at most a straight replacement - the field must neither shrink nor grow");
-            Assert.AreEqual(2, atReplicator.Capacity,
-                "a cycle that could only manage the guaranteed replacement (never 0) must not burn capacity");
+            // MV-1394: was Capacity == 2 (no capacity burned); now no completed pair.
+            Assert.AreEqual(0, atReplicator.CompletedPairs,
+                "a cycle that could only manage the guaranteed replacement must not count as a completed pair");
         }
     }
 }

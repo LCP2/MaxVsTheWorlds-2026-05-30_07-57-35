@@ -170,7 +170,8 @@ namespace MaxWorlds.Tests.EditMode
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "exactly two live Rushers must exist after one consumption at capacity 1");
-            Assert.AreEqual(0, replicator.Capacity, "one doubling must spend the box's only capacity");
+            // MV-1394: was Assert.AreEqual(0, replicator.Capacity, "one doubling must spend the box's only
+            // capacity") — relays never go spent now; the count/NoReplicate checks below still hold.
 
             // The two doubled Rushers are read back off the spawner's own live list, not
             // RobotEnemy.Active — SpawnKind's SetActive(true) never runs OnEnable outside Play mode
@@ -189,13 +190,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(twinA.NoReplicate, "a freshly doubled Rusher must carry NoReplicate");
             Assert.IsTrue(twinB.NoReplicate, "a freshly doubled Rusher must carry NoReplicate");
 
-            // --- Move one of them back to the hatch, advance 5 s: spent (capacity 0) — count stays two ---
+            // --- Move one of them back to the hatch, advance 5 s: its NoReplicate tag still refuses it — count stays two ---
             twinA.transform.position = RigOrigin;
             replicator.TickLure();
             replicator.TickConsumption(5f);
 
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
-                "spent at capacity 0, the Replicator lures nothing further — the count must stay two");
+                "a freshly doubled twin carries NoReplicate, so the Replicator lures nothing further — the count must stay two");
         }
 
         /// <summary>

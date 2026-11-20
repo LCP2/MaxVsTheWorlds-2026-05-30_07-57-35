@@ -136,7 +136,7 @@ namespace MaxWorlds.Tests.EditMode
                         // Replicator.MaxQueueSlots (raised 2 -> 6) and this box's own remaining capacity
                         // is smaller, so this fixture's own "only the 2 nearest are assigned at once"
                         // narrative (AC1(b)/(c)/(d) below) now depends on capacity, not on MaxQueueSlots.
-                        new WorldReplicator { id = "a3_rep1", x = OriginX, z = OriginZ + 38f, capacity = 2 },
+                        new WorldReplicator { id = "a3_rep1", x = OriginX, z = OriginZ + 38f, capacity = 2 }, // MV-1394: capacity ignored
                     },
                 },
             },
@@ -271,6 +271,11 @@ namespace MaxWorlds.Tests.EditMode
             // snapshot taken that late would wrongly capture it as "known" and never detect it.
             var knownBefore = new System.Collections.Generic.HashSet<RobotEnemy>(RobotEnemy.Active);
 
+            // MV-1394: the queue is MaxQueueSlots (6) deep now, not capped at capacity 2, so all four
+            // garrisoned robots are assigned on entry. C is forced into Telegraph BEFORE the crossing so
+            // it is assigned mid-Telegraph (the MV-828 D1 pending hand-off) rather than mid-seek.
+            ForceTelegraph(robotC);
+
             // The real physical-crossing signal — Max's position, not a direct OnAreaEntered call.
             _playerGo = new GameObject("Player") { tag = "Player" };
             _playerGo.transform.position = new Vector3(OriginX, 0f, OriginZ + 38f);
@@ -282,15 +287,15 @@ namespace MaxWorlds.Tests.EditMode
                 "MV-828 AC1(b): the nearest robot (3 m) must be ReplicatorSeeking after the real area-entry signal");
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robotB.Current,
                 "MV-828 AC1(b): the second-nearest robot (4 m) must be ReplicatorSeeking after the real area-entry signal");
-            Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, robotC.Current,
-                "setup failure: with this fixture's own capacity of 2 (not Replicator.MaxQueueSlots), " +
-                "the 3rd-nearest must not be assigned yet");
-            Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, spare.Current,
-                "setup failure: the spare robot must not be assigned yet");
+            // MV-1394: was AreNotEqual(Seeking) for C and spare ("capacity 2 caps the queue"); now both
+            // are assigned too — C pending behind its Telegraph, spare seeking.
+            Assert.IsTrue(robotC.IsAssignedToReplicator,
+                "MV-1394: the 3rd-nearest (in Telegraph) must be assigned on entry, the queue being 6 deep");
+            Assert.IsTrue(spare.IsAssignedToReplicator,
+                "MV-1394: the spare robot must be assigned on entry, the queue being 6 deep");
 
             // === AC1(c): assigned while in Telegraph, still tracked after 3 s, reaches ===
             // === ReplicatorSeeking (and is genuinely still owned) after Recover ===
-            ForceTelegraph(robotC);
             robotA.CancelReplicatorSeeking();
             robotA.TagNoReplicatePermanent(); // simulates "no longer eligible" so it can't be re-picked
             box.TickConsumption(0.02f); // cleanup drops A, refills the freed slot with C (now Telegraph)
@@ -304,10 +309,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsTrue(robotC.IsAssignedToReplicator,
                 "MV-828 D1: a robot assigned while in Telegraph must still be assigned after 3 s of ticks");
-            Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, spare.Current,
-                "MV-828 D1: the spare robot's slot must not have been stolen from the pending Telegraph " +
-                "assignee by the cleanup pass wrongly dropping it");
-
+            spare.CancelReplicatorSeeking(); // MV-1394: spare is queued now; release it before retiring it
             spare.TagNoReplicatePermanent(); // its part in AC1(c) is proven; retire it
 
             ForceRecoverCompletion(robotC);
@@ -375,7 +377,8 @@ namespace MaxWorlds.Tests.EditMode
                 RegisterAllUnregisteredRobots();
                 foreach (RobotEnemy r in RobotEnemy.Active)
                 {
-                    if (knownBefore.Contains(r) || r == robotD) continue;
+                    // MV-1394: skip a re-queued second twin (ReplicatorSeeking) — D3 is about the chasing twin.
+                    if (knownBefore.Contains(r) || r == robotD || r.IsAssignedToReplicator) continue;
                     twin = r;
                     break;
                 }

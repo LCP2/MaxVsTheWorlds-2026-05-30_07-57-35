@@ -169,12 +169,12 @@ namespace MaxWorlds.Tests.EditMode
 
             // --- Finish the cycle: second twin emits, capacity drops from 3 to 2 (still > 0) ---
             guard = 0;
-            while (replicator.Capacity >= 3 && guard++ < 300)
+            while (replicator.CompletedPairs < 1 && guard++ < 300) // MV-1394: was Capacity >= 3
             {
                 replicator.TickConsumption(0.02f);
                 LateUpdateMethod.Invoke(replicator, null);
             }
-            Assert.AreEqual(2, replicator.Capacity, "one doubling must spend exactly one of the three starting capacity");
+            Assert.AreEqual(1, replicator.CompletedPairs, "one cycle must complete exactly one pair"); // was Capacity == 2
 
             // --- Amber again, once MV-823's own 0.4 s replication-light linger has also cleared. ---
             for (int i = 0; i < 30; i++) // 30 x 0.02 s = 0.6 s, comfortably past the 0.4 s linger
@@ -212,12 +212,12 @@ namespace MaxWorlds.Tests.EditMode
             // --- Finish this second cycle: capacity 2 -> 1 (still > 0, idle amber, never spent). Polled
             // rather than a fixed jump — MV-823 changed CycleSeconds 0.9 -> 2.0. ---
             guard = 0;
-            while (replicator.Capacity >= 2 && guard++ < 300)
+            while (replicator.CompletedPairs < 2 && guard++ < 300) // MV-1394: was Capacity >= 2
             {
                 replicator.TickConsumption(0.02f);
                 LateUpdateMethod.Invoke(replicator, null);
             }
-            Assert.AreEqual(1, replicator.Capacity, "the second doubling must spend exactly one more of the starting capacity");
+            Assert.AreEqual(2, replicator.CompletedPairs, "the second cycle must complete exactly one more pair"); // was Capacity == 1
             for (int i = 0; i < 30; i++) // 30 x 0.02 s = 0.6 s, comfortably past MV-823's own 0.4 s replication-light linger
             {
                 replicator.TickConsumption(0.02f);

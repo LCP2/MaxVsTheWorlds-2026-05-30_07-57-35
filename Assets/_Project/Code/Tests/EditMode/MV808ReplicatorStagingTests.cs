@@ -181,7 +181,8 @@ namespace MaxWorlds.Tests.EditMode
             }
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
-            Assert.AreEqual(1, replicator.Capacity, "one doubling must spend exactly one of the two starting capacity");
+            // MV-1394: was Capacity == 1 ("spends exactly one of the two starting capacity"); capacity is ignored now.
+            Assert.AreEqual(1, replicator.CompletedPairs, "one cycle must complete exactly one full pair");
             AssertLed(led, ledMpb, amber, "once both twins have emerged, with capacity still > 0, the LED must read amber again");
 
             // --- Both twins must be at the out-ramp foot, not wherever the ordinary emergence path

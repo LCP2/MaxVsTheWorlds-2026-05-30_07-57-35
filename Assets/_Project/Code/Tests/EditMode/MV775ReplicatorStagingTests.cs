@@ -147,7 +147,8 @@ namespace MaxWorlds.Tests.EditMode
             while (spawner.LiveCountOf(EnemyKind.Rusher) < 2 && guard++ < 300) replicator.TickConsumption(0.02f);
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "the SECOND of the doubled pair must emerge once the stagger has elapsed");
-            Assert.AreEqual(0, replicator.Capacity, "one doubling must spend the box's only capacity");
+            // MV-1394: was Assert.AreEqual(0, replicator.Capacity, "one doubling must spend the box's only
+            // capacity") — relays never go spent now.
 
             // --- Death: the drum's own renderer is disabled and a husk stands in its place. ---
             replicator.TakeDamage(new DamageInfo(99999f, replicator.transform.position, Vector3.forward, Team.Player));
