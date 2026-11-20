@@ -406,14 +406,14 @@ namespace MaxWorlds.Rendering
             // target is ~3x MV-1340's best measured median (22.7/255), and MV-1340's own round 1->2 data
             // point (x1.4->x2.1 moved median only 16.1->22.7, sublinear) says intensity alone won't get
             // there without PostExposure sharing the load (see PostExposure's own comment).
-            KeyIntensity = 2.3f,
+            KeyIntensity = 0.52f,         // MV-1377: 2.3 -> 0.52 (deck median ~107 -> 44-50, AC1)
             KeyEuler = new Vector3(58f, -45f, 0f),       // MV-1349: high, from the south-east
             ShadowStrength = 0.7f,     // down slightly from 0.68 — a bright biome lets more fill through, same reasoning Default's own ShadowStrength comment gives
 
             // Teal bounce off the hull plating — a shade darker/greener than the key, same role this
             // field always plays (keeps the shadow side of a pipe or bulkhead from crushing to black).
             FillColor = new Color(0.14f, 0.34f, 0.42f),
-            FillIntensity = 1.2f,     // same x2.4-ish ratio to MV-1340's 1.62 as KeyIntensity's own jump
+            FillIntensity = 0.28f,        // MV-1377: 1.2 -> 0.28     // same x2.4-ish ratio to MV-1340's 1.62 as KeyIntensity's own jump
             FillEuler = new Vector3(20f, 140f, 0f),
 
             // The only warm light anywhere — hazard orange, matching Max's own body colour, so it reads
@@ -427,8 +427,8 @@ namespace MaxWorlds.Rendering
             // Bright teal-green, every term — sky, equator AND ground — matching the deck's own panel
             // hue. No green/sludge equator band like Stormdrain's: the Reef has no sludge, only hull
             // plate and bio-glow.
-            AmbientSky = new Color(0.17f, 0.28f, 0.34f),   // MV-1349: cool blue-teal sky, Rec709 luma ~0.26
-            AmbientEquator = new Color(0.10f, 0.19f, 0.24f),
+            AmbientSky = new Color(0.04f, 0.065f, 0.078f),   // MV-1377: x0.35   // MV-1349: cool blue-teal sky, Rec709 luma ~0.26
+            AmbientEquator = new Color(0.023f, 0.044f, 0.055f),
             AmbientGround = new Color(0.03f, 0.06f, 0.08f), // MV-1349: dark ground
 
             // Teal fog, lighter than MV-1340's near-black navy (0.025/0.06/0.08) to match the room's own

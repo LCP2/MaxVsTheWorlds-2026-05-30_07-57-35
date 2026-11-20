@@ -22,7 +22,8 @@ namespace MaxWorlds.Tests.EditMode
             WorldDefinition reef = WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.Reef));
             Color sky = reef.Look.AmbientSky;
             float luma = 0.2126f * sky.r + 0.7152f * sky.g + 0.0722f * sky.b;
-            Assert.That(luma, Is.InRange(0.15f, 0.35f), $"Reef ambient sky luminance {luma:F3} must be 0.15-0.35");
+            // MV-1377: floor lowered 0.15 -> 0.05 (deck darkened to 44-50); the 0.35 upper bound, the MV-1349 too-bright guard, is unchanged.
+            Assert.That(luma, Is.InRange(0.05f, 0.35f), $"Reef ambient sky luminance {luma:F3} must be 0.05-0.35");
 
             WorldConfig cfg = WorldLibrary.Load(reef.ConfigKey);
             Assert.IsNotNull(cfg, "Reef config must load");
