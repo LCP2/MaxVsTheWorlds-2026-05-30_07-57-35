@@ -101,7 +101,8 @@ namespace MaxWorlds.Enemies
                     implemented.Add(parsed);
             }
 
-            if (kind == EnemyKind.Blinker) implemented.Remove(EliteAffix.Shielded);
+            // MV-1397: a Projector hangs back facing Max, so a front-arc plate made it unkillable.
+            if (kind == EnemyKind.Blinker || kind == EnemyKind.Projector) implemented.Remove(EliteAffix.Shielded);
             if (EnemyArchetype.Of(kind).MoveSpeed <= 0f)
             {
                 implemented.Remove(EliteAffix.Hasted);
