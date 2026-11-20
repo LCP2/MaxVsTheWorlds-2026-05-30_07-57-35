@@ -63,8 +63,8 @@ namespace MaxWorlds.Tests.EditMode
             pylon.Build(); // AddComponent's own Awake never runs outside Play mode
             pylon.Configure(RelayId);
 
-            pylon.TakeDamage(new DamageInfo(120f, pylon.transform.position, Vector3.down, Team.Player));
-            Assert.IsFalse(pylon.IsAlive, "setup failure: 120 damage must destroy a 120 HP pylon");
+            pylon.TakeDamage(new DamageInfo(240f, pylon.transform.position, Vector3.down, Team.Player));
+            Assert.IsFalse(pylon.IsAlive, "setup failure: 240 damage must destroy a 240 HP pylon");
             Assert.AreEqual(0, Pylon.LiveFeedersOf(RelayId),
                 "setup failure: a destroyed pylon's relay must read 0 live feeders before the Welder acts");
 

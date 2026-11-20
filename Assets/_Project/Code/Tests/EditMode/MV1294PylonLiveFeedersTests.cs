@@ -139,8 +139,8 @@ namespace MaxWorlds.Tests.EditMode
                 "MV-1294 AC1: two live pylons feeding the same relay id must both be counted");
 
             // === AC1: 120 damage (the ticket's own authored HP) destroys one, dropping the count to 1 ===
-            pylonA.TakeDamage(new DamageInfo(120f, pylonA.transform.position, Vector3.down, Team.Player));
-            Assert.IsFalse(pylonA.IsAlive, "setup failure: 120 damage must destroy a 120 HP pylon");
+            pylonA.TakeDamage(new DamageInfo(240f, pylonA.transform.position, Vector3.down, Team.Player));
+            Assert.IsFalse(pylonA.IsAlive, "setup failure: 240 damage must destroy a 240 HP pylon");
             Assert.IsTrue(pylonB.IsAlive, "setup failure: pylon B must be unaffected by pylon A's own damage");
 
             Assert.AreEqual(1, Pylon.LiveFeedersOf(RelayId),

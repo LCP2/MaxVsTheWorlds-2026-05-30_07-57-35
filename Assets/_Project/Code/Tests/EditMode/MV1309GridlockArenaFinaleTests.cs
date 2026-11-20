@@ -125,8 +125,8 @@ namespace MaxWorlds.Tests.EditMode
                 "MV-1309 AC1: GRIDLOCK must take 0 damage while any pylon feeding her is alive");
 
             // === AC: once all 4 pylons are destroyed, the same hit lands in full ===
-            foreach (Pylon p in pylons) p.TakeDamage(new DamageInfo(120f, p.transform.position, Vector3.down, Team.Player));
-            foreach (Pylon p in pylons) Assert.IsFalse(p.IsAlive, "setup failure: 120 damage must destroy a 120 HP pylon");
+            foreach (Pylon p in pylons) p.TakeDamage(new DamageInfo(240f, p.transform.position, Vector3.down, Team.Player));
+            foreach (Pylon p in pylons) Assert.IsFalse(p.IsAlive, "setup failure: 240 damage must destroy a 240 HP pylon");
             Assert.AreEqual(0, Pylon.LiveFeedersOf("gridlock"), "setup failure: destroying every feeding pylon must drop the live count to 0");
 
             float beforeOpen = health.Current;

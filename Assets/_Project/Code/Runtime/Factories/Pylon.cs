@@ -26,8 +26,8 @@ namespace MaxWorlds.Factories
     [MaxWorlds.Core.PerfSection("factories")]
     public sealed class Pylon : MonoBehaviour, IDamageable, IHealthReadout, IRepairable
     {
-        /// <summary>Ticket's own "120 HP".</summary>
-        private const float PylonHealth = 120f;
+        /// <summary>MV-1402: 240 HP (was 120) — Lee: "at least twice as tough".</summary>
+        private const float PylonHealth = 240f;
 
         /// <summary>Metres above this mast's own centre the health bar floats — the mast's top sits
         /// <see cref="WorldMapLoader.PylonHeight"/>/2 above centre (this body's own pivot is its vertical
@@ -305,7 +305,7 @@ namespace MaxWorlds.Factories
         /// bar.</summary>
         private void BuildHealthBar()
         {
-            WorldHealthBar.Attach(gameObject, this, PylonBarHeightAboveCentre, PylonBarWorldWidth, showNumber: false);
+            WorldHealthBar.Attach(gameObject, this, PylonBarHeightAboveCentre, PylonBarWorldWidth, showNumber: false, alwaysShow: true); // MV-1402: name + bar always up while alive
         }
 
         public void TakeDamage(in DamageInfo info)
