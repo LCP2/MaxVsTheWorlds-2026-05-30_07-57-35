@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Pickups;
+using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Factories
@@ -31,7 +33,11 @@ namespace MaxWorlds.Factories
         private const float DoorSlideSeconds = 0.5f;    // ticket: "slides open over 0.5 s"
         private const float IconHeight = 2f;            // ticket: "floats 2 m above the door"
         private const float IconDiameter = 0.8f;        // ">= 32 px" at 48 px/m (docs/DECISIONS.md), same constant RepairBay/ChallengePad use
-        private const float OpenIconLingerSeconds = 2f; // ticket: "turns into an open padlock for 2 s... then disappears"
+        private const float OpenIconLingerSeconds = 2f; // MV-1403: the floating word reads OPEN for 2 s after the door opens, then goes
+        private const float LabelHeight = 1.9f;         // MV-1403: floats just above the 1.5 m walls, centred over the vault
+        private const float LabelCharacterSize = 0.14f; // with fontSize 100 -> capitals ~1 m tall = ~48 px at 48 px/m (>= the 32 px world-icon floor)
+        private const int LabelFontSize = 100;
+        private const float PadlockPitchDegrees = 72f;  // faces the fixed ~72 degree top-down camera
         private const int SupercellCount = 2;           // ticket: "2 Supercell"
         private const int PowerCellCount = 6;           // ticket: "6 PowerCell"
         private const float CacheScatterRadius = 0.9f;  // same ring spacing DestructibleCover's own secret cache uses
@@ -51,6 +57,8 @@ namespace MaxWorlds.Factories
         private Vector3 _doorOpenLocal;
         private float _doorSlideT; // 0 (closed) .. 1 (open)
         private CameraFacingFlare _icon;
+        private Transform _padlock;   // MV-1403: padlock built from primitives, floats above the door while locked
+        private TextMesh _label;      // MV-1403: floating gold "VAULT" (then "OPEN" for 2 s) over the vault's centre
         private float _openIconTimer = -1f; // -1 = not counting down
         private Transform _player;
 
@@ -136,6 +144,8 @@ namespace MaxWorlds.Factories
             }
 
             _icon = CameraFacingFlare.Create($"{name} Icon");
+            BuildPadlock();
+            BuildLabel();
             UpdateIcon();
 
             if (!Registered.Contains(this)) Registered.Add(this);
@@ -183,6 +193,7 @@ namespace MaxWorlds.Factories
             if (_door != null) _door.gameObject.layer = 0; // Default â€” same "remove it from CoverLayer" idiom DestructibleCover.Break uses
             _openIconTimer = OpenIconLingerSeconds;
             UpdateIcon();
+            if (_label != null) _label.text = "OPEN";
             PlaceCache();
         }
 
@@ -202,11 +213,14 @@ namespace MaxWorlds.Factories
                 _door.gameObject.layer = 0;
             }
             UpdateIcon();
+            HideLabel();
         }
 
         private void TickDoorSlide(float dt)
         {
-            if (_door == null || _doorSlideT >= 1f) return;
+            // MV-1403: only an OPEN vault slides its door. This used to run unconditionally, so every
+            // vault's door slid away 0.5 s after the first frame, key or no key.
+            if (_door == null || State != VaultState.Open || _doorSlideT >= 1f) return;
             _doorSlideT = Mathf.Min(1f, _doorSlideT + dt / DoorSlideSeconds);
             _door.localPosition = Vector3.Lerp(_doorClosedLocal, _doorOpenLocal, _doorSlideT);
         }
@@ -218,22 +232,88 @@ namespace MaxWorlds.Factories
             if (_openIconTimer <= 0f)
             {
                 _openIconTimer = -1f;
-                _icon.Hide();
+                HideLabel();
             }
         }
 
         private void UpdateIcon()
         {
             if (_icon == null) return;
-            switch (State)
+            if (State == VaultState.Closed)
             {
-                case VaultState.Closed:
-                    _icon.Show(IconCenter, IconDiameter, ClosedIconColor);
-                    break;
-                case VaultState.Open:
-                    _icon.Show(IconCenter, IconDiameter, OpenIconColor); // TickOpenIconLinger hides it after OpenIconLingerSeconds
-                    break;
+                _icon.Show(IconCenter, IconDiameter, ClosedIconColor);
+                if (_padlock != null) _padlock.gameObject.SetActive(true);
+                return;
             }
+
+            // MV-1403: "The padlock goes when it opens."
+            _icon.Hide();
+            if (_padlock != null) _padlock.gameObject.SetActive(false);
+        }
+
+        private void HideLabel()
+        {
+            if (_label != null) _label.gameObject.SetActive(false);
+        }
+
+        /// <summary>The floating word, centred over the vault (MV-1403). A legacy <see cref="TextMesh"/> on
+        /// the built-in font, same "no font asset, renders headless" reasoning <see cref="HudFont"/> gives.</summary>
+        private void BuildLabel()
+        {
+            var go = new GameObject($"{name} Label");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, LabelHeight, 0f);
+            go.transform.localRotation = Quaternion.Euler(PadlockPitchDegrees, 0f, 0f);
+
+            _label = go.AddComponent<TextMesh>();
+            _label.font = HudFont.Get();
+            _label.fontSize = LabelFontSize;
+            _label.characterSize = LabelCharacterSize;
+            _label.fontStyle = FontStyle.Bold;
+            _label.anchor = TextAnchor.MiddleCenter;
+            _label.alignment = TextAlignment.Center;
+            _label.color = ClosedIconColor;
+            _label.text = "VAULT";
+
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                mr.sharedMaterial = _label.font.material;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+            }
+
+            // A vault already open at build (checkpoint resume) never shows it; ApplyCheckpointOpened hides it.
+            go.SetActive(State == VaultState.Closed);
+        }
+
+        /// <summary>A padlock from three primitives (body + two-post-and-bar shackle), floating above the
+        /// door and tilted to face the fixed top-down camera — no collider, shown only while Closed.</summary>
+        private void BuildPadlock()
+        {
+            var root = new GameObject($"{name} Padlock");
+            root.transform.SetParent(transform, false);
+            root.transform.localPosition = DoorLocalCenter() + Vector3.up * IconHeight;
+            root.transform.localRotation = Quaternion.Euler(PadlockPitchDegrees, 0f, 0f);
+            _padlock = root.transform;
+
+            Material gold = MaterialLibrary.Tinted(SurfaceKind.Metal, new Color(1f, 0.82f, 0.25f));
+            AddPadlockPart(root.transform, "Body", new Vector3(0f, -0.12f, 0f), new Vector3(0.62f, 0.46f, 0.12f), gold);
+            AddPadlockPart(root.transform, "ShackleL", new Vector3(-0.17f, 0.22f, 0f), new Vector3(0.10f, 0.30f, 0.10f), gold);
+            AddPadlockPart(root.transform, "ShackleR", new Vector3(0.17f, 0.22f, 0f), new Vector3(0.10f, 0.30f, 0.10f), gold);
+            AddPadlockPart(root.transform, "ShackleTop", new Vector3(0f, 0.38f, 0f), new Vector3(0.44f, 0.10f, 0.10f), gold);
+        }
+
+        private static void AddPadlockPart(Transform parent, string partName, Vector3 localPos, Vector3 size, Material mat)
+        {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            part.name = partName;
+            Collider c = part.GetComponent<Collider>();
+            if (c != null) Object.DestroyImmediate(c); // visual only — never blocks Max or a shot
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = localPos;
+            part.transform.localScale = size;
+            part.GetComponent<MeshRenderer>().sharedMaterial = mat;
         }
 
         private Vector3 IconCenter => transform.position + DoorLocalCenter() + Vector3.up * IconHeight;
