@@ -2298,7 +2298,7 @@ namespace MaxWorlds.Enemies
         /// Called every awake tick; public so a test can drive it without a full Tick.</summary>
         public void SyncEliteMarker() =>
             _bar?.SetEliteMarker(IsElite && _team == Team.Enemy, CarriesKey,
-                                 Affix == EliteAffix.None ? null : Affix.ToString().ToUpperInvariant());
+                                 Affix == EliteAffix.None ? null : Affix.ToString().ToUpperInvariant(), DisplayName);
 
         /// <summary>MV-940: split out of <see cref="Tick"/> purely so the sub-phase try/finally above
         /// has a single call to wrap — no behaviour here changed by this split.</summary>

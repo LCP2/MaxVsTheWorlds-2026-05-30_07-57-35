@@ -929,6 +929,7 @@ namespace MaxWorlds.Pickups
                     // whether ITS OWN door may open.
                     HudSignals.EmitPickup(p.transform.position, "VAULT KEY", new Color(0.90f, 0.70f, 0.18f));
                     VaultKeyState.SetHeld(p.VaultId);
+                    MaxWorlds.UI.VaultKeyGuide.EnsureInstalled(); // MV-1404: banner + HUD key icon + arrow to the vault
                     break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's

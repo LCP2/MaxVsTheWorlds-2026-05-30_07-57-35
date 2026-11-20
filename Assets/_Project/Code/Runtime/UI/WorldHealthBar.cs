@@ -175,6 +175,8 @@ namespace MaxWorlds.UI
         private Text _replicatorMarker;
         private Text _trapMarker;
         private Text _eliteMarker;
+        private RectTransform _keyIcon; // MV-1404: gold "K" disc above the KEY carrier's nameplate
+        private static readonly Color KeyGold = new Color(1f, 0.82f, 0.25f, 1f);
         private Text _shieldText;
         private Camera _camera;
         private CanvasGroup _canvasGroup;
@@ -402,7 +404,7 @@ namespace MaxWorlds.UI
         /// track Team, which has no dedicated "just got captured" hook the way HELD/ALLY does). The two
         /// markers sharing this slot (replicator lure / elite) can in principle both want to show on the
         /// same World 2 robot at once — a known, accepted overlap this tight slice does not resolve.</summary>
-        public void SetEliteMarker(bool show, bool carriesKey = false, string affixLabel = null)
+        public void SetEliteMarker(bool show, bool carriesKey = false, string affixLabel = null, string plateName = null)
         {
             if (_eliteMarker == null) return;
             // MV-1380: an elite always shows its bar (a fully-deflecting Shielded elite never takes
@@ -410,7 +412,11 @@ namespace MaxWorlds.UI
             _eliteAlwaysShow = show;
             // MV-1321: the KEY elite's nameplate reads "ELITE  KEY" instead of the plain tag — same
             // slot/shape, just a different string, re-evaluated every call exactly like the plain tag.
-            string text = carriesKey ? "ELITE  KEY" : "ELITE";
+            // MV-1404: "KEY BRUISER" in gold, with a gold key disc above it (was a red "ELITE  KEY").
+            string text = carriesKey ? "KEY " + (string.IsNullOrEmpty(plateName) ? "ELITE" : plateName) : "ELITE";
+            Color tag = carriesKey ? KeyGold : EliteMarkerColor;
+            if (_eliteMarker.color != tag) _eliteMarker.color = tag;
+            if (_keyIcon != null) _keyIcon.gameObject.SetActive(show && carriesKey);
             // MV-1380: affix on the plate, ASCII only (MV-600), e.g. "ELITE - SHIELDED".
             if (!string.IsNullOrEmpty(affixLabel)) text += " - " + affixLabel;
             if (_eliteMarker.text != text) _eliteMarker.text = text;
@@ -420,6 +426,9 @@ namespace MaxWorlds.UI
         private bool _eliteAlwaysShow;
 
         /// <summary>MV-1380: the elite nameplate tag's resolved text (Tier 2).</summary>
+        /// <summary>MV-1404: whether the gold key disc above the nameplate is showing (Tier 2).</summary>
+        public bool KeyIconActive => _keyIcon != null && _keyIcon.gameObject.activeSelf;
+
         public string EliteMarkerText => _eliteMarker != null ? _eliteMarker.text : null;
 
         /// <summary>MV-1380: whether the elite tag is active on the plate (Tier 2).</summary>
@@ -561,6 +570,22 @@ namespace MaxWorlds.UI
             emr.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
             _eliteMarker.text = "ELITE";
             _eliteMarker.gameObject.SetActive(false);
+
+            // MV-1404: the KEY carrier's gold key disc, one line above the elite tag.
+            var kgo = new GameObject("KeyIcon", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            kgo.transform.SetParent(_canvas, false);
+            _keyIcon = (RectTransform)kgo.transform;
+            _keyIcon.anchorMin = _keyIcon.anchorMax = new Vector2(0.5f, 1f);
+            _keyIcon.pivot = new Vector2(0.5f, 0f);
+            _keyIcon.sizeDelta = new Vector2(LabelPixelHeight, LabelPixelHeight);
+            _keyIcon.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight * 2f);
+            var kimg = kgo.GetComponent<UnityEngine.UI.Image>();
+            kimg.color = KeyGold; kimg.raycastTarget = false;
+            Text kt = NewText(_keyIcon, LabelFontSize, new Color(0.15f, 0.1f, 0f), TextAnchor.MiddleCenter);
+            kt.text = "K";
+            var ktr = (RectTransform)kt.transform;
+            ktr.anchorMin = Vector2.zero; ktr.anchorMax = Vector2.one; ktr.offsetMin = ktr.offsetMax = Vector2.zero;
+            kgo.SetActive(false);
 
             // MV-991: the Force Field shield % — directly above the name label, only ever fed by
             // Max's own Attach() call (shieldFraction/shieldActive stay null everywhere else, so a

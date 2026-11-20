@@ -104,6 +104,21 @@ namespace MaxWorlds.Factories
         /// <see cref="MaxWorlds.Enemies.RobotEnemy.Despawn"/>) resolves its dropped key's own vault
         /// binding from. "Nearest" stands in for "the vault in this area" (a tight-slice world authors
         /// one vault per area) without needing a separate area-lookup plumbed through the drop.</summary>
+        public static bool TryGetPosition(string id, out Vector3 position, out bool closed)
+        {
+            // MV-1404: the world position of the registered vault with this id, and whether it is still
+            // CLOSED - what the key guide's arrow aims at. False if no such vault is registered.
+            foreach (Vault v in Registered)
+            {
+                if (v == null || v.Id != id) continue;
+                position = v.transform.position + v.DoorLocalCenter();
+                closed = v.State == VaultState.Closed;
+                return true;
+            }
+            position = Vector3.zero; closed = false;
+            return false;
+        }
+
         public static string NearestId(Vector3 pos)
         {
             Vault nearest = null;
@@ -149,6 +164,7 @@ namespace MaxWorlds.Factories
             UpdateIcon();
 
             if (!Registered.Contains(this)) Registered.Add(this);
+            VaultKeyGuide.EnsureInstalled(); // MV-1404: key icon/arrow/banners, also on a checkpoint-restored held key
         }
 
         private void OnDestroy() => Registered.Remove(this);

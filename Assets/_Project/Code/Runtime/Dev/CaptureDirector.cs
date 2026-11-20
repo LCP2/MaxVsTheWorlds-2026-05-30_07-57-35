@@ -681,6 +681,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1320SecretCover());
             Add(BuildMv1321Vault());
             Add(BuildMv1403RealVault());
+            Add(BuildMv1404VaultKey());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -1940,6 +1941,80 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1403-a7-vault", NoSetup) },
+            };
+        }
+
+        // ---- Mv1404VaultKey (MV-1404 AC2) -----------------------------------------------------
+
+        /// <summary>MV-1404 AC2: ONE capture of the real City a7 area with a dropped vault key lying near
+        /// Max and the HUD as it reads just after a pickup (key icon + banner + arrow). The key is placed
+        /// through <see cref="PickupDirector.PlaceVaultKeyAt"/>; the held state is staged through
+        /// <see cref="VaultKeyState.SetHeld"/> so the guide shows its pickup banner this frame. Same
+        /// City-load + zone-gate idiom as <see cref="BuildMv1403RealVault"/>.</summary>
+        private static CapturePreset BuildMv1404VaultKey()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("City built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate("area7");
+
+                Factories.Vault vault = null;
+                foreach (var v in FindObjectsByType<Factories.Vault>(FindObjectsSortMode.None))
+                    if (v != null && v.Id == "a7_vault1") vault = v;
+                if (vault == null) throw new CaptureAbortException("City built no vault 'a7_vault1'");
+
+                var max = GameObject.FindGameObjectWithTag("Player");
+                if (max == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+                var cc = max.GetComponent<CharacterController>();
+                bool was = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                Vector3 maxAt = vault.transform.position + new Vector3(0f, 0f, 9f);
+                max.transform.position = new Vector3(maxAt.x, max.transform.position.y, maxAt.z);
+                if (cc != null) cc.enabled = was;
+                Physics.SyncTransforms();
+
+                // A dropped key a few metres from Max (the second shot's subject), then the held state.
+                Pickups.PickupDirector.EnsureInstalled().PlaceVaultKeyAt(maxAt + new Vector3(3.5f, 0f, -1.5f), vault.Id);
+                Factories.VaultKeyState.SetHeld(vault.Id);
+                for (int i = 0; i < 6; i++) yield return null;   // let the guide build its HUD, banner and arrow
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+                Vector3 focus = maxAt + new Vector3(1.5f, 1f, -3f);
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1404vaultkey",
+                LogTag = "[MV1404Capture]",
+                Flag = "-mv1404shot",
+                ArmFile = "Temp/mv1404.arm",
+                HeadlessMarker = "Temp/mv1404.headless",
+                DoneFileName = "_mv1404_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1404-vault-key", NoSetup) },
+                Cleanup = () => Factories.VaultKeyState.Reset(),
             };
         }
 

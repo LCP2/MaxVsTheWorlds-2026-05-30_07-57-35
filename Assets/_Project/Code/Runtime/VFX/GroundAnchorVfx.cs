@@ -148,6 +148,10 @@ namespace MaxWorlds.VFX
             /// skipped as "unchanged".</summary>
             public bool LastIsElite;
 
+            /// <summary>MV-1404: the KEY carrier's gold ring (built lazily, only for a carrier).</summary>
+            public GroundRing KeyRing;
+            public bool LastCarriesKey;
+
             public bool Placed;
             public bool SeenThisFrame;
         }
@@ -197,7 +201,8 @@ namespace MaxWorlds.VFX
                 // longer keeps it off this director's rings. Skip it directly via the same optional,
                 // type-agnostic interface pattern as IKnockbackable/IHaltable, rather than special-casing
                 // RobotEnemy — see the class doc's own "one rule for every actor" reasoning.
-                if (actor is IDormant dormant && dormant.IsDormant) continue;
+                // MV-1404: a sleeping KEY carrier is still marked (gold ring "from the moment it is placed").
+                if (actor is IDormant dormant && dormant.IsDormant && !(actor is RobotEnemy sleeper && sleeper.CarriesKey)) continue;
 
                 float footprint = GroundAnchorTuning.FootprintRadius(cc);
                 if (footprint <= 0f) continue;
@@ -209,6 +214,7 @@ namespace MaxWorlds.VFX
                 // Player the instant conversion completes, so this reads "loses its ring ... while it
                 // is an ally" (the ticket's own wording) for free, with no separate capture hook needed.
                 bool isElite = !isPlayer && actor is RobotEnemy robotActor && robotActor.IsElite;
+                bool carriesKey = !isPlayer && actor is RobotEnemy keyActor && keyActor.CarriesKey;
 
                 // MV-969: a CharacterController never changes side once discovered, so the ring's
                 // tint is decided once, right here, rather than re-selected (or, before this ticket,
@@ -230,7 +236,8 @@ namespace MaxWorlds.VFX
                     && pos == slot.LastPosition
                     && footprint == slot.LastFootprint
                     && isPlayer == slot.LastIsPlayer
-                    && isElite == slot.LastIsElite;
+                    && isElite == slot.LastIsElite
+                    && carriesKey == slot.LastCarriesKey;
 
                 if (!unchanged)
                 {
@@ -266,6 +273,15 @@ namespace MaxWorlds.VFX
                     slot.LastFootprint = footprint;
                     slot.LastIsPlayer = isPlayer;
                     slot.LastIsElite = isElite;
+                    slot.LastCarriesKey = carriesKey;
+
+                    // MV-1404: gold ring at a KEY carrier's feet, wider than the elite double ring.
+                    if (carriesKey)
+                    {
+                        if (slot.KeyRing == null) slot.KeyRing = CreateKeyRing();
+                        slot.KeyRing.Show(ground, footprint + GroundAnchorTuning.EliteRingOuterExtraRadius + 0.35f);
+                    }
+                    else slot.KeyRing?.Hide();
                     slot.Placed = true;
                     AnchorRecomputeCount++;
                 }
@@ -288,6 +304,7 @@ namespace MaxWorlds.VFX
                 slot.Ring.Hide();
                 slot.EliteRingOuter?.Hide();
                 slot.EliteRingInner?.Hide();
+                slot.KeyRing?.Hide();
                 slot.Placed = false;
             }
 
@@ -335,6 +352,16 @@ namespace MaxWorlds.VFX
         /// design image shows.</summary>
         /// <summary>MV-1380: builds one elite ring exactly as production does, for a Tier 2 colour read.</summary>
         public GroundRing BuildEliteRingForTests() => CreateEliteRing(GroundAnchorTuning.EliteRingOuterLift);
+
+        /// <summary>MV-1404: the gold ring under a KEY carrier.</summary>
+        private GroundRing CreateKeyRing()
+        {
+            Material tinted = VfxMaterials.AlphaBlendTinted(VfxMaterials.Annulus(), new Color(1f, 0.82f, 0.25f, 0.95f));
+            var r = GroundRing.CreateFixedTint("KeyRing", tinted);
+            r.Lift = GroundAnchorTuning.EliteRingOuterLift;
+            r.transform.SetParent(transform, worldPositionStays: false);
+            return r;
+        }
 
         private GroundRing CreateEliteRing(float lift)
         {

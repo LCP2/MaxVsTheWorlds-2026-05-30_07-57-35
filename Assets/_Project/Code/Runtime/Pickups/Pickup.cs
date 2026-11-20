@@ -139,6 +139,12 @@ namespace MaxWorlds.Pickups
                 return;
             }
 
+            if (Kind == PickupKind.VaultKey)
+            {
+                BuildVaultKeyVisual();
+                return;
+            }
+
             bool cell = Kind == PickupKind.PowerCell;
             var prim = GameObject.CreatePrimitive(cell ? PrimitiveType.Sphere : PrimitiveType.Cube);
             prim.name = "Visual";
@@ -157,6 +163,55 @@ namespace MaxWorlds.Pickups
             mr.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, cell ? CellColor : PartColor);
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _spin = prim.transform;
+        }
+
+        /// <summary>MV-1404: the dropped vault key reads as a KEY — a large gold key (bow ring + 1.2 m shaft
+        /// + two teeth, so over 1 m long at the play camera) that spins and bobs like every pickup, plus a
+        /// 3 m gold light beam so it can be seen across the area. Primitives, no colliders.</summary>
+        public const float VaultKeyLength = 1.2f;
+        public const float VaultKeyBeamHeight = 3f;
+
+        private void BuildVaultKeyVisual()
+        {
+            Color gold = new Color(1f, 0.82f, 0.25f);
+            Material goldMat = MaterialLibrary.Tinted(SurfaceKind.Metal, gold);
+
+            var spin = new GameObject("Visual").transform; // no MeshRenderer: PickupArtDirector.HideGreybox leaves it alone
+            spin.SetParent(transform, worldPositionStays: false);
+            spin.localPosition = Vector3.zero;
+            _spin = spin;
+
+            AddKeyPart(spin, "Bow", PrimitiveType.Cylinder, new Vector3(-VaultKeyLength * 0.5f + 0.25f, 0f, 0f), new Vector3(0.5f, 0.06f, 0.5f), goldMat);
+            AddKeyPart(spin, "Shaft", PrimitiveType.Cube, new Vector3(0.1f, 0f, 0f), new Vector3(VaultKeyLength - 0.35f, 0.14f, 0.14f), goldMat);
+            AddKeyPart(spin, "ToothA", PrimitiveType.Cube, new Vector3(VaultKeyLength * 0.5f - 0.1f, 0f, -0.14f), new Vector3(0.14f, 0.14f, 0.3f), goldMat);
+            AddKeyPart(spin, "ToothB", PrimitiveType.Cube, new Vector3(VaultKeyLength * 0.5f - 0.36f, 0f, -0.11f), new Vector3(0.14f, 0.14f, 0.22f), goldMat);
+
+            // The beam stands on the pickup (so it bobs a hair with it) and does not spin.
+            var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            beam.name = "KeyBeam";
+            var bc = beam.GetComponent<Collider>();
+            if (Application.isPlaying) Destroy(bc); else DestroyImmediate(bc);
+            beam.transform.SetParent(transform, worldPositionStays: false);
+            beam.transform.localScale = new Vector3(0.5f, VaultKeyBeamHeight * 0.5f, 0.5f); // a Cylinder is 2 m tall
+            beam.transform.localPosition = new Vector3(0f, VaultKeyBeamHeight * 0.5f - FloatHeight, 0f);
+            var bmr = beam.GetComponent<MeshRenderer>();
+            bmr.sharedMaterial = VfxMaterials.AlphaBlendTinted(VfxMaterials.Glow(), new Color(1f, 0.85f, 0.3f, 0.35f));
+            bmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            bmr.receiveShadows = false;
+        }
+
+        private static void AddKeyPart(Transform parent, string partName, PrimitiveType type, Vector3 localPos, Vector3 scale, Material mat)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = partName;
+            var c = part.GetComponent<Collider>();
+            if (Application.isPlaying) Destroy(c); else DestroyImmediate(c);
+            part.transform.SetParent(parent, worldPositionStays: false);
+            part.transform.localPosition = localPos;
+            part.transform.localScale = scale;
+            var mr = part.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
         /// <summary>MV-698: World 1's finale drop wears its own greybox rather than the ordinary
