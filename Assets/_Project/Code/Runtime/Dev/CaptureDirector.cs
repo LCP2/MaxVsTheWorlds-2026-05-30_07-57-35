@@ -680,6 +680,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1299Gridlock());
             Add(BuildMv1320SecretCover());
             Add(BuildMv1321Vault());
+            Add(BuildMv1403RealVault());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -1878,6 +1879,67 @@ namespace MaxWorlds.Dev
                     if (robotGo != null) Destroy(robotGo);
                     if (vaultGo != null) Destroy(vaultGo);
                 },
+            };
+        }
+
+        // ---- Mv1403RealVault (MV-1403 AC2) ----------------------------------------------------
+
+        /// <summary>MV-1403 AC2: ONE capture of the REAL City <c>a7_vault1</c> (built by
+        /// <see cref="MapRuntime.BuildVault"/>), locked, framed from its door side (door "N" = +z) so the
+        /// gold door, padlock and VAULT word read. Same City-load + zone-gate idiom as
+        /// <see cref="BuildMv1205CityGroundCheck"/> (zone id is "area"+index, a7 = index 7). Does not
+        /// touch <see cref="BuildMv1321Vault"/>.</summary>
+        private static CapturePreset BuildMv1403RealVault()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + MapStaticBatchRoot.Start finish
+
+                var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                if (batchRoot == null) throw new CaptureAbortException("City built no MapStaticBatchRoot");
+                batchRoot.ApplyAreaGate("area7");
+
+                Factories.Vault vault = null;
+                foreach (var v in FindObjectsByType<Factories.Vault>(FindObjectsSortMode.None))
+                    if (v != null && v.Id == "a7_vault1") vault = v;
+                if (vault == null) throw new CaptureAbortException("City built no vault 'a7_vault1'");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                // Door is on the +z (N) wall: look from the north (yaw 180) so the door face is toward the camera.
+                Vector3 focus = vault.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 180f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 4; i++) yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1403realvault",
+                LogTag = "[MV1403Capture]",
+                Flag = "-mv1403shot",
+                ArmFile = "Temp/mv1403.arm",
+                HeadlessMarker = "Temp/mv1403.headless",
+                DoneFileName = "_mv1403_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1403-a7-vault", NoSetup) },
             };
         }
 
