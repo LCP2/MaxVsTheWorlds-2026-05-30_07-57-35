@@ -259,7 +259,7 @@ namespace MaxWorlds.Weapons
                 transform.position = contact.point;
 
                 if (TryResolveDamageable(contact.collider, out IDamageable target) &&
-                    target.IsAlive && target.Team == Team.Enemy)
+                    target.IsAlive && IsDiscTarget(target))
                 {
                     if (target is RobotEnemy robot && robot.IsDormant) robot.Activate();
                     float multiplier = 1f + _bankBonusPerBounce * _bouncesTaken;
@@ -392,6 +392,12 @@ namespace MaxWorlds.Weapons
             return false;
         }
 
+        /// <summary>MV-1395: what a disc damages and stops on -- every Team.Enemy damageable, plus the
+        /// Team.Neutral Canister and DestructibleCover (neutral by design, so the old Enemy-only test
+        /// let the disc fly through a canister and bounce off cover without hurting it).</summary>
+        private static bool IsDiscTarget(IDamageable d) =>
+            d.Team == Team.Enemy || d is MaxWorlds.Factories.Canister || d is MaxWorlds.Factories.DestructibleCover;
+
         /// <summary>The real hit query, pulled out static and buffer-parameterised (MV-1197) so the
         /// aim preview can run the EXACT same swept-sphere/filter code against its OWN buffer
         /// (<see cref="s_previewHits"/>) without touching a live disc's <see cref="s_hits"/> -- the
@@ -415,7 +421,7 @@ namespace MaxWorlds.Weapons
                 RaycastHit rh = buffer[i];
                 bool isCover = CoverLayer.Exists && rh.collider.gameObject.layer == CoverLayer.Index;
                 bool isEnemy = !isCover && rh.collider.TryGetComponent(out IDamageable d) &&
-                               d.IsAlive && d.Team == Team.Enemy;
+                               d.IsAlive && IsDiscTarget(d);
                 if (!isCover && !isEnemy) continue;
 
                 if (rh.distance < bestDist) { bestDist = rh.distance; contact = rh; found = true; }
