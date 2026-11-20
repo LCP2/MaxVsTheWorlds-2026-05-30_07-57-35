@@ -257,9 +257,11 @@ namespace MaxWorlds.Factories
             public readonly EnemyKind Kind;
             public readonly float Timer;
             public readonly bool FirstEmitted;
-            public PendingEmission(EnemyKind kind, float timer, bool firstEmitted)
+            /// <summary>MV-1396: the robot that went in was drop-less, so its first twin is too.</summary>
+            public readonly bool InputNoDrops;
+            public PendingEmission(EnemyKind kind, float timer, bool firstEmitted, bool inputNoDrops)
             {
-                Kind = kind; Timer = timer; FirstEmitted = firstEmitted;
+                Kind = kind; Timer = timer; FirstEmitted = firstEmitted; InputNoDrops = inputNoDrops;
             }
         }
 
@@ -975,6 +977,7 @@ namespace MaxWorlds.Factories
                     // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
                     // placement is for the ordinary emergence walk, not this box's own theatre.
                     PlaceAtOutRamp(firstSpawn, twinIndex: 0);
+                    if (p.InputNoDrops && firstSpawn.Count > 0) firstSpawn[0].TagNoDrops(); // MV-1396
                     firstEmitted = true;
                 }
 
@@ -994,6 +997,7 @@ namespace MaxWorlds.Factories
                     if (_spawner.Emitted > emittedBefore)
                     {
                         PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808
+                        if (spawned.Count > 0) spawned[0].TagNoDrops(); // MV-1396: the added robot never drops
                         _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
                         CompletedPairs++;
                         if (requeue && spawned.Count > 0)
@@ -1006,7 +1010,7 @@ namespace MaxWorlds.Factories
                     continue;
                 }
 
-                _pending[i] = new PendingEmission(p.Kind, timer, firstEmitted);
+                _pending[i] = new PendingEmission(p.Kind, timer, firstEmitted, p.InputNoDrops);
             }
 
             // MV-823 change 2: "from the moment the robot is fully inside" (i.e. it's landed in
@@ -1178,6 +1182,7 @@ namespace MaxWorlds.Factories
                 {
                     // Fully passed through: gone, and the pair it becomes starts its Cycle beat now.
                     EnemyKind kind = r.Kind;
+                    bool inputNoDrops = r.NoDrops; // MV-1396: read before Despawn
                     r.Despawn();
                     r.transform.localScale = Vector3.one; // MV-823: reset before the pool hands it back out
                     // MV-809: hold the slot this robot just vacated until the Cycle beat's first
@@ -1185,7 +1190,7 @@ namespace MaxWorlds.Factories
                     // fill it during the Cycle beat, and this box's own "always return at least what it
                     // consumed" guarantee would have nothing left to spend.
                     EnemySpawner.ReserveReplicatorSlot();
-                    _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
+                    _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false, inputNoDrops));
                     _intakeRobot = null; // the hatch-close tail keeps _intakeSeq running without it
                 }
             }

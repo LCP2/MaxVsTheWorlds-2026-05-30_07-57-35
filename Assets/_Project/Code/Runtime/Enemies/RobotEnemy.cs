@@ -550,6 +550,14 @@ namespace MaxWorlds.Enemies
         /// <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>). One-way — nothing ever clears this.</summary>
         public void TagNoReplicatePermanent() => _noReplicatePermanent = true;
 
+        /// <summary>MV-1396: true for a robot a relay added (the second twin), or the first twin of a
+        /// drop-less input. Carried for the robot's whole life (cleared only by <see cref="ResetState"/>
+        /// on a fresh pooled life); <see cref="Die"/> then announces no drop of any kind.</summary>
+        public bool NoDrops { get; private set; }
+
+        /// <summary>MV-1396: marks this robot drop-less for its whole life.</summary>
+        public void TagNoDrops() => NoDrops = true;
+
         /// <summary>MV-820: true while this robot is spoken for by a Replicator — either actually
         /// seeking one (queued or mid-Intake, <see cref="State.ReplicatorSeeking"/>) or mid-attack and
         /// tagged to seek one the instant that attack finishes (<see cref="_hasPendingReplicatorSeek"/>).
@@ -1972,6 +1980,7 @@ namespace MaxWorlds.Enemies
             // EnemySpawner must never un-permanent a tag it never re-applies.
             _noReplicate = false;
             _noReplicateTimer = 0f;
+            NoDrops = false; // MV-1396: a fresh life; the relay re-tags after spawn
             _bar?.SetReplicatorMarker(false);
             // MV-775: a pooled robot must not carry the last life's "being drawn into a hatch" latch
             // forward — SeekReplicator/BeginReplicatorIntake re-stamp it fresh each time a Replicator
@@ -5177,11 +5186,12 @@ namespace MaxWorlds.Enemies
             // this kind. The enemy stays ignorant of pickups — the policy lives in PickupDirector.
             // MV-1122: grantsDrops is false for a clean-up safety-net kill (KillWithoutDrops) — the
             // player never fought this robot, so it must not pay out either.
-            if (grantsDrops) MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
+            // MV-1396: a relay-added robot (or the first twin of a drop-less input) pays out nothing.
+            if (grantsDrops && !NoDrops) MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
             // MV-1278: an elite's bonus drop — exactly one Supercell, in ADDITION to whatever the
             // ordinary drop signal above already grants, never on a clean-up/safety-net kill
             // (grantsDrops false) — a robot the player never fought must not pay out extra either.
-            if (grantsDrops && IsElite)
+            if (grantsDrops && !NoDrops && IsElite)
                 MaxWorlds.Pickups.PickupDirector.EnsureInstalled()
                     .PlaceEliteSupercell(transform.position);   // MV-1384: counts against the area's one Supercell
             // MV-1321: the KEY elite's VaultKey drops on ANY kill path through Die — a genuine kill OR a
