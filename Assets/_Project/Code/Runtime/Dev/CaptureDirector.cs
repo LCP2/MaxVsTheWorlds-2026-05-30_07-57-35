@@ -2817,12 +2817,11 @@ namespace MaxWorlds.Dev
                 Vector3 focus = CaptureDirector.OpenZoneCenter() ?? (maxGo.transform.position + maxGo.transform.forward * 4f);
                 focus.y = 1f;
 
-                // design v5 §3.1: Mark I 1-2, Mark II 3-4, Mark III 5-6, Mark IV 7-8 -- one representative
-                // POWER level per mark.
-                int[] powerLevels = { 1, 3, 5, 7 };
+                // MV-1414 AC2: POWER 1, 4 and 8 side by side.
+                int[] powerLevels = { 1, 4, 8 };
                 for (int i = 0; i < powerLevels.Length; i++)
                 {
-                    Vector3 at = focus + new Vector3((i - 1.5f) * 1.1f, 0f, 0f);
+                    Vector3 at = focus + new Vector3((i - 1f) * 1.1f, 0f, 0f);
                     RicochetDisc.Spawn(at, Vector3.forward, speed: 0f, bounces: 2,
                         powerLevel: powerLevels[i], aimLevel: 0,
                         damage: 0f, bankBonusPerBounce: 0f, turnRateDegPerSec: 0f, lookaheadMetres: 0f,
@@ -2867,10 +2866,7 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot>
                 {
-                    new CaptureShot("MV-1196-discs", DiscsSetup),
-                    new CaptureShot("MV-1196-launcher-rate1", cam => LauncherSetup(cam, 1)),
-                    new CaptureShot("MV-1196-launcher-rate3", cam => LauncherSetup(cam, 3)),
-                    new CaptureShot("MV-1196-launcher-rate5", cam => LauncherSetup(cam, 5)),
+                    new CaptureShot("MV-1414-discs", DiscsSetup),
                 },
                 Cleanup = () => RicochetDisc.DestroyPoolForTests(),
             };
