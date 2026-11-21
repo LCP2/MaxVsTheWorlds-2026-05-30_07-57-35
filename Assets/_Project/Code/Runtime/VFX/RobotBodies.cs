@@ -153,10 +153,10 @@ namespace MaxWorlds.VFX
             // just built — never a silhouette change of its own (ticket AC4).
             if (skin == StormdrainSkinTag) AddStormdrainShoulderBand(kind, visualRoot, p);
 
-            // MV-1281: the Shielded elite's own front-arc plate — on top of whichever silhouette the
-            // switch above just built, same "layered on, never a silhouette change" footing as the
-            // stormdrain band immediately above, so it reads identically whichever kind rolled it.
-            if (p.Shield != null) AddShieldedPlate(kind, visualRoot, p);
+            // MV-1413: the Shielded plate is NOT built here any more. A rig is built once, at Awake,
+            // BEFORE RobotEnemy.Apply stamps the affix, so a plate gated on the palette at build time never
+            // existed on a pooled/prefab robot. RobotRig now builds it as its own toggled part
+            // (RobotBodies.BuildShieldedPlateMesh), switched on/off as the affix changes.
 
             // MV-1282: the Hasted elite's own backward-swept fins — same "layered on, never a
             // silhouette change" footing as the Shielded plate immediately above.
@@ -190,28 +190,25 @@ namespace MaxWorlds.VFX
                 new Vector3(0f, y, 0f), Quaternion.identity, Vector3.one, "StormdrainBand");
         }
 
-        /// <summary>MV-1281 point 5: the Shielded elite's own front-arc plate — a light-steel panel
-        /// with a dark edge, ~1.2 m wide per the ticket's design image, standing just proud of the
-        /// collider on its +Z (forward) face at chest height so it reads at a glance as "the front is
-        /// armoured". <see cref="CharacterMeshes.Bevelled"/>'s chamfer is what gives a flat box the
-        /// "curved plate" read the image calls for without a bespoke lathe profile. The dark box behind
-        /// is sized slightly larger so it peeks out as a border/edge around the steel face, same
-        /// outline-via-oversized-backing idiom <see cref="BuildRusher"/> and friends already use for
-        /// eye bezels. Layered on top of whichever kind's own silhouette <see cref="Build"/> just
-        /// built — this never changes a kind's own shape, only adds the tell.</summary>
-        private static void AddShieldedPlate(EnemyKind kind, Transform root, in RobotPalette p)
+        /// <summary>MV-1281 point 5 / MV-1413: the Shielded elite's front-arc plate geometry — a
+        /// light-steel panel (submesh 1) with a slightly larger dark edge behind it (submesh 0), ~1.2 m
+        /// wide. One two-submesh mesh so the rig owns it as a single toggled renderer. Centred on the
+        /// origin; the rig places it on the robot's +Z face, clear of the body mesh.</summary>
+        public const float ShieldedPlateWidth = 1.2f;
+        public const float ShieldedPlateThickness = 0.08f;
+
+        public static Mesh BuildShieldedPlateMesh()
         {
-            EnemyArchetype archetype = EnemyArchetype.Of(kind);
-            const float plateWidth = 1.2f;
             const float plateHeight = 0.5f;
-            float y = archetype.ColliderHeight * 0.5f;
-            float z = archetype.ColliderRadius * 0.95f;
-
-            Add(root, CharacterMeshes.Bevelled(new Vector3(plateWidth + 0.06f, plateHeight + 0.06f, 0.05f), 0.02f),
-                p.Dark, new Vector3(0f, y, z - 0.01f), Quaternion.identity, Vector3.one, "ShieldedPlateEdge");
-
-            Add(root, CharacterMeshes.Bevelled(new Vector3(plateWidth, plateHeight, 0.08f), 0.06f),
-                p.Shield, new Vector3(0f, y, z), Quaternion.identity, Vector3.one, "ShieldedPlate");
+            Mesh edge = CharacterMeshes.Bevelled(new Vector3(ShieldedPlateWidth + 0.06f, plateHeight + 0.06f, 0.05f), 0.02f);
+            Mesh face = CharacterMeshes.Bevelled(new Vector3(ShieldedPlateWidth, plateHeight, ShieldedPlateThickness), 0.06f);
+            var m = new Mesh { name = "ShieldedPlate" };
+            m.CombineMeshes(new[]
+            {
+                new CombineInstance { mesh = edge, transform = Matrix4x4.TRS(new Vector3(0f, 0f, -0.01f), Quaternion.identity, Vector3.one) },
+                new CombineInstance { mesh = face, transform = Matrix4x4.identity },
+            }, mergeSubMeshes: false, useMatrices: true);
+            return m;
         }
 
         /// <summary>MV-1282 point 4: the Hasted elite's own tell — two light-steel fins on the body's

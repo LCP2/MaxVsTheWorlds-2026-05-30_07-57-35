@@ -78,6 +78,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var r in rig.GetComponentsInChildren<MeshRenderer>(true))
             {
                 if (r == greybox) continue;
+                if (r.name == "ShieldedPlate") continue;   // MV-1413: a switched-off affix part, not the body
                 if (combined == null) { combined = r.bounds; continue; }
                 var b = combined.Value;
                 b.Encapsulate(r.bounds);

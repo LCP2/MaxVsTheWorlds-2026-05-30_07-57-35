@@ -684,6 +684,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1404VaultKey());
             Add(BuildMv1409PylonCable());
             Add(BuildMv1412Wedge());
+            Add(BuildMv1413ShieldedPlate());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2218,6 +2219,73 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1412-wedges", Run) },
+            };
+        }
+
+        // ---- Mv1413ShieldedPlate (MV-1413 AC2) ------------------------------------------------
+
+        /// <summary>MV-1413 AC2: a Shielded Bolter seen from the front at the play camera's pitch. The
+        /// robot is built in the production order (rig first, affix stamped by
+        /// <see cref="RobotEnemy.Apply"/> afterwards). ONE shot, no tuning loop. Run via
+        /// <c>cc-mv1413-capture.bat</c>; writes <c>Logs/MV-1413-shielded-bolter.png</c>.</summary>
+        private static CapturePreset BuildMv1413ShieldedPlate()
+        {
+            IEnumerator Run(Camera cam)
+            {
+                Vector3 focus = new Vector3(600f, 0f, 600f);
+                var host = new GameObject("MV1413 Bolter").transform;
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ground.name = "MV1413 Ground";
+                ground.transform.SetParent(host, false);
+                ground.transform.position = focus + new Vector3(0f, -0.5f, 0f);
+                ground.transform.localScale = new Vector3(30f, 1f, 30f);
+                ground.GetComponent<Renderer>().sharedMaterial =
+                    MaterialLibrary.Tinted(SurfaceKind.Stone, new Color(0.16f, 0.17f, 0.22f));
+
+                var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                go.transform.SetParent(host, false);
+                go.transform.position = focus + new Vector3(0f, 1f, 0f);
+                go.AddComponent<CharacterController>();
+                RobotEnemy robot = go.AddComponent<RobotEnemy>();
+                EnemyArchetype plain = EnemyArchetype.Of(EnemyKind.Bolter);
+                robot.Apply(plain);
+                go.AddComponent<RobotRig>();
+                for (int i = 0; i < 2; i++) yield return null;
+                robot.Apply(plain.WithElite(EliteAffix.Shielded));
+                for (int i = 0; i < 2; i++) yield return null;
+                robot.enabled = false;   // hold the pose: the robot faces +Z, the camera looks back at its front
+
+                float pitch = 60f, distance = 9f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) pitch = fixedRig.Pitch;
+                var rot = Quaternion.Euler(pitch, 180f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 4; i++) yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1413shielded",
+                LogTag = "[MV1413Capture]",
+                Flag = "-mv1413shot",
+                ArmFile = "Temp/mv1413.arm",
+                HeadlessMarker = "Temp/mv1413.headless",
+                DoneFileName = "_mv1413_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1413-shielded-bolter", Run) },
             };
         }
 

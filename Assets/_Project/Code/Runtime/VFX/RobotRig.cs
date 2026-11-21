@@ -317,6 +317,11 @@ namespace MaxWorlds.VFX
         {
             if (!_built || _enemy == null || _normalBodyMat == null) return;
             bool wantElite = _enemy.IsElite && !_enemy.IsConverted && !_enemy.IsTrapConverting;
+            if (_shieldPlate != null)
+            {
+                bool wantPlate = wantElite && _enemy.Affix == EliteAffix.Shielded;
+                if (_shieldPlate.activeSelf != wantPlate) _shieldPlate.SetActive(wantPlate);
+            }
             if (wantElite == _eliteBodyShown) return;
             _eliteBodyShown = wantElite;
             _bodyMat = wantElite ? SharedCharacterMaterial("Robot_Elite_Body", EliteRed) : _normalBodyMat;
@@ -675,8 +680,9 @@ namespace MaxWorlds.VFX
             // MV-1281: the Shielded elite's own front-arc plate — null unless this robot actually
             // rolled the affix, in which case RobotBodies.Build (via RobotPalette.Shield) builds no
             // plate at all.
-            if (_enemy.IsElite && _enemy.Affix == EliteAffix.Shielded)
-                _shieldMat = SharedCharacterMaterial("Robot_Shielded_Plate", ShieldedPlateSteel);
+            // MV-1413: built unconditionally — the rig is built at Awake, BEFORE Apply stamps the affix, so
+            // the plate is a toggled part of the rig (see BuildShieldedPlate), not a build-time branch.
+            _shieldMat = SharedCharacterMaterial("Robot_Shielded_Plate", ShieldedPlateSteel);
 
             // MV-1282: the Hasted elite's own swept fins — null unless this robot actually rolled the
             // affix, in which case RobotBodies.Build (via RobotPalette.Hasted) builds no fins at all.
@@ -737,7 +743,7 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, _shieldMat, _hastedMat, _moltenMat),
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, null, _hastedMat, _moltenMat),
                                          _enemy.Skin);
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
@@ -786,7 +792,46 @@ namespace MaxWorlds.VFX
                     break;
                 }
             }
+
+            BuildShieldedPlate(feet);
         }
+
+        /// <summary>MV-1413: the Shielded elite's plate, owned by the rig as ONE renderer that is switched
+        /// on only while this robot is a live Shielded elite (<see cref="RefreshEliteBody"/>). Sits on the
+        /// +Z face (the facing the damage rule uses), pushed out past the forward-most point of every
+        /// other renderer so it can never be buried inside the body.</summary>
+        private void BuildShieldedPlate(Transform feet)
+        {
+            EnemyArchetype archetype = EnemyArchetype.Of(_enemy.Kind);
+            float frontZ = float.NegativeInfinity;
+            foreach (Renderer r in feet.GetComponentsInChildren<Renderer>(true))
+            {
+                Bounds b = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = new Vector3(i % 2 == 0 ? b.min.x : b.max.x, i / 2 % 2 == 0 ? b.min.y : b.max.y, i / 4 == 0 ? b.min.z : b.max.z);
+                    frontZ = Mathf.Max(frontZ, feet.InverseTransformPoint(corner).z);
+                }
+            }
+            float half = RobotBodies.ShieldedPlateThickness * 0.5f;
+            float z = Mathf.Max(archetype.ColliderRadius * 0.95f, frontZ + half + 0.02f);
+
+            var go = new GameObject("ShieldedPlate");
+            go.transform.SetParent(feet, worldPositionStays: false);
+            go.transform.localPosition = new Vector3(0f, archetype.ColliderHeight * 0.5f, z);
+            Mesh mesh = RobotBodies.BuildShieldedPlateMesh();
+            _ownedMeshes.Add(mesh);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterials = new[] { _darkMat, _shieldMat };
+            mr.shadowCastingMode = ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+            go.AddComponent<SelfDrivenTint>();
+            go.SetActive(false);
+            _shieldPlate = go;
+        }
+
+        private GameObject _shieldPlate;
 
         /// <summary>MV-969: <see cref="RobotBodies"/> authors a wheel as TWO OR THREE separate parts
         /// sharing one pivot — Charger's tyre+hub (8 wheel parts for 4 physical wheels), Bruiser's
