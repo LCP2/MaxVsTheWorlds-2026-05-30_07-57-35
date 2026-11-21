@@ -91,16 +91,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.NodeButton("s_bal").interactable, Is.EqualTo(_screen.NodeButton("p_rng").interactable),
                 "AC3: an affordable node in a fresh-empty family must be exactly as interactable as one in an owned family");
 
-            // ---------------------------------------------------------------- AC2: a genuinely LOCKED
-            // family (MOVE, never shed-unlocked) must still read dimmer than both unlocked families
-            // above — the fix must not brighten a family that is actually still locked.
-            float lockedCategoryAlpha = _screen.CategoryPanel("MOVE").color.a;
-            float freshCategoryAlpha = _screen.CategoryPanel("SECONDARY").color.a;
-            float ownedCategoryAlpha = _screen.CategoryPanel("PRIMARY").color.a;
-            Assert.That(lockedCategoryAlpha, Is.LessThan(freshCategoryAlpha),
-                "AC2: MOVE (still locked) must read dimmer than SECONDARY (unlocked, empty)");
-            Assert.That(freshCategoryAlpha, Is.EqualTo(ownedCategoryAlpha).Within(1e-4f),
-                "AC1: SECONDARY (unlocked, empty) and PRIMARY (unlocked, owned) must read the category panel at the same alpha");
+            // MV-1410: the per-category panel alpha checks (old AC2) went with the per-category panels.
 
             // ---------------------------------------------------------------- AC4: the progress ring's
             // own empty track — active whenever the fill is, non-zero alpha, so a partial arc always

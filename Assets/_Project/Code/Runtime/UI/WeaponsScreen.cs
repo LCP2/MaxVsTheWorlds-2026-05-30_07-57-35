@@ -478,6 +478,7 @@ namespace MaxWorlds.UI
         /// full stage breakdown). A no-op if the category has no built panel (nothing to highlight).</summary>
         private void StartCeremony(string categoryId)
         {
+            SelectCategory(categoryId);   // MV-1410: show the tree the reveal is about
             if (_ceremonyScrim == null || string.IsNullOrEmpty(categoryId)) return;
 
             _ceremonyActive = true;
@@ -670,7 +671,83 @@ namespace MaxWorlds.UI
         /// fonts, a scrollable content taller than 1080) instead of the standard fixed 1920x1080 frame?
         /// Pure so it's pinned by an EditMode test without building a canvas — same idiom as
         /// <see cref="ComputeBoardScale"/>.</summary>
-        public static bool IsPhoneLayout(float aspect) => aspect >= PhoneAspectThreshold;
+        // MV-1410: always true. THE RIG is phone-first at every aspect now - a category rail and one
+        // tree at a time - so the big phone radii/fonts apply everywhere (the old standard 1920x1080
+        // board is gone).
+        public static bool IsPhoneLayout(float aspect) => true;
+
+        // ------------------------------------------------------------------ MV-1410: rail + one tree
+
+        /// <summary>Board frame units to canvas units. The tree is authored in frame units (the node
+        /// shell's radii, fonts and pill sizes all are) and drawn at half size, so a 60-radius child is a
+        /// 60-canvas-unit tap rect.</summary>
+        public const float TreeScale = 0.5f;
+        private const float RootRadius = 72f, ChildRadius = 60f, FusionTreeRadius = 72f;   // frame units: rects 144 / 120 / 144
+        private const float TreeMargin = 8f, TreeGap = 6f, RailWidth = 440f, DetailReserve = 360f, TreeHeaderH = 100f;
+        private const float TreeLabelHang = 56f, TreeMaxGapY = 110f, TreeMaxPitchX = 240f;
+        private const float ViewHeight = 1400f, ViewLeft = -240f, ViewWidth = 2400f;
+        private const string ForgeTabId = "FORGE";
+        // MV-1410: a padlock in the same 30-unit centred stroke style as rig_board.json's icons.
+        private const string PadlockSvg = "<path d=\"M-10,-1 L10,-1 L10,14 L-10,14 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-6,-1 L-6,-7 L-3,-12 L3,-12 L6,-7 L6,-1\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>";
+
+        /// <summary>Where everything in the rail + tree layout sits, in board frame units (x right, y down
+        /// from the top of the area below the top bar).</summary>
+        private struct TreeFrame { public Rect Panel, Area; public Rect[] Tabs; }
+
+        private static TreeFrame ComputeTreeFrame(float safeW, float safeH, int tabCount)
+        {
+            float w = safeW / TreeScale, h = (safeH - TopBarHeight) / TreeScale;
+            float x0 = RefW * 0.5f - w * 0.5f;
+            var f = new TreeFrame { Tabs = new Rect[tabCount] };
+            float tabH = tabCount > 0 ? Mathf.Min(150f, (h - 2f * TreeMargin - (tabCount - 1) * TreeGap) / tabCount) : 0f;
+            for (int i = 0; i < tabCount; i++)
+                f.Tabs[i] = new Rect(x0 + TreeMargin, TreeMargin + i * (tabH + TreeGap), RailWidth, tabH);
+            float px = x0 + TreeMargin + RailWidth + TreeMargin;
+            f.Panel = new Rect(px, TreeMargin, Mathf.Max(200f, w - (px - x0) - DetailReserve - TreeMargin), h - 2f * TreeMargin);
+            f.Area = new Rect(f.Panel.x + 24f, f.Panel.y + TreeHeaderH, f.Panel.width - 48f, f.Panel.height - TreeHeaderH - 16f);
+            return f;
+        }
+
+        /// <summary>The tree-layout result for one node, in board frame units.</summary>
+        private struct TreeSpot { public float X, Y, R; public bool HasChildren; public string Category; }
+        private readonly Dictionary<string, TreeSpot> _treeSpots = new Dictionary<string, TreeSpot>();
+        private TreeFrame _treeFrame;
+        private string _selectedCategory;
+
+        /// <summary>The category ids that get a rail tab, in board order (FORGE last, only when the world has fusions).</summary>
+        private List<string> RailIds()
+        {
+            var ids = new List<string>();
+            foreach (var c in Categories) ids.Add(c.Id);
+            if (Fusions.Count > 0) ids.Add(ForgeTabId);
+            return ids;
+        }
+
+        private void ComputeTreeLayouts()
+        {
+            _treeSpots.Clear();
+            var ids = RailIds();
+            _treeFrame = ComputeTreeFrame(_safeW, _safeH, ids.Count);
+            if (_selectedCategory == null || !ids.Contains(_selectedCategory)) _selectedCategory = ids.Count > 0 ? ids[0] : null;
+
+            var area = _treeFrame.Area;
+            foreach (var cat in Categories)
+            {
+                var pairs = new List<(string, string)>();
+                foreach (var ab in Abilities) if (ab.Category == cat.Id) pairs.Add((ab.Id, ab.Parent));
+                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, RootRadius * 2f, ChildRadius * 2f, TreeLabelHang, TreeMaxGapY, TreeMaxPitchX);
+                foreach (var p in placed)
+                    _treeSpots[p.Id] = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, HasChildren = p.HasChildren, Category = cat.Id };
+            }
+            if (Fusions.Count > 0)
+            {
+                var pairs = new List<(string, string)>();
+                foreach (var fu in Fusions) pairs.Add((fu.Id, null));
+                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, FusionTreeRadius * 2f, FusionTreeRadius * 2f, TreeLabelHang, TreeMaxGapY, TreeMaxPitchX);
+                foreach (var p in placed)
+                    _treeSpots[p.Id] = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, HasChildren = false, Category = ForgeTabId };
+            }
+        }
 
         /// <summary>MV-549: half the total ref-px span phone mode's own category panels actually occupy,
         /// centred on the board's own x=960 midpoint — the same envelope
@@ -1108,6 +1185,7 @@ namespace MaxWorlds.UI
             foreach (var ab in Abilities) RefreshAbilityNode(ab);
             foreach (var fusion in Fusions) RefreshFusionNode(fusion, cellsBanked);
             RefreshConnectors();
+            RefreshRail();
 
             RefreshMorphingModuleDraft();
         }
@@ -1173,6 +1251,7 @@ namespace MaxWorlds.UI
                     img.color = new Color(supercell.r, supercell.g, supercell.b, alpha);
                 }
             }
+            SyncConnectorExtras();
         }
 
         private static bool CategoryHasOwnedAbility(string categoryId)
@@ -1405,6 +1484,9 @@ namespace MaxWorlds.UI
                 return;
             }
             v.DraftBadge.gameObject.SetActive(false);
+            v.PillBg.gameObject.SetActive(true);   // MV-1410: a locked node hides its pill, so every refresh starts from visible
+            v.PillBorder.gameObject.SetActive(true);
+            if (v.NormalIcon != null) v.Icon.sprite = v.NormalIcon;
 
             bool owned = RigState.IsOwned(ab.Id);
             bool maxed = owned && RigState.Level(ab.Id) >= ab.MaxLevel;
@@ -1536,7 +1618,8 @@ namespace MaxWorlds.UI
             else if (draftable)
             {
                 v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.16f), categoryUnlocked);
-                v.HexOutline.color = DimIfUnlit(module, categoryUnlocked);
+                // MV-1410: affordable-but-unbought reads as a dashed GOLD outline; unaffordable keeps the cyan.
+                v.HexOutline.color = DimIfUnlit(cellAffordable ? SupercellColor : module, categoryUnlocked);
                 // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
                 // (was module cyan) — the module tint lives on the border/dot instead so it still reads
                 // "draftable", pulsing in Update() alongside the ring itself. MV-446 defect 2: hex-tight
@@ -1562,7 +1645,7 @@ namespace MaxWorlds.UI
                 // tag already carries the price, so dropping it from this pill costs nothing.
                 v.PillText.text = ab.Id == "u_slt"
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
-                    : CellSpend.UnlockCostFor(ab.Id).ToString();
+                    : "NEW";   // MV-1410: the price rides on the cost tag; the pill says this is a first purchase
                 if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
@@ -1581,11 +1664,14 @@ namespace MaxWorlds.UI
                 v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
                 v.HexOutline.color = new Color(module.r, module.g, module.b, 0.40f);
                 v.Glow.gameObject.SetActive(false);
-                v.PillText.text = "LOCK";
+                v.PillText.text = "";
+                v.PillBg.gameObject.SetActive(false);   // MV-1410: locked = a padlock, no pill and no "???"
+                v.PillBorder.gameObject.SetActive(false);
+                v.Icon.sprite = v.LockIcon;
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = new Color(module.r, module.g, module.b, 0.35f);
                 v.PillText.color = new Color(module.r, module.g, module.b, 0.55f);
-                v.Label.text = "? ? ?";
+                v.Label.text = "";
                 v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
             }
@@ -1594,11 +1680,14 @@ namespace MaxWorlds.UI
                 v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
                 v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), categoryUnlocked);
                 v.Glow.gameObject.SetActive(false);
-                v.PillText.text = "LOCK";
+                v.PillText.text = "";
+                v.PillBg.gameObject.SetActive(false);   // MV-1410: locked = a padlock, no pill and no "???"
+                v.PillBorder.gameObject.SetActive(false);
+                v.Icon.sprite = v.LockIcon;
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.22f), categoryUnlocked);
                 v.PillText.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.34f), categoryUnlocked);
-                v.Label.text = "? ? ?";
+                v.Label.text = "";
                 v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
             }
@@ -1715,13 +1804,15 @@ namespace MaxWorlds.UI
         /// width, so two adjacent boxes can never overlap no matter how the layout pass happens to space
         /// that particular pair. <paramref name="allFusions"/> must be the same aspect-correct list
         /// (<see cref="Fusions"/>) the caller is iterating, not the unconditional standard-aspect one.</summary>
-        private static float FusionSubLabelWidth(RigFusionLayout fusion, IReadOnlyList<RigFusionLayout> allFusions)
+        private float FusionSubLabelWidth(RigFusionLayout fusion, IReadOnlyList<RigFusionLayout> allFusions)
         {
+            // MV-1410: gaps are read off the tree layout's real positions, not the board JSON's x.
+            if (!_treeSpots.TryGetValue(fusion.Id, out var me)) return FusionSubLabelMaxWidth;
             float nearestGap = float.MaxValue;
             foreach (var other in allFusions)
             {
-                if (other.Id == fusion.Id) continue;
-                float dx = Mathf.Abs(other.X - fusion.X);
+                if (other.Id == fusion.Id || !_treeSpots.TryGetValue(other.Id, out var o)) continue;
+                float dx = Mathf.Abs(o.X - me.X);
                 if (dx < nearestGap) nearestGap = dx;
             }
             if (nearestGap == float.MaxValue) return FusionSubLabelMaxWidth;
@@ -2024,35 +2115,15 @@ namespace MaxWorlds.UI
         /// is how far above that edge the content's own origin (authored y = 0) sits.</summary>
         private static void ComputeBoardViewport(bool phone, out float left, out float top, out float width, out float height, out float contentHeight, out float contentOffsetY)
         {
-            if (phone)
-            {
-                top = PhoneViewportTop;
-                contentHeight = RigBoardLayout.PhoneContentHeight;
-                // The FORGE fusions' sub-captions run past PhoneContentHeight (it was only ever a scroll
-                // extent); with nothing to scroll the viewport must be tall enough to show them whole.
-                height = contentHeight + PhoneBoardBottomPad;
-                contentOffsetY = 0f;
-                width = PhoneContentHalfWidth() * 2f + 16f;
-                left = RefW * 0.5f - width * 0.5f;
-            }
-            else
-            {
-                top = StandardViewportTop;
-                contentHeight = Mathf.Max(RefH, RigBoardLayout.StandardContentHeight);
-                height = contentHeight - top;
-                contentOffsetY = top;
-                width = RefW;
-                left = 0f;
-            }
+            // MV-1410: one fixed viewport, wide and tall enough for any aspect; the rail and tree are laid
+            // out in frame units from the live safe size (ComputeTreeFrame), so nothing here depends on mode.
+            left = ViewLeft; top = 0f; width = ViewWidth; height = ViewHeight;
+            contentHeight = ViewHeight; contentOffsetY = 0f;
         }
 
         /// <summary>MV-1408: uniform scale that fits the whole board viewport into
         /// <paramref name="availW"/> x <paramref name="availH"/> canvas units (the area below the top bar).</summary>
-        private static float ComputeBoardFit(bool phone, float availW, float availH)
-        {
-            ComputeBoardViewport(phone, out _, out _, out float vw, out float vh, out _, out _);
-            return Mathf.Max(0.01f, Mathf.Min(availW / vw, availH / vh));
-        }
+        private static float ComputeBoardFit(bool phone, float availW, float availH) => TreeScale;
 
         /// <summary>MV-1408: where board-content coordinates (the authored json x, y) land on the canvas for a
         /// screen of <paramref name="aspect"/>, in canvas units measured from the canvas's top-left:
@@ -2064,11 +2135,10 @@ namespace MaxWorlds.UI
             ComputeCanvasSize(aspect, out float cw, out float ch);
             float safeW = cw * SafeArea.CurrentSafeWidthFraction();
             float safeH = ch * SafeArea.CurrentSafeHeightFraction();
-            scale = ComputeBoardFit(phone, safeW, safeH - TopBarHeight);
-            ComputeBoardViewport(phone, out _, out float vTop, out _, out _, out _, out float contentOffsetY);
-            // The viewport's top edge sits on the top bar's bottom edge; content y = 0 is contentOffsetY above it.
+            scale = TreeScale;
+            // The frame's x = 960 (centre) sits on the canvas centre; its y = 0 on the top bar's bottom edge.
             originX = cw * 0.5f - RefW * 0.5f * scale;
-            originY = (ch - safeH) * 0.5f + TopBarHeight - contentOffsetY * scale;
+            originY = (ch - safeH) * 0.5f + TopBarHeight;
         }
 
         /// <summary>MV-1408/MV-1398: board fit scale plus the two shape-resolution buckets — the board's
@@ -2122,7 +2192,9 @@ namespace MaxWorlds.UI
             }
             CrispUi.Resolution = wantRes;
 
-            if (wantPhoneMode != _phoneMode || worldChanged || resChanged || _nodeParent == null)
+            // MV-1410: the rail and tree are laid out from the live safe size, so a new size re-lays them out.
+            bool safeChanged = !Mathf.Approximately(_builtSafeW, _safeW) || !Mathf.Approximately(_builtSafeH, _safeH);
+            if (wantPhoneMode != _phoneMode || worldChanged || resChanged || safeChanged || _nodeParent == null)
             {
                 _phoneMode = wantPhoneMode;
                 RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
@@ -2149,9 +2221,11 @@ namespace MaxWorlds.UI
         private void BuildBoardContent()
         {
             _nodeParent = BuildBoardViewport(_boardRoot, _phoneMode, out _boardContentHost);
+            _builtSafeW = _safeW; _builtSafeH = _safeH;
 
-            BuildCategoryPanels(_nodeParent);
-            BuildConnectors(_nodeParent);   // MV-443: behind the panels' contents, but above the panel fill
+            ComputeTreeLayouts();                // MV-1410: every category's tree, laid out from parent links
+            BuildTreePanel(_nodeParent);         // the tree panel, its header and the category rail
+            BuildConnectors(_nodeParent);
             BuildForgeSection(_nodeParent);
             foreach (var cat in Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_nodeParent, cat);
             foreach (var ab in Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_nodeParent, ab);
@@ -2159,7 +2233,10 @@ namespace MaxWorlds.UI
             BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
             BuildCeremonyVisuals(_nodeParent);   // MV-605: built last too, so it renders above everything else
+            ApplyTreeSelection();
         }
+
+        private float _builtSafeW = -1f, _builtSafeH = -1f;
 
         /// <summary>MV-1408: the node parent for both modes — a masked, NON-scrolling viewport exactly as
         /// big as the content (see <see cref="ComputeBoardViewport"/>), so every node is reachable without
@@ -2210,6 +2287,10 @@ namespace MaxWorlds.UI
             _categoryPanels.Clear();
             _categoryPanelBorders.Clear();
             _connectors.Clear();
+            _connectorExtras.Clear();
+            _railTabs.Clear();
+            _railOrder.Clear();
+            _treePanel = null; _treePanelBorder = null; _treeSlotText = null; _treeNameText = null;
             _draftScrim = null;
             _draftBand = null;
             _draftBandTitle = null;
@@ -2227,136 +2308,310 @@ namespace MaxWorlds.UI
             _ceremonySkipCatcher = null;
         }
 
-        /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
-        /// per category, sized to the actual bounds of the nodes it contains (its own category node
-        /// plus every ability node whose <c>Category</c> matches it), not to a shared midpoint with its
-        /// neighbours (MV-594: midpoint-tiled panels put the visible box's edge wherever the NEXT
-        /// family's centre happened to sit, unrelated to where this family's own nodes actually are —
-        /// dead space for a narrow family, a tight crop for one with a close neighbour) and not to a
-        /// fixed height either (MV-1109: the old shared <c>RegionRectH</c> was sized for standard mode's
-        /// own row schedule and silently reused for phone mode's deeper one, leaving a family's own
-        /// lowest label hanging below its panel on plain black — see
-        /// <see cref="RigBoardLayout.ComputeFamilyPanelBounds"/>'s own doc comment for the numbers).
-        /// Panels may now have gaps between them; that is correct, a gap is what makes a box read as
-        /// "this one family". Drawn before the nodes so they sit behind everything.</summary>
-        private void BuildCategoryPanels(RectTransform boardRoot)
+        // ------------------------------------------------------------------ MV-1410: tree panel + rail
+
+        private sealed class RailTab
         {
-            var categories = Categories;
-            var abilities = Abilities;
-            int n = categories.Count;
-            if (n == 0) return;
-            float radius = RigBoardLayout.RegionRectRadius;
-            float catR = RadiusCategory, abR = RadiusAbility;
-
-            // MV-1109: left/right/top/bottom all come from the same content-derived pass now, shared with
-            // the ui-screens conformance check so the drawn panel and the checked panel can never drift
-            // apart from each other.
-            var bounds = RigBoardLayout.ComputeFamilyPanelBounds(categories, abilities, catR, abR, _phoneMode);
-
-            for (int i = 0; i < n; i++)
-            {
-                float left = bounds[i].Left, right = bounds[i].Right, top = bounds[i].Top, bottom = bounds[i].Bottom;
-                float w = right - left, h = bottom - top;
-
-                float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
-                var panel = AddImage(boardRoot, CrispUi.RoundedBox(64, cornerFraction),
-                    new Color(1f, 1f, 1f, RigBoardLayout.RegionOpacityDark), $"{categories[i].Id} Panel");
-                Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-                panel.rectTransform.sizeDelta = new Vector2(w, h);
-                panel.rectTransform.anchoredPosition = new Vector2(left, -top);
-                panel.type = Image.Type.Sliced;
-                panel.raycastTarget = false;
-                _categoryPanels[categories[i].Id] = panel;
-
-                // MV-443 defect 1: a 1.5px family-coloured hairline so the columns read as an edge
-                // without shouting — same rect as the panel fill, stacked on top.
-                var border = AddImage(boardRoot, CrispUi.RoundedBoxOutline(64, cornerFraction, 1.5f),
-                    Color.clear, $"{categories[i].Id} Panel Border");
-                Anchor(border.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-                border.rectTransform.sizeDelta = new Vector2(w, h);
-                border.rectTransform.anchoredPosition = new Vector2(left, -top);
-                border.type = Image.Type.Sliced;
-                border.raycastTarget = false;
-                _categoryPanelBorders[categories[i].Id] = border;
-            }
+            public string Id, Family;
+            public RectTransform Root;
+            public Image Bg, Border, Hex, Icon;
+            public TextMeshProUGUI Top, Name, Count;
+            public Button Button;
         }
 
-        /// <summary>MV-443 defect 2: the tree's connector lines — category-to-parentless-ability,
-        /// parent-ability-to-child-ability, and category-to-fusion — built once here as static cubic-
-        /// bezier strokes (<see cref="HudTextures.BezierStroke"/>); <see cref="RefreshConnectors"/>
-        /// only ever recolours them. Built right after the panels (behind every node, above the panel
-        /// fill) so nothing drawn later needs to know connectors exist.</summary>
-        private void BuildConnectors(RectTransform boardRoot)
+        private readonly Dictionary<string, RailTab> _railTabs = new Dictionary<string, RailTab>();
+        private readonly List<string> _railOrder = new List<string>();
+        private Image _treePanel, _treePanelBorder;
+        private TextMeshProUGUI _treeSlotText, _treeNameText;
+        private readonly Dictionary<string, List<Image>> _connectorExtras = new Dictionary<string, List<Image>>();
+
+        /// <summary>MV-1410: the tree panel's rect in board frame units - test/conformance access.</summary>
+        public Rect TreePanelRect => _treeFrame.Panel;
+
+        /// <summary>MV-1410: the category currently shown in the tree panel (a rail tab id, or FORGE).</summary>
+        public string SelectedCategoryId => _selectedCategory;
+
+        /// <summary>MV-1410: the rail's tab ids, in board order.</summary>
+        public IReadOnlyList<string> RailTabIds => _railOrder;
+
+        /// <summary>MV-1410: a rail tab's rect in board frame units (see <see cref="TreeScale"/>).</summary>
+        public Rect RailTabRect(string id)
         {
-            float catR = RadiusCategory, abR = RadiusAbility, fuR = RadiusFusion;
-            float bias = RigBoardLayout.ConnectorControlBias, width = RigBoardLayout.ConnectorWidth;
+            int i = _railOrder.IndexOf(id);
+            return i >= 0 && _treeFrame.Tabs != null && i < _treeFrame.Tabs.Length ? _treeFrame.Tabs[i] : default;
+        }
 
-            var categoryById = new Dictionary<string, RigCategoryLayout>();
-            foreach (var cat in Categories) categoryById[cat.Id] = cat;
-            var abilityById = new Dictionary<string, RigAbilityLayout>();
-            foreach (var ab in Abilities) abilityById[ab.Id] = ab;
+        /// <summary>MV-1410: a rail tab's tap button.</summary>
+        public Button RailTabButton(string id) => _railTabs.TryGetValue(id, out var t) ? t.Button : null;
 
+        /// <summary>MV-1410: the ability/fusion ids shown in the tree right now (the selected category's nodes).</summary>
+        public List<string> VisibleTreeNodeIds()
+        {
+            var ids = new List<string>();
+            foreach (var kv in _treeSpots) if (kv.Value.Category == _selectedCategory) ids.Add(kv.Key);
+            return ids;
+        }
+
+        /// <summary>MV-1410: an ability's parent id in its tree (null for a root, and for a fusion).</summary>
+        public string NodeParentId(string id)
+        {
+            foreach (var ab in Abilities) if (ab.Id == id) return ab.Parent;
+            return null;
+        }
+
+        /// <summary>MV-1410: a tree node's tap rect in board frame units, or default if unknown.</summary>
+        public Rect TreeNodeRect(string id) =>
+            _treeSpots.TryGetValue(id, out var s) ? new Rect(s.X - s.R, s.Y - s.R, s.R * 2f, s.R * 2f) : default;
+
+        /// <summary>MV-1410: the visible tree's abilities with their tree-layout positions (board frame units) -
+        /// what the capture harness probes, in place of the board JSON's x/y.</summary>
+        public List<RigAbilityLayout> TreeAbilityLayouts()
+        {
+            var list = new List<RigAbilityLayout>();
             foreach (var ab in Abilities)
+                if (_treeSpots.TryGetValue(ab.Id, out var s) && s.Category == _selectedCategory)
+                    list.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, s.X, s.Y, ab.MaxLevel));
+            return list;
+        }
+
+        /// <summary>MV-1410: a child node's radius in frame units (a root is <see cref="TreeRootRadiusValue"/>).</summary>
+        public static float TreeChildRadiusValue => ChildRadius;
+        public static float TreeRootRadiusValue => RootRadius;
+
+        /// <summary>MV-1410: shows <paramref name="categoryId"/>'s tree (a rail tab id, or FORGE).</summary>
+        public void SelectCategory(string categoryId)
+        {
+            if (!_railOrder.Contains(categoryId) || categoryId == _selectedCategory) return;
+            _selectedCategory = categoryId;
+            ApplyTreeSelection();
+            RefreshRail();
+        }
+
+        private void BuildTreePanel(RectTransform parent)
+        {
+            _railTabs.Clear();
+            _railOrder.Clear();
+            var ids = RailIds();
+            _railOrder.AddRange(ids);
+
+            var p = _treeFrame.Panel;
+            float cornerFraction = Mathf.Clamp(RigBoardLayout.RegionRectRadius * 2f / (Mathf.Min(p.width, p.height) * 0.5f), 0.05f, 0.5f);
+            _treePanel = AddImage(parent, CrispUi.RoundedBox(64, cornerFraction), Color.white, "Tree Panel");
+            PlaceTopLeft(_treePanel.rectTransform, p);
+            _treePanel.type = Image.Type.Sliced;
+            _treePanel.raycastTarget = false;
+            _treePanelBorder = AddImage(parent, CrispUi.RoundedBoxOutline(64, cornerFraction, 3f), Color.white, "Tree Panel Border");
+            PlaceTopLeft(_treePanelBorder.rectTransform, p);
+            _treePanelBorder.type = Image.Type.Sliced;
+            _treePanelBorder.raycastTarget = false;
+
+            _treeSlotText = AddText(parent, 26, Color.white, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_treeSlotText.rectTransform, new Rect(p.x + 28f, p.y + 10f, p.width - 56f, 30f));
+            _treeSlotText.fontStyle = FontStyles.Bold;
+            _treeSlotText.raycastTarget = false;
+            _treeNameText = AddText(parent, 44, TextColor, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_treeNameText.rectTransform, new Rect(p.x + 28f, p.y + 38f, p.width - 56f, 50f));
+            _treeNameText.fontStyle = FontStyles.Bold;
+            _treeNameText.enableAutoSizing = true;
+            _treeNameText.fontSizeMin = 22f; _treeNameText.fontSizeMax = 44f;
+            _treeNameText.textWrappingMode = TextWrappingModes.Normal;
+            _treeNameText.overflowMode = TextOverflowModes.Truncate;
+            _treeNameText.raycastTarget = false;
+
+            for (int i = 0; i < ids.Count; i++) _railTabs[ids[i]] = BuildRailTab(parent, ids[i], _treeFrame.Tabs[i]);
+        }
+
+        private static void PlaceTopLeft(RectTransform r, Rect rect)
+        {
+            Anchor(r, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            r.sizeDelta = rect.size;
+            r.anchoredPosition = new Vector2(rect.x, -rect.y);
+        }
+
+        private RailTab BuildRailTab(RectTransform parent, string id, Rect rect)
+        {
+            string family = id == ForgeTabId ? "supercell" : RigBoardLayout.CategoryFamily(id);
+            string iconKey = id == ForgeTabId ? "fuse" : null;
+            if (iconKey == null) foreach (var c in Categories) if (c.Id == id) iconKey = c.Icon;
+            var tab = new RailTab { Id = id, Family = family };
+
+            float corner = Mathf.Clamp(24f / (rect.height * 0.5f), 0.05f, 0.5f);
+            tab.Bg = AddImage(parent, CrispUi.RoundedBox(64, corner), Color.white, "Tab " + id);
+            tab.Root = tab.Bg.rectTransform;
+            PlaceTopLeft(tab.Root, rect);
+            tab.Bg.type = Image.Type.Sliced;
+            tab.Bg.raycastTarget = true;
+            tab.Button = tab.Bg.gameObject.AddComponent<Button>();
+            tab.Button.transition = Selectable.Transition.None;
+            string tabId = id;
+            tab.Button.onClick.AddListener(() => SelectCategory(tabId));
+
+            tab.Border = AddImage(tab.Root, CrispUi.RoundedBoxOutline(64, corner, 3f), Color.clear, "Border");
+            Stretch(tab.Border.rectTransform);
+            tab.Border.type = Image.Type.Sliced;
+            tab.Border.raycastTarget = false;
+
+            float hexH = Mathf.Min(rect.height - 24f, 96f), hexW = hexH * Sqrt3 * 0.5f;
+            tab.Hex = AddImage(tab.Root, CrispUi.Polygon(HexSides, HexRotationDeg, Mathf.CeilToInt(hexW), Mathf.CeilToInt(hexH)), Color.white, "Hex");
+            Anchor(tab.Hex.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f));
+            tab.Hex.rectTransform.sizeDelta = new Vector2(hexW, hexH);
+            tab.Hex.rectTransform.anchoredPosition = new Vector2(20f + hexW * 0.5f, 0f);
+            tab.Hex.raycastTarget = false;
+            int iconSize = Mathf.RoundToInt(hexH * 0.62f);
+            tab.Icon = AddImage(tab.Hex.rectTransform, CrispUi.VectorIcon(RigBoardLayout.Icon(iconKey), iconSize), Color.white, "Icon");
+            Anchor(tab.Icon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            tab.Icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
+            tab.Icon.raycastTarget = false;
+
+            float textLeft = 20f + hexW + 18f;
+            float countW = 96f;
+            tab.Top = AddText(tab.Root, 22, Dim, TextAnchor.LowerLeft);
+            Anchor(tab.Top.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0f));
+            tab.Top.rectTransform.offsetMin = new Vector2(textLeft, 0f);
+            tab.Top.rectTransform.offsetMax = new Vector2(-countW - 8f, 30f);
+            tab.Top.fontStyle = FontStyles.Bold;
+            tab.Top.raycastTarget = false;
+
+            tab.Name = AddText(tab.Root, 32, TextColor, TextAnchor.UpperLeft);
+            Anchor(tab.Name.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 1f));
+            tab.Name.rectTransform.offsetMin = new Vector2(textLeft, -60f);
+            tab.Name.rectTransform.offsetMax = new Vector2(-countW - 8f, 0f);
+            tab.Name.fontStyle = FontStyles.Bold;
+            tab.Name.enableAutoSizing = true;
+            tab.Name.fontSizeMin = 18f; tab.Name.fontSizeMax = 32f;
+            tab.Name.textWrappingMode = TextWrappingModes.Normal;   // long weapon names wrap to two lines and shrink rather than run into the count
+            tab.Name.overflowMode = TextOverflowModes.Truncate;
+            tab.Name.raycastTarget = false;
+
+            tab.Count = AddText(tab.Root, 32, Dim, TextAnchor.MiddleRight);
+            Anchor(tab.Count.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            tab.Count.rectTransform.sizeDelta = new Vector2(countW, 44f);
+            tab.Count.rectTransform.anchoredPosition = new Vector2(-14f, 0f);
+            tab.Count.fontStyle = FontStyles.Bold;
+            tab.Count.raycastTarget = false;
+            return tab;
+        }
+
+        /// <summary>Repaints the rail tabs and the tree header from live state: the selected tab gets its
+        /// family outline and fill, a locked category is dimmed but stays tappable.</summary>
+        private void RefreshRail()
+        {
+            foreach (var kv in _railTabs)
             {
-                var end = new Vector2(ab.X, ab.Y + RigBoardLayout.ConnectorEndOffset(abR));
-                if (string.IsNullOrEmpty(ab.Parent))
+                var tab = kv.Value;
+                bool forge = tab.Id == ForgeTabId;
+                bool selected = tab.Id == _selectedCategory;
+                bool unlocked = forge || RigState.IsCategoryUnlocked(tab.Id);
+                Color fam = RigBoardLayout.Colour(tab.Family);
+                Color ink = RigBoardLayout.Colour("ink");
+                float dim = unlocked ? 1f : RigBoardLayout.FamilyDimFactor;
+
+                tab.Bg.color = selected ? new Color(fam.r * 0.28f, fam.g * 0.28f, fam.b * 0.28f, 1f) : new Color(0.075f, 0.085f, 0.11f, 1f);
+                tab.Border.color = selected ? fam : Color.clear;
+                tab.Hex.color = new Color(fam.r, fam.g, fam.b, unlocked ? 1f : dim * 0.6f);
+                tab.Icon.color = new Color(ink.r, ink.g, ink.b, dim);
+
+                string name, top;
+                if (forge) { name = "FORGE"; top = "FUSIONS"; }
+                else
                 {
-                    if (!categoryById.TryGetValue(ab.Category, out var cat)) continue;
-                    var start = new Vector2(cat.X, cat.Y + catR + RigBoardLayout.ConnectorStartOffsetCategory);
-                    BuildConnector(boardRoot, $"conn:cat:{cat.Id}>{ab.Id}", start, end, bias, width);
+                    name = CategoryHeaderText(tab.Id, out _);
+                    top = !unlocked ? "LOCKED" : (tab.Id == "PRIMARY" || tab.Id == "SECONDARY") ? tab.Id : "SYSTEMS";
+                }
+                tab.Top.text = top;
+                tab.Top.color = new Color(fam.r, fam.g, fam.b, unlocked ? 0.95f : 0.5f);
+                tab.Name.text = name;
+                tab.Name.color = new Color(TextColor.r, TextColor.g, TextColor.b, unlocked ? 1f : 0.55f);
+
+                int owned = 0, total = 0;
+                if (forge)
+                {
+                    foreach (var fu in Fusions) { total++; if (RigFusionState.IsForged(fu.Id)) owned++; }
                 }
                 else
                 {
-                    if (!abilityById.TryGetValue(ab.Parent, out var parent)) continue;
-                    var start = new Vector2(parent.X, parent.Y + RigBoardLayout.ConnectorStartOffsetAbility(abR));
-                    BuildConnector(boardRoot, $"conn:ab:{parent.Id}>{ab.Id}", start, end, bias, width);
+                    foreach (var ab in Abilities)
+                    {
+                        if (ab.Category != tab.Id) continue;
+                        total++;
+                        if (RigState.IsOwned(ab.Id)) owned++;
+                    }
                 }
+                tab.Count.text = $"{owned}/{total}";
+                tab.Count.color = new Color(ink.r, ink.g, ink.b, unlocked ? 0.8f : 0.4f);
             }
 
-            // MV-445 defect 3: geometry only here — colour is now live (RefreshConnectors), gated by
-            // RigFusionState.IsEligible so an unreachable fusion (not both parent categories lit) draws
-            // at the dimmer fusionAlphaLocked, not the old always-on fusionAlpha.
-            float fusionBias = RigBoardLayout.ConnectorFusionControlBias, fusionWidth = RigBoardLayout.ConnectorFusionWidth;
-            foreach (var fusion in Fusions)
+            if (_treePanel == null || _selectedCategory == null || !_railTabs.TryGetValue(_selectedCategory, out var sel)) return;
+            Color f = RigBoardLayout.Colour(sel.Family);
+            _treePanel.color = new Color(f.r * 0.16f, f.g * 0.16f, f.b * 0.16f, 0.55f);
+            _treePanelBorder.color = new Color(f.r, f.g, f.b, 0.55f);
+            bool isForge = _selectedCategory == ForgeTabId;
+            _treeSlotText.text = isForge ? "FUSIONS" : _selectedCategory == "PRIMARY" ? "PRIMARY WEAPON" : _selectedCategory == "SECONDARY" ? "SECONDARY WEAPON" : "SYSTEM";
+            _treeSlotText.color = f;
+            _treeNameText.text = isForge ? "FORGE" : CategoryHeaderText(_selectedCategory, out _);
+        }
+
+        /// <summary>Shows only the selected category's nodes and connectors. The others stay built (just
+        /// inactive) so every node id still resolves through <see cref="BoardNode"/>.</summary>
+        private void ApplyTreeSelection()
+        {
+            foreach (var kv in _abilityNodes)
+                kv.Value.Root.gameObject.SetActive(_treeSpots.TryGetValue(kv.Key, out var s) && s.Category == _selectedCategory);
+            foreach (var kv in _fusionNodes)
+                kv.Value.Root.gameObject.SetActive(_selectedCategory == ForgeTabId);
+            foreach (var kv in _categoryNodes) kv.Value.Root.gameObject.SetActive(false);   // the rail tab IS the category now
+            foreach (var kv in _connectors)
             {
-                var end = new Vector2(fusion.X, fusion.Y + RigBoardLayout.ConnectorEndOffset(fuR));
-                foreach (var parentCategoryId in new[] { fusion.ParentA, fusion.ParentB })
+                bool show = false;
+                if (kv.Key.StartsWith("conn:ab:", StringComparison.Ordinal))
                 {
-                    if (!categoryById.TryGetValue(parentCategoryId, out var cat)) continue;
-                    var start = new Vector2(cat.X, cat.Y + catR + RigBoardLayout.ConnectorStartOffsetCategory);
-                    BuildConnector(boardRoot, $"conn:fusion:{fusion.Id}>{parentCategoryId}", start, end, fusionBias, fusionWidth);
+                    string child = kv.Key.Substring(kv.Key.IndexOf('>') + 1);
+                    show = _treeSpots.TryGetValue(child, out var s) && s.Category == _selectedCategory;
                 }
+                kv.Value.gameObject.SetActive(show);
+            }
+            foreach (var kv in _connectorExtras)
+            {
+                bool show = _connectors.TryGetValue(kv.Key, out var main) && main.gameObject.activeSelf;
+                foreach (var img in kv.Value) img.gameObject.SetActive(show);
             }
         }
 
-        /// <summary>One cubic-bezier connector: control points sit on the vertical between
-        /// <paramref name="start"/> and <paramref name="end"/>, at <paramref name="controlBias"/> of the
-        /// gap from each end — a smooth mostly-vertical S-curve regardless of how far apart the two
-        /// points sit on x.</summary>
-        private Image BuildConnector(RectTransform boardRoot, string id, Vector2 start, Vector2 end, float controlBias, float strokeWidth)
+        /// <summary>MV-1410: one orthogonal connector per parent-child link - down from the parent, across,
+        /// down into the child - drawn as thin solid bars sharing one colour (RefreshConnectors tints the
+        /// first; <see cref="SyncConnectorExtras"/> copies it to the rest).</summary>
+        private void BuildConnectors(RectTransform parent)
         {
-            float gap = end.y - start.y;
-            var c1 = new Vector2(start.x, start.y + gap * controlBias);
-            var c2 = new Vector2(end.x, start.y + gap * (1f - controlBias));
+            _connectorExtras.Clear();
+            foreach (var ab in Abilities)
+            {
+                if (string.IsNullOrEmpty(ab.Parent)) continue;
+                if (!_treeSpots.TryGetValue(ab.Id, out var c) || !_treeSpots.TryGetValue(ab.Parent, out var p)) continue;
+                string id = $"conn:ab:{ab.Parent}>{ab.Id}";
+                const float w = 5f;
+                float y0 = p.Y + p.R * 0.92f, y1 = c.Y - c.R * 0.92f, ym = (y0 + y1) * 0.5f;
+                _connectors[id] = ConnectorBar(parent, id, p.X, y0, p.X, ym, w);
+                var extras = new List<Image>();
+                if (Mathf.Abs(c.X - p.X) > 0.5f) extras.Add(ConnectorBar(parent, id + "#h", Mathf.Min(p.X, c.X), ym, Mathf.Max(p.X, c.X), ym, w));
+                extras.Add(ConnectorBar(parent, id + "#v", c.X, ym, c.X, y1, w));
+                _connectorExtras[id] = extras;
+            }
+        }
 
-            float pad = strokeWidth * 0.5f + 2f;
-            float minX = Mathf.Min(Mathf.Min(start.x, c1.x), Mathf.Min(c2.x, end.x)) - pad;
-            float maxX = Mathf.Max(Mathf.Max(start.x, c1.x), Mathf.Max(c2.x, end.x)) + pad;
-            float minY = Mathf.Min(Mathf.Min(start.y, c1.y), Mathf.Min(c2.y, end.y)) - pad;
-            float maxY = Mathf.Max(Mathf.Max(start.y, c1.y), Mathf.Max(c2.y, end.y)) + pad;
-            int w = Mathf.Max(2, Mathf.CeilToInt(maxX - minX));
-            int h = Mathf.Max(2, Mathf.CeilToInt(maxY - minY));
-
-            Vector2 Local(Vector2 p) => new Vector2(p.x - minX, p.y - minY);
-            var sprite = CrispUi.BezierStroke(Local(start), Local(c1), Local(c2), Local(end), strokeWidth, w, h);
-
-            var img = AddImage(boardRoot, sprite, Color.clear, id);
-            Anchor(img.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            img.rectTransform.sizeDelta = new Vector2(w, h);
-            img.rectTransform.anchoredPosition = new Vector2(minX, -minY);
+        private static Image ConnectorBar(RectTransform parent, string name, float x0, float y0, float x1, float y1, float w)
+        {
+            var img = AddImage(parent, CrispUi.Solid(), Color.clear, name);
+            Rect r = x0 == x1 ? new Rect(x0 - w * 0.5f, y0, w, Mathf.Max(1f, y1 - y0)) : new Rect(x0 - w * 0.5f, y0 - w * 0.5f, x1 - x0 + w, w);
+            PlaceTopLeft(img.rectTransform, r);
             img.raycastTarget = false;
-            _connectors[id] = img;
             return img;
+        }
+
+        private void SyncConnectorExtras()
+        {
+            foreach (var kv in _connectorExtras)
+                if (_connectors.TryGetValue(kv.Key, out var main))
+                    foreach (var img in kv.Value) img.color = main.color;
         }
 
         /// <summary>The Morphing Module draft's dimming scrim (MV-424) — one full-board rect, built
@@ -2479,40 +2734,15 @@ namespace MaxWorlds.UI
             // furniture above it isn't gated by that property).
             if (!RigFusionState.EnabledInWorld(RigBoard.ActiveWorldIndex)) return;
 
-            float dividerY = ForgeDividerY;
-            var divider = AddImage(boardRoot, CrispUi.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
-            Anchor(divider.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-            divider.rectTransform.offsetMin = new Vector2(ContentMargin, 0f);
-            divider.rectTransform.offsetMax = new Vector2(-ContentMargin, 0f);
-            divider.rectTransform.anchoredPosition = new Vector2(0f, -dividerY);
-            divider.rectTransform.sizeDelta = new Vector2(0f, 1.5f);
-
-            var forgeLabel = AddText(boardRoot, 22, SupercellColor, TextAnchor.UpperLeft);
-            Anchor(forgeLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            forgeLabel.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 24f));
-            forgeLabel.rectTransform.sizeDelta = new Vector2(200f, 28f);
-            forgeLabel.fontStyle = FontStyles.Bold;
-            forgeLabel.text = "FORGE";
-
-            // MV-443 defect 8: two short lines under the FORGE label (not one long line beside it,
-            // which used to run under the first diamond) — left of x=380, per MV-442.png. MV-446
-            // defect 3: fontSize now off rig_board.json (was a hardcoded 16, under the 16px readability
-            // floor once actually measured against the design's own 1920x1080 reference frame) — box
-            // height grown to match so two lines still clear it.
-            var caption = AddText(boardRoot, Mathf.RoundToInt(ForgeCaptionFontSize), Dim, TextAnchor.UpperLeft);
-            Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
-            caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 52f);
-            caption.lineSpacing = 20f;   // TMP: additive percent (legacy multiplier 1.2)
-            caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
-
+            // MV-1410: FORGE is a rail tab now - no divider, label or caption on the board.
             foreach (var fusion in Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
 
         private RigNodeVisual BuildFusionNode(RectTransform boardRoot, RigFusionLayout fusion)
         {
-            float r = RadiusFusion;
-            var node = BuildNodeShell(boardRoot, fusion.Id, fusion.X, fusion.Y, r, FusionSides, out var shell);
+            var spot = _treeSpots.TryGetValue(fusion.Id, out var fs) ? fs : new TreeSpot { X = fusion.X, Y = fusion.Y, R = RadiusFusion };
+            float r = spot.R;
+            var node = BuildNodeShell(boardRoot, fusion.Id, spot.X, spot.Y, r, FusionSides, out var shell);
 
             Color amber = SupercellColor;
             shell.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.03f);
@@ -2539,7 +2769,7 @@ namespace MaxWorlds.UI
             // rendered text — Wrap makes FusionSubLabelWidth's shrunk box a real clip boundary instead of
             // just a number a different test happened to check preferredWidth against.
             sub.textWrappingMode = TextWrappingModes.Normal;
-            sub.rectTransform.sizeDelta = new Vector2(FusionSubLabelWidth(fusion, Fusions), 44f);
+            sub.rectTransform.sizeDelta = new Vector2(FusionSubLabelWidth(fusion, Fusions), 70f);   // MV-1410: wraps to up to three lines
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
             sub.lineSpacing = 10f;   // TMP: additive percent (legacy multiplier 1.1)
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
@@ -2647,16 +2877,35 @@ namespace MaxWorlds.UI
 
         private RigNodeVisual BuildAbilityNode(RectTransform boardRoot, RigAbilityLayout ab)
         {
-            float r = RadiusAbility;
-            BuildNodeShell(boardRoot, ab.Id, ab.X, ab.Y, r, HexSides, out var shell);
+            var spot = _treeSpots.TryGetValue(ab.Id, out var ts) ? ts : new TreeSpot { X = ab.X, Y = ab.Y, R = RadiusAbility };
+            float r = spot.R;
+            BuildNodeShell(boardRoot, ab.Id, spot.X, spot.Y, r, HexSides, out var shell);
 
-            // MV-620: phone mode's own label sits further down than the shared BuildNodeShell default
-            // (RigBoardLayout.LabelOffsetYPhone, not LabelOffsetY) — opens the collar the enlarged cost
-            // tag below needs. Category nodes make their own equivalent override with CategoryLabelOffsetY;
-            // this is the ability-node one.
-            if (_phoneMode)
+            // MV-1410: tree chrome. The level pill sits beside the hex, the cost tag under it; a node with
+            // children carries its name to the LEFT (so the connector can leave from its bottom), a leaf
+            // carries it underneath.
+            float hexHalfW = r * Sqrt3 * 0.5f;
+            float pillX = hexHalfW + 8f + LevelPillW * 0.5f;
+            shell.PillBg.rectTransform.anchoredPosition = new Vector2(pillX, LevelPillH * 0.5f + 2f);
+            shell.PillBorder.rectTransform.anchoredPosition = shell.PillBg.rectTransform.anchoredPosition;
             {
-                shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetYPhone(r));
+                var lr = shell.Label.rectTransform;
+                shell.Label.enableAutoSizing = true;
+                shell.Label.fontSizeMin = 22f;
+                shell.Label.fontSizeMax = Mathf.RoundToInt(LabelFontSize);
+                shell.Label.textWrappingMode = TextWrappingModes.Normal;
+                if (spot.HasChildren)
+                {
+                    lr.sizeDelta = new Vector2(150f, 44f);
+                    lr.anchoredPosition = new Vector2(-(hexHalfW + 14f + 75f), 0f);
+                    shell.Label.alignment = ToTmpAlignment(TextAnchor.MiddleRight);
+                }
+                else
+                {
+                    lr.sizeDelta = new Vector2(180f, 44f);
+                    lr.anchoredPosition = new Vector2(0f, -(r + 4f + 22f));
+                    shell.Label.alignment = ToTmpAlignment(TextAnchor.UpperCenter);
+                }
             }
 
             // MV-1117 (Lee, 6 Oct 2026 device playtest): "Make the x/y sentinels text in the add circle
@@ -2726,6 +2975,8 @@ namespace MaxWorlds.UI
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
             int abIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleAbility);
             shell.Icon.sprite = CrispUi.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
+            shell.NormalIcon = shell.Icon.sprite;
+            shell.LockIcon = CrispUi.VectorIcon(PadlockSvg, abIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(abIconSize, abIconSize);
 
             // Outer dashed ring (capability draftable) — a hex at r + capOuterRingOffset, independent
@@ -2779,7 +3030,7 @@ namespace MaxWorlds.UI
             // on phone and 9.6pt on tablet, both under the project's 11pt legibility floor.
             float pillBottom = -RigBoardLayout.LevelPillOffsetY(r) - LevelPillH * 0.5f;
             float labelTop = -(_phoneMode ? RigBoardLayout.LabelOffsetYPhone(r) : RigBoardLayout.LabelOffsetY(r)) + 12f;
-            float costTagY = (pillBottom + labelTop) * 0.5f;
+            float costTagY = -(LevelPillH * 0.5f + 4f);   // MV-1410: under the pill, beside the hex
             Color moduleColour = RigBoardLayout.Colour("module");
             float costIconSize = CostIconSize;
             float costFontSize = CostFontSize;
@@ -2796,14 +3047,15 @@ namespace MaxWorlds.UI
             shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(Mathf.RoundToInt(costIconSize) * CrispUi.Resolution), Color.clear, "Cost Icon");
             Anchor(shell.CostIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.CostIcon.rectTransform.sizeDelta = new Vector2(costIconSize, costIconSize);
-            shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-(costIconSize * 0.5f + TagGap * 0.5f), costTagY);
+            float costShiftX = pillX - (textHalfWidth * 2f - costIconSize) * 0.5f;   // centre the icon+number block under the pill
+            shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-(costIconSize * 0.5f + TagGap * 0.5f) + costShiftX, costTagY);
             shell.CostIcon.raycastTarget = false;
             shell.CostIcon.gameObject.SetActive(false);
 
             shell.CostText = AddText(shell.Root, Mathf.RoundToInt(costFontSize), moduleColour, TextAnchor.MiddleLeft);
             Anchor(shell.CostText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.CostText.rectTransform.sizeDelta = new Vector2(textHalfWidth * 2f, costFontSize * 1.2f);
-            shell.CostText.rectTransform.anchoredPosition = new Vector2(textHalfWidth + TagGap * 0.5f, costTagY);
+            shell.CostText.rectTransform.anchoredPosition = new Vector2(textHalfWidth + TagGap * 0.5f + costShiftX, costTagY);
             shell.CostText.fontStyle = FontStyles.Bold;
             shell.CostText.raycastTarget = false;
             shell.CostText.gameObject.SetActive(false);
@@ -3019,6 +3271,8 @@ namespace MaxWorlds.UI
             public TextMeshProUGUI SlotLabel;
             public Button Button;
             public float Radius;
+            /// <summary>MV-1410: an ability's own icon, and the padlock it swaps to while locked.</summary>
+            public Sprite NormalIcon, LockIcon;
 
             /// <summary>MV-516: the hex FILL/OUTLINE alpha <see cref="WeaponsScreen.RefreshAbilityNode"/>
             /// (or <see cref="WeaponsScreen.RefreshCandidateNode"/>) most recently set for this node's

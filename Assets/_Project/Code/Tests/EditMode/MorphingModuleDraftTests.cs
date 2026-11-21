@@ -141,12 +141,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.IsCeremonyActive, Is.True, "fixture (feeds AC5): a reveal ceremony must start when a pick resolves");
 
             // ---------------------------------------------------------------- AC2: no longer family-locked
-            // MV-538: the category's own panel border alpha now carries ONLY "lit" (RigState.IsCategoryUnlocked,
-            // what this AC is about) — the separate "familyLit"/CategoryHasOwnedAbility dim MV-462 also
-            // applied here was the bug MV-538 fixed (a freshly-unlocked, still-empty family must not
-            // dim), so the border now renders at the plain RegionBorderAlphaLit constant, undimmed.
-            Assert.That(_screen.CategoryPanelBorder(revealedCategory).color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit).Within(0.0001f),
-                "AC2: the unlocked category's own panel must render at full (lit, undimmed) strength, not the dark/family-locked reading");
+            // MV-1410: the per-category panel border alpha check went with the per-category panels.
             RigAbilityLayout rootAbility = null;
             foreach (var ab in RigBoardLayout.Abilities)
                 if (ab.Category == revealedCategory && string.IsNullOrEmpty(ab.Parent)) { rootAbility = ab; break; }

@@ -92,9 +92,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(delSubText, Does.Contain("(HAVE)"), "f_del's locked sub-label must flag PRIMARY as already lit");
             foreach (string line in delSubText.Split('\n'))
             {
-                delSub.text = line; // isolate one line's own preferredWidth — same font/size as the live label
-                Assert.That(delSub.preferredWidth, Is.LessThanOrEqualTo(delSub.rectTransform.sizeDelta.x),
-                    $"f_del's locked sub-label line '{line}' ({delSub.preferredWidth:0}px) overflows its own box ({delSub.rectTransform.sizeDelta.x}px) and will bleed into the neighbouring diamond");
+                delSub.text = line; // isolate one line's own wrapped height - same font/size/width as the live label
+                // MV-1410: the sub-label wraps inside its box (the tree's slots are narrower than one line), so
+                // the guard is "the wrapped text still fits the box's height", i.e. it never bleeds past it.
+                Assert.That(delSub.preferredHeight, Is.LessThanOrEqualTo(delSub.rectTransform.sizeDelta.y),
+                    $"f_del's locked sub-label line '{line}' wraps to {delSub.preferredHeight:0}px, taller than its own box ({delSub.rectTransform.sizeDelta.y}px) and will bleed into the diamond row below/neighbour");
             }
             delSub.text = delSubText;
 

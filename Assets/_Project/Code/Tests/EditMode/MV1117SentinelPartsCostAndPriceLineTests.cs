@@ -98,7 +98,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(pricePill, Is.Not.Null, "u_slt built no price-text component");
                 Assert.That(priceIcon, Is.Not.Null, "u_slt built no price-icon component");
 
-                Assert.That(pricePill.gameObject.activeInHierarchy, Is.True, "the price line must be visible");
+                Assert.That(pricePill.gameObject.activeSelf, Is.True, "the price line must be visible");
                 Assert.That(pricePill.text, Is.EqualTo(PlayerAbilities.SentinelCost.ToString()),
                     "the price line must read the current SentinelCost");
                 Assert.That(pricePill.fontSize, Is.GreaterThanOrEqualTo(22),

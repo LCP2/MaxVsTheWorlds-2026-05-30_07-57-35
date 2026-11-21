@@ -1105,9 +1105,13 @@ namespace MaxWorlds.Dev
         /// letterbox/scale to account for.</summary>
         private void RunOutsideBackgroundProbe(Texture2D tex)
         {
-            const int probeJsonX = 20, probeJsonY = 400;   // rig_board.json coords (y measured from the top)
-            int texX = probeJsonX;
-            int texY = tex.height - probeJsonY;             // Texture2D is bottom-left origin
+            // MV-1410: a point in the free band to the right of the tree panel (the detail panel's reserved
+            // room), in board frame units - mapped to a pixel through the same transform every other check uses.
+            var rigScreen = FindFirstObjectByType<WeaponsScreen>();
+            var panelRect = rigScreen != null ? rigScreen.TreePanelRect : new Rect(0f, 0f, 1000f, 600f);
+            var probeTransform = BuildTransform((float)tex.width / tex.height, true, tex.width, tex.height);
+            int texX = Mathf.RoundToInt(probeTransform.PixelX(panelRect.xMax + 60f));
+            int texY = tex.height - Mathf.RoundToInt(probeTransform.PixelY(panelRect.y + 200f));   // Texture2D is bottom-left origin
             if (texX < 0 || texX >= tex.width || texY < 0 || texY >= tex.height)
             {
                 string skip = "probe6 (outside-background==composited-base): SKIPPED — coordinates fall outside the captured texture";
@@ -1175,9 +1179,14 @@ namespace MaxWorlds.Dev
         /// as the node itself, before any connector curve starts (they only begin ~88px below a category
         /// — see <c>connector.startOffsetCategory</c>), so this point is clear of every node and every
         /// connector for every fixture, by construction of the board's own fixed layout.</summary>
+        /// <summary>MV-1410: what the tree panel looks like where nothing is drawn - sampled from its own
+        /// bottom-right corner, set once per capture by <see cref="RunConformanceChecks"/>.</summary>
+        private static Color? s_treePanelBackground;
+
         private static Color SampleCategoryBackground(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, string categoryId,
             RigBoardConformance.BoardPixelTransform transform)
         {
+            if (s_treePanelBackground.HasValue) return s_treePanelBackground.Value;
             foreach (var cat in categories)
                 if (cat.Id == categoryId) return RigBoardConformance.GetJsonPixel(tex, cat.X + 110f, cat.Y, transform);
             return RigBoardLayout.Colour("base");
@@ -1309,15 +1318,23 @@ namespace MaxWorlds.Dev
             bool phoneMode = WeaponsScreen.IsPhoneLayout(aspect);
             var transform = BuildTransform(aspect, phoneMode, w, h);
 
-            var categories = phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
-            var abilities = phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
-            var fusions = phoneMode ? RigBoardLayout.PhoneFusions : RigBoardLayout.Fusions;
-            float radiusCategory = phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
-            float radiusAbility = phoneMode ? RigBoardLayout.RadiusAbilityPhone : RigBoardLayout.RadiusAbility;
-            float radiusFusion = phoneMode ? RigBoardLayout.RadiusFusionPhone : RigBoardLayout.RadiusFusion;
-            float categoryLabelFontSize = phoneMode ? RigBoardLayout.CategoryLabelFontSizePhone : RigBoardLayout.CategoryLabelFontSize;
-
+            // MV-1410: the board is a category rail plus ONE tree now. The category hexes are rail tabs (no
+            // hex to probe), and the visible tree's nodes sit where the tree layout put them, not at the
+            // board JSON's x/y - so the probes read the live layout from WeaponsScreen.
             var weapons = FindFirstObjectByType<WeaponsScreen>();
+            var categories = (IReadOnlyList<RigCategoryLayout>)System.Array.Empty<RigCategoryLayout>();
+            var abilities = (IReadOnlyList<RigAbilityLayout>)(weapons != null ? weapons.TreeAbilityLayouts() : new List<RigAbilityLayout>());
+            var fusions = (IReadOnlyList<RigFusionLayout>)System.Array.Empty<RigFusionLayout>();
+            float radiusCategory = RigBoardLayout.RadiusCategoryPhone;
+            float radiusAbility = WeaponsScreen.TreeChildRadiusValue;
+            float radiusFusion = RigBoardLayout.RadiusFusionPhone;
+            float categoryLabelFontSize = RigBoardLayout.CategoryLabelFontSizePhone;
+            s_treePanelBackground = null;
+            if (weapons != null)
+            {
+                var pr = weapons.TreePanelRect;
+                s_treePanelBackground = RigBoardConformance.GetJsonPixel(tex, pr.xMax - 16f, pr.yMax - 16f, transform);
+            }
             Color background = ComputeCompositedBackground(weapons);
             var lines = new List<string>();
             int passCount = 0, checkCount = 0;
@@ -1381,7 +1398,7 @@ namespace MaxWorlds.Dev
             // one. MV-538: the dim now follows RigState.IsCategoryUnlocked, not ownership — an unlocked
             // family with nothing owned in it yet renders at full strength, so "lit" here must track the
             // same unlock flag WeaponsScreen.DimIfUnlit actually reads, not IsOwned.
-            CheckFamilyContrast(tex, categories, abilities, transform, phoneMode, out float contrastRatio, out float litMean, out float unlitMean);
+            CheckRailContrast(tex, weapons, transform, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
 
@@ -1409,6 +1426,7 @@ namespace MaxWorlds.Dev
                 Color abBackground = SampleCategoryBackground(tex, categories, ab.Category, transform);
                 ColumnBounds(categories, ab.Category, out float abColumnMin, out float abColumnMax);
                 float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, radiusAbility * 1.25f, radiusAbility * 1.95f, abBackground, InkTolerance,
+                    sectorCenterDeg: -135f, sectorHalfWidthDeg: 15f,   // MV-1410: the diagonals - the pill, label and connectors crowd the horizontal/vertical bands
                     xMin: abColumnMin, xMax: abColumnMax, transform: transform);
                 if (frac > 0.25f) glowFails.Add($"{ab.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
@@ -1537,6 +1555,27 @@ namespace MaxWorlds.Dev
             litMean = Average(litVals);
             unlitMean = Average(unlitVals);
             ratio = unlitMean > 0.0001f ? litMean / unlitMean : (litMean > 0.0001f ? 999f : 0f);
+        }
+
+        /// <summary>MV-1410: family contrast re-pointed at the rail - mean luminance of an unlocked
+        /// category's tab against a locked one's (no locked tab on the board = nothing to compare = pass).</summary>
+        private static void CheckRailContrast(Texture2D tex, WeaponsScreen weapons, RigBoardConformance.BoardPixelTransform transform,
+            out float ratio, out float litMean, out float unlitMean)
+        {
+            var litVals = new List<float>();
+            var unlitVals = new List<float>();
+            if (weapons != null)
+                foreach (var id in weapons.RailTabIds)
+                {
+                    var r = weapons.RailTabRect(id);
+                    bool lit = id == "FORGE" || RigState.IsCategoryUnlocked(id);
+                    // The tab's hex only (its left 24..100 frame units, middle 70) - the text beside it is the same on every tab.
+                    float mean = RigBoardConformance.MeanLuminance(tex, r.xMin + 24f, r.xMin + 100f, r.center.y - 35f, r.center.y + 35f, transform: transform);
+                    (lit ? litVals : unlitVals).Add(mean);
+                }
+            litMean = Average(litVals);
+            unlitMean = Average(unlitVals);
+            ratio = unlitVals.Count == 0 ? 999f : unlitMean > 0.0001f ? litMean / unlitMean : (litMean > 0.0001f ? 999f : 0f);
         }
 
         private static float Average(List<float> vals)

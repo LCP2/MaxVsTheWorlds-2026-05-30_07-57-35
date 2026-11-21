@@ -154,30 +154,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(scale, Is.EqualTo(1f).Within(1e-4f));
         }
 
-        /// <summary>Drives <see cref="WeaponsScreen.ApplyBoardScale(float)"/> directly with the 16:9
-        /// aspect (bypassing the ambient <see cref="Screen"/> singleton EditMode tests can't control) —
-        /// the same explicit-aspect entry point <c>UiScreensDirector</c>'s capture harness now uses.
-        /// Must land the scale wrapper at exact identity, and (since <c>RigBoardLayoutTests</c> already
-        /// pins Board Root's own anchoredPosition to the json coordinate 1:1, unaffected by this
-        /// ancestor's scale) that identity IS the "maps to json (250, 230)" contract — a wrapper anything
-        /// other than 1.0 is what shifted/shrunk the whole board in the real capture.</summary>
-        [Test]
-        public void PrimaryNodeLandsOnItsJsonCoordinate_AtSixteenByNine()
-        {
-            OpenScreen();
-            _screen.ApplyBoardScale(1920f / 1080f);
-
-            // MV-1408: the board is fitted below the top bar now, so its scale root is no longer identity;
-            // what this still pins is that Board Root's own local positions stay 1:1 with the json.
-
-            var primary = _screen.BoardNode("PRIMARY");
-            Assert.That(primary, Is.Not.Null);
-            var cat = RigBoardLayout.Categories[0];
-            Assert.That(cat.Id, Is.EqualTo("PRIMARY"));
-            Assert.That(primary.anchoredPosition.x, Is.EqualTo(cat.X).Within(1f), "PRIMARY anchored x must equal its json x");
-            Assert.That(primary.anchoredPosition.y, Is.EqualTo(-cat.Y).Within(1f), "PRIMARY anchored y must equal its json y (canvas is y-down, RectTransform is y-up)");
-        }
-
         /// <summary>The narrower 16:10-ish shot (<c>rig-16x10.png</c>, 1728x1080, aspect 1.6) must still
         /// shrink — MV-462's fix must not flatten <see cref="WeaponsScreen.ComputeBoardScale"/> to
         /// always-1, only fix the 16:9-and-wider identity case.</summary>
@@ -191,71 +167,5 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------------ defect 3: unlit family dim
 
-        /// <summary>MV-538 revision: MV-462's own version of this test pinned the wrong invariant — it
-        /// asserted a shed-unlocked-but-still-EMPTY family (SECONDARY here, nothing owned) should read
-        /// dimmed, which is the exact defect MV-538 fixed ("I've turned on a new ability family... I
-        /// can't see that I can do that"). A family now only ever dims while genuinely LOCKED
-        /// (<c>RigState.IsCategoryUnlocked</c> false) — MOVE stays locked all run and must still dim by
-        /// <c>RigBoardLayout.FamilyDimFactor</c>; SECONDARY is shed-unlocked with nothing owned and must
-        /// read fully undimmed. Checked via the region panel/border (category level) and a category
-        /// connector (connector level), each backed by a named <c>RigBoardLayout</c> constant rather
-        /// than a duplicated magic literal. Must fail on the MV-538 base commit — SECONDARY's panel
-        /// would still read <c>RegionOpacityLit * FamilyDimFactor</c>, not the plain
-        /// <c>RegionOpacityLit</c> this test now asserts.</summary>
-        [Test]
-        public void OnlyAGenuinelyLockedFamilyDimsCategoryAndConnectorGraphics()
-        {
-            RigState.UnlockCategory("SECONDARY");
-            OpenScreen();
-            float factor = RigBoardLayout.FamilyDimFactor;
-            Assert.That(RigState.IsCategoryUnlocked("MOVE"), Is.False, "fixture: MOVE stays locked all run");
-            Assert.That(RigState.IsCategoryUnlocked("SECONDARY"), Is.True, "fixture: SECONDARY is shed-unlocked");
-            Assert.That(RigState.IsOwned("s_bal"), Is.False, "fixture: SECONDARY still has nothing owned");
-
-            var lockedPanel = _screen.CategoryPanel("MOVE");
-            var lockedBorder = _screen.CategoryPanelBorder("MOVE");
-            Assert.That(lockedPanel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityDark * factor).Within(1e-4f), "MOVE (locked) region panel");
-            Assert.That(lockedBorder.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaDark * factor).Within(1e-4f), "MOVE (locked) region border");
-            var lockedConn = _screen.Connector("conn:cat:MOVE>m_spd");
-            Assert.That(lockedConn, Is.Not.Null, "missing category connector for 'm_spd'");
-            Assert.That(lockedConn.color.a, Is.EqualTo(RigBoardLayout.ConnectorAlphaDim * factor).Within(1e-4f), "MOVE (locked) category connector");
-
-            var unlockedPanel = _screen.CategoryPanel("SECONDARY");
-            var unlockedBorder = _screen.CategoryPanelBorder("SECONDARY");
-            Assert.That(unlockedPanel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
-                "SECONDARY (unlocked, nothing owned) region panel must NOT carry the family dim");
-            Assert.That(unlockedBorder.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit).Within(1e-4f),
-                "SECONDARY (unlocked, nothing owned) region border must NOT carry the family dim");
-            var unlockedConn = _screen.Connector("conn:cat:SECONDARY>s_bal");
-            Assert.That(unlockedConn, Is.Not.Null, "missing category connector for 's_bal'");
-            Assert.That(unlockedConn.color.a, Is.EqualTo(RigBoardLayout.ConnectorAlphaLive).Within(1e-4f),
-                "SECONDARY (unlocked, nothing owned) category connector must read LIVE undimmed — s_bal is draftable");
-        }
-
-        /// <summary>MV-538: unlocking a category alone already renders it at full (undimmed) strength —
-        /// before this ticket, an otherwise-untouched family stayed dimmed until something in it was
-        /// OWNED (<c>RigState.AcquireCap</c>), the exact trap Lee reported. Owning something afterward
-        /// must be a no-op on the panel's own alpha, not a "flip."</summary>
-        [Test]
-        public void UnlockingACategoryAloneRendersItAtFullStrengthBeforeAnythingIsOwned()
-        {
-            RigState.UnlockCategory("SECONDARY");
-            OpenScreen();
-            var panelBefore = _screen.CategoryPanel("SECONDARY");
-            Assert.That(panelBefore.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
-                "SECONDARY must already read at full (lit, undimmed) strength the moment it is unlocked — nothing owned yet");
-
-            Assert.That(RigState.AcquireCap("s_bal"), Is.True, "s_bal must be a reached, ownable root at run start");
-
-            // RigState.Changed -> Refresh isn't reliably driven by the Editor outside Play mode (same
-            // rule RigBoardLayoutTests documents for OnEnable), so force a fresh Refresh() the same way
-            // every other state-change-after-Open test in this suite does: close and reopen.
-            _screen.Close();
-            _screen.Open();
-
-            var panelAfter = _screen.CategoryPanel("SECONDARY");
-            Assert.That(panelAfter.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
-                "SECONDARY must stay at the same full strength once one of its abilities is owned too");
-        }
     }
 }

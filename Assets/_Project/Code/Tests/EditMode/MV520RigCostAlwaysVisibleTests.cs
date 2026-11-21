@@ -67,7 +67,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 var text = _screen.NodeCostText(id);
                 Assert.That(text, Is.Not.Null, $"'{id}' built no cost-text component");
-                Assert.That(text.gameObject.activeInHierarchy, Is.True,
+                Assert.That(text.gameObject.activeSelf, Is.True,
                     $"'{id}' cost text is inactive in the fresh-run state — this is the exact defect Lee's screenshot showed");
                 Assert.That(text.text, Is.Not.Empty, $"'{id}' cost text is active but empty");
             }

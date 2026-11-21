@@ -84,8 +84,8 @@ namespace MaxWorlds.Tests.EditMode
                     var partsText = parts.GetComponentInChildren<TMP_Text>(true);
                     Inside(problems, tag + " PARTS text in chip", LocalRect(root, partsText.rectTransform), LocalRect(root, parts));
 
-                    var content = Find(go, "Board Viewport");
-                    Assert.That(content, Is.Not.Null, tag + " board viewport");
+                    var content = Find(go, "Tree Panel");   // MV-1410: the board content is the rail + tree panel now
+                    Assert.That(content, Is.Not.Null, tag + " tree panel");
                     var contentRect = LocalRect(root, content);
                     Inside(problems, tag + " board content", contentRect, safe);
                     if (contentRect.yMax > barRect.yMin + 0.01f)

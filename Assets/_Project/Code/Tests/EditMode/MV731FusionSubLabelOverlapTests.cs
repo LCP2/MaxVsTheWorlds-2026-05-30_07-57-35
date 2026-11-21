@@ -53,6 +53,7 @@ namespace MaxWorlds.Tests.EditMode
         public void AdjacentForgeFusionSubLabelBoxesNeverOverlap()
         {
             _screen.Open();
+            _screen.SelectCategory("FORGE");
 
             var fusions = RigBoardLayout.Fusions;
             Assert.That(fusions.Count, Is.GreaterThan(1), "fixture: FORGE row must carry more than one fusion to exercise adjacency");
@@ -61,7 +62,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 var subA = _screen.FusionNodeSub(fusions[i].Id);
                 Assert.That(subA, Is.Not.Null, $"{fusions[i].Id} built no sub-label");
-                Rect rectA = SubLabelRect(fusions[i], subA);
+                Rect rectA = SubLabelRect(fusions[i], subA);   // MV-1410: positions come from the tree layout
 
                 for (int j = i + 1; j < fusions.Count; j++)
                 {
@@ -80,11 +81,12 @@ namespace MaxWorlds.Tests.EditMode
         /// fusion node's pivot is anchored at exactly (<c>fusion.X</c>, <c>-fusion.Y</c>) and the
         /// sub-label is centred under it with no horizontal offset, so the sub-label's own resolved
         /// centre X equals <c>fusion.X</c> exactly.</summary>
-        private static Rect SubLabelRect(RigFusionLayout fusion, TMP_Text sub)
+        private Rect SubLabelRect(RigFusionLayout fusion, TMP_Text sub)
         {
             float w = sub.rectTransform.sizeDelta.x;
             float h = sub.rectTransform.sizeDelta.y;
-            return new Rect(fusion.X - w * 0.5f, fusion.Y, w, h);
+            var node = _screen.TreeNodeRect(fusion.Id);
+            return new Rect(node.center.x - w * 0.5f, node.center.y, w, h);
         }
     }
 }

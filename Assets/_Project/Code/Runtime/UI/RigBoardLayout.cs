@@ -512,12 +512,12 @@ namespace MaxWorlds.UI
         /// scale derivation — every other small caption below uses the same floor-clearing value for the
         /// same reason, sized generously rather than to the exact minimum since phone mode has a whole
         /// scrollable canvas of room to spend.</summary>
-        public static float LabelFontSizePhone => 32f;
+        public static float LabelFontSizePhone => 28f;
         public static float CategoryLabelFontSizePhone => 36f;
-        public static float LevelPillFontSizePhone => 32f;
-        public static float LevelPillWPhone => 108f;
-        public static float LevelPillHPhone => 54f;
-        public static float FusionSubFontSizePhone => 32f;
+        public static float LevelPillFontSizePhone => 28f;
+        public static float LevelPillWPhone => 100f;
+        public static float LevelPillHPhone => 44f;
+        public static float FusionSubFontSizePhone => 22f;
         public static float ForgeCaptionFontSizePhone => 32f;
 
         /// <summary>MV-620: the node cost tag (icon + number) was the one label on the board never
@@ -530,9 +530,9 @@ namespace MaxWorlds.UI
         /// floor on every supported tablet (iPad mini 20*0.689 = 13.8pt, 16:9 tablet 20*(768/1080) =
         /// 14.2pt). Icon sized ~1.1x the font so the glyph optically matches the digits.</summary>
         public static float CostFontSize => 20f;
-        public static float CostFontSizePhone => 36f;
+        public static float CostFontSizePhone => 28f;
         public static float CostIconSize => 22f;
-        public static float CostIconSizePhone => 40f;
+        public static float CostIconSizePhone => 30f;
 
         /// <summary>MV-472: the box <c>WeaponsScreen.BuildNodeShell</c> best-fit-shrinks a phone-mode
         /// label into instead of the standard mode's fixed <c>r*3</c> box — sized so two ADJACENT
