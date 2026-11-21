@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TMPro;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
@@ -179,7 +180,7 @@ namespace MaxWorlds.UI
         /// after a phone-mode rebuild moves nodes a level deeper.</summary>
         private RectTransform _nodeParent;
 
-        private Text _cellsText;
+        private TextMeshProUGUI _cellsText;
         private Image _cellsChipBg;
         private Image _cellsBorder;
         private Button _cellsChipButton;
@@ -200,7 +201,7 @@ namespace MaxWorlds.UI
 
         private Image _draftScrim;
         private RectTransform _draftBand;
-        private Text _draftBandTitle, _draftBandSubtitle, _draftBandReason;
+        private TextMeshProUGUI _draftBandTitle, _draftBandSubtitle, _draftBandReason;
         private bool _draftActive;
         private readonly List<string> _draftCandidateIds = new List<string>();
 
@@ -232,7 +233,7 @@ namespace MaxWorlds.UI
         private Image _ceremonyScrim;                  // stage b: dims every other category back
         private RectTransform _ceremonyCategoryGlow;
         private Image _ceremonyCategoryGlowImage;       // stage c: highlight over the lit category's own panel
-        private Text _ceremonyCategoryLabelOverlay;     // stage c: locked placeholder, fades out to reveal the real label beneath
+        private TextMeshProUGUI _ceremonyCategoryLabelOverlay;     // stage c: locked placeholder, fades out to reveal the real label beneath
         private readonly List<Image> _ceremonyChildGlows = new List<Image>();   // stage d: one per child, pooled
         private Button _ceremonySkipCatcher;            // full-board invisible tap target while a ceremony plays
 
@@ -320,7 +321,7 @@ namespace MaxWorlds.UI
         /// <summary>MV-520: an ability node's own cost-tag text — test-only access, same idiom as
         /// <see cref="CategoryPanel"/>, so a resolved-value test can assert the built Text component
         /// directly rather than guessing GameObject names among a node's several Text children.</summary>
-        public Text NodeCostText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.CostText : null;
+        public TextMeshProUGUI NodeCostText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.CostText : null;
 
         /// <summary>MV-520: an ability node's own cost-tag glyph — test-only access, same idiom as
         /// <see cref="NodeCostText"/>.</summary>
@@ -328,7 +329,7 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-520: an ability node's own name label — test-only access, so a test can confirm
         /// the "? ? ?" name-hidden placeholder never coincides with a spendable cost.</summary>
-        public Text NodeLabel(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Label : null;
+        public TextMeshProUGUI NodeLabel(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Label : null;
 
         /// <summary>MV-538: an ability node's own hex fill — test-only access, same idiom as
         /// <see cref="NodeLabel"/>, so a dim-scope test can compare alpha across nodes without
@@ -356,12 +357,12 @@ namespace MaxWorlds.UI
         /// <summary>MV-654: an ability node's own level-pill text — test-only access, same idiom as
         /// <see cref="NodePillBg"/>, so a test can read the RESOLVED pill text (e.g. <c>u_slt</c>'s
         /// deployable-sentinels read) rather than re-deriving it from the refresh formulas independently.</summary>
-        public Text NodePillText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText : null;
+        public TextMeshProUGUI NodePillText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText : null;
 
         /// <summary>MV-1117: <c>u_slt</c>'s own deploy-price line, stacked beneath its (doubled-size)
         /// slots pill text — test-only access, same idiom as <see cref="NodePillText"/>. Null for every
         /// other node (see <see cref="RigNodeVisual.SentinelPriceText"/>'s own doc comment).</summary>
-        public Text NodeSentinelPriceText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.SentinelPriceText : null;
+        public TextMeshProUGUI NodeSentinelPriceText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.SentinelPriceText : null;
 
         /// <summary>MV-1117: <c>u_slt</c>'s own deploy-price glyph — test-only access, same idiom as
         /// <see cref="NodeSentinelPriceText"/>.</summary>
@@ -370,12 +371,12 @@ namespace MaxWorlds.UI
         /// <summary>MV-729: a FORGE fusion node's own name label — test-only access, same idiom as
         /// <see cref="NodeLabel"/>, so a test can confirm the real fusion name is shown even while
         /// locked, never the old "? ? ?" placeholder.</summary>
-        public Text FusionNodeLabel(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Label : null;
+        public TextMeshProUGUI FusionNodeLabel(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Label : null;
 
         /// <summary>MV-729: a FORGE fusion node's own sub-label — test-only access, same idiom as
         /// <see cref="FusionNodeLabel"/>, so a test can read the RESOLVED unlock-requirement/cost/slot
         /// text rather than re-deriving it from the refresh formulas independently.</summary>
-        public Text FusionNodeSub(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Sub : null;
+        public TextMeshProUGUI FusionNodeSub(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Sub : null;
 
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
@@ -1348,11 +1349,11 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>MV-1391: test-only access to a category header's slot line (null if it has none).</summary>
-        public Text CategorySlotLabel(string id) =>
+        public TextMeshProUGUI CategorySlotLabel(string id) =>
             _categoryNodes.TryGetValue(id, out var v) && v.SlotLabel != null && v.SlotLabel.gameObject.activeSelf ? v.SlotLabel : null;
 
         /// <summary>MV-1391: test-only access to a category header's name line.</summary>
-        public Text CategoryNameLabel(string id) => _categoryNodes.TryGetValue(id, out var v) ? v.Label : null;
+        public TextMeshProUGUI CategoryNameLabel(string id) => _categoryNodes.TryGetValue(id, out var v) ? v.Label : null;
 
         /// <summary>MV-689: rebuilds the whole board from scratch against whichever world
         /// <see cref="RigBoard.ActiveWorldIndex"/> currently reads — needed because a Weapon Core morph
@@ -2361,7 +2362,7 @@ namespace MaxWorlds.UI
             Anchor(_draftBandTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
             _draftBandTitle.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 44f);
             _draftBandTitle.rectTransform.anchoredPosition = new Vector2(0f, -22f);
-            _draftBandTitle.fontStyle = FontStyle.Bold;
+            _draftBandTitle.fontStyle = FontStyles.Bold;
 
             _draftBandSubtitle = AddText(band, 18, Dim, TextAnchor.UpperCenter);
             Anchor(_draftBandSubtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
@@ -2450,7 +2451,7 @@ namespace MaxWorlds.UI
             Anchor(forgeLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             forgeLabel.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 24f));
             forgeLabel.rectTransform.sizeDelta = new Vector2(200f, 28f);
-            forgeLabel.fontStyle = FontStyle.Bold;
+            forgeLabel.fontStyle = FontStyles.Bold;
             forgeLabel.text = "FORGE";
 
             // MV-443 defect 8: two short lines under the FORGE label (not one long line beside it,
@@ -2462,7 +2463,7 @@ namespace MaxWorlds.UI
             Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
             caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 52f);
-            caption.lineSpacing = 1.2f;
+            caption.lineSpacing = 20f;   // TMP: additive percent (legacy multiplier 1.2)
             caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
 
             foreach (var fusion in Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
@@ -2497,10 +2498,10 @@ namespace MaxWorlds.UI
             // MV-731: AddText defaults to Overflow, so the box width alone never actually clamped the
             // rendered text — Wrap makes FusionSubLabelWidth's shrunk box a real clip boundary instead of
             // just a number a different test happened to check preferredWidth against.
-            sub.horizontalOverflow = HorizontalWrapMode.Wrap;
+            sub.textWrappingMode = TextWrappingModes.Normal;
             sub.rectTransform.sizeDelta = new Vector2(FusionSubLabelWidth(fusion, Fusions), 44f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
-            sub.lineSpacing = 1.1f;
+            sub.lineSpacing = 10f;   // TMP: additive percent (legacy multiplier 1.1)
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
             shell.Sub = sub;
 
@@ -2533,15 +2534,15 @@ namespace MaxWorlds.UI
             // category label is one word alone above its hex, with the real column to itself
             // (cat.ColumnHalfWidth, MV-472's own content-proportional layout data, never consulted here
             // before). Two bugs shared one root cause:
-            //   1. MV-489: MV-472 set resizeTextMinSize/resizeTextMaxSize off CategoryLabelFontSize (36
+            //   1. MV-489: MV-472 set fontSizeMin/fontSizeMax off CategoryLabelFontSize (36
             //      in phone mode) but left the base Text.fontSize field at whatever BuildNodeShell had
             //      already authored it to — the ABILITY size (32) — on the assumption that best-fit
             //      ignores the bare fontSize field entirely. Verified false by direct measurement
             //      (TextGenerator.Populate/fontSizeUsedForBestFit, the same call OnPopulateMesh makes):
-            //      Unity's best-fit search is bounded ABOVE by fontSize as well as resizeTextMaxSize, so
+            //      Unity's best-fit search is bounded ABOVE by fontSize as well as fontSizeMax, so
             //      a stale fontSize below the intended cap silently re-imposes it — the label rendered
-            //      at 32 even with resizeTextMaxSize correctly set to 36. fontSize must be kept in sync
-            //      with resizeTextMaxSize, not left at whatever the shared shell happened to author.
+            //      at 32 even with fontSizeMax correctly set to 36. fontSize must be kept in sync
+            //      with fontSizeMax, not left at whatever the shared shell happened to author.
             //   2. The inherited box (phone: 190px/Wrap) is an ability-column width, not this category's
             //      own — narrower than "SECONDARY" needs, so it broke mid-word ("SECONDAR"/"Y").
             // Deriving the box from the real column width and using best-fit (Overflow, never Wrap) to
@@ -2550,11 +2551,11 @@ namespace MaxWorlds.UI
             // shrinks gracefully instead of breaking or spilling into a neighbouring column.
             float categoryLabelBoxW = Mathf.Max(2f * cat.ColumnHalfWidth - 16f, 120f);
             shell.Label.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, _phoneMode ? 60f : 28f);
-            shell.Label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            shell.Label.resizeTextForBestFit = true;
-            shell.Label.resizeTextMinSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.75f));
-            shell.Label.resizeTextMaxSize = Mathf.RoundToInt(CategoryLabelFontSize);
-            shell.Label.fontSize = shell.Label.resizeTextMaxSize;   // MV-489: keep in lockstep with the cap above — see note 1
+            shell.Label.textWrappingMode = TextWrappingModes.NoWrap;
+            shell.Label.enableAutoSizing = true;
+            shell.Label.fontSizeMin = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.75f));
+            shell.Label.fontSizeMax = Mathf.RoundToInt(CategoryLabelFontSize);
+            shell.Label.fontSize = shell.Label.fontSizeMax;   // MV-489: keep in lockstep with the cap above — see note 1
 
             // MV-1391: PRIMARY/SECONDARY carry a small slot line in the gap between the hex and the
             // weapon-name line (the name line keeps its place, so nothing below it moves).
@@ -2562,19 +2563,19 @@ namespace MaxWorlds.UI
             {
                 // The name line may be long ("CONDENSATION DIRECTIONAL ACCELERATOR"): let best-fit shrink it
                 // well below the plain category floor rather than overflow into the next column.
-                shell.Label.resizeTextMinSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.55f));
+                shell.Label.fontSizeMin = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.55f));
                 // Best-fit only shrinks on the wrap axis: with Overflow it fits height alone and a long
                 // name just runs wide. Wrap + a one-line-tall box makes it shrink until it fits the width.
-                shell.Label.horizontalOverflow = HorizontalWrapMode.Wrap;
-                shell.Label.verticalOverflow = VerticalWrapMode.Truncate;   // Overflow here would also stop best-fit shrinking
-                shell.Label.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, Mathf.Max(shell.Label.rectTransform.sizeDelta.y, 2.5f * shell.Label.resizeTextMinSize));
+                shell.Label.textWrappingMode = TextWrappingModes.Normal;
+                shell.Label.overflowMode = TextOverflowModes.Truncate;   // Overflow here would also stop best-fit shrinking
+                shell.Label.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, Mathf.Max(shell.Label.rectTransform.sizeDelta.y, 2.5f * shell.Label.fontSizeMin));
                 int slotSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.5f));
                 var slot = AddText(shell.Label.transform.parent, slotSize, shell.Label.color, TextAnchor.LowerCenter);
                 Anchor(slot.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0f));
                 slot.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, slotSize + 4f);
                 slot.rectTransform.anchoredPosition = shell.Label.rectTransform.anchoredPosition
                     + new Vector2(0f, shell.Label.rectTransform.sizeDelta.y * 0.5f - 2f);
-                slot.fontStyle = FontStyle.Bold;
+                slot.fontStyle = FontStyles.Bold;
                 slot.raycastTarget = false;
                 slot.name = "SlotLabel";
                 shell.SlotLabel = slot;
@@ -2674,7 +2675,7 @@ namespace MaxWorlds.UI
                 Anchor(priceText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0.5f));
                 priceText.rectTransform.sizeDelta = new Vector2(pillW * 0.5f - 6f, bottomRowH);
                 priceText.rectTransform.anchoredPosition = new Vector2(2f, priceRowY);
-                priceText.fontStyle = FontStyle.Bold;
+                priceText.fontStyle = FontStyles.Bold;
                 priceText.raycastTarget = false;
                 priceText.gameObject.SetActive(false);
 
@@ -2763,7 +2764,7 @@ namespace MaxWorlds.UI
             Anchor(shell.CostText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.CostText.rectTransform.sizeDelta = new Vector2(textHalfWidth * 2f, costFontSize * 1.2f);
             shell.CostText.rectTransform.anchoredPosition = new Vector2(textHalfWidth + TagGap * 0.5f, costTagY);
-            shell.CostText.fontStyle = FontStyle.Bold;
+            shell.CostText.fontStyle = FontStyles.Bold;
             shell.CostText.raycastTarget = false;
             shell.CostText.gameObject.SetActive(false);
 
@@ -2848,13 +2849,13 @@ namespace MaxWorlds.UI
 
             var pillText = AddText(pillBg.rectTransform, Mathf.RoundToInt(LevelPillFontSize), TextColor, TextAnchor.MiddleCenter);
             Stretch(pillText.rectTransform);
-            pillText.fontStyle = FontStyle.Bold;
+            pillText.fontStyle = FontStyles.Bold;
             pillText.raycastTarget = false;
 
             var label = AddText(root, Mathf.RoundToInt(LabelFontSize), TextColor, TextAnchor.UpperCenter);
             Anchor(label.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetY(r));
-            label.fontStyle = FontStyle.Bold;
+            label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
             if (_phoneMode)
             {
@@ -2866,10 +2867,10 @@ namespace MaxWorlds.UI
                 // other, not bleeding into a different family, so tighter spacing alone couldn't fix it
                 // without either cramming hexes together or capping label width somehow.
                 label.rectTransform.sizeDelta = new Vector2(RigBoardLayout.PhoneLabelBoxWidth, RigBoardLayout.LabelBoxHeightPhone);
-                label.horizontalOverflow = HorizontalWrapMode.Wrap;
-                label.resizeTextForBestFit = true;
-                label.resizeTextMinSize = Mathf.RoundToInt(RigBoardLayout.PhoneLabelFontSizeMin);
-                label.resizeTextMaxSize = Mathf.RoundToInt(RigBoardLayout.LabelFontSizePhone);
+                label.textWrappingMode = TextWrappingModes.Normal;
+                label.enableAutoSizing = true;
+                label.fontSizeMin = Mathf.RoundToInt(RigBoardLayout.PhoneLabelFontSizeMin);
+                label.fontSizeMax = Mathf.RoundToInt(RigBoardLayout.LabelFontSizePhone);
             }
             else
             {
@@ -2888,7 +2889,7 @@ namespace MaxWorlds.UI
 
             var draftBadgeText = AddText(draftBadge.rectTransform, 18, PanelColor, TextAnchor.MiddleCenter);
             Stretch(draftBadgeText.rectTransform);
-            draftBadgeText.fontStyle = FontStyle.Bold;
+            draftBadgeText.fontStyle = FontStyles.Bold;
             draftBadgeText.raycastTarget = false;
 
             var hit = AddImage(root, CrispUi.Solid(), Color.clear, "Hit");
@@ -2970,9 +2971,9 @@ namespace MaxWorlds.UI
         {
             public RectTransform Root;
             public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PillBg, PillBorder, DraftBadge;
-            public Text PillText, Label, DraftBadgeText;
+            public TextMeshProUGUI PillText, Label, DraftBadgeText;
             /// <summary>MV-1391: PRIMARY/SECONDARY category only — the small slot line above the weapon-name <see cref="Label"/>.</summary>
-            public Text SlotLabel;
+            public TextMeshProUGUI SlotLabel;
             public Button Button;
             public float Radius;
 
@@ -2986,7 +2987,7 @@ namespace MaxWorlds.UI
             /// <summary>Fusion nodes only (MV-426): the sub-label beneath the name — parent category
             /// names while unforgeable, "<c>N CELLS · SLOT B</c>" once eligible (MV-515: was parts),
             /// "<c>FORGED · SLOT B</c>" once forged. Null for category/ability nodes.</summary>
-            public Text Sub;
+            public TextMeshProUGUI Sub;
 
             /// <summary>MV-470: ability nodes only (null for category/fusion) — the accumulation ring
             /// (<see cref="Image.Type.Filled"/>/<see cref="Image.FillMethod.Radial360"/>, fillAmount =
@@ -2996,7 +2997,7 @@ namespace MaxWorlds.UI
             /// ring itself. All null unless a cell cost currently applies to the node (draftable or
             /// owned-and-below-max).</summary>
             public Image ProgressRing, ProgressTrack, CostIcon;
-            public Text CostText;
+            public TextMeshProUGUI CostText;
 
             /// <summary>MV-1117: <c>u_slt</c> only (null for every other node) — the deploy-price line
             /// stacked inside the bottom half of its own (enlarged) level pill, directly beneath the
@@ -3005,7 +3006,7 @@ namespace MaxWorlds.UI
             /// once the node is maxed) — a Sentinel still costs Parts to deploy every time regardless of
             /// u_slt's own level, so this stays visible whenever the slots pill itself does.</summary>
             public Image SentinelPriceIcon;
-            public Text SentinelPriceText;
+            public TextMeshProUGUI SentinelPriceText;
         }
 
         // ------------------------------------------------------------------ top bar
@@ -3032,7 +3033,7 @@ namespace MaxWorlds.UI
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
             title.rectTransform.offsetMin = new Vector2(28f, -30f);
             title.rectTransform.offsetMax = new Vector2(-160f, 30f);
-            title.fontStyle = FontStyle.Bold;
+            title.fontStyle = FontStyles.Bold;
             title.text = "THE RIG";
 
             var subtitle = AddText(bar, 18, Dim, TextAnchor.MiddleLeft);
@@ -3041,7 +3042,7 @@ namespace MaxWorlds.UI
             // subtitle at the design's own scale; pushed right enough to clear it with a real gap.
             subtitle.rectTransform.offsetMin = new Vector2(230f, -30f);
             subtitle.rectTransform.offsetMax = new Vector2(-12f, 30f);
-            subtitle.fontStyle = FontStyle.Bold;
+            subtitle.fontStyle = FontStyles.Bold;
             subtitle.text = "MAX'S WORKBENCH";
 
             // MV-1390: right-to-left CLOSE, PARTS, SETTINGS, QUIT TO MENU — four buttons of ONE shared
@@ -3069,7 +3070,7 @@ namespace MaxWorlds.UI
             var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out _cellsText,
                 height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
             cellsChip.name = "Parts Chip";
-            _cellsText.resizeTextForBestFit = false;   // fixed shared size: the width above already fits 999/999
+            _cellsText.enableAutoSizing = false;   // fixed shared size: the width above already fits 999/999
             _cellsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
             _cellsText.rectTransform.offsetMin = new Vector2(TopBarButtonPad, -20f);
             _cellsText.rectTransform.offsetMax = new Vector2(-TopBarButtonPad, 20f);
@@ -3085,7 +3086,7 @@ namespace MaxWorlds.UI
             var settingsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out var settingsText,
                 height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
             settingsChip.name = "Settings Button";
-            settingsText.resizeTextForBestFit = false;
+            settingsText.enableAutoSizing = false;
             settingsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
             settingsText.text = SettingsLabel;
             var settingsBtn = settingsChip.Find("BG").gameObject.AddComponent<Button>();
@@ -3110,7 +3111,7 @@ namespace MaxWorlds.UI
         private static float MeasureLabelWidth(RectTransform under, string text, float fontSize)
         {
             var t = AddText(under, Mathf.RoundToInt(fontSize), Color.white, TextAnchor.MiddleCenter);
-            t.fontStyle = FontStyle.Bold;
+            t.fontStyle = FontStyles.Bold;
             t.text = text;
             float w = t.preferredWidth;
             UnityEngine.Object.DestroyImmediate(t.gameObject);
@@ -3155,7 +3156,7 @@ namespace MaxWorlds.UI
             Stretch(label.rectTransform);
             // MV-445 defect 6: U+00D7 (Latin-1 multiplication sign) — HudFont has no glyph for U+2715.
             label.text = CloseLabel;
-            label.fontStyle = FontStyle.Bold;
+            label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
 
             return rightEdge - w;
@@ -3179,7 +3180,7 @@ namespace MaxWorlds.UI
             var label = AddText(bg.rectTransform, Mathf.RoundToInt(_topBarButtonFont), TextColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = QuitLabel;
-            label.fontStyle = FontStyle.Bold;
+            label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
 
             return rightEdge - w;
@@ -3194,7 +3195,7 @@ namespace MaxWorlds.UI
         /// 52px/24pt chip (MV-519 gives the CELLS chip its own larger override, see
         /// the shared top-bar button width (MV-1390)).</summary>
         private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
-            out Text label, float height = 52f, float textMaxSize = 24f)
+            out TextMeshProUGUI label, float height = 52f, float textMaxSize = 24f)
         {
             const float radius = 25f;
             float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(width, height) * 0.5f), 0.05f, 0.5f);
@@ -3211,10 +3212,10 @@ namespace MaxWorlds.UI
             Stretch(label.rectTransform);
             label.rectTransform.offsetMin = new Vector2(14f, -20f);
             label.rectTransform.offsetMax = new Vector2(-14f, 20f);
-            label.fontStyle = FontStyle.Bold;
-            label.resizeTextForBestFit = true;
-            label.resizeTextMinSize = 14;
-            label.resizeTextMaxSize = (int)textMaxSize;
+            label.fontStyle = FontStyles.Bold;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 14;
+            label.fontSizeMax = (int)textMaxSize;
             return chip;
         }
 
@@ -3246,19 +3247,29 @@ namespace MaxWorlds.UI
             return img;
         }
 
-        private static Text AddText(Transform parent, int size, Color color, TextAnchor anchor)
+        private static TextMeshProUGUI AddText(Transform parent, int size, Color color, TextAnchor anchor)
         {
-            var go = new GameObject("Text", typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var t = go.AddComponent<Text>();
-            t.font = HudFont.Get();
-            t.fontSize = size;
-            t.color = color;
-            t.alignment = anchor;
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-            t.raycastTarget = false;
+            // MV-1406: TextMeshProUGUI on the SDF font (CrispUi.Text), replacing the legacy UI.Text.
+            var t = CrispUi.Text(parent, "Text", string.Empty, size, color, ToTmpAlignment(anchor));
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Overflow;
             return t;
+        }
+
+        private static TextAlignmentOptions ToTmpAlignment(TextAnchor a)
+        {
+            switch (a)
+            {
+                case TextAnchor.UpperLeft: return TextAlignmentOptions.TopLeft;
+                case TextAnchor.UpperCenter: return TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight: return TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft: return TextAlignmentOptions.Left;
+                case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+                case TextAnchor.LowerLeft: return TextAlignmentOptions.BottomLeft;
+                case TextAnchor.LowerCenter: return TextAlignmentOptions.Bottom;
+                case TextAnchor.LowerRight: return TextAlignmentOptions.BottomRight;
+                default: return TextAlignmentOptions.Center;
+            }
         }
 
         private static void Anchor(RectTransform r, Vector2 min, Vector2 max, Vector2 pivot)

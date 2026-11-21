@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -44,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             Time.timeScale = 1f;
         }
 
-        private static Text OpenAndReadSlotsPill(out GameObject go)
+        private static TMP_Text OpenAndReadSlotsPill(out GameObject go)
         {
             go = new GameObject("WeaponsScreen");
             var screen = go.AddComponent<WeaponsScreen>();

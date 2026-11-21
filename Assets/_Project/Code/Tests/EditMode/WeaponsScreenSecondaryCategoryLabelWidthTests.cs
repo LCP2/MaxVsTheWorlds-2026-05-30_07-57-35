@@ -1,5 +1,6 @@
 using System.Linq;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -72,18 +73,17 @@ namespace MaxWorlds.Tests.EditMode
 
             var node = _screen.BoardNode("SECONDARY");
             Assert.That(node, Is.Not.Null, "SECONDARY category node must exist");
-            var label = node.Find("Text")?.GetComponent<Text>();
+            var label = node.Find("Text")?.GetComponent<TMP_Text>();
             Assert.That(label, Is.Not.Null, "SECONDARY category node must carry a label Text");
-            Assert.That(label.resizeTextForBestFit, Is.True, "fixture assumption: label must be best-fit driven");
+            Assert.That(label.enableAutoSizing, Is.True, "fixture assumption: label must be best-fit driven");
 
             float expectedWidth = Mathf.Max(2f * cat.ColumnHalfWidth - 16f, 120f);
             Assert.That(label.rectTransform.sizeDelta.x, Is.EqualTo(expectedWidth).Within(0.5f),
                 $"resolved label box width must track cat.ColumnHalfWidth ({cat.ColumnHalfWidth}), " +
                 $"not a fixed pixel width like the pre-MV-472 PhoneLabelBoxWidth ({RigBoardLayout.PhoneLabelBoxWidth})");
 
-            var settings = label.GetGenerationSettings(label.rectTransform.rect.size);
-            label.cachedTextGenerator.Populate(label.text, settings);
-            Assert.That(label.cachedTextGenerator.lineCount, Is.EqualTo(1),
+            label.ForceMeshUpdate();
+            Assert.That(label.textInfo.lineCount, Is.EqualTo(1),
                 "SECONDARY must resolve to a single line — a box too narrow for its own column " +
                 "(the pre-MV-472 defect) breaks it into \"SECONDAR\"/\"Y\"");
         }

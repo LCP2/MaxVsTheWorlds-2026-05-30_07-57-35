@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -121,7 +122,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 var node = screen.BoardNode("p_flw");
                 Assert.That(node, Is.Not.Null, "p_flw must still have a built board node");
-                var label = node.Find("Text")?.GetComponent<Text>();
+                var label = node.Find("Text")?.GetComponent<TMP_Text>();
                 Assert.That(label, Is.Not.Null, "p_flw's board node must carry a label Text component");
                 Assert.That(label.text, Is.EqualTo("CAPACITY"), "MV-609: the board's own built Text must read CAPACITY, not ENDURANCE or FLOW");
             }

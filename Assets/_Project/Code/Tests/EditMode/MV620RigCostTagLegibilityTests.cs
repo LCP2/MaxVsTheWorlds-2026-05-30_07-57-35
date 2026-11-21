@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -86,12 +87,12 @@ namespace MaxWorlds.Tests.EditMode
             _screen.ApplyBoardScale(StandardAspect);
             var standardCostText = _screen.NodeCostText("p_dmg");
             Assert.That(standardCostText, Is.Not.Null, "p_dmg built no cost-text component in standard mode");
-            int standardFontSize = standardCostText.fontSize;
+            float standardFontSize = standardCostText.fontSize;
 
             _screen.ApplyBoardScale(PhoneAspect);
             var phoneCostText = _screen.NodeCostText("p_dmg");
             Assert.That(phoneCostText, Is.Not.Null, "p_dmg built no cost-text component in phone mode");
-            Assert.That(phoneCostText.fontSize, Is.EqualTo(Mathf.RoundToInt(RigBoardLayout.CostFontSizePhone)),
+            Assert.That(phoneCostText.fontSize, Is.EqualTo((float)Mathf.RoundToInt(RigBoardLayout.CostFontSizePhone)),
                 $"phone-mode cost text must resolve to CostFontSizePhone ({RigBoardLayout.CostFontSizePhone}), not the old hardcoded 14");
             Assert.That(phoneCostText.fontSize, Is.GreaterThan(standardFontSize),
                 "phone-mode cost text must render strictly larger than standard mode's own");
@@ -107,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
             AssertTagFitsCollar("phone");
         }
 
-        private static void AssertNoClip(Text text, string modeName)
+        private static void AssertNoClip(TMP_Text text, string modeName)
         {
             text.text = "20";
             Assert.That(text.rectTransform.sizeDelta.x, Is.GreaterThanOrEqualTo(text.preferredWidth),

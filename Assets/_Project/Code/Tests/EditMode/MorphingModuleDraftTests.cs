@@ -1,5 +1,6 @@
 using System.Reflection;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -76,7 +77,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < candidates.Length; i++)
             {
                 var node = _screen.BoardNode(candidates[i]);
-                var badgeText = node.Find("Draft Badge").GetComponentInChildren<Text>();
+                var badgeText = node.Find("Draft Badge").GetComponentInChildren<TMP_Text>();
                 Assert.That(badgeText.text, Is.EqualTo((i + 1).ToString()));
             }
         }

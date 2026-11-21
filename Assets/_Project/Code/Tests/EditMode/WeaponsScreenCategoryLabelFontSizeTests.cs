@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -76,19 +77,16 @@ namespace MaxWorlds.Tests.EditMode
 
             var node = _screen.BoardNode("MOVE");
             Assert.That(node, Is.Not.Null, "MOVE category node must exist");
-            var label = node.Find("Text")?.GetComponent<Text>();
+            var label = node.Find("Text")?.GetComponent<TMP_Text>();
             Assert.That(label, Is.Not.Null, "MOVE category node must carry a label Text");
-            Assert.That(label.resizeTextForBestFit, Is.True, "fixture assumption: label must be best-fit driven");
+            Assert.That(label.enableAutoSizing, Is.True, "fixture assumption: label must be best-fit driven");
             Assert.That(label.rectTransform.sizeDelta.y, Is.EqualTo(60f),
                 "fixture assumption: phone-mode category label box height must be 60 (confirms _phoneMode was true at build time)");
-            Assert.That((float)label.resizeTextMaxSize, Is.EqualTo(RigBoardLayout.CategoryLabelFontSizePhone),
+            Assert.That(label.fontSizeMax, Is.EqualTo(RigBoardLayout.CategoryLabelFontSizePhone),
                 $"BuildCategoryNode's own configured cap (raw component property, before any generation) must be {RigBoardLayout.CategoryLabelFontSizePhone}");
 
-            var settings = label.GetGenerationSettings(label.rectTransform.rect.size);
-            Assert.That((float)settings.resizeTextMaxSize, Is.EqualTo(RigBoardLayout.CategoryLabelFontSizePhone),
-                "GetGenerationSettings must carry the same cap through to the TextGenerationSettings struct");
-            label.cachedTextGenerator.Populate(label.text, settings);
-            float resolved = label.cachedTextGenerator.fontSizeUsedForBestFit;
+            label.ForceMeshUpdate();
+            float resolved = label.fontSize;   // TMP: the auto-sized value after generation
 
             Assert.That(resolved, Is.EqualTo(RigBoardLayout.CategoryLabelFontSizePhone).Within(0.5f),
                 $"resolved size {resolved} must land at the category cap ({RigBoardLayout.CategoryLabelFontSizePhone}), " +

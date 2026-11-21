@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -83,7 +84,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             _screen.Open();
 
-            foreach (var text in _go.GetComponentsInChildren<Text>(true))
+            foreach (var text in _go.GetComponentsInChildren<TMP_Text>(true))
             {
                 string t = text.text ?? string.Empty;
                 Assert.That(t, Does.Not.Contain("tap a node to fit one"),

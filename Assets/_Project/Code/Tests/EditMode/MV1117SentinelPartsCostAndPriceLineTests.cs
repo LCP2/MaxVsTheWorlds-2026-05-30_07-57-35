@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Arena;
@@ -90,8 +91,8 @@ namespace MaxWorlds.Tests.EditMode
                 var screen = screenGo.AddComponent<WeaponsScreen>();
                 screen.Open();
 
-                Text slotsPill = screen.NodePillText("u_slt");
-                Text pricePill = screen.NodeSentinelPriceText("u_slt");
+                TMP_Text slotsPill = screen.NodePillText("u_slt");
+                TMP_Text pricePill = screen.NodeSentinelPriceText("u_slt");
                 Image priceIcon = screen.NodeSentinelPriceIcon("u_slt");
                 Assert.That(slotsPill, Is.Not.Null, "u_slt built no pill-text component");
                 Assert.That(pricePill, Is.Not.Null, "u_slt built no price-text component");
@@ -107,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(priceIcon.color, Is.EqualTo(UnaffordableColor));
 
                 // ---------------------------------------------------------------- slots pill: >= 2x a sibling node's, >= 28px
-                Text siblingPill = screen.NodePillText("p_dmg");
+                TMP_Text siblingPill = screen.NodePillText("p_dmg");
                 Assert.That(siblingPill, Is.Not.Null, "fixture: p_dmg built no pill-text component");
                 Assert.That(slotsPill.fontSize, Is.GreaterThanOrEqualTo(siblingPill.fontSize * 2),
                     "u_slt's own slots text must resolve at least 2.0x a sibling node's pill font size");
@@ -146,7 +147,7 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        private static void AssertNoOverflow(Text text, string label)
+        private static void AssertNoOverflow(TMP_Text text, string label)
         {
             Assert.That(text.rectTransform.rect.width, Is.GreaterThanOrEqualTo(text.preferredWidth - 0.5f),
                 $"{label}: box width ({text.rectTransform.rect.width:0.0}px) is narrower than its own text needs ({text.preferredWidth:0.0}px)");

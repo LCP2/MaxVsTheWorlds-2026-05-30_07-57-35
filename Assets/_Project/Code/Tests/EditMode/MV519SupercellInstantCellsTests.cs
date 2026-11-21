@@ -1,5 +1,6 @@
 using System.Reflection;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -87,7 +88,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 var cellsChip = FindRect(go, "Parts Chip");
                 Assert.That(cellsChip, Is.Not.Null, "the PARTS chip must still exist");
-                var cellsText = cellsChip.GetComponentInChildren<Text>();
+                var cellsText = cellsChip.GetComponentInChildren<TMP_Text>();
                 Assert.That(cellsText, Is.Not.Null, "the PARTS chip must carry a label");
 
                 // MV-1390: the old 'cell readout is the largest text in the bar' assertion is retired —
@@ -103,12 +104,12 @@ namespace MaxWorlds.Tests.EditMode
                 screen.Close();
                 PickupWallet.AddSupercell();   // 8 -> 18, still under the default 20 cap
                 screen.Open();
-                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<Text>();
+                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<TMP_Text>();
                 Assert.That(cellsText.color, Is.EqualTo(underCapColor), "still under capacity — colour must not change yet");
                 screen.Close();
                 PickupWallet.AddSupercell();   // 18 -> 28, over the cap
                 screen.Open();
-                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<Text>();
+                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<TMP_Text>();
                 Assert.That(cellsText.color, Is.Not.EqualTo(underCapColor),
                     "an over-cap balance (28/20) must render in a visually distinct colour from a normal balance");
             }
@@ -121,11 +122,10 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        private static float ResolvedFontSize(Text text)
+        private static float ResolvedFontSize(TMP_Text text)
         {
-            var settings = text.GetGenerationSettings(text.rectTransform.rect.size);
-            text.cachedTextGenerator.Populate(text.text, settings);
-            return text.cachedTextGenerator.fontSizeUsedForBestFit;
+            text.ForceMeshUpdate();
+            return text.fontSize;   // TMP: the auto-sized value after generation
         }
 
         private static RectTransform FindRect(GameObject go, string name)

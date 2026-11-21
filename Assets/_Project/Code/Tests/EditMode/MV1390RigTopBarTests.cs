@@ -1,5 +1,6 @@
 using System.IO;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Pickups;
@@ -53,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
 
                 // AC2: the widest PARTS text clears the chip by >= 24 px.
-                var partsText = parts.GetComponentInChildren<Text>();
+                var partsText = parts.GetComponentInChildren<TMP_Text>();
                 partsText.text = "999/999 PARTS";
                 Assert.That(partsText.preferredWidth, Is.LessThanOrEqualTo(parts.rect.width - 24f),
                     "PARTS text must sit inside its border");

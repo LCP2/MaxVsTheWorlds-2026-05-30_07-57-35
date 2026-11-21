@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
@@ -79,7 +80,7 @@ namespace MaxWorlds.Tests.EditMode
         /// fusion node's pivot is anchored at exactly (<c>fusion.X</c>, <c>-fusion.Y</c>) and the
         /// sub-label is centred under it with no horizontal offset, so the sub-label's own resolved
         /// centre X equals <c>fusion.X</c> exactly.</summary>
-        private static Rect SubLabelRect(RigFusionLayout fusion, UnityEngine.UI.Text sub)
+        private static Rect SubLabelRect(RigFusionLayout fusion, TMP_Text sub)
         {
             float w = sub.rectTransform.sizeDelta.x;
             float h = sub.rectTransform.sizeDelta.y;
