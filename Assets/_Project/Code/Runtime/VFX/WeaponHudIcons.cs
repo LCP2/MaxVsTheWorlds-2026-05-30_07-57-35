@@ -31,7 +31,7 @@ namespace MaxWorlds.VFX
         /// cover it — through the bore, and protruding past the hex's top and bottom.</summary>
         public static Sprite PowerCell(int size = 64)
         {
-            const string key = "powercell";
+            string key = "powercell" + size;   // MV-1398: per-size, so the RIG can ask for a texture matching its drawn size
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
             var tex = NewTex(size, size);
@@ -373,7 +373,7 @@ namespace MaxWorlds.VFX
         /// same idiom every other node-shell graphic on the board uses.</summary>
         public static Sprite UnlockGlyph(int size = 32)
         {
-            const string key = "unlockglyph";
+            string key = "unlockglyph" + size;   // MV-1398: per-size
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
             var tex = NewTex(size, size);
@@ -424,7 +424,7 @@ namespace MaxWorlds.VFX
         /// keyhole. Solid white, tinted by the caller exactly as <see cref="UnlockGlyph"/> is.</summary>
         public static Sprite UpgradeGlyph(int size = 32)
         {
-            const string key = "upgradeglyph";
+            string key = "upgradeglyph" + size;   // MV-1398: per-size
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
             var tex = NewTex(size, size);

@@ -136,6 +136,8 @@ namespace MaxWorlds.UI
         private const float ProgressTrackAlpha = 0.22f;
 
         private Canvas _canvas;
+        /// <summary>MV-1398: the <see cref="CrispUi.Resolution"/> bucket this screen's shapes were built at.</summary>
+        private int _shapeRes;
         private RectTransform _topBar;
         private RectTransform _screenRoot;
         private Image _background;
@@ -1459,7 +1461,7 @@ namespace MaxWorlds.UI
             if (hasCostToShow)
             {
                 v.CostIcon.gameObject.SetActive(true);
-                v.CostIcon.sprite = owned ? WeaponHudIcons.UpgradeGlyph() : WeaponHudIcons.UnlockGlyph();
+                v.CostIcon.sprite = owned ? WeaponHudIcons.UpgradeGlyph(32 * CrispUi.Resolution) : WeaponHudIcons.UnlockGlyph(32 * CrispUi.Resolution);
                 v.CostIcon.color = module;
                 v.CostText.gameObject.SetActive(true);
                 v.CostText.text = CellSpend.PotentialCellCost(ab.Id).ToString();
@@ -1715,7 +1717,7 @@ namespace MaxWorlds.UI
         private Sprite LockedFusionOutlineSprite(float r)
         {
             float w = r * 2f, h = r * 2f;
-            return HudTextures.PolygonOutline(FusionSides, FusionRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), 2f);
+            return CrispUi.PolygonOutline(FusionSides, FusionRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), 2f);
         }
 
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
@@ -1850,7 +1852,7 @@ namespace MaxWorlds.UI
             // MV-433: opaque, first child of the screen root (not Safe Area) so it sits behind the
             // top bar too and ignores the safe-area inset — the board draws over live gameplay
             // otherwise, which is what washed every family colour out against the lawn.
-            _background = AddImage(_screenRoot, HudTextures.Solid(), OpaqueBase(), "Background");
+            _background = AddImage(_screenRoot, CrispUi.Solid(), OpaqueBase(), "Background");
             Stretch(_background.rectTransform);
             _background.raycastTarget = false;
 
@@ -1863,7 +1865,7 @@ namespace MaxWorlds.UI
             rootRt.SetParent(_safeRoot, false);
             Stretch(rootRt);
 
-            _screenScrim = AddImage(rootRt, HudTextures.Solid(), Scrim, "Scrim");
+            _screenScrim = AddImage(rootRt, CrispUi.Solid(), Scrim, "Scrim");
             Stretch(_screenScrim.rectTransform);
             _screenScrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
@@ -1921,6 +1923,14 @@ namespace MaxWorlds.UI
             // instance) can detect a change against.
             float initialAspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
             _phoneMode = IsPhoneLayout(initialAspect);
+            // MV-1398: seed the shape resolution from the same ambient guess, so the first build already
+            // lands in the bucket ApplyBoardScale will re-derive (no throwaway double build).
+            {
+                float seedScale = ComputeBoardScale(initialAspect);
+                if (_phoneMode) seedScale *= ComputePhoneFitScale(initialAspect, SafeArea.CurrentSafeWidthFraction());
+                _shapeRes = CrispUi.BucketFor((Screen.height > 0 ? Screen.height / RefH : 1f) * seedScale);
+                CrispUi.Resolution = _shapeRes;
+            }
             // MV-753: BuildBoardContent below reads straight off RigBoardLayout, which must already
             // match whatever world RigBoard is on — e.g. a Weapon Core morph already applied at run
             // start, before THE RIG was ever opened — same sync ApplyBoardScale(float) re-checks below.
@@ -1950,7 +1960,7 @@ namespace MaxWorlds.UI
         private void ApplyBoardScale()
         {
             float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
-            ApplyBoardScale(aspect);
+            ApplyBoardScale(aspect, Screen.height);
         }
 
         /// <summary>Applies the scale-to-fit factor for an explicit aspect ratio, bypassing the ambient
@@ -1958,7 +1968,13 @@ namespace MaxWorlds.UI
         /// this with its actual capture-target aspect the same way <see cref="Screen"/>-based
         /// <c>ComputeScaleFactor</c> already bypasses <c>Screen</c> for the CanvasScaler. Public so both
         /// the capture harness and an EditMode test can drive it without a real screen/window.</summary>
-        public void ApplyBoardScale(float aspect)
+        public void ApplyBoardScale(float aspect) => ApplyBoardScale(aspect, Screen.height);
+
+        /// <summary>MV-1398: <see cref="ApplyBoardScale(float)"/> with the render target's real pixel
+        /// height, so the shape sprites are generated at the true device-pixel scale (the CanvasScaler
+        /// is match-by-height, so scaleFactor = pixelHeight / <see cref="RefH"/>) instead of whatever
+        /// the ambient <see cref="Screen"/> reports. The capture harness and tests pass their own.</summary>
+        public void ApplyBoardScale(float aspect, int pixelHeight)
         {
             if (_boardScaleRoot == null) return;
 
@@ -1975,7 +1991,20 @@ namespace MaxWorlds.UI
             // Refresh() on every state change), not just the one call site RebuildBoard used to
             // require the capture harness to reach for by hand.
             bool worldChanged = _lastBoardWorldIndex != RigBoard.ActiveWorldIndex;
-            if (wantPhoneMode != _phoneMode || worldChanged || _nodeParent == null)
+
+            // MV-1398: shape sprites are generated at 2x the live device-pixel scale (canvas scaleFactor
+            // x the board's own fit-to-width scale), bucketed to a power of two, so nothing is ever drawn
+            // larger than its own texture. A bucket change (new window/device size) rebuilds the board
+            // content exactly like a phone/standard verdict change does.
+            float scale = ComputeBoardScale(aspect);
+            if (wantPhoneMode) scale *= ComputePhoneFitScale(aspect, SafeArea.CurrentSafeWidthFraction());
+            float pixelScale = (pixelHeight > 0 ? pixelHeight / RefH : 1f) * scale;
+            int wantRes = CrispUi.BucketFor(pixelScale);
+            bool resChanged = wantRes != _shapeRes;
+            _shapeRes = wantRes;
+            CrispUi.Resolution = wantRes;
+
+            if (wantPhoneMode != _phoneMode || worldChanged || resChanged || _nodeParent == null)
             {
                 _phoneMode = wantPhoneMode;
                 RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
@@ -1985,8 +2014,6 @@ namespace MaxWorlds.UI
                 RefreshBoardState();
             }
 
-            float scale = ComputeBoardScale(aspect);
-            if (_phoneMode) scale *= ComputePhoneFitScale(aspect, SafeArea.CurrentSafeWidthFraction());
             _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
         }
 
@@ -2111,7 +2138,7 @@ namespace MaxWorlds.UI
         {
             if (contentHeight <= viewportHeight + 0.5f) return;
 
-            var hint = AddImage(viewport, HudTextures.Arrow(64), Dim, "Scroll Hint");
+            var hint = AddImage(viewport, CrispUi.Arrow(64), Dim, "Scroll Hint");
             Anchor(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             hint.rectTransform.anchoredPosition = new Vector2(0f, 20f);
             hint.rectTransform.sizeDelta = new Vector2(40f, 24f);
@@ -2191,7 +2218,7 @@ namespace MaxWorlds.UI
                 float w = right - left, h = bottom - top;
 
                 float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
-                var panel = AddImage(boardRoot, HudTextures.RoundedBox(64, cornerFraction),
+                var panel = AddImage(boardRoot, CrispUi.RoundedBox(64, cornerFraction),
                     new Color(1f, 1f, 1f, RigBoardLayout.RegionOpacityDark), $"{categories[i].Id} Panel");
                 Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
                 panel.rectTransform.sizeDelta = new Vector2(w, h);
@@ -2202,7 +2229,7 @@ namespace MaxWorlds.UI
 
                 // MV-443 defect 1: a 1.5px family-coloured hairline so the columns read as an edge
                 // without shouting — same rect as the panel fill, stacked on top.
-                var border = AddImage(boardRoot, HudTextures.RoundedBoxOutline(64, cornerFraction, 1.5f),
+                var border = AddImage(boardRoot, CrispUi.RoundedBoxOutline(64, cornerFraction, 1.5f),
                     Color.clear, $"{categories[i].Id} Panel Border");
                 Anchor(border.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
                 border.rectTransform.sizeDelta = new Vector2(w, h);
@@ -2280,7 +2307,7 @@ namespace MaxWorlds.UI
             int h = Mathf.Max(2, Mathf.CeilToInt(maxY - minY));
 
             Vector2 Local(Vector2 p) => new Vector2(p.x - minX, p.y - minY);
-            var sprite = HudTextures.BezierStroke(Local(start), Local(c1), Local(c2), Local(end), strokeWidth, w, h);
+            var sprite = CrispUi.BezierStroke(Local(start), Local(c1), Local(c2), Local(end), strokeWidth, w, h);
 
             var img = AddImage(boardRoot, sprite, Color.clear, id);
             Anchor(img.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
@@ -2299,7 +2326,7 @@ namespace MaxWorlds.UI
         /// brings the candidate nodes themselves back above this via <c>SetAsLastSibling</c>.</summary>
         private void BuildDraftScrim(RectTransform boardRoot)
         {
-            var scrim = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0.82f), "Draft Scrim");
+            var scrim = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0.82f), "Draft Scrim");
             Stretch(scrim.rectTransform);
             scrim.raycastTarget = true;
             scrim.gameObject.SetActive(false);
@@ -2320,11 +2347,11 @@ namespace MaxWorlds.UI
             band.anchoredPosition = Vector2.zero;
             _draftBand = band;
 
-            var bg = AddImage(band, HudTextures.Solid(), new Color(0.02f, 0.05f, 0.07f, 0.96f), "Band BG");
+            var bg = AddImage(band, CrispUi.Solid(), new Color(0.02f, 0.05f, 0.07f, 0.96f), "Band BG");
             Stretch(bg.rectTransform);
             bg.raycastTarget = true;   // swallow taps under the band too, same as the scrim
 
-            var hairline = AddImage(band, HudTextures.Solid(), DraftBadgeColor, "Band Hairline");
+            var hairline = AddImage(band, CrispUi.Solid(), DraftBadgeColor, "Band Hairline");
             Anchor(hairline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
             hairline.rectTransform.sizeDelta = new Vector2(0f, 2f);
             hairline.rectTransform.anchoredPosition = Vector2.zero;
@@ -2359,13 +2386,13 @@ namespace MaxWorlds.UI
         /// tap.</summary>
         private void BuildCeremonyVisuals(RectTransform boardRoot)
         {
-            var scrim = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Scrim");
+            var scrim = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Scrim");
             Stretch(scrim.rectTransform);
             scrim.raycastTarget = false;
             scrim.gameObject.SetActive(false);
             _ceremonyScrim = scrim;
 
-            var glow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.08f), Color.clear, "Ceremony Category Glow");
+            var glow = AddImage(boardRoot, CrispUi.RoundedBox(64, 0.08f), Color.clear, "Ceremony Category Glow");
             glow.type = Image.Type.Sliced;   // the panel it's sized to match is almost never a 64px square
             glow.raycastTarget = false;
             glow.gameObject.SetActive(false);
@@ -2382,14 +2409,14 @@ namespace MaxWorlds.UI
             _ceremonyChildGlows.Clear();
             for (int i = 0; i < CeremonyMaxChildGlows; i++)
             {
-                var childGlow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.5f), Color.clear, $"Ceremony Child Glow {i}");
+                var childGlow = AddImage(boardRoot, CrispUi.RoundedBox(64, 0.5f), Color.clear, $"Ceremony Child Glow {i}");
                 childGlow.type = Image.Type.Sliced;
                 childGlow.raycastTarget = false;
                 childGlow.gameObject.SetActive(false);
                 _ceremonyChildGlows.Add(childGlow);
             }
 
-            var skip = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Skip Catcher");
+            var skip = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Skip Catcher");
             Stretch(skip.rectTransform);
             skip.raycastTarget = true;
             var skipButton = skip.gameObject.AddComponent<Button>();
@@ -2412,7 +2439,7 @@ namespace MaxWorlds.UI
             if (!RigFusionState.EnabledInWorld(RigBoard.ActiveWorldIndex)) return;
 
             float dividerY = ForgeDividerY;
-            var divider = AddImage(boardRoot, HudTextures.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
+            var divider = AddImage(boardRoot, CrispUi.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
             Anchor(divider.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
             divider.rectTransform.offsetMin = new Vector2(ContentMargin, 0f);
             divider.rectTransform.offsetMax = new Vector2(-ContentMargin, 0f);
@@ -2452,7 +2479,7 @@ namespace MaxWorlds.UI
             shell.HexOutline.color = new Color(1f, 1f, 1f, 0.14f);
 
             int fuseIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleFusion);
-            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon("fuse"), fuseIconSize);
+            shell.Icon.sprite = CrispUi.VectorIcon(RigBoardLayout.Icon("fuse"), fuseIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(fuseIconSize, fuseIconSize);
             shell.Icon.color = Dim;
 
@@ -2495,7 +2522,7 @@ namespace MaxWorlds.UI
 
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
             int catIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleCategory);
-            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(cat.Icon), catIconSize);
+            shell.Icon.sprite = CrispUi.VectorIcon(RigBoardLayout.Icon(cat.Icon), catIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(catIconSize, catIconSize);
 
             shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.CategoryLabelOffsetY(r));
@@ -2566,7 +2593,7 @@ namespace MaxWorlds.UI
             float ringR = r + RigBoardLayout.CapOuterRingOffset;
             float ringW = ringR * Sqrt3, ringH = ringR * 2f;
             shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringW, ringH);
-            shell.OuterRing.sprite = HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 2f);
+            shell.OuterRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 2f);
             shell.OuterRing.gameObject.SetActive(false);
 
             shell.CapMarker.gameObject.SetActive(false);
@@ -2636,7 +2663,7 @@ namespace MaxWorlds.UI
 
                 float priceRowY = -(pillH - bottomRowH) * 0.5f;
 
-                var priceIcon = AddImage(shell.PillBg.rectTransform, WeaponHudIcons.PowerCell(Mathf.RoundToInt(priceIconSize)), Color.clear, "Sentinel Price Icon");
+                var priceIcon = AddImage(shell.PillBg.rectTransform, WeaponHudIcons.PowerCell(Mathf.RoundToInt(priceIconSize) * CrispUi.Resolution), Color.clear, "Sentinel Price Icon");
                 Anchor(priceIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f));
                 priceIcon.rectTransform.sizeDelta = new Vector2(priceIconSize, priceIconSize);
                 priceIcon.rectTransform.anchoredPosition = new Vector2(-2f, priceRowY);
@@ -2657,7 +2684,7 @@ namespace MaxWorlds.UI
 
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
             int abIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleAbility);
-            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
+            shell.Icon.sprite = CrispUi.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(abIconSize, abIconSize);
 
             // Outer dashed ring (capability draftable) — a hex at r + capOuterRingOffset, independent
@@ -2667,13 +2694,13 @@ namespace MaxWorlds.UI
             float ringR = r + RigBoardLayout.CapOuterRingOffset;
             float ringW = ringR * Sqrt3, ringH = ringR * 2f;
             shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringW, ringH);
-            shell.OuterRing.sprite = HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), RigBoardLayout.StrokeActive, true);
+            shell.OuterRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), RigBoardLayout.StrokeActive, true);
 
             float markerR = RigBoardLayout.CapMarkerRadius;
             Vector2 markerOffset = RigBoardLayout.CapMarkerOffset(r);
             shell.CapMarker.rectTransform.sizeDelta = new Vector2(markerR * 2f, markerR * 2f);
             shell.CapMarker.rectTransform.anchoredPosition = markerOffset;
-            shell.CapMarker.sprite = HudTextures.Disc(32);
+            shell.CapMarker.sprite = CrispUi.Disc(32);
 
             // MV-470: the accumulation ring — a plain (non-dashed) ring just inside the dashed
             // OuterRing/CapOuterRingOffset radius, revealed by Image.Type.Filled/Radial360 as
@@ -2684,13 +2711,13 @@ namespace MaxWorlds.UI
             // MV-538 AC4: the empty TRACK, built first so it renders BEHIND the fill — same size and
             // position, a plain (non-filled) ring at a dim, always-on alpha whenever the fill is
             // active, so a partial arc always reads as "part of a whole."
-            shell.ProgressTrack = AddImage(shell.Root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Track");
+            shell.ProgressTrack = AddImage(shell.Root, CrispUi.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Track");
             Anchor(shell.ProgressTrack.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.ProgressTrack.rectTransform.sizeDelta = new Vector2(progressRingR * 2f, progressRingR * 2f);
             shell.ProgressTrack.raycastTarget = false;
             shell.ProgressTrack.gameObject.SetActive(false);
 
-            shell.ProgressRing = AddImage(shell.Root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Ring");
+            shell.ProgressRing = AddImage(shell.Root, CrispUi.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Ring");
             Anchor(shell.ProgressRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.ProgressRing.rectTransform.sizeDelta = new Vector2(progressRingR * 2f, progressRingR * 2f);
             shell.ProgressRing.raycastTarget = false;
@@ -2725,7 +2752,7 @@ namespace MaxWorlds.UI
             const float TagGap = 4f;
             float textHalfWidth = costFontSize * 1.1f;
 
-            shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(Mathf.RoundToInt(costIconSize)), Color.clear, "Cost Icon");
+            shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(Mathf.RoundToInt(costIconSize) * CrispUi.Resolution), Color.clear, "Cost Icon");
             Anchor(shell.CostIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.CostIcon.rectTransform.sizeDelta = new Vector2(costIconSize, costIconSize);
             shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-(costIconSize * 0.5f + TagGap * 0.5f), costTagY);
@@ -2793,16 +2820,16 @@ namespace MaxWorlds.UI
             icon.rectTransform.anchoredPosition = new Vector2(0f, RigBoardLayout.IconOffsetY);
             icon.raycastTarget = false;
 
-            var outerRing = AddImage(root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, true, 16), Color.clear, "Outer Ring");
+            var outerRing = AddImage(root, CrispUi.Ring(96, RigBoardLayout.StrokeActive, true, 16), Color.clear, "Outer Ring");
             Anchor(outerRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             outerRing.raycastTarget = false;
 
-            var capMarker = AddImage(root, HudTextures.Disc(32), Color.clear, "Cap Marker");
+            var capMarker = AddImage(root, CrispUi.Disc(32), Color.clear, "Cap Marker");
             Anchor(capMarker.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             capMarker.raycastTarget = false;
 
             float pillW = LevelPillW, pillH = LevelPillH;
-            var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), PillBackdrop, "Pill");
+            var pillBg = AddImage(root, CrispUi.RoundedBox(32, 0.5f), PillBackdrop, "Pill");
             Anchor(pillBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             pillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
             pillBg.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LevelPillOffsetY(r));
@@ -2812,7 +2839,7 @@ namespace MaxWorlds.UI
             // MV-443 defect 3: the level pill's own 2px border — a separate stacked image so its
             // colour (the state read: family/module/ink) never has to fight the backdrop's fixed
             // #0A0B0F fill.
-            var pillBorder = AddImage(root, HudTextures.RoundedBoxOutline(32, 0.5f, 2f), Color.clear, "Pill Border");
+            var pillBorder = AddImage(root, CrispUi.RoundedBoxOutline(32, 0.5f, 2f), Color.clear, "Pill Border");
             Anchor(pillBorder.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             pillBorder.rectTransform.sizeDelta = new Vector2(pillW, pillH);
             pillBorder.rectTransform.anchoredPosition = pillBg.rectTransform.anchoredPosition;
@@ -2852,7 +2879,7 @@ namespace MaxWorlds.UI
             // MV-424: the Morphing Module draft's numbered badge (1-3), centred above the hex — a
             // different corner language from the SHED/spend markers so a candidate reads unmistakably
             // as "tap to take", not another passive state.
-            var draftBadge = AddImage(root, HudTextures.Disc(40), Color.clear, "Draft Badge");
+            var draftBadge = AddImage(root, CrispUi.Disc(40), Color.clear, "Draft Badge");
             Anchor(draftBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             draftBadge.rectTransform.sizeDelta = new Vector2(36f, 36f);
             draftBadge.rectTransform.anchoredPosition = new Vector2(0f, r + 34f);
@@ -2864,7 +2891,7 @@ namespace MaxWorlds.UI
             draftBadgeText.fontStyle = FontStyle.Bold;
             draftBadgeText.raycastTarget = false;
 
-            var hit = AddImage(root, HudTextures.Solid(), Color.clear, "Hit");
+            var hit = AddImage(root, CrispUi.Solid(), Color.clear, "Hit");
             Stretch(hit.rectTransform);
             hit.raycastTarget = true;
             var button = hit.gameObject.AddComponent<Button>();
@@ -2886,7 +2913,7 @@ namespace MaxWorlds.UI
         // was the bug (fusion squares in MV-423's build).
         private static float RotationFor(int sides) => sides == FusionSides ? FusionRotationDeg : HexRotationDeg;
 
-        private static Sprite PolygonFillSprite(int sides, int w, int h) => HudTextures.Polygon(sides, RotationFor(sides), w, h);
+        private static Sprite PolygonFillSprite(int sides, int w, int h) => CrispUi.Polygon(sides, RotationFor(sides), w, h);
 
         /// <summary>A <paramref name="sides"/>-gon's own (width, height) bounding box at circumradius
         /// <paramref name="r"/> — the same <c>hexW</c>/<c>hexH</c> pair <see cref="BuildNodeShell"/>'s
@@ -2905,7 +2932,7 @@ namespace MaxWorlds.UI
         private static Sprite NodeGlowSprite(float r, int sides, float blurPx)
         {
             Vector2 size = NodeGlowSize(r, sides);
-            return HudTextures.PolygonGlow(sides, RotationFor(sides), Mathf.CeilToInt(size.x), Mathf.CeilToInt(size.y), r, blurPx);
+            return CrispUi.PolygonGlow(sides, RotationFor(sides), Mathf.CeilToInt(size.x), Mathf.CeilToInt(size.y), r, blurPx);
         }
 
         private Sprite SolidHexOutlineSprite(float r) => SolidPolygonOutlineSprite(HexSides, r);
@@ -2913,7 +2940,7 @@ namespace MaxWorlds.UI
         private Sprite SolidPolygonOutlineSprite(int sides, float r)
         {
             float w = sides == HexSides ? r * Sqrt3 : r * 2f, h = r * 2f;
-            return HudTextures.PolygonOutline(sides, RotationFor(sides), Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
+            return CrispUi.PolygonOutline(sides, RotationFor(sides), Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
         }
 
         // MV-445 defect 4: dash 13 / gap 9, walked as arc length around the closed hexagon (see
@@ -2924,7 +2951,7 @@ namespace MaxWorlds.UI
         private Sprite DashedHexSprite(float r)
         {
             float w = r * Sqrt3, h = r * 2f;
-            return HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h),
+            return CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h),
                 RigBoardLayout.StrokeActive, true, DraftableDashLength, DraftableGapLength);
         }
 
@@ -2933,7 +2960,7 @@ namespace MaxWorlds.UI
         private Sprite LockedHexOutlineSprite(float r)
         {
             float w = r * Sqrt3, h = r * 2f;
-            return HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeLocked);
+            return CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeLocked);
         }
 
         /// <summary>The refs a built node hands back to <see cref="Refresh"/> — one shared shape for
@@ -2995,7 +3022,7 @@ namespace MaxWorlds.UI
             // INSIDE the top bar, per MV-423.png — flush-to-edge plus a shallow corner radius is what
             // made it read as a hard rectangle overlapping the debug FPS readout (Bootstrap.cs OnGUI,
             // screen pixels 12,8-652,68 — squarely under the old flush plate).
-            var accent = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), HeaderAccent, "Title Accent");
+            var accent = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), HeaderAccent, "Title Accent");
             Anchor(accent.rectTransform, new Vector2(0f, 0f), new Vector2(0.34f, 1f), new Vector2(0f, 0.5f));
             accent.rectTransform.offsetMin = new Vector2(0f, 12f);
             accent.rectTransform.offsetMax = new Vector2(-6f, -12f);
@@ -3094,7 +3121,7 @@ namespace MaxWorlds.UI
         {
             var sz = chip.sizeDelta;
             float frac = Mathf.Clamp(25f / (Mathf.Min(sz.x, sz.y) * 0.5f), 0.05f, 0.5f);
-            var border = AddImage(chip, HudTextures.RoundedBoxOutline(32, frac, 2.5f), color, name);
+            var border = AddImage(chip, CrispUi.RoundedBoxOutline(32, frac, 2.5f), color, name);
             Stretch(border.rectTransform);
             border.type = Image.Type.Sliced;
             border.raycastTarget = false;
@@ -3111,7 +3138,7 @@ namespace MaxWorlds.UI
         private float BuildCloseButton(RectTransform bar, float rightEdge)
         {
             float w = _topBarButtonWidth, h = _topBarButtonHeight;
-            var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), SupercellColor, "Close Button");
+            var bg = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), SupercellColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
             bg.rectTransform.sizeDelta = new Vector2(w, h);
@@ -3138,7 +3165,7 @@ namespace MaxWorlds.UI
         private float BuildQuitButton(RectTransform bar, float rightEdge)
         {
             float w = _topBarButtonWidth, h = _topBarButtonHeight;
-            var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), QuitColor, "Quit Button");
+            var bg = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), QuitColor, "Quit Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
             bg.rectTransform.sizeDelta = new Vector2(w, h);
@@ -3177,7 +3204,7 @@ namespace MaxWorlds.UI
             chip.sizeDelta = new Vector2(width, height);
             chip.anchoredPosition = offset;
 
-            var bg = AddImage(chip, HudTextures.RoundedBox(32, cornerFraction), PanelColor, "BG");
+            var bg = AddImage(chip, CrispUi.RoundedBox(32, cornerFraction), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
             label = AddText(chip, (int)textMaxSize, accent, TextAnchor.MiddleCenter);

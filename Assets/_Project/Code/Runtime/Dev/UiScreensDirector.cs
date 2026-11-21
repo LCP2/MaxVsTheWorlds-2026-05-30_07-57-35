@@ -153,7 +153,7 @@ namespace MaxWorlds.Dev
             }
             if (canvas == null) { LogWarn("rig: WeaponsScreen built no canvas"); yield break; }
 
-            void ScaleBoardTo(int w, int h) => weapons.ApplyBoardScale((float)w / h);
+            void ScaleBoardTo(int w, int h) => weapons.ApplyBoardScale((float)w / h, h);   // MV-1398: shapes are generated at this target's real pixel scale
 
             foreach (var aspect in RigBoardLayout.CaptureAspects)
                 yield return CaptureFixtureScreen($"rig-{aspect.Name}", aspect.W, aspect.H, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
@@ -176,6 +176,8 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("rig-mv472-977x458", 977, 458, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-mv472-852x393", 852, 393, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-mv472-1133x744", 1133, 744, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-1398 AC3: iPhone 15 Pro Max landscape, the device Lee saw the blur on.
+            yield return CaptureFixtureScreen("rig-mv1398-2556x1179", 2556, 1179, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-519 AC9's human-check shot: the CELLS chip reading an over-cap balance (22/20) after a
             // Supercell grant pushed PowerCells past Capacity — must read as a deliberate bonus, not a

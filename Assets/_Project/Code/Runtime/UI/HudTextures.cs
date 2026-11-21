@@ -15,6 +15,14 @@ namespace MaxWorlds.UI
     {
         private static readonly Dictionary<string, Sprite> s_cache = new Dictionary<string, Sprite>();
 
+        /// <summary>MV-1398: resolution multiplier for the generators below (1 = the legacy 1 texel per
+        /// canvas unit). <see cref="CrispUi"/> sets it for the duration of one call. Above 1 every size,
+        /// stroke, blur and dash length is multiplied, the cache key carries the multiplier, the sprite's
+        /// pixelsPerUnit is multiplied so its nominal canvas-unit size is unchanged, and the texture gets
+        /// mipmaps + trilinear filtering so minification does not shimmer.</summary>
+        internal static int Res = 1;
+        private static string Rk => Res > 1 ? "_x" + Res : "";
+
         /// <summary>1×1 white sprite. Tint via Image.color — used for every bar/panel fill.</summary>
         public static Sprite Solid()
         {
@@ -27,7 +35,8 @@ namespace MaxWorlds.UI
         /// <summary>Filled anti-aliased disc (radial-fill overlays, joystick knob).</summary>
         public static Sprite Disc(int size = 128)
         {
-            string key = $"disc{size}";
+            size *= Res;
+            string key = $"disc{size}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(size, size);
             float r = size * 0.5f;
@@ -128,7 +137,9 @@ namespace MaxWorlds.UI
         /// <summary>Upward-pointing triangle (movement direction overlay).</summary>
         public static Sprite Arrow(int size = 64)
         {
-            if (s_cache.TryGetValue("arrow", out var s)) return s;
+            size *= Res;
+            string akey = "arrow" + Rk;
+            if (s_cache.TryGetValue(akey, out var s)) return s;
             var tex = NewTex(size, size);
             var px = new Color32[size * size];
             for (int y = 0; y < size; y++)
@@ -141,7 +152,7 @@ namespace MaxWorlds.UI
                 px[y * size + x] = new Color(1, 1, 1, inside ? 1f : 0f);
             }
             tex.SetPixels32(px); tex.Apply();
-            return Cache("arrow", tex, 100f);
+            return Cache(akey, tex, 100f);
         }
 
         /// <summary>Thin crosshair glyph (aim-joystick centre).</summary>
@@ -166,7 +177,8 @@ namespace MaxWorlds.UI
         /// <summary>Rounded-corner box (icon buttons, ability slots, name card). 9-sliced.</summary>
         public static Sprite RoundedBox(int size = 64, float cornerFraction = 0.28f)
         {
-            string key = $"rbox{size}_{Mathf.RoundToInt(cornerFraction * 100)}";
+            size *= Res;
+            string key = $"rbox{size}_{Mathf.RoundToInt(cornerFraction * 100)}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(size, size);
             var px = new Color32[size * size];
@@ -180,7 +192,7 @@ namespace MaxWorlds.UI
             tex.SetPixels32(px); tex.Apply();
             float b = radius; // 9-slice border so scaling keeps corners crisp
             var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
-                100f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+                100f * Res, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
             sprite.name = key;
             s_cache[key] = sprite;
             return sprite;
@@ -234,7 +246,8 @@ namespace MaxWorlds.UI
         /// <c>2r x 2r</c>) so the sprite never distorts when stretched onto a node's RectTransform.</summary>
         public static Sprite Polygon(int sides, float rotationDeg, int width, int height)
         {
-            string key = $"poly{sides}_{rotationDeg}_{width}_{height}";
+            width *= Res; height *= Res;
+            string key = $"poly{sides}_{rotationDeg}_{width}_{height}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(width, height);
             var px = new Color32[width * height];
@@ -260,7 +273,8 @@ namespace MaxWorlds.UI
         public static Sprite PolygonOutline(int sides, float rotationDeg, int width, int height,
             float strokeWidth, bool dashed = false, float dashLength = 14f, float gapLength = 10f)
         {
-            string key = $"polyO{sides}_{rotationDeg}_{width}_{height}_{strokeWidth}_{dashed}_{dashLength}_{gapLength}";
+            width *= Res; height *= Res; strokeWidth *= Res; dashLength *= Res; gapLength *= Res;
+            string key = $"polyO{sides}_{rotationDeg}_{width}_{height}_{strokeWidth}_{dashed}_{dashLength}_{gapLength}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(width, height);
             var px = new Color32[width * height];
@@ -292,7 +306,8 @@ namespace MaxWorlds.UI
         /// radius or stroke width.</summary>
         public static Sprite RoundedBoxOutline(int size, float cornerFraction, float strokeWidth)
         {
-            string key = $"rboxO{size}_{Mathf.RoundToInt(cornerFraction * 100)}_{strokeWidth}";
+            size *= Res; strokeWidth *= Res;
+            string key = $"rboxO{size}_{Mathf.RoundToInt(cornerFraction * 100)}_{strokeWidth}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(size, size);
             var px = new Color32[size * size];
@@ -307,7 +322,7 @@ namespace MaxWorlds.UI
             tex.SetPixels32(px); tex.Apply();
             float b = radius;
             var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
-                100f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+                100f * Res, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
             sprite.name = key;
             s_cache[key] = sprite;
             return sprite;
@@ -321,7 +336,8 @@ namespace MaxWorlds.UI
         /// of a whole SVG path.</summary>
         public static Sprite BezierStroke(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float strokeWidth, int width, int height)
         {
-            string key = $"bez_{p0}_{p1}_{p2}_{p3}_{strokeWidth}_{width}_{height}";
+            p0 *= Res; p1 *= Res; p2 *= Res; p3 *= Res; strokeWidth *= Res; width *= Res; height *= Res;
+            string key = $"bez_{p0}_{p1}_{p2}_{p3}_{strokeWidth}_{width}_{height}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
 
             var pts = FlattenCubic(p0, p1, p2, p3, 24);
@@ -348,7 +364,8 @@ namespace MaxWorlds.UI
         /// (not a polygon approximation), so it stays round regardless of <paramref name="dashCount"/>.</summary>
         public static Sprite Ring(int size, float strokeWidth, bool dashed = false, int dashCount = 24)
         {
-            string key = $"ring{size}_{strokeWidth}_{dashed}_{dashCount}";
+            size *= Res; strokeWidth *= Res;
+            string key = $"ring{size}_{strokeWidth}_{dashed}_{dashCount}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(size, size);
             var px = new Color32[size * size];
@@ -444,7 +461,8 @@ namespace MaxWorlds.UI
         public static Sprite PolygonGlow(int sides, float rotationDeg, int width, int height,
             float shapeRadius, float blurPx)
         {
-            string key = $"polyGlow{sides}_{rotationDeg}_{width}_{height}_{shapeRadius}_{blurPx}";
+            width *= Res; height *= Res; shapeRadius *= Res; blurPx *= Res;
+            string key = $"polyGlow{sides}_{rotationDeg}_{width}_{height}_{shapeRadius}_{blurPx}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(width, height);
             var px = new Color32[width * height];
@@ -473,7 +491,8 @@ namespace MaxWorlds.UI
         /// every other sprite here; tint via Image.color.</summary>
         public static Sprite VectorIcon(string svgFragment, int size)
         {
-            string key = $"vicon{size}_{svgFragment.GetHashCode()}";
+            size *= Res;
+            string key = $"vicon{size}_{svgFragment.GetHashCode()}{Rk}";
             if (s_cache.TryGetValue(key, out var s)) return s;
 
             List<IconOp> ops = ParseIconOps(svgFragment);
@@ -736,9 +755,10 @@ namespace MaxWorlds.UI
 
         private static Texture2D NewTex(int w, int h)
         {
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, Res > 1)
             {
-                filterMode = FilterMode.Bilinear,
+                filterMode = Res > 1 ? FilterMode.Trilinear : FilterMode.Bilinear,
+                anisoLevel = Res > 1 ? 2 : 1,
                 wrapMode = TextureWrapMode.Clamp,
                 hideFlags = HideFlags.HideAndDontSave
             };
@@ -756,7 +776,7 @@ namespace MaxWorlds.UI
         private static Sprite Cache(string key, Texture2D tex, float ppu)
         {
             var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
-                new Vector2(0.5f, 0.5f), ppu);
+                new Vector2(0.5f, 0.5f), ppu * Res);
             sprite.name = key;
             s_cache[key] = sprite;
             return sprite;
