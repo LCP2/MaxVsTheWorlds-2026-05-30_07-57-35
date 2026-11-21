@@ -737,6 +737,10 @@ namespace MaxWorlds.VFX
                 Bounds testAgainst = isOtherRamp ? rawRamp : grown;
                 if (!ReallyOverlaps(testAgainst, r.bounds, 0.05f)) continue;
 
+                // MV-1409: a pylon's power cable (line + dots) is neither dressing nor structure - it was
+                // being switched off here whenever it crossed a relay's ramp footprint, so it never drew.
+                if (r.GetComponentInParent<PylonCableMarker>() != null) continue;
+
                 // MV-1107: a collider alone isn't "structural or authored" — MV-1087's channel kerbs
                 // and crossing decks are decorative dressing that ALSO carry one, purely so something
                 // can walk on top of them (StormdrainKit.MakeWalkable's own StructuralFloor marker).

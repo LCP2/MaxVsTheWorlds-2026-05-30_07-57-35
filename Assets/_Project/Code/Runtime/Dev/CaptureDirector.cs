@@ -682,6 +682,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1321Vault());
             Add(BuildMv1403RealVault());
             Add(BuildMv1404VaultKey());
+            Add(BuildMv1409PylonCable());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2017,6 +2018,139 @@ namespace MaxWorlds.Dev
                 Cleanup = () => Factories.VaultKeyState.Reset(),
             };
         }
+
+        // ---- Mv1409PylonCable (MV-1409 AC1) ---------------------------------------------------
+
+        /// <summary>MV-1409 AC1: the REAL City, two shots from the play camera - <c>a2_rep1_pylon1</c> and
+        /// its relay <c>a2_rep1</c> (the defect), then <c>a29_rep1_pylon1</c> and <c>a29_rep1</c> (the
+        /// control whose cable Lee sees). Each shot's <see cref="CaptureShot.Measure"/> projects the
+        /// cable's own L-route to the screen, samples points along it (skipping any point inside the
+        /// pylon's or relay's own footprint, where the box legitimately covers the cable) and reports the
+        /// fraction whose rendered pixel is the cable's red, plus the LineRenderer's resolved state, to
+        /// <c>Logs/MV-1409-cable.txt</c>. Run it from the repo root via <c>cc-mv1409-capture.bat</c>.</summary>
+        private static CapturePreset BuildMv1409PylonCable()
+        {
+            const int W = 1600, H = 1000;
+            var report = new System.Text.StringBuilder();
+
+            Factories.Pylon FindPylon(string id)
+            {
+                foreach (var p in FindObjectsByType<Factories.Pylon>(FindObjectsSortMode.None))
+                    if (p != null && p.Id == id) return p;
+                return null;
+            }
+
+            Func<Camera, IEnumerator> Setup(string zone, string pylonId, string feedId)
+            {
+                IEnumerator Run(Camera cam)
+                {
+                    var batchRoot = FindFirstObjectByType<MapStaticBatchRoot>();
+                    if (batchRoot == null) throw new CaptureAbortException("City built no MapStaticBatchRoot");
+                    var pylon = FindPylon(pylonId);
+                    if (pylon == null) throw new CaptureAbortException($"City built no pylon '{pylonId}'");
+                    var relay = GameObject.Find(feedId);
+                    if (relay == null) throw new CaptureAbortException($"City built no relay '{feedId}'");
+
+                    batchRoot.ApplyAreaGate(zone);
+                    var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                    float pitch = rig != null ? rig.Pitch : 60f;
+                    float distance = rig != null ? rig.Distance : 20f;
+                    Vector3 focus = (pylon.transform.position + relay.transform.position) * 0.5f;
+                    focus.y = 0f;
+                    var rot = Quaternion.Euler(pitch, 0f, 0f);
+                    cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                    for (int i = 0; i < 4; i++) yield return null;
+                    CaptureDirector.WarmUpRender(cam);
+                    for (int i = 0; i < 3; i++) yield return null;
+                }
+                return Run;
+            }
+
+            Action<Texture2D> Measure(string label, string pylonId, string feedId, Camera[] camHolder)
+            {
+                return tex =>
+                {
+                    var cam = Camera.main;
+                    var pylon = FindPylon(pylonId);
+                    var relay = GameObject.Find(feedId);
+                    var prend = pylon.GetComponentsInChildren<Renderer>();
+                    var rrend = relay.GetComponentsInChildren<Renderer>();
+                    bool Covered(Vector3 p)
+                    {
+                        foreach (var r in prend) if (r != null && r.bounds.Contains(new Vector3(p.x, r.bounds.center.y, p.z))) return true;
+                        foreach (var r in rrend) if (r != null && r.bounds.Contains(new Vector3(p.x, r.bounds.center.y, p.z))) return true;
+                        return false;
+                    }
+
+                    Vector3 s = pylon.transform.position, e = relay.transform.position;
+                    float length = Mathf.Abs(e.x - s.x) + Mathf.Abs(e.z - s.z);
+                    int total = 0, hit = 0, offscreen = 0;
+                    const int N = 60;
+                    for (int i = 0; i < N; i++)
+                    {
+                        Vector3 p = pylon.PointAlongCable(length * (i + 0.5f) / N);
+                        if (Covered(p)) continue;
+                        Vector3 v = cam.WorldToViewportPoint(p);
+                        int px = Mathf.RoundToInt(v.x * W), py = Mathf.RoundToInt(v.y * H);
+                        if (v.z <= 0f || px < 2 || py < 2 || px >= W - 2 || py >= H - 2) { offscreen++; continue; }
+                        total++;
+                        bool found = false;
+                        for (int dy = -2; dy <= 2 && !found; dy++)
+                            for (int dx = -2; dx <= 2 && !found; dx++)
+                            {
+                                Color c = tex.GetPixel(px + dx, py + dy);
+                                if (c.r >= 0.4f && c.r - Mathf.Max(c.g, c.b) >= 0.25f) found = true;
+                            }
+                        if (found) hit++;
+                    }
+                    float frac = total > 0 ? (float)hit / total : 0f;
+                    report.Append($"{label}: cable-colour fraction = {frac:P1} ({hit}/{total} samples; {offscreen} off-screen; pylon={pylonId} relay={feedId})\n");
+
+                    foreach (var lr in FindObjectsByType<LineRenderer>(FindObjectsSortMode.None))
+                    {
+                        if (lr == null || lr.gameObject.name != pylonId + "_Cable") continue;
+                        var m = lr.sharedMaterial;
+                        report.Append($"  line: enabled={lr.enabled} activeInHierarchy={lr.gameObject.activeInHierarchy} layer={lr.gameObject.layer} " +
+                                      $"inCullingMask={(cam.cullingMask & (1 << lr.gameObject.layer)) != 0} positions={lr.positionCount} " +
+                                      $"width={lr.startWidth:F2} bounds={lr.bounds.center}/{lr.bounds.size} sortingOrder={lr.sortingOrder} " +
+                                      $"material={(m != null ? m.name : "NULL")} shader={(m != null && m.shader != null ? m.shader.name : "NULL")} " +
+                                      $"queue={(m != null ? m.renderQueue : -1)} parent={(lr.transform.parent != null ? lr.transform.parent.name : "none")}\n");
+                    }
+                    File.WriteAllText(Path.Combine("Logs", "MV-1409-cable.txt"), report.ToString());
+                };
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1409pylonCable",
+                LogTag = "[MV1409Capture]",
+                Flag = "-mv1409shot",
+                ArmFile = "Temp/mv1409.arm",
+                HeadlessMarker = "Temp/mv1409.headless",
+                DoneFileName = "_mv1409_done.txt",
+                Width = W,
+                Height = H,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-1409-a2", Setup("area2", "a2_rep1_pylon1", "a2_rep1"),
+                        measure: Measure("a2 ", "a2_rep1_pylon1", "a2_rep1", null)),
+                    new CaptureShot("MV-1409-a29", Setup("area29", "a29_rep1_pylon1", "a29_rep1"),
+                        measure: Measure("a29", "a29_rep1_pylon1", "a29_rep1", null)),
+                },
+            };
+        }
+
+        private static IEnumerator WaitFrames(int n) { for (int i = 0; i < n; i++) yield return null; }
 
         // ---- IntroHandoffFrame (MV-719 AC6) ---------------------------------------------------
 

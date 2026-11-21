@@ -404,6 +404,7 @@ namespace MaxWorlds.Factories
 
             var cableGo = new GameObject($"{(string.IsNullOrEmpty(Id) ? name : Id)}_Cable");
             _cableRoot = cableGo.transform;
+            cableGo.AddComponent<PylonCableMarker>(); // MV-1409: FactoryDoorway's dressing sweep must leave this alone
             _cableRoot.SetParent(transform.parent, worldPositionStays: true);
 
             // A private clone, never VfxMaterials' own shared cache: TickCable mutates this material's
@@ -498,4 +499,11 @@ namespace MaxWorlds.Factories
             TickCable(Time.deltaTime);
         }
     }
+
+    /// <summary>MV-1409: tags a pylon's cable root (line + travelling dots). <c>FactoryDoorway</c>'s
+    /// <c>SuppressConflictingDressing</c> switches off every enabled scene renderer overlapping a
+    /// replicator's entry ramp as "decorative dressing" - which silently disabled any cable lying across
+    /// a relay's ramp footprint (City a2's among them), so it never drew. A cable is neither dressing nor
+    /// structure; the door leaves anything carrying this marker alone.</summary>
+    public sealed class PylonCableMarker : MonoBehaviour { }
 }
