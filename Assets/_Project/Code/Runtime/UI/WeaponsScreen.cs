@@ -692,7 +692,7 @@ namespace MaxWorlds.UI
 
         /// <summary>Where everything in the rail + tree layout sits, in board frame units (x right, y down
         /// from the top of the area below the top bar).</summary>
-        private struct TreeFrame { public Rect Panel, Area; public Rect[] Tabs; }
+        private struct TreeFrame { public Rect Panel, Area, Detail; public Rect[] Tabs; }
 
         private static TreeFrame ComputeTreeFrame(float safeW, float safeH, int tabCount)
         {
@@ -704,6 +704,7 @@ namespace MaxWorlds.UI
                 f.Tabs[i] = new Rect(x0 + TreeMargin, TreeMargin + i * (tabH + TreeGap), RailWidth, tabH);
             float px = x0 + TreeMargin + RailWidth + TreeMargin;
             f.Panel = new Rect(px, TreeMargin, Mathf.Max(200f, w - (px - x0) - DetailReserve - TreeMargin), h - 2f * TreeMargin);
+            f.Detail = new Rect(f.Panel.xMax + TreeMargin, TreeMargin, DetailReserve - 2f * TreeMargin, f.Panel.height);   // MV-1411: right of the tree panel, same height
             f.Area = new Rect(f.Panel.x + 24f, f.Panel.y + TreeHeaderH, f.Panel.width - 48f, f.Panel.height - TreeHeaderH - 16f);
             return f;
         }
@@ -713,6 +714,7 @@ namespace MaxWorlds.UI
         private readonly Dictionary<string, TreeSpot> _treeSpots = new Dictionary<string, TreeSpot>();
         private TreeFrame _treeFrame;
         private string _selectedCategory;
+        private string _selectedNodeId;
 
         /// <summary>The category ids that get a rail tab, in board order (FORGE last, only when the world has fusions).</summary>
         private List<string> RailIds()
@@ -747,6 +749,9 @@ namespace MaxWorlds.UI
                 foreach (var p in placed)
                     _treeSpots[p.Id] = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, HasChildren = false, Category = ForgeTabId };
             }
+            // MV-1411: keep the selected node only while it is still in the selected category's tree.
+            if (_selectedNodeId == null || !_treeSpots.TryGetValue(_selectedNodeId, out var keep) || keep.Category != _selectedCategory)
+                _selectedNodeId = RootNodeOf(_selectedCategory);
         }
 
         /// <summary>MV-549: half the total ref-px span phone mode's own category panels actually occupy,
@@ -946,6 +951,11 @@ namespace MaxWorlds.UI
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
             ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
+
+            // MV-1411: opening the RIG lands on the PRIMARY tab with its root node selected.
+            if (_railOrder.Contains("PRIMARY")) _selectedCategory = "PRIMARY";
+            _selectedNodeId = RootNodeOf(_selectedCategory);
+            ApplyTreeSelection();
 
             Refresh();
             _screenRoot.gameObject.SetActive(true);
@@ -1186,6 +1196,7 @@ namespace MaxWorlds.UI
             foreach (var fusion in Fusions) RefreshFusionNode(fusion, cellsBanked);
             RefreshConnectors();
             RefreshRail();
+            RefreshDetail();
 
             RefreshMorphingModuleDraft();
         }
@@ -1867,6 +1878,27 @@ namespace MaxWorlds.UI
             v.Button.interactable = true;
         }
 
+        /// <summary>MV-1411: a node tap SELECTS the node and nothing else - buying moved to the detail
+        /// panel's UPGRADE/UNLOCK button (<see cref="OnDetailUpgradePressed"/>). The one exception is a
+        /// live Morphing Module draft, where a candidate tap is the pick itself.</summary>
+        private void OnNodeTapped(string id)
+        {
+            if (_draftActive) { OnRigNodeTapped(id); return; }
+            SelectNode(id);
+        }
+
+        /// <summary>MV-1411: a transparent always-live tap target over a node. The node's own button is
+        /// only interactable while the node is spendable (MV-516), but selecting must work on every node.</summary>
+        private void AddSelectHit(RigNodeVisual shell, string id)
+        {
+            var hit = AddImage(shell.Root, CrispUi.Solid(), Color.clear, "Select Hit");
+            Stretch(hit.rectTransform);
+            hit.raycastTarget = true;
+            var b = hit.gameObject.AddComponent<Button>();
+            b.transition = Selectable.Transition.None;
+            b.onClick.AddListener(() => OnNodeTapped(id));
+        }
+
         /// <summary>MV-515: an owned node tries <see cref="CellSpend.TryUpgradeNode"/>; an unowned node
         /// tries <see cref="CellSpend.TryUnlockNode"/> — both cells-only now. A fusion tries
         /// <see cref="PartSpend.TrySpendOnFusion"/>, also cells (converted from parts by this
@@ -2229,6 +2261,7 @@ namespace MaxWorlds.UI
             BuildForgeSection(_nodeParent);
             foreach (var cat in Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_nodeParent, cat);
             foreach (var ab in Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_nodeParent, ab);
+            BuildSelectionRing(_nodeParent);     // MV-1411: above the nodes, below the draft chrome
 
             BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
@@ -2291,6 +2324,8 @@ namespace MaxWorlds.UI
             _railTabs.Clear();
             _railOrder.Clear();
             _treePanel = null; _treePanelBorder = null; _treeSlotText = null; _treeNameText = null;
+            _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailLevel = null;
+            _detailUpgrade = null; _detailUpgradeBg = null; _detailUpgradeText = null; _selectionRing = null; _detailPips.Clear();
             _draftScrim = null;
             _draftBand = null;
             _draftBandTitle = null;
@@ -2383,8 +2418,31 @@ namespace MaxWorlds.UI
         {
             if (!_railOrder.Contains(categoryId) || categoryId == _selectedCategory) return;
             _selectedCategory = categoryId;
+            _selectedNodeId = RootNodeOf(categoryId);
             ApplyTreeSelection();
             RefreshRail();
+            RefreshDetail();
+        }
+
+        /// <summary>MV-1411: the first parentless node of <paramref name="categoryId"/>'s tree (its root),
+        /// or the first fusion for FORGE; null if the tree is empty.</summary>
+        private string RootNodeOf(string categoryId)
+        {
+            if (categoryId == null) return null;
+            if (categoryId == ForgeTabId) { foreach (var fu in Fusions) return fu.Id; return null; }
+            foreach (var ab in Abilities) if (ab.Category == categoryId && string.IsNullOrEmpty(ab.Parent)) return ab.Id;
+            return null;
+        }
+
+        /// <summary>MV-1411: the node whose details the detail panel shows (null if none).</summary>
+        public string SelectedNodeId => _selectedNodeId;
+
+        /// <summary>MV-1411: selects a node of the currently shown tree. Never spends anything.</summary>
+        public void SelectNode(string id)
+        {
+            if (id == null || !_treeSpots.TryGetValue(id, out var spot) || spot.Category != _selectedCategory) return;
+            _selectedNodeId = id;
+            RefreshDetail();
         }
 
         private void BuildTreePanel(RectTransform parent)
@@ -2419,6 +2477,202 @@ namespace MaxWorlds.UI
             _treeNameText.raycastTarget = false;
 
             for (int i = 0; i < ids.Count; i++) _railTabs[ids[i]] = BuildRailTab(parent, ids[i], _treeFrame.Tabs[i]);
+            BuildDetailPanel(parent);
+        }
+
+        // ------------------------------------------------------------------ MV-1411: detail panel
+
+        private Image _detailPanel, _detailUpgradeBg, _selectionRing;
+        private TextMeshProUGUI _detailPath, _detailName, _detailEffect, _detailLevel, _detailUpgradeText;
+        private Button _detailUpgrade;
+        private readonly List<Image> _detailPips = new List<Image>();
+        private const float DetailPad = 20f, DetailButtonH = 110f;
+
+        /// <summary>MV-1411: test access - the detail panel's name line, level line, effect line (empty
+        /// until MV-1400), UPGRADE/UNLOCK/MAXED button and its label.</summary>
+        public TextMeshProUGUI DetailNameText => _detailName;
+        public TextMeshProUGUI DetailLevelText => _detailLevel;
+        public TextMeshProUGUI DetailEffectText => _detailEffect;
+        public TextMeshProUGUI DetailPathText => _detailPath;
+        public Button DetailUpgradeButton => _detailUpgrade;
+        public TextMeshProUGUI DetailUpgradeText => _detailUpgradeText;
+
+        private void BuildDetailPanel(RectTransform parent)
+        {
+            var d = _treeFrame.Detail;
+            float cornerFraction = Mathf.Clamp(RigBoardLayout.RegionRectRadius * 2f / (Mathf.Min(d.width, d.height) * 0.5f), 0.05f, 0.5f);
+            _detailPanel = AddImage(parent, CrispUi.RoundedBox(64, cornerFraction), new Color(0.075f, 0.085f, 0.11f, 1f), "Detail Panel");
+            PlaceTopLeft(_detailPanel.rectTransform, d);
+            _detailPanel.type = Image.Type.Sliced;
+            _detailPanel.raycastTarget = false;
+            var border = AddImage(_detailPanel.rectTransform, CrispUi.RoundedBoxOutline(64, cornerFraction, 3f), new Color(1f, 1f, 1f, 0.16f), "Border");
+            Stretch(border.rectTransform);
+            border.type = Image.Type.Sliced;
+            border.raycastTarget = false;
+
+            float inner = d.width - 2f * DetailPad;
+            var tr = _detailPanel.rectTransform;
+            _detailPath = AddText(tr, 24, Dim, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailPath.rectTransform, new Rect(DetailPad, 16f, inner, 30f));
+            _detailPath.fontStyle = FontStyles.Bold;
+            _detailPath.enableAutoSizing = true;
+            _detailPath.fontSizeMin = 14f; _detailPath.fontSizeMax = 24f;
+            _detailPath.textWrappingMode = TextWrappingModes.NoWrap;
+            _detailPath.overflowMode = TextOverflowModes.Ellipsis;   // a long weapon name shrinks, then truncates, never runs off the panel
+            _detailPath.raycastTarget = false;
+
+            _detailName = AddText(tr, 44, TextColor, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailName.rectTransform, new Rect(DetailPad, 48f, inner, 56f));
+            _detailName.fontStyle = FontStyles.Bold;
+            _detailName.enableAutoSizing = true;
+            _detailName.fontSizeMin = 24f; _detailName.fontSizeMax = 44f;
+            _detailName.textWrappingMode = TextWrappingModes.Normal;
+            _detailName.overflowMode = TextOverflowModes.Truncate;
+            _detailName.raycastTarget = false;
+
+            // The effect line (MV-1400 fills it): its space is reserved, its text stays empty here.
+            _detailEffect = AddText(tr, 28, TextColor, TextAnchor.UpperLeft);
+            PlaceTopLeft(_detailEffect.rectTransform, new Rect(DetailPad, 108f, inner, 60f));
+            _detailEffect.textWrappingMode = TextWrappingModes.Normal;
+            _detailEffect.text = "";
+            _detailEffect.raycastTarget = false;
+
+            int maxPips = 1;
+            foreach (var ab in Abilities) maxPips = Mathf.Max(maxPips, RigBoard.Exists(ab.Id) ? RigBoard.MaxLevel(ab.Id) : ab.MaxLevel);
+            for (int i = 0; i < maxPips; i++)
+            {
+                var pip = AddImage(tr, CrispUi.RoundedBox(32, 0.5f), Color.white, "Pip " + (i + 1));
+                pip.type = Image.Type.Sliced;
+                pip.raycastTarget = false;
+                _detailPips.Add(pip);
+            }
+
+            _detailLevel = AddText(tr, 28, Dim, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailLevel.rectTransform, new Rect(DetailPad, 214f, inner, 36f));
+            _detailLevel.raycastTarget = false;
+
+            var btnRect = new Rect(DetailPad, d.height - DetailPad - DetailButtonH, inner, DetailButtonH);
+            _detailUpgradeBg = AddImage(tr, CrispUi.RoundedBox(64, 0.3f), Color.white, "Detail Upgrade");
+            _detailUpgradeBg.type = Image.Type.Sliced;
+            PlaceTopLeft(_detailUpgradeBg.rectTransform, btnRect);
+            _detailUpgradeBg.raycastTarget = true;
+            _detailUpgrade = _detailUpgradeBg.gameObject.AddComponent<Button>();
+            _detailUpgrade.transition = Selectable.Transition.None;
+            _detailUpgrade.onClick.AddListener(OnDetailUpgradePressed);
+            _detailUpgradeText = AddText(_detailUpgradeBg.rectTransform, 36, new Color(0.07f, 0.05f, 0.12f, 1f), TextAnchor.MiddleCenter);
+            Stretch(_detailUpgradeText.rectTransform);
+            _detailUpgradeText.fontStyle = FontStyles.Bold;
+            _detailUpgradeText.enableAutoSizing = true;
+            _detailUpgradeText.fontSizeMin = 20f; _detailUpgradeText.fontSizeMax = 36f;
+            _detailUpgradeText.raycastTarget = false;
+        }
+
+        private void BuildSelectionRing(RectTransform parent)
+        {
+            _selectionRing = AddImage(parent, CrispUi.Solid(), Color.clear, "Selection Ring");
+            _selectionRing.raycastTarget = false;
+            _selectionRing.gameObject.SetActive(false);
+        }
+
+        /// <summary>The cell price the detail button advertises for <paramref name="id"/>: the upgrade
+        /// price while owned, else the unlock price (for a node in a locked category, that category's
+        /// root node's unlock price - the category itself has no price of its own).</summary>
+        private static int DetailPrice(string id, string category)
+        {
+            if (RigState.IsOwned(id)) return CellSpend.PotentialCellCost(id);
+            if (!RigState.IsCategoryUnlocked(category))
+                foreach (var ab in RigBoardLayout.PhoneAbilities)
+                    if (ab.Category == category && string.IsNullOrEmpty(ab.Parent)) return CellSpend.UnlockCostFor(ab.Id);
+            return CellSpend.UnlockCostFor(id);
+        }
+
+        /// <summary>Repaints the detail panel from the selected node's live state.</summary>
+        private void RefreshDetail()
+        {
+            if (_detailPanel == null) return;
+            string id = _selectedNodeId;
+            RigAbilityLayout node = null; RigFusionLayout fusion = null;
+            if (id != null)
+            {
+                foreach (var ab in Abilities) if (ab.Id == id) node = ab;
+                foreach (var fu in Fusions) if (fu.Id == id) fusion = fu;
+            }
+            bool has = node != null || fusion != null;
+            _detailPath.gameObject.SetActive(has); _detailName.gameObject.SetActive(has);
+            _detailLevel.gameObject.SetActive(has); _detailUpgradeBg.gameObject.SetActive(has);
+            if (_selectionRing != null) _selectionRing.gameObject.SetActive(has);
+            foreach (var pip in _detailPips) pip.gameObject.SetActive(false);
+            if (!has) return;
+
+            string category = node != null ? node.Category : ForgeTabId;
+            string family = category == ForgeTabId ? "supercell" : RigBoardLayout.CategoryFamily(category);
+            Color fam = RigBoardLayout.Colour(family);
+            string slot = category == ForgeTabId ? "FORGE" : category == "PRIMARY" ? "PRIMARY" : category == "SECONDARY" ? "SECONDARY" : "SYSTEM";
+            string catName = category == ForgeTabId ? "FUSIONS" : CategoryHeaderText(category, out _);
+            _detailPath.text = (slot == catName ? slot : slot + " · " + catName).ToUpperInvariant();
+            _detailPath.color = fam;
+            _detailName.text = node != null ? node.Label : fusion.Label;
+            _detailEffect.text = "";   // MV-1400 fills this
+
+            string buttonText; bool live;
+            if (node != null)
+            {
+                int max = Mathf.Max(1, RigBoard.Exists(id) ? RigBoard.MaxLevel(id) : node.MaxLevel), level = RigState.Level(id);
+                _detailLevel.text = $"Level {level} of {max}";
+                var d = _treeFrame.Detail;
+                float inner = d.width - 2f * DetailPad, gap = 8f;
+                float w = (inner - gap * (max - 1)) / max;
+                for (int i = 0; i < _detailPips.Count; i++)
+                {
+                    var pip = _detailPips[i];
+                    bool show = i < max;
+                    pip.gameObject.SetActive(show);
+                    if (!show) continue;
+                    PlaceTopLeft(pip.rectTransform, new Rect(DetailPad + i * (w + gap), 176f, w, 16f));
+                    pip.color = i < level ? fam : new Color(0.17f, 0.19f, 0.26f, 1f);
+                }
+                bool maxed = RigState.IsOwned(id) && !RigState.CanSpendPart(id);
+                int price = DetailPrice(id, category);
+                if (maxed) { buttonText = "MAXED"; live = false; }
+                else
+                {
+                    buttonText = (RigState.IsOwned(id) ? "UPGRADE   " : "UNLOCK   ") + price;
+                    live = !_draftActive && !IsCeremonySuppressingAbility(id) && CellSpend.IsCellActionAffordable(id, PickupWallet.PowerCells);
+                }
+            }
+            else
+            {
+                bool forged = RigFusionState.IsForged(id);
+                _detailLevel.text = forged ? "Forged" : "Not forged";
+                if (forged) { buttonText = "FORGED"; live = false; }
+                else { buttonText = "FORGE   " + fusion.CellCost; live = !_draftActive && PickupWallet.PowerCells >= fusion.CellCost; }
+            }
+            _detailLevel.color = Dim;
+            _detailUpgradeText.text = buttonText;
+            _detailUpgradeBg.color = live ? fam : new Color(fam.r * 0.45f, fam.g * 0.45f, fam.b * 0.45f, 0.8f);
+            _detailUpgrade.interactable = true;   // always tappable; OnDetailUpgradePressed re-checks (a refused press spends nothing)
+
+            if (_treeSpots.TryGetValue(id, out var spot) && _selectionRing != null)
+            {
+                float rr = spot.R * 1.16f;
+                float ringW = rr * Sqrt3, ringH = rr * 2f;
+                _selectionRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 3f);
+                _selectionRing.color = Color.white;
+                PlaceTopLeft(_selectionRing.rectTransform, new Rect(spot.X - ringW * 0.5f, spot.Y - rr, ringW, ringH));
+            }
+        }
+
+        /// <summary>MV-1411: the only place a RIG node is bought. Price, affordability and spending are
+        /// the existing <see cref="OnRigNodeTapped"/> / <see cref="CellSpend"/> logic, unchanged; a maxed
+        /// node, a live draft or a mid-ceremony family spends nothing.</summary>
+        private void OnDetailUpgradePressed()
+        {
+            string id = _selectedNodeId;
+            if (id == null || _draftActive) return;
+            if (RigState.IsOwned(id) && !RigState.CanSpendPart(id)) return;   // MAXED
+            if (IsCeremonySuppressingAbility(id)) return;
+            OnRigNodeTapped(id);
+            Refresh();   // the wallet/level events repaint too; this keeps the panel right even when they have not fired yet
         }
 
         private static void PlaceTopLeft(RectTransform r, Rect rect)
@@ -2782,7 +3036,8 @@ namespace MaxWorlds.UI
             shell.Button.interactable = false;   // RefreshFusionNode (MV-426) turns this on once eligible
 
             string id = fusion.Id;   // capture by value, not the loop variable
-            shell.Button.onClick.AddListener(() => OnRigNodeTapped(id));
+            shell.Button.onClick.AddListener(() => OnNodeTapped(id));
+            AddSelectHit(shell, id);
             return shell;
         }
 
@@ -2871,7 +3126,7 @@ namespace MaxWorlds.UI
             shell.Button.interactable = false;   // MV-457: only tappable while it's a shed draft candidate — see RefreshCategoryNode
 
             string catId = cat.Id;   // capture by value, not the loop variable
-            shell.Button.onClick.AddListener(() => OnRigNodeTapped(catId));
+            shell.Button.onClick.AddListener(() => OnNodeTapped(catId));
             return shell;
         }
 
@@ -3063,7 +3318,8 @@ namespace MaxWorlds.UI
             shell.Label.text = ab.Label;
 
             string id = ab.Id;   // capture by value, not the loop variable
-            shell.Button.onClick.AddListener(() => OnRigNodeTapped(id));
+            shell.Button.onClick.AddListener(() => OnNodeTapped(id));
+            AddSelectHit(shell, id);
             return shell;
         }
 

@@ -25,8 +25,8 @@ PASS y-bounds-containment: 4/4 nodes within [0,1210] board content
 == rig-world2-16x9 (1920x1080) ==
 PASS node-position: 5/5 nodes present at their json coordinate
 PASS hex-orientation: 0/0 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.626 unlit=0.393 ratio=1.595 (need >=1.5)
-PASS glow-containment: no lit/owned node to measure
+PASS family-contrast: lit=0.627 unlit=0.378 ratio=1.659 (need >=1.5)
+PASS glow-containment: 1/1 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor
 PASS y-bounds-containment: 5/5 nodes within [0,1210] board content
