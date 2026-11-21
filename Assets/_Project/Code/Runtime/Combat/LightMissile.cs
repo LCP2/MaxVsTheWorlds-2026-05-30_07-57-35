@@ -51,13 +51,13 @@ namespace MaxWorlds.Combat
         public const float DefaultFanDegrees = 15f;
 
         /// <summary>POWER (<c>p_dmg</c>), levels 1..8 — the ticket's own table, built as written.</summary>
-        private static readonly float[] PowerDamageByLevel = { 30f, 34f, 38f, 42f, 46f, 50f, 55f, 60f };
+        public static readonly float[] PowerDamageByLevel = { 30f, 34f, 38f, 42f, 46f, 50f, 55f, 60f };
 
         /// <summary>TRACKING (<c>p_trk</c>) base turn rate, deg/s, levels 0..4.</summary>
-        private static readonly float[] TrackingBaseDegPerSecByLevel = { 170f, 200f, 240f, 290f, 350f };
+        public static readonly float[] TrackingBaseDegPerSecByLevel = { 170f, 200f, 240f, 290f, 350f };
 
         /// <summary>RATE (<c>p_rof</c>) volley interval, seconds, levels 1..5.</summary>
-        private static readonly float[] RateIntervalSecondsByLevel = { 1.0f, 0.9f, 0.8f, 0.7f, 0.6f };
+        public static readonly float[] RateIntervalSecondsByLevel = { 1.0f, 0.9f, 0.8f, 0.7f, 0.6f };
 
         /// <summary>POWER damage per ball at track level <paramref name="level"/> (1..8) - the same table
         /// <see cref="EffectiveDamagePerBall"/> reads, for the Helmsman fight model (MV-1372).</summary>

@@ -31,11 +31,15 @@ namespace MaxWorlds.UI
     public sealed class RigAbilityLayout
     {
         public readonly string Id, Category, Icon, Label, Kind, Parent;
+        /// <summary>MV-1400: the node's short effect name ("Damage per disc"), authored in the board JSON's
+        /// optional <c>effect</c> field; null when none.</summary>
+        public readonly string Effect;
         public readonly float X, Y;
         public readonly int MaxLevel;
         public RigAbilityLayout(string id, string category, string icon, string label, string kind,
-            string parent, float x, float y, int maxLevel)
+            string parent, float x, float y, int maxLevel, string effect = null)
         {
+            Effect = effect;
             Id = id; Category = category; Icon = icon; Label = label; Kind = kind; Parent = parent;
             X = x; Y = y; MaxLevel = maxLevel;
         }
@@ -172,7 +176,7 @@ namespace MaxWorlds.UI
         [Serializable]
         private sealed class AbilityWire
         {
-            public string id, category, icon, label, kind, parent;
+            public string id, category, icon, label, kind, parent, effect;
             public float x, y;
             public int maxLevel;
         }
@@ -461,7 +465,7 @@ namespace MaxWorlds.UI
                 float x = categoryX.TryGetValue(a.category, out var cx) ? cx + offsetUnits[a.id] * finalSpacing : a.x;
                 int depth = depthOf.TryGetValue(a.id, out var d) ? d : 1;
                 float y = rowY[Mathf.Clamp(depth, 1, rowY.Length - 1)];
-                abilities[i] = new RigAbilityLayout(a.id, a.category, a.icon, a.label, a.kind, a.parent, x, y, a.maxLevel);
+                abilities[i] = new RigAbilityLayout(a.id, a.category, a.icon, a.label, a.kind, a.parent, x, y, a.maxLevel, a.effect);
             }
 
             var fusions = new RigFusionLayout[rawFusions.Length];

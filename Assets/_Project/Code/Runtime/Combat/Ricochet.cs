@@ -47,14 +47,14 @@ namespace MaxWorlds.Combat
         /// rather than approximated by <see cref="WeaponCatalog.EffectiveDamagePerTick"/>'s linear
         /// curve (the real numbers step by 3,3,4,4,4,5,5, not a single constant). MV-1330: restored to
         /// this pre-MV-1325 table; MV-1325's start-only lower (level 1: 8) is reverted.</summary>
-        private static readonly float[] PowerDamageByLevel = { 12f, 15f, 18f, 22f, 26f, 30f, 35f, 40f };
+        public static readonly float[] PowerDamageByLevel = { 12f, 15f, 18f, 22f, 26f, 30f, 35f, 40f };
 
         /// <summary>RATE (<c>p_rof</c>), discs/second, levels 1..5.</summary>
-        private static readonly float[] RateDiscsPerSecondByLevel = { 3.0f, 3.6f, 4.3f, 5.1f, 6.0f };
+        public static readonly float[] RateDiscsPerSecondByLevel = { 3.0f, 3.6f, 4.3f, 5.1f, 6.0f };
 
         /// <summary>AIMING (<c>p_aim</c>) turn rate, deg/s, levels 0..4 (level 0 = unowned, dead
         /// straight).</summary>
-        private static readonly float[] AimTurnRateDegPerSecByLevel = { 0f, 45f, 90f, 140f, 200f };
+        public static readonly float[] AimTurnRateDegPerSecByLevel = { 0f, 45f, 90f, 140f, 200f };
 
         /// <summary>AIMING's own lookahead distance, metres, levels 0..4 (level 0 unused — no steering,
         /// so no lookahead to speak of).</summary>

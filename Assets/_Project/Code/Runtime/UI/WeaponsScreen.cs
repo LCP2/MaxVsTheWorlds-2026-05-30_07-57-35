@@ -492,7 +492,7 @@ namespace MaxWorlds.UI
             var children = new List<RigAbilityLayout>();
             foreach (var ab in Abilities)
                 if (ab.Category == categoryId && _treeSpots.TryGetValue(ab.Id, out var spot))
-                    children.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, spot.X, spot.Y, ab.MaxLevel));
+                    children.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, spot.X, spot.Y, ab.MaxLevel, ab.Effect));
             children.Sort((a, b) => a.Y.CompareTo(b.Y));
             foreach (var ab in children) _ceremonyChildIds.Add(ab.Id);
 
@@ -2421,7 +2421,7 @@ namespace MaxWorlds.UI
             var list = new List<RigAbilityLayout>();
             foreach (var ab in Abilities)
                 if (_treeSpots.TryGetValue(ab.Id, out var s) && s.Category == _selectedCategory)
-                    list.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, s.X, s.Y, ab.MaxLevel));
+                    list.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, s.X, s.Y, ab.MaxLevel, ab.Effect));
             return list;
         }
 
@@ -2603,6 +2603,34 @@ namespace MaxWorlds.UI
             return CellSpend.UnlockCostFor(id);
         }
 
+        /// <summary>MV-1400: the detail panel's effect line - "Damage per disc  12 → 15" (name, then the
+        /// gameplay value now and at the next level, MAX at the cap), or the category's unlock text while
+        /// its category is still locked. Empty when the node has no effect name or no gameplay read.</summary>
+        public static string DetailEffectLine(RigAbilityLayout node)
+        {
+            if (node == null) return "";
+            if (!RigState.IsCategoryUnlocked(node.Category)) return CategoryUnlockText(node.Category);
+            if (string.IsNullOrEmpty(node.Effect)) return "";
+            int max = Mathf.Max(1, RigBoard.Exists(node.Id) ? RigBoard.MaxLevel(node.Id) : node.MaxLevel);
+            string v = RigEffectLines.ValueText(WeaponSystemState.ActivePrimary, WeaponSystemState.SecondaryKind,
+                node.Id, RigState.Level(node.Id), max);
+            return v == null ? "" : node.Effect + "  " + v;
+        }
+
+        /// <summary>The unlock effect text a locked category's nodes show instead of a value.</summary>
+        public static string CategoryUnlockText(string category)
+        {
+            switch (category)
+            {
+                case "PRIMARY": return "Unlocks your main weapon upgrades";
+                case "SECONDARY": return "Unlocks the secondary weapon";
+                case "ENERGY": return "Unlocks shield and pickup upgrades";
+                case "MOVE": return "Unlocks speed and teleport";
+                case "SUPPORT": return "Unlocks the sentinel";
+                default: return "";
+            }
+        }
+
         /// <summary>Repaints the detail panel from the selected node's live state.</summary>
         private void RefreshDetail()
         {
@@ -2629,7 +2657,7 @@ namespace MaxWorlds.UI
             _detailPath.text = (slot == catName ? slot : slot + " · " + catName).ToUpperInvariant();
             _detailPath.color = fam;
             _detailName.text = node != null ? node.Label : fusion.Label;
-            _detailEffect.text = "";   // MV-1400 fills this
+            _detailEffect.text = node != null ? DetailEffectLine(node) : "";   // MV-1400
 
             string buttonText; bool live;
             if (node != null)
