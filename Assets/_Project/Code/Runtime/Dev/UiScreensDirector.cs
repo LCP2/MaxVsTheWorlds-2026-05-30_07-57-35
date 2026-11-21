@@ -180,6 +180,8 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("rig-mv1398-2556x1179", 2556, 1179, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             // MV-1408 AC4: the iPad (2048x1536); the 852x393-at-3x shot is the 2556x1179 one above.
             yield return CaptureFixtureScreen("rig-mv1408-2048x1536", 2048, 1536, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-1407 AC4: the Morphing Module draft modal at 852x393 rendered at 3x (2556x1179), one capture.
+            yield return CaptureFixtureScreen("rig-mv1407-draft-2556x1179", 2556, 1179, ApplyRigFixtureMv521, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-519 AC9's human-check shot: the CELLS chip reading an over-cap balance (22/20) after a
             // Supercell grant pushed PowerCells past Capacity — must read as a deliberate bonus, not a

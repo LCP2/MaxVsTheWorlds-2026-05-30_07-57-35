@@ -490,8 +490,9 @@ namespace MaxWorlds.UI
             // ascending Y is top-to-bottom on screen.
             _ceremonyChildIds.Clear();
             var children = new List<RigAbilityLayout>();
-            foreach (var ab in RigBoardLayout.Abilities)
-                if (ab.Category == categoryId) children.Add(ab);
+            foreach (var ab in Abilities)
+                if (ab.Category == categoryId && _treeSpots.TryGetValue(ab.Id, out var spot))
+                    children.Add(new RigAbilityLayout(ab.Id, ab.Category, ab.Icon, ab.Label, ab.Kind, ab.Parent, spot.X, spot.Y, ab.MaxLevel));
             children.Sort((a, b) => a.Y.CompareTo(b.Y));
             foreach (var ab in children) _ceremonyChildIds.Add(ab.Id);
 
@@ -523,9 +524,9 @@ namespace MaxWorlds.UI
             // c: the category node's own highlight glow, and its label resolving from a locked
             // placeholder to the real family name.
             float catT = Mathf.Clamp01(Mathf.InverseLerp(CeremonyDimEnd, CeremonyCategoryLightEnd, elapsedUnscaledSeconds));
-            if (_ceremonyCategoryGlow != null && _categoryPanels.TryGetValue(_ceremonyCategoryId, out var panel))
+            if (_ceremonyCategoryGlow != null && _treePanel != null)
             {
-                RectTransform panelRect = panel.rectTransform;
+                RectTransform panelRect = _treePanel.rectTransform;
                 _ceremonyCategoryGlow.anchorMin = panelRect.anchorMin;
                 _ceremonyCategoryGlow.anchorMax = panelRect.anchorMax;
                 _ceremonyCategoryGlow.pivot = panelRect.pivot;
@@ -537,10 +538,10 @@ namespace MaxWorlds.UI
                 Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(_ceremonyCategoryId));
                 _ceremonyCategoryGlowImage.color = new Color(family.r, family.g, family.b, 0.55f * catT);
             }
-            if (_ceremonyCategoryLabelOverlay != null && _categoryNodes.TryGetValue(_ceremonyCategoryId, out var catVisual))
+            if (_ceremonyCategoryLabelOverlay != null && _treeNameText != null)
             {
                 bool resolved = elapsedUnscaledSeconds >= CeremonyCategoryLightEnd;
-                RectTransform realLabelRect = catVisual.Label.rectTransform;
+                RectTransform realLabelRect = _treeNameText.rectTransform;
                 RectTransform overlayRect = _ceremonyCategoryLabelOverlay.rectTransform;
                 overlayRect.SetParent(realLabelRect.parent, false);
                 overlayRect.anchorMin = realLabelRect.anchorMin;
@@ -1296,13 +1297,28 @@ namespace MaxWorlds.UI
             if (_draftBand != null) _draftBand.gameObject.SetActive(_draftActive);
             if (!_draftActive) return;
 
-            for (int i = 0; i < _draftCandidateIds.Count; i++)
+            int n = Mathf.Min(_draftCandidateIds.Count, _draftChips.Count);
+            const float gap = 0.03f, pad = 0.05f;
+            float chipW = (1f - 2f * pad - gap * (n - 1)) / Mathf.Max(1, n);
+            for (int i = 0; i < _draftChips.Count; i++)
             {
+                var chip = _draftChips[i];
+                chip.Root.gameObject.SetActive(i < n);
+                if (i >= n) continue;
                 string id = _draftCandidateIds[i];
-                RigNodeVisual v = _abilityNodes.TryGetValue(id, out var abilityVisual) ? abilityVisual
-                    : _categoryNodes.TryGetValue(id, out var categoryVisual) ? categoryVisual : null;
-                v?.Root.SetAsLastSibling();   // render above the scrim
+                chip.Root.name = "Draft Candidate " + id;
+                float x0 = pad + i * (chipW + gap);
+                Anchor(chip.Root, new Vector2(x0, 0.08f), new Vector2(x0 + chipW, 0.40f), new Vector2(0.5f, 0.5f));
+                chip.Root.offsetMin = Vector2.zero; chip.Root.offsetMax = Vector2.zero;
+                string cat = RigBoard.Exists(id) ? RigBoard.Category(id) : id;
+                Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(cat));
+                chip.Bg.color = new Color(family.r * 0.55f, family.g * 0.55f, family.b * 0.55f, 1f);
+                chip.Label.text = $"{i + 1}  " + (RigBoard.Exists(id) ? AbilityLabel(id) : id);
+                chip.Button.onClick.RemoveAllListeners();
+                string pick = id;
+                chip.Button.onClick.AddListener(() => OnRigNodeTapped(pick));
             }
+            _draftBand.SetAsLastSibling();
 
             UpdateDraftBandText();
         }
@@ -2417,6 +2433,7 @@ namespace MaxWorlds.UI
         public void SelectCategory(string categoryId)
         {
             if (!_railOrder.Contains(categoryId) || categoryId == _selectedCategory) return;
+            if (_draftActive || _ceremonyActive) return;   // MV-1407: the modal / reveal owns the tree until it ends
             _selectedCategory = categoryId;
             _selectedNodeId = RootNodeOf(categoryId);
             ApplyTreeSelection();
@@ -2868,62 +2885,75 @@ namespace MaxWorlds.UI
                     foreach (var img in kv.Value) img.color = main.color;
         }
 
-        /// <summary>The Morphing Module draft's dimming scrim (MV-424) — one full-board rect, built
-        /// last among the board's normal children so it renders above every category/ability/fusion
-        /// node, and toggled active only while a draft is pending. Also the reason non-candidate nodes
-        /// stop receiving taps during a draft: a raycast target this high in the hierarchy eats them
-        /// before they reach anything drawn underneath it. <see cref="RefreshMorphingModuleDraft"/>
-        /// brings the candidate nodes themselves back above this via <c>SetAsLastSibling</c>.</summary>
-        private void BuildDraftScrim(RectTransform boardRoot)
-        {
-            var scrim = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0.82f), "Draft Scrim");
-            Stretch(scrim.rectTransform);
-            scrim.raycastTarget = true;
-            scrim.gameObject.SetActive(false);
-            _draftScrim = scrim;
-        }
+        /// <summary>MV-1407: the draft has no full-board scrim any more - the modal itself (see
+        /// <see cref="BuildDraftBand"/>) covers the tree panel and swallows taps over it, and the rail
+        /// is inert while a draft is active (see <see cref="SelectCategory"/>), as is the detail button.</summary>
+        private void BuildDraftScrim(RectTransform boardRoot) { _draftScrim = null; }
 
-        /// <summary>The bottom band (MV-424): full width, anchored to the board's own bottom edge so
-        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area.
-        /// Deliberately at the BOTTOM, not the top: a top banner would cover the category row, and the
-        /// whole value of drafting on the board is seeing the current build while choosing (ticket,
-        /// non-negotiable).</summary>
+        private const int DraftMaxCandidates = 3;
+        private readonly List<(RectTransform Root, Image Bg, TextMeshProUGUI Label, Button Button)> _draftChips =
+            new List<(RectTransform, Image, TextMeshProUGUI, Button)>();
+
+        /// <summary>MV-1407: the Morphing Module draft MODAL (was a full-width bottom band over the old
+        /// 1920x1080 board): exactly the tree panel's rect, drawn above the tree, holding the title, the
+        /// two explanatory lines and one tap chip per candidate. Candidates are chips here, not board
+        /// nodes - a family candidate has no node in the one-tree layout (its rail tab is the family).</summary>
         private void BuildDraftBand(RectTransform boardRoot)
         {
-            const float bandHeight = 170f;
-            var band = NewRect("draft_band", boardRoot, new Vector2(0f, 0f), new Vector2(1f, 0f));
-            band.pivot = new Vector2(0.5f, 0f);
-            band.sizeDelta = new Vector2(0f, bandHeight);
-            band.anchoredPosition = Vector2.zero;
+            var p = _treeFrame.Panel;
+            var band = NewRect("draft_band", boardRoot, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            band.pivot = new Vector2(0f, 1f);
+            PlaceTopLeft(band, p);
             _draftBand = band;
 
-            var bg = AddImage(band, CrispUi.Solid(), new Color(0.02f, 0.05f, 0.07f, 0.96f), "Band BG");
+            float cornerFraction = Mathf.Clamp(RigBoardLayout.RegionRectRadius * 2f / (Mathf.Min(p.width, p.height) * 0.5f), 0.05f, 0.5f);
+            var bg = AddImage(band, CrispUi.RoundedBox(64, cornerFraction), new Color(0.02f, 0.05f, 0.07f, 0.97f), "Band BG");
+            bg.type = Image.Type.Sliced;
             Stretch(bg.rectTransform);
-            bg.raycastTarget = true;   // swallow taps under the band too, same as the scrim
+            bg.raycastTarget = true;   // swallow taps over the tree underneath
+            var edge = AddImage(band, CrispUi.RoundedBoxOutline(64, cornerFraction, 3f), DraftBadgeColor, "Band Hairline");
+            edge.type = Image.Type.Sliced;
+            Stretch(edge.rectTransform);
+            edge.raycastTarget = false;
 
-            var hairline = AddImage(band, CrispUi.Solid(), DraftBadgeColor, "Band Hairline");
-            Anchor(hairline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-            hairline.rectTransform.sizeDelta = new Vector2(0f, 2f);
-            hairline.rectTransform.anchoredPosition = Vector2.zero;
-            hairline.raycastTarget = false;
-
-            _draftBandTitle = AddText(band, 34, DraftBadgeColor, TextAnchor.UpperCenter);
-            Anchor(_draftBandTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-            _draftBandTitle.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 44f);
-            _draftBandTitle.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+            float pad = 0.05f;
+            _draftBandTitle = DraftLine(band, 40, 12, DraftBadgeColor, 0.76f, 0.97f, pad);
             _draftBandTitle.fontStyle = FontStyles.Bold;
+            _draftBandSubtitle = DraftLine(band, 26, 10, Dim, 0.60f, 0.76f, pad);
+            _draftBandReason = DraftLine(band, 22, 10, TextColor, 0.44f, 0.60f, pad);
 
-            _draftBandSubtitle = AddText(band, 18, Dim, TextAnchor.UpperCenter);
-            Anchor(_draftBandSubtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-            _draftBandSubtitle.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 30f);
-            _draftBandSubtitle.rectTransform.anchoredPosition = new Vector2(0f, -66f);
-
-            _draftBandReason = AddText(band, 16, TextColor, TextAnchor.UpperCenter);
-            Anchor(_draftBandReason.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-            _draftBandReason.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 30f);
-            _draftBandReason.rectTransform.anchoredPosition = new Vector2(0f, -100f);
+            _draftChips.Clear();
+            for (int i = 0; i < DraftMaxCandidates; i++)
+            {
+                var chipBg = AddImage(band, CrispUi.RoundedBox(64, 0.3f), Color.white, "Draft Candidate");
+                chipBg.type = Image.Type.Sliced;
+                chipBg.raycastTarget = true;
+                var btn = chipBg.gameObject.AddComponent<Button>();
+                btn.transition = Selectable.Transition.None;
+                var label = AddText(chipBg.rectTransform, 30, Color.white, TextAnchor.MiddleCenter);
+                Stretch(label.rectTransform, 6f);
+                label.fontStyle = FontStyles.Bold;
+                label.enableAutoSizing = true;
+                label.fontSizeMin = 10f; label.fontSizeMax = 30f;
+                label.textWrappingMode = TextWrappingModes.Normal;
+                label.raycastTarget = false;
+                chipBg.gameObject.SetActive(false);
+                _draftChips.Add((chipBg.rectTransform, chipBg, label, btn));
+            }
 
             band.gameObject.SetActive(false);
+        }
+
+        private static TextMeshProUGUI DraftLine(RectTransform band, int max, int min, Color colour, float yMin, float yMax, float pad)
+        {
+            var t = AddText(band, max, colour, TextAnchor.MiddleCenter);
+            Anchor(t.rectTransform, new Vector2(pad, yMin), new Vector2(1f - pad, yMax), new Vector2(0.5f, 0.5f));
+            t.rectTransform.offsetMin = Vector2.zero; t.rectTransform.offsetMax = Vector2.zero;
+            t.enableAutoSizing = true;
+            t.fontSizeMin = min; t.fontSizeMax = max;
+            t.textWrappingMode = TextWrappingModes.Normal;
+            t.raycastTarget = false;
+            return t;
         }
 
         /// <summary>MV-605: the reveal ceremony's static shell, all built inactive and repositioned/
@@ -2937,7 +2967,7 @@ namespace MaxWorlds.UI
         private void BuildCeremonyVisuals(RectTransform boardRoot)
         {
             var scrim = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Scrim");
-            Stretch(scrim.rectTransform);
+            PlaceTopLeft(scrim.rectTransform, _treeFrame.Panel);   // MV-1407: the tree panel, not the old full board
             scrim.raycastTarget = false;
             scrim.gameObject.SetActive(false);
             _ceremonyScrim = scrim;
@@ -2967,7 +2997,7 @@ namespace MaxWorlds.UI
             }
 
             var skip = AddImage(boardRoot, CrispUi.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Skip Catcher");
-            Stretch(skip.rectTransform);
+            PlaceTopLeft(skip.rectTransform, _treeFrame.Panel);
             skip.raycastTarget = true;
             var skipButton = skip.gameObject.AddComponent<Button>();
             skipButton.transition = Selectable.Transition.None;
