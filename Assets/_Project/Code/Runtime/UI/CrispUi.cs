@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 namespace MaxWorlds.UI
@@ -8,7 +9,7 @@ namespace MaxWorlds.UI
     /// the sprite will be drawn at (<see cref="Resolution"/>: 2x supersampled, rounded up to a
     /// power-of-two bucket, cached per bucket by <see cref="HudTextures"/>), with mipmaps and trilinear
     /// filtering. The sprite's pixelsPerUnit is scaled by the same multiplier, so its nominal canvas-unit
-    /// size (and every authored sizeDelta that stretches it) is unchanged. MV-1405 adds the text half.
+    /// size (and every authored sizeDelta that stretches it) is unchanged. MV-1405 adds the text half (<see cref="TmpFont"/>, <see cref="Text"/>).
     /// </summary>
     public static class CrispUi
     {
@@ -39,6 +40,43 @@ namespace MaxWorlds.UI
             HudTextures.Res = k;
             try { return make(); }
             finally { HudTextures.Res = prev; }
+        }
+
+        private static TMP_FontAsset _tmpFont;
+
+        /// <summary>
+        /// MV-1405: SDF font asset made at runtime from Liberation Sans, the face behind the game's UI font (<see cref="HudFont"/>).
+        /// Its material uses the runtime TMP SDF shader, which ships in player builds because the TMP
+        /// Essential Resources under Assets/TextMesh Pro/Resources reference it (and TMP Settings loads
+        /// them). Nothing calls <see cref="Text"/> yet; MV-1406 swaps the RIG's legacy Text over.
+        /// </summary>
+        public static TMP_FontAsset TmpFont()
+        {
+            if (_tmpFont == null)
+            {
+                // The built-in LegacyRuntime.ttf has no font file TMP can rasterise from
+                // (CreateFontAsset returns null), so use a copy of Liberation Sans, the face it is
+                // built on, committed under Resources.
+                _tmpFont = TMP_FontAsset.CreateFontAsset(Resources.Load<Font>("UI/HudSdfSource"));
+                _tmpFont.name = "HudFont SDF";
+            }
+            return _tmpFont;
+        }
+
+        /// <summary>One call: a <see cref="TextMeshProUGUI"/> child of <paramref name="parent"/> using <see cref="TmpFont"/>.</summary>
+        public static TextMeshProUGUI Text(Transform parent, string name, string text, float fontSize,
+            Color color, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var t = go.GetComponent<TextMeshProUGUI>();
+            t.font = TmpFont();
+            t.text = text;
+            t.fontSize = fontSize;
+            t.color = color;
+            t.alignment = alignment;
+            t.raycastTarget = false;
+            return t;
         }
 
         public static Sprite Solid() => HudTextures.Solid();
