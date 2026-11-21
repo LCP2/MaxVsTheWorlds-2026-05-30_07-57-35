@@ -13,11 +13,15 @@ namespace MaxWorlds.Tests.EditMode
     /// base commit, where QUIT is still CLOSE's immediate left neighbour and CLOSE still resolves at
     /// 104x56, not 220x92 — NOT YET RUN against the base commit: see the MV-962 hand-off comment for why
     /// (`cc-verify`/Unity batchmode could not be run to completion in this session).
+    ///
+    /// MV-1408 re-orders the bar to the approved phone mockup — left to right PARTS, settings gear, QUIT,
+    /// CLOSE (X) — so QUIT is CLOSE's neighbour again by design; the test now pins that order, and the
+    /// gap between the two is the spacing MV-1408's own test measures.
     /// </summary>
     public sealed class MV962RigTopBarOrderTests
     {
         [Test]
-        public void QuitMovesPastPartsAwayFromClose()
+        public void TopBarOrderIsPartsGearQuitClose()
         {
             WeaponSystemState.Reset();
             RigState.Reset();
@@ -33,6 +37,8 @@ namespace MaxWorlds.Tests.EditMode
                 var close = FindRect(go, "Close Button");
                 var parts = FindRect(go, "Parts Chip");
                 var quit = FindRect(go, "Quit Button");
+                var gear = FindRect(go, "Settings Button");
+                Assert.That(gear, Is.Not.Null, "fixture: the settings gear must exist");
                 Assert.That(close, Is.Not.Null, "fixture: CLOSE must exist");
                 Assert.That(parts, Is.Not.Null, "fixture: the PARTS chip must exist");
                 Assert.That(quit, Is.Not.Null, "fixture: QUIT must exist");
@@ -41,10 +47,10 @@ namespace MaxWorlds.Tests.EditMode
                 Rect partsRect = WorldRect(parts);
                 Rect quitRect = WorldRect(quit);
 
-                Assert.That(quitRect.xMax, Is.LessThanOrEqualTo(partsRect.xMin),
-                    "QUIT must sit entirely left of the PARTS chip");
-                Assert.That(partsRect.xMax, Is.LessThanOrEqualTo(closeRect.xMin),
-                    "the PARTS chip must sit entirely left of CLOSE — QUIT must no longer be CLOSE's neighbour");
+                Rect gearRect = WorldRect(gear);
+                Assert.That(partsRect.xMax, Is.LessThanOrEqualTo(gearRect.xMin), "PARTS must sit entirely left of the settings gear");
+                Assert.That(gearRect.xMax, Is.LessThanOrEqualTo(quitRect.xMin), "the settings gear must sit entirely left of QUIT");
+                Assert.That(quitRect.xMax, Is.LessThanOrEqualTo(closeRect.xMin), "QUIT must sit entirely left of CLOSE");
             }
             finally
             {

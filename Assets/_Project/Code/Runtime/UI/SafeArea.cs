@@ -84,6 +84,15 @@ namespace MaxWorlds.UI
             return Mathf.Clamp01(safe.width / screen.x);
         }
 
+        /// <summary>MV-1408: the safe area's height as a fraction of the full screen height (1.0 when
+        /// there is no vertical inset) — same seam and purpose as <see cref="CurrentSafeWidthFraction"/>.</summary>
+        public static float CurrentSafeHeightFraction()
+        {
+            Rect safe = CurrentSafeArea(out Vector2 screen);
+            if (screen.y <= 0f) return 1f;
+            return Mathf.Clamp01(safe.height / screen.y);
+        }
+
         /// <summary>
         /// Converts a pixel-space safe area into anchor fractions inside a full-screen parent.
         /// Pure and deterministic so it can be asserted in EditMode. Degenerate inputs

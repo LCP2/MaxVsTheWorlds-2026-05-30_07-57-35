@@ -178,6 +178,8 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("rig-mv472-1133x744", 1133, 744, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             // MV-1398 AC3: iPhone 15 Pro Max landscape, the device Lee saw the blur on.
             yield return CaptureFixtureScreen("rig-mv1398-2556x1179", 2556, 1179, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-1408 AC4: the iPad (2048x1536); the 852x393-at-3x shot is the 2556x1179 one above.
+            yield return CaptureFixtureScreen("rig-mv1408-2048x1536", 2048, 1536, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-519 AC9's human-check shot: the CELLS chip reading an over-cap balance (22/20) after a
             // Supercell grant pushed PowerCells past Capacity — must read as a deliberate bonus, not a
@@ -1273,7 +1275,7 @@ namespace MaxWorlds.Dev
         /// was never a rendering defect — see each check's own use of this. The geometry-only
         /// y-bounds-containment check (feature 3) deliberately does NOT use this: it checks against the
         /// full scrollable content instead, per this ticket's own phone exception.</summary>
-        private const float PhoneFoldLimit = PhoneViewportBottom - PhoneViewportTop;   // 910
+        private static float PhoneFoldLimit => RigBoardLayout.PhoneContentHeight;   // MV-1408: nothing scrolls, so nothing is below the fold
 
         /// <summary>MV-480: builds the json-coordinate-space -> pixel-space mapping this capture's own
         /// aspect/mode needs (see <see cref="RigBoardConformance.BoardPixelTransform"/>'s own doc
@@ -1291,21 +1293,21 @@ namespace MaxWorlds.Dev
         /// dragging content above the vertical midpoint DOWN toward it — offsetY is 0 here for the same
         /// reason RigBoardChromeTests' own AssertFitsY now reads <c>rawY * scale</c> instead of a
         /// centre-relative term.</summary>
-        private static RigBoardConformance.BoardPixelTransform BuildTransform(float aspect, bool phoneMode, int h)
+        private static RigBoardConformance.BoardPixelTransform BuildTransform(float aspect, bool phoneMode, int w, int h)
         {
-            float pxPerRefUnit = h / 1080f;
-            float scale = phoneMode ? 1f : WeaponsScreen.ComputeBoardScale(aspect);
-            float offsetX = phoneMode ? 0f : 960f * (1f - scale);
-            float offsetY = phoneMode ? PhoneViewportTop : 0f;
-            float windowMinX = WeaponsScreen.VisibleRefXWindow(aspect).MinX;
-            return new RigBoardConformance.BoardPixelTransform(scale, offsetX, offsetY, windowMinX, pxPerRefUnit);
+            // MV-1408: the RIG canvas is 852x393 / Expand, and the board is fitted below the top bar —
+            // WeaponsScreen.ComputeBoardMapping is the single source of where a json (x, y) lands, in canvas
+            // units; one canvas unit is canvasScale pixels.
+            WeaponsScreen.ComputeBoardMapping(aspect, out float scale, out float originX, out float originY);
+            float canvasScale = Mathf.Min(w / 852f, h / 393f);
+            return new RigBoardConformance.BoardPixelTransform(scale, originX, originY, 0f, canvasScale);
         }
 
         private void RunConformanceChecks(Texture2D tex, string aspectName, int w, int h)
         {
             float aspect = (float)w / h;
             bool phoneMode = WeaponsScreen.IsPhoneLayout(aspect);
-            var transform = BuildTransform(aspect, phoneMode, h);
+            var transform = BuildTransform(aspect, phoneMode, w, h);
 
             var categories = phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
             var abilities = phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
@@ -1451,9 +1453,9 @@ namespace MaxWorlds.Dev
             // that EditMode test's own math for this one capture's aspect instead of every tested one.
             CheckYBoundsContainment(phoneMode, transform.Scale, categories, abilities, fusions, radiusCategory, radiusAbility, radiusFusion,
                 out int yChecked, out var yFails);
-            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
+            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : RigBoardLayout.StandardContentHeight;
             Emit("y-bounds-containment", yFails.Count == 0,
-                yFails.Count == 0 ? $"{yChecked}/{yChecked} nodes within [0,{RigBoardConformance.Fmt(yMax)}] {(phoneMode ? "scroll content" : "visible frame")}"
+                yFails.Count == 0 ? $"{yChecked}/{yChecked} nodes within [0,{RigBoardConformance.Fmt(yMax)}] {(phoneMode ? "board content" : "board content")}"
                                    : $"{yFails.Count}/{yChecked} overrun — {string.Join("; ", yFails)}");
 
             Log($"conformance/{aspectName}: {passCount}/{checkCount} check families passed");
@@ -1671,7 +1673,7 @@ namespace MaxWorlds.Dev
             IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities, IReadOnlyList<RigFusionLayout> fusions,
             float radiusCategory, float radiusAbility, float radiusFusion, out int checkedCount, out List<string> fails)
         {
-            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
+            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : RigBoardLayout.StandardContentHeight;
             var localFails = new List<string>();
             int localChecked = 0;
 
@@ -1680,14 +1682,9 @@ namespace MaxWorlds.Dev
             void Check(string id, float rawY, float halfExtent)
             {
                 localChecked++;
-                float top, bottom;
-                if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
-                else
-                {
-                    float scaledY = rawY * scale;
-                    float scaledHalf = halfExtent * scale;
-                    top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
-                }
+                // MV-1408: the board is fitted whole (no scroll, no per-mode scaling of Y), so content
+                // coordinates are checked directly against the content rect.
+                float top = rawY - halfExtent, bottom = rawY + halfExtent;
                 if (top < -0.5f || bottom > yMax + 0.5f)
                     localFails.Add($"{id} top={RigBoardConformance.Fmt(top)} bottom={RigBoardConformance.Fmt(bottom)}");
             }

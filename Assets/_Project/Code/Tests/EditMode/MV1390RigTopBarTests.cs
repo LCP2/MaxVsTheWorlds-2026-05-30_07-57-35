@@ -11,7 +11,7 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-1390: the RIG top bar is four equal buttons, right to left CLOSE, PARTS, SETTINGS, QUIT TO MENU;
+    /// MV-1390: the RIG top bar is four equal-height buttons, right to left CLOSE, QUIT, SETTINGS, PARTS (MV-1408);
     /// PARTS text sits inside its border; SETTINGS opens the SettingsPanel over the paused RIG; Home no
     /// longer builds a SETTINGS button. Resolved rects / preferredWidth only (Tier 2).
     /// </summary>
@@ -43,20 +43,20 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(settings, Is.Not.Null, "RIG top bar must carry a Settings Button");
                 Assert.That(quit, Is.Not.Null);
 
-                // AC1: equal size, right-to-left order CLOSE, PARTS, SETTINGS, QUIT.
-                var all = new[] { close, parts, settings, quit };
+                // AC1: equal height (MV-1408: widths now differ — the gear and X are square), right-to-left
+                // order CLOSE, QUIT, SETTINGS, PARTS.
+                var all = new[] { close, quit, settings, parts };
                 for (int i = 1; i < all.Length; i++)
                 {
-                    Assert.That(all[i].rect.width, Is.EqualTo(all[0].rect.width).Within(1f), $"{all[i].name} width");
                     Assert.That(all[i].rect.height, Is.EqualTo(all[0].rect.height).Within(1f), $"{all[i].name} height");
                     Assert.That(WorldRect(all[i]).xMax, Is.LessThanOrEqualTo(WorldRect(all[i - 1]).xMin),
                         $"{all[i].name} must sit entirely left of {all[i - 1].name}");
                 }
 
-                // AC2: the widest PARTS text clears the chip by >= 24 px.
+                // AC2: the widest PARTS text fits inside its own text rect, which sits inside the chip.
                 var partsText = parts.GetComponentInChildren<TMP_Text>();
                 partsText.text = "999/999 PARTS";
-                Assert.That(partsText.preferredWidth, Is.LessThanOrEqualTo(parts.rect.width - 24f),
+                Assert.That(partsText.preferredWidth, Is.LessThanOrEqualTo(partsText.rectTransform.rect.width),
                     "PARTS text must sit inside its border");
 
                 // AC3: SETTINGS opens SettingsPanel and the game stays paused.

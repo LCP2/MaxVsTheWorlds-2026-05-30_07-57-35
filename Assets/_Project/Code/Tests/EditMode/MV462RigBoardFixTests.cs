@@ -162,12 +162,13 @@ namespace MaxWorlds.Tests.EditMode
         /// ancestor's scale) that identity IS the "maps to json (250, 230)" contract — a wrapper anything
         /// other than 1.0 is what shifted/shrunk the whole board in the real capture.</summary>
         [Test]
-        public void BoardScaleRootIsIdentityAtSixteenByNine_PrimaryNodeLandsOnItsJsonCoordinate()
+        public void PrimaryNodeLandsOnItsJsonCoordinate_AtSixteenByNine()
         {
             OpenScreen();
             _screen.ApplyBoardScale(1920f / 1080f);
 
-            Assert.That(_screen.BoardScale, Is.EqualTo(1f).Within(1e-4f), "board scale root must be identity at 16:9");
+            // MV-1408: the board is fitted below the top bar now, so its scale root is no longer identity;
+            // what this still pins is that Board Root's own local positions stay 1:1 with the json.
 
             var primary = _screen.BoardNode("PRIMARY");
             Assert.That(primary, Is.Not.Null);

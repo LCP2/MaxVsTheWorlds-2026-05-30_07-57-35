@@ -92,8 +92,16 @@ namespace MaxWorlds.UI
         /// the REAL backdrop colour the pill actually renders against, not a hand-copied duplicate.</summary>
         public static Color PillBackdropColor => PillBackdrop;
 
-        private const float TopBarHeight = 104f;
+        private const float TopBarHeight = 40f;   // MV-1408: canvas units at the 852x393 reference
         private const float ContentMargin = 28f;
+
+        // MV-1408: the RIG canvas is a phone-first 852x393 design, ScreenMatchMode.Expand (the whole
+        // design always visible; extra screen centres it). The board stays authored in its own 1920x1080
+        // frame and is scaled to fit the area below the top bar (see ApplyBoardScale).
+        private const float CanvasRefW = 852f, CanvasRefH = 393f;
+        private const float StandardViewportTop = 100f;   // frame y where standard mode's content starts (nothing above it)
+        private const float PhoneViewportTop = 140f;      // frame y where phone mode's content starts
+        private const float PhoneBoardBottomPad = 200f;   // phone FORGE captions hang below PhoneContentHeight
 
         // ------------------------------------------------------------------ THE RIG board (MV-423)
 
@@ -1054,6 +1062,16 @@ namespace MaxWorlds.UI
         {
             if (_root == null) return;
 
+            RefreshTopBarState();
+            ApplyBoardScale();
+            RefreshBoardState();
+        }
+
+        /// <summary>The PARTS chip's live text/colour/interactable state (MV-1408: split out of
+        /// <see cref="Refresh"/> so a top-bar rebuild at a new resolution can repaint it).</summary>
+        private void RefreshTopBarState()
+        {
+            if (_cellsText == null) return;
             _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} PARTS";
             // MV-519 Change item 5: an over-cap balance must read as a deliberate bonus, not a bug —
             // tinted the same amber a Supercell glows, mirroring HudController.SetCellCountDisplay's
@@ -1076,9 +1094,6 @@ namespace MaxWorlds.UI
             // player's own cell count unreadable. The chip stays tappable via .interactable; readability
             // wins over the spend affordance.
             _cellsChipBg.color = RowColor;
-
-            ApplyBoardScale();
-            RefreshBoardState();
         }
 
         /// <summary>MV-472: the state-repaint tail of <see cref="Refresh"/>, factored out so
@@ -1839,9 +1854,8 @@ namespace MaxWorlds.UI
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(RefW, RefH);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 1f;
+            scaler.referenceResolution = new Vector2(CanvasRefW, CanvasRefH);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;   // MV-1408
 
             // MV-440: one screen root, full-canvas, holding both the opaque backdrop and the Safe
             // Area — this is the only GameObject Open()/Close()/OpenMorphingModuleDraft() ever toggle,
@@ -1899,7 +1913,9 @@ namespace MaxWorlds.UI
             // shrinking pulls content toward the frame's own top instead of its centre — the vertical
             // gap now only ever SHRINKS as aspect narrows (verified: -14px, i.e. a hair of overlap, not
             // 124px of empty space, at iPad mini), never grows the dead band the ticket exists to fix.
-            _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            // MV-1408: centre-anchored (not top-anchored) so its position never depends on the live
+            // canvas size — ApplyBoardScale places it from the computed canvas size.
+            _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             _boardScaleRoot.pivot = new Vector2(0.5f, 1f);
             _boardScaleRoot.sizeDelta = new Vector2(RefW, RefH);
             _boardScaleRoot.anchoredPosition = Vector2.zero;
@@ -1922,16 +1938,16 @@ namespace MaxWorlds.UI
             // this never double-builds; it only matters as the seed a later explicit-aspect call (the
             // ui-screens capture harness driving a shot through several registered aspects on this one
             // instance) can detect a change against.
-            float initialAspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
+            float initialAspect = Screen.height > 0 ? (float)Screen.width / Screen.height : CanvasRefW / CanvasRefH;
             _phoneMode = IsPhoneLayout(initialAspect);
-            // MV-1398: seed the shape resolution from the same ambient guess, so the first build already
-            // lands in the bucket ApplyBoardScale will re-derive (no throwaway double build).
-            {
-                float seedScale = ComputeBoardScale(initialAspect);
-                if (_phoneMode) seedScale *= ComputePhoneFitScale(initialAspect, SafeArea.CurrentSafeWidthFraction());
-                _shapeRes = CrispUi.BucketFor((Screen.height > 0 ? Screen.height / RefH : 1f) * seedScale);
-                CrispUi.Resolution = _shapeRes;
-            }
+            // MV-1398/MV-1408: seed the shape resolution from the same ambient guess, so the first build
+            // already lands in the bucket ApplyBoardScale will re-derive (no throwaway double build).
+            UpdateSafeSize(initialAspect);
+            int initialPixelH = Screen.height > 0 ? Screen.height : (int)CanvasRefH;
+            ComputeBoardMetrics(initialAspect, initialPixelH, out _, out int seedRes, out int seedBarRes);
+            _shapeRes = seedRes;
+            _barRes = seedBarRes;
+            CrispUi.Resolution = _shapeRes;
             // MV-753: BuildBoardContent below reads straight off RigBoardLayout, which must already
             // match whatever world RigBoard is on — e.g. a Weapon Core morph already applied at run
             // start, before THE RIG was ever opened — same sync ApplyBoardScale(float) re-checks below.
@@ -1939,7 +1955,9 @@ namespace MaxWorlds.UI
             _lastBoardWorldIndex = RigBoard.ActiveWorldIndex;
             BuildBoardContent();
 
+            CrispUi.Resolution = _barRes;
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
+            CrispUi.Resolution = _shapeRes;
 
             ApplyBoardScale();
             _screenRoot.gameObject.SetActive(false);
@@ -1960,7 +1978,7 @@ namespace MaxWorlds.UI
         /// below, which the capture harness now drives directly.</summary>
         private void ApplyBoardScale()
         {
-            float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
+            float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : CanvasRefW / CanvasRefH;
             ApplyBoardScale(aspect, Screen.height);
         }
 
@@ -1971,38 +1989,137 @@ namespace MaxWorlds.UI
         /// the capture harness and an EditMode test can drive it without a real screen/window.</summary>
         public void ApplyBoardScale(float aspect) => ApplyBoardScale(aspect, Screen.height);
 
+        /// <summary>MV-1408: the RIG canvas is 852x393 with <c>ScreenMatchMode.Expand</c>, so its size in
+        /// canvas units for a screen of <paramref name="aspect"/> is 393 tall (wider screens) or 852 wide
+        /// (taller screens). Pure.</summary>
+        public static void ComputeCanvasSize(float aspect, out float width, out float height)
+        {
+            float refAspect = CanvasRefW / CanvasRefH;
+            if (aspect <= 0f) aspect = refAspect;
+            if (aspect >= refAspect) { height = CanvasRefH; width = CanvasRefH * aspect; }
+            else { width = CanvasRefW; height = CanvasRefW / aspect; }
+        }
+
+        /// <summary>MV-1408: the live safe area (canvas units) the top bar and board are laid out in,
+        /// computed from the aspect rather than read off a rendered rect (an un-laid-out canvas reports
+        /// ~0 under the EditMode runner). Everything in THE RIG is centre-anchored inside the safe root
+        /// and sized from these two numbers, so the layout is the same wherever it is measured.</summary>
+        private float _safeW = CanvasRefW, _safeH = CanvasRefH;
+        private int _barRes = 1;
+
+        /// <summary>MV-1408: the safe area size last laid out, test/conformance-only.</summary>
+        public Vector2 SafeSize => new Vector2(_safeW, _safeH);
+
+        private void UpdateSafeSize(float aspect)
+        {
+            ComputeCanvasSize(aspect, out float cw, out float ch);
+            _safeW = cw * SafeArea.CurrentSafeWidthFraction();
+            _safeH = ch * SafeArea.CurrentSafeHeightFraction();
+        }
+
+        /// <summary>MV-1408: where the board content (the masked viewport the category columns live in)
+        /// sits in the 1920x1080 board frame, and how big it is. Nothing scrolls: the viewport is exactly
+        /// as tall as the content, and the whole thing is scaled to fit by <see cref="ComputeBoardFit"/>.
+        /// <paramref name="top"/> is the frame y of the viewport's top edge; <paramref name="contentOffsetY"/>
+        /// is how far above that edge the content's own origin (authored y = 0) sits.</summary>
+        private static void ComputeBoardViewport(bool phone, out float left, out float top, out float width, out float height, out float contentHeight, out float contentOffsetY)
+        {
+            if (phone)
+            {
+                top = PhoneViewportTop;
+                contentHeight = RigBoardLayout.PhoneContentHeight;
+                // The FORGE fusions' sub-captions run past PhoneContentHeight (it was only ever a scroll
+                // extent); with nothing to scroll the viewport must be tall enough to show them whole.
+                height = contentHeight + PhoneBoardBottomPad;
+                contentOffsetY = 0f;
+                width = PhoneContentHalfWidth() * 2f + 16f;
+                left = RefW * 0.5f - width * 0.5f;
+            }
+            else
+            {
+                top = StandardViewportTop;
+                contentHeight = Mathf.Max(RefH, RigBoardLayout.StandardContentHeight);
+                height = contentHeight - top;
+                contentOffsetY = top;
+                width = RefW;
+                left = 0f;
+            }
+        }
+
+        /// <summary>MV-1408: uniform scale that fits the whole board viewport into
+        /// <paramref name="availW"/> x <paramref name="availH"/> canvas units (the area below the top bar).</summary>
+        private static float ComputeBoardFit(bool phone, float availW, float availH)
+        {
+            ComputeBoardViewport(phone, out _, out _, out float vw, out float vh, out _, out _);
+            return Mathf.Max(0.01f, Mathf.Min(availW / vw, availH / vh));
+        }
+
+        /// <summary>MV-1408: where board-content coordinates (the authored json x, y) land on the canvas for a
+        /// screen of <paramref name="aspect"/>, in canvas units measured from the canvas's top-left:
+        /// <c>(originX + x * scale, originY + y * scale)</c>. Pure; the conformance harness builds its
+        /// json-to-pixel transform from this so its probes follow the layout instead of re-deriving it.</summary>
+        public static void ComputeBoardMapping(float aspect, out float scale, out float originX, out float originY)
+        {
+            bool phone = IsPhoneLayout(aspect);
+            ComputeCanvasSize(aspect, out float cw, out float ch);
+            float safeW = cw * SafeArea.CurrentSafeWidthFraction();
+            float safeH = ch * SafeArea.CurrentSafeHeightFraction();
+            scale = ComputeBoardFit(phone, safeW, safeH - TopBarHeight);
+            ComputeBoardViewport(phone, out _, out float vTop, out _, out _, out _, out float contentOffsetY);
+            // The viewport's top edge sits on the top bar's bottom edge; content y = 0 is contentOffsetY above it.
+            originX = cw * 0.5f - RefW * 0.5f * scale;
+            originY = (ch - safeH) * 0.5f + TopBarHeight - contentOffsetY * scale;
+        }
+
+        /// <summary>MV-1408/MV-1398: board fit scale plus the two shape-resolution buckets — the board's
+        /// (canvas scale x fit) and the top bar's (canvas scale alone) — for a render target of
+        /// <paramref name="aspect"/> and <paramref name="pixelHeight"/>.</summary>
+        private void ComputeBoardMetrics(float aspect, int pixelHeight, out float fit, out int boardRes, out int barRes)
+        {
+            bool phone = IsPhoneLayout(aspect);
+            fit = ComputeBoardFit(phone, _safeW, _safeH - TopBarHeight);
+            float canvasScale = pixelHeight > 0
+                ? Mathf.Min(aspect * pixelHeight / CanvasRefW, pixelHeight / CanvasRefH)
+                : 1f;
+            boardRes = CrispUi.BucketFor(canvasScale * fit);
+            barRes = CrispUi.BucketFor(canvasScale);
+        }
+
         /// <summary>MV-1398: <see cref="ApplyBoardScale(float)"/> with the render target's real pixel
-        /// height, so the shape sprites are generated at the true device-pixel scale (the CanvasScaler
-        /// is match-by-height, so scaleFactor = pixelHeight / <see cref="RefH"/>) instead of whatever
-        /// the ambient <see cref="Screen"/> reports. The capture harness and tests pass their own.</summary>
+        /// height, so the shape sprites are generated at the true device-pixel scale (the canvas scale is
+        /// <c>min(width/852, height/393)</c>) instead of whatever the ambient <see cref="Screen"/>
+        /// reports. The capture harness and tests pass their own.
+        ///
+        /// MV-1408: also lays out the top bar and fits the board below it (see
+        /// <see cref="ComputeBoardFit"/>) — no scrolling, nothing hidden.</summary>
         public void ApplyBoardScale(float aspect, int pixelHeight)
         {
             if (_boardScaleRoot == null) return;
 
-            // MV-472: the phone/standard verdict can change on THIS call — the ui-screens capture
-            // harness reuses one WeaponsScreen instance across every registered aspect (16:9, 16:10,
-            // phone), each shot calling this with its own real aspect well after Build() already ran
-            // once at whatever the ambient aspect happened to be. A verdict change means the board's
-            // nodes were built at the wrong radii/fonts/positions for this aspect, so rebuild them from
-            // scratch before applying the scale-to-fit factor below.
             bool wantPhoneMode = IsPhoneLayout(aspect);
             // MV-753: RigBoard is THE RIG's single source of truth for which world's ids even exist —
             // a change here (a Weapon Core morph landing) must force the exact same rebuild a
-            // phone/standard verdict change already does, checked on every call (this runs from
-            // Refresh() on every state change), not just the one call site RebuildBoard used to
-            // require the capture harness to reach for by hand.
+            // phone/standard verdict change does, checked on every call.
             bool worldChanged = _lastBoardWorldIndex != RigBoard.ActiveWorldIndex;
 
-            // MV-1398: shape sprites are generated at 2x the live device-pixel scale (canvas scaleFactor
-            // x the board's own fit-to-width scale), bucketed to a power of two, so nothing is ever drawn
-            // larger than its own texture. A bucket change (new window/device size) rebuilds the board
-            // content exactly like a phone/standard verdict change does.
-            float scale = ComputeBoardScale(aspect);
-            if (wantPhoneMode) scale *= ComputePhoneFitScale(aspect, SafeArea.CurrentSafeWidthFraction());
-            float pixelScale = (pixelHeight > 0 ? pixelHeight / RefH : 1f) * scale;
-            int wantRes = CrispUi.BucketFor(pixelScale);
+            UpdateSafeSize(aspect);
+            ComputeBoardMetrics(aspect, pixelHeight, out float fit, out int wantRes, out int wantBarRes);
             bool resChanged = wantRes != _shapeRes;
+            bool barResChanged = wantBarRes != _barRes || _topBar == null;
             _shapeRes = wantRes;
+            _barRes = wantBarRes;
+
+            if (barResChanged)
+            {
+                if (_topBar != null)
+                {
+                    if (Application.isPlaying) Destroy(_topBar.gameObject);
+                    else DestroyImmediate(_topBar.gameObject);
+                }
+                CrispUi.Resolution = wantBarRes;
+                BuildTopBar((RectTransform)_root.transform);
+                RefreshTopBarState();
+            }
             CrispUi.Resolution = wantRes;
 
             if (wantPhoneMode != _phoneMode || worldChanged || resChanged || _nodeParent == null)
@@ -2015,7 +2132,14 @@ namespace MaxWorlds.UI
                 RefreshBoardState();
             }
 
-            _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
+            LayoutTopBar();
+
+            // The board's viewport top edge lands on the top bar's bottom edge; the fit scale keeps the
+            // rest of it inside the safe area. The wrapper is centre-anchored, so only its own offset
+            // from the safe area's centre matters.
+            ComputeBoardViewport(_phoneMode, out _, out float vTop, out _, out _, out _, out _);
+            _boardScaleRoot.localScale = new Vector3(fit, fit, 1f);
+            _boardScaleRoot.anchoredPosition = new Vector2(0f, _safeH * 0.5f - TopBarHeight + vTop * fit);
         }
 
         /// <summary>MV-472: builds everything under <see cref="_boardContentHost"/> — the category
@@ -2024,7 +2148,7 @@ namespace MaxWorlds.UI
         /// <see cref="ApplyBoardScale(float)"/> whenever the phone/standard verdict changes.</summary>
         private void BuildBoardContent()
         {
-            _nodeParent = _phoneMode ? BuildPhoneScrollViewport(_boardRoot, out _boardContentHost) : BuildStandardBoardContent(_boardRoot);
+            _nodeParent = BuildBoardViewport(_boardRoot, _phoneMode, out _boardContentHost);
 
             BuildCategoryPanels(_nodeParent);
             BuildConnectors(_nodeParent);   // MV-443: behind the panels' contents, but above the panel fill
@@ -2037,114 +2161,30 @@ namespace MaxWorlds.UI
             BuildCeremonyVisuals(_nodeParent);   // MV-605: built last too, so it renders above everything else
         }
 
-        /// <summary>Standard mode's node parent (MV-472, current spec, defect 3): a masked vertical
-        /// ScrollRect, the same pattern <see cref="BuildPhoneScrollViewport"/> already uses for phone —
-        /// there was previously no mask or scroll here at all, so the FORGE section's own fusion
-        /// sub-caption (the deepest content, node Y 910 + label offset 86 + 22 + half its own 24-tall
-        /// box ≈ y=1030 in the SAME 1920x1080 frame every node's authored (x, y) already assumes) sat
-        /// within ~50px of the 1080 bottom edge with no room for error and no way to reach it if it
-        /// didn't fit — this is what Lee saw clipped on iPad mini. Unlike phone's viewport (offset below
-        /// its own taller top bar), this one spans the FULL boardRoot rect at (0,0) so every existing
-        /// node position — already authored assuming placement directly in the full frame — renders
-        /// exactly where it always has when unscrolled; only content past the fold becomes reachable by
-        /// scrolling instead of invisible. A distinct child of <see cref="_boardRoot"/> (not _boardRoot
-        /// itself) purely so <see cref="DestroyBoardContent"/> has something of its own to destroy on a
-        /// mode change without ever touching _boardRoot or any of its ancestors.</summary>
-        private RectTransform BuildStandardBoardContent(RectTransform boardRoot)
+        /// <summary>MV-1408: the node parent for both modes — a masked, NON-scrolling viewport exactly as
+        /// big as the content (see <see cref="ComputeBoardViewport"/>), so every node is reachable without
+        /// a ScrollRect and there is no scroll hint. The viewport starts below the empty band the old top
+        /// bar used to occupy; its child "Board Content" keeps the authored coordinate origin, so every
+        /// node's json (x, y) still maps 1:1 onto its anchoredPosition. A distinct child of
+        /// <see cref="_boardRoot"/> purely so <see cref="DestroyBoardContent"/> has something of its own to
+        /// destroy on a rebuild without touching _boardRoot or any ancestor.</summary>
+        private RectTransform BuildBoardViewport(RectTransform boardRoot, bool phone, out RectTransform host)
         {
-            var viewport = NewRect("Board Viewport", boardRoot, Vector2.zero, Vector2.one);
-            Stretch(viewport);
+            ComputeBoardViewport(phone, out float vx, out float vy, out float vw, out float vh, out float contentH, out float contentOffsetY);
+
+            var viewport = NewRect("Board Viewport", boardRoot, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            viewport.pivot = new Vector2(0f, 1f);
+            viewport.anchoredPosition = new Vector2(vx, -vy);
+            viewport.sizeDelta = new Vector2(vw, vh);
             viewport.gameObject.AddComponent<RectMask2D>();
 
-            var content = NewRect("Board Content", viewport, new Vector2(0f, 1f), new Vector2(1f, 1f));
-            content.pivot = new Vector2(0.5f, 1f);
-            content.anchoredPosition = Vector2.zero;
-            float contentHeight = Mathf.Max(RefH, RigBoardLayout.StandardContentHeight);
-            content.sizeDelta = new Vector2(0f, contentHeight);
-
-            var scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
-            scrollRect.viewport = viewport;
-            scrollRect.content = content;
-            scrollRect.horizontal = false;
-            scrollRect.vertical = true;
-            scrollRect.movementType = ScrollRect.MovementType.Clamped;
-            scrollRect.scrollSensitivity = 24f;
-
-            BuildScrollHint(viewport, RefH, contentHeight);
-
-            _boardContentHost = viewport;
-            return content;
-        }
-
-        /// <summary>Phone mode's node parent: a vertical ScrollRect (MV-472 item 2 — "reflow ... rather
-        /// than overflow"). The phone row schedule (<see cref="RigBoardLayout.PhoneContentHeight"/>) is
-        /// taller than the 1080-tall reference frame can show at once once nodes/fonts are big enough to
-        /// clear Apple's 44pt/11pt floors, so content scrolls under a masked viewport instead of clipping
-        /// or cramming. The viewport sits between the top bar and the board's own bottom margin, in the
-        /// SAME fixed 1920x1080 board frame every other measurement on this screen already uses.</summary>
-        private RectTransform BuildPhoneScrollViewport(RectTransform boardRoot, out RectTransform host)
-        {
-            const float viewportTop = 140f, viewportBottom = 1050f;
-
-            // MV-472: RigBoardLayout's phone column layout deliberately extends outside the standard
-            // [0, RefW] frame (its own centred-content math — see BuildColumnLayout's own cursor
-            // comment) since a wide phone aspect's real visible window is wider than 1920. A viewport
-            // sized to boardRoot's own 1920 width would RectMask2D-clip that overflow on both edges —
-            // caught live: a first pass sized the viewport to boardRoot's own width and PRIMARY clipped
-            // off the left edge of rig-phone.png despite fitting VisibleRefXWindow's own check (the mask
-            // was the thing clipping it, not the actual visible window). horizontalOverflow (700, each
-            // side) comfortably exceeds PhoneTargetWidth's own worst-case span with room to spare.
-            const float horizontalOverflow = 700f;
-
-            var viewport = NewRect("Board Viewport", boardRoot, new Vector2(0f, 1f), new Vector2(1f, 1f));
-            viewport.pivot = new Vector2(0.5f, 1f);
-            viewport.anchoredPosition = new Vector2(0f, -viewportTop);
-            viewport.sizeDelta = new Vector2(horizontalOverflow * 2f, viewportBottom - viewportTop);
-            viewport.gameObject.AddComponent<RectMask2D>();
-
-            // Content's own local origin (its top-left, where a node's anchoredPosition.x=0 would land)
-            // must still land on boardRoot-frame x=0 — the same reference every node's own RigBoardLayout
-            // x assumes — so it's offset by horizontalOverflow from viewport's own (now wider) left edge,
-            // not stretched to match viewport like the standard-mode content host is.
             var content = NewRect("Board Content", viewport, new Vector2(0f, 1f), new Vector2(0f, 1f));
             content.pivot = new Vector2(0f, 1f);
-            content.anchoredPosition = new Vector2(horizontalOverflow, 0f);
-            content.sizeDelta = new Vector2(RefW + horizontalOverflow * 2f, RigBoardLayout.PhoneContentHeight);
-
-            var scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
-            scrollRect.viewport = viewport;
-            scrollRect.content = content;
-            scrollRect.horizontal = false;
-            scrollRect.vertical = true;
-            scrollRect.movementType = ScrollRect.MovementType.Clamped;
-            scrollRect.scrollSensitivity = 24f;
-
-            BuildScrollHint(viewport, viewportBottom - viewportTop, RigBoardLayout.PhoneContentHeight);
+            content.anchoredPosition = new Vector2(-vx, contentOffsetY);
+            content.sizeDelta = new Vector2(RefW, contentH);
 
             host = viewport;
             return content;
-        }
-
-        /// <summary>MV-472 (current spec, defect 4): a small downward chevron pinned at a scrollable
-        /// viewport's own bottom edge — content running past the fold with nothing on screen signalling
-        /// it scrolls read as broken/clipped to Lee ("I read it as the board being cut off"). Parented to
-        /// <paramref name="viewport"/> itself (a SIBLING of its ScrollRect <c>content</c>, not a child of
-        /// it), so the ScrollRect's own translation of <c>content</c> never moves it and it always reads
-        /// against the viewport's own fixed bottom edge; destroyed for free whenever
-        /// <see cref="DestroyBoardContent"/> tears down <c>_boardContentHost</c> (the viewport, in both
-        /// modes) since it lives inside that same subtree. Built only when there is genuinely something
-        /// below the fold — a board that fits needs no hint, and phone mode's content is always taller
-        /// than its viewport so it always gets one.</summary>
-        private static void BuildScrollHint(RectTransform viewport, float viewportHeight, float contentHeight)
-        {
-            if (contentHeight <= viewportHeight + 0.5f) return;
-
-            var hint = AddImage(viewport, CrispUi.Arrow(64), Dim, "Scroll Hint");
-            Anchor(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            hint.rectTransform.anchoredPosition = new Vector2(0f, 20f);
-            hint.rectTransform.sizeDelta = new Vector2(40f, 24f);
-            hint.rectTransform.localScale = new Vector3(1f, -1f, 1f);   // Arrow() points up; flip to point down ("more below")
-            hint.raycastTarget = false;
         }
 
         /// <summary>Tears down whatever <see cref="BuildBoardContent"/> built last pass — the whole
@@ -2827,6 +2867,9 @@ namespace MaxWorlds.UI
 
             var capMarker = AddImage(root, CrispUi.Disc(32), Color.clear, "Cap Marker");
             Anchor(capMarker.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            // MV-1408: the real size, not the 100x100 default — category/fusion markers never get one
+            // (they are always inactive), and at the fitted board scale that default outgrew its 64px texture.
+            capMarker.rectTransform.sizeDelta = new Vector2(RigBoardLayout.CapMarkerRadius * 2f, RigBoardLayout.CapMarkerRadius * 2f);
             capMarker.raycastTarget = false;
 
             float pillW = LevelPillW, pillH = LevelPillH;
@@ -3011,101 +3054,94 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ top bar
 
+        // MV-1408: the phone-first top bar — "THE RIG" / "MAX'S WORKBENCH" on the left; on the right, left
+        // to right, the PARTS chip, a settings gear, QUIT and CLOSE (an X). Canvas units at the 852x393
+        // reference: the bar is TopBarHeight (40) high and all four buttons are TopBarButtonHeight (36).
+        // Built centre-anchored inside the safe root and sized by LayoutTopBar from the computed safe size.
+        private const float TopBarButtonHeight = 36f;
+        private const float TopBarButtonFont = 15f;
+        private const float TopBarButtonGap = 6f;
+        private const float TopBarPadX = 10f;
+        private const float TopBarCorner = 9f;
+        private const string CloseLabel = "\u00D7", QuitLabel = "QUIT";   // U+00D7: the multiplication sign is in the SDF font's Latin-1 range
+
+        private static readonly Color GearBorder = new Color(0.20f, 0.24f, 0.31f, 1f);
+        private static readonly Color BarButtonFill = new Color(0.075f, 0.09f, 0.12f, 1f);
+
         private void BuildTopBar(RectTransform parent)
         {
-            var bar = NewRect("Top Bar", parent, new Vector2(0f, 1f), new Vector2(1f, 1f));
+            var bar = NewRect("Top Bar", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             _topBar = bar;
-            bar.pivot = new Vector2(0.5f, 1f);
-            bar.sizeDelta = new Vector2(-2f * ContentMargin, TopBarHeight);
-            bar.anchoredPosition = new Vector2(0f, -ContentMargin);
+            bar.pivot = new Vector2(0.5f, 0.5f);
+            bar.sizeDelta = new Vector2(_safeW, TopBarHeight);
+            bar.anchoredPosition = new Vector2(0f, _safeH * 0.5f - TopBarHeight * 0.5f);
 
-            // MV-433: inset (not flush to the bar's own edges) so it reads as a soft-cornered panel
-            // INSIDE the top bar, per MV-423.png — flush-to-edge plus a shallow corner radius is what
-            // made it read as a hard rectangle overlapping the debug FPS readout (Bootstrap.cs OnGUI,
-            // screen pixels 12,8-652,68 — squarely under the old flush plate).
-            var accent = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), HeaderAccent, "Title Accent");
-            Anchor(accent.rectTransform, new Vector2(0f, 0f), new Vector2(0.34f, 1f), new Vector2(0f, 0.5f));
-            accent.rectTransform.offsetMin = new Vector2(0f, 12f);
-            accent.rectTransform.offsetMax = new Vector2(-6f, -12f);
-            accent.type = Image.Type.Sliced;
-
-            var title = AddText(bar, 38, TextColor, TextAnchor.MiddleLeft);
-            Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
-            title.rectTransform.offsetMin = new Vector2(28f, -30f);
-            title.rectTransform.offsetMax = new Vector2(-160f, 30f);
+            // Title block, left.
+            var title = AddText(bar, 20, TextColor, TextAnchor.MiddleLeft);
+            title.name = "Title";
+            Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            float titleW = Mathf.Ceil(MeasureLabelWidth(bar, "THE RIG", 20f)) + 2f;
+            title.rectTransform.anchoredPosition = new Vector2(TopBarPadX + 2f, 0f);
+            title.rectTransform.sizeDelta = new Vector2(titleW, 30f);
             title.fontStyle = FontStyles.Bold;
             title.text = "THE RIG";
 
-            var subtitle = AddText(bar, 18, Dim, TextAnchor.MiddleLeft);
-            Anchor(subtitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
-            // MV-443 defect 7: was 190 — "THE RIG" at 38pt Bold runs past that, colliding with this
-            // subtitle at the design's own scale; pushed right enough to clear it with a real gap.
-            subtitle.rectTransform.offsetMin = new Vector2(230f, -30f);
-            subtitle.rectTransform.offsetMax = new Vector2(-12f, 30f);
+            var subtitle = AddText(bar, 9, Dim, TextAnchor.MiddleLeft);
+            subtitle.name = "Subtitle";
+            Anchor(subtitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            subtitle.rectTransform.anchoredPosition = new Vector2(TopBarPadX + 2f + titleW + 6f, -3f);
+            subtitle.rectTransform.sizeDelta = new Vector2(120f, 16f);
             subtitle.fontStyle = FontStyles.Bold;
+            subtitle.characterSpacing = 3f;
             subtitle.text = "MAX'S WORKBENCH";
 
-            // MV-1390: right-to-left CLOSE, PARTS, SETTINGS, QUIT TO MENU — four buttons of ONE shared
-            // width/height/font size (QUIT stays furthest from CLOSE, MV-962). The width is the widest
-            // label at the shared font size plus TopBarButtonPad each side; if four of those do not fit
-            // beside the title (phone safe area), all four shrink equally (width, height and font).
-            float barWidth = (parent.rect.width >= 1000f ? parent.rect.width : RefW)   // unlaid-out canvas (batchmode) reports ~0: assume the reference width
-                 - 2f * ContentMargin;
-            const string worstPartsLabel = "999/999 PARTS";
-            string[] labels = { CloseLabel, worstPartsLabel, SettingsLabel, QuitLabel };
-            float widest = 0f;
-            foreach (var l in labels) widest = Mathf.Max(widest, MeasureLabelWidth(bar, l, TopBarButtonFont));
-            float natural = widest + 2f * TopBarButtonPad;
-            float available = barWidth * (1f - TopBarTitleFraction) - 16f - 3f * TopBarButtonGap;
-            float shrink = Mathf.Min(1f, available / (4f * natural));
-            _topBarButtonWidth = natural * shrink;
-            _topBarButtonHeight = TopBarButtonHeight * shrink;
-            _topBarButtonFont = Mathf.Max(10, Mathf.FloorToInt(TopBarButtonFont * shrink));
-            float step = _topBarButtonWidth + TopBarButtonGap;
+            // Right to left: CLOSE, QUIT, settings gear, PARTS.
+            float cursor = -TopBarPadX;
+            float closeW = TopBarButtonHeight;
+            BuildCloseButton(bar, cursor, closeW);
+            cursor -= closeW + TopBarButtonGap;
 
-            float cursor = -16f;
-            BuildCloseButton(bar, cursor);
-            cursor -= step;
+            float quitW = Mathf.Max(TopBarButtonHeight, Mathf.Ceil(MeasureLabelWidth(bar, QuitLabel, TopBarButtonFont)) + 2f * 14f);
+            BuildQuitButton(bar, cursor, quitW);
+            cursor -= quitW + TopBarButtonGap;
 
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out _cellsText,
-                height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
+            float gearW = TopBarButtonHeight;
+            BuildSettingsButton(bar, cursor, gearW);
+            cursor -= gearW + TopBarButtonGap;
+
+            const float iconSize = 12f, iconGap = 6f, padL = 10f, padR = 10f;
+            float partsTextW = Mathf.Ceil(MeasureLabelWidth(bar, "999/999 PARTS", TopBarButtonFont));
+            float partsW = padL + iconSize + iconGap + partsTextW + padR;
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), partsW, CellsColor, out _cellsText,
+                height: TopBarButtonHeight, textMaxSize: TopBarButtonFont, radius: TopBarCorner);
             cellsChip.name = "Parts Chip";
-            _cellsText.enableAutoSizing = false;   // fixed shared size: the width above already fits 999/999
-            _cellsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
-            _cellsText.rectTransform.offsetMin = new Vector2(TopBarButtonPad, -20f);
-            _cellsText.rectTransform.offsetMax = new Vector2(-TopBarButtonPad, 20f);
+            _cellsText.enableAutoSizing = false;   // fixed size: the width above already fits 999/999
+            _cellsText.fontSize = Mathf.RoundToInt(TopBarButtonFont);
+            _cellsText.rectTransform.offsetMin = new Vector2(padL + iconSize + iconGap, 2f);
+            _cellsText.rectTransform.offsetMax = new Vector2(-padR, -2f);
+
+            var hex = AddImage(cellsChip, CrispUi.Polygon(HexSides, HexRotationDeg, 48, 48), SupercellColor, "Parts Icon");
+            Anchor(hex.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            hex.rectTransform.anchoredPosition = new Vector2(padL, 0f);
+            hex.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
+            hex.raycastTarget = false;
 
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
             _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
             _cellsChipButton.transition = Selectable.Transition.None;
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
 
-            _cellsBorder = AddChipBorder(cellsChip, CellsColor, "Parts Border");
-            cursor -= step;
-
-            var settingsChip = BuildChip(bar, new Vector2(cursor, 0f), _topBarButtonWidth, CellsColor, out var settingsText,
-                height: _topBarButtonHeight, textMaxSize: _topBarButtonFont);
-            settingsChip.name = "Settings Button";
-            settingsText.enableAutoSizing = false;
-            settingsText.fontSize = Mathf.RoundToInt(_topBarButtonFont);
-            settingsText.text = SettingsLabel;
-            var settingsBtn = settingsChip.Find("BG").gameObject.AddComponent<Button>();
-            settingsBtn.transition = Selectable.Transition.None;
-            settingsBtn.onClick.AddListener(OnSettingsTapped);
-            AddChipBorder(settingsChip, CellsColor, "Settings Border");
-            cursor -= step;
-
-            BuildQuitButton(bar, cursor);
+            _cellsBorder = AddChipBorder(cellsChip, CellsColor, "Parts Border", TopBarCorner);
         }
 
-        private const string CloseLabel = "× CLOSE", SettingsLabel = "SETTINGS", QuitLabel = "QUIT TO MENU";
-        private const float TopBarButtonHeight = 76f;
-        private const float TopBarButtonFont = 24f;
-        private const float TopBarButtonPad = 24f;
-        private const float TopBarButtonGap = 20f;
-        private const float TopBarTitleFraction = 0.34f;   // the title accent's own anchor, above
-
-        private float _topBarButtonWidth, _topBarButtonHeight, _topBarButtonFont;
+        /// <summary>MV-1408: sizes and places the top bar from the computed safe size — the bar is
+        /// centre-anchored, so only its width and its offset from the safe area's centre ever change.</summary>
+        private void LayoutTopBar()
+        {
+            if (_topBar == null) return;
+            _topBar.sizeDelta = new Vector2(_safeW, TopBarHeight);
+            _topBar.anchoredPosition = new Vector2(0f, _safeH * 0.5f - TopBarHeight * 0.5f);
+        }
 
         /// <summary>Resolved (not authored) width of <paramref name="text"/> in bold at <paramref name="fontSize"/>.</summary>
         private static float MeasureLabelWidth(RectTransform under, string text, float fontSize)
@@ -3118,10 +3154,10 @@ namespace MaxWorlds.UI
             return w;
         }
 
-        private static Image AddChipBorder(RectTransform chip, Color color, string name)
+        private static Image AddChipBorder(RectTransform chip, Color color, string name, float radius = 25f)
         {
             var sz = chip.sizeDelta;
-            float frac = Mathf.Clamp(25f / (Mathf.Min(sz.x, sz.y) * 0.5f), 0.05f, 0.5f);
+            float frac = Mathf.Clamp(radius / (Mathf.Min(sz.x, sz.y) * 0.5f), 0.05f, 0.5f);
             var border = AddImage(chip, CrispUi.RoundedBoxOutline(32, frac, 2.5f), color, name);
             Stretch(border.rectTransform);
             border.type = Image.Type.Sliced;
@@ -3135,41 +3171,49 @@ namespace MaxWorlds.UI
             if (settings != null) settings.OpenFromRig();
         }
 
-        /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
-        private float BuildCloseButton(RectTransform bar, float rightEdge)
+        /// <summary>A right-anchored, bar-centred button rect <paramref name="rightEdge"/> from the bar's right edge.</summary>
+        private static RectTransform NewBarButton(RectTransform bar, string name, float rightEdge, float w)
         {
-            float w = _topBarButtonWidth, h = _topBarButtonHeight;
-            var bg = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), SupercellColor, "Close Button");
+            var rt = NewRect(name, bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(rightEdge, 0f);
+            rt.sizeDelta = new Vector2(w, TopBarButtonHeight);
+            return rt;
+        }
+
+        /// <summary>The orange CLOSE (X) button pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
+        private void BuildCloseButton(RectTransform bar, float rightEdge, float w)
+        {
+            var bg = AddImage(bar, CrispUi.RoundedBox(32, Mathf.Clamp(TopBarCorner / (TopBarButtonHeight * 0.5f), 0.05f, 0.5f)),
+                SupercellColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
-            bg.rectTransform.sizeDelta = new Vector2(w, h);
+            bg.rectTransform.sizeDelta = new Vector2(w, TopBarButtonHeight);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
-            // MV-962: padded raycast beyond the drawn pill keeps CLOSE an easy target.
-            bg.raycastPadding = new Vector4(-14f, -14f, -14f, -14f);
+            // MV-962: padded raycast beyond the drawn button keeps CLOSE an easy target (kept inside the 6-unit gap).
+            bg.raycastPadding = new Vector4(-3f, -3f, -3f, -3f);
 
             var button = bg.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(Close);
 
-            var label = AddText(bg.rectTransform, Mathf.RoundToInt(_topBarButtonFont), PanelColor, TextAnchor.MiddleCenter);
+            var label = AddText(bg.rectTransform, 26, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            // MV-445 defect 6: U+00D7 (Latin-1 multiplication sign) — HudFont has no glyph for U+2715.
             label.text = CloseLabel;
             label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
-
-            return rightEdge - w;
         }
 
-        /// <summary>MV-257: abandons the run and returns to Home via <see cref="RunFlow.QuitToMenu"/>.</summary>
-        private float BuildQuitButton(RectTransform bar, float rightEdge)
+        /// <summary>MV-257: abandons the run and returns to Home via <see cref="RunFlow.QuitToMenu"/>.
+        /// MV-1408: dark fill, red outline and red text, per the approved mockup.</summary>
+        private void BuildQuitButton(RectTransform bar, float rightEdge, float w)
         {
-            float w = _topBarButtonWidth, h = _topBarButtonHeight;
-            var bg = AddImage(bar, CrispUi.RoundedBox(32, 0.5f), QuitColor, "Quit Button");
+            float frac = Mathf.Clamp(TopBarCorner / (TopBarButtonHeight * 0.5f), 0.05f, 0.5f);
+            var bg = AddImage(bar, CrispUi.RoundedBox(32, frac), BarButtonFill, "Quit Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
-            bg.rectTransform.sizeDelta = new Vector2(w, h);
+            bg.rectTransform.sizeDelta = new Vector2(w, TopBarButtonHeight);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
 
@@ -3177,27 +3221,56 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(RunFlow.QuitToMenu);
 
-            var label = AddText(bg.rectTransform, Mathf.RoundToInt(_topBarButtonFont), TextColor, TextAnchor.MiddleCenter);
+            AddChipBorder(bg.rectTransform, QuitColor, "Quit Border", TopBarCorner);
+
+            var label = AddText(bg.rectTransform, Mathf.RoundToInt(TopBarButtonFont), new Color(1f, 0.38f, 0.40f), TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = QuitLabel;
             label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
-
-            return rightEdge - w;
         }
 
-        /// <summary>A rounded pill: a live count/label, right-anchored at <paramref name="offset"/>
-        /// from the top bar's right edge (CELLS). MV-445 defect 6: dropped the leading icon dot —
-        /// neither design image carries one, "0 / 20 CELLS" reads on its own — and switched the
-        /// background to a true stadium radius (25, matching the ticket's own spec against this chip's
-        /// fixed 52px height) over a dark fill, not the lighter RowColor every other row uses.</summary>
-        /// <summary><paramref name="height"/>/<paramref name="textMaxSize"/> default to the original
-        /// 52px/24pt chip (MV-519 gives the CELLS chip its own larger override, see
-        /// the shared top-bar button width (MV-1390)).</summary>
-        private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
-            out TextMeshProUGUI label, float height = 52f, float textMaxSize = 24f)
+        /// <summary>MV-1408: the settings gear — a square dark button with a drawn gear (ring + eight teeth);
+        /// opens <see cref="SettingsPanel"/> over the paused RIG exactly as MV-1390's SETTINGS button did.</summary>
+        private void BuildSettingsButton(RectTransform bar, float rightEdge, float w)
         {
-            const float radius = 25f;
+            var chip = NewBarButton(bar, "Settings Button", rightEdge, w);
+
+            float frac = Mathf.Clamp(TopBarCorner / (TopBarButtonHeight * 0.5f), 0.05f, 0.5f);
+            var bg = AddImage(chip, CrispUi.RoundedBox(32, frac), BarButtonFill, "BG");
+            Stretch(bg.rectTransform);
+            bg.type = Image.Type.Sliced;
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnSettingsTapped);
+
+            AddChipBorder(chip, GearBorder, "Settings Border", TopBarCorner);
+
+            var teeth = new System.Text.StringBuilder();
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * Mathf.PI / 4f;
+                string x0 = (Mathf.Sin(a) * 12f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string y0 = (-Mathf.Cos(a) * 12f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string x1 = (Mathf.Sin(a) * 18f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string y1 = (-Mathf.Cos(a) * 18f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                teeth.Append($"<path d=\"M{x0},{y0} L{x1},{y1}\" stroke=\"#ICON#\" stroke-width=\"5\"/>");
+            }
+            var gearTeeth = AddImage(chip, CrispUi.VectorIcon(teeth.ToString(), 64), new Color(0.80f, 0.84f, 0.90f), "Gear Teeth");
+            Anchor(gearTeeth.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            gearTeeth.rectTransform.sizeDelta = new Vector2(20f, 20f);
+            gearTeeth.raycastTarget = false;
+            var gearRing = AddImage(chip, CrispUi.Ring(64, 7f), new Color(0.80f, 0.84f, 0.90f), "Gear Ring");
+            Anchor(gearRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            gearRing.rectTransform.sizeDelta = new Vector2(13f, 13f);
+            gearRing.raycastTarget = false;
+        }
+
+        /// <summary>A rounded rect: a live count/label, right-anchored at <paramref name="offset"/> from the
+        /// top bar's right edge (the PARTS chip), over a dark fill.</summary>
+        private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
+            out TextMeshProUGUI label, float height = 52f, float textMaxSize = 24f, float radius = 25f)
+        {
             float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(width, height) * 0.5f), 0.05f, 0.5f);
 
             var chip = NewRect("Chip", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
@@ -3210,12 +3283,10 @@ namespace MaxWorlds.UI
 
             label = AddText(chip, (int)textMaxSize, accent, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            label.rectTransform.offsetMin = new Vector2(14f, -20f);
-            label.rectTransform.offsetMax = new Vector2(-14f, 20f);
+            label.rectTransform.offsetMin = new Vector2(4f, 2f);
+            label.rectTransform.offsetMax = new Vector2(-4f, -2f);
             label.fontStyle = FontStyles.Bold;
-            label.enableAutoSizing = true;
-            label.fontSizeMin = 14;
-            label.fontSizeMax = (int)textMaxSize;
+            label.enableAutoSizing = false;
             return chip;
         }
 

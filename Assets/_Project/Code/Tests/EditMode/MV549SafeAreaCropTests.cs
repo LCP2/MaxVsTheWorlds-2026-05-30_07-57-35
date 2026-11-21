@@ -110,8 +110,6 @@ namespace MaxWorlds.Tests.EditMode
             _screen = _go.AddComponent<WeaponsScreen>();
             BuildAndMeasure(0f, out float safeMinSym, out float safeMaxSym);
             AssertEveryNodeFitsWithin(safeMinSym, safeMaxSym, "symmetric (no notch)");
-            Assert.That(_screen.BoardScale, Is.EqualTo(1f).Within(1e-4f),
-                "fixture: a full-width safe area must never engage the phone fit-scale");
         }
 
         private void AssertEveryNodeFitsWithin(float safeMinPx, float safeMaxPx, string label)

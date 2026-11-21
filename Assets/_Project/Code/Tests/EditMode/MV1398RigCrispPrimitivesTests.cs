@@ -14,7 +14,7 @@ namespace MaxWorlds.Tests.EditMode
     /// over larger rects, so on a 2556x1179 iPhone they rendered blurred. Every shape sprite must now be
     /// generated at (at least) the pixel size it is drawn at. Sole guard on that fix; do not cull.
     /// Asserts resolved values only: each Image's sprite texel rect against its resolved on-screen pixel
-    /// rect (world corners with the canvas scaleFactor pinned to the real 1179/1080).
+    /// rect (world corners with the canvas scaleFactor pinned to the real Expand scale).
     /// </summary>
     public sealed class MV1398RigCrispPrimitivesTests
     {
@@ -55,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var canvas = screen.RootCanvas;
             canvas.GetComponent<CanvasScaler>().enabled = false;
-            canvas.scaleFactor = h / 1080f;   // what match-by-height resolves to at this size
+            canvas.scaleFactor = Mathf.Min(w / 852f, h / 393f);   // what the RIG canvas's Expand mode resolves to at this size (MV-1408)
 
             var bad = new StringBuilder();
             int checkedCount = 0;
