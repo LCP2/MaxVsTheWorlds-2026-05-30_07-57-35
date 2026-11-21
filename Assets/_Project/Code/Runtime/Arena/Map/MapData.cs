@@ -194,6 +194,10 @@ namespace MaxWorlds.Arena
         /// dressing-keyed Hedge/Pipe exemption, not a replacement for it.</summary>
         public string coverKind = "solid";
 
+        /// <summary>Cover only (MV-1412) — a wedge's solid corner: SE | SW | NW | NE. Unknown falls
+        /// back to SE with the usual MapEnums warning.</summary>
+        public string corner = "SE";
+
         /// <summary>Cover only (MV-1298) — resolved from <see cref="WorldCover.hp"/>. 0 (default, every
         /// other kind) means indestructible. 0 for every other kind.</summary>
         public float hp;
@@ -367,7 +371,8 @@ namespace MaxWorlds.Arena
         /// <summary>The same record expressed as the cover struct the rest of the game already
         /// speaks (<see cref="BackyardCover"/>, the dressing pass, the sight-line tests).</summary>
         public ArenaCover ToCover() =>
-            new ArenaCover(string.IsNullOrEmpty(id) ? "Cover" : id, CenterXz, Size, Shape, Dressing, CoverKind);
+            new ArenaCover(string.IsNullOrEmpty(id) ? "Cover" : id, CenterXz, Size, Shape, Dressing, CoverKind,
+                Shape == CoverShape.Wedge ? MapEnums.Corner(corner) : CoverCorner.SE);
     }
 
     /// <summary>
@@ -821,6 +826,9 @@ namespace MaxWorlds.Arena
 
         public static CoverShape Shape(string s) =>
             Parse(s, CoverShape.Box, nameof(Shape));
+
+        public static CoverCorner Corner(string s) =>
+            Parse(s, CoverCorner.SE, nameof(Corner));
 
         public static CoverDressing Dressing(string s) =>
             Parse(s, CoverDressing.None, nameof(Dressing));

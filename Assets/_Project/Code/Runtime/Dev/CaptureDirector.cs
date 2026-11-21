@@ -683,6 +683,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1403RealVault());
             Add(BuildMv1404VaultKey());
             Add(BuildMv1409PylonCable());
+            Add(BuildMv1412Wedge());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2147,6 +2148,76 @@ namespace MaxWorlds.Dev
                     new CaptureShot("MV-1409-a29", Setup("area29", "a29_rep1_pylon1", "a29_rep1"),
                         measure: Measure("a29", "a29_rep1_pylon1", "a29_rep1", null)),
                 },
+            };
+        }
+
+        // ---- Mv1412Wedge (MV-1412 AC2) --------------------------------------------------------
+
+        /// <summary>MV-1412 AC2: the four wedge orientations (NW, NE, SE, SW solid corners) side by
+        /// side, 3 m legs, built through the real <see cref="MapRuntime.BuildCover"/> in the real City on
+        /// the play camera, concrete-tinted as the City's own cover. ONE shot, no tuning loop. Run via
+        /// <c>cc-mv1412-capture.bat</c>; writes <c>Logs/MV-1412-wedges.png</c>.</summary>
+        private static CapturePreset BuildMv1412Wedge()
+        {
+            const int W = 1600, H = 1000;
+
+            IEnumerator Run(Camera cam)
+            {
+                // Far outside the City's buildings (the street camera sits under roofs): a plain ground slab.
+                Vector3 focus = new Vector3(600f, 0f, 600f);
+                var host = new GameObject("MV1412 Wedges").transform;
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ground.name = "MV1412 Ground";
+                ground.transform.SetParent(host, false);
+                ground.transform.position = focus + new Vector3(0f, -0.5f, 0f);
+                ground.transform.localScale = new Vector3(30f, 1f, 30f);
+                ground.GetComponent<Renderer>().sharedMaterial =
+                    MaterialLibrary.Tinted(SurfaceKind.Stone, new Color(0.16f, 0.17f, 0.22f));
+                Material concrete = MaterialLibrary.Tinted(SurfaceKind.Stone, CityKit.Concrete);
+                string[] corners = { "NW", "NE", "SW", "SE" };
+                for (int i = 0; i < 4; i++)
+                {
+                    float x = focus.x + (i % 2 == 0 ? -3f : 3f);
+                    float z = focus.z + (i < 2 ? 3f : -3f);
+                    CoverPiece piece = MapRuntime.BuildCover(host, new MapEntity
+                    {
+                        id = "wedge_" + corners[i], kind = "cover", shape = "wedge", corner = corners[i],
+                        x = x, z = z, width = 3f, depth = 3f, height = 1.8f,
+                    });
+                    var r = piece.Body.GetComponent<Renderer>();
+                    if (r != null) r.sharedMaterial = concrete;
+                }
+                float pitch = 60f, distance = 14f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 4; i++) yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1412wedge",
+                LogTag = "[MV1412Capture]",
+                Flag = "-mv1412shot",
+                ArmFile = "Temp/mv1412.arm",
+                HeadlessMarker = "Temp/mv1412.headless",
+                DoneFileName = "_mv1412_done.txt",
+                Width = W,
+                Height = H,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1412-wedges", Run) },
             };
         }
 

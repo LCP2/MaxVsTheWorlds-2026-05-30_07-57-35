@@ -3,7 +3,11 @@ using UnityEngine;
 
 namespace MaxWorlds.Arena
 {
-    public enum CoverShape { Box, Cylinder }
+    public enum CoverShape { Box, Cylinder, Wedge }
+
+    /// <summary>MV-1412: which corner of a wedge's square is SOLID (E = +X, N = +Z). The slanted
+    /// bank face looks toward the opposite corner. Meaningless for any other shape.</summary>
+    public enum CoverCorner { SE, SW, NW, NE }
 
     /// <summary>What a cover piece looks like once the art pass has been through (YT-75). The BOX is
     /// what the game reasons about — it is the collider, and none of these change it. This only says
@@ -92,11 +96,14 @@ namespace MaxWorlds.Arena
         public CoverShape Shape;
         public CoverDressing Dressing;
         public CoverKind Kind;
+        public CoverCorner Corner; // MV-1412: Wedge only; footprint stays the full square
 
         public ArenaCover(string name, Vector2 centerXz, Vector3 size, CoverShape shape,
-                          CoverDressing dressing = CoverDressing.None, CoverKind kind = CoverKind.Solid)
+                          CoverDressing dressing = CoverDressing.None, CoverKind kind = CoverKind.Solid,
+                          CoverCorner corner = CoverCorner.SE)
         {
             Name = name; CenterXz = centerXz; Size = size; Shape = shape; Dressing = dressing; Kind = kind;
+            Corner = corner;
         }
 
         /// <summary>World centre — Y derived so the prop rests on the ground plane (y=0).</summary>

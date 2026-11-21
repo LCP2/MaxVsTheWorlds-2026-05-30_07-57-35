@@ -2526,7 +2526,7 @@ namespace MaxWorlds.Arena
             if (go.GetComponent<KeepsOwnMaterial>() == null) go.AddComponent<KeepsOwnMaterial>();
         }
 
-        private static CoverPiece BuildCover(Transform root, MapEntity e)
+        public static CoverPiece BuildCover(Transform root, MapEntity e)
         {
             ArenaCover cover = e.ToCover();
 
@@ -2546,7 +2546,9 @@ namespace MaxWorlds.Arena
                 cover.Center, scale);
 
             // MV-778: cylinders (hedges) are untouched — only the box shape gets a chamfered mesh.
-            if (cover.Shape != CoverShape.Cylinder)
+            if (cover.Shape == CoverShape.Wedge)
+                ApplyWedge(body, cover); // MV-1412
+            else if (cover.Shape != CoverShape.Cylinder)
                 ApplyBevelledBoxMesh(body, scale);
 
             // This is the line that turns a prop from scenery into a mechanic (YT-83) — except for a
@@ -3624,6 +3626,113 @@ namespace MaxWorlds.Arena
             go.transform.localPosition = center;
             go.transform.localScale = scale;
             return go;
+        }
+
+        private static readonly Color WedgeChevronYellow = new Color(1f, 0.82f, 0.10f);
+
+        /// <summary>The wedge's three footprint vertices in body-local XZ: the solid right-angle
+        /// corner, then the two ends of the slanted face (MV-1412). E = +X, N = +Z.</summary>
+        internal static void WedgeFootprint(Vector2 half, CoverCorner corner,
+            out Vector2 solid, out Vector2 endA, out Vector2 endB)
+        {
+            float sx = (corner == CoverCorner.SE || corner == CoverCorner.NE) ? 1f : -1f;
+            float sz = (corner == CoverCorner.NE || corner == CoverCorner.NW) ? 1f : -1f;
+            solid = new Vector2(sx * half.x, sz * half.y);
+            endA = new Vector2(-sx * half.x, sz * half.y);  // along X from the solid corner
+            endB = new Vector2(sx * half.x, -sz * half.y);  // along Z from the solid corner
+        }
+
+        /// <summary>MV-1412: a right-angled triangular prism — flat-shaded mesh on the body, a convex
+        /// MeshCollider matching it exactly (replacing the primitive's box), and a yellow chevron
+        /// stripe child hugging the slanted face only. Footprint rules still read the full square
+        /// (<see cref="ArenaCover.Footprint"/>), unchanged.</summary>
+        private static void ApplyWedge(GameObject go, ArenaCover cover)
+        {
+            go.transform.localScale = Vector3.one;
+            float h = cover.Size.y;
+            Vector2 half = new Vector2(cover.Size.x * 0.5f, cover.Size.z * 0.5f);
+            WedgeFootprint(half, cover.Corner, out Vector2 c, out Vector2 a, out Vector2 b);
+            float y0 = -h * 0.5f, y1 = h * 0.5f;
+
+            // The square's own centre lies ON the slanted face, so "outward" is judged from the prism's centroid.
+            Vector3 centroid = new Vector3((c.x + a.x + b.x) / 3f, 0f, (c.y + a.y + b.y) / 3f);
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            var normals = new List<Vector3>();
+            void Face(Vector3 p0, Vector3 p1, Vector3 p2, Vector3? p3)
+            {
+                Vector3 n = Vector3.Cross(p1 - p0, p2 - p0).normalized;
+                // Outward test against the prism's own centre, so winding never has to be hand-derived.
+                Vector3 mid = (p0 + p1 + p2) / 3f;
+                bool flip = Vector3.Dot(n, mid - centroid) < 0f;
+                if (flip) n = -n;
+                int i = verts.Count;
+                verts.Add(p0); verts.Add(p1); verts.Add(p2);
+                if (p3.HasValue) verts.Add(p3.Value);
+                for (int k = 0; k < (p3.HasValue ? 4 : 3); k++) normals.Add(n);
+                if (!flip) { tris.Add(i); tris.Add(i + 1); tris.Add(i + 2); }
+                else { tris.Add(i); tris.Add(i + 2); tris.Add(i + 1); }
+                if (p3.HasValue)
+                {
+                    if (!flip) { tris.Add(i); tris.Add(i + 2); tris.Add(i + 3); }
+                    else { tris.Add(i); tris.Add(i + 3); tris.Add(i + 2); }
+                }
+            }
+            Vector3 V(Vector2 p, float y) => new Vector3(p.x, y, p.y);
+            Face(V(c, y1), V(a, y1), V(b, y1), null);                 // top
+            Face(V(c, y0), V(a, y0), V(b, y0), null);                 // bottom
+            Face(V(c, y0), V(a, y0), V(a, y1), V(c, y1));             // leg along X
+            Face(V(c, y0), V(b, y0), V(b, y1), V(c, y1));             // leg along Z
+            Face(V(a, y0), V(b, y0), V(b, y1), V(a, y1));             // slanted face
+
+            var mesh = new Mesh { name = "Wedge" };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            go.GetComponent<MeshFilter>().sharedMesh = mesh;
+
+            var box = go.GetComponent<BoxCollider>();
+            if (box != null) Object.DestroyImmediate(box);
+            var mc = go.AddComponent<MeshCollider>();
+            mc.sharedMesh = mesh;
+            mc.convex = true;
+
+            // Chevron stripes: slanted parallelograms across the bank face, nudged 1 cm proud of it.
+            Vector3 faceN = Vector3.Cross(V(b, 0f) - V(a, 0f), Vector3.up).normalized;
+            if (Vector3.Dot(faceN, V((a + b) * 0.5f, 0f) - V(c, 0f)) < 0f) faceN = -faceN;
+            Vector3 along = V(b, 0f) - V(a, 0f);
+            float length = along.magnitude;
+            int stripes = Mathf.Max(3, Mathf.RoundToInt(length / 0.6f));
+            float pitch = 1f / stripes, width = pitch * 0.5f, skew = pitch * 0.3f;
+            var sv = new List<Vector3>();
+            var st = new List<int>();
+            var sn = new List<Vector3>();
+            for (int s = 0; s < stripes; s++)
+            {
+                float t0 = s * pitch + pitch * 0.1f, t1 = t0 + width;
+                float u0 = Mathf.Min(t0 + skew, 1f), u1 = Mathf.Min(t1 + skew, 1f);
+                Vector3 off = faceN * 0.01f;
+                Vector3 q0 = V(a, y0) + along * t0 + off, q1 = V(a, y0) + along * t1 + off;
+                Vector3 q2 = V(a, y1) + along * u1 + off, q3 = V(a, y1) + along * u0 + off;
+                int i = sv.Count;
+                sv.Add(q0); sv.Add(q1); sv.Add(q2); sv.Add(q3);
+                for (int k = 0; k < 4; k++) sn.Add(faceN);
+                bool ccw = Vector3.Dot(Vector3.Cross(q1 - q0, q2 - q0), faceN) > 0f;
+                if (ccw) { st.Add(i); st.Add(i + 1); st.Add(i + 2); st.Add(i); st.Add(i + 2); st.Add(i + 3); }
+                else { st.Add(i); st.Add(i + 2); st.Add(i + 1); st.Add(i); st.Add(i + 3); st.Add(i + 2); }
+            }
+            var chev = new GameObject("Chevrons");
+            chev.transform.SetParent(go.transform, false);
+            var cm = new Mesh { name = "WedgeChevrons" };
+            cm.SetVertices(sv);
+            cm.SetNormals(sn);
+            cm.SetTriangles(st, 0);
+            cm.RecalculateBounds();
+            chev.AddComponent<MeshFilter>().sharedMesh = cm;
+            var cr = chev.AddComponent<MeshRenderer>();
+            cr.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, WedgeChevronYellow);
+            chev.AddComponent<KeepsOwnMaterial>();
         }
 
         /// <summary>Swaps a freshly spawned primitive cube's flat mesh for a chamfered one (MV-778) —

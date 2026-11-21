@@ -396,6 +396,7 @@ namespace MaxWorlds.Arena
                         shape = c.shape,
                         dressing = c.dressing,
                         coverKind = c.coverKind,
+                        corner = c.corner,
                         hp = c.hp,
                         secret = secret,
                     });

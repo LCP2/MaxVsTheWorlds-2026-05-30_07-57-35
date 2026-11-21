@@ -568,6 +568,9 @@ namespace MaxWorlds.Arena
         /// alongside this field rather than being replaced by it).</summary>
         public string coverKind = "solid";
 
+        /// <summary>MV-1412: a wedge's solid corner (SE | SW | NW | NE); ignored by every other shape.</summary>
+        public string corner = "SE";
+
         /// <summary>MV-1298: this piece's HP — 0 (every piece authored before this field existed)
         /// means indestructible, unchanged. A piece with <c>hp &gt; 0</c> takes damage from shots of
         /// ANY team that it blocks and breaks once its HP reaches zero (<see cref="MaxWorlds.Factories.DestructibleCover"/>).
