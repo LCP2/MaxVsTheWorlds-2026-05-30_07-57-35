@@ -225,6 +225,14 @@ namespace MaxWorlds.Factories
 
             if (_collider != null) _collider.enabled = false; // ticket: "disable its collider"
             if (_bodyRenderer != null) _bodyRenderer.enabled = false;
+            // MV-1416: the body and every dressing child under it (barrier/car/bin parts) are hidden AND
+            // marked, or MapStaticBatchRoot.ApplyAreaGate re-enables them. The rubble decal is a sibling
+            // (BuildRubbleDecal parents it to transform.parent), so it is never swept up here.
+            foreach (Renderer r in GetComponentsInChildren<Renderer>(true))
+            {
+                r.enabled = false;
+                MapStaticBatchRoot.Active?.MarkPermanentlyHidden(r);
+            }
             if (_crack != null) _crack.SetActive(false); // MV-1320: the hairline goes with the body it was etched into
             gameObject.layer = 0; // Default — ticket: "remove it from CoverLayer"
 

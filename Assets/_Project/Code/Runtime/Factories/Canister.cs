@@ -255,9 +255,17 @@ namespace MaxWorlds.Factories
         private void ApplyDestructionEffects()
         {
             if (_collider != null) _collider.enabled = false;
-            if (_bodyRenderer != null) _bodyRenderer.enabled = false;
-            if (_bandRenderer != null) _bandRenderer.enabled = false;
-            if (_chevronRenderer != null) _chevronRenderer.enabled = false;
+            // MV-1416: hidden AND marked, or MapStaticBatchRoot.ApplyAreaGate re-enables them within 0.25 s.
+            HideAndMark(_bodyRenderer);
+            HideAndMark(_bandRenderer);
+            HideAndMark(_chevronRenderer);
+        }
+
+        private static void HideAndMark(Renderer r)
+        {
+            if (r == null) return;
+            r.enabled = false;
+            MapStaticBatchRoot.Active?.MarkPermanentlyHidden(r);
         }
 
         private void SetBandColor(Color c)
