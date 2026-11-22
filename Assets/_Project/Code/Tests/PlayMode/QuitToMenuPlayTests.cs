@@ -78,10 +78,13 @@ namespace MaxWorlds.Tests.PlayMode
             weapons.Open();
             yield return null;
 
-            var quit = FindButtonNamed("Quit Button");
+            var quit = FindButtonNamed("Quit Rail Button");
             Assert.That(quit, Is.Not.Null, "the weapons screen has no Quit To Menu button");
 
-            quit.onClick.Invoke();
+            quit.onClick.Invoke();   // MV-1415: opens the confirm dialog; only its QUIT quits
+            var confirm = FindButtonNamed("Quit Confirm Button");
+            Assert.That(confirm, Is.Not.Null, "the confirm dialog has no QUIT button");
+            confirm.onClick.Invoke();
             // The reload happens synchronously inside the click; the new scene's own Awake/Start
             // still each need a frame, same as SceneReloadPlayTests/HudHomeButtonPlayTests.
             yield return null;

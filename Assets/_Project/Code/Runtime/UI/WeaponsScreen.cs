@@ -686,6 +686,12 @@ namespace MaxWorlds.UI
         private const float RootRadius = 72f, ChildRadius = 60f, FusionTreeRadius = 72f;   // frame units: rects 144 / 120 / 144
         private const float TreeMargin = 8f, TreeGap = 6f, RailWidth = 440f, DetailReserve = 360f, TreeHeaderH = 100f;
         private const float TreeLabelHang = 56f, TreeMaxGapY = 110f, TreeMaxPitchX = 240f;
+        // MV-1415: node labels hang UNDER the hex (name, then the level / price line) and are never wider than
+        // their own column minus a 12 pt (24 frame unit) gap, so no label or hex rect can overlap a neighbour.
+        private const float QuitBtnH = 76f;   // 38 pt
+        private const float LabelNameH = 30f, LabelSubH = 28f, LabelBlockH = 62f, LabelColGap = 24f, LabelMaxW = 220f, RootLabelW = 200f;
+        private static readonly Color GoldColor = new Color32(0xFF, 0xC0, 0x4A, 0xFF);
+        private static readonly Color SubGrey = new Color(0.62f, 0.65f, 0.72f, 1f);
         private const float ViewHeight = 1400f, ViewLeft = -240f, ViewWidth = 2400f;
         private const string ForgeTabId = "FORGE";
         // MV-1410: a padlock in the same 30-unit centred stroke style as rig_board.json's icons.
@@ -693,14 +699,15 @@ namespace MaxWorlds.UI
 
         /// <summary>Where everything in the rail + tree layout sits, in board frame units (x right, y down
         /// from the top of the area below the top bar).</summary>
-        private struct TreeFrame { public Rect Panel, Area, Detail; public Rect[] Tabs; }
+        private struct TreeFrame { public Rect Panel, Area, Detail, Quit; public Rect[] Tabs; }
 
         private static TreeFrame ComputeTreeFrame(float safeW, float safeH, int tabCount)
         {
             float w = safeW / TreeScale, h = (safeH - TopBarHeight) / TreeScale;
             float x0 = RefW * 0.5f - w * 0.5f;
             var f = new TreeFrame { Tabs = new Rect[tabCount] };
-            float tabH = tabCount > 0 ? Mathf.Min(150f, (h - 2f * TreeMargin - (tabCount - 1) * TreeGap) / tabCount) : 0f;
+            float tabH = tabCount > 0 ? Mathf.Min(150f, (h - 2f * TreeMargin - QuitBtnH - TreeGap - (tabCount - 1) * TreeGap) / tabCount) : 0f;
+            f.Quit = new Rect(x0 + TreeMargin, h - TreeMargin - QuitBtnH, RailWidth, QuitBtnH);   // MV-1415: QUIT TO MENU lives at the rail's foot, far from CLOSE
             for (int i = 0; i < tabCount; i++)
                 f.Tabs[i] = new Rect(x0 + TreeMargin, TreeMargin + i * (tabH + TreeGap), RailWidth, tabH);
             float px = x0 + TreeMargin + RailWidth + TreeMargin;
@@ -711,8 +718,33 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>The tree-layout result for one node, in board frame units.</summary>
-        private struct TreeSpot { public float X, Y, R; public bool HasChildren; public string Category; }
+        private struct TreeSpot { public float X, Y, R, Pitch; public int Depth; public bool HasChildren, RootAlone; public string Category; }
         private readonly Dictionary<string, TreeSpot> _treeSpots = new Dictionary<string, TreeSpot>();
+        private readonly Dictionary<string, Rect> _treeLabelRects = new Dictionary<string, Rect>();
+
+        /// <summary>MV-1415: height of the label block under <paramref name="id"/>'s hex. u_slt carries its
+        /// enlarged slots/price pill (MV-1117) between its name and the next row.</summary>
+        private float LabelBlockHeight(string id) => id == "u_slt" ? 4f + LabelNameH + 2f + SentinelPillHeight() + 2f : LabelBlockH;
+
+        private float SentinelPillHeight()
+        {
+            float slotsFontSize = Mathf.Max(SentinelSlotsPillMinFontSize, LevelPillFontSize * 2f);
+            float priceFontSize = Mathf.Max(SentinelPriceLineMinFontSize, CostFontSize);
+            return slotsFontSize * 1.3f + priceFontSize * 1.3f + 6f;
+        }
+
+        /// <summary>MV-1415: the label block's rect (board frame units): under the hex, centred, as wide as the
+        /// node's column minus the gap; a root that is alone on its row carries it to the right instead.</summary>
+        private Rect ComputeLabelRect(TreeSpot s, string id)
+        {
+            if (s.RootAlone) return new Rect(s.X + s.R * Sqrt3 * 0.5f + 28f, s.Y - 30f, RootLabelW, 60f);
+            float w = Mathf.Clamp(s.Pitch - LabelColGap, 60f, LabelMaxW);
+            return new Rect(s.X - w * 0.5f, s.Y + s.R + 2f, w, LabelBlockHeight(id) - 2f);
+        }
+
+        /// <summary>MV-1415: a tree node's label block rect in board frame units (see <see cref="TreeScale"/>),
+        /// or default if unknown. Counted together with <see cref="TreeNodeRect"/> for overlap.</summary>
+        public Rect TreeLabelRect(string id) => _treeLabelRects.TryGetValue(id, out var r) ? r : default;
         private TreeFrame _treeFrame;
         private string _selectedCategory;
         private string _selectedNodeId;
@@ -729,6 +761,7 @@ namespace MaxWorlds.UI
         private void ComputeTreeLayouts()
         {
             _treeSpots.Clear();
+            _treeLabelRects.Clear();
             var ids = RailIds();
             _treeFrame = ComputeTreeFrame(_safeW, _safeH, ids.Count);
             if (_selectedCategory == null || !ids.Contains(_selectedCategory)) _selectedCategory = ids.Count > 0 ? ids[0] : null;
@@ -738,15 +771,21 @@ namespace MaxWorlds.UI
             {
                 var pairs = new List<(string, string)>();
                 foreach (var ab in Abilities) if (ab.Category == cat.Id) pairs.Add((ab.Id, ab.Parent));
-                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, RootRadius * 2f, ChildRadius * 2f, TreeLabelHang, TreeMaxGapY, TreeMaxPitchX);
+                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, RootRadius * 2f, ChildRadius * 2f, LabelBlockHeight, 0f, TreeMaxGapY, TreeMaxPitchX);
+                int rootCount = 0;
+                foreach (var p in placed) if (p.IsRoot) rootCount++;
                 foreach (var p in placed)
-                    _treeSpots[p.Id] = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, HasChildren = p.HasChildren, Category = cat.Id };
+                {
+                    var spot = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, Pitch = p.Pitch, Depth = p.Depth, HasChildren = p.HasChildren, RootAlone = p.Depth == 0 && rootCount == 1, Category = cat.Id };
+                    _treeSpots[p.Id] = spot;
+                    _treeLabelRects[p.Id] = ComputeLabelRect(spot, p.Id);
+                }
             }
             if (Fusions.Count > 0)
             {
                 var pairs = new List<(string, string)>();
                 foreach (var fu in Fusions) pairs.Add((fu.Id, null));
-                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, FusionTreeRadius * 2f, FusionTreeRadius * 2f, TreeLabelHang, TreeMaxGapY, TreeMaxPitchX);
+                var placed = RigTreeLayout.Compute(pairs, area.width, area.height, FusionTreeRadius * 2f, FusionTreeRadius * 2f, null, TreeLabelHang, TreeMaxGapY, TreeMaxPitchX);
                 foreach (var p in placed)
                     _treeSpots[p.Id] = new TreeSpot { X = area.x + p.X, Y = area.y + p.Y, R = p.Size * 0.5f, HasChildren = false, Category = ForgeTabId };
             }
@@ -988,6 +1027,7 @@ namespace MaxWorlds.UI
             // not replay on the next open, and must not grant anything a second time — CancelCeremony
             // only ever clears/hides; the grant itself already happened at StartCeremony time.
             CancelCeremony();
+            CloseQuitDialog();
             Time.timeScale = _prevTimeScale;
             ModalFrameRateGate.Exit();
             _screenRoot.gameObject.SetActive(false);
@@ -1578,37 +1618,16 @@ namespace MaxWorlds.UI
                 v.ProgressTrack.gameObject.SetActive(false);
             }
 
-            // MV-520: the cost tag itself is always on for anything that will ever cost cells — gating
-            // changes how a node LOOKS (LOCK pill, dimmed hex), never whether its price is legible. The
-            // glyph tells unlock and upgrade apart without reading the number; the colour is exempt from
-            // DimIfUnlit, same idiom MV-516 used for the level pill (:863) — a price the player can't
-            // yet act on still has to stay legible.
-            if (hasCostToShow)
-            {
-                v.CostIcon.gameObject.SetActive(true);
-                v.CostIcon.sprite = owned ? WeaponHudIcons.UpgradeGlyph(32 * CrispUi.Resolution) : WeaponHudIcons.UnlockGlyph(32 * CrispUi.Resolution);
-                v.CostIcon.color = module;
-                v.CostText.gameObject.SetActive(true);
-                v.CostText.text = CellSpend.PotentialCellCost(ab.Id).ToString();
-                v.CostText.color = module;
-            }
-            else
-            {
-                v.CostIcon.gameObject.SetActive(false);
-                v.CostText.gameObject.SetActive(false);
-            }
+            // MV-1415: no cost tag beside the node any more - the first-purchase price rides on the sub line
+            // ("25 · NEW") and every other price lives on the detail panel's button.
+            v.CostIcon.gameObject.SetActive(false);
+            v.CostText.gameObject.SetActive(false);
 
             // MV-1117: u_slt's own generic cost tag would read the NODE's unlock/upgrade price (and
             // disappear once maxed, hasCostToShow's own rule) — a different number from what a Sentinel
             // deploy itself costs, which never goes away. u_slt carries its OWN price line instead (see
             // RefreshSentinelPriceLine, called from the owned/draftable branches below), so the generic
             // tag is always off for this one node to avoid showing two different "price" numbers at once.
-            if (ab.Id == "u_slt")
-            {
-                v.CostIcon.gameObject.SetActive(false);
-                v.CostText.gameObject.SetActive(false);
-            }
-
             if (owned)
             {
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
@@ -1622,7 +1641,7 @@ namespace MaxWorlds.UI
                 // node level, in both this owned branch and the draftable branch below.
                 v.PillText.text = ab.Id == "u_slt"
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
-                    : $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
+                    : $"{RigState.Level(ab.Id)} / {ab.MaxLevel}";
                 if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
@@ -1630,7 +1649,7 @@ namespace MaxWorlds.UI
                 // "too faint to see" (Lee, 2000x900 screenshot). Ink (near-white/bone) on that same
                 // backdrop clears WCAG's 4.5:1 floor at every family hue, unconditionally — the family
                 // identity stays on the border, which never had a legibility job to do.
-                v.PillText.color = ink;
+                v.PillText.color = ab.Id == "u_slt" ? ink : SubGrey;
                 v.Label.text = ab.Label;
                 v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.95f);
                 v.Icon.color = ink;
@@ -1672,11 +1691,11 @@ namespace MaxWorlds.UI
                 // tag already carries the price, so dropping it from this pill costs nothing.
                 v.PillText.text = ab.Id == "u_slt"
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
-                    : "NEW";   // MV-1410: the price rides on the cost tag; the pill says this is a first purchase
+                    : $"{CellSpend.PotentialCellCost(ab.Id)} · NEW";   // MV-1415: first purchase: price and NEW, in gold, on the sub line
                 if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
-                v.PillText.color = DimIfUnlit(module, categoryUnlocked);
+                v.PillText.color = DimIfUnlit(ab.Id == "u_slt" ? module : GoldColor, categoryUnlocked);
                 v.Label.text = ab.Label;
                 v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), categoryUnlocked);
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), categoryUnlocked);
@@ -2282,6 +2301,7 @@ namespace MaxWorlds.UI
             BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
             BuildCeremonyVisuals(_nodeParent);   // MV-605: built last too, so it renders above everything else
+            BuildQuitDialog();                   // MV-1415: over the whole RIG, top bar included
             ApplyTreeSelection();
         }
 
@@ -2340,8 +2360,14 @@ namespace MaxWorlds.UI
             _railTabs.Clear();
             _railOrder.Clear();
             _treePanel = null; _treePanelBorder = null; _treeSlotText = null; _treeNameText = null;
-            _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailLevel = null;
+            _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailValue = null; _detailLevel = null;
             _detailUpgrade = null; _detailUpgradeBg = null; _detailUpgradeText = null; _selectionRing = null; _detailPips.Clear();
+            if (_quitDialog != null)
+            {
+                if (Application.isPlaying) Destroy(_quitDialog.gameObject);
+                else DestroyImmediate(_quitDialog.gameObject);
+            }
+            _quitDialog = null; _quitRailButton = null; _quitConfirmButton = null; _quitCancelButton = null; _quitScrimButton = null;
             _draftScrim = null;
             _draftBand = null;
             _draftBandTitle = null;
@@ -2365,10 +2391,57 @@ namespace MaxWorlds.UI
         {
             public string Id, Family;
             public RectTransform Root;
-            public Image Bg, Border, Hex, Icon;
+            public Image Bg, Border, Hex, Icon, BarTrack, BarFill, Padlock;
             public TextMeshProUGUI Top, Name, Count;
             public Button Button;
+            public CanvasGroup Group;
         }
+
+        /// <summary>MV-1415: what a rail tab shows, resolved from live state - the bar fraction is owned nodes over
+        /// the category's nodes; a category is MAX once every node is at its cap; a locked one has no bar.</summary>
+        public readonly struct RailTabState
+        {
+            public readonly bool Locked, Maxed;
+            public readonly float Fraction;
+            public readonly int Owned, Total;
+            public RailTabState(bool locked, bool maxed, float fraction, int owned, int total)
+            { Locked = locked; Maxed = maxed; Fraction = fraction; Owned = owned; Total = total; }
+        }
+
+        /// <summary>MV-1415: the state a rail tab is showing for <paramref name="id"/>.</summary>
+        public RailTabState ComputeRailTabState(string id)
+        {
+            bool forge = id == ForgeTabId;
+            int owned = 0, total = 0;
+            bool allMax = true;
+            if (forge)
+            {
+                foreach (var fu in Fusions) { total++; if (RigFusionState.IsForged(fu.Id)) owned++; else allMax = false; }
+            }
+            else
+            {
+                foreach (var ab in Abilities)
+                {
+                    if (ab.Category != id) continue;
+                    total++;
+                    if (RigState.IsOwned(ab.Id)) owned++;
+                    int max = Mathf.Max(1, RigBoard.Exists(ab.Id) ? RigBoard.MaxLevel(ab.Id) : ab.MaxLevel);
+                    if (RigState.Level(ab.Id) < max) allMax = false;
+                }
+            }
+            bool locked = !forge && !RigState.IsCategoryUnlocked(id);
+            bool maxed = !locked && total > 0 && allMax;
+            return new RailTabState(locked, maxed, total > 0 ? Mathf.Clamp01((float)owned / total) : 0f, owned, total);
+        }
+
+        /// <summary>MV-1415: test access to a rail tab's resolved parts.</summary>
+        public Image RailTabBarTrack(string id) => _railTabs.TryGetValue(id, out var t) ? t.BarTrack : null;
+        public Image RailTabBarFill(string id) => _railTabs.TryGetValue(id, out var t) ? t.BarFill : null;
+        public Image RailTabPadlock(string id) => _railTabs.TryGetValue(id, out var t) ? t.Padlock : null;
+        public TextMeshProUGUI RailTabTopText(string id) => _railTabs.TryGetValue(id, out var t) ? t.Top : null;
+        public TextMeshProUGUI RailTabNameText(string id) => _railTabs.TryGetValue(id, out var t) ? t.Name : null;
+        public TextMeshProUGUI RailTabCountText(string id) => _railTabs.TryGetValue(id, out var t) ? t.Count : null;
+        public float RailTabAlpha(string id) => _railTabs.TryGetValue(id, out var t) && t.Group != null ? t.Group.alpha : 1f;
 
         private readonly Dictionary<string, RailTab> _railTabs = new Dictionary<string, RailTab>();
         private readonly List<string> _railOrder = new List<string>();
@@ -2494,13 +2567,156 @@ namespace MaxWorlds.UI
             _treeNameText.raycastTarget = false;
 
             for (int i = 0; i < ids.Count; i++) _railTabs[ids[i]] = BuildRailTab(parent, ids[i], _treeFrame.Tabs[i]);
+            BuildRailQuit(parent);
             BuildDetailPanel(parent);
+        }
+
+        // ------------------------------------------------------------------ MV-1415: QUIT TO MENU + confirm
+
+        private Button _quitRailButton, _quitConfirmButton, _quitCancelButton, _quitScrimButton;
+        private RectTransform _quitDialog;
+
+        /// <summary>MV-1415: the rail's QUIT TO MENU button, its rect in board frame units, and the confirm dialog.</summary>
+        public Button QuitRailButton => _quitRailButton;
+        public Rect QuitRailRect => _treeFrame.Quit;
+        public bool QuitDialogOpen => _quitDialog != null && _quitDialog.gameObject.activeSelf;
+        public Button QuitConfirmButton => _quitConfirmButton;
+        public Button QuitCancelButton => _quitCancelButton;
+        public Button QuitScrimButton => _quitScrimButton;
+
+        public void OpenQuitDialog()
+        {
+            if (_quitDialog == null) return;
+            _quitDialog.gameObject.SetActive(true);
+            _quitDialog.SetAsLastSibling();
+        }
+
+        public void CloseQuitDialog()
+        {
+            if (_quitDialog != null) _quitDialog.gameObject.SetActive(false);
+        }
+
+        private void ConfirmQuit()
+        {
+            CloseQuitDialog();
+            RunFlow.QuitToMenu();
+        }
+
+        private static readonly Color QuitText = new Color(1f, 0.38f, 0.40f);
+
+        private void BuildRailQuit(RectTransform parent)
+        {
+            var r = _treeFrame.Quit;
+            float corner = Mathf.Clamp(24f / (r.height * 0.5f), 0.05f, 0.5f);
+            var bg = AddImage(parent, CrispUi.RoundedBox(64, corner), new Color(0.07f, 0.04f, 0.05f, 1f), "Quit Rail Button");
+            PlaceTopLeft(bg.rectTransform, r);
+            bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+            _quitRailButton = bg.gameObject.AddComponent<Button>();
+            _quitRailButton.transition = Selectable.Transition.None;
+            _quitRailButton.onClick.AddListener(OpenQuitDialog);   // never quits on its own: the dialog's QUIT does
+
+            var border = AddImage(bg.rectTransform, CrispUi.RoundedBoxOutline(64, corner, 3f), QuitColor, "Border");
+            Stretch(border.rectTransform);
+            border.type = Image.Type.Sliced;
+            border.raycastTarget = false;
+
+            // power icon: a broken ring with a bar through the gap, in the same centred-stroke style as the other icons
+            var arc = new System.Text.StringBuilder("<path d=\"M");
+            for (int i = 0; i <= 10; i++)
+            {
+                float a = Mathf.Deg2Rad * (-55f + 290f * i / 10f);
+                string x = (Mathf.Sin(a) * 11f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string y = (-Mathf.Cos(a) * 11f).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                arc.Append(i == 0 ? $"{x},{y}" : $" L{x},{y}");
+            }
+            arc.Append("\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,-14 L0,-2\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\"/>");
+            int iconSize = 40;
+            var icon = AddImage(bg.rectTransform, CrispUi.VectorIcon(arc.ToString(), iconSize), QuitText, "Power Icon");
+            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
+            icon.rectTransform.anchoredPosition = new Vector2(34f, 0f);
+            icon.raycastTarget = false;
+
+            var label = AddText(bg.rectTransform, 30, QuitText, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            label.rectTransform.offsetMin = new Vector2(34f + iconSize + 8f, 4f);
+            label.rectTransform.offsetMax = new Vector2(-12f, -4f);
+            label.text = QuitLabel;
+            label.fontStyle = FontStyles.Bold;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 14f; label.fontSizeMax = 30f;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.raycastTarget = false;
+        }
+
+        /// <summary>MV-1415: the small "Quit to menu?" dialog over the RIG, in canvas units under the safe root
+        /// (above the top bar). QUIT is red and small; CANCEL is the default - larger and more prominent. A tap on the
+        /// scrim outside the dialog cancels.</summary>
+        private void BuildQuitDialog()
+        {
+            var parent = (RectTransform)_root.transform;
+            _quitDialog = NewRect("Quit Dialog", parent, Vector2.zero, Vector2.one);
+            Stretch(_quitDialog);
+
+            var scrim = AddImage(_quitDialog, CrispUi.Solid(), new Color(0f, 0f, 0f, 0.62f), "Quit Scrim");
+            Stretch(scrim.rectTransform);
+            scrim.raycastTarget = true;
+            _quitScrimButton = scrim.gameObject.AddComponent<Button>();
+            _quitScrimButton.transition = Selectable.Transition.None;
+            _quitScrimButton.onClick.AddListener(CloseQuitDialog);
+
+            var panel = AddImage(_quitDialog, CrispUi.RoundedBox(64, 0.12f), new Color(0.075f, 0.085f, 0.11f, 1f), "Quit Panel");
+            Anchor(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            panel.rectTransform.sizeDelta = new Vector2(300f, 130f);
+            panel.rectTransform.anchoredPosition = Vector2.zero;
+            panel.type = Image.Type.Sliced;
+            panel.raycastTarget = true;   // taps on the dialog itself are absorbed, never read as "outside"
+            var panelBorder = AddImage(panel.rectTransform, CrispUi.RoundedBoxOutline(64, 0.12f, 2f), new Color(1f, 1f, 1f, 0.18f), "Border");
+            Stretch(panelBorder.rectTransform);
+            panelBorder.type = Image.Type.Sliced;
+            panelBorder.raycastTarget = false;
+
+            var title = AddText(panel.rectTransform, 20, TextColor, TextAnchor.MiddleCenter);
+            Anchor(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            title.rectTransform.sizeDelta = new Vector2(280f, 36f);
+            title.rectTransform.anchoredPosition = new Vector2(0f, -16f);
+            title.text = "Quit to menu?";
+            title.fontStyle = FontStyles.Bold;
+            title.raycastTarget = false;
+
+            _quitConfirmButton = DialogButton(panel.rectTransform, "Quit Confirm Button", "QUIT", new Vector2(-72f, -26f), new Vector2(100f, 34f),
+                QuitColor, Color.white, 16);
+            _quitConfirmButton.onClick.AddListener(ConfirmQuit);
+            _quitCancelButton = DialogButton(panel.rectTransform, "Quit Cancel Button", "CANCEL", new Vector2(68f, -26f), new Vector2(136f, 44f),
+                new Color(0.86f, 0.89f, 0.94f, 1f), new Color(0.07f, 0.08f, 0.11f, 1f), 20);
+            _quitCancelButton.onClick.AddListener(CloseQuitDialog);
+
+            _quitDialog.gameObject.SetActive(false);
+        }
+
+        private static Button DialogButton(RectTransform parent, string name, string text, Vector2 pos, Vector2 size, Color fill, Color ink, int font)
+        {
+            var bg = AddImage(parent, CrispUi.RoundedBox(32, 0.3f), fill, name);
+            Anchor(bg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            bg.rectTransform.sizeDelta = size;
+            bg.rectTransform.anchoredPosition = pos;
+            bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+            var b = bg.gameObject.AddComponent<Button>();
+            b.transition = Selectable.Transition.None;
+            var t = AddText(bg.rectTransform, font, ink, TextAnchor.MiddleCenter);
+            Stretch(t.rectTransform);
+            t.text = text;
+            t.fontStyle = FontStyles.Bold;
+            t.raycastTarget = false;
+            return b;
         }
 
         // ------------------------------------------------------------------ MV-1411: detail panel
 
         private Image _detailPanel, _detailUpgradeBg, _selectionRing;
-        private TextMeshProUGUI _detailPath, _detailName, _detailEffect, _detailLevel, _detailUpgradeText;
+        private TextMeshProUGUI _detailPath, _detailName, _detailEffect, _detailValue, _detailLevel, _detailUpgradeText;
         private Button _detailUpgrade;
         private readonly List<Image> _detailPips = new List<Image>();
         private const float DetailPad = 20f, DetailButtonH = 110f;
@@ -2510,6 +2726,8 @@ namespace MaxWorlds.UI
         public TextMeshProUGUI DetailNameText => _detailName;
         public TextMeshProUGUI DetailLevelText => _detailLevel;
         public TextMeshProUGUI DetailEffectText => _detailEffect;
+        /// <summary>MV-1415: the effect's value line - current -> next in a larger weight, on its own line.</summary>
+        public TextMeshProUGUI DetailValueText => _detailValue;
         public TextMeshProUGUI DetailPathText => _detailPath;
         public Button DetailUpgradeButton => _detailUpgrade;
         public TextMeshProUGUI DetailUpgradeText => _detailUpgradeText;
@@ -2548,11 +2766,27 @@ namespace MaxWorlds.UI
             _detailName.raycastTarget = false;
 
             // The effect line (MV-1400 fills it): its space is reserved, its text stays empty here.
-            _detailEffect = AddText(tr, 28, TextColor, TextAnchor.UpperLeft);
-            PlaceTopLeft(_detailEffect.rectTransform, new Rect(DetailPad, 108f, inner, 60f));
-            _detailEffect.textWrappingMode = TextWrappingModes.Normal;
+            // MV-1415: the effect NAME on one line, then "current -> next" on its own line in a larger weight
+            // (18 pt = 36 frame units). Neither wraps: each shrinks to fit the panel instead.
+            _detailEffect = AddText(tr, 26, Dim, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailEffect.rectTransform, new Rect(DetailPad, 108f, inner, 34f));
+            _detailEffect.textWrappingMode = TextWrappingModes.NoWrap;
+            _detailEffect.enableAutoSizing = true;
+            _detailEffect.fontSizeMin = 14f; _detailEffect.fontSizeMax = 26f;
+            _detailEffect.overflowMode = TextOverflowModes.Ellipsis;
             _detailEffect.text = "";
             _detailEffect.raycastTarget = false;
+
+            _detailValue = AddText(tr, 36, TextColor, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailValue.rectTransform, new Rect(DetailPad, 144f, inner, 48f));
+            _detailValue.fontStyle = FontStyles.Bold;
+            _detailValue.textWrappingMode = TextWrappingModes.NoWrap;
+            _detailValue.enableAutoSizing = true;
+            _detailValue.fontSizeMin = 18f; _detailValue.fontSizeMax = 36f;
+            _detailValue.overflowMode = TextOverflowModes.Ellipsis;
+            _detailValue.richText = true;
+            _detailValue.text = "";
+            _detailValue.raycastTarget = false;
 
             int maxPips = 1;
             foreach (var ab in Abilities) maxPips = Mathf.Max(maxPips, RigBoard.Exists(ab.Id) ? RigBoard.MaxLevel(ab.Id) : ab.MaxLevel);
@@ -2565,7 +2799,7 @@ namespace MaxWorlds.UI
             }
 
             _detailLevel = AddText(tr, 28, Dim, TextAnchor.MiddleLeft);
-            PlaceTopLeft(_detailLevel.rectTransform, new Rect(DetailPad, 214f, inner, 36f));
+            PlaceTopLeft(_detailLevel.rectTransform, new Rect(DetailPad, 240f, inner, 36f));
             _detailLevel.raycastTarget = false;
 
             var btnRect = new Rect(DetailPad, d.height - DetailPad - DetailButtonH, inner, DetailButtonH);
@@ -2631,6 +2865,28 @@ namespace MaxWorlds.UI
             }
         }
 
+        private static readonly Color ValueNextGreen = new Color32(0x7C, 0xF5, 0x9A, 0xFF);
+
+        /// <summary>MV-1415: splits <see cref="DetailEffectLine"/>'s "name  now -> next" (or "name  now MAX", or a
+        /// bare unlock text) into the name line and the value line - now in white, next in green, MAX in gold.</summary>
+        private void SetDetailEffect(string line)
+        {
+            _detailEffect.text = "";
+            _detailValue.text = "";
+            if (string.IsNullOrEmpty(line)) return;
+            int split = line.IndexOf("  ", StringComparison.Ordinal);
+            if (split < 0) { _detailEffect.text = line; return; }
+            _detailEffect.text = line.Substring(0, split);
+            string value = line.Substring(split + 2);
+            string white = ColorUtility.ToHtmlStringRGB(TextColor), green = ColorUtility.ToHtmlStringRGB(ValueNextGreen), gold = ColorUtility.ToHtmlStringRGB(GoldColor);
+            int arrow = value.IndexOf('\u2192');
+            if (arrow >= 0)
+                _detailValue.text = $"<color=#{white}>{value.Substring(0, arrow).TrimEnd()}</color> \u2192 <color=#{green}>{value.Substring(arrow + 1).TrimStart()}</color>";
+            else if (value.EndsWith(RigEffectLines.Max, StringComparison.Ordinal))
+                _detailValue.text = $"<color=#{white}>{value.Substring(0, value.Length - RigEffectLines.Max.Length).TrimEnd()}</color>  <color=#{gold}>{RigEffectLines.Max}</color>";
+            else _detailValue.text = $"<color=#{white}>{value}</color>";
+        }
+
         /// <summary>Repaints the detail panel from the selected node's live state.</summary>
         private void RefreshDetail()
         {
@@ -2644,7 +2900,7 @@ namespace MaxWorlds.UI
             }
             bool has = node != null || fusion != null;
             _detailPath.gameObject.SetActive(has); _detailName.gameObject.SetActive(has);
-            _detailLevel.gameObject.SetActive(has); _detailUpgradeBg.gameObject.SetActive(has);
+            _detailLevel.gameObject.SetActive(has); _detailUpgradeBg.gameObject.SetActive(has); _detailEffect.gameObject.SetActive(has); _detailValue.gameObject.SetActive(has);
             if (_selectionRing != null) _selectionRing.gameObject.SetActive(has);
             foreach (var pip in _detailPips) pip.gameObject.SetActive(false);
             if (!has) return;
@@ -2657,7 +2913,7 @@ namespace MaxWorlds.UI
             _detailPath.text = (slot == catName ? slot : slot + " · " + catName).ToUpperInvariant();
             _detailPath.color = fam;
             _detailName.text = node != null ? node.Label : fusion.Label;
-            _detailEffect.text = node != null ? DetailEffectLine(node) : "";   // MV-1400
+            SetDetailEffect(node != null ? DetailEffectLine(node) : "");   // MV-1400 / MV-1415
 
             string buttonText; bool live;
             if (node != null)
@@ -2673,7 +2929,7 @@ namespace MaxWorlds.UI
                     bool show = i < max;
                     pip.gameObject.SetActive(show);
                     if (!show) continue;
-                    PlaceTopLeft(pip.rectTransform, new Rect(DetailPad + i * (w + gap), 176f, w, 16f));
+                    PlaceTopLeft(pip.rectTransform, new Rect(DetailPad + i * (w + gap), 206f, w, 16f));
                     pip.color = i < level ? fam : new Color(0.17f, 0.19f, 0.26f, 1f);
                 }
                 bool maxed = RigState.IsOwned(id) && !RigState.CanSpendPart(id);
@@ -2773,13 +3029,13 @@ namespace MaxWorlds.UI
 
             tab.Name = AddText(tab.Root, 32, TextColor, TextAnchor.UpperLeft);
             Anchor(tab.Name.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 1f));
-            tab.Name.rectTransform.offsetMin = new Vector2(textLeft, -60f);
+            tab.Name.rectTransform.offsetMin = new Vector2(textLeft, -Mathf.Min(60f, rect.height * 0.5f - 10f));
             tab.Name.rectTransform.offsetMax = new Vector2(-countW - 8f, 0f);
             tab.Name.fontStyle = FontStyles.Bold;
             tab.Name.enableAutoSizing = true;
-            tab.Name.fontSizeMin = 18f; tab.Name.fontSizeMax = 32f;
-            tab.Name.textWrappingMode = TextWrappingModes.Normal;   // long weapon names wrap to two lines and shrink rather than run into the count
-            tab.Name.overflowMode = TextOverflowModes.Truncate;
+            tab.Name.fontSizeMin = 12f; tab.Name.fontSizeMax = 32f;
+            tab.Name.textWrappingMode = TextWrappingModes.NoWrap;   // MV-1415: a tab name stays on ONE line and shrinks to fit ("SHOULDER RACK")
+            tab.Name.overflowMode = TextOverflowModes.Ellipsis;
             tab.Name.raycastTarget = false;
 
             tab.Count = AddText(tab.Root, 32, Dim, TextAnchor.MiddleRight);
@@ -2788,6 +3044,24 @@ namespace MaxWorlds.UI
             tab.Count.rectTransform.anchoredPosition = new Vector2(-14f, 0f);
             tab.Count.fontStyle = FontStyles.Bold;
             tab.Count.raycastTarget = false;
+
+            // MV-1415: 3 pt (6 frame unit) bar along the bottom edge - family colour filled to owned/total, gold
+            // and full when maxed, absent when locked - plus a padlock that replaces the count on a locked tab.
+            tab.BarTrack = AddImage(tab.Root, CrispUi.Solid(), new Color(1f, 1f, 1f, 0.12f), "Bar Track");
+            Anchor(tab.BarTrack.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f));
+            tab.BarTrack.rectTransform.offsetMin = new Vector2(20f, 8f);
+            tab.BarTrack.rectTransform.offsetMax = new Vector2(-20f, 14f);
+            tab.BarTrack.raycastTarget = false;
+            tab.BarFill = AddImage(tab.BarTrack.rectTransform, CrispUi.Solid(), Color.white, "Bar Fill");
+            Anchor(tab.BarFill.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
+            tab.BarFill.rectTransform.offsetMin = Vector2.zero; tab.BarFill.rectTransform.offsetMax = Vector2.zero;
+            tab.BarFill.raycastTarget = false;
+            tab.Padlock = AddImage(tab.Root, CrispUi.VectorIcon(PadlockSvg, 40), new Color(0.80f, 0.84f, 0.90f, 1f), "Padlock");
+            Anchor(tab.Padlock.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            tab.Padlock.rectTransform.sizeDelta = new Vector2(40f, 40f);
+            tab.Padlock.rectTransform.anchoredPosition = new Vector2(-18f, 0f);
+            tab.Padlock.raycastTarget = false;
+            tab.Group = tab.Root.gameObject.AddComponent<CanvasGroup>();
             return tab;
         }
 
@@ -2803,11 +3077,11 @@ namespace MaxWorlds.UI
                 bool unlocked = forge || RigState.IsCategoryUnlocked(tab.Id);
                 Color fam = RigBoardLayout.Colour(tab.Family);
                 Color ink = RigBoardLayout.Colour("ink");
-                float dim = unlocked ? 1f : RigBoardLayout.FamilyDimFactor;
+                float dim = 1f;   // MV-1415: a locked tab is dimmed as a whole (CanvasGroup), not element by element
 
                 tab.Bg.color = selected ? new Color(fam.r * 0.28f, fam.g * 0.28f, fam.b * 0.28f, 1f) : new Color(0.075f, 0.085f, 0.11f, 1f);
                 tab.Border.color = selected ? fam : Color.clear;
-                tab.Hex.color = new Color(fam.r, fam.g, fam.b, unlocked ? 1f : dim * 0.6f);
+                tab.Hex.color = new Color(fam.r, fam.g, fam.b, unlocked ? 1f : 0.5f);   // a locked hex sits a step below the tab's own 45% (the project is in linear colour space, where 45% alpha reads brighter than in the mock)
                 tab.Icon.color = new Color(ink.r, ink.g, ink.b, dim);
 
                 string name, top;
@@ -2818,26 +3092,20 @@ namespace MaxWorlds.UI
                     top = !unlocked ? "LOCKED" : (tab.Id == "PRIMARY" || tab.Id == "SECONDARY") ? tab.Id : "SYSTEMS";
                 }
                 tab.Top.text = top;
-                tab.Top.color = new Color(fam.r, fam.g, fam.b, unlocked ? 0.95f : 0.5f);
+                tab.Top.color = new Color(fam.r, fam.g, fam.b, 0.95f);
                 tab.Name.text = name;
-                tab.Name.color = new Color(TextColor.r, TextColor.g, TextColor.b, unlocked ? 1f : 0.55f);
+                tab.Name.color = TextColor;
 
-                int owned = 0, total = 0;
-                if (forge)
-                {
-                    foreach (var fu in Fusions) { total++; if (RigFusionState.IsForged(fu.Id)) owned++; }
-                }
-                else
-                {
-                    foreach (var ab in Abilities)
-                    {
-                        if (ab.Category != tab.Id) continue;
-                        total++;
-                        if (RigState.IsOwned(ab.Id)) owned++;
-                    }
-                }
-                tab.Count.text = $"{owned}/{total}";
-                tab.Count.color = new Color(ink.r, ink.g, ink.b, unlocked ? 0.8f : 0.4f);
+                var st = ComputeRailTabState(tab.Id);
+                tab.Group.alpha = st.Locked ? 0.45f : 1f;
+                tab.Padlock.gameObject.SetActive(st.Locked);
+                tab.Count.gameObject.SetActive(!st.Locked);
+                tab.BarTrack.gameObject.SetActive(!st.Locked);
+                tab.Count.text = st.Maxed ? "MAX" : $"{st.Owned}/{st.Total}";
+                tab.Count.color = st.Maxed ? GoldColor : new Color(ink.r, ink.g, ink.b, 0.8f);
+                tab.BarFill.color = st.Maxed ? GoldColor : fam;
+                tab.BarFill.rectTransform.anchorMax = new Vector2(st.Maxed ? 1f : st.Fraction, 1f);
+                tab.BarFill.rectTransform.offsetMin = Vector2.zero; tab.BarFill.rectTransform.offsetMax = Vector2.zero;
             }
 
             if (_treePanel == null || _selectedCategory == null || !_railTabs.TryGetValue(_selectedCategory, out var sel)) return;
@@ -2888,7 +3156,7 @@ namespace MaxWorlds.UI
                 if (!_treeSpots.TryGetValue(ab.Id, out var c) || !_treeSpots.TryGetValue(ab.Parent, out var p)) continue;
                 string id = $"conn:ab:{ab.Parent}>{ab.Id}";
                 const float w = 5f;
-                float y0 = p.Y + p.R * 0.92f, y1 = c.Y - c.R * 0.92f, ym = (y0 + y1) * 0.5f;
+                float y0 = p.Y + p.R * 0.92f + (p.RootAlone ? 0f : LabelBlockHeight(ab.Parent)), y1 = c.Y - c.R * 0.92f, ym = (y0 + y1) * 0.5f;   // MV-1415: a non-root parent's label hangs under it, so the line leaves from below the label
                 _connectors[id] = ConnectorBar(parent, id, p.X, y0, p.X, ym, w);
                 var extras = new List<Image>();
                 if (Mathf.Abs(c.X - p.X) > 0.5f) extras.Add(ConnectorBar(parent, id + "#h", Mathf.Min(p.X, c.X), ym, Mathf.Max(p.X, c.X), ym, w));
@@ -3194,30 +3462,47 @@ namespace MaxWorlds.UI
             float r = spot.R;
             BuildNodeShell(boardRoot, ab.Id, spot.X, spot.Y, r, HexSides, out var shell);
 
-            // MV-1410: tree chrome. The level pill sits beside the hex, the cost tag under it; a node with
-            // children carries its name to the LEFT (so the connector can leave from its bottom), a leaf
-            // carries it underneath.
+            // MV-1415: tree chrome. The name sits centred UNDER the hex with the level / price line below it
+            // (a root alone on its row carries both to its right); there are no side badges. The sub line is
+            // the old pill's text, so the pill itself is never drawn (u_slt keeps MV-1117's enlarged slots pill).
             float hexHalfW = r * Sqrt3 * 0.5f;
-            float pillX = hexHalfW + 8f + LevelPillW * 0.5f;
-            shell.PillBg.rectTransform.anchoredPosition = new Vector2(pillX, LevelPillH * 0.5f + 2f);
-            shell.PillBorder.rectTransform.anchoredPosition = shell.PillBg.rectTransform.anchoredPosition;
+            float pillX = 0f;
+            bool isSlt = ab.Id == "u_slt";
             {
+                var lrect = _treeLabelRects.TryGetValue(ab.Id, out var lr0) ? lr0 : new Rect(spot.X - 90f, spot.Y + r + 2f, 180f, LabelBlockH - 2f);
+                bool right = spot.RootAlone;
+                float lw = lrect.width;
+                float cx = lrect.center.x - spot.X;
+                float nameY = right ? lrect.y + 15f : lrect.y + 2f + LabelNameH * 0.5f;
+                float subY = right ? lrect.y + 45f : lrect.y + 2f + LabelNameH + LabelSubH * 0.5f;
+                var align = ToTmpAlignment(right ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter);
+
                 var lr = shell.Label.rectTransform;
                 shell.Label.enableAutoSizing = true;
-                shell.Label.fontSizeMin = 22f;
-                shell.Label.fontSizeMax = Mathf.RoundToInt(LabelFontSize);
-                shell.Label.textWrappingMode = TextWrappingModes.Normal;
-                if (spot.HasChildren)
+                shell.Label.fontSizeMin = 14f;
+                shell.Label.fontSizeMax = 26f;
+                shell.Label.textWrappingMode = TextWrappingModes.NoWrap;   // a label shrinks to fit, never wraps
+                shell.Label.overflowMode = TextOverflowModes.Ellipsis;
+                shell.Label.alignment = align;
+                lr.sizeDelta = new Vector2(lw, LabelNameH);
+                lr.anchoredPosition = new Vector2(cx, -(nameY - spot.Y));
+
+                var subPos = new Vector2(cx, -(subY - spot.Y));
+                foreach (var rt in new[] { shell.PillBg.rectTransform, shell.PillBorder.rectTransform })
                 {
-                    lr.sizeDelta = new Vector2(150f, 44f);
-                    lr.anchoredPosition = new Vector2(-(hexHalfW + 14f + 75f), 0f);
-                    shell.Label.alignment = ToTmpAlignment(TextAnchor.MiddleRight);
+                    rt.sizeDelta = new Vector2(lw, LabelSubH);
+                    rt.anchoredPosition = subPos;
                 }
-                else
+                if (!isSlt)
                 {
-                    lr.sizeDelta = new Vector2(180f, 44f);
-                    lr.anchoredPosition = new Vector2(0f, -(r + 4f + 22f));
-                    shell.Label.alignment = ToTmpAlignment(TextAnchor.UpperCenter);
+                    shell.PillBg.enabled = false;       // the pill chrome is gone; only its text remains, as the sub line
+                    shell.PillBorder.enabled = false;
+                    shell.PillText.enableAutoSizing = true;
+                    shell.PillText.fontSizeMin = 12f;
+                    shell.PillText.fontSizeMax = 24f;
+                    shell.PillText.textWrappingMode = TextWrappingModes.NoWrap;
+                    shell.PillText.overflowMode = TextOverflowModes.Ellipsis;
+                    shell.PillText.alignment = align;
                 }
             }
 
@@ -3253,9 +3538,9 @@ namespace MaxWorlds.UI
                 // the label below (MV1109RigBoardPanelHeightTests' own family-panel bound) is generic
                 // board geometry this one node must not disturb; growing toward the hex's own icon
                 // above costs nothing equivalent to guard.
-                float extraHeight = pillH - LevelPillH;
+                // MV-1415: the pill hangs under u_slt's name (centred), taking the sub line's place.
                 shell.PillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
-                shell.PillBg.rectTransform.anchoredPosition += new Vector2(0f, extraHeight * 0.5f);
+                shell.PillBg.rectTransform.anchoredPosition = new Vector2(0f, -(r + 2f + 2f + LabelNameH + 2f + pillH * 0.5f));
                 shell.PillBorder.rectTransform.sizeDelta = new Vector2(pillW, pillH);
                 shell.PillBorder.rectTransform.anchoredPosition = shell.PillBg.rectTransform.anchoredPosition;
 
@@ -3631,7 +3916,7 @@ namespace MaxWorlds.UI
         private const float TopBarButtonGap = 6f;
         private const float TopBarPadX = 10f;
         private const float TopBarCorner = 9f;
-        private const string CloseLabel = "\u00D7", QuitLabel = "QUIT";   // U+00D7: the multiplication sign is in the SDF font's Latin-1 range
+        private const string CloseLabel = "\u00D7", QuitLabel = "QUIT TO MENU";   // U+00D7: the multiplication sign is in the SDF font's Latin-1 range
 
         private static readonly Color GearBorder = new Color(0.20f, 0.24f, 0.31f, 1f);
         private static readonly Color BarButtonFill = new Color(0.075f, 0.09f, 0.12f, 1f);
@@ -3663,15 +3948,11 @@ namespace MaxWorlds.UI
             subtitle.characterSpacing = 3f;
             subtitle.text = "MAX'S WORKBENCH";
 
-            // Right to left: CLOSE, QUIT, settings gear, PARTS.
+            // Right to left: CLOSE, settings gear, PARTS (MV-1415: QUIT moved to the rail's foot).
             float cursor = -TopBarPadX;
             float closeW = TopBarButtonHeight;
             BuildCloseButton(bar, cursor, closeW);
             cursor -= closeW + TopBarButtonGap;
-
-            float quitW = Mathf.Max(TopBarButtonHeight, Mathf.Ceil(MeasureLabelWidth(bar, QuitLabel, TopBarButtonFont)) + 2f * 14f);
-            BuildQuitButton(bar, cursor, quitW);
-            cursor -= quitW + TopBarButtonGap;
 
             float gearW = TopBarButtonHeight;
             BuildSettingsButton(bar, cursor, gearW);
@@ -3700,6 +3981,7 @@ namespace MaxWorlds.UI
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
 
             _cellsBorder = AddChipBorder(cellsChip, CellsColor, "Parts Border", TopBarCorner);
+            if (_quitDialog != null) _quitDialog.SetAsLastSibling();   // MV-1415: the confirm dialog stays above the bar
         }
 
         /// <summary>MV-1408: sizes and places the top bar from the computed safe size — the bar is
@@ -3769,31 +4051,6 @@ namespace MaxWorlds.UI
             var label = AddText(bg.rectTransform, 26, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = CloseLabel;
-            label.fontStyle = FontStyles.Bold;
-            label.raycastTarget = false;
-        }
-
-        /// <summary>MV-257: abandons the run and returns to Home via <see cref="RunFlow.QuitToMenu"/>.
-        /// MV-1408: dark fill, red outline and red text, per the approved mockup.</summary>
-        private void BuildQuitButton(RectTransform bar, float rightEdge, float w)
-        {
-            float frac = Mathf.Clamp(TopBarCorner / (TopBarButtonHeight * 0.5f), 0.05f, 0.5f);
-            var bg = AddImage(bar, CrispUi.RoundedBox(32, frac), BarButtonFill, "Quit Button");
-            Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
-            bg.rectTransform.sizeDelta = new Vector2(w, TopBarButtonHeight);
-            bg.type = Image.Type.Sliced;
-            bg.raycastTarget = true;
-
-            var button = bg.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(RunFlow.QuitToMenu);
-
-            AddChipBorder(bg.rectTransform, QuitColor, "Quit Border", TopBarCorner);
-
-            var label = AddText(bg.rectTransform, Mathf.RoundToInt(TopBarButtonFont), new Color(1f, 0.38f, 0.40f), TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
-            label.text = QuitLabel;
             label.fontStyle = FontStyles.Bold;
             label.raycastTarget = false;
         }

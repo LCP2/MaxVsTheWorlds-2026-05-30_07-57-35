@@ -1571,8 +1571,9 @@ namespace MaxWorlds.Dev
                 {
                     var r = weapons.RailTabRect(id);
                     bool lit = id == "FORGE" || RigState.IsCategoryUnlocked(id);
-                    // The tab's hex only (its left 24..100 frame units, middle 70) - the text beside it is the same on every tab.
-                    float mean = RigBoardConformance.MeanLuminance(tex, r.xMin + 24f, r.xMin + 100f, r.center.y - 35f, r.center.y + 35f, transform: transform);
+                    // The tab's hex only (the middle of it) - the text beside it is the same on every tab. MV-1415: a locked tab is dimmed
+                    // as a whole (about 45% opacity), so the window stays inside the hex, clear of the tab's own background.
+                    float mean = RigBoardConformance.MeanLuminance(tex, r.xMin + 30f, r.xMin + 72f, r.center.y - 28f, r.center.y + 28f, transform: transform);
                     (lit ? litVals : unlitVals).Add(mean);
                 }
             litMean = Average(litVals);

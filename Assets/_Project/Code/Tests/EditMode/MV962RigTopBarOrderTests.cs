@@ -21,7 +21,7 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class MV962RigTopBarOrderTests
     {
         [Test]
-        public void TopBarOrderIsPartsGearQuitClose()
+        public void TopBarOrderIsPartsGearClose()
         {
             WeaponSystemState.Reset();
             RigState.Reset();
@@ -36,21 +36,18 @@ namespace MaxWorlds.Tests.EditMode
 
                 var close = FindRect(go, "Close Button");
                 var parts = FindRect(go, "Parts Chip");
-                var quit = FindRect(go, "Quit Button");
                 var gear = FindRect(go, "Settings Button");
                 Assert.That(gear, Is.Not.Null, "fixture: the settings gear must exist");
                 Assert.That(close, Is.Not.Null, "fixture: CLOSE must exist");
                 Assert.That(parts, Is.Not.Null, "fixture: the PARTS chip must exist");
-                Assert.That(quit, Is.Not.Null, "fixture: QUIT must exist");
+                Assert.That(FindRect(go, "Quit Button"), Is.Null, "MV-1415: QUIT is no longer in the top bar");
 
                 Rect closeRect = WorldRect(close);
                 Rect partsRect = WorldRect(parts);
-                Rect quitRect = WorldRect(quit);
 
                 Rect gearRect = WorldRect(gear);
                 Assert.That(partsRect.xMax, Is.LessThanOrEqualTo(gearRect.xMin), "PARTS must sit entirely left of the settings gear");
-                Assert.That(gearRect.xMax, Is.LessThanOrEqualTo(quitRect.xMin), "the settings gear must sit entirely left of QUIT");
-                Assert.That(quitRect.xMax, Is.LessThanOrEqualTo(closeRect.xMin), "QUIT must sit entirely left of CLOSE");
+                Assert.That(gearRect.xMax, Is.LessThanOrEqualTo(closeRect.xMin), "the settings gear must sit entirely left of CLOSE");
             }
             finally
             {

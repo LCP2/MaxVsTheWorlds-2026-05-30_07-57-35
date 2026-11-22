@@ -38,14 +38,13 @@ namespace MaxWorlds.Tests.EditMode
                 var close = FindRect(go, "Close Button");
                 var parts = FindRect(go, "Parts Chip");
                 var settings = FindRect(go, "Settings Button");
-                var quit = FindRect(go, "Quit Button");
                 Assert.That(close, Is.Not.Null); Assert.That(parts, Is.Not.Null);
                 Assert.That(settings, Is.Not.Null, "RIG top bar must carry a Settings Button");
-                Assert.That(quit, Is.Not.Null);
+                Assert.That(FindRect(go, "Quit Button"), Is.Null, "MV-1415: QUIT left the top bar");
 
                 // AC1: equal height (MV-1408: widths now differ — the gear and X are square), right-to-left
                 // order CLOSE, QUIT, SETTINGS, PARTS.
-                var all = new[] { close, quit, settings, parts };
+                var all = new[] { close, settings, parts };
                 for (int i = 1; i < all.Length; i++)
                 {
                     Assert.That(all[i].rect.height, Is.EqualTo(all[0].rect.height).Within(1f), $"{all[i].name} height");

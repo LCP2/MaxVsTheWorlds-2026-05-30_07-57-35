@@ -69,7 +69,7 @@ namespace MaxWorlds.Tests.EditMode
                     var barRect = LocalRect(root, bar);
                     Inside(problems, tag + " top bar", barRect, safe);
 
-                    var buttons = new[] { "Close Button", "Quit Button", "Settings Button", "Parts Chip" };
+                    var buttons = new[] { "Close Button", "Settings Button", "Parts Chip" };
                     foreach (var name in buttons)
                     {
                         var rt = Find(go, name);

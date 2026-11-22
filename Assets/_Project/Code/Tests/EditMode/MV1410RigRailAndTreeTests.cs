@@ -74,7 +74,7 @@ namespace MaxWorlds.Tests.EditMode
                         var tab = LocalRect(root, Find(go, "Tab " + id));
                         string what = $"world {world} tab {id}";
                         Inside(problems, what, tab, safe);
-                        if (tab.height < 50f - 0.01f) problems.AppendLine($"{what} is {tab.height:0.##} high (< 50)");
+                        if (tab.height < 44f - 0.01f) problems.AppendLine($"{what} is {tab.height:0.##} high (< 44)");   // MV-1415: the rail also carries QUIT TO MENU (36+ pt), so six tabs get 44 pt (the iOS tap-target floor), not 50
                     }
 
                     foreach (var id in tabs)
