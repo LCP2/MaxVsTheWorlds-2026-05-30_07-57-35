@@ -1435,7 +1435,7 @@ namespace MaxWorlds.VFX
         /// that DO reach Lunge but shouldn't strike.</summary>
         private static bool StrikesOnLunge(EnemyKind kind) =>
             kind != EnemyKind.Gunner && kind != EnemyKind.Launcher &&
-            kind != EnemyKind.Bolter && kind != EnemyKind.Turret && kind != EnemyKind.Orbital;
+            kind != EnemyKind.Bolter && kind != EnemyKind.Turret && kind != EnemyKind.Orbital && kind != EnemyKind.ArcStriker;
 
         /// <summary>
         /// The Gunner's laser, drawn (MV-312) — before this, <see cref="BeamGeometry"/> and

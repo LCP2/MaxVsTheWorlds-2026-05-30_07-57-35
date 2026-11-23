@@ -234,6 +234,9 @@ namespace MaxWorlds.Arena
         /// Every garrisoned Orbital must be covered by a count here (MapValidation's garrison-vs-composition rule).</summary>
         public int orbital;
 
+        /// <summary>MV-1426: ARC STRIKER — authored-composition only, same footing as <see cref="orbital"/>.</summary>
+        public int arcstriker;
+
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
         /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
         /// once ANY area in the array carries the field, even ones whose JSON omits it entirely (a
@@ -244,7 +247,7 @@ namespace MaxWorlds.Arena
             rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
             blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0 ||
             dreadnought > 0 || skitter > 0 || breaker > 0 || tractor > 0 || welder > 0 || projector > 0 ||
-            jammer > 0 || orbital > 0;
+            jammer > 0 || orbital > 0 || arcstriker > 0;
 
         /// <summary>MV-1220: explicit opt-in, default false. JsonUtility's 0-means-"not authored"
         /// idiom cannot tell "this area authors zero Rushers on purpose" (world1's a9: authored
@@ -297,12 +300,13 @@ namespace MaxWorlds.Arena
                 case MaxWorlds.Enemies.EnemyKind.Projector: projector++; break;
                 case MaxWorlds.Enemies.EnemyKind.Jammer: jammer++; break;
                 case MaxWorlds.Enemies.EnemyKind.Orbital: orbital++; break;
+                case MaxWorlds.Enemies.EnemyKind.ArcStriker: arcstriker++; break;
                 default: throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "WorldComposition.Add: unhandled EnemyKind");
             }
         }
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought, skitter, breaker, tractor, welder, projector, jammer, orbital);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret, dreadnought, skitter, breaker, tractor, welder, projector, jammer, orbital, arcstriker);
 
         /// <summary>MV-1220: carries THIS composition's authored-composition-only counts (bolter/
         /// lurker/turret/sludger/charger/dreadnought) onto <paramref name="dialSolved"/>'s
@@ -313,7 +317,7 @@ namespace MaxWorlds.Arena
             new DifficultyEngine.Composition(
                 dialSolved.Rusher, dialSolved.Bruiser, dialSolved.Heavy, dialSolved.Brute,
                 dialSolved.Gunner, dialSolved.Launcher, dialSolved.Blinker,
-                bolter, lurker, sludger, charger, turret, dreadnought, skitter, breaker, tractor, welder, projector, jammer, orbital);
+                bolter, lurker, sludger, charger, turret, dreadnought, skitter, breaker, tractor, welder, projector, jammer, orbital, arcstriker);
 
         /// <summary>MV-1234: the inverse of <see cref="ToEngineComposition"/> — a solved
         /// <see cref="DifficultyEngine.Composition"/> (e.g. from <see cref="WorldConfig.SolveComposition"/>'s
@@ -328,7 +332,7 @@ namespace MaxWorlds.Arena
                 gunner = c.Gunner, launcher = c.Launcher, blinker = c.Blinker, bolter = c.Bolter,
                 lurker = c.Lurker, turret = c.Turret, sludger = c.Sludger, charger = c.Charger,
                 dreadnought = c.Dreadnought, skitter = c.Skitter, breaker = c.Breaker, tractor = c.Tractor,
-                welder = c.Welder, projector = c.Projector, jammer = c.Jammer, orbital = c.Orbital,
+                welder = c.Welder, projector = c.Projector, jammer = c.Jammer, orbital = c.Orbital, arcstriker = c.ArcStriker,
             };
     }
 
@@ -1321,6 +1325,9 @@ namespace MaxWorlds.Arena
         // MV-1344: same optional/fallback footing as jammer above.
         public WorldEnemyTypeEntry orbital;
 
+        // MV-1426: same optional/fallback footing as orbital above.
+        public WorldEnemyTypeEntry arcstriker;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -1343,6 +1350,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Projector => projector,
                 EnemyKind.Jammer => jammer,
                 EnemyKind.Orbital => orbital,
+                EnemyKind.ArcStriker => arcstriker,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
@@ -1359,7 +1367,7 @@ namespace MaxWorlds.Arena
             c.Lurker * Thv(EnemyKind.Lurker) + c.Sludger * Thv(EnemyKind.Sludger) +
             c.Charger * Thv(EnemyKind.Charger) + c.Dreadnought * Thv(EnemyKind.Dreadnought) +
             c.Skitter * Thv(EnemyKind.Skitter) + c.Breaker * Thv(EnemyKind.Breaker) +
-            c.Projector * Thv(EnemyKind.Projector) + c.Jammer * Thv(EnemyKind.Jammer) + c.Orbital * Thv(EnemyKind.Orbital);
+            c.Projector * Thv(EnemyKind.Projector) + c.Jammer * Thv(EnemyKind.Jammer) + c.Orbital * Thv(EnemyKind.Orbital) + c.ArcStriker * Thv(EnemyKind.ArcStriker);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170

@@ -63,6 +63,9 @@ namespace MaxWorlds.Audio
 
             // MV-1421: a canister's blast - appended, never inserted.
             CanisterExplosion,
+
+            // MV-1426: an ARC STRIKER's lightning crack - appended, never inserted.
+            ArcStrikeCrack,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -114,6 +117,7 @@ namespace MaxWorlds.Audio
             { Cue.ViewportRising, "Viewport rising" },
             { Cue.ShieldBlocked, "Blocked hit" },
             { Cue.CanisterExplosion, "Canister explosion" },
+            { Cue.ArcStrikeCrack, "Arc strike crack" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -160,6 +164,7 @@ namespace MaxWorlds.Audio
             { Cue.ViewportRising, 4 },
             { Cue.ShieldBlocked, 8 },
             { Cue.CanisterExplosion, 6 },
+            { Cue.ArcStrikeCrack, 6 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -448,6 +453,13 @@ namespace MaxWorlds.Audio
                 P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.05f, lowPass: 6000f, volume: 1f, seed: 19),
                 P(SfxWaveform.Sine, freq: 48f, slide: -12f, attack: 0.003f, sustain: 0.1f, decay: 0.45f, volume: 1f),
                 P(SfxWaveform.Noise, attack: 0.02f, sustain: 0.05f, decay: 0.75f, lowPass: 220f, volume: 0.9f, seed: 20),
+            },
+
+            // MV-1426: a short, bright crack - a high noise snap over a fast falling square zap.
+            [Cue.ArcStrikeCrack] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.09f, lowPass: 9000f, volume: 0.9f, seed: 31),
+                P(SfxWaveform.Square, freq: 2600f, slide: -1800f, attack: 0.001f, sustain: 0.02f, decay: 0.12f, duty: 0.3f, lowPass: 7000f, volume: 0.6f),
             },
         };
 

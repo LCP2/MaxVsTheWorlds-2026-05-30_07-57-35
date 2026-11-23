@@ -396,6 +396,10 @@ namespace MaxWorlds.Enemies
             // MV-1344: nor a previous ORBITAL life's missiles/cycle — and its HP slider scaling restarts.
             _orbital?.Reset();
             _orbitalHpApplied = OrbitalTuning.DefaultRobotHp;
+            // MV-1426: nor a previous ARC STRIKER life's mark, hold anchor or retreat.
+            _arcStriker?.Cancel();
+            _arcHomeSet = false;
+            _arcRetreating = false;
             // MV-1228: a pooled instance must not carry a previous Breaker life's attack choice or
             // ram hit-list into this one either.
             _breakerIsRam = false;
@@ -774,6 +778,8 @@ namespace MaxWorlds.Enemies
         public float TelegraphProgress =>
             Kind == EnemyKind.Dreadnought
                 ? DreadnoughtTurretWarnProgress
+                : Kind == EnemyKind.ArcStriker
+                    ? (_arcStriker != null ? _arcStriker.MarkProgress : 0f)
                 : Kind == EnemyKind.Orbital
                     ? (_orbital != null ? Mathf.Max(_orbital.GlowProgress, _orbital.SpinUpProgress < 1f ? _orbital.SpinUpProgress * 0.5f : 0f) : 0f)
                 : Current == State.Telegraph && telegraphTime > 0f
@@ -1101,6 +1107,7 @@ namespace MaxWorlds.Enemies
             // MV-1286: a captured Jammer's own field drops at once, same reasoning.
             HideJammerFieldImmediate();
             _orbital?.PopAll();   // MV-1344: a captured ORBITAL's missiles pop, and it stops firing.
+            _arcStriker?.Cancel();   // MV-1426: a captured ARC STRIKER's live mark drops with no strike.
             // MV-1285: a captured Linked elite's tether snaps too, same as on death — "not captured"
             // is one of the partner-eligibility conditions in TryEstablishLink, so this also keeps a
             // captured ally from ever being picked as a fresh pairing candidate.
@@ -2350,6 +2357,9 @@ namespace MaxWorlds.Enemies
             // captured ORBITAL stops firing (TryConvert pops its missiles).
             if (Kind == EnemyKind.Orbital && Team == Team.Enemy) TickOrbital(dt);
 
+            // MV-1426: ARC STRIKER's mark/strike cycle ticks every awake frame regardless of Current state.
+            if (Kind == EnemyKind.ArcStriker && Team == Team.Enemy) TickArcStrikerWeapon(dt);
+
             // MV-1281 point 3: a Shielded elite keeps turning to face Max regardless of Current state
             // (Telegraph/Recover/Search included, not just Chase) — see TickShieldedFacing's own doc
             // comment for the awake/lunge gate (which lives inside that method, not here) and why
@@ -2411,8 +2421,10 @@ namespace MaxWorlds.Enemies
                     case State.Chase:    if (Kind == EnemyKind.Welder) TickWelderRepair(dt);
                                          else if (Kind == EnemyKind.Projector) TickProjectorHangBack(dt);
                                          else if (Kind == EnemyKind.Jammer) TickJammerApproach(dt);
+                                         else if (Kind == EnemyKind.ArcStriker) TickArcStrikerMove(dt);
                                          else TickChase(dt); break;
-                    case State.Search:   TickSearch(dt);   break;
+                    case State.Search:   if (Kind == EnemyKind.ArcStriker) TickArcStrikerMove(dt);
+                                         else TickSearch(dt); break;
                     case State.Telegraph: TickTelegraph(dt); break;
                     case State.Lunge:    TickLunge(dt);    break;
                     case State.Recover:  TickRecover(dt);  break;
@@ -4769,6 +4781,82 @@ namespace MaxWorlds.Enemies
             _orbital.Tick(dt, feet, target, AreaIndex);
         }
 
+        // --- MV-1426: ARC STRIKER hold / retreat / mark -----------------------------------------
+
+        private ArcStrikerBattery _arcStriker;
+
+        /// <summary>The mark/strike weapon (null until the first awake tick) — read by the rig and tests.</summary>
+        public ArcStrikerBattery ArcStrike => _arcStriker;
+
+        private Vector3 _arcHome;
+        private bool _arcHomeSet;
+        private bool _arcRetreating;
+
+        /// <summary>Retreat begins inside this distance from Max ...</summary>
+        public const float ArcStrikerRetreatBelowMeters = 8f;
+        /// <summary>... and ends (the robot holds where it stands) beyond this one.</summary>
+        public const float ArcStrikerHoldBeyondMeters = 10f;
+        /// <summary>How far from its hold point it may drift before walking back.</summary>
+        public const float ArcStrikerHoldRadiusMeters = 1.5f;
+
+        /// <summary>Marks Max when he is within 18 m and in sight and the 4 s cooldown is ready. The strike
+        /// ignores cover (it comes from above) so only the mark needs sight; once placed it lands regardless.
+        /// A target on another combat level is never marked (MV-944 rule).</summary>
+        private void TickArcStrikerWeapon(float dt)
+        {
+            _arcStriker ??= new ArcStrikerBattery();
+            if (!_arcHomeSet) { _arcHome = transform.position; _arcHomeSet = true; }
+
+            bool sameLevel = target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position);
+            Vector3 feet = transform.position - Vector3.up * (_cc != null ? _cc.height * 0.5f : 0.8f);
+            _arcStriker.Tick(dt, feet, sameLevel ? target : null, _sight.HasSight);
+        }
+
+        /// <summary>Hold within 1.5 m of the spawn point until Max is within 8 m; then walk directly away from
+        /// him until he is more than 10 m off, and hold wherever that leaves it. Replaces Chase/Search, so it
+        /// never telegraphs or lunges.</summary>
+        private void TickArcStrikerMove(float dt)
+        {
+            if (target == null) { AcquireTarget(); return; }
+            if (!_arcHomeSet) { _arcHome = transform.position; _arcHomeSet = true; }
+
+            Vector3 here = transform.position; here.y = 0f;
+            Vector3 maxPos = target.position; maxPos.y = 0f;
+            Vector3 away = here - maxPos;
+            float dist = away.magnitude;
+
+            if (!_arcRetreating && dist < ArcStrikerRetreatBelowMeters) _arcRetreating = true;
+            else if (_arcRetreating && dist > ArcStrikerHoldBeyondMeters)
+            {
+                _arcRetreating = false;
+                _arcHome = transform.position;   // holds where it stands
+            }
+
+            Vector3 dir;
+            float speed = EffectiveMoveSpeed;
+            if (_arcRetreating)
+            {
+                dir = dist > 0.001f ? away / dist : Vector3.forward;
+            }
+            else
+            {
+                Vector3 toHome = _arcHome - transform.position; toHome.y = 0f;
+                float homeDist = toHome.magnitude;
+                if (homeDist <= ArcStrikerHoldRadiusMeters * 0.5f) { FaceMax(dt, maxPos, here); return; }
+                dir = toHome / homeDist;
+                speed = Mathf.Min(speed, homeDist / Mathf.Max(dt, 1e-4f));
+            }
+
+            RotateToward(dir, dt);
+            CharacterControllerMotion.SafeMove(_cc, dir * (speed * dt));
+        }
+
+        private void FaceMax(float dt, Vector3 maxPos, Vector3 here)
+        {
+            Vector3 to = maxPos - here;
+            if (to.sqrMagnitude > 1e-4f) RotateToward(to.normalized, dt);
+        }
+
         /// <summary>World-space bearing in degrees from <paramref name="from"/> to <paramref name="to"/>,
         /// 0 along +Z, matching <see cref="Quaternion.LookRotation(Vector3)"/>'s own convention — the
         /// same angle a body facing that direction reads on its own <c>transform.eulerAngles.y</c>.</summary>
@@ -5173,6 +5261,7 @@ namespace MaxWorlds.Enemies
             HideJammerFieldImmediate();
             // MV-1344: an ORBITAL's missiles pop within 0.3 s of its death.
             _orbital?.PopAll();
+            _arcStriker?.Cancel();   // MV-1426: a dead ARC STRIKER's live mark drops with no strike.
             // MV-1285 point 4: this robot's death snaps the Linked tether and starts its live
             // partner's own revenge-heal countdown — read LinkedPartner BEFORE BreakLink clears it.
             if (IsElite && Affix == EliteAffix.Linked && LinkedPartner != null && LinkedPartner.IsAlive)

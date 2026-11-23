@@ -89,6 +89,10 @@ namespace MaxWorlds.Enemies
         /// low-damage obstacles; priced on the same placeholder footing as the Jammer.</summary>
         public const float Orbital = 1.8f;
 
+        /// <summary>MV-1426: ARC STRIKER — 160 HP artillery that threatens 60 a strike every 4 s from range; priced
+        /// above the Gunner (3.0) and below the Heavy.</summary>
+        public const float ArcStriker = 3.6f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -110,6 +114,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Projector => Projector,
             EnemyKind.Jammer => Jammer,
             EnemyKind.Orbital => Orbital,
+            EnemyKind.ArcStriker => ArcStriker,
             _ => Rusher,
         };
     }

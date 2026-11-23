@@ -704,6 +704,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1375ProjectorLimeLook());
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
+            Add(BuildMv1426ArcStrikerMark());
             return d;
         }
 
@@ -2557,6 +2558,84 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1423-city-a3", Run) },
+            };
+        }
+
+        /// <summary>MV-1426 AC2: ONE capture of the City a6 ARC STRIKER with a live mark circle under Max, at the
+        /// play camera. Run via <c>cc-mv1426-capture.bat</c>; writes <c>Logs/MV-1426-arc-striker-mark.png</c>.</summary>
+        private static CapturePreset BuildMv1426ArcStrikerMark()
+        {
+            string found = "no ARC STRIKER found";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a6"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a6\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var player = FindFirstObjectByType<PlayerController>();
+                // The a6 garrison only spawns when Max walks in through the gate (not on a teleport), so stage ONE
+                // real ARC STRIKER through the shipped spawner path, 9 m beyond Max in the open.
+                RobotEnemy striker = null;
+                var spawner = FindFirstObjectByType<EnemySpawner>();
+                if (spawner == null) spawner = new GameObject("MV1426 Spawner").AddComponent<EnemySpawner>();
+                var spawned = spawner.SpawnExact(EnemyKind.ArcStriker, 1, 0f, true, true);
+                if (spawned.Count > 0) striker = spawned[0];
+                if (striker != null && player != null)
+                {
+                    Vector3 pp = player.transform.position;
+                    CharacterControllerSafety.SafeReposition(striker.GetComponent<CharacterController>(), new Vector3(pp.x, pp.y, pp.z + 9f), "MV1426CaptureStriker");
+                }
+                if (striker == null || player == null)
+                    throw new CaptureAbortException($"MV-1426: no ARC STRIKER ({(striker == null ? "none" : "found")}) / player ({(player == null ? "none" : "found")}) after jumping to City a6; robots in scene: {FindObjectsByType<RobotEnemy>(FindObjectsInactive.Include).Length}");
+
+                Vector3 sp = striker.transform.position;
+                Vector3 p = player.transform.position;
+                float until = Time.time + 12f;
+                while (Time.time < until && !(striker.ArcStrike != null && striker.ArcStrike.IsMarking && striker.ArcStrike.MarkProgress > 0.4f))
+                    yield return null;
+                found = $"ARC STRIKER at {sp}, Max at {p}, marking={(striker.ArcStrike != null && striker.ArcStrike.IsMarking)}, strikes={(striker.ArcStrike != null ? striker.ArcStrike.Strikes : -1)}";
+
+                Time.timeScale = 0f;   // hold the live mark for the frame
+                Vector3 focus = (sp + p) * 0.5f;
+                float pitch = 60f, distance = 24f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1426arcstrikermark",
+                LogTag = "[MV1426Capture]",
+                Flag = "-mv1426shot",
+                ArmFile = "Temp/mv1426.arm",
+                HeadlessMarker = "Temp/mv1426.headless",
+                DoneFileName = "_mv1426_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1426-arc-striker-mark", NoSetup) },
+                ExtraReport = () => found + "\n",
             };
         }
 

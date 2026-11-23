@@ -17,7 +17,8 @@ namespace MaxWorlds.Enemies
     // Projector (MV-1279) follows it too — a hang-back support drone that never attacks, appended after Welder.
     // Jammer (MV-1280) follows it too — a standoff-circling drone that never attacks, appended after Projector.
     // Orbital (MV-1344) follows it too — a standoff-circling light-missile spiral shooter, appended after Jammer.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector, Jammer, Orbital }
+    // ArcStriker (MV-1426) follows it too — a long-range lightning artillery robot, appended after Orbital.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector, Jammer, Orbital, ArcStriker }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -50,6 +51,7 @@ namespace MaxWorlds.Enemies
                 case "projector": kind = EnemyKind.Projector; return true;
                 case "jammer": kind = EnemyKind.Jammer; return true;
                 case "orbital": kind = EnemyKind.Orbital; return true;
+                case "arcstriker": kind = EnemyKind.ArcStriker; return true;
                 default: kind = default; return false;
             }
         }
@@ -767,6 +769,22 @@ namespace MaxWorlds.Enemies
             standoffRange: 8f,
             displayName: "ORBITAL");
 
+        /// <summary>
+        /// ARC STRIKER (MV-1426): long-range lightning artillery. It marks a 2.5 m circle under Max
+        /// and 1.0 s later a lightning column hits it for 60 (<see cref="ArcStrikerBattery"/>). It holds
+        /// near its spawn at the back of an area, walks away when Max comes within 8 m, and never enters
+        /// Telegraph/Lunge (<see cref="RobotEnemy"/> replaces the Chase state with its own hold/retreat).
+        /// No contact damage. <see cref="LungeRange"/> doubles as the 18 m mark range.
+        /// </summary>
+        public static EnemyArchetype ArcStriker => new EnemyArchetype(
+            EnemyKind.ArcStriker, EnemyShape.Capsule, new Vector3(0.9f, 1.4f, 0.9f),
+            colliderHeight: 1.6f, colliderRadius: 0.45f,
+            moveSpeed: 0.7f, maxHealth: 160f,
+            contactDamage: 0f, contactRadius: 0.5f,
+            lungeRange: 18f, telegraphTime: 1.0f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
+            knockbackDecay: 28f,
+            displayName: "ARC STRIKER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -788,6 +806,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Projector => Projector,
             EnemyKind.Jammer => Jammer,
             EnemyKind.Orbital => Orbital,
+            EnemyKind.ArcStriker => ArcStriker,
             _ => Rusher,
         };
 

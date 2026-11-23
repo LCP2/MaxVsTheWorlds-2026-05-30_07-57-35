@@ -113,16 +113,19 @@ namespace MaxWorlds.Enemies
             /// <summary>MV-1344: ORBITAL — same "authored-composition only" footing as <see cref="Jammer"/>.</summary>
             public readonly int Orbital;
 
+            /// <summary>MV-1426: ARC STRIKER — authored-composition only, same footing as <see cref="Orbital"/>.</summary>
+            public readonly int ArcStriker;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
                 int sludger = 0, int charger = 0, int turret = 0, int dreadnought = 0, int skitter = 0,
-                int breaker = 0, int tractor = 0, int welder = 0, int projector = 0, int jammer = 0, int orbital = 0)
+                int breaker = 0, int tractor = 0, int welder = 0, int projector = 0, int jammer = 0, int orbital = 0, int arcStriker = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
                 Sludger = sludger; Charger = charger; Turret = turret; Dreadnought = dreadnought;
                 Skitter = skitter; Breaker = breaker; Tractor = tractor; Welder = welder; Projector = projector;
-                Jammer = jammer; Orbital = orbital;
+                Jammer = jammer; Orbital = orbital; ArcStriker = arcStriker;
             }
 
             /// <summary>MV-1347: a copy of this composition with ONLY the Rusher count replaced; every other
@@ -131,7 +134,7 @@ namespace MaxWorlds.Enemies
             public Composition WithRusher(int rusher) =>
                 new Composition(rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker,
                     Sludger, Charger, Turret, Dreadnought, Skitter, Breaker, Tractor, Welder, Projector,
-                    Jammer, Orbital);
+                    Jammer, Orbital, ArcStriker);
 
             /// <summary>MV-1347: this composition's count for <paramref name="kind"/>. Lets callers walk
             /// <c>Enum.GetValues(typeof(EnemyKind))</c> instead of naming every kind.</summary>
@@ -159,13 +162,14 @@ namespace MaxWorlds.Enemies
                     case EnemyKind.Projector: return Projector;
                     case EnemyKind.Jammer: return Jammer;
                     case EnemyKind.Orbital: return Orbital;
+                    case EnemyKind.ArcStriker: return ArcStriker;
                     default: throw new System.ArgumentOutOfRangeException(nameof(kind), kind, "Composition.CountOf: unhandled EnemyKind");
                 }
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor + Welder + Projector + Jammer + Orbital;
+                Sludger + Charger + Turret + Dreadnought + Skitter + Breaker + Tractor + Welder + Projector + Jammer + Orbital + ArcStriker;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -189,7 +193,7 @@ namespace MaxWorlds.Enemies
                 Dreadnought * ThreatValues.Dreadnought + Skitter * ThreatValues.Skitter +
                 Breaker * ThreatValues.Breaker + Tractor * ThreatValues.Tractor +
                 Welder * ThreatValues.Welder + Projector * ThreatValues.Projector +
-                Jammer * ThreatValues.Jammer + Orbital * ThreatValues.Orbital;
+                Jammer * ThreatValues.Jammer + Orbital * ThreatValues.Orbital + ArcStriker * ThreatValues.ArcStriker;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

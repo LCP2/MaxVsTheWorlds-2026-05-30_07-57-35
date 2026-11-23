@@ -81,6 +81,9 @@
   },
   "turret": {
    "thv": 2.5
+  },
+  "arcstriker": {
+   "thv": 3.6
   }
  },
  "enemyOverrides": [
@@ -4216,7 +4219,8 @@
     "bruiser": 5,
     "gunner": 7,
     "turret": 2,
-    "jammer": 1
+    "jammer": 1,
+    "arcstriker": 1
    },
    "surfaces": [
     {
@@ -4578,6 +4582,12 @@
     }
    ],
    "garrison": [
+    {
+     "kind": "arcstriker",
+     "x": 11.0,
+     "z": 125.5,
+     "level": 0
+    },
     {
      "kind": "gunner",
      "x": 18.5,

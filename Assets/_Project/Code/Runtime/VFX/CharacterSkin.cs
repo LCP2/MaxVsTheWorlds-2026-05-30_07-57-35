@@ -37,6 +37,7 @@ namespace MaxWorlds.VFX
                      // and this new one still tell apart by hue alone.
         Orbital,     // MV-1344: the light-missile spiral shooter — crimson, matching its missiles' hue
                      // family (never violet, which is Max's own Light Missile).
+        ArcStriker,  // MV-1426: lightning artillery — a deep rust box (teal half comes from the palette)
     }
 
     /// <summary>
@@ -241,6 +242,9 @@ namespace MaxWorlds.VFX
 
         /// <summary>The ORBITAL (MV-1344): placeholder crimson body (the Launcher's silhouette tinted),
         /// authored under <see cref="SunlitAlbedo.Ceiling"/> (0.6) like every other kind colour.</summary>
+        /// <summary>The ARC STRIKER (MV-1426): deep rust-red, authored under <see cref="SunlitAlbedo.Ceiling"/>.</summary>
+        private static readonly Color ArcStrikerBody = new Color(0.42f, 0.15f, 0.08f);
+
         private static readonly Color OrbitalBody = new Color(0.55f, 0.07f, 0.18f);
 
         /// <summary>The Breaker (MV-1231): the ticket's own "rust/teal halves split by one hard line"
@@ -417,6 +421,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Skitter: return SkitterBody;
                 case CharacterRole.Breaker: return BreakerBody;
                 case CharacterRole.Orbital: return OrbitalBody;
+                case CharacterRole.ArcStriker: return ArcStrikerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -446,6 +451,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Skitter: return CharacterRole.Skitter;
                 case EnemyKind.Breaker: return CharacterRole.Breaker;
                 case EnemyKind.Orbital: return CharacterRole.Orbital;
+                case EnemyKind.ArcStriker: return CharacterRole.ArcStriker;
                 default: return CharacterRole.Robot;
             }
         }
@@ -497,7 +503,7 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
             r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
             r == CharacterRole.Sludger || r == CharacterRole.Charger || r == CharacterRole.Dreadnought ||
-            r == CharacterRole.Skitter || r == CharacterRole.Breaker || r == CharacterRole.Orbital || r == CharacterRole.Boss;
+            r == CharacterRole.Skitter || r == CharacterRole.Breaker || r == CharacterRole.Orbital || r == CharacterRole.ArcStriker || r == CharacterRole.Boss;
 
         private void OnEnable()
         {

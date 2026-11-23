@@ -232,6 +232,9 @@ namespace MaxWorlds.UI
         /// <see cref="MaxWorlds.VFX.AmbienceVfx"/>.</summary>
         public static event Action<Vector3> CanisterDetonated;
 
+        /// <summary>MV-1426: an ARC STRIKER's lightning column landed at this ground point (the crack cue).</summary>
+        public static event Action<Vector3> ArcStrikeLanded;
+
         /// <summary>MV-706: which word the bottom banner counter should use — true for "REPLICATORS",
         /// false for "FACTORIES". Fired once by <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/> after
         /// a level finishes building, since only the map — not the HUD, built earlier — knows whether
@@ -300,6 +303,9 @@ namespace MaxWorlds.UI
 
         public static void EmitFittingDestroyed(Vector3 worldPos)
             => FittingDestroyed?.Invoke(worldPos);
+
+        public static void EmitArcStrikeLanded(Vector3 worldPos)
+            => ArcStrikeLanded?.Invoke(worldPos);
 
         public static void EmitCanisterDetonated(Vector3 worldPos)
             => CanisterDetonated?.Invoke(worldPos);
