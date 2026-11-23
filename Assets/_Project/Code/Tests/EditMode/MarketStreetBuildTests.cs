@@ -94,6 +94,8 @@ namespace MaxWorlds.Tests.EditMode
                 if (collider == null || !collider.enabled || collider.isTrigger) continue;
 
                 if (FitExempt.Contains(piece.Cover.Dressing)) continue;
+                // MV-1419: every destructible piece is one barricade look and builds no dressing art root.
+                if (piece.Body.GetComponent<MaxWorlds.Factories.DestructibleCover>() != null) continue;
 
                 Transform pieceRoot = coverHost.Find(piece.Cover.Name);
                 if (pieceRoot == null) { failures.Add($"{piece.Cover.Name}: no art root built under Cover"); continue; }
@@ -131,6 +133,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (CoverPiece piece in build.Cover)
             {
                 if (piece.Body == null || piece.Cover.Dressing != CoverDressing.LampPost) continue;
+                if (piece.Body.GetComponent<MaxWorlds.Factories.DestructibleCover>() != null) continue; // MV-1419
                 Transform pieceRoot = coverHost.Find(piece.Cover.Name);
                 Renderer pool = pieceRoot?.GetComponentsInChildren<Renderer>(true).FirstOrDefault(r => r.name == "Pool");
                 if (pool == null) { failures.Add($"{piece.Cover.Name}: LampPost built no 'Pool' renderer"); continue; }

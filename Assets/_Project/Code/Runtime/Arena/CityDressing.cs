@@ -267,6 +267,14 @@ namespace MaxWorlds.Arena
             {
                 if (piece.Body == null) continue;
 
+                // MV-1419: every destructible City piece is one barricade look and ignores its dressing.
+                var destructible = piece.Body.GetComponent<MaxWorlds.Factories.DestructibleCover>();
+                if (destructible != null)
+                {
+                    destructible.BuildBarricade(piece.Cover.Size, piece.Cover.Shape == CoverShape.Cylinder);
+                    continue;
+                }
+
                 var pieceRoot = new GameObject(piece.Cover.Name).transform;
                 pieceRoot.SetParent(coverHost, false);
                 pieceRoot.gameObject.AddComponent<KeepsOwnMaterial>();

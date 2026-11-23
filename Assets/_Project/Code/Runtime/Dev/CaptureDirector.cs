@@ -686,6 +686,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1412Wedge());
             Add(BuildMv1413ShieldedPlate());
             Add(BuildMv1417CanisterBlast());
+            Add(BuildMv1419CityBarricades());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2354,6 +2355,93 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1417-canister-blast", Run) },
+            };
+        }
+
+        // ---- Mv1419CityBarricades (MV-1419 AC2) -----------------------------------------------
+
+        /// <summary>MV-1419 AC2: a City area with four destructible pieces of different sizes (1x1, 2x1,
+        /// 3x1, 2x3), one at 30% HP, one just hit. ONE shot, no tuning loop. Run via
+        /// <c>cc-mv1419-capture.bat</c>; writes <c>Logs/MV-1419-city-barricades.png</c>.</summary>
+        private static CapturePreset BuildMv1419CityBarricades()
+        {
+            IEnumerator Run(Camera cam)
+            {
+                const float ox = 600f, oz = 600f;
+                WorldCover Piece(string id, float x, float z, float w, float d, string dressing) => new WorldCover
+                {
+                    id = id, x = ox + x, z = oz + 10f + z, width = w, height = 1.2f, depth = d,
+                    shape = "box", hp = 150f, dressing = dressing,
+                };
+                var cfg = new WorldConfig
+                {
+                    world = "MV-1419 Capture",
+                    dials = new WorldDials { areaCount = 1, baseThreat = 0f, threatGrowth = 0f, pacingRhythm = new[] { 1f }, powerupCadence = 99 },
+                    areas = new[]
+                    {
+                        new WorldArea { id = "stub", index = 0, role = "entry",
+                            origin = new WorldAreaOrigin { x = ox - 2f, z = oz - 6f }, size = new WorldAreaSize { w = 4f, d = 6f } },
+                        new WorldArea { id = "a1", index = 1, role = "normal",
+                            origin = new WorldAreaOrigin { x = ox - 10f, z = oz }, size = new WorldAreaSize { w = 20f, d = 20f },
+                            cover = new[]
+                            {
+                                Piece("c1", -6f, -3f, 1f, 1f, "bin"),
+                                Piece("c2", -2f, -3f, 2f, 1f, "barrier"),
+                                Piece("c3", 3f, -3f, 3f, 1f, "car"),
+                                Piece("c4", -4f, 2.5f, 2f, 3f, "bus"),
+                                Piece("c5", 3f, 2.5f, 3f, 1f, "car"),
+                            } },
+                    },
+                    gates = new[]
+                    {
+                        new WorldGate { id = "g0", width = 3f, opensWith = "start",
+                            from = new WorldGateEndpoint { area = "stub", wall = "N", pos = 0.5f },
+                            to = new WorldGateEndpoint { area = "a1", wall = "S", pos = 0.5f } },
+                    },
+                };
+                if (!WorldMapLoader.TryLoad(cfg, out MapData map, out string reason)) { Debug.LogWarning("[MV1419Capture] " + reason); yield break; }
+                var host = new GameObject("MV1419 Host").transform;
+                MapBuild built = MapRuntime.Build(map, host);
+                CityDressing.Dress(host, map, cfg, built.Cover);
+                for (int i = 0; i < 3; i++) yield return null;
+
+                // c3 at 30% HP, c5 just hit (flash + sparks + chips).
+                built.Cover[2].Body.GetComponent<DestructibleCover>().TakeDamage(new DamageInfo(105f, built.Cover[2].Body.transform.position, Vector3.down, Team.Player));
+                built.Cover[3].Body.GetComponent<DestructibleCover>().TakeDamage(new DamageInfo(105f, built.Cover[3].Body.transform.position, Vector3.down, Team.Player));
+                built.Cover[4].Body.GetComponent<DestructibleCover>().TakeDamage(new DamageInfo(10f, built.Cover[4].Body.transform.position + Vector3.up, Vector3.down, Team.Player));
+
+                Vector3 focus = new Vector3(ox, 0f, oz + 10f);
+                float pitch = 60f, distance = 14f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) pitch = fixedRig.Pitch;
+                var rot = Quaternion.Euler(pitch, 180f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1419barricades",
+                LogTag = "[MV1419Capture]",
+                Flag = "-mv1419shot",
+                ArmFile = "Temp/mv1419.arm",
+                HeadlessMarker = "Temp/mv1419.headless",
+                DoneFileName = "_mv1419_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1419-city-barricades", Run) },
             };
         }
 

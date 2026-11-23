@@ -46,6 +46,30 @@ namespace MaxWorlds.Factories
         private float _configuredHp;
         private bool _secret;
         private GameObject _crack;
+        private BarricadeLook _barricade; // MV-1419: set only for City pieces
+
+        /// <summary>MV-1419: the City barricade look, null for every other world's piece.</summary>
+        public BarricadeLook Barricade => _barricade;
+
+        /// <summary>MV-1419: tiles this piece's footprint into barricade modules and hides the plain box.
+        /// Called by <c>CityDressing</c> for every City cover piece with hp &gt; 0.</summary>
+        public void BuildBarricade(Vector3 size, bool cylinder)
+        {
+            if (_barricade != null) return;
+            Build();
+            _barricade = new BarricadeLook();
+            _barricade.Build(transform, size, cylinder);
+            if (_bodyRenderer != null) _bodyRenderer.enabled = false;
+            if (_health != null) _barricade.SetStage(_health.Normalized);
+        }
+
+        /// <summary>MV-1419: advances the hit flash — called from Update in Play mode, directly by tests.</summary>
+        public void Tick(float dt) => _barricade?.Tick(dt);
+
+        private void Update()
+        {
+            if (_barricade != null && _barricade.Flashing) _barricade.Tick(Time.deltaTime);
+        }
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Neutral; // ticket: "takes damage from shots of ANY team"
@@ -179,7 +203,11 @@ namespace MaxWorlds.Factories
             if (!Registered.Contains(this)) Registered.Add(this);
         }
 
-        private void OnDestroy() => Registered.Remove(this);
+        private void OnDestroy()
+        {
+            Registered.Remove(this);
+            _barricade?.Dispose();
+        }
 
         private void RebuildHealth()
         {
@@ -192,24 +220,32 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // always true for Team.Neutral — kept for symmetry with every other TakeDamage in this codebase
+            if (_barricade != null && info.Amount > 0f)
+            {
+                Vector3 hit = info.Point;
+                if ((hit - transform.position).sqrMagnitude > 25f) hit = transform.position;
+                _barricade.Hit(hit);
+            }
             _health.TakeDamage(info.Amount);
         }
 
         private void OnHealthChanged(float current)
         {
             if (_health == null) return;
+            _barricade?.SetStage(_health.Normalized);
             SetStageTint(_health.Normalized <= DamagedNormalizedThreshold);
         }
 
         private void SetStageTint(bool damaged)
         {
-            if (_bodyRenderer == null) return;
+            if (_bodyRenderer == null || _barricade != null) return; // MV-1419: the barricade's cracks replace the tint
             Material mat = MaterialLibrary.Tinted(SurfaceKind.Stone, damaged ? DamagedColor : IntactColor);
             if (mat != null) _bodyRenderer.sharedMaterial = mat;
         }
 
         private void Break()
         {
+            _barricade?.Break(transform.position);
             ApplyBreakEffects();
             HudSignals.EmitFittingDestroyed(transform.position);
         }
@@ -329,7 +365,8 @@ namespace MaxWorlds.Factories
             Material mat = MaterialLibrary.Tinted(SurfaceKind.Stone, RubbleColor);
             if (mat != null) rend.sharedMaterial = mat;
 
-            decal.AddComponent<RubbleBurstVfx>().Begin(decal.transform, RubbleBurstLife);
+            // MV-1419: the barricade's chunks + dust replace the pop-up; the decal simply stays.
+            if (_barricade == null) decal.AddComponent<RubbleBurstVfx>().Begin(decal.transform, RubbleBurstLife);
         }
 
         /// <summary>Pops the rubble decal up from a fraction of its own resting footprint to full size
