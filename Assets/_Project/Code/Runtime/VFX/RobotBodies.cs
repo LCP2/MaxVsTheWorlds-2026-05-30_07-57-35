@@ -103,6 +103,10 @@ namespace MaxWorlds.VFX
         /// them"), only the silhouette changes.</summary>
         private const string MothershipSkinTag = "mothership";
 
+        /// <summary>MV-1429: the City marksman Bolter's body tag. Passed by <see cref="MaxWorlds.VFX.RobotRig"/>
+        /// when <c>RobotEnemy.IsMarksman</c> is set (never authored as a world skin).</summary>
+        public const string MarksmanSkinTag = "marksman";
+
         /// <summary>Build <paramref name="kind"/>'s body under <paramref name="root"/> and return the
         /// emissive lenses the rig drives as its tell. <paramref name="skin"/> selects a world
         /// reskin's OWN silhouette (MV-746) — null/anything else falls through to the base roster.</summary>
@@ -122,6 +126,12 @@ namespace MaxWorlds.VFX
 
             if (skin == MothershipSkinTag && TryBuildMothership(kind, visualRoot, p, eyes, wheels, legs))
                 return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
+
+            if (kind == EnemyKind.Bolter && skin == MarksmanSkinTag)
+            {
+                BuildMarksman(visualRoot, p, eyes, wheels, legs);
+                return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
+            }
 
             switch (kind)
             {
@@ -564,6 +574,60 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.24f, 0.016f, 0.007f, 5), p.Dark, new Vector3(0.13f, 1.26f, -0.09f), Quaternion.Euler(6f, 0f, -20f), Vector3.one);
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(0.2121f, 1.38f, -0.0649f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
             Add(root, CharacterMeshes.Beam(0.15f, 0.016f, 0.007f, 5), p.Dark, new Vector3(-0.1f, 1.195f, -0.11f), Quaternion.Euler(0f, 0f, 15f), Vector3.one);
+        }
+
+        /// <summary>MV-1429: the City marksman Bolter — a 1.2 m rust/teal drum on three thin legs carrying a
+        /// forward rail with orange coils, about 1.6 m tall; one off-centre gold eye in a dark bezel on the
+        /// rust half. +Z is the rail (the aim direction). Hand-authored, same exception as BuildBolter.</summary>
+        private static void BuildMarksman(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            const float bodyY = 1.3f, bodyH = 0.5f, bodyW = 0.6f;
+            // Tripod: one leg trailing, two splayed forward; near-black.
+            Vector3[] feet =
+            {
+                new Vector3(0f, 0.02f, -0.9f),
+                new Vector3(-0.55f, 0.02f, 0.45f),
+                new Vector3(0.55f, 0.02f, 0.45f),
+            };
+            Vector3[] hips =
+            {
+                new Vector3(0f, bodyY - 0.2f, -0.35f),
+                new Vector3(-0.2f, bodyY - 0.2f, 0.25f),
+                new Vector3(0.2f, bodyY - 0.2f, 0.25f),
+            };
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 mid = (hips[i] + feet[i]) * 0.5f;
+                Vector3 d = feet[i] - hips[i];
+                float len = d.magnitude;
+                Quaternion rot = Quaternion.FromToRotation(Vector3.up, d.normalized);
+                Transform beam = Add(root, CharacterMeshes.Beam(len, 0.06f, 0.045f, 6), p.Dark, mid, rot, Vector3.one, "MarksmanLeg");
+                Transform tip = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.07f, 0f), new Vector2(0.045f, 0.03f), new Vector2(0.02f, 0.07f) }, 8), p.Dark, feet[i], Quaternion.identity, Vector3.one, "MarksmanFoot");
+                legs.Add(AddLeg(root, beam, tip, len * 0.5f));
+            }
+
+            // The drum: rust back half, teal front half, hard split between them (1.2 m total).
+            Add(root, CharacterMeshes.Bevelled(new Vector3(bodyW, bodyH, 0.78f), 0.03f), p.Warm, new Vector3(0f, bodyY, -0.21f), Quaternion.identity, Vector3.one, "MarksmanRust");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(bodyW, bodyH, 0.42f), 0.03f), p.Cool, new Vector3(0f, bodyY, 0.39f), Quaternion.identity, Vector3.one, "MarksmanTeal");
+
+            // One off-centre gold eye, dark bezel, on the rust half's top face (reads from the play camera).
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1f, 0f), new Vector2(0.15f, 0.02f), new Vector2(0.16f, 0.04f), new Vector2(0.14f, 0.06f) }, 20), p.Dark, new Vector3(0.12f, bodyY + bodyH * 0.5f - 0.01f, -0.3f), Quaternion.identity, Vector3.one, "MarksmanBezel");
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(18), new Vector3(0.12f, bodyY + bodyH * 0.5f + 0.045f, -0.3f), Quaternion.identity, new Vector3(0.2f, 0.07f, 0.2f)));
+
+            // The rail: two orange coil rods with dark spacer bars, 0.9 m out from the teal face.
+            const float railZ0 = 0.6f, railLen = 0.9f;
+            for (int i = 0; i < 2; i++)
+            {
+                float x = i == 0 ? -0.08f : 0.08f;
+                Add(root, CharacterMeshes.Beam(railLen, 0.035f, 0.035f, 6), p.Gold, new Vector3(x, bodyY, railZ0 + railLen * 0.5f), Quaternion.Euler(90f, 0f, 0f), Vector3.one, "MarksmanRail");
+            }
+            for (int i = 0; i < 5; i++)
+            {
+                float z = railZ0 + 0.1f + i * 0.18f;
+                Add(root, CharacterMeshes.Bevelled(new Vector3(0.26f, 0.12f, 0.04f), 0.008f), p.Dark, new Vector3(0f, bodyY, z), Quaternion.identity, Vector3.one, "MarksmanSpacer");
+            }
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(12), new Vector3(0f, bodyY, railZ0 + railLen + 0.04f), Quaternion.identity, new Vector3(0.12f, 0.12f, 0.1f)));
         }
 
         /// <summary>Bolter (MV-578 rewrite of MV-539) — keeps the small-tier two-wheel drivetrain, but

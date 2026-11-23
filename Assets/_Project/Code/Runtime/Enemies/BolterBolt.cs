@@ -49,6 +49,19 @@ namespace MaxWorlds.Enemies
         private float _hitRadius;
         private float _maxDistance;
         private float _traveled;
+        private float _flatDamage;        // MV-1429: >0 = a marksman bolt's fixed damage (else 7% of max health)
+        private TrailRenderer _trail;
+        private Renderer _coreRenderer;
+
+        /// <summary>MV-1429: marksman bolt numbers.</summary>
+        public const float MarksmanSpeed = 22f;
+        public const float MarksmanDamage = 50f;
+        public const float MarksmanMaxRange = 25f;
+        public const float MarksmanCoreDiameter = 0.34f;
+        public const float MarksmanTrailMetres = 1.6f;
+
+        /// <summary>The white-hot core colour of a marksman bolt (the glow around it is orange).</summary>
+        public static readonly Color MarksmanCoreColor = new Color(1f, 0.97f, 0.85f);
 
         /// <summary>Damage a bolt deals a <see cref="DestructibleCover"/> piece it strikes (MV-1382) —
         /// the same 14 a bolt deals Max at his authored 200 HP. Cover has no "max health" to take a
@@ -83,6 +96,61 @@ namespace MaxWorlds.Enemies
             var bolt = go.AddComponent<BolterBolt>();
             bolt.Init(target, speed, maxRange, hitRadius);
             return bolt;
+        }
+
+        /// <summary>MV-1429: a marksman's bolt. Flies along <paramref name="direction"/> (locked by the
+        /// shooter, never steered) from <paramref name="muzzle"/>, a white-hot core with an orange glow and a
+        /// 1.6 m trail, 22 m/s, 50 damage to Max or a Sentinel, gone after 25 m or on cover.</summary>
+        public static BolterBolt FireMarksman(Vector3 muzzle, Vector3 direction, Transform target, float hitRadius)
+        {
+            var go = new GameObject("BolterBolt (marksman)");
+            go.transform.position = muzzle;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 1e-4f) direction = Vector3.forward;
+            go.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+
+            go.AddComponent<KeepsOwnMaterial>();
+            var core = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            core.name = "MarksmanCore";
+            Strip(core);
+            core.transform.SetParent(go.transform, false);
+            core.transform.localScale = Vector3.one * MarksmanCoreDiameter;
+            var coreMat = VfxMaterials.AdditiveTinted(MarksmanCoreColor);
+            if (coreMat != null) core.GetComponent<MeshRenderer>().sharedMaterial = coreMat;
+
+            var glow = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            glow.name = "MarksmanGlow";
+            Strip(glow);
+            glow.transform.SetParent(go.transform, false);
+            glow.transform.localScale = Vector3.one * (MarksmanCoreDiameter * 2.2f);
+            var glowMat = VfxMaterials.AdditiveTinted(new Color(1f, 0.54f, 0.12f, 0.35f));
+            if (glowMat != null) glow.GetComponent<MeshRenderer>().sharedMaterial = glowMat;
+
+            var trail = go.AddComponent<TrailRenderer>();
+            trail.time = MarksmanTrailMetres * 1.1f / MarksmanSpeed;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = 0.3f;
+            trail.minVertexDistance = 0.05f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = VfxMaterials.AdditiveTinted(HostileShotLook.Orange);
+
+            var bolt = go.AddComponent<BolterBolt>();
+            bolt.Init(target, MarksmanSpeed, MarksmanMaxRange - DespawnRangePadding, hitRadius);
+            bolt._flatDamage = MarksmanDamage;
+            bolt._trail = trail;
+            bolt._coreRenderer = core.GetComponent<Renderer>();
+            return bolt;
+        }
+
+        /// <summary>MV-1429: resolved core diameter / colour / trail metres of a marksman bolt (zeroed for
+        /// an ordinary bolt), read back off its real components.</summary>
+        public HostileShotLook.Resolved ResolvedLook()
+        {
+            if (_coreRenderer == null) return new HostileShotLook.Resolved(0f, Color.clear, 0f);
+            return new HostileShotLook.Resolved(_coreRenderer.transform.lossyScale.x,
+                HostileShotLook.MaterialColor(_coreRenderer.sharedMaterial),
+                _trail != null ? _trail.time * _speed : 0f);
         }
 
         /// <summary>Read live off <see cref="CharacterSkin.BaseColorFor"/> rather than a copied literal
@@ -237,22 +305,24 @@ namespace MaxWorlds.Enemies
             if (_targetDamageable is PlayerHealth player && player.IsAlive)
             {
                 player.TakeDamage(new DamageInfo(
-                    DamageFor(player.Max), transform.position, _direction, Team.Enemy));
+                    Dmg(player.Max), transform.position, _direction, Team.Enemy));
             }
             else if (_targetDamageable is Sentinel sentinel && sentinel.IsAlive)
             {
                 sentinel.TakeDamage(new DamageInfo(
-                    DamageFor(sentinel.HealthMax), transform.position, _direction, Team.Enemy));
+                    Dmg(sentinel.HealthMax), transform.position, _direction, Team.Enemy));
             }
             else if (_targetDamageable is RobotEnemy capturedRobot && capturedRobot.IsAlive &&
                      capturedRobot.Team == Team.Player)
             {
                 capturedRobot.TakeDamage(new DamageInfo(
-                    DamageFor(capturedRobot.MaxHealth), transform.position, _direction, Team.Enemy));
+                    Dmg(capturedRobot.MaxHealth), transform.position, _direction, Team.Enemy));
             }
 
             DestroySelf();
         }
+
+        private float Dmg(float receiverMax) => _flatDamage > 0f ? _flatDamage : DamageFor(receiverMax);
 
         private void DespawnHarmless() => DestroySelf();
 

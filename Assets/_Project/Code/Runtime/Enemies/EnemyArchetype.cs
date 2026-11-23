@@ -150,6 +150,10 @@ namespace MaxWorlds.Enemies
         /// through <see cref="WithCarriesKey"/>.</summary>
         public readonly bool CarriesKey;
 
+        /// <summary>MV-1429: a role stamped by a world's <c>marksman</c> override (City bolter). See
+        /// <see cref="RobotEnemy.IsMarksman"/>. False for every base archetype.</summary>
+        public readonly bool Marksman;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
@@ -157,7 +161,7 @@ namespace MaxWorlds.Enemies
             float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f,
             string displayName = null, string skin = null, string colourRole = null,
             bool splicer = false, bool elite = false, EliteAffix affix = EliteAffix.None,
-            bool carriesKey = false)
+            bool carriesKey = false, bool marksman = false)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -175,6 +179,7 @@ namespace MaxWorlds.Enemies
             Elite = elite;
             Affix = affix;
             CarriesKey = carriesKey;
+            Marksman = marksman;
         }
 
         /// <summary>MV-1278: the same archetype, rolled elite — see <see cref="Elite"/>/<see cref="Affix"/>.
@@ -187,7 +192,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole, Splicer, elite: true, affix: affix, carriesKey: CarriesKey);
+            DisplayName, Skin, ColourRole, Splicer, elite: true, affix: affix, carriesKey: CarriesKey, marksman: Marksman);
 
         /// <summary>MV-1321: the same archetype, stamped the KEY elite — the garrison call sites' own
         /// fluent step, applied ALONGSIDE <see cref="WithElite"/> (never instead of it: a KEY elite is
@@ -198,7 +203,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole, Splicer, elite: Elite, affix: Affix, carriesKey: true);
+            DisplayName, Skin, ColourRole, Splicer, elite: Elite, affix: Affix, carriesKey: true, marksman: Marksman);
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
         public float SpawnHeight => ColliderHeight * 0.5f;
@@ -829,7 +834,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage * multiplier,
-            DisplayName, Skin, ColourRole, Splicer, Elite, Affix);
+            DisplayName, Skin, ColourRole, Splicer, Elite, Affix, marksman: Marksman);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -841,7 +846,7 @@ namespace MaxWorlds.Enemies
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
             StandoffRange, TeleportCooldown, TouchDamage,
-            DisplayName, Skin, ColourRole, Splicer, Elite, Affix);
+            DisplayName, Skin, ColourRole, Splicer, Elite, Affix, marksman: Marksman);
 
         /// <summary>The same lookup as <see cref="Of"/>, with this world's own
         /// <see cref="MaxWorlds.Arena.WorldConfig.enemyOverrides"/> applied over the base table
@@ -879,7 +884,7 @@ namespace MaxWorlds.Enemies
             string.IsNullOrEmpty(ov.displayName) ? DisplayName : ov.displayName,
             string.IsNullOrEmpty(ov.skin) ? Skin : ov.skin,
             string.IsNullOrEmpty(ov.colourRole) ? ColourRole : ov.colourRole,
-            Splicer || ov.splicer, Elite, Affix);
+            Splicer || ov.splicer, Elite, Affix, marksman: Marksman || ov.marksman);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

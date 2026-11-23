@@ -705,6 +705,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1343ThermalCaptureCheck());
             Add(BuildMv1345OrbitalLook());
             Add(BuildMv1426ArcStrikerMark());
+            Add(BuildMv1429MarksmanBolter());
             return d;
         }
 
@@ -2635,6 +2636,92 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1426-arc-striker-mark", NoSetup) },
+                ExtraReport = () => found + "\n",
+            };
+        }
+
+        /// <summary>MV-1429 AC2: ONE capture of City marksman Bolters at the play camera - one mid-aim (red aim
+        /// line on Max) and another one's bolt in flight. Run via <c>cc-mv1429-capture.bat</c>; writes
+        /// <c>Logs/MV-1429-marksman-bolter.png</c>.</summary>
+        private static CapturePreset BuildMv1429MarksmanBolter()
+        {
+            string found = "no marksman Bolter found";
+
+            RobotEnemy Stage(EnemySpawner spawner, PlayerController player, Vector3 offset, string tag)
+            {
+                var spawned = spawner.SpawnExact(EnemyKind.Bolter, 1, 0f, true, true);
+                if (spawned.Count == 0) return null;
+                RobotEnemy r = spawned[0];
+                Vector3 pp = player.transform.position;
+                CharacterControllerSafety.SafeReposition(r.GetComponent<CharacterController>(), pp + offset, tag);
+                return r;
+            }
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+
+                if (!DevModeController.TryJumpToArea("a6"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a6\") found no map/player to jump");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                var player = FindFirstObjectByType<PlayerController>();
+                var spawner = FindFirstObjectByType<EnemySpawner>();
+                if (spawner == null) spawner = new GameObject("MV1429 Spawner").AddComponent<EnemySpawner>();
+                if (player == null) throw new CaptureAbortException("MV-1429: no player after jumping to City a6");
+
+                RobotEnemy first = Stage(spawner, player, new Vector3(0f, 0f, 11f), "MV1429CaptureFirst");
+                if (first == null || !first.IsMarksman)
+                    throw new CaptureAbortException($"MV-1429: first Bolter missing or not a marksman ({(first == null ? "none" : "not marksman")})");
+
+                float until = Time.time + 20f;
+                while (Time.time < until && (first.Rifle == null || first.Rifle.Shots < 1)) yield return null;
+
+                // The first bolt is now in flight; a second marksman, 11 m the other way, starts its aim.
+                RobotEnemy second = Stage(spawner, player, new Vector3(0f, 0f, -11f), "MV1429CaptureSecond");
+                if (second == null) throw new CaptureAbortException("MV-1429: second Bolter missing");
+                until = Time.time + 6f;
+                while (Time.time < until && !(second.Rifle != null && second.Rifle.IsAiming && second.Rifle.AimElapsed > 0.3f)) yield return null;
+
+                Vector3 p = player.transform.position;
+                found = $"first shots={(first.Rifle != null ? first.Rifle.Shots : -1)}, bolt alive={(first.Rifle != null && first.Rifle.LastBolt != null)}, second aiming={(second.Rifle != null && second.Rifle.IsAiming)} elapsed={(second.Rifle != null ? second.Rifle.AimElapsed : -1f):F2}, Max at {p}";
+
+                Time.timeScale = 0f;
+                float pitch = 60f, distance = 24f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(p - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1429marksmanbolter",
+                LogTag = "[MV1429Capture]",
+                Flag = "-mv1429shot",
+                ArmFile = "Temp/mv1429.arm",
+                HeadlessMarker = "Temp/mv1429.headless",
+                DoneFileName = "_mv1429_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1429-marksman-bolter", NoSetup) },
                 ExtraReport = () => found + "\n",
             };
         }

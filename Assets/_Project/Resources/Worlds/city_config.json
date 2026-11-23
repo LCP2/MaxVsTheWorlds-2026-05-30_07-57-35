@@ -94,6 +94,11 @@
    "displayName": "COURIER"
   },
   {
+   "kind": "bolter",
+   "moveSpeed": 3.5,
+   "marksman": true
+  },
+  {
    "kind": "turret",
    "displayName": "STOPLIGHT"
   }

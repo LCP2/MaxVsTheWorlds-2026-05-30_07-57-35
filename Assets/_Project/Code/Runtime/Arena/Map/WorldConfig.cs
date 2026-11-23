@@ -374,6 +374,11 @@ namespace MaxWorlds.Arena
         /// other field here; resolved onto <see cref="MaxWorlds.Enemies.EnemyArchetype.Splicer"/> by
         /// <see cref="MaxWorlds.Enemies.EnemyArchetype.WithOverride"/>.</summary>
         public bool splicer;
+
+        /// <summary>MV-1429: stamps this kind as a MARKSMAN (City bolter only) — it holds 9-13 m from Max,
+        /// shows a 0.6 s red aim line, then fires one bright 50-damage bolt, and wears the tripod rail-gun
+        /// body. A role flag, same idiom as <see cref="splicer"/>; default false = today's Bolter exactly.</summary>
+        public bool marksman;
     }
 
     /// <summary>A sludge slow-zone (MV-692) — a rect in AREA-LOCAL metres (like <see cref="WorldArea.origin"/>,

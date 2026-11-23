@@ -401,6 +401,7 @@ namespace MaxWorlds.Enemies
             _salvoSecondFired = false;
             // MV-1426: nor a previous ARC STRIKER life's mark, hold anchor or retreat.
             _arcStriker?.Cancel();
+            _rifle?.Cancel();   // MV-1429
             _arcHomeSet = false;
             _arcRetreating = false;
             // MV-1228: a pooled instance must not carry a previous Breaker life's attack choice or
@@ -436,6 +437,7 @@ namespace MaxWorlds.Enemies
             // MV-1016: the shared spawn path's own Splicer stamp — a.Splicer comes from World 3's
             // gunner override (see EnemyArchetype.WithOverride), never a hardcoded world check.
             if (a.Splicer) MarkAsSplicer();
+            IsMarksman = a.Marksman && a.Kind == EnemyKind.Bolter;   // MV-1429: City bolter role flag
         }
 
         /// <summary>Elevation tier (MV-697), set at spawn from the authored garrison entry's
@@ -1149,6 +1151,7 @@ namespace MaxWorlds.Enemies
             HideJammerFieldImmediate();
             _orbital?.PopAll();   // MV-1344: a captured ORBITAL's missiles pop, and it stops firing.
             _arcStriker?.Cancel();   // MV-1426: a captured ARC STRIKER's live mark drops with no strike.
+            _rifle?.Cancel();        // MV-1429: ... and a captured marksman's aim line.
             // MV-1285: a captured Linked elite's tether snaps too, same as on death — "not captured"
             // is one of the partner-eligibility conditions in TryEstablishLink, so this also keeps a
             // captured ally from ever being picked as a fresh pairing candidate.
@@ -2401,6 +2404,9 @@ namespace MaxWorlds.Enemies
             // MV-1426: ARC STRIKER's mark/strike cycle ticks every awake frame regardless of Current state.
             if (Kind == EnemyKind.ArcStriker && Team == Team.Enemy) TickArcStrikerWeapon(dt);
 
+            // MV-1429: the City marksman Bolter's aim/fire cycle ticks every awake frame regardless of state.
+            if (IsMarksman && Kind == EnemyKind.Bolter && Team == Team.Enemy) TickMarksmanWeapon(dt);
+
             // MV-1281 point 3: a Shielded elite keeps turning to face Max regardless of Current state
             // (Telegraph/Recover/Search included, not just Chase) — see TickShieldedFacing's own doc
             // comment for the awake/lunge gate (which lives inside that method, not here) and why
@@ -2463,8 +2469,10 @@ namespace MaxWorlds.Enemies
                                          else if (Kind == EnemyKind.Projector) TickProjectorHangBack(dt);
                                          else if (Kind == EnemyKind.Jammer) TickJammerApproach(dt);
                                          else if (Kind == EnemyKind.ArcStriker) TickArcStrikerMove(dt);
+                                         else if (IsMarksman) TickMarksmanMove(dt);
                                          else TickChase(dt); break;
                     case State.Search:   if (Kind == EnemyKind.ArcStriker) TickArcStrikerMove(dt);
+                                         else if (IsMarksman) TickMarksmanMove(dt);
                                          else TickSearch(dt); break;
                     case State.Telegraph: TickTelegraph(dt); break;
                     case State.Lunge:    TickLunge(dt);    break;
@@ -4900,6 +4908,85 @@ namespace MaxWorlds.Enemies
             _orbital.Tick(dt, feet, target, AreaIndex);
         }
 
+        // --- MV-1429: City MARKSMAN Bolter -----------------------------------------------------
+
+        /// <summary>True for a Bolter stamped by a world's <c>marksman</c> override (the City). Cleared by
+        /// <see cref="Apply"/> for every other spawn, so a pooled robot never carries it forward.</summary>
+        public bool IsMarksman { get; private set; }
+
+        private MarksmanRifle _rifle;
+        private bool _rifleBackingOff;
+        private float _rifleBlockedTimer;
+
+        /// <summary>The aim/fire weapon (null until the first awake tick) — read by the rig and tests.</summary>
+        public MarksmanRifle Rifle => _rifle;
+
+        /// <summary>Back off when Max is closer than this, to <see cref="MarksmanBackOffTo"/>.</summary>
+        public const float MarksmanBackOffTo = 11f;
+
+        private void TickMarksmanWeapon(float dt)
+        {
+            _rifle ??= new MarksmanRifle();
+            bool sameLevel = target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position);
+            Vector3 feet = transform.position - Vector3.up * (_cc != null ? _cc.height * 0.5f : 0.8f);
+            bool fired = _rifle.Tick(dt, feet, sameLevel ? target : null, _sight.HasSight, sameLevel, contactRadius);
+            if (SquadOn && (fired || _rifle.IsAiming)) SquadTactics.NotifyFired(this);   // MV-1427
+        }
+
+        /// <summary>Approach to 9-13 m with line of sight (walking at Max until it has it), hold and face him
+        /// while aiming or in the band, and back directly away to 11 m when he is inside 9 m (gives up after
+        /// 1 s blocked). Replaces Chase/Search, so a marksman never telegraphs, lunges or touches.</summary>
+        private void TickMarksmanMove(float dt)
+        {
+            if (target == null) { AcquireTarget(); return; }
+            Vector3 here = transform.position; here.y = 0f;
+            Vector3 maxPos = target.position; maxPos.y = 0f;
+            Vector3 away = here - maxPos;
+            float dist = away.magnitude;
+            Vector3 toMax = dist > 1e-3f ? -away / dist : Vector3.forward;
+
+            if (!_rifleBackingOff && dist < MarksmanRifle.BandMin)
+            {
+                _rifleBackingOff = true;
+                _rifleBlockedTimer = 0f;
+            }
+            else if (_rifleBackingOff && (dist >= MarksmanBackOffTo || _rifleBlockedTimer >= 1f))
+            {
+                _rifleBackingOff = false;
+            }
+
+            if (_rifleBackingOff)
+            {
+                Vector3 before = transform.position;
+                RotateToward(toMax, dt);
+                CharacterControllerMotion.SafeMove(_cc, (away / Mathf.Max(dist, 1e-3f)) * (EffectiveMoveSpeed * dt));
+                Vector3 moved = transform.position - before; moved.y = 0f;
+                if (moved.magnitude < EffectiveMoveSpeed * dt * 0.25f) _rifleBlockedTimer += dt;
+                else _rifleBlockedTimer = 0f;
+                return;
+            }
+
+            bool aiming = _rifle != null && _rifle.IsAiming;
+            bool inBand = dist <= MarksmanRifle.BandMax && _sight.HasSight;
+            if (aiming || inBand)
+            {
+                RotateToward(toMax, dt);   // stands and faces Max
+                return;
+            }
+
+            // Approach: straight at Max (or his last-seen spot when out of sight) until in the band with sight.
+            Vector3 goal = _sight.HasSight || !_sight.HasTrail ? maxPos : _sight.LastKnown;
+            MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
+            string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
+                false, _zoneRouteBudget, dt);
+            Vector3 d = waypoint - transform.position; d.y = 0f;
+            if (d.sqrMagnitude < 1e-4f) { RotateToward(toMax, dt); return; }
+            Vector3 dirToGoal = d.normalized;
+            RotateToward(dirToGoal, dt);
+            CharacterControllerMotion.SafeMove(_cc, dirToGoal * (EffectiveMoveSpeed * dt));
+        }
+
         // --- MV-1426: ARC STRIKER hold / retreat / mark -----------------------------------------
 
         private ArcStrikerBattery _arcStriker;
@@ -5382,6 +5469,7 @@ namespace MaxWorlds.Enemies
             // MV-1344: an ORBITAL's missiles pop within 0.3 s of its death.
             _orbital?.PopAll();
             _arcStriker?.Cancel();   // MV-1426: a dead ARC STRIKER's live mark drops with no strike.
+            _rifle?.Cancel();        // MV-1429: ... and a dead marksman's aim line.
             // MV-1285 point 4: this robot's death snaps the Linked tether and starts its live
             // partner's own revenge-heal countdown — read LinkedPartner BEFORE BreakLink clears it.
             if (IsElite && Affix == EliteAffix.Linked && LinkedPartner != null && LinkedPartner.IsAlive)

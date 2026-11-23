@@ -744,7 +744,7 @@ namespace MaxWorlds.VFX
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
                                          new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat, _accentMat, null, _hastedMat, _moltenMat),
-                                         _enemy.Skin);
+                                         _enemy.IsMarksman ? RobotBodies.MarksmanSkinTag : _enemy.Skin);   // MV-1429
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
             _breakerChainPivot = body.BreakerChainPivot;
