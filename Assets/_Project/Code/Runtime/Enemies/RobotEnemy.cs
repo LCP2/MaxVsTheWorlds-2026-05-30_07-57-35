@@ -404,7 +404,6 @@ namespace MaxWorlds.Enemies
             _arcStriker?.Cancel();
             _rifle?.Cancel();   // MV-1429
             _arcHomeSet = false;
-            _arcRetreating = false;
             // MV-1228: a pooled instance must not carry a previous Breaker life's attack choice or
             // ram hit-list into this one either.
             _breakerIsRam = false;
@@ -1607,7 +1606,7 @@ namespace MaxWorlds.Enemies
                 return;
             }
 
-            Affix = dials != null ? EliteRoll.RerollExcludingLinked(dials.eliteAffixes, Kind) : EliteAffix.None;
+            Affix = dials != null ? EliteRoll.RerollExcludingLinked(dials.eliteAffixes, Kind, dials.rangedNeverShielded) : EliteAffix.None;
         }
 
         /// <summary>Point 2: turns an ordinary robot into this Linked elite's paired partner —
@@ -4995,7 +4994,7 @@ namespace MaxWorlds.Enemies
             CharacterControllerMotion.SafeMove(_cc, dirToGoal * (EffectiveMoveSpeed * dt));
         }
 
-        // --- MV-1426: ARC STRIKER hold / retreat / mark -----------------------------------------
+        // --- MV-1426/MV-1433: ARC STRIKER advance / hold / mark -----------------------------------------
 
         private ArcStrikerBattery _arcStriker;
 
@@ -5004,14 +5003,9 @@ namespace MaxWorlds.Enemies
 
         private Vector3 _arcHome;
         private bool _arcHomeSet;
-        private bool _arcRetreating;
 
-        /// <summary>Retreat begins inside this distance from Max ...</summary>
-        public const float ArcStrikerRetreatBelowMeters = 8f;
-        /// <summary>... and ends (the robot holds where it stands) beyond this one.</summary>
-        public const float ArcStrikerHoldBeyondMeters = 10f;
-        /// <summary>How far from its hold point it may drift before walking back.</summary>
-        public const float ArcStrikerHoldRadiusMeters = 1.5f;
+        /// <summary>MV-1433: holds (stands, faces Max) within this distance while it has sight of him.</summary>
+        public const float ArcStrikerHoldWithinMeters = 14f;
 
         /// <summary>Marks Max when he is within 18 m and in sight and the 4 s cooldown is ready. The strike
         /// ignores cover (it comes from above) so only the mark needs sight; once placed it lands regardless.
@@ -5027,43 +5021,30 @@ namespace MaxWorlds.Enemies
             if (SquadOn && _arcStriker.IsMarking) SquadTactics.NotifyFired(this);   // MV-1427
         }
 
-        /// <summary>Hold within 1.5 m of the spawn point until Max is within 8 m; then walk directly away from
-        /// him until he is more than 10 m off, and hold wherever that leaves it. Replaces Chase/Search, so it
-        /// never telegraphs or lunges.</summary>
+        /// <summary>MV-1433: ADVANCE toward Max (the same zone-routed path a marksman uses) while he is more
+        /// than 14 m away or out of its sight; HOLD (stand and face him) while he is within 14 m and in
+        /// sight. Never retreats, ignores post/squad holds. Replaces Chase/Search, so it never telegraphs
+        /// or lunges.</summary>
         private void TickArcStrikerMove(float dt)
         {
             if (target == null) { AcquireTarget(); return; }
-            if (!_arcHomeSet) { _arcHome = transform.position; _arcHomeSet = true; }
 
             Vector3 here = transform.position; here.y = 0f;
             Vector3 maxPos = target.position; maxPos.y = 0f;
-            Vector3 away = here - maxPos;
-            float dist = away.magnitude;
+            float dist = (maxPos - here).magnitude;
 
-            if (!_arcRetreating && dist < ArcStrikerRetreatBelowMeters) _arcRetreating = true;
-            else if (_arcRetreating && dist > ArcStrikerHoldBeyondMeters)
-            {
-                _arcRetreating = false;
-                _arcHome = transform.position;   // holds where it stands
-            }
+            if (dist <= ArcStrikerHoldWithinMeters && _sight.HasSight) { FaceMax(dt, maxPos, here); return; }
 
-            Vector3 dir;
-            float speed = EffectiveMoveSpeed;
-            if (_arcRetreating)
-            {
-                dir = dist > 0.001f ? away / dist : Vector3.forward;
-            }
-            else
-            {
-                Vector3 toHome = _arcHome - transform.position; toHome.y = 0f;
-                float homeDist = toHome.magnitude;
-                if (homeDist <= ArcStrikerHoldRadiusMeters * 0.5f) { FaceMax(dt, maxPos, here); return; }
-                dir = toHome / homeDist;
-                speed = Mathf.Min(speed, homeDist / Mathf.Max(dt, 1e-4f));
-            }
-
+            Vector3 goal = _sight.HasSight || !_sight.HasTrail ? maxPos : _sight.LastKnown;
+            MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
+            string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
+                false, _zoneRouteBudget, dt);
+            Vector3 d = waypoint - transform.position; d.y = 0f;
+            if (d.sqrMagnitude < 1e-4f) { FaceMax(dt, maxPos, here); return; }
+            Vector3 dir = d.normalized;
             RotateToward(dir, dt);
-            CharacterControllerMotion.SafeMove(_cc, dir * (speed * dt));
+            CharacterControllerMotion.SafeMove(_cc, dir * (EffectiveMoveSpeed * dt));
         }
 
         private void FaceMax(float dt, Vector3 maxPos, Vector3 here)

@@ -58,6 +58,7 @@
   "powerupCadence": 2,
   "squadTactics": true,
   "brightHostileProjectiles": true,
+  "rangedNeverShielded": true,
   "eliteChancePct": 20,
   "eliteAffixes": [
    "shielded",
@@ -2440,7 +2441,6 @@
      "x": 53.0,
      "z": 78.5,
      "level": 0,
-     "post": true,
      "squad": "a4_n"
     },
     {

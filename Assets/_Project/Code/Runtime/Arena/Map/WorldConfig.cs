@@ -1263,6 +1263,11 @@ namespace MaxWorlds.Arena
         /// city_config.json.</summary>
         public bool brightHostileProjectiles = false;
 
+        /// <summary>MV-1433: Bolter, Arc Striker, Gunner, Launcher and Turret never roll the Shielded elite
+        /// plate in this world (a ranged robot always faces Max, so the plate is always in the way). Default
+        /// false; true only in city_config.json.</summary>
+        public bool rangedNeverShielded = false;
+
         /// <summary>MV-1430: multiplies the damage of every Gunner beam, Launcher missile, Turret glob and
         /// Orbital missile in this world. Default 1 = unchanged; 1.5 in city_config.json. Never touches the
         /// Bolter or the Arc Striker.</summary>

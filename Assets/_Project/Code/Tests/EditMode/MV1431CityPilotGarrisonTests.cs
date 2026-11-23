@@ -61,7 +61,7 @@ namespace MaxWorlds.Tests.EditMode
                 "a3_canister3 63.0 35.0"
             } },
             new object[] { "a4", new[] {
-                "arcstriker 53.0 78.5 P a4_n",
+                "arcstriker 53.0 78.5 - a4_n",
                 "bolter 54.5 76.0 P a4_e",
                 "gunner 47.0 69.5 P a4_e",
                 "launcher 51.0 73.5 P a4_n",

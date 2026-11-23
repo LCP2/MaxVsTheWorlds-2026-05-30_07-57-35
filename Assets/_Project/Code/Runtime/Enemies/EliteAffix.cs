@@ -65,7 +65,7 @@ namespace MaxWorlds.Enemies
             if (RobotEnemy.LiveEliteCountInArea(areaIndex) >= Mathf.Max(0, dials.eliteMaxPerArea)) return false;
             if (Random.value >= dials.eliteChancePct / 100f) return false;
 
-            affix = RollAffix(dials.eliteAffixes, kind);
+            affix = RollAffix(dials.eliteAffixes, kind, EliteAffix.None, dials.rangedNeverShielded);
             return true;
         }
 
@@ -76,7 +76,7 @@ namespace MaxWorlds.Enemies
         /// <see cref="RollAffix"/> for its affix "normally from the world's list", exactly like an
         /// ordinary elite roll would.</summary>
         public static EliteAffix RollAffixForced(WorldDials dials, EnemyKind kind) =>
-            RollAffix(dials?.eliteAffixes, kind);
+            RollAffix(dials?.eliteAffixes, kind, EliteAffix.None, dials != null && dials.rangedNeverShielded);
 
         /// <summary>Picks one IMPLEMENTED affix at random from <paramref name="authoredAffixes"/>
         /// (MV-1278 point 2) — <see cref="EliteAffix.None"/> (a plain elite) when the authored list is
@@ -90,7 +90,8 @@ namespace MaxWorlds.Enemies
         /// Tractor — Turret is already excluded outright by <see cref="EliteRoll.IsEligibleKind"/>), on
         /// the same "incoherent on a body that never moves" footing. MV-1283 point 1: Molten is excluded
         /// by the identical zero-move-speed test — a robot that never walks can never trail a patch.</summary>
-        private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind, EliteAffix exclude = EliteAffix.None)
+        private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind, EliteAffix exclude = EliteAffix.None,
+            bool rangedNeverShielded = false)
         {
             if (authoredAffixes == null || authoredAffixes.Length == 0) return EliteAffix.None;
 
@@ -103,6 +104,10 @@ namespace MaxWorlds.Enemies
 
             // MV-1397: a Projector hangs back facing Max, so a front-arc plate made it unkillable.
             if (kind == EnemyKind.Blinker || kind == EnemyKind.Projector) implemented.Remove(EliteAffix.Shielded);
+            // MV-1433: a world may bar the plate from every ranged kind (the City's dial).
+            if (rangedNeverShielded && (kind == EnemyKind.Bolter || kind == EnemyKind.ArcStriker || kind == EnemyKind.Gunner ||
+                                        kind == EnemyKind.Launcher || kind == EnemyKind.Turret))
+                implemented.Remove(EliteAffix.Shielded);
             if (EnemyArchetype.Of(kind).MoveSpeed <= 0f)
             {
                 implemented.Remove(EliteAffix.Hasted);
@@ -118,7 +123,7 @@ namespace MaxWorlds.Enemies
         /// <see cref="EliteAffix.Linked"/> — the same pick <see cref="RollAffix"/> makes for a fresh
         /// spawn, minus Linked itself (a Linked elite that failed to pair never retries pairing a
         /// second time as some other affix).</summary>
-        public static EliteAffix RerollExcludingLinked(string[] authoredAffixes, EnemyKind kind) =>
-            RollAffix(authoredAffixes, kind, EliteAffix.Linked);
+        public static EliteAffix RerollExcludingLinked(string[] authoredAffixes, EnemyKind kind, bool rangedNeverShielded = false) =>
+            RollAffix(authoredAffixes, kind, EliteAffix.Linked, rangedNeverShielded);
     }
 }

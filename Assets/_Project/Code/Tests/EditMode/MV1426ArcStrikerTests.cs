@@ -8,7 +8,7 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-1426 — the ARC STRIKER: marks a 2.5 m circle at Max's position, 1.0 s later a lightning column
-    /// hits it for 60; it walks away when Max is within 8 m. ONE test (MV-465 Rule 1), Tier 2 resolved
+    /// hits it for 60; (MV-1433 removed its retreat; see MV1433ArcStrikerHuntsTests). ONE test (MV-465 Rule 1), Tier 2 resolved
     /// values only, driven through the real spawner/pool and the robot's own public
     /// <see cref="RobotEnemy.Tick"/> (same shape as MV1280's Jammer test). On the base commit
     /// <c>EnemyKind.ArcStriker</c> does not exist, so this fails to compile there.
@@ -58,7 +58,7 @@ namespace MaxWorlds.Tests.EditMode
         private static float Flat(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
 
         [Test]
-        public void ArcStriker_MarksUnderMax_StrikesTheCircleForSixtyOnly_AndRetreatsFromSixMetres()
+        public void ArcStriker_MarksUnderMax_StrikesTheCircleForSixtyOnly()
         {
             GameObject groundGo = null, maxGo = null, spawnerGo = null;
             RobotEnemy striker = null;
@@ -105,14 +105,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(TickUntil(striker, () => striker.ArcStrike.IsMarking, 400), "the 4 s cooldown readies a second mark");
                 Assert.IsTrue(TickUntil(striker, () => striker.ArcStrike.Strikes == 2, 80), "the second strike lands");
                 Assert.AreEqual(60f, max.Damage, "Max inside the circle takes exactly 60");
-
-                // 4. Max at 6 m: the striker's distance grows over 2 s.
-                maxGo.transform.position = striker.transform.position + new Vector3(6f, 0f, 0f);
-                Physics.SyncTransforms();
-                float before = Flat(striker.transform.position, maxGo.transform.position);
-                for (int i = 0; i < Mathf.RoundToInt(2f / Dt); i++) striker.Tick(Dt);
-                float after = Flat(striker.transform.position, maxGo.transform.position);
-                Assert.That(after, Is.GreaterThan(before + 0.5f), "retreating from Max at 6 m");
             }
             finally
             {

@@ -776,15 +776,15 @@ namespace MaxWorlds.Enemies
 
         /// <summary>
         /// ARC STRIKER (MV-1426): long-range lightning artillery. It marks a 2.5 m circle under Max
-        /// and 1.0 s later a lightning column hits it for 60 (<see cref="ArcStrikerBattery"/>). It holds
-        /// near its spawn at the back of an area, walks away when Max comes within 8 m, and never enters
-        /// Telegraph/Lunge (<see cref="RobotEnemy"/> replaces the Chase state with its own hold/retreat).
+        /// and 1.0 s later a lightning column hits it for 60 (<see cref="ArcStrikerBattery"/>). MV-1433: it advances
+        /// on Max at 1.4 m/s until he is within 14 m and in sight, then holds and faces him; it never retreats and
+        /// never enters Telegraph/Lunge (<see cref="RobotEnemy"/> replaces Chase with its own advance/hold).
         /// No contact damage. <see cref="LungeRange"/> doubles as the 18 m mark range.
         /// </summary>
         public static EnemyArchetype ArcStriker => new EnemyArchetype(
             EnemyKind.ArcStriker, EnemyShape.Capsule, new Vector3(0.9f, 1.4f, 0.9f),
             colliderHeight: 1.6f, colliderRadius: 0.45f,
-            moveSpeed: 0.7f, maxHealth: 160f,
+            moveSpeed: 1.4f, maxHealth: 160f,
             contactDamage: 0f, contactRadius: 0.5f,
             lungeRange: 18f, telegraphTime: 1.0f, lungeSpeed: 0f, lungeTime: 0f, recoverTime: 1f,
             knockbackDecay: 28f,
