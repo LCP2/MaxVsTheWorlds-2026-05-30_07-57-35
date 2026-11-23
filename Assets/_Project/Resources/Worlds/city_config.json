@@ -57,6 +57,7 @@
   },
   "powerupCadence": 2,
   "squadTactics": true,
+  "brightHostileProjectiles": true,
  "eliteChancePct": 20,
   "eliteAffixes": [
    "shielded",

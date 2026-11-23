@@ -610,6 +610,7 @@ namespace MaxWorlds.Enemies
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 e.SetSquad(slots[i].Squad, slots[i].Post, _worldCfg?.dials != null && _worldCfg.dials.squadTactics);
+                e.SetBrightShots(_worldCfg?.dials != null && _worldCfg.dials.brightHostileProjectiles);   // MV-1428
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
                 if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
                 _areaByRobot[e] = areaIndex;
@@ -1005,6 +1006,7 @@ namespace MaxWorlds.Enemies
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 e.SetSquad(slots[i].Squad, slots[i].Post, _worldCfg?.dials != null && _worldCfg.dials.squadTactics);
+                e.SetBrightShots(_worldCfg?.dials != null && _worldCfg.dials.brightHostileProjectiles);   // MV-1428
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
                 // MV-688: wired BEFORE BeginDormant() (which routes a Lurker into BeginSubmerged) — it
                 // needs its home/area grates to already be set for the initial hidden state to be correct.
@@ -1129,6 +1131,7 @@ namespace MaxWorlds.Enemies
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 e.SetSquad(slots[i].Squad, slots[i].Post, _worldCfg?.dials != null && _worldCfg.dials.squadTactics);
+                e.SetBrightShots(_worldCfg?.dials != null && _worldCfg.dials.brightHostileProjectiles);   // MV-1428
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
                 // MV-688: see PlacePendingGarrison's own comment on this same line.
                 if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));

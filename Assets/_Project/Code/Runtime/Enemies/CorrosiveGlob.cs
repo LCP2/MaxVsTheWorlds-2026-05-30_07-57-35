@@ -68,13 +68,14 @@ namespace MaxWorlds.Enemies
         /// ticket's own authored puddle size/lifetime, handed straight to <see cref="CorrosionPuddle.Spawn"/>
         /// once this glob lands.</summary>
         public static CorrosiveGlob Fire(Vector3 origin, Transform target, float speed, float damage,
-            float splashRadius, float puddleRadius, float puddleDuration)
+            float splashRadius, float puddleRadius, float puddleDuration, bool bright = false)
         {
             var go = new GameObject("CorrosiveGlob (stand-in)");
             go.transform.position = origin + Vector3.up * FlightHeight;
-            BuildVisual(go.transform, DefaultBlobDiameter);
+            BuildVisual(go.transform, DefaultBlobDiameter, bright, speed);
 
             var glob = go.AddComponent<CorrosiveGlob>();
+            glob._bright = bright;
             Vector3 targetPosition = target != null ? target.position : origin + Vector3.forward;
             IDamageable damageable = target != null ? target.GetComponent<IDamageable>() : null;
             glob._flightBaseHeight = go.transform.position.y;
@@ -121,22 +122,59 @@ namespace MaxWorlds.Enemies
         private const float TrailTime = 0.14f;
         private const float TrailWidth = 0.3f;
 
-        private static void BuildVisual(Transform parent, float diameter)
+        private static void BuildVisual(Transform parent, float diameter, bool bright = false, float speed = 0f)
         {
             // Same reason as HomingMissile.BuildVisual/BolterBolt.BuildVisual: without this,
             // RuntimeSurfaceDirector's sweep claims this a frame after spawn and overwrites the
             // deliberate paint with the generic world-prop material (MV-350).
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, GlobColor);
+            Material mat = bright
+                ? VfxMaterials.AdditiveTinted(HostileShotLook.Orange)   // MV-1428: emissive orange core
+                : MaterialLibrary.Tinted(SurfaceKind.Metal, GlobColor);
             var blob = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             blob.name = "Glob";
             Strip(blob);
             blob.transform.SetParent(parent, false);
-            blob.transform.localScale = Vector3.one * diameter;
+            blob.transform.localScale = Vector3.one * (bright ? Mathf.Max(diameter, HostileShotLook.CoreDiameter) : diameter);
             if (mat != null) blob.GetComponent<MeshRenderer>().sharedMaterial = mat;
 
-            BuildTrail(parent, mat);
+            if (bright) BuildBrightTrail(parent, mat, speed);
+            else BuildTrail(parent, mat);
+        }
+
+        // --- MV-1428: bright hostile look ---
+        private bool _bright;
+
+        /// <summary>MV-1428: resolved core size / colour / trail length read back off the built blob,
+        /// its material and the <see cref="TrailRenderer"/> (trail metres = lifetime x flight speed).</summary>
+        public HostileShotLook.Resolved ResolvedLook()
+        {
+            Transform blob = transform.Find("Glob");
+            var trail = GetComponent<TrailRenderer>();
+            float diameter = blob != null ? blob.lossyScale.x : 0f;
+            Color colour = blob != null ? HostileShotLook.MaterialColor(blob.GetComponent<Renderer>().sharedMaterial) : Color.clear;
+            return new HostileShotLook.Resolved(diameter, colour, trail != null ? trail.time * _speed : 0f);
+        }
+
+        /// <summary>MV-1428: an orange, tapering, dripping trail long enough to clear the 1.0 m minimum.</summary>
+        private static void BuildBrightTrail(Transform parent, Material mat, float speed)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = HostileShotLook.TrailTimeFor(speed);
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(0.35f, 0.55f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = TrailWidth;
+            trail.minVertexDistance = 0.05f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = mat;
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(HostileShotLook.Orange, 0f), new GradientColorKey(HostileShotLook.Orange, 1f) },
+                new[] { new GradientAlphaKey(0.95f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+            trail.Clear();
         }
 
         /// <summary>Same shape as <see cref="HomingMissile.BuildTrail"/>: a short motion smear, not a

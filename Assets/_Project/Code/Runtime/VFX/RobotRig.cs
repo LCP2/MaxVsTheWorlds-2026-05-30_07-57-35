@@ -1457,6 +1457,9 @@ namespace MaxWorlds.VFX
         /// The origin is the eye/muzzle this rig just built, not the feet — the beam has to look like
         /// it comes out of the turret's lens, not out of the ground.
         /// </summary>
+        /// <summary>MV-1428: the Gunner's beam line, for tests (null until first drawn).</summary>
+        public LineRenderer BeamLineForTests => _beamLine;
+
         private void UpdateBeamVfx()
         {
             if (_enemy.Kind != EnemyKind.Gunner) return;
@@ -1481,11 +1484,13 @@ namespace MaxWorlds.VFX
             _beamLine.SetPosition(1, end);
 
             float fullWidth = _enemy.BeamHalfWidth * 2f;
+            bool bright = _enemy.BrightShots;   // MV-1428
+            if (bright) fullWidth = Mathf.Max(fullWidth, HostileShotLook.MinBeamWidth);
             if (aiming)
             {
                 float t = _enemy.TelegraphProgress;
                 _beamLine.widthMultiplier = Mathf.Lerp(0.03f, fullWidth * 0.9f, t);
-                Color c = EyeWarn;
+                Color c = bright ? HostileShotLook.Red : EyeWarn;
                 c.a = Mathf.Lerp(0.25f, 0.85f, t);
                 _beamLine.startColor = c;
                 _beamLine.endColor = c;
@@ -1493,7 +1498,7 @@ namespace MaxWorlds.VFX
             else // firing
             {
                 _beamLine.widthMultiplier = fullWidth;
-                Color c = Color.Lerp(EyeWarn, Color.white, 0.6f);
+                Color c = bright ? HostileShotLook.Red : Color.Lerp(EyeWarn, Color.white, 0.6f);
                 c.a = 1f;
                 _beamLine.startColor = c;
                 _beamLine.endColor = c;

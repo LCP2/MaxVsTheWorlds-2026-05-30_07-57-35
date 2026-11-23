@@ -1253,6 +1253,11 @@ namespace MaxWorlds.Arena
         /// post, blink behind). Default false; true only in city_config.json.</summary>
         public bool squadTactics = false;
 
+        /// <summary>MV-1428: every enemy shot in this world is drawn bright (orange/red/blue-white, 0.25 m
+        /// core, 1 m trail) and a Launcher in area 10+ fires a 2-missile salvo. Default false; true only in
+        /// city_config.json.</summary>
+        public bool brightHostileProjectiles = false;
+
         /// <summary>MV-1278: how many LIVE elites one area may hold at once before the roll stops
         /// offering a new one — not a per-world total, a per-area ceiling.</summary>
         public int eliteMaxPerArea = 3;

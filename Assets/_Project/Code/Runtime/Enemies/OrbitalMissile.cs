@@ -87,7 +87,8 @@ namespace MaxWorlds.Enemies
         /// (<see cref="OrbitalTuning.WorldBudget"/>) is spent. <paramref name="areaIndex"/> &lt;= 0
         /// disables the "leaves its own area" rule.</summary>
         public static OrbitalMissile Spawn(Vector3 feet, Vector3 heading, Transform target, int areaIndex,
-                                           Vector3? mouth = null, float damage = -1f, float trailSeconds = -1f, bool straight = false)
+                                           Vector3? mouth = null, float damage = -1f, float trailSeconds = -1f, bool straight = false,
+                                           bool bright = false)
         {
             PrunePool();
             if (!straight && FlyingCount >= OrbitalTuning.WorldBudget) return null;
@@ -127,6 +128,7 @@ namespace MaxWorlds.Enemies
             m._straight = straight;
             m._active = true;
             m._ballRoot.SetActive(true);
+            m.ApplyLook(bright);
             m._collider.enabled = true;
             m._trail.Clear();
             m._trail.emitting = true;
@@ -272,12 +274,12 @@ namespace MaxWorlds.Enemies
             _ballRoot = new GameObject("Ball");
             _ballRoot.transform.SetParent(transform, false);
 
-            BuildSphere(_ballRoot.transform, "Body", OrbitalTuning.BallDiameter,
+            _bodyR = BuildSphere(_ballRoot.transform, "Body", OrbitalTuning.BallDiameter,
                 VfxMaterials.AdditiveTinted(BallColor));
-            BuildSphere(_ballRoot.transform, "Core", OrbitalTuning.BallDiameter * 0.45f,
+            _coreR = BuildSphere(_ballRoot.transform, "Core", OrbitalTuning.BallDiameter * 0.45f,
                 VfxMaterials.AdditiveTinted(CoreColor));
             Color halo = BallColor * 0.4f;
-            BuildSphere(_ballRoot.transform, "Halo", OrbitalTuning.BallDiameter * 1.9f,
+            _haloR = BuildSphere(_ballRoot.transform, "Halo", OrbitalTuning.BallDiameter * 1.9f,
                 VfxMaterials.AdditiveTinted(halo));
 
             // Physics collider so Max's beam/pulses (which skip triggers) can hit and pop it.
@@ -299,7 +301,36 @@ namespace MaxWorlds.Enemies
             _trail.colorGradient = gradient;
         }
 
-        private static void BuildSphere(Transform parent, string name, float diameter, Material mat)
+        // --- MV-1428: bright hostile look. The missile is pooled, so the look is (re)applied on every Spawn. ---
+        private MeshRenderer _bodyR, _coreR, _haloR;
+
+        private void ApplyLook(bool bright)
+        {
+            Color body = bright ? HostileShotLook.BlueWhite : BallColor;
+            Color core = bright ? HostileShotLook.BlueWhite : CoreColor;
+            Color halo = body * 0.4f;
+            if (bright) halo.a = 1f;
+            _bodyR.sharedMaterial = VfxMaterials.AdditiveTinted(body);
+            _coreR.sharedMaterial = VfxMaterials.AdditiveTinted(core);
+            _haloR.sharedMaterial = VfxMaterials.AdditiveTinted(halo);
+            _coreR.transform.localScale = Vector3.one *
+                (bright ? HostileShotLook.CoreDiameter : OrbitalTuning.BallDiameter * 0.45f);
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(body, 0f), new GradientColorKey(body, 1f) },
+                new[] { new GradientAlphaKey(0.8f, 0f), new GradientAlphaKey(0f, 1f) });
+            _trail.colorGradient = gradient;
+        }
+
+        /// <summary>MV-1428: resolved core size / colour / trail length read back off the live missile
+        /// (trail metres = trail lifetime x the missile's real flight speed).</summary>
+        public HostileShotLook.Resolved ResolvedLook() => new HostileShotLook.Resolved(
+            _coreR.transform.lossyScale.x,
+            HostileShotLook.MaterialColor(_coreR.sharedMaterial),
+            _trail.time * OrbitalTuning.MissileSpeed);
+
+        private static MeshRenderer BuildSphere(Transform parent, string name, float diameter, Material mat)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             go.name = name;
@@ -310,7 +341,9 @@ namespace MaxWorlds.Enemies
             }
             go.transform.SetParent(parent, false);
             go.transform.localScale = Vector3.one * diameter;
-            if (mat != null) go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mat != null) mr.sharedMaterial = mat;
+            return mr;
         }
     }
 
@@ -347,6 +380,9 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-1345: world position of tube <c>i</c>'s mouth, supplied by the body (null for a
         /// body-less battery, e.g. a test — missiles then leave from the feet at flight height).</summary>
         public System.Func<int, Vector3?> TubeMouth;
+
+        /// <summary>MV-1428: the world's brightHostileProjectiles dial — launches blue-white missiles.</summary>
+        public bool Bright;
 
         /// <summary>The tube that fires next (the crown brings it round to the front).</summary>
         public int NextTube => _step % RobotBodies.OrbitalTubeCount;
@@ -399,7 +435,7 @@ namespace MaxWorlds.Enemies
             Vector3 line = dist > 1e-3f ? to / dist : Vector3.forward;
             Vector3 heading = Quaternion.AngleAxis(OrbitalTuning.LaunchAngle(_step), Vector3.up) * line;
             OrbitalMissile m = OrbitalMissile.Spawn(feet, heading, target, areaIndex,
-                                                    TubeMouth?.Invoke(NextTube));
+                                                    TubeMouth?.Invoke(NextTube), bright: Bright);
             if (m == null) return 0;   // world budget spent — try again next tick
 
             _live.Add(m);

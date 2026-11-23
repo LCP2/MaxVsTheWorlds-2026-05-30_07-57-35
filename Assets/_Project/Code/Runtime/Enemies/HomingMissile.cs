@@ -80,7 +80,7 @@ namespace MaxWorlds.Enemies
         /// <see cref="EnemyArchetype.ContactDamage"/>/<see cref="EnemyArchetype.ContactRadius"/> — same
         /// numbers, ranged-attack meaning.</summary>
         public static HomingMissile Fire(Vector3 origin, Transform target, float speed, float damage,
-            float splashRadius)
+            float splashRadius, bool bright = false)
         {
             var go = new GameObject("HomingMissile (stand-in)");
             go.transform.position = origin + Vector3.up * FlightHeight;
@@ -90,11 +90,30 @@ namespace MaxWorlds.Enemies
             if (aim.sqrMagnitude < 1e-4f) aim = Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(aim.normalized, Vector3.up);
 
-            BuildVisual(go.transform);
+            BuildVisual(go.transform, bright, speed);
 
             var missile = go.AddComponent<HomingMissile>();
+            missile._bright = bright;
+            missile._trailWidthBase = bright ? BrightTrailWidth : TrailWidth;
             missile.Init(target, speed, damage, splashRadius);
             return missile;
+        }
+
+        // --- MV-1428: bright hostile look (only when the world's brightHostileProjectiles dial is on) ---
+        private const float BrightTrailWidth = 0.3f;
+        private bool _bright;
+        private float _trailWidthBase = TrailWidth;
+        private Renderer _coreRenderer;
+
+        /// <summary>MV-1428: the resolved core size / colour / trail length of this missile, read back off
+        /// its real core sphere, material and <see cref="TrailRenderer"/> (trail metres = lifetime x speed).</summary>
+        public HostileShotLook.Resolved ResolvedLook()
+        {
+            Transform core = _coreRenderer != null ? _coreRenderer.transform : null;
+            float diameter = core != null ? core.lossyScale.x : 0f;
+            Color colour = _coreRenderer != null ? HostileShotLook.MaterialColor(_coreRenderer.sharedMaterial) : Color.clear;
+            float trail = _trail != null ? _trail.time * _speed : 0f;
+            return new HostileShotLook.Resolved(diameter, colour, trail);
         }
 
         /// <summary>MV-405: Lee's explicit colour call — the missile body matches the Launcher's own
@@ -129,7 +148,7 @@ namespace MaxWorlds.Enemies
         /// already keeps <c>transform.rotation</c> aimed along the flight path, and everything built here
         /// is a child in that same local space.
         /// </summary>
-        private static void BuildVisual(Transform parent)
+        private static void BuildVisual(Transform parent, bool bright = false, float speed = 0f)
         {
             // MV-350: none of Shaft/WarheadBand/Fin below is IDamageable, so with nothing else marking
             // them, RuntimeSurfaceDirector's sweep claimed them one frame after spawn and overwrote this
@@ -143,20 +162,26 @@ namespace MaxWorlds.Enemies
             // are private CLONES of MaterialLibrary.Tinted's shared cache entries (never the cached
             // instances themselves), or setting emission here would leak onto every other Metal-tinted
             // prop that happens to share one of these two exact tones.
-            Material shaftBase = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
+            // MV-1428: with the bright dial on the body is orange and fully emissive, never the Launcher's
+            // own body colour.
+            Color bodyColor = bright ? HostileShotLook.Orange : ShaftColor;
+            Material shaftBase = MaterialLibrary.Tinted(SurfaceKind.Metal, bodyColor);
             Material tipBase = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
 
             BackyardLook activeLook = WorldCatalog.ForActivePalette().Look;
 
             // Shaft/fins: the same world-compensation emission MV-857 gives Max — zero in World 1 (his
             // look there is already correct), filled back in wherever the active world is dimmer.
-            Material shaftMat = EmissiveInstance(shaftBase, MaxRig.WorldCompensationEmission(ShaftColor, activeLook));
+            Material shaftMat = bright
+                ? EmissiveInstance(shaftBase, HostileShotLook.Orange)
+                : EmissiveInstance(shaftBase, MaxRig.WorldCompensationEmission(ShaftColor, activeLook));
 
             // Tip and trail: fully emissive in every world, not just compensated — Lee's spec is that
             // these read as an unlit threat tell at ~48 px/m, not merely "as lit as World 1".
             Material tipMat = EmissiveInstance(tipBase, TipColor);
 
-            BuildTrail(parent, EmissiveInstance(shaftBase, ShaftColor));
+            if (bright) BuildBrightTrail(parent, speed);
+            else BuildTrail(parent, EmissiveInstance(shaftBase, ShaftColor));
 
             var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             shaft.name = "Shaft";
@@ -206,6 +231,39 @@ namespace MaxWorlds.Enemies
                 fin.transform.localScale = finScale;
                 if (shaftMat != null) fin.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
             }
+
+            if (bright)
+            {
+                // MV-1428: a glowing additive orange core, at least 0.25 m across, at the missile's centre.
+                var core = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                core.name = "BrightCore";
+                Strip(core);
+                core.transform.SetParent(parent, false);
+                core.transform.localScale = Vector3.one * HostileShotLook.CoreDiameter;
+                var coreMat = VfxMaterials.AdditiveTinted(HostileShotLook.Orange);
+                if (coreMat != null) core.GetComponent<MeshRenderer>().sharedMaterial = coreMat;
+            }
+        }
+
+        /// <summary>MV-1428: the bright missile's trail — orange fading to grey smoke, long enough
+        /// (lifetime x speed) to clear <see cref="HostileShotLook.MinTrailLength"/>.</summary>
+        private static void BuildBrightTrail(Transform parent, float speed)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = HostileShotLook.TrailTimeFor(speed);
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = BrightTrailWidth;
+            trail.minVertexDistance = 0.05f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = VfxMaterials.AdditiveTinted(HostileShotLook.Orange);
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(HostileShotLook.Orange, 0f), new GradientColorKey(HostileShotLook.Smoke, 1f) },
+                new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+            trail.Clear();
         }
 
         /// <summary>MV-508: a fast object with a hard aliased silhouette and nothing connecting one
@@ -267,6 +325,8 @@ namespace MaxWorlds.Enemies
             _splashRadius = splashRadius;
 
             _trail = GetComponent<TrailRenderer>();
+            Transform coreT = transform.Find("BrightCore");
+            _coreRenderer = coreT != null ? coreT.GetComponent<Renderer>() : null;
             ClearTrailForRespawn();
         }
 
@@ -361,7 +421,7 @@ namespace MaxWorlds.Enemies
 
             // MV-508: the trail dying alongside the coast is a free extension of MV-349's "the player
             // has to be able to tell it's failing" — the smear shrinks as the thrust does.
-            if (_trail != null) _trail.widthMultiplier = TrailWidth * coast;
+            if (_trail != null) _trail.widthMultiplier = _trailWidthBase * coast;
 
             if (_stateTimer >= SputterDuration) BeginBounce();
         }
