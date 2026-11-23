@@ -685,6 +685,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1409PylonCable());
             Add(BuildMv1412Wedge());
             Add(BuildMv1413ShieldedPlate());
+            Add(BuildMv1417CanisterBlast());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2286,6 +2287,73 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1413-shielded-bolter", Run) },
+            };
+        }
+
+        // ---- Mv1417CanisterBlast (MV-1417 AC2) ------------------------------------------------
+
+        /// <summary>MV-1417 AC2: a canister in the City world, shot dead, captured ~0.15 s into its
+        /// explosion at the play camera's pitch. ONE shot, no tuning loop. Run via
+        /// <c>cc-mv1417-capture.bat</c>; writes <c>Logs/MV-1417-canister-blast.png</c>.</summary>
+        private static CapturePreset BuildMv1417CanisterBlast()
+        {
+            IEnumerator Run(Camera cam)
+            {
+                Vector3 focus = new Vector3(600f, 0f, 600f);
+                var host = new GameObject("MV1417 Canister").transform;
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                ground.name = "MV1417 Ground";
+                ground.transform.SetParent(host, false);
+                ground.transform.position = focus + new Vector3(0f, -0.5f, 0f);
+                ground.transform.localScale = new Vector3(30f, 1f, 30f);
+                ground.GetComponent<Renderer>().sharedMaterial =
+                    MaterialLibrary.Tinted(SurfaceKind.Stone, new Color(0.26f, 0.27f, 0.30f));
+
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                go.transform.SetParent(host, false);
+                go.transform.position = focus + new Vector3(0f, WorldMapLoader.CanisterHeight * 0.5f, 0f);
+                go.transform.localScale = new Vector3(WorldMapLoader.CanisterFootprint, WorldMapLoader.CanisterHeight * 0.5f,
+                    WorldMapLoader.CanisterFootprint);
+                Canister canister = go.AddComponent<Canister>();
+                for (int i = 0; i < 3; i++) yield return null;
+
+                float pitch = 60f, distance = 9f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) pitch = fixedRig.Pitch;
+                var rot = Quaternion.Euler(pitch, 180f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                canister.TakeDamage(new DamageInfo(80f, go.transform.position, Vector3.down, Team.Player));
+                float deadline = Time.realtimeSinceStartup + 6f;
+                while (canister.Fireball == null && Time.realtimeSinceStartup < deadline) yield return null;
+                // Frame timing in the standalone varies, so shoot on the fireball's own size (full grown ~0.2 s in).
+                deadline = Time.realtimeSinceStartup + 3f;
+                while (canister.FireballRadius < 2.3f && Time.realtimeSinceStartup < deadline) yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1417canister",
+                LogTag = "[MV1417Capture]",
+                Flag = "-mv1417shot",
+                ArmFile = "Temp/mv1417.arm",
+                HeadlessMarker = "Temp/mv1417.headless",
+                DoneFileName = "_mv1417_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1417-canister-blast", Run) },
             };
         }
 

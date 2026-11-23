@@ -29,27 +29,30 @@ namespace MaxWorlds.Factories
     public sealed class Canister : MonoBehaviour, IDamageable, IHealthReadout
     {
         // --- Ticket's own numbers ---
-        private const float CanisterHealth = 40f;
+        private const float CanisterHealth = 80f;           // MV-1417: doubled from 40
         private const float FuseDuration = 1.0f;           // ">= 60 frames" at 60fps
         private const float BlastRadius = 3f;
         private const float BlastDamage = 60f;
-        private const float BlastRingLifetime = 10f / 60f;  // "expanding to 3 m over ~10 frames"
         private const float ScorchLife = 5f;                // "a scorch decal that fades in 5 s" (AmbienceVfx.CanisterScorchLife)
+        private const float HitFlashDuration = 0.08f;       // MV-1417: whole drum flashes white this long per hit
+        private const float HitFlashBlend = 0.8f;           // ...at least 60% of the way to white
+        private const float HealthBarWidth = 1.2f;          // MV-1417: was 0.8 m
 
         // --- Body proportions (ticket: "a drum 0.8 m across, 1.0 m tall") ---
         private const float DrumDiameter = WorldMapLoader.CanisterFootprint;
         private const float DrumHeight = WorldMapLoader.CanisterHeight;
         private const float BandHeight = 0.22f;
         private const float BandDiameterPad = 0.02f;   // sits a hair proud of the drum, never z-fights it
-        private const float ChevronWidth = 0.34f;
-        private const float ChevronHeight = 0.5f;
         private const float FlashesPerSecond = 6f;     // how fast the band blinks during the fuse
 
-        private static readonly Color SteelColor = new Color(0.20f, 0.21f, 0.23f);          // "dark steel"
-        private static readonly Color BandColor = new Color(0.95f, 0.45f, 0.08f);           // "bright orange hazard band"
+        // MV-1417: a red hazard drum that stands out in every world.
+        private static readonly Color DrumColor = new Color32(0xB2, 0x1C, 0x18, 255);       // #B21C18
+        private static readonly Color CapColor = new Color32(0xD6, 0x3A, 0x30, 255);        // lighter top cap
+        private static readonly Color ShadeColor = new Color32(0x7E, 0x12, 0x10, 255);      // darker left shade
+        private static readonly Color BandColor = new Color32(0xFF, 0xC4, 0x00, 255);       // #FFC400 yellow band
+        private static readonly Color StripeColor = new Color(0.05f, 0.05f, 0.05f);         // black hazard stripes
         private static readonly Color FlashColor = Color.white;
         private static readonly Color ChevronColor = Color.white;
-        private static readonly Color BlastRingColor = new Color(1f, 0.74f, 0.42f, 0.9f);   // "orange-white ring"
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -61,9 +64,38 @@ namespace MaxWorlds.Factories
         private Renderer _chevronRenderer;
         private MaterialPropertyBlock _bandMpb;
 
+        // MV-1417: the drum's red parts (body, cap, shade, band) that blend toward white on a hit, and
+        // every cosmetic renderer built under Body (hidden together on destruction).
+        private readonly List<Renderer> _tintParts = new List<Renderer>(4);
+        private readonly List<Color> _tintBase = new List<Color>(4);
+        private readonly List<Renderer> _allParts = new List<Renderer>(16);
+        private float _flashLeft;
+        private CanisterFx _fx;
+
         private bool _fusing;
         private float _fuseElapsed;
         private bool _exploded;
+
+        /// <summary>MV-1417: the live explosion fireball (null before the blast and once it is gone).</summary>
+        public GameObject Fireball => _fx?.Fireball;
+
+        /// <summary>MV-1417: the fireball's resolved radius in metres (0 when there is none).</summary>
+        public float FireballRadius => _fx?.FireballRadius ?? 0f;
+
+        /// <summary>MV-1417: the root every transient effect hangs under (null when none is live).</summary>
+        public GameObject FxRoot => _fx?.Root;
+
+        /// <summary>MV-1417: the drum body's resolved colour as last pushed through its MaterialPropertyBlock.</summary>
+        public Color DrumResolvedColor
+        {
+            get
+            {
+                if (_bodyRenderer == null) return Color.clear;
+                var mpb = new MaterialPropertyBlock();
+                _bodyRenderer.GetPropertyBlock(mpb);
+                return mpb.GetColor(BaseColorId);
+            }
+        }
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Neutral; // ticket: "takes damage from any team"
@@ -96,7 +128,11 @@ namespace MaxWorlds.Factories
         /// <summary>Wipe the registry. Called by <see cref="MapRuntime.Build"/> when a level starts
         /// building — see <see cref="Pylon.ResetRegistry"/>'s own doc comment for why this can't be
         /// named <c>Reset</c>.</summary>
-        public static void ResetRegistry() => Registered.Clear();
+        public static void ResetRegistry()
+        {
+            foreach (Canister c in Registered) c?._fx?.Dispose(); // MV-1417: a level teardown must not strand live effects
+            Registered.Clear();
+        }
 
         /// <summary>The stable ids of every registered canister already destroyed this run (MV-1296) —
         /// what a mid-run checkpoint capture persists so a resume can re-apply the exact same destroyed
@@ -142,12 +178,18 @@ namespace MaxWorlds.Factories
             _health.Destroyed += StartFuse;
 
             BuildBody();
-            WorldHealthBar.Attach(gameObject, this, DrumHeight * 0.5f + 0.6f, 0.8f, showNumber: false);
+            WorldHealthBar.Attach(gameObject, this, DrumHeight * 0.5f + 0.6f, HealthBarWidth, showNumber: false);
+
+            _fx = new CanisterFx(); // world-rooted on purpose: a scaled map parent would distort every piece
 
             if (!Registered.Contains(this)) Registered.Add(this);
         }
 
-        private void OnDestroy() => Registered.Remove(this);
+        private void OnDestroy()
+        {
+            Registered.Remove(this);
+            _fx?.Dispose();
+        }
 
         private void BuildBody()
         {
@@ -155,38 +197,96 @@ namespace MaxWorlds.Factories
             // Pylon/Replicator, which hide a cosmetic-mismatched cube root, this one just gets tinted.
             _collider = GetComponent<Collider>();
             _bodyRenderer = GetComponent<Renderer>();
+            _bandMpb = new MaterialPropertyBlock();
             if (_bodyRenderer != null)
             {
-                Material steel = MaterialLibrary.Tinted(SurfaceKind.Metal, SteelColor);
-                if (steel != null) _bodyRenderer.sharedMaterial = steel;
+                Material drum = MaterialLibrary.Tinted(SurfaceKind.Metal, DrumColor);
+                if (drum != null) _bodyRenderer.sharedMaterial = drum;
+                RegisterTint(_bodyRenderer, DrumColor);
             }
 
             Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
+            float r = DrumDiameter * 0.5f;
 
-            var bandGo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            bandGo.name = "Band";
-            var bandCol = bandGo.GetComponent<Collider>();
-            if (bandCol != null) Object.DestroyImmediate(bandCol); // cosmetic only — the drum's own collider is the real one
-            bandGo.transform.SetParent(bodyRoot, false);
-            bandGo.transform.localPosition = Vector3.zero;
-            // The cylinder mesh is 2 units tall, so half its height goes into the Y scale (same
-            // compensation MapRuntime.BuildCanister's own root cylinder needs).
-            bandGo.transform.localScale = new Vector3(DrumDiameter + BandDiameterPad, BandHeight * 0.5f, DrumDiameter + BandDiameterPad);
-            _bandRenderer = bandGo.GetComponent<MeshRenderer>();
-            Material band = MaterialLibrary.Tinted(SurfaceKind.Metal, BandColor);
-            if (band != null) _bandRenderer.sharedMaterial = band;
-            _bandMpb = new MaterialPropertyBlock();
+            // Lighter top cap — a thin disc a hair above the drum's top face.
+            Renderer cap = Part(bodyRoot, PrimitiveType.Cylinder, "Cap", new Vector3(0f, DrumHeight * 0.5f + 0.004f, 0f),
+                new Vector3(DrumDiameter * 0.97f, 0.01f, DrumDiameter * 0.97f), Quaternion.identity, CapColor);
+            RegisterTint(cap, CapColor);
 
-            var chevronGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            chevronGo.name = "Chevron";
-            var chevronCol = chevronGo.GetComponent<Collider>();
-            if (chevronCol != null) Object.DestroyImmediate(chevronCol);
-            chevronGo.transform.SetParent(bodyRoot, false);
-            chevronGo.transform.localPosition = new Vector3(0f, 0f, DrumDiameter * 0.5f);
-            chevronGo.transform.localScale = new Vector3(ChevronWidth, ChevronHeight, 0.02f);
-            _chevronRenderer = chevronGo.GetComponent<MeshRenderer>();
-            Material chevron = MaterialLibrary.Tinted(SurfaceKind.Metal, ChevronColor);
-            if (chevron != null) _chevronRenderer.sharedMaterial = chevron;
+            // Slightly darker left shade — a narrow strip hugging the drum's left flank.
+            Renderer shade = Part(bodyRoot, PrimitiveType.Cube, "Shade",
+                new Vector3(-Mathf.Sin(65f * Mathf.Deg2Rad) * r * 1.01f, 0f, Mathf.Cos(65f * Mathf.Deg2Rad) * r * 1.01f),
+                new Vector3(0.1f, DrumHeight * 0.94f, 0.02f), Quaternion.Euler(0f, -65f, 0f), ShadeColor);
+            RegisterTint(shade, ShadeColor);
+
+            // Yellow band, the cylinder mesh is 2 units tall so half its height goes into the Y scale.
+            _bandRenderer = Part(bodyRoot, PrimitiveType.Cylinder, "Band", Vector3.zero,
+                new Vector3(DrumDiameter + BandDiameterPad, BandHeight * 0.5f, DrumDiameter + BandDiameterPad),
+                Quaternion.identity, BandColor);
+            RegisterTint(_bandRenderer, BandColor);
+
+            // Black diagonal hazard stripes across the front arc of the band.
+            float stripeR = r + BandDiameterPad * 0.5f;
+            for (int i = 0; i < 7; i++)
+            {
+                float a = (i - 3) * 17f * Mathf.Deg2Rad;
+                Part(bodyRoot, PrimitiveType.Cube, "Stripe", new Vector3(Mathf.Sin(a) * stripeR, 0f, Mathf.Cos(a) * stripeR),
+                    new Vector3(0.04f, BandHeight * 1.28f, 0.012f), Quaternion.Euler(0f, a * Mathf.Rad2Deg, 40f), StripeColor);
+            }
+
+            // White hazard icon on the front: an up-arrow (diamond head + stem) above the band.
+            _chevronRenderer = Part(bodyRoot, PrimitiveType.Cube, "Chevron",
+                new Vector3(0f, 0.2f, r + 0.005f), new Vector3(0.16f, 0.16f, 0.02f), Quaternion.Euler(0f, 0f, 45f), ChevronColor);
+            Part(bodyRoot, PrimitiveType.Cube, "ChevronStem", new Vector3(0f, 0.09f, r + 0.005f),
+                new Vector3(0.07f, 0.16f, 0.02f), Quaternion.identity, ChevronColor);
+        }
+
+        /// <summary>One cosmetic primitive under the body root, on a tinted Metal surface; remembered so it
+        /// is hidden (and marked hidden) when the drum is destroyed.</summary>
+        private Renderer Part(Transform parent, PrimitiveType type, string name, Vector3 localPos, Vector3 localScale,
+            Quaternion localRot, Color color)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            go.name = name;
+            var col = go.GetComponent<Collider>();
+            if (col != null) Object.DestroyImmediate(col); // cosmetic only — the drum's own collider is the real one
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = localRot;
+            go.transform.localScale = localScale;
+            var rend = go.GetComponent<MeshRenderer>();
+            Material m = MaterialLibrary.Tinted(SurfaceKind.Metal, color);
+            if (m != null) rend.sharedMaterial = m;
+            SetPartColor(rend, color);
+            _allParts.Add(rend);
+            return rend;
+        }
+
+        private void RegisterTint(Renderer r, Color baseColor)
+        {
+            _tintParts.Add(r);
+            _tintBase.Add(baseColor);
+            SetPartColor(r, baseColor);
+        }
+
+        private void SetPartColor(Renderer r, Color c)
+        {
+            if (r == null) return;
+            r.GetPropertyBlock(_bandMpb);
+            _bandMpb.SetColor(BaseColorId, c);
+            _bandMpb.SetColor(ColorId, c);
+            r.SetPropertyBlock(_bandMpb);
+        }
+
+        /// <summary>Blend every red part toward white by <paramref name="amount"/> (0 = its own colour).
+        /// The band is left to the fuse's blink while fusing.</summary>
+        private void ApplyDrumTint(float amount)
+        {
+            for (int i = 0; i < _tintParts.Count; i++)
+            {
+                if (_fusing && _tintParts[i] == _bandRenderer) continue;
+                SetPartColor(_tintParts[i], Color.Lerp(_tintBase[i], FlashColor, amount));
+            }
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -194,6 +294,17 @@ namespace MaxWorlds.Factories
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // always true for Team.Neutral — kept for symmetry with every other TakeDamage in this codebase
             HudSignals.EmitDamage(transform.position + Vector3.up * (DrumHeight * 0.5f + 0.3f), info.Amount);
+
+            if (info.Amount > 0f)
+            {
+                // MV-1417: every hit flashes the whole drum and sprays sparks from the hit point.
+                _flashLeft = HitFlashDuration;
+                ApplyDrumTint(HitFlashBlend);
+                Vector3 hit = info.Point;
+                if ((hit - transform.position).sqrMagnitude > 4f) hit = transform.position;
+                _fx?.HitSparks(hit);
+            }
+
             _health.TakeDamage(info.Amount);
         }
 
@@ -206,16 +317,28 @@ namespace MaxWorlds.Factories
         {
             _fusing = true;
             _fuseElapsed = 0f;
+            _fx?.BeginFuse(FuseTop, transform.position);
         }
+
+        private Vector3 FuseTop => transform.position + Vector3.up * (DrumHeight * 0.5f);
 
         /// <summary>Advances the fuse (and its band flash) toward <see cref="Explode"/> — dt-parameterised
         /// like <see cref="Pylon.TickCable"/>, called from this object's own <c>Update</c> in Play mode
         /// and directly by an EditMode test.</summary>
         public void Tick(float dt)
         {
+            _fx?.Tick(dt);
+
+            if (_flashLeft > 0f)
+            {
+                _flashLeft -= dt;
+                if (_flashLeft <= 0f) ApplyDrumTint(0f);
+            }
+
             if (!_fusing || _exploded) return;
 
             _fuseElapsed += dt;
+            _fx?.FuseTick(dt, FuseTop);
 
             bool flashOn = Mathf.FloorToInt(_fuseElapsed * FlashesPerSecond) % 2 == 0;
             SetBandColor(flashOn ? FlashColor : BandColor);
@@ -230,7 +353,7 @@ namespace MaxWorlds.Factories
 
             Vector3 point = transform.position;
             BlastSweep(point);
-            PlayBlastRing(point);
+            _fx?.Explode(point, BlastRadius);
             HudSignals.EmitCanisterDetonated(point);
 
             ApplyDestructionEffects();
@@ -257,8 +380,7 @@ namespace MaxWorlds.Factories
             if (_collider != null) _collider.enabled = false;
             // MV-1416: hidden AND marked, or MapStaticBatchRoot.ApplyAreaGate re-enables them within 0.25 s.
             HideAndMark(_bodyRenderer);
-            HideAndMark(_bandRenderer);
-            HideAndMark(_chevronRenderer);
+            foreach (Renderer part in _allParts) HideAndMark(part);
         }
 
         private static void HideAndMark(Renderer r)
@@ -312,50 +434,6 @@ namespace MaxWorlds.Factories
 
                 d.TakeDamage(new DamageInfo(BlastDamage, point, Vector3.up, Team.Neutral,
                     source: DamageSource.Environment));
-            }
-        }
-
-        private static void PlayBlastRing(Vector3 point)
-        {
-            GroundRing ring = GroundRing.Create("CanisterBlastRing");
-            ring.gameObject.AddComponent<BlastRingLifetimeVfx>().Begin(ring, point, BlastRadius, BlastRingLifetime);
-        }
-
-        /// <summary>Grows the blast ring to <see cref="BlastRadius"/> over <see cref="BlastRingLifetime"/>,
-        /// fading it out, then destroys its own GameObject — same self-contained shape as
-        /// <c>MaxWorlds.Weapons.RocketImpactVfx.RingLifetime</c> (a detonation has no owning component
-        /// left alive to drive it once this canister's body is hidden).</summary>
-        [MaxWorlds.Core.PerfSection("factories")]
-        private sealed class BlastRingLifetimeVfx : MonoBehaviour
-        {
-            private const float RingStartRadius = 0.05f;
-
-            private GroundRing _ring;
-            private Vector3 _origin;
-            private float _maxRadius;
-            private float _life;
-            private float _t;
-
-            public void Begin(GroundRing ring, Vector3 origin, float maxRadius, float life)
-            {
-                _ring = ring;
-                _origin = origin;
-                _maxRadius = maxRadius;
-                _life = life;
-                _ring.Show(_origin, RingStartRadius, BlastRingColor);
-            }
-
-            private void Update()
-            {
-                _t += Time.deltaTime;
-                float f = Mathf.Clamp01(_t / _life);
-                _ring.Show(_origin, Mathf.Lerp(RingStartRadius, _maxRadius, f),
-                    new Color(BlastRingColor.r, BlastRingColor.g, BlastRingColor.b, BlastRingColor.a * (1f - f)));
-                if (f >= 1f)
-                {
-                    _ring.Hide();
-                    Destroy(gameObject);
-                }
             }
         }
 

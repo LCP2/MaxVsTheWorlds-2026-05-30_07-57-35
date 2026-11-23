@@ -122,7 +122,7 @@ namespace MaxWorlds.Tests.EditMode
             part.transform.SetParent(coverBody.transform, false);
 
             Vector3 canisterPos = canister.transform.position;
-            canister.TakeDamage(new DamageInfo(40f, canisterPos, Vector3.down, Team.Player));
+            canister.TakeDamage(new DamageInfo(80f, canisterPos, Vector3.down, Team.Player));
             for (float t = 0f; t < 1.5f; t += 0.1f) canister.Tick(0.1f);
             cover.TakeDamage(new DamageInfo(100f, coverBody.transform.position, Vector3.down, Team.Player));
             Assert.IsFalse(canister.IsAlive, "setup failure: canister destroyed");

@@ -155,11 +155,15 @@ namespace MaxWorlds.Tests.EditMode
             float rusherNearHealthBefore = rusherNear.HealthCurrent;
             float rusherFarHealthBefore = rusherFar.HealthCurrent;
 
-            // === AC1: 40 damage (the ticket's own authored HP) starts canister A's fuse rather than
-            // destroying it outright ("does not vanish ... sparks") ===
-            canisterA.TakeDamage(new DamageInfo(40f, canisterAPos, Vector3.down, Team.Player));
+            // MV-1417 doubled the canister to 80 HP: a 60-damage blast no longer kills a neighbour from
+            // full, so canister B is pre-damaged by 20 to keep the chain (60 blast >= 60 left) exercised.
+            canisterB.TakeDamage(new DamageInfo(20f, canisterAPos, Vector3.down, Team.Player));
+
+            // === AC1: lethal damage starts canister A's fuse rather than destroying it outright
+            // ("does not vanish ... sparks") ===
+            canisterA.TakeDamage(new DamageInfo(80f, canisterAPos, Vector3.down, Team.Player));
             Assert.IsTrue(canisterA.IsFusing,
-                "MV-1296 AC1: 40 damage on a 40 HP canister must start its fuse, not destroy it outright");
+                "MV-1296 AC1: lethal damage on an 80 HP canister must start its fuse, not destroy it outright");
 
             // === AC1: 1.1 s simulated (11 explicit 0.1 s ticks) carries the fuse past its 1.0 s duration
             // and fires the blast ===
