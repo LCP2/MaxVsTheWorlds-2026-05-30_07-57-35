@@ -119,6 +119,7 @@ namespace MaxWorlds.Audio
             HudSignals.ForceFieldPopped += OnForceFieldPopped;
             HudSignals.ShieldDeflected += OnShieldDeflected;   // MV-1380
             HudSignals.DomeBlocked += OnDomeBlocked;           // MV-1380
+            HudSignals.CanisterDetonated += OnCanisterDetonated; // MV-1421
         }
 
         private void OnDisable()
@@ -148,6 +149,7 @@ namespace MaxWorlds.Audio
             HudSignals.ForceFieldPopped -= OnForceFieldPopped;
             HudSignals.ShieldDeflected -= OnShieldDeflected;
             HudSignals.DomeBlocked -= OnDomeBlocked;
+            HudSignals.CanisterDetonated -= OnCanisterDetonated;
         }
 
         private void Update()
@@ -181,6 +183,7 @@ namespace MaxWorlds.Audio
         private void OnForceFieldPopped(Vector3 pos) => PlayCue(Cue.ForceFieldPop, pos);
         private void OnShieldDeflected(Vector3 pos, Vector3 dir) => PlayCue(Cue.ShieldBlocked, pos);   // MV-1380
         private void OnDomeBlocked(Vector3 pos) => PlayCue(Cue.ShieldBlocked, pos);                  // MV-1380
+        private void OnCanisterDetonated(Vector3 pos) => PlayCue(Cue.CanisterExplosion, pos);   // MV-1421
         private void OnAnyButtonClicked() => PlayCue(Cue.UiClick, transform.position);
 
         // --- playback ---

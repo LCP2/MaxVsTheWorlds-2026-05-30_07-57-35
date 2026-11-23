@@ -17,12 +17,20 @@ namespace MaxWorlds.Factories
     {
         // --- Ticket numbers ---
         public const float HitStreakLife = 0.2f;            // "gone within 0.25 s"
-        private const float FireballStartRadius = 0.3f;
-        public const float FireballMaxRadius = 2.5f;
+        private const float FireballStartRadius = 0.45f;   // MV-1421: fireball scaled 1.5x
+        public const float FireballMaxRadius = 3.75f;
         private const float FireballGrowTime = 0.2f;
         private const float FireballLife = 0.7f;
-        private const float RingLife = 0.3f;
-        private const float RingStartRadius = 0.05f;
+        // MV-1421: the ring of fire - 0 -> blast radius at 15 m/s (0.4 s for 6 m), fading over a further 0.3 s.
+        public const float RingSpeed = 15f;
+        private const float RingFadeTime = 0.3f;
+        private const float BandLeading = 0.15f;            // white-yellow leading edge
+        private const float BandMiddle = 0.20f;             // orange
+        private const float BandTrailing = 0.25f;           // red trailing edge  (0.6 m of flame in all, >= 0.5 m)
+        private const int BandSegments = 64;
+        private const int TongueCount = 24;
+        private const float ScorchFadeTime = 1f;
+        private const float ScorchColourAlpha = 0.55f;
         private const float DebrisLife = 1.0f;
         private const float SmokeLife = 2.0f;
         private const float FountainRate = 70f;             // sparks per second while fusing
@@ -49,7 +57,9 @@ namespace MaxWorlds.Factories
         private static readonly Color SparkColor = new Color(1f, 0.78f, 0.25f);
         private static readonly Color ShardColor = new Color(0.70f, 0.11f, 0.09f);
         private static readonly Color GlowColor = new Color(1f, 0.5f, 0.1f);
-        private static readonly Color RingColor = new Color(1f, 0.82f, 0.55f);
+        private static readonly Color LeadingColor = new Color(1f, 0.95f, 0.6f);
+        private static readonly Color MiddleColor = new Color(1f, 0.5f, 0.08f);
+        private static readonly Color TrailingColor = new Color(0.75f, 0.1f, 0.04f);
 
         private readonly List<Piece> _pieces = new List<Piece>(48);
         private readonly MaterialPropertyBlock _mpb = new MaterialPropertyBlock();
@@ -58,10 +68,13 @@ namespace MaxWorlds.Factories
         private GameObject _glow;
         private Renderer _glowRend;
         private float _glowT;
-        private GroundRing _ring;
+        private FlameBand[] _bands;
+        private GameObject[] _tongues;
+        private GroundRing _scorch;
         private Vector3 _ringOrigin;
         private float _ringAge;
         private float _ringMax;
+        private float _tongueFlicker;
         private float _fountainBank;
 
         /// <summary>The live fireball (null until the canister explodes, and again once it is gone) —
@@ -73,7 +86,7 @@ namespace MaxWorlds.Factories
 
         public GameObject Root => _root;
 
-        public bool Busy => _pieces.Count > 0 || _glow != null || _ring != null;
+        public bool Busy => _pieces.Count > 0 || _glow != null || _bands != null;
 
         /// <summary>Where the fx root hangs (the canister's own parent, so a level teardown takes it too).</summary>
         public Transform ParentHint { get; set; }
@@ -154,13 +167,31 @@ namespace MaxWorlds.Factories
             _pieces.Add(new Piece { Kind = Kind.FireballEdge, Go = edge, Rend = edge.GetComponent<Renderer>(), Life = FireballLife });
             ApplyFireball(core);
 
-            // Shockwave: a thick additive annulus, 0.05 m -> the blast radius in 0.3 s.
-            _ring = GroundRing.Create("CanisterShockwave", VfxMaterials.Annulus(), additive: true);
-            _ring.transform.SetParent(_root.transform, true);
+            // Ring of fire: three nested additive bands (white-yellow, orange, red) plus flame tongues.
             _ringOrigin = point;
             _ringMax = blastRadius;
             _ringAge = 0f;
-            _ring.Show(_ringOrigin, RingStartRadius, RingColor);
+            _tongueFlicker = 0f;
+            Material solid = VfxMaterials.Additive(VfxMaterials.Solid());
+            _bands = new FlameBand[3];
+            for (int b = 0; b < 3; b++) _bands[b] = new FlameBand(_root.transform, "CanisterFireRing" + b, solid, _mpb);
+            Material tongueMat = VfxMaterials.AdditiveTinted(MiddleColor);
+            _tongues = new GameObject[TongueCount];
+            for (int k = 0; k < TongueCount; k++)
+            {
+                GameObject t = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                t.name = "FireTongue";
+                StripCollider(t);
+                t.transform.SetParent(_root.transform, false);
+                Renderer tr = t.GetComponent<Renderer>();
+                tr.sharedMaterial = tongueMat;
+                Cosmetic(tr);
+                _tongues[k] = t;
+            }
+            // Scorch tint on the floor inside the ring, fading in 1 s.
+            _scorch = GroundRing.Create("CanisterScorchTint", VfxMaterials.Splat(), additive: false);
+            _scorch.transform.SetParent(_root.transform, true);
+            UpdateRing(0f);
 
             // Debris: 10-14 red shards thrown 2-4 m, falling, gone by 1.0 s.
             int shards = Random.Range(10, 15);
@@ -199,15 +230,11 @@ namespace MaxWorlds.Factories
 
         public void Tick(float dt)
         {
-            if (_ring != null)
+            if (_bands != null)
             {
                 _ringAge += dt;
-                float f = Mathf.Clamp01(_ringAge / RingLife);
-                float e = 1f - (1f - f) * (1f - f);
-                float a = (1f - f * f) * 1.3f;   // bright orange-white, held until late
-                _ring.Show(_ringOrigin, Mathf.Lerp(RingStartRadius, _ringMax, e),
-                    new Color(RingColor.r * a, RingColor.g * a, RingColor.b * a, a));
-                if (f >= 1f) { Kill(_ring.gameObject); _ring = null; }
+                UpdateRing(dt);
+                if (_ringAge >= _ringMax / RingSpeed + RingFadeTime) DisposeRing();
             }
 
             for (int i = _pieces.Count - 1; i >= 0; i--)
@@ -262,6 +289,127 @@ namespace MaxWorlds.Factories
             }
 
             if (_root != null && !Busy) { Kill(_root); _root = null; }
+        }
+
+        /// <summary>Places the three bands and the tongues for the current ring age.</summary>
+        private void UpdateRing(float dt)
+        {
+            float travel = _ringMax / RingSpeed;
+            float radius = Mathf.Min(_ringMax, _ringAge * RingSpeed);
+            float fade = _ringAge <= travel ? 1f : Mathf.Clamp01(1f - (_ringAge - travel) / RingFadeTime);
+            const float boost = 1.4f;
+
+            float outer = radius;
+            float[] widths = { BandLeading, BandMiddle, BandTrailing };
+            Color[] cols = { LeadingColor, MiddleColor, TrailingColor };
+            for (int b = 0; b < 3; b++)
+            {
+                float inner = Mathf.Max(0f, outer - widths[b]);
+                Color c = cols[b] * (fade * boost);
+                c.a = fade;
+                _bands[b].Set(_ringOrigin, inner, outer, c);
+                outer = inner;
+            }
+
+            // Flickering flame tongues on the outer edge: re-rolled length/width ~20 times a second.
+            _tongueFlicker -= dt;
+            bool reroll = _tongueFlicker <= 0f;
+            if (reroll) _tongueFlicker = 0.05f;
+            bool show = radius > 0.2f && fade > 0.01f;
+            for (int k = 0; k < _tongues.Length; k++)
+            {
+                GameObject t = _tongues[k];
+                if (t == null) continue;
+                if (t.activeSelf != show) t.SetActive(show);
+                if (!show) continue;
+                float ang = (k + 0.5f * (k % 2)) / _tongues.Length * Mathf.PI * 2f;
+                if (reroll)
+                {
+                    float len = Random.Range(0.5f, 1.2f) * fade;
+                    t.transform.localScale = new Vector3(Random.Range(0.2f, 0.4f), Random.Range(0.3f, 0.7f), Mathf.Max(0.01f, len));
+                }
+                Vector3 dir = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+                float len2 = t.transform.localScale.z;
+                t.transform.position = _ringOrigin + dir * (radius + len2 * 0.25f) + Vector3.up * 0.2f;
+                t.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            }
+
+            if (_scorch != null)
+            {
+                float a = ScorchColourAlpha * Mathf.Clamp01(_ringAge / ScorchFadeTime);
+                float hold = 1f - Mathf.Clamp01((_ringAge - travel - RingFadeTime) / ScorchFadeTime);
+                _scorch.Show(_ringOrigin, Mathf.Max(0.05f, radius), new Color(0.06f, 0.04f, 0.03f, a * hold));
+            }
+        }
+
+        private void DisposeRing()
+        {
+            if (_bands != null) foreach (FlameBand b in _bands) b.Dispose();
+            _bands = null;
+            if (_tongues != null) foreach (GameObject t in _tongues) if (t != null) Kill(t);
+            _tongues = null;
+            if (_scorch != null) Kill(_scorch.gameObject);
+            _scorch = null;
+        }
+
+        /// <summary>One flat annulus mesh whose inner/outer radius is rewritten in place each frame (a fixed
+        /// WORLD thickness, which a scaled quad cannot give), tinted through a MaterialPropertyBlock.</summary>
+        private sealed class FlameBand
+        {
+            private const float Lift = 0.12f;
+            private readonly GameObject _go;
+            private readonly Mesh _mesh;
+            private readonly MeshRenderer _rend;
+            private readonly MaterialPropertyBlock _block;
+            private readonly Vector3[] _verts = new Vector3[BandSegments * 2];
+
+            public FlameBand(Transform parent, string name, Material mat, MaterialPropertyBlock shared)
+            {
+                _block = shared;
+                _go = new GameObject(name);
+                _go.transform.SetParent(parent, false);
+                _mesh = new Mesh { name = name };
+                var uvs = new Vector2[BandSegments * 2];
+                var tris = new int[BandSegments * 6];
+                for (int i = 0; i < BandSegments; i++)
+                {
+                    uvs[i * 2] = uvs[i * 2 + 1] = new Vector2(0.5f, 0.5f);
+                    int a = i * 2, b = i * 2 + 1, c = ((i + 1) % BandSegments) * 2, d = c + 1;
+                    int t = i * 6;
+                    tris[t] = a; tris[t + 1] = c; tris[t + 2] = b;
+                    tris[t + 3] = b; tris[t + 4] = c; tris[t + 5] = d;
+                }
+                _mesh.vertices = _verts;
+                _mesh.uv = uvs;
+                _mesh.triangles = tris;
+                _go.AddComponent<MeshFilter>().sharedMesh = _mesh;
+                _rend = _go.AddComponent<MeshRenderer>();
+                _rend.sharedMaterial = mat;
+                Cosmetic(_rend);
+            }
+
+            public void Set(Vector3 origin, float inner, float outer, Color color)
+            {
+                for (int i = 0; i < BandSegments; i++)
+                {
+                    float ang = i / (float)BandSegments * Mathf.PI * 2f;
+                    float cx = Mathf.Cos(ang), cz = Mathf.Sin(ang);
+                    _verts[i * 2] = new Vector3(origin.x + cx * inner, origin.y + Lift, origin.z + cz * inner);
+                    _verts[i * 2 + 1] = new Vector3(origin.x + cx * outer, origin.y + Lift, origin.z + cz * outer);
+                }
+                _mesh.vertices = _verts;
+                _mesh.RecalculateBounds();
+                _rend.GetPropertyBlock(_block);
+                _block.SetColor(BaseColorId, color);
+                _block.SetColor(ColorId, color);
+                _rend.SetPropertyBlock(_block);
+            }
+
+            public void Dispose()
+            {
+                Kill(_mesh);
+                if (_go != null) Kill(_go);
+            }
         }
 
         private void ApplyFireball(Piece p)
@@ -361,7 +509,7 @@ namespace MaxWorlds.Factories
         public void Dispose()
         {
             _pieces.Clear();
-            _ring = null;
+            DisposeRing();
             _glow = null;
             Fireball = null;
             if (_root != null) Kill(_root);

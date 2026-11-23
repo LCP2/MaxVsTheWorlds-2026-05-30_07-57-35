@@ -60,6 +60,9 @@ namespace MaxWorlds.Audio
 
             // MV-1380: a fully deflected hit (Shielded plate or Projector dome) - appended, never inserted.
             ShieldBlocked,
+
+            // MV-1421: a canister's blast - appended, never inserted.
+            CanisterExplosion,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -110,6 +113,7 @@ namespace MaxWorlds.Audio
             { Cue.HelmsmanLensSweep, "Helmsman lens sweep" },
             { Cue.ViewportRising, "Viewport rising" },
             { Cue.ShieldBlocked, "Blocked hit" },
+            { Cue.CanisterExplosion, "Canister explosion" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -155,6 +159,7 @@ namespace MaxWorlds.Audio
             { Cue.HelmsmanLensSweep, 6 },
             { Cue.ViewportRising, 4 },
             { Cue.ShieldBlocked, 8 },
+            { Cue.CanisterExplosion, 6 },
         };
 
         private static SfxPreset P(SfxWaveform wf, float freq = 0f, float slide = 0f,
@@ -433,6 +438,16 @@ namespace MaxWorlds.Audio
             [Cue.ShieldBlocked] = new[]
             {
                 P(SfxWaveform.Square, freq: 1900f, slide: -700f, attack: 0.001f, sustain: 0.01f, decay: 0.07f, duty: 0.25f, lowPass: 5000f, volume: 0.5f),
+            },
+
+            // MV-1421: "a deep boom with a sharp crack at the front and a rumbling tail of about 0.8 s" -
+            // clearly louder (first note's 1.0 sets the peak, vs RocketImpact's 0.8) and lower (a 48 Hz
+            // sine body and a 220 Hz low-passed rumble, vs RocketImpact's 1800 Hz noise pop).
+            [Cue.CanisterExplosion] = new[]
+            {
+                P(SfxWaveform.Noise, attack: 0.001f, sustain: 0.01f, decay: 0.05f, lowPass: 6000f, volume: 1f, seed: 19),
+                P(SfxWaveform.Sine, freq: 48f, slide: -12f, attack: 0.003f, sustain: 0.1f, decay: 0.45f, volume: 1f),
+                P(SfxWaveform.Noise, attack: 0.02f, sustain: 0.05f, decay: 0.75f, lowPass: 220f, volume: 0.9f, seed: 20),
             },
         };
 

@@ -6,6 +6,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Factories
 {
@@ -31,8 +32,11 @@ namespace MaxWorlds.Factories
         // --- Ticket's own numbers ---
         private const float CanisterHealth = 80f;           // MV-1417: doubled from 40
         private const float FuseDuration = 1.0f;           // ">= 60 frames" at 60fps
-        private const float BlastRadius = 3f;
-        private const float BlastDamage = 60f;
+        private const float BlastRadius = 6f;               // MV-1421: doubled from 3 m (Lee, 23 Nov)
+        private const float BlastFullRadius = 3f;           // full damage out to here...
+        private const float BlastDamageInner = 120f;        // ...then a linear fall...
+        private const float BlastDamageEdge = 60f;          // ...to this at BlastRadius
+        private const float BlastQueryMargin = 1.5f;        // a big body's pivot can sit this far from its collider
         private const float ScorchLife = 5f;                // "a scorch decal that fades in 5 s" (AmbienceVfx.CanisterScorchLife)
         private const float HitFlashDuration = 0.08f;       // MV-1417: whole drum flashes white this long per hit
         private const float HitFlashBlend = 0.8f;           // ...at least 60% of the way to white
@@ -75,6 +79,13 @@ namespace MaxWorlds.Factories
         private bool _fusing;
         private float _fuseElapsed;
         private bool _exploded;
+
+        // MV-1421: the blast front - it travels with the ring of fire (CanisterFx.RingSpeed) and each target
+        // is damaged once, the moment the front reaches it.
+        private bool _blasting;
+        private float _blastFront;
+        private Vector3 _blastPoint;
+        private readonly HashSet<IDamageable> _blastHit = new HashSet<IDamageable>();
 
         /// <summary>MV-1417: the live explosion fireball (null before the blast and once it is gone).</summary>
         public GameObject Fireball => _fx?.Fireball;
@@ -328,6 +339,7 @@ namespace MaxWorlds.Factories
         public void Tick(float dt)
         {
             _fx?.Tick(dt);
+            if (_blasting) AdvanceBlast(dt);
 
             if (_flashLeft > 0f)
             {
@@ -343,7 +355,11 @@ namespace MaxWorlds.Factories
             bool flashOn = Mathf.FloorToInt(_fuseElapsed * FlashesPerSecond) % 2 == 0;
             SetBandColor(flashOn ? FlashColor : BandColor);
 
-            if (_fuseElapsed >= FuseDuration) Explode();
+            if (_fuseElapsed >= FuseDuration)
+            {
+                Explode();
+                AdvanceBlast(_fuseElapsed - FuseDuration); // any overshoot of this step already travels the front
+            }
         }
 
         private void Explode()
@@ -352,7 +368,11 @@ namespace MaxWorlds.Factories
             _exploded = true;
 
             Vector3 point = transform.position;
-            BlastSweep(point);
+            _blasting = true;
+            _blastFront = 0f;
+            _blastPoint = point;
+            _blastHit.Clear();
+            _blastHit.Add(this);
             _fx?.Explode(point, BlastRadius);
             HudSignals.EmitCanisterDetonated(point);
 
@@ -401,39 +421,68 @@ namespace MaxWorlds.Factories
 
         // ---------------------------------------------------------------- Blast (ticket Change 4)
 
-        private static readonly Collider[] s_hits = new Collider[32];
-        private static readonly HashSet<int> s_hitIds = new HashSet<int>();
+        // MV-1421: was 32 with mask ~0 - floor, walls and cover could fill every slot before Max or a robot
+        // was reached, and OverlapSphereNonAlloc drops the rest silently.
+        private static readonly Collider[] s_hits = new Collider[256];
 
-        /// <summary>Every damageable within <see cref="BlastRadius"/> on the same combat level takes
-        /// <see cref="BlastDamage"/> — Max, Sentinels, robots (incl. captured allies), other canisters
-        /// (so chains form), relays/sheds/cradles, a boss. <c>docs/DECISIONS.md</c> §4, "Hazards:
-        /// world-run vs player-triggered" (Lee, 27 Oct 2026): this hazard was set off by the PLAYER
-        /// shooting the canister, so — unlike a world-run hazard such as the plasma vent's own MV-924
-        /// constraint — it is explicitly licensed to damage robots too. <see cref="Team.Neutral"/> already
-        /// satisfies <see cref="DamageRules.Applies"/> against every target team, so no further
-        /// team-branching is needed to reach any of them.</summary>
-        private void BlastSweep(Vector3 point)
+        /// <summary>The damage a target <paramref name="distance"/> metres from the blast takes: 120 out to
+        /// 3 m, then a linear fall to 60 at 6 m (MV-1421, Lee 23 Nov); 0 beyond the radius.</summary>
+        public static float BlastDamageAt(float distance)
         {
+            if (distance > BlastRadius) return 0f;
+            if (distance <= BlastFullRadius) return BlastDamageInner;
+            return Mathf.Lerp(BlastDamageInner, BlastDamageEdge, (distance - BlastFullRadius) / (BlastRadius - BlastFullRadius));
+        }
+
+        /// <summary>Advances the blast front by <paramref name="dt"/> and damages every not-yet-hit damageable
+        /// it has reached - Max, Sentinels, robots (incl. captured allies), other canisters (so chains form),
+        /// relays/sheds/cradles, destructible cover, a boss. <c>docs/DECISIONS.md</c> §4, "Hazards: world-run
+        /// vs player-triggered" (Lee, 27 Oct 2026): set off by the PLAYER shooting the canister, so it is
+        /// licensed to damage robots. <see cref="Team.Neutral"/> satisfies <see cref="DamageRules.Applies"/>
+        /// against every target team. An active Force Field absorbs it through
+        /// <c>PlayerHealth.AbsorbForceFieldDamage</c> like any other hit - correct, not a bug (MV-1421).
+        /// The damageable is resolved like <see cref="RicochetDisc.TryResolveDamageable"/> (MV-1203) and then
+        /// up the parent chain, and de-duplicated by damageable instance, not collider GameObject.</summary>
+        private void AdvanceBlast(float dt)
+        {
+            if (!_blasting) return;
+            _blastFront = Mathf.Min(BlastRadius, _blastFront + CanisterFx.RingSpeed * Mathf.Max(0f, dt));
+
             MapData map = EnemyNavigation.Map;
 
-            // Physics.autoSyncTransforms is off project-wide (see GateSolidityTests) — force a sync so
-            // a target that moved this very frame (or a Rusher built straight into the blast, never
-            // ticked by a physics step at all, the exact EditMode test shape) is still found, same
-            // reasoning ForceFieldBubble's own build already gives for the same call.
+            // Physics.autoSyncTransforms is off project-wide (see GateSolidityTests) - force a sync so a
+            // target that moved this very frame is still found (same reasoning as ForceFieldBubble).
             Physics.SyncTransforms();
 
-            s_hitIds.Clear();
-            int count = Physics.OverlapSphereNonAlloc(point, BlastRadius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.OverlapSphereNonAlloc(_blastPoint, BlastRadius + BlastQueryMargin, s_hits, ~0,
+                QueryTriggerInteraction.Ignore);
+            if (count >= s_hits.Length)
+                Debug.LogWarning($"Canister blast overlap buffer full ({s_hits.Length}); some colliders were not examined.");
+
             for (int i = 0; i < count; i++)
             {
                 Collider hit = s_hits[i];
                 if (hit == null) continue;
-                if (!s_hitIds.Add(hit.gameObject.GetInstanceID())) continue;
-                if (!hit.TryGetComponent<IDamageable>(out var d) || !d.IsAlive) continue;
-                if (!CombatLevel.SameLevel(map, point, hit.transform.position)) continue;
+                if (!RicochetDisc.TryResolveDamageable(hit, out IDamageable d))
+                    d = hit.GetComponentInParent<IDamageable>();
+                if (d == null || !d.IsAlive || _blastHit.Contains(d)) continue;
 
-                d.TakeDamage(new DamageInfo(BlastDamage, point, Vector3.up, Team.Neutral,
+                Transform tr = d is Component c ? c.transform : hit.transform;
+                Vector3 offset = tr.position - _blastPoint;
+                offset.y = 0f;
+                float distance = offset.magnitude;
+                if (distance > _blastFront) continue; // the ring of fire has not reached it yet
+                if (!CombatLevel.SameLevel(map, _blastPoint, tr.position)) continue;
+
+                _blastHit.Add(d);
+                d.TakeDamage(new DamageInfo(BlastDamageAt(distance), _blastPoint, Vector3.up, Team.Neutral,
                     source: DamageSource.Environment));
+            }
+
+            if (_blastFront >= BlastRadius)
+            {
+                _blasting = false;
+                _blastHit.Clear();
             }
         }
 

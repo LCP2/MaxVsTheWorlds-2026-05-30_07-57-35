@@ -190,7 +190,7 @@ namespace MaxWorlds.VFX
 
         private void OnEnemyKilled(Vector3 pos) => AddDecal(pos, Random.Range(0.7f, 1.1f), scorchColor);
         private void OnFactoryDestroyed(Vector3 pos) => AddDecal(pos, 3.4f, wreckColor);
-        private void OnCanisterDetonated(Vector3 pos) => AddDecal(pos, 1.6f, scorchColor, CanisterScorchLife);
+        private void OnCanisterDetonated(Vector3 pos) => AddDecal(pos, 3f, scorchColor, CanisterScorchLife); // MV-1421: grew from 1.6;
 
         /// <summary>
         /// Leave a mark on the ground. Capped and recycled oldest-first: a long run kills a lot of

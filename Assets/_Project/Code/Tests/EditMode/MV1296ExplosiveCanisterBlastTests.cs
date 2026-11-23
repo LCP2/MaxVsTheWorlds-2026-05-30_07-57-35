@@ -150,7 +150,7 @@ namespace MaxWorlds.Tests.EditMode
             var rusherFar = _rusherFarGo.AddComponent<RobotEnemy>();
             rusherFar.Apply(EnemyArchetype.Rusher);
             RobotOnEnableMethod.Invoke(rusherFar, null);
-            _rusherFarGo.transform.position = canisterAPos + new Vector3(4f, 0f, 0f);
+            _rusherFarGo.transform.position = canisterAPos + new Vector3(7f, 0f, 0f);
 
             float rusherNearHealthBefore = rusherNear.HealthCurrent;
             float rusherFarHealthBefore = rusherFar.HealthCurrent;
@@ -168,15 +168,16 @@ namespace MaxWorlds.Tests.EditMode
             // === AC1: 1.1 s simulated (11 explicit 0.1 s ticks) carries the fuse past its 1.0 s duration
             // and fires the blast ===
             const float step = 0.1f;
-            const float simulatedSeconds = 1.1f;
+            const float simulatedSeconds = 1.6f;   // MV-1421: fuse 1.0 s + the 0.4 s the blast front takes to reach 6 m
             for (float t = 0f; t < simulatedSeconds; t += step) canisterA.Tick(step);
 
-            Assert.AreEqual(60f, rusherNearHealthBefore - rusherNear.HealthCurrent, 0.001f,
-                "MV-1296 AC1: a Rusher 2 m from the shot canister must take exactly 60 blast damage");
+            // MV-1421: blast is now 120 at 2 m (radius 6 m), so the Rusher dies outright.
+            Assert.LessOrEqual(rusherNear.HealthCurrent, 0f,
+                "MV-1296 AC1 (MV-1421 numbers): a Rusher 2 m from the shot canister must be killed by the blast");
             Assert.AreEqual(0f, rusherFarHealthBefore - rusherFar.HealthCurrent, 0.001f,
-                "MV-1296 AC1: a Rusher 4 m from the shot canister (outside the 3 m blast radius) must take no damage");
+                "MV-1296 AC1: a Rusher 7 m from the shot canister (outside the 6 m blast radius) must take no damage");
             Assert.IsTrue(canisterB.IsFusing,
-                "MV-1296 AC1: the second canister, 2.5 m away (inside the 3 m blast radius), must have started its own fuse");
+                "MV-1296 AC1: the second canister, 2.5 m away (inside the 6 m blast radius), must have started its own fuse");
         }
     }
 }
