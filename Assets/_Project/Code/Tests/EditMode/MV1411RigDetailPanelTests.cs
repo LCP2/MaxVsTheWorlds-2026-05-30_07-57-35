@@ -63,7 +63,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(RigState.Level(other), Is.EqualTo(otherLevel), "AC1: a node tap must not change its level");
                 Assert.That(screen.SelectedNodeId, Is.EqualTo(other), "AC1: the tap selects the node");
                 Assert.That(screen.DetailNameText.text, Is.EqualTo(LabelOf(other)), "AC1: the panel shows the node's name");
-                Assert.That(screen.DetailLevelText.text, Is.EqualTo($"Level {otherLevel} of {RigBoard.MaxLevel(other)}"), "AC1: the panel shows Level n of m");
+                Assert.That(screen.DetailLevelText.text, Does.StartWith($"Level {otherLevel} of {RigBoard.MaxLevel(other)}"), "AC1: the panel shows Level n of m");
 
                 // AC2: UPGRADE on an affordable node spends exactly its price and raises it one level.
                 TapNode(screen, primaryRoot);

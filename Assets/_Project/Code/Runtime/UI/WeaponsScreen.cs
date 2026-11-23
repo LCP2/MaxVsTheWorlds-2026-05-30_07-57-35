@@ -1595,28 +1595,18 @@ namespace MaxWorlds.UI
             // player sitting on affordable cells sees the same "something's waiting" tell everywhere one
             // applies. CapMarker's own presence (rather than a flat colour) IS the "affordable now" read;
             // Update() only ever pulses it while cellAffordable stays true.
-            v.OuterRing.gameObject.SetActive(hasLiveCellAction);
-            v.CapMarker.gameObject.SetActive(cellAffordable);
+            // MV-1424: ONE outline per node - no dashed outer ring, no affordability dot, no progress ring/track
+            // (level progress is the "n / m" label and the detail panel's pips).
+            v.OuterRing.gameObject.SetActive(false);
+            v.CapMarker.gameObject.SetActive(false);
             v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
 
             // MV-470: the progress ring stays scoped to a live cell action — accumulation only means
             // something for a node you can currently act on. MV-538 AC4: ProgressTrack is the dim
             // full-circle track drawn behind the fill, same scope as the fill itself, so a partial arc
             // always reads as "part of a whole" rather than a stray arc with nothing to measure against.
-            if (hasLiveCellAction)
-            {
-                v.ProgressRing.gameObject.SetActive(true);
-                v.ProgressRing.fillAmount = CellSpend.CellCostProgress01(ab.Id, cellsBanked);
-                v.ProgressRing.color = DimIfUnlit(new Color(module.r, module.g, module.b, 0.9f), categoryUnlocked);
-
-                v.ProgressTrack.gameObject.SetActive(true);
-                v.ProgressTrack.color = DimIfUnlit(new Color(module.r, module.g, module.b, ProgressTrackAlpha), categoryUnlocked);
-            }
-            else
-            {
-                v.ProgressRing.gameObject.SetActive(false);
-                v.ProgressTrack.gameObject.SetActive(false);
-            }
+            v.ProgressRing.gameObject.SetActive(false);
+            v.ProgressTrack.gameObject.SetActive(false);
 
             // MV-1415: no cost tag beside the node any more - the first-purchase price rides on the sub line
             // ("25 · NEW") and every other price lives on the detail panel's button.
@@ -1631,7 +1621,7 @@ namespace MaxWorlds.UI
             if (owned)
             {
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
-                v.HexOutline.color = family;
+                v.HexOutline.color = maxed ? GoldColor : family;   // MV-1424: maxed = owned look + gold outline
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
                 v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
@@ -2362,6 +2352,7 @@ namespace MaxWorlds.UI
             _treePanel = null; _treePanelBorder = null; _treeSlotText = null; _treeNameText = null;
             _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailValue = null; _detailLevel = null;
             _detailUpgrade = null; _detailUpgradeBg = null; _detailUpgradeText = null; _selectionRing = null; _detailPips.Clear();
+            for (int i = 0; i < 3; i++) { _costLabel[i] = null; _costValue[i] = null; _costIcon[i] = null; }
             if (_quitDialog != null)
             {
                 if (Application.isPlaying) Destroy(_quitDialog.gameObject);
@@ -2719,7 +2710,10 @@ namespace MaxWorlds.UI
         private TextMeshProUGUI _detailPath, _detailName, _detailEffect, _detailValue, _detailLevel, _detailUpgradeText;
         private Button _detailUpgrade;
         private readonly List<Image> _detailPips = new List<Image>();
-        private const float DetailPad = 20f, DetailButtonH = 110f;
+        // MV-1424: the cost block - three rows (Cost / You have / Need), label left, parts icon + value right.
+        private readonly TextMeshProUGUI[] _costLabel = new TextMeshProUGUI[3], _costValue = new TextMeshProUGUI[3];
+        private readonly Image[] _costIcon = new Image[3];
+        private const float DetailPad = 20f, DetailButtonH = 110f, CostRowH = 40f;
 
         /// <summary>MV-1411: test access - the detail panel's name line, level line, effect line (empty
         /// until MV-1400), UPGRADE/UNLOCK/MAXED button and its label.</summary>
@@ -2730,6 +2724,21 @@ namespace MaxWorlds.UI
         public TextMeshProUGUI DetailValueText => _detailValue;
         public TextMeshProUGUI DetailPathText => _detailPath;
         public Button DetailUpgradeButton => _detailUpgrade;
+        /// <summary>MV-1424: test access - cost block row <paramref name="row"/> (0 Cost, 1 You have, 2 Need): its label and value text, or null while the row is hidden.</summary>
+        public string DetailCostRowLabel(int row) => _costLabel[row] != null && _costLabel[row].gameObject.activeSelf ? _costLabel[row].text : null;
+        public string DetailCostRowValue(int row) => _costValue[row] != null && _costValue[row].gameObject.activeSelf ? _costValue[row].text : null;
+        /// <summary>MV-1424: the selected node's white outline, null when nothing is selected.</summary>
+        public Image SelectionOutline => _selectionRing != null && _selectionRing.gameObject.activeSelf ? _selectionRing : null;
+        /// <summary>MV-1424: the active ring / circle / dot images under tree nodes (progress track, progress ring, outer ring, cap marker) - empty when every node has one outline only.</summary>
+        public List<string> NodeStackedOutlineNames()
+        {
+            var found = new List<string>();
+            foreach (var kv in _abilityNodes)
+                foreach (var img in kv.Value.Root.GetComponentsInChildren<Image>(false))
+                    if (img.name == "Progress Track" || img.name == "Progress Ring" || img.name == "Outer Ring" || img.name == "Cap Marker")
+                        found.Add(kv.Key + "/" + img.name);
+            return found;
+        }
         public TextMeshProUGUI DetailUpgradeText => _detailUpgradeText;
 
         private void BuildDetailPanel(RectTransform parent)
@@ -2800,7 +2809,28 @@ namespace MaxWorlds.UI
 
             _detailLevel = AddText(tr, 28, Dim, TextAnchor.MiddleLeft);
             PlaceTopLeft(_detailLevel.rectTransform, new Rect(DetailPad, 240f, inner, 36f));
+            _detailLevel.textWrappingMode = TextWrappingModes.NoWrap;   // MV-1424: "Level n of m · k more to MAX" shrinks to fit, never clips
+            _detailLevel.enableAutoSizing = true;
+            _detailLevel.fontSizeMin = 14f; _detailLevel.fontSizeMax = 28f;
+            _detailLevel.overflowMode = TextOverflowModes.Ellipsis;
             _detailLevel.raycastTarget = false;
+
+            // MV-1424: cost block above the button - 3 rows of CostRowH, label left, parts icon + value right-aligned.
+            float rowsTop = d.height - DetailPad - DetailButtonH - 14f - 3f * CostRowH;
+            for (int i = 0; i < 3; i++)
+            {
+                float ry = rowsTop + i * CostRowH;
+                _costLabel[i] = AddText(tr, 28, Dim, TextAnchor.MiddleLeft);
+                PlaceTopLeft(_costLabel[i].rectTransform, new Rect(DetailPad, ry, inner * 0.5f, CostRowH));
+                _costLabel[i].raycastTarget = false;
+                _costValue[i] = AddText(tr, 32, GoldColor, TextAnchor.MiddleRight);
+                PlaceTopLeft(_costValue[i].rectTransform, new Rect(DetailPad + inner - 150f, ry, 150f, CostRowH));
+                _costValue[i].fontStyle = FontStyles.Bold;
+                _costValue[i].raycastTarget = false;
+                _costIcon[i] = AddImage(tr, WeaponHudIcons.PowerCell(32 * CrispUi.Resolution), GoldColor, "Cost Icon " + (i + 1));
+                PlaceTopLeft(_costIcon[i].rectTransform, new Rect(DetailPad + inner - 150f - 34f, ry + (CostRowH - 28f) * 0.5f, 28f, 28f));
+                _costIcon[i].raycastTarget = false;
+            }
 
             var btnRect = new Rect(DetailPad, d.height - DetailPad - DetailButtonH, inner, DetailButtonH);
             _detailUpgradeBg = AddImage(tr, CrispUi.RoundedBox(64, 0.3f), Color.white, "Detail Upgrade");
@@ -2903,6 +2933,10 @@ namespace MaxWorlds.UI
             _detailLevel.gameObject.SetActive(has); _detailUpgradeBg.gameObject.SetActive(has); _detailEffect.gameObject.SetActive(has); _detailValue.gameObject.SetActive(has);
             if (_selectionRing != null) _selectionRing.gameObject.SetActive(has);
             foreach (var pip in _detailPips) pip.gameObject.SetActive(false);
+            for (int i = 0; i < 3; i++)
+            {
+                _costLabel[i].gameObject.SetActive(false); _costValue[i].gameObject.SetActive(false); _costIcon[i].gameObject.SetActive(false);
+            }
             if (!has) return;
 
             string category = node != null ? node.Category : ForgeTabId;
@@ -2916,10 +2950,11 @@ namespace MaxWorlds.UI
             SetDetailEffect(node != null ? DetailEffectLine(node) : "");   // MV-1400 / MV-1415
 
             string buttonText; bool live;
+            int costShown = -1;   // MV-1424: the price the cost block shows (-1 = no block: maxed / forged)
             if (node != null)
             {
                 int max = Mathf.Max(1, RigBoard.Exists(id) ? RigBoard.MaxLevel(id) : node.MaxLevel), level = RigState.Level(id);
-                _detailLevel.text = $"Level {level} of {max}";
+                _detailLevel.text = (RigState.IsOwned(id) && !RigState.CanSpendPart(id)) ? "MAXED" : $"Level {level} of {max} \u00B7 {Mathf.Max(0, max - level)} more to MAX";
                 var d = _treeFrame.Detail;
                 float inner = d.width - 2f * DetailPad, gap = 8f;
                 float w = (inner - gap * (max - 1)) / max;
@@ -2937,8 +2972,10 @@ namespace MaxWorlds.UI
                 if (maxed) { buttonText = "MAXED"; live = false; }
                 else
                 {
-                    buttonText = (RigState.IsOwned(id) ? "UPGRADE   " : "UNLOCK   ") + price;
+                    costShown = price;
                     live = !_draftActive && !IsCeremonySuppressingAbility(id) && CellSpend.IsCellActionAffordable(id, PickupWallet.PowerCells);
+                    int short_ = price - PickupWallet.PowerCells;
+                    buttonText = !live && short_ > 0 ? $"NEED {short_} MORE PARTS" : (RigState.IsOwned(id) ? "UPGRADE   " : "UNLOCK   ") + price;
                 }
             }
             else
@@ -2946,21 +2983,46 @@ namespace MaxWorlds.UI
                 bool forged = RigFusionState.IsForged(id);
                 _detailLevel.text = forged ? "Forged" : "Not forged";
                 if (forged) { buttonText = "FORGED"; live = false; }
-                else { buttonText = "FORGE   " + fusion.CellCost; live = !_draftActive && PickupWallet.PowerCells >= fusion.CellCost; }
+                else
+                {
+                    costShown = fusion.CellCost;
+                    live = !_draftActive && PickupWallet.PowerCells >= fusion.CellCost;
+                    int short_ = fusion.CellCost - PickupWallet.PowerCells;
+                    buttonText = !live && short_ > 0 ? $"NEED {short_} MORE PARTS" : "FORGE   " + fusion.CellCost;
+                }
             }
             _detailLevel.color = Dim;
             _detailUpgradeText.text = buttonText;
-            _detailUpgradeBg.color = live ? fam : new Color(fam.r * 0.45f, fam.g * 0.45f, fam.b * 0.45f, 0.8f);
-            _detailUpgrade.interactable = true;   // always tappable; OnDetailUpgradePressed re-checks (a refused press spends nothing)
+            // MV-1424: affordable = family colour with dark text; otherwise dark grey with light text (#E6E8EF on #2A2D38,
+            // well over 4.5:1). OnDetailUpgradePressed still re-checks, so a refused press spends nothing.
+            _detailUpgradeBg.color = live ? fam : new Color32(0x2A, 0x2D, 0x38, 0xFF);
+            _detailUpgradeText.color = live ? new Color(0.07f, 0.05f, 0.12f, 1f) : new Color32(0xE6, 0xE8, 0xEF, 0xFF);
+            _detailUpgrade.interactable = live;
+            if (costShown >= 0)
+            {
+                int wallet = PickupWallet.PowerCells, need = costShown - wallet;
+                SetCostRow(0, "Cost", costShown.ToString(), GoldColor, Dim);
+                SetCostRow(1, "You have", wallet.ToString(), GoldColor, Dim);
+                if (need > 0) SetCostRow(2, "Need", need + " more", NeedRed, NeedRed);
+            }
 
             if (_treeSpots.TryGetValue(id, out var spot) && _selectionRing != null)
             {
-                float rr = spot.R * 1.16f;
+                float rr = spot.R;
                 float ringW = rr * Sqrt3, ringH = rr * 2f;
-                _selectionRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 3f);
+                _selectionRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 5.2f);
                 _selectionRing.color = Color.white;
                 PlaceTopLeft(_selectionRing.rectTransform, new Rect(spot.X - ringW * 0.5f, spot.Y - rr, ringW, ringH));
             }
+        }
+
+        private static readonly Color NeedRed = new Color32(0xFF, 0x6B, 0x6B, 0xFF);
+
+        private void SetCostRow(int row, string label, string value, Color valueColor, Color labelColor)
+        {
+            _costLabel[row].text = label; _costLabel[row].color = labelColor; _costLabel[row].gameObject.SetActive(true);
+            _costValue[row].text = value; _costValue[row].color = valueColor; _costValue[row].gameObject.SetActive(true);
+            _costIcon[row].color = valueColor; _costIcon[row].gameObject.SetActive(true);
         }
 
         /// <summary>MV-1411: the only place a RIG node is bought. Price, affordability and spending are

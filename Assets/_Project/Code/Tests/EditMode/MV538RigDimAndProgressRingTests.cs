@@ -93,28 +93,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // MV-1410: the per-category panel alpha checks (old AC2) went with the per-category panels.
 
-            // ---------------------------------------------------------------- AC4: the progress ring's
-            // own empty track — active whenever the fill is, non-zero alpha, so a partial arc always
-            // reads as "part of a whole."
-            var ring = _screen.NodeProgressRing("s_bal");
-            var track = _screen.NodeProgressTrack("s_bal");
-            Assert.That(ring, Is.Not.Null, "s_bal must have built a progress ring");
-            Assert.That(ring.gameObject.activeSelf, Is.True, "s_bal's progress ring must be active — it has a live cell action");
-            Assert.That(track, Is.Not.Null, "s_bal must have built a progress track (AC4)");
-            Assert.That(track.gameObject.activeSelf, Is.True, "AC4: the track must be active whenever the fill is active");
-            Assert.That(track.color.a, Is.GreaterThan(0f), "AC4: the track must be visible (non-zero alpha), not a decorative no-op");
-
-            // ---------------------------------------------------------------- AC5: the ring and the
-            // number can never disagree — fillAmount is exactly CellCostProgress01, for a full ring
-            // (s_bal, 10/10) and a partial one (p_dmg, an owned node mid-upgrade, 10/20).
-            Assert.That(ring.fillAmount, Is.EqualTo(CellSpend.CellCostProgress01("s_bal", cellsBanked)).Within(1e-4f),
-                "AC5: s_bal's ring fillAmount must equal CellCostProgress01 exactly");
-            var p_dmgRing = _screen.NodeProgressRing("p_dmg");
-            Assert.That(p_dmgRing, Is.Not.Null, "p_dmg must have an active progress ring — owned, below max level");
-            Assert.That(p_dmgRing.fillAmount, Is.EqualTo(CellSpend.CellCostProgress01("p_dmg", cellsBanked)).Within(1e-4f),
-                "AC5: p_dmg's ring fillAmount must equal CellCostProgress01 exactly, mid-progress");
-            Assert.That(p_dmgRing.fillAmount, Is.EqualTo(10f / 20f).Within(1e-4f),
-                "fixture cross-check: 10 cells banked / UpgradeCostFor(3)=20 must resolve to a genuinely partial fill");
+            // MV-1424: AC4/AC5 (the per-node progress ring and its track) went with the rings themselves - one outline per node.
 
             // ---------------------------------------------------------------- AC6: "ready" is a
             // discontinuity, not a fuller reading — at fillAmount 1.0 the node is actionable
