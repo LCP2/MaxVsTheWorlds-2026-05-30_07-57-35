@@ -2603,7 +2603,7 @@ namespace MaxWorlds.Dev
 
                 Time.timeScale = 0f;   // hold the live mark for the frame
                 Vector3 focus = (sp + p) * 0.5f;
-                float pitch = 60f, distance = 24f;
+                float pitch = 60f, distance = 13f;
                 var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
                 if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
                 var rot = Quaternion.Euler(pitch, 0f, 0f);
@@ -2635,7 +2635,7 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Prepare = Prepare,
-                Shots = new List<CaptureShot> { new CaptureShot("MV-1426-arc-striker-mark", NoSetup) },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1434-arc-striker-mark", NoSetup) },
                 ExtraReport = () => found + "\n",
             };
         }

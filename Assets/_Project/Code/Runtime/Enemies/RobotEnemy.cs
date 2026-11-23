@@ -5001,6 +5001,9 @@ namespace MaxWorlds.Enemies
         /// <summary>The mark/strike weapon (null until the first awake tick) — read by the rig and tests.</summary>
         public ArcStrikerBattery ArcStrike => _arcStriker;
 
+        /// <summary>MV-1434: the rig sets this to the orb's world position so the mark arcs and strike bolt start there.</summary>
+        public System.Func<Vector3?> ArcOrb;
+
         private Vector3 _arcHome;
         private bool _arcHomeSet;
 
@@ -5013,6 +5016,7 @@ namespace MaxWorlds.Enemies
         private void TickArcStrikerWeapon(float dt)
         {
             _arcStriker ??= new ArcStrikerBattery();
+            _arcStriker.OrbSource = ArcOrb;
             if (!_arcHomeSet) { _arcHome = transform.position; _arcHomeSet = true; }
 
             bool sameLevel = target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position);

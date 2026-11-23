@@ -33,6 +33,96 @@ namespace MaxWorlds.Enemies
         private Vector3 _center;
         private GroundRing _ring;
 
+        /// <summary>MV-1434: where the orb is in world space (set by the rig); null falls back to a point
+        /// <see cref="MaxWorlds.VFX.RobotBodies.ArcStrikerOrbHeight"/> above the striker's feet.</summary>
+        public System.Func<Vector3?> OrbSource;
+
+        /// <summary>MV-1434: the 3 mark arcs (built with the first mark, active only while marking).</summary>
+        public const int ArcCount = 3;
+        public const float ArcPeakHeight = 3f;
+        public const float ArcReJagSeconds = 0.05f;
+        public static readonly Color ArcColor = new Color(0.749f, 0.89f, 1f, 1f);   // #BFE3FF
+        private LineRenderer[] _arcs;
+        private GameObject _arcRoot;
+        private Vector3 _feet;
+
+        /// <summary>The mark arcs' renderers (null until the first mark) - read by tests/captures.</summary>
+        public LineRenderer[] Arcs => _arcs;
+
+        public Vector3 OrbPosition()
+        {
+            Vector3? o = OrbSource != null ? OrbSource() : null;
+            return o ?? _feet + Vector3.up * MaxWorlds.VFX.RobotBodies.ArcStrikerOrbHeight;
+        }
+
+        /// <summary>Fill <paramref name="pts"/> with a jagged arc from <paramref name="from"/> to <paramref name="to"/>
+        /// peaking <see cref="ArcPeakHeight"/> above the floor at <paramref name="to"/>. Endpoints are exact.</summary>
+        public static void BuildArcPoints(Vector3[] pts, Vector3 from, Vector3 to, float jag, int seed)
+        {
+            var rng = new System.Random(seed);
+            int n = pts.Length - 1;
+            float floorY = to.y;
+            float midY = (from.y + to.y) * 0.5f;
+            float lift = Mathf.Max(0.5f, ArcPeakHeight - (midY - floorY));
+            Vector3 flat = to - from; flat.y = 0f;
+            Vector3 side = flat.sqrMagnitude > 1e-6f ? Vector3.Cross(Vector3.up, flat.normalized) : Vector3.right;
+            for (int i = 0; i <= n; i++)
+            {
+                float t = i / (float)n;
+                Vector3 pt = Vector3.Lerp(from, to, t);
+                pt.y += 4f * t * (1f - t) * lift;
+                if (i != 0 && i != n)
+                {
+                    pt += side * (((float)rng.NextDouble() - 0.5f) * 2f * jag);
+                    pt.y += ((float)rng.NextDouble() - 0.5f) * jag;
+                }
+                pts[i] = pt;
+            }
+        }
+
+        private static readonly Vector3[] ArcScratch = new Vector3[12];
+
+        private void UpdateArcs()
+        {
+            if (_arcs == null)
+            {
+                _arcRoot = new GameObject("ArcStriker Arcs");
+                _arcs = new LineRenderer[ArcCount];
+                for (int i = 0; i < ArcCount; i++)
+                {
+                    var go = new GameObject("Arc" + i);
+                    go.transform.SetParent(_arcRoot.transform, false);
+                    var lr = go.AddComponent<LineRenderer>();
+                    lr.sharedMaterial = VfxMaterials.Additive(VfxMaterials.LineGlow());
+                    lr.useWorldSpace = true;
+                    lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    lr.receiveShadows = false;
+                    lr.widthMultiplier = 0.12f;
+                    lr.startColor = lr.endColor = ArcColor;
+                    lr.positionCount = ArcScratch.Length;
+                    _arcs[i] = lr;
+                }
+            }
+            Vector3 orb = OrbPosition();
+            int bucket = (int)(_markElapsed / ArcReJagSeconds);
+            float k = MarkProgress;
+            for (int i = 0; i < _arcs.Length; i++)
+            {
+                BuildArcPoints(ArcScratch, orb, _center, 0.3f + 0.2f * i, bucket * 31 + i * 7919);
+                _arcs[i].SetPositions(ArcScratch);
+                float flicker = ((bucket + i) & 1) == 0 ? 1f : 0.55f;
+                Color c = ArcColor; c.a = flicker * Mathf.Lerp(0.6f, 1f, k);
+                _arcs[i].startColor = _arcs[i].endColor = c;
+                _arcs[i].enabled = true;
+            }
+        }
+
+        private void HideArcs()
+        {
+            if (_arcs == null) return;
+            foreach (var lr in _arcs) if (lr != null) lr.enabled = false;
+        }
+
         /// <summary>True from the instant a circle is placed until its strike lands.</summary>
         public bool IsMarking => _marking;
 
@@ -54,13 +144,14 @@ namespace MaxWorlds.Enemies
         public bool Tick(float dt, Vector3 feet, Transform target, bool hasSight)
         {
             SetTarget(target);
+            _feet = feet;
             if (_cooldown > 0f) _cooldown = Mathf.Max(0f, _cooldown - dt);
 
             if (_marking)
             {
                 _markElapsed += dt;
                 PulseRing();
-                if (_markElapsed < MarkSeconds) return false;
+                if (_markElapsed < MarkSeconds) { UpdateArcs(); return false; }
                 Strike();
                 return true;
             }
@@ -75,6 +166,7 @@ namespace MaxWorlds.Enemies
             _cooldown = CooldownSeconds;
             _ring ??= GroundRing.Create("ArcStriker Mark", VfxMaterials.Ring(), additive: true);
             PulseRing();
+            UpdateArcs();
             return false;
         }
 
@@ -104,6 +196,8 @@ namespace MaxWorlds.Enemies
             _markElapsed = 0f;
             Strikes++;
             if (_ring != null) _ring.Hide();
+            HideArcs();
+            Vector3 orbAtStrike = OrbPosition();
 
             float r = CircleDiameter * 0.5f;
             _sentinelScratch.Clear();
@@ -120,7 +214,7 @@ namespace MaxWorlds.Enemies
 
             if (Application.isPlaying)
             {
-                ArcStrikeFx.Spawn(_center);
+                ArcStrikeFx.Spawn(_center, orbAtStrike);
                 HudSignals.EmitArcStrikeLanded(_center);
             }
         }
@@ -148,12 +242,18 @@ namespace MaxWorlds.Enemies
             _marking = false;
             _markElapsed = 0f;
             if (_ring != null) _ring.Hide();
+            HideArcs();
         }
 
         /// <summary>Destroy the ring object (robot teardown / test cleanup).</summary>
         public void Dispose()
         {
             Cancel();
+            if (_arcRoot != null)
+            {
+                if (Application.isPlaying) Object.Destroy(_arcRoot); else Object.DestroyImmediate(_arcRoot);
+                _arcRoot = null; _arcs = null;
+            }
             if (_ring == null) return;
             if (Application.isPlaying) Object.Destroy(_ring.gameObject);
             else Object.DestroyImmediate(_ring.gameObject);
@@ -161,45 +261,60 @@ namespace MaxWorlds.Enemies
         }
     }
 
-    /// <summary>The strike's presentation: a bright jagged vertical bolt and a floor flash, 0.3 s.</summary>
+    /// <summary>The strike's presentation (MV-1434): ONE thick jagged bolt from the ORB to the circle centre,
+    /// arcing up to 3 m over cover, white core inside a #BFE3FF edge, flashing at both ends, 0.15 s, plus the
+    /// floor flash.</summary>
     [MaxWorlds.Core.PerfSection("weapons")]
     public sealed class ArcStrikeFx : MonoBehaviour
     {
-        private const float Life = 0.3f;
-        private const float BoltHeight = 16f;
+        public const float Life = 0.15f;
+        private const int Segs = 11;
 
         private float _age;
-        private LineRenderer _line;
+        private LineRenderer _edge, _core, _orbFlash, _hitFlash;
         private GroundRing _flash;
 
-        public static ArcStrikeFx Spawn(Vector3 ground)
+        /// <summary>The bolt's outer (#BFE3FF) line - first point at the orb, last at the circle centre.</summary>
+        public LineRenderer Bolt => _edge;
+
+        public static ArcStrikeFx Spawn(Vector3 ground, Vector3 orb)
         {
             var go = new GameObject("ArcStrikeFx");
             go.transform.position = ground;
             var fx = go.AddComponent<ArcStrikeFx>();
-            fx.Build(ground);
+            fx.Build(ground, orb);
             return fx;
         }
 
-        private void Build(Vector3 ground)
+        private static LineRenderer MakeLine(Transform parent, string name, float width, Color color, int count)
         {
-            _line = gameObject.AddComponent<LineRenderer>();
-            _line.sharedMaterial = VfxMaterials.Additive(VfxMaterials.LineGlow());
-            _line.useWorldSpace = true;
-            _line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _line.receiveShadows = false;
-            const int segs = 9;
-            _line.positionCount = segs + 1;
-            var rng = new System.Random(ground.GetHashCode());
-            for (int i = 0; i <= segs; i++)
-            {
-                float t = i / (float)segs;
-                float jag = (i == 0 || i == segs) ? 0f : ((float)rng.NextDouble() - 0.5f) * 1.1f;
-                float jag2 = (i == 0 || i == segs) ? 0f : ((float)rng.NextDouble() - 0.5f) * 1.1f;
-                _line.SetPosition(i, new Vector3(ground.x + jag, ground.y + 0.05f + (1f - t) * BoltHeight, ground.z + jag2));
-            }
-            _line.widthMultiplier = 0.35f;
-            _line.startColor = _line.endColor = Color.white;
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.sharedMaterial = VfxMaterials.Additive(VfxMaterials.LineGlow());
+            lr.useWorldSpace = true;
+            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.numCapVertices = 4;
+            lr.positionCount = count;
+            lr.widthMultiplier = width;
+            lr.startColor = lr.endColor = color;
+            return lr;
+        }
+
+        private void Build(Vector3 ground, Vector3 orb)
+        {
+            var pts = new Vector3[Segs + 1];
+            ArcStrikerBattery.BuildArcPoints(pts, orb, ground, 0.45f, ground.GetHashCode());
+            _edge = MakeLine(transform, "BoltEdge", 0.5f, ArcStrikerBattery.ArcColor, pts.Length);
+            _core = MakeLine(transform, "BoltCore", 0.2f, Color.white, pts.Length);
+            _edge.SetPositions(pts);
+            _core.SetPositions(pts);
+
+            _orbFlash = MakeLine(transform, "OrbFlash", 0.8f, Color.white, 2);
+            _orbFlash.SetPositions(new[] { orb, orb + Vector3.up * 0.01f });
+            _hitFlash = MakeLine(transform, "HitFlash", 1.0f, ArcStrikerBattery.ArcColor, 2);
+            _hitFlash.SetPositions(new[] { ground + Vector3.up * 0.1f, ground + Vector3.up * 0.11f });
 
             _flash = GroundRing.Create("ArcStrike Flash", VfxMaterials.Glow(), additive: true);
             _flash.transform.SetParent(transform, true);
@@ -210,11 +325,16 @@ namespace MaxWorlds.Enemies
         {
             _age += Time.deltaTime;
             float k = 1f - Mathf.Clamp01(_age / Life);
-            if (_line != null)
+            if (_edge != null)
             {
-                _line.widthMultiplier = 0.35f * (0.4f + 0.6f * k);
-                Color c = new Color(1f, 1f, 1f, k);
-                _line.startColor = _line.endColor = c;
+                float w = 0.4f + 0.6f * k;
+                _edge.widthMultiplier = 0.5f * w;
+                _core.widthMultiplier = 0.2f * w;
+                Color e = ArcStrikerBattery.ArcColor; e.a = k;
+                _edge.startColor = _edge.endColor = e;
+                _core.startColor = _core.endColor = new Color(1f, 1f, 1f, k);
+                _orbFlash.widthMultiplier = 0.8f * w;
+                _hitFlash.widthMultiplier = 1.0f * w;
             }
             if (_flash != null) _flash.Show(transform.position, ArcStrikerBattery.CircleDiameter * (0.5f + 0.35f * k), new Color(0.7f, 0.85f, 1f, k));
             if (_age >= Life) Destroy(gameObject);

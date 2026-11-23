@@ -759,6 +759,11 @@ namespace MaxWorlds.VFX
                     ? crown.TransformPoint(RobotBodies.OrbitalTubeMouthLocal(i))
                     : (Vector3?)null;
             }
+            if (_enemy.Kind == EnemyKind.ArcStriker && _eyes != null && _eyes.Length > 0)
+            {
+                MeshRenderer orb = _eyes[_eyes.Length - 1];   // MV-1434: the orb is the LAST lens
+                _enemy.ArcOrb = () => orb != null ? orb.transform.position : (Vector3?)null;
+            }
             _restModelScale = _model.localScale;
 
             // MV-969: RobotBodies authors a wheel as TWO OR THREE co-located parts sharing one pivot

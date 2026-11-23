@@ -26,6 +26,8 @@ namespace MaxWorlds.VFX
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private float _phase, _t;
+        private float _period = BobPeriod;
+        private float _maxTilt = MaxTiltDegrees;
         private Transform _ground;          // the node whose local origin is the floor under the robot
         private Transform _shadow;
         private MeshRenderer _shadowRenderer;
@@ -37,6 +39,23 @@ namespace MaxWorlds.VFX
         /// <summary>Hover offset (metres) of the drum at <paramref name="t"/> seconds for a start phase.</summary>
         public static float Offset(float t, float phase) =>
             BobAmplitude * Mathf.Sin(2f * Mathf.PI * t / BobPeriod + phase);
+
+        /// <summary>MV-1434: a hoverer with its own bob period (s), max tilt (deg) and an ADDITIVE floor glow
+        /// disc (<see cref="ShadowDiameter"/> across) instead of the dark shadow + thruster glow.</summary>
+        public static void AttachHoverer(Transform hover, Transform ground, float period, float maxTilt, Color floorGlow)
+        {
+            var m = hover.gameObject.AddComponent<OrbitalHoverMotion>();
+            m._phase = Random.value * 2f * Mathf.PI;
+            m._ground = ground;
+            m._period = period;
+            m._maxTilt = maxTilt;
+            m._floorGlow = floorGlow;
+            m._mpb = new MaterialPropertyBlock();
+            m._shadow = MakeQuad("HoverFloorGlow", hover, VfxMaterials.Additive(VfxMaterials.Glow()), out m._shadowRenderer);
+            m.Apply(0f);
+        }
+
+        private Color? _floorGlow;
 
         public static void Attach(Transform hover, Transform ground, float glowY)
         {
@@ -101,7 +120,7 @@ namespace MaxWorlds.VFX
 
         private void Apply(float dt)
         {
-            float off = Offset(_t, _phase);
+            float off = BobAmplitude * Mathf.Sin(2f * Mathf.PI * _t / _period + _phase);
             transform.localPosition = new Vector3(0f, off, 0f);
 
             // Tilt toward the direction of travel, from the ground node's world displacement.
@@ -114,7 +133,7 @@ namespace MaxWorlds.VFX
                 if (k > 0.001f)
                 {
                     Vector3 axis = Vector3.Cross(Vector3.up, v.normalized);
-                    target = Quaternion.AngleAxis(MaxTiltDegrees * k, axis);
+                    target = Quaternion.AngleAxis(_maxTilt * k, axis);
                     if (_ground != null) target = Quaternion.Inverse(_ground.rotation) * target * _ground.rotation;
                 }
                 _tilt = Quaternion.Slerp(_tilt, target, Mathf.Clamp01(8f * dt));
@@ -133,6 +152,7 @@ namespace MaxWorlds.VFX
             float ls = Mathf.Max(0.0001f, transform.lossyScale.x);
             _shadow.localScale = Vector3.one * (size / ls);
             Color c = ShadowDark; c.a *= Mathf.Lerp(0.85f, 1.15f, low);
+            if (_floorGlow.HasValue) c = _floorGlow.Value;
             _shadowRenderer.GetPropertyBlock(_mpb);
             _mpb.SetColor(BaseColorId, c);
             _mpb.SetColor(ColorId, c);

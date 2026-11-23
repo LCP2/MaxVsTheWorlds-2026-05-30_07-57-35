@@ -140,7 +140,7 @@ namespace MaxWorlds.VFX
                 // (MV-1344 shipped it on the Launcher's placeholder body).
                 case EnemyKind.Orbital:  BuildOrbital(visualRoot, p, eyes, out crown, out crownTubes, out crownTips, out orbitalHover); break;
                 // MV-1426: ARC STRIKER — a rust/teal box on two thin legs, a coil mast and a glowing orb.
-                case EnemyKind.ArcStriker: BuildArcStriker(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.ArcStriker: orbitalHover = BuildArcStriker(visualRoot, p, eyes); break;
                 case EnemyKind.Blinker:  BuildBlinker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Gunner:   BuildGunner(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;
@@ -1043,48 +1043,46 @@ namespace MaxWorlds.VFX
             eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0.09f, 0.2f, 0.22f), Quaternion.Euler(-30f, 0f, 0f), new Vector3(0.08f, 0.08f, 0.04f)));
         }
 
-        /// <summary>ARC STRIKER (MV-1426) — about 2.2 m to the orb: two thin splayed legs under a rust/teal
-        /// split box (rust front half, teal back half, one gold eye on the rust side), a dark neck, four
-        /// stacked coil rings and a glowing orb on top. The orb and coil rings are lenses, so they brighten
-        /// with <see cref="MaxWorlds.Enemies.RobotEnemy.TelegraphProgress"/> across the 1.0 s mark.</summary>
-        private static void BuildArcStriker(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        /// <summary>Height of the ARC STRIKER's orb above the floor at rest (MV-1434): box underside 0.35 m up,
+        /// box 0.7 m, neck + coil, orb 0.5 m above the box top.</summary>
+        public const float ArcStrikerOrbHeight = 0.35f + 0.7f + 0.5f;
+
+        /// <summary>ARC STRIKER (MV-1426, MV-1434: hovers, no legs) — a rust/teal split box (rust front half, teal
+        /// back half, one gold eye on the rust side) floating 0.35 m off the floor under a dark neck, four
+        /// stacked coil rings and a glowing orb. Everything hangs off one hover pivot that
+        /// <see cref="OrbitalHoverMotion"/> bobs (0.08 m, 1 Hz) and tilts (8 deg) with a blue-white glow disc on the
+        /// floor beneath. The orb and coil rings are lenses, so they brighten with
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.TelegraphProgress"/> across the 1.0 s mark.</summary>
+        private static Transform BuildArcStriker(Transform root, in RobotPalette p, List<MeshRenderer> eyes)
         {
-            // Two thin legs splayed front/back (the image's side view), hip under the box.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Vector3 hip = new Vector3(0f, 0.95f, side * 0.18f);
-                Vector3 foot = new Vector3(0f, 0.02f, side * 0.5f);
-                Vector3 mid = (hip + foot) * 0.5f;
-                Vector3 d = foot - hip;
-                float len = d.magnitude;
-                Quaternion rot = Quaternion.FromToRotation(Vector3.up, d.normalized);
-                Transform beam = Add(root, CharacterMeshes.Beam(len, 0.05f, 0.035f, 6), p.Dark, mid, rot, Vector3.one, "ArcLeg");
-                Transform tip = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.06f, 0f), new Vector2(0.04f, 0.03f), new Vector2(0.02f, 0.06f) }, 8), p.Dark, foot, Quaternion.identity, Vector3.one, "ArcFoot");
-                legs.Add(AddLeg(root, beam, tip, len * 0.5f));
-            }
+            var hover = new GameObject("ArcStrikerHover").transform;
+            hover.SetParent(root, worldPositionStays: false);
+            hover.localPosition = Vector3.zero;
+            hover.localRotation = Quaternion.identity;
 
             // The box: warm (rust) front half and cool (teal) back half, split down the middle (z).
-            const float boxY = 1.0f, boxH = 0.7f, boxW = 0.85f, boxD = 0.4f;
-            Add(root, CharacterMeshes.Bevelled(new Vector3(boxW, boxH, boxD), 0.03f), p.Warm, new Vector3(0f, boxY + boxH * 0.5f, boxD * 0.5f), Quaternion.identity, Vector3.one, "ArcBoxRust");
-            Add(root, CharacterMeshes.Bevelled(new Vector3(boxW, boxH, boxD), 0.03f), p.Cool, new Vector3(0f, boxY + boxH * 0.5f, -boxD * 0.5f), Quaternion.identity, Vector3.one, "ArcBoxTeal");
+            const float boxY = 0.35f, boxH = 0.7f, boxW = 0.85f, boxD = 0.4f;
+            Add(hover, CharacterMeshes.Bevelled(new Vector3(boxW, boxH, boxD), 0.03f), p.Warm, new Vector3(0f, boxY + boxH * 0.5f, boxD * 0.5f), Quaternion.identity, Vector3.one, "ArcBoxRust");
+            Add(hover, CharacterMeshes.Bevelled(new Vector3(boxW, boxH, boxD), 0.03f), p.Cool, new Vector3(0f, boxY + boxH * 0.5f, -boxD * 0.5f), Quaternion.identity, Vector3.one, "ArcBoxTeal");
 
             // One gold eye on the rust (front) face.
-            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0.2f, boxY + boxH * 0.55f, boxD + 0.01f), Quaternion.identity, new Vector3(0.2f, 0.2f, 0.07f)));
+            eyes.Add(Lens(hover, CharacterMeshes.Sphere(16), new Vector3(0.2f, boxY + boxH * 0.55f, boxD + 0.01f), Quaternion.identity, new Vector3(0.2f, 0.2f, 0.07f)));
 
             // Neck and coil mast.
             float topY = boxY + boxH;
-            Add(root, CharacterMeshes.Beam(0.3f, 0.05f, 0.05f, 8), p.Dark, new Vector3(0f, topY + 0.15f, 0f), Quaternion.identity, Vector3.one, "ArcNeck");
+            Add(hover, CharacterMeshes.Beam(0.3f, 0.05f, 0.05f, 8), p.Dark, new Vector3(0f, topY + 0.15f, 0f), Quaternion.identity, Vector3.one, "ArcNeck");
             for (int i = 0; i < 4; i++)
             {
                 float y = topY + 0.1f + i * 0.1f;
                 float r = 0.12f - i * 0.012f;
-                eyes.Add(Lens(root, CharacterMeshes.Ring(r * 0.8f, r, 0.03f, 16), new Vector3(0f, y, 0f), Quaternion.identity, Vector3.one));
+                eyes.Add(Lens(hover, CharacterMeshes.Ring(r * 0.8f, r, 0.03f, 16), new Vector3(0f, y, 0f), Quaternion.identity, Vector3.one));
             }
 
-            // The orb: top of the stack, ~2.2 m up.
-            eyes.Add(Lens(root, CharacterMeshes.Sphere(16), new Vector3(0f, topY + 0.5f, 0f), Quaternion.identity, new Vector3(0.28f, 0.28f, 0.28f)));
+            // The orb: top of the stack, ArcStrikerOrbHeight up. MUST stay the LAST lens (the battery's arcs and bolt start here).
+            eyes.Add(Lens(hover, CharacterMeshes.Sphere(16), new Vector3(0f, topY + 0.5f, 0f), Quaternion.identity, new Vector3(0.28f, 0.28f, 0.28f)));
+
+            OrbitalHoverMotion.AttachHoverer(hover, root, 1f, 8f, new Color(0.62f, 0.8f, 1f, 1f) * 0.45f);
+            return hover;
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
