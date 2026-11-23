@@ -41,7 +41,7 @@ namespace MaxWorlds.Tests.EditMode
                 "gunner 19.0 57.5 P a2_n",
                 "turret 21.0 58.0 P a2_n",
                 "bruiser 16.5 58.0 - a2_n",
-                "charger 28.0 56.5 - a2_n"
+                "bolter 13.5 56.0 P a2_n"
             }, new[] {
                 "a2_canister1 26.6 52.6",
                 "a2_canister2 14.6 61.2"
@@ -54,7 +54,7 @@ namespace MaxWorlds.Tests.EditMode
                 "bruiser 58.0 38.5 - a3_k",
                 "bruiser 62.5 40.5 - a3_k",
                 "blinker 56.0 41.0 - a3_k",
-                "charger 46.0 39.5 - a3_l"
+                "bolter 51.5 40.0 P a3_l"
             }, new[] {
                 "a3_canister1 44.0 44.0",
                 "a3_canister2 57.0 40.0",
@@ -75,8 +75,8 @@ namespace MaxWorlds.Tests.EditMode
             new object[] { "a5", new[] {
                 "launcher 7.15 69.65 P a5_s",
                 "gunner -2.39 91.19 P a5_n",
-                "charger 19.29 86.74 - a5_c",
-                "charger -2.5 80.4 - a5_d",
+                "bruiser 19.29 86.74 - a5_c",
+                "blinker -2.5 80.4 - a5_d",
                 "bruiser 22.0 85.0 - a5_m",
                 "bruiser 9.57 79.75 - a5_m",
                 "blinker 23.0 78.5 - a5_m",
