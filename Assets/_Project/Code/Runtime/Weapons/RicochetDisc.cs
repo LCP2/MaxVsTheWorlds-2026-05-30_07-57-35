@@ -203,7 +203,8 @@ namespace MaxWorlds.Weapons
             _age += dt;
             Flicker(dt);
 
-            if (_turnRateDegPerSec > 0f) Steer(dt);
+            // MV-1425: the first leg is dead straight; AIMING only steers once the disc has banked.
+            if (_turnRateDegPerSec > 0f && _bouncesTaken >= 1) Steer(dt);
 
             Vector3 from = transform.position;
             Vector3 next = from + _direction * (_speed * dt);
