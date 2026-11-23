@@ -8,37 +8,26 @@ using MaxWorlds.Arena;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-1308 (the one new test, per CC_AUTONOMY's testing policy): the City's a2-a29 relays now
-    /// each author the feeding pylon(s) MV-1294's own Pylon/WorldPylon machinery needs — 1 per relay
-    /// for a2-a12, 2 for a13-a29 (98 total, matching MV1315PylonClearanceRuleTests' own derivation),
-    /// each 6-10 m from its relay and clear of every cover piece/gate by
-    /// <see cref="MapValidation.RequiredPylonCoverClearance"/> (2.0 m, or 1.85 m for the named
-    /// a5_rep1 exemption, MV-1315) and clear of every other pylon by 3 m.
+    /// MV-1308 (the one new test, per CC_AUTONOMY's testing policy), rewritten by MV-1418 when Lee's
+    /// V5.1 City map (23 Nov 2026) replaced the old pylon rules: a pylon may now stand far from its
+    /// relay, or in a different area. Feeders are counted per relay across ALL areas' pylons - 1 per
+    /// relay for a2-a12, 2 for a13-a29 (98 total). In the area a pylon stands in, its centre is at
+    /// least 0.85 m from every cover rect (1.4 m footprint + 0.15 m gap), at least 1.6 m from every
+    /// other pylon, and at least 2 m from that area's gates. The old 6-10 m ring check is gone.
     ///
-    /// Fails on 800bae5 (the commit before this ticket, MV-1315's own HEAD): city_config.json's
-    /// a2-a29 author no "pylons" at all, so every relay's feeder count reads 0 against the required
-    /// 1 or 2. See the fix comment for the captured failure output.
-    ///
-    /// Real entry points throughout: the actual city_config.json, loaded through the real
-    /// <see cref="WorldLibrary"/>, same technique <c>MV1315PylonClearanceRuleTests</c> already uses
-    /// for this same file — no built <see cref="MapRuntime"/>/scene needed, since every value this
-    /// test reads (an area's own origin/size/cover/replicators/pylons/gates) is already resolved,
-    /// loaded JSON data, not an authored constant echoed back at itself.
-    ///
-    /// ONE new test (MV-465 Rule 1). Tier 2 (Rule 2): every assertion reads a resolved value — a
-    /// measured ring distance, a measured footprint-edge/point clearance, a measured pylon-to-pylon
-    /// separation — never a bare authored constant, never a rendered pixel.
+    /// Real entry points: the actual city_config.json via WorldLibrary. Tier 2 (Rule 2): every
+    /// assertion reads a measured distance or count, never an authored constant echoed back.
     /// // Guards MV-1308
     /// </summary>
     public sealed class MV1308CityPylonPlacementTests
     {
-        private const float RingMin = 6f;
-        private const float RingMax = 10f;
-        private const float MinPylonSeparation = 3f;
+        private const float MinPylonSeparation = 1.6f;
+        private const float MinPylonCoverDistance = 0.85f;
+        private const float MinGateClearance = 2f;
         private const float Tolerance = 0.001f;
 
         [Test]
-        public void CityPylons_SatisfyFeederCountsRingAndClearanceRules()
+        public void CityPylons_SatisfyFeederCountsAndClearanceRules()
         {
             WorldConfig city = WorldLibrary.Load(WorldLibrary.City);
             Assert.IsNotNull(city, "city_config.json failed to load — see the error log above.");
@@ -57,51 +46,43 @@ namespace MaxWorlds.Tests.EditMode
             var violations = new List<string>();
             int totalPylons = 0;
 
+            var feedersByRelay = new Dictionary<string, int>();
+            foreach (WorldArea area in city.areas)
+                foreach (WorldPylon p in area.pylons ?? Array.Empty<WorldPylon>())
+                {
+                    if (area.index >= 2 && area.index <= 29) totalPylons++; // a30's own four are MV-1309's
+                    feedersByRelay.TryGetValue(p.feeds ?? "", out int n);
+                    feedersByRelay[p.feeds ?? ""] = n + 1;
+                }
+
             foreach (WorldArea area in city.areas)
             {
                 if (area.index < 2 || area.index > 29) continue; // a1/stub feed nothing; a30 is MV-1309's own
 
                 int expectedPerRelay = area.index <= 12 ? 1 : 2;
-                WorldReplicator[] relays = area.replicators ?? Array.Empty<WorldReplicator>();
-                WorldPylon[] pylons = area.pylons ?? Array.Empty<WorldPylon>();
-                totalPylons += pylons.Length;
-
-                var byFeeds = pylons.GroupBy(p => p.feeds).ToDictionary(g => g.Key, g => g.ToList());
-
-                foreach (WorldReplicator relay in relays)
+                foreach (WorldReplicator relay in area.replicators ?? Array.Empty<WorldReplicator>())
                 {
-                    List<WorldPylon> feeders = byFeeds.TryGetValue(relay.id, out List<WorldPylon> list)
-                        ? list : new List<WorldPylon>();
-                    if (feeders.Count != expectedPerRelay)
+                    feedersByRelay.TryGetValue(relay.id, out int count);
+                    if (count != expectedPerRelay)
+                        violations.Add($"'{relay.id}' has {count} pylon(s), expected {expectedPerRelay}");
+                }
+
+                WorldPylon[] pylons = area.pylons ?? Array.Empty<WorldPylon>();
+                foreach (WorldPylon p in pylons)
+                {
+                    foreach (WorldCover c in area.cover ?? Array.Empty<WorldCover>())
                     {
-                        violations.Add($"'{relay.id}' has {feeders.Count} pylon(s), expected {expectedPerRelay}");
-                        continue;
+                        float dist = RectPointDistance(c.x - c.width * 0.5f, c.x + c.width * 0.5f,
+                            c.z - c.depth * 0.5f, c.z + c.depth * 0.5f, p.x, p.z);
+                        if (dist < MinPylonCoverDistance - Tolerance)
+                            violations.Add($"'{p.id}' is {dist:0.###} m from cover '{c.id}', under {MinPylonCoverDistance} m");
                     }
 
-                    float requiredClearance = MapValidation.RequiredPylonCoverClearance(relay.id);
-
-                    foreach (WorldPylon p in feeders)
+                    foreach (Vector2 gatePoint in GatePointsFor(area.id, areasById, gatesByFromArea, gatesByToArea))
                     {
-                        float ring = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(relay.x, relay.z));
-                        if (ring < RingMin - Tolerance || ring > RingMax + Tolerance)
-                            violations.Add($"'{p.id}' is {ring:0.###} m from '{relay.id}', outside " +
-                                           $"[{RingMin}, {RingMax}] m");
-
-                        foreach (WorldCover c in area.cover ?? Array.Empty<WorldCover>())
-                        {
-                            float dist = RectPointDistance(c.x - c.width * 0.5f, c.x + c.width * 0.5f,
-                                c.z - c.depth * 0.5f, c.z + c.depth * 0.5f, p.x, p.z);
-                            if (dist < requiredClearance - Tolerance)
-                                violations.Add($"'{p.id}' is {dist:0.###} m from cover '{c.id}', under " +
-                                               $"{requiredClearance} m");
-                        }
-
-                        foreach (Vector2 gatePoint in GatePointsFor(area.id, areasById, gatesByFromArea, gatesByToArea))
-                        {
-                            float dist = Vector2.Distance(new Vector2(p.x, p.z), gatePoint);
-                            if (dist < requiredClearance - Tolerance)
-                                violations.Add($"'{p.id}' is {dist:0.###} m from a gate, under {requiredClearance} m");
-                        }
+                        float dist = Vector2.Distance(new Vector2(p.x, p.z), gatePoint);
+                        if (dist < MinGateClearance - Tolerance)
+                            violations.Add($"'{p.id}' is {dist:0.###} m from a gate, under {MinGateClearance} m");
                     }
                 }
 
@@ -111,8 +92,7 @@ namespace MaxWorlds.Tests.EditMode
                     float dist = Vector2.Distance(new Vector2(pylons[i].x, pylons[i].z),
                         new Vector2(pylons[j].x, pylons[j].z));
                     if (dist < MinPylonSeparation - Tolerance)
-                        violations.Add($"'{pylons[i].id}' and '{pylons[j].id}' are {dist:0.###} m apart, under " +
-                                       $"{MinPylonSeparation} m");
+                        violations.Add($"'{pylons[i].id}' and '{pylons[j].id}' are {dist:0.###} m apart, under {MinPylonSeparation} m");
                 }
             }
 

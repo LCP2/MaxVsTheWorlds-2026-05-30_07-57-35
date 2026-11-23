@@ -687,6 +687,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1413ShieldedPlate());
             Add(BuildMv1417CanisterBlast());
             Add(BuildMv1419CityBarricades());
+            Add(BuildMv1418CityA13());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
             Add(BuildMv1335CurrentLaneCheck());
@@ -2355,6 +2356,53 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1417-canister-blast", Run) },
+            };
+        }
+
+        // ---- Mv1418CityA13 (MV-1418 AC3) -------------------------------------------------------
+
+        /// <summary>MV-1418 AC3: ONE top-down capture of City a13 (nested walls, centre pylons) built from the
+        /// real city_config. Run via <c>cc-mv1418-capture.bat</c>; writes <c>Logs/MV-1418-a13.png</c>.</summary>
+        private static CapturePreset BuildMv1418CityA13()
+        {
+            IEnumerator Run(Camera cam)
+            {
+                WorldConfig cfg = WorldLibrary.Load(WorldLibrary.City);
+                if (!WorldMapLoader.TryLoad(cfg, out MapData map, out string reason)) { Debug.LogWarning("[MV1418Capture] " + reason); yield break; }
+                var host = new GameObject("MV1418 Host").transform;
+                MapBuild built = MapRuntime.Build(map, host);
+                CityDressing.Dress(host, map, cfg, built.Cover);
+                for (int i = 0; i < 3; i++) yield return null;
+
+                Vector3 focus = new Vector3(104f, 0f, 212f);
+                var rot = Quaternion.Euler(90f, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus + Vector3.up * 40f, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1418a13",
+                LogTag = "[MV1418Capture]",
+                Flag = "-mv1418shot",
+                ArmFile = "Temp/mv1418.arm",
+                HeadlessMarker = "Temp/mv1418.headless",
+                DoneFileName = "_mv1418_done.txt",
+                Width = 1600,
+                Height = 1600,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1418-a13", Run) },
             };
         }
 

@@ -275,6 +275,9 @@ namespace MaxWorlds.Arena
                     continue;
                 }
 
+                // MV-1418: wedges carry no dressing - the wedge prism is the visible piece.
+                if (piece.Cover.Shape == CoverShape.Wedge) continue;
+
                 var pieceRoot = new GameObject(piece.Cover.Name).transform;
                 pieceRoot.SetParent(coverHost, false);
                 pieceRoot.gameObject.AddComponent<KeepsOwnMaterial>();

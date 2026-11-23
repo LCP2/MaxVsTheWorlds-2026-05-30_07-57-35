@@ -97,6 +97,9 @@ namespace MaxWorlds.Tests.EditMode
                 // MV-1419: every destructible piece is one barricade look and builds no dressing art root.
                 if (piece.Body.GetComponent<MaxWorlds.Factories.DestructibleCover>() != null) continue;
 
+                // MV-1418: wedges carry no dressing; the wedge prism itself is the visible piece.
+                if (piece.Cover.Shape == CoverShape.Wedge) continue;
+
                 Transform pieceRoot = coverHost.Find(piece.Cover.Name);
                 if (pieceRoot == null) { failures.Add($"{piece.Cover.Name}: no art root built under Cover"); continue; }
 
