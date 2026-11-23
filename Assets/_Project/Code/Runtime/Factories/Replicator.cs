@@ -798,6 +798,24 @@ namespace MaxWorlds.Factories
             return nearest;
         }
 
+        /// <summary>MV-1430: robots alive in this box's own area (garrison included - they count but are never removed).</summary>
+        public int AliveInArea()
+        {
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            int count = 0;
+            for (int i = 0; i < active.Count; i++)
+                if (active[i] != null && active[i].IsAlive && active[i].AreaIndex == AreaIndex) count++;
+            return count;
+        }
+
+        /// <summary>MV-1430: true while fewer than the world's <c>aliveCap</c> robots are alive in this area
+        /// (always true for a world that does not author one).</summary>
+        public bool HasRoomUnderAliveCap()
+        {
+            int cap = _spawner != null ? _spawner.AliveCap : 0;
+            return cap <= 0 || AliveInArea() < cap;
+        }
+
         /// <summary>MV-1066 Step 2.4: the REPL telemetry row's own "elig" field — how many of
         /// <see cref="RobotEnemy.Active"/> currently pass <see cref="IsEligibleFor"/> for this box's
         /// own area. Same walk <see cref="NearestEligible"/> does, just counting instead of ranking.</summary>
@@ -914,7 +932,8 @@ namespace MaxWorlds.Factories
                 // MV-820 Change 6: intake is never gated on room any more — consuming this robot and
                 // owing back at least the guaranteed first twin (which now ignores the global budget
                 // too, see below) is net zero.
-                if (atSlot)
+                // MV-1430: a world's aliveCap bounds it - no intake (so nothing emitted) while the area is full.
+                if (atSlot && HasRoomUnderAliveCap())
                 {
                     // At its slot: hand its position over to the Intake beat rather than despawning it
                     // here outright — TickIntake is what actually draws it in and despawns it. Slot 1
@@ -961,6 +980,18 @@ namespace MaxWorlds.Factories
                 PendingEmission p = _pending[i];
                 float timer = p.Timer + dt;
                 bool firstEmitted = p.FirstEmitted;
+
+                // MV-1430: the cycle holds (never drops) while the area is at the world's aliveCap.
+                if (timer >= CycleSeconds && !firstEmitted && !HasRoomUnderAliveCap())
+                {
+                    _pending[i] = new PendingEmission(p.Kind, CycleSeconds, false, p.InputNoDrops);
+                    continue;
+                }
+                if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds && !HasRoomUnderAliveCap())
+                {
+                    _pending[i] = new PendingEmission(p.Kind, CycleSeconds + EmitStaggerSeconds, true, p.InputNoDrops);
+                    continue;
+                }
 
                 if (!firstEmitted && timer >= CycleSeconds)
                 {

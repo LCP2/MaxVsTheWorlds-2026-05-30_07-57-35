@@ -1263,6 +1263,19 @@ namespace MaxWorlds.Arena
         /// city_config.json.</summary>
         public bool brightHostileProjectiles = false;
 
+        /// <summary>MV-1430: multiplies the damage of every Gunner beam, Launcher missile, Turret glob and
+        /// Orbital missile in this world. Default 1 = unchanged; 1.5 in city_config.json. Never touches the
+        /// Bolter or the Arc Striker.</summary>
+        public float rangedDamageMultiplier = 1f;
+
+        /// <summary>MV-1430: a relay (Replicator) emits only while fewer than this many robots are alive in
+        /// its area. 0 (not authored) = no area cap, i.e. today's behaviour exactly; 12 in city_config.json.</summary>
+        public int aliveCap = 0;
+
+        /// <summary>MV-1430: multiplies an explosive canister blast's damage to ROBOTS only (Max and Sentinels
+        /// unchanged). Default 1 = unchanged; 2 in city_config.json.</summary>
+        public float hazardRobotDamageMultiplier = 1f;
+
         /// <summary>MV-1278: how many LIVE elites one area may hold at once before the roll stops
         /// offering a new one — not a per-world total, a per-area ceiling.</summary>
         public int eliteMaxPerArea = 3;

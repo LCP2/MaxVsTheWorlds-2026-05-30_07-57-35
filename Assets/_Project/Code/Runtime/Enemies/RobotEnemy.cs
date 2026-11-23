@@ -398,6 +398,7 @@ namespace MaxWorlds.Enemies
             _orbital?.Reset();
             _orbitalHpApplied = OrbitalTuning.DefaultRobotHp;
             BrightShots = false;   // MV-1428: the spawner re-stamps the world's dial after this
+            RangedDamageMultiplier = 1f;   // MV-1430: ... and this one
             _salvoSecondFired = false;
             // MV-1426: nor a previous ARC STRIKER life's mark, hold anchor or retreat.
             _arcStriker?.Cancel();
@@ -475,6 +476,12 @@ namespace MaxWorlds.Enemies
         private bool _salvoSecondFired;
 
         public void SetBrightShots(bool on) => BrightShots = on;
+
+        /// <summary>MV-1430: the world's rangedDamageMultiplier - scales this robot's Gunner beam, Launcher
+        /// missile, Turret glob and Orbital missile damage. 1 for every world that does not author it.</summary>
+        public float RangedDamageMultiplier { get; private set; } = 1f;
+
+        public void SetRangedDamageMultiplier(float m) => RangedDamageMultiplier = m > 0f ? m : 1f;
 
         public void SetSquad(string squad, bool post, bool tactics)
         {
@@ -3962,7 +3969,7 @@ namespace MaxWorlds.Enemies
                 if (_targetDamageable != null && _targetDamageable.IsAlive)
                 {
                     _targetDamageable.TakeDamage(new DamageInfo(
-                        contactDamage * dt, transform.position, _lungeDir, _team));
+                        contactDamage * RangedDamageMultiplier * dt, transform.position, _lungeDir, _team));
                 }
             }
 
@@ -3983,7 +3990,7 @@ namespace MaxWorlds.Enemies
                 // whole fix.
                 _salvoSecondFired = false;
                 if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
-                    HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius, BrightShots);
+                    HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage * RangedDamageMultiplier, contactRadius, BrightShots);
             }
             // MV-1428: City salvo — from area 10 a Launcher follows its first missile with a second 0.25 s later.
             else if (!_salvoSecondFired && HostileShotLook.SalvoApplies(BrightShots, AreaIndex) &&
@@ -3991,7 +3998,7 @@ namespace MaxWorlds.Enemies
             {
                 _salvoSecondFired = true;
                 if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
-                    HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius, true);
+                    HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage * RangedDamageMultiplier, contactRadius, true);
             }
 
             if (_stateTimer >= lungeTime) EnterRecover();
@@ -4032,7 +4039,7 @@ namespace MaxWorlds.Enemies
                 // other combat level.
                 if (target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position))
                 {
-                    CorrosiveGlob.Fire(transform.position, target, lungeSpeed, contactDamage <= 0f ? GlobDamage : contactDamage,
+                    CorrosiveGlob.Fire(transform.position, target, lungeSpeed, (contactDamage <= 0f ? GlobDamage : contactDamage) * RangedDamageMultiplier,
                         contactRadius, GlobPuddleRadius, GlobPuddleDuration, BrightShots);
                 }
             }
@@ -4890,6 +4897,7 @@ namespace MaxWorlds.Enemies
             _orbital ??= new OrbitalBattery();
             _orbital.TubeMouth = OrbitalTubeMouth;
             _orbital.Bright = BrightShots;
+            _orbital.DamageMultiplier = RangedDamageMultiplier;   // MV-1430
 
             // "Robot HP" slider (10-200), live: scale max and current health by the change since last tick.
             float hp = OrbitalTuning.RobotHp;

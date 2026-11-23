@@ -20,12 +20,12 @@ namespace MaxWorlds.Tests.EditMode
             new object[] { "a2", 18, 5, 1, 1, 22, 0 },
             new object[] { "a3", 21, 2, 1, 1, 23, 3 },
             new object[] { "a5", 117, 8, 2, 2, 23, 2 },
-            new object[] { "a6", 33, 0, 1, 1, 26, 3 }, // MV-1426: +1 arcstriker at the back wall
+            new object[] { "a6", 33, 0, 1, 1, 25, 3 }, // MV-1426: +1 arcstriker at the back wall; MV-1430: -1 cut kind (a welder/jammer/projector)
             new object[] { "a7", 12, 23, 2, 1, 24, 4 },
             new object[] { "a8", 39, 0, 3, 4, 42, 4 },
-            new object[] { "a9", 21, 0, 2, 0, 26, 3 },
+            new object[] { "a9", 21, 0, 2, 0, 25, 3 },
             new object[] { "a10", 27, 0, 1, 3, 25, 3 },
-            new object[] { "a11", 120, 12, 2, 2, 36, 3 },
+            new object[] { "a11", 120, 12, 2, 2, 35, 3 },
             new object[] { "a13", 14, 18, 2, 4, 60, 4 },
         };
 

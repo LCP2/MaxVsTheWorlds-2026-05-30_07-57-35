@@ -224,6 +224,9 @@ namespace MaxWorlds.Enemies
 
         public void ConfigureWorldConfig(MaxWorlds.Arena.WorldConfig cfg) => _worldConfig = cfg;
 
+        /// <summary>MV-1430: this world's relay alive cap (0 = no cap).</summary>
+        public int AliveCap => _worldConfig?.dials != null ? Mathf.Max(0, _worldConfig.dials.aliveCap) : 0;
+
         /// <summary>MV-1022: for a mobile shed only — <see cref="Bodies()"/> roots its metre-space
         /// container here instead of this factory's own (moving) transform, so a live robot riding
         /// inside is never dragged by the shed's <c>ClampToArea</c>/hutch-separation steps the way a
@@ -655,6 +658,7 @@ namespace MaxWorlds.Enemies
 
             e.gameObject.SetActive(true);
             e.SetAreaIndex(areaIndex); // MV-1122: see ResolveAreaIndex's own doc comment
+            e.SetRangedDamageMultiplier(_worldConfig?.dials != null ? _worldConfig.dials.rangedDamageMultiplier : 1f);   // MV-1430
 
             // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
             // Told to emerge first, it would be told to chase a frame later and step out of the door

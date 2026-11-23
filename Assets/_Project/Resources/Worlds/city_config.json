@@ -58,12 +58,15 @@
   "powerupCadence": 2,
   "squadTactics": true,
   "brightHostileProjectiles": true,
- "eliteChancePct": 20,
+  "eliteChancePct": 20,
   "eliteAffixes": [
    "shielded",
    "hasted",
    "molten"
-  ]
+  ],
+  "rangedDamageMultiplier": 1.5,
+  "aliveCap": 12,
+  "hazardRobotDamageMultiplier": 2
  },
  "enemyTypes": {
   "small": {
@@ -91,16 +94,51 @@
  "enemyOverrides": [
   {
    "kind": "rusher",
-   "displayName": "COURIER"
+   "displayName": "COURIER",
+   "maxHealth": 64
   },
   {
    "kind": "bolter",
    "moveSpeed": 3.5,
-   "marksman": true
+   "marksman": true,
+   "maxHealth": 80
   },
   {
    "kind": "turret",
-   "displayName": "STOPLIGHT"
+   "displayName": "STOPLIGHT",
+   "maxHealth": 120
+  },
+  {
+   "kind": "bruiser",
+   "maxHealth": 200
+  },
+  {
+   "kind": "heavy",
+   "maxHealth": 520
+  },
+  {
+   "kind": "brute",
+   "maxHealth": 840
+  },
+  {
+   "kind": "gunner",
+   "maxHealth": 78
+  },
+  {
+   "kind": "launcher",
+   "maxHealth": 80
+  },
+  {
+   "kind": "blinker",
+   "maxHealth": 80
+  },
+  {
+   "kind": "charger",
+   "maxHealth": 280
+  },
+  {
+   "kind": "orbital",
+   "maxHealth": 180
   }
  ],
  "gates": [
@@ -2243,8 +2281,7 @@
    "composition": {
     "rusher": 10,
     "bruiser": 11,
-    "turret": 2,
-    "projector": 1
+    "turret": 2
    },
    "surfaces": [],
    "cover": [
@@ -2673,12 +2710,6 @@
      "x": 50.0,
      "z": 69.5,
      "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 48.0,
-     "z": 70.0,
-     "level": 0
     }
    ],
    "canisters": [
@@ -2709,13 +2740,6 @@
      "x": 52.325635,
      "z": 84.292592,
      "feeds": "a4_rep1"
-    }
-   ],
-   "challenges": [
-    {
-     "id": "a4_challenge1",
-     "x": 48.0,
-     "z": 70.0
     }
    ]
   },
@@ -4226,7 +4250,6 @@
     "bruiser": 5,
     "gunner": 7,
     "turret": 2,
-    "jammer": 1,
     "arcstriker": 1
    },
    "surfaces": [
@@ -4665,12 +4688,6 @@
      "kind": "bruiser",
      "x": 26.5,
      "z": 112.0,
-     "level": 0
-    },
-    {
-     "kind": "jammer",
-     "x": 14.0,
-     "z": 110.2,
      "level": 0
     },
     {
@@ -5268,8 +5285,7 @@
      "kind": "bruiser",
      "x": 50.5,
      "z": 105.5,
-     "level": 0,
-     "carriesKey": true
+     "level": 0
     },
     {
      "kind": "rusher",
@@ -5366,16 +5382,6 @@
      "x": 55.5,
      "z": 116.5,
      "feeds": "a7_rep1"
-    }
-   ],
-   "vaults": [
-    {
-     "id": "a7_vault1",
-     "x": 40.0,
-     "z": 110.0,
-     "w": 6,
-     "d": 6,
-     "door": "N"
     }
    ]
   },
@@ -6178,8 +6184,7 @@
     "turret": 2,
     "bruiser": 5,
     "heavy": 3,
-    "bolter": 2,
-    "projector": 1
+    "bolter": 2
    },
    "surfaces": [
     {
@@ -6483,12 +6488,6 @@
      "kind": "bruiser",
      "x": 99.5,
      "z": 142.0,
-     "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 101.0,
-     "z": 141.0,
      "level": 0
     },
     {
@@ -7103,13 +7102,6 @@
      "z": 167.5,
      "feeds": "a10_rep1"
     }
-   ],
-   "challenges": [
-    {
-     "id": "a10_challenge1",
-     "x": 100.0,
-     "z": 168.0
-    }
    ]
   },
   {
@@ -7135,8 +7127,7 @@
     "launcher": 3,
     "gunner": 2,
     "heavy": 2,
-    "brute": 4,
-    "jammer": 1
+    "brute": 4
    },
    "surfaces": [],
    "cover": [
@@ -8614,12 +8605,6 @@
      "kind": "heavy",
      "x": 81.0,
      "z": 184.5,
-     "level": 0
-    },
-    {
-     "kind": "jammer",
-     "x": 71.3,
-     "z": 180.0,
      "level": 0
     },
     {
@@ -10160,8 +10145,7 @@
     "gunner": 2,
     "bruiser": 2,
     "blinker": 1,
-    "heavy": 1,
-    "projector": 1
+    "heavy": 1
    },
    "surfaces": [
     {
@@ -10359,8 +10343,7 @@
      "kind": "brute",
      "x": 106.5,
      "z": 251.5,
-     "level": 0,
-     "carriesKey": true
+     "level": 0
     },
     {
      "kind": "rusher",
@@ -10511,12 +10494,6 @@
      "x": 100.0,
      "z": 262.5,
      "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 104.0,
-     "z": 250.0,
-     "level": 0
     }
    ],
    "canisters": [
@@ -10548,16 +10525,6 @@
      "x": 101.112405,
      "z": 269.298488,
      "feeds": "a14_rep1"
-    }
-   ],
-   "vaults": [
-    {
-     "id": "a14_vault1",
-     "x": 104.0,
-     "z": 236.0,
-     "w": 6,
-     "d": 6,
-     "door": "N"
     }
    ]
   },
@@ -11498,8 +11465,7 @@
     "brute": 2,
     "gunner": 2,
     "heavy": 4,
-    "bolter": 3,
-    "jammer": 1
+    "bolter": 3
    },
    "surfaces": [
     {
@@ -11854,12 +11820,6 @@
      "kind": "heavy",
      "x": 142.5,
      "z": 312.5,
-     "level": 0
-    },
-    {
-     "kind": "jammer",
-     "x": 138.0,
-     "z": 299.0,
      "level": 0
     }
    ],
@@ -14044,8 +14004,7 @@
     "brute": 3,
     "blinker": 3,
     "bolter": 1,
-    "heavy": 1,
-    "projector": 1
+    "heavy": 1
    },
    "surfaces": [],
    "cover": [
@@ -15309,12 +15268,6 @@
      "x": 146.0,
      "z": 325.0,
      "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 131.0,
-     "z": 331.3,
-     "level": 0
     }
    ],
    "canisters": [
@@ -15864,9 +15817,7 @@
     "blinker": 2,
     "turret": 3,
     "bruiser": 1,
-    "launcher": 1,
-    "jammer": 1,
-    "welder": 1
+    "launcher": 1
    },
    "surfaces": [
     {
@@ -16365,18 +16316,6 @@
      "x": 148.5,
      "z": 370.5,
      "level": 0
-    },
-    {
-     "kind": "jammer",
-     "x": 159.0,
-     "z": 366.0,
-     "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 173.99,
-     "z": 360.42,
-     "level": 0
     }
    ],
    "canisters": [
@@ -16442,8 +16381,7 @@
     "blinker": 5,
     "launcher": 2,
     "bolter": 3,
-    "brute": 1,
-    "welder": 1
+    "brute": 1
    },
    "surfaces": [
     {
@@ -17405,12 +17343,6 @@
      "x": 146.5,
      "z": 410.5,
      "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 181.92,
-     "z": 420.26,
-     "level": 0
     }
    ],
    "canisters": [
@@ -17508,8 +17440,7 @@
     "blinker": 3,
     "gunner": 2,
     "bruiser": 3,
-    "launcher": 3,
-    "welder": 1
+    "launcher": 3
    },
    "surfaces": [
     {
@@ -17853,12 +17784,6 @@
      "x": 211.0,
      "z": 407.0,
      "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 230.29,
-     "z": 403.83,
-     "level": 0
     }
    ],
    "canisters": [
@@ -17933,9 +17858,7 @@
     "launcher": 3,
     "bruiser": 2,
     "brute": 1,
-    "bolter": 4,
-    "projector": 1,
-    "welder": 1
+    "bolter": 4
    },
    "surfaces": [
     {
@@ -18369,18 +18292,6 @@
      "x": 202.0,
      "z": 426.0,
      "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 210.5,
-     "z": 430.0,
-     "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 224.8,
-     "z": 446.29,
-     "level": 0
     }
    ],
    "canisters": [
@@ -18451,8 +18362,7 @@
     "blinker": 4,
     "launcher": 1,
     "brute": 3,
-    "bruiser": 2,
-    "welder": 1
+    "bruiser": 2
    },
    "surfaces": [],
    "cover": [
@@ -19848,12 +19758,6 @@
      "x": 178.5,
      "z": 438.0,
      "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 160.61,
-     "z": 441.59,
-     "level": 0
     }
    ],
    "canisters": [
@@ -19940,9 +19844,7 @@
     "turret": 3,
     "bolter": 1,
     "launcher": 4,
-    "gunner": 1,
-    "jammer": 1,
-    "welder": 1
+    "gunner": 1
    },
    "surfaces": [],
    "cover": [
@@ -20409,18 +20311,6 @@
      "x": 181.5,
      "z": 478.0,
      "level": 0
-    },
-    {
-     "kind": "jammer",
-     "x": 176.5,
-     "z": 464.7,
-     "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 169.41,
-     "z": 478.43,
-     "level": 0
     }
    ],
    "canisters": [
@@ -20496,8 +20386,7 @@
     "bolter": 6,
     "bruiser": 1,
     "blinker": 2,
-    "heavy": 2,
-    "welder": 1
+    "heavy": 2
    },
    "surfaces": [
     {
@@ -21003,12 +20892,6 @@
      "kind": "heavy",
      "x": 218.5,
      "z": 474.5,
-     "level": 0
-    },
-    {
-     "kind": "welder",
-     "x": 231.29,
-     "z": 470.83,
      "level": 0
     }
    ],
@@ -21633,8 +21516,7 @@
     "turret": 4,
     "brute": 3,
     "bruiser": 3,
-    "heavy": 1,
-    "projector": 1
+    "heavy": 1
    },
    "surfaces": [
     {
@@ -22232,12 +22114,6 @@
      "kind": "brute",
      "x": 230.5,
      "z": 517.0,
-     "level": 0
-    },
-    {
-     "kind": "projector",
-     "x": 242.0,
-     "z": 501.0,
      "level": 0
     }
    ],

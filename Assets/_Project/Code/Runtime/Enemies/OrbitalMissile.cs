@@ -384,6 +384,10 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-1428: the world's brightHostileProjectiles dial — launches blue-white missiles.</summary>
         public bool Bright;
 
+        /// <summary>MV-1430: the world's rangedDamageMultiplier - each launched missile hits for
+        /// <see cref="OrbitalTuning.Damage"/> times this.</summary>
+        public float DamageMultiplier = 1f;
+
         /// <summary>The tube that fires next (the crown brings it round to the front).</summary>
         public int NextTube => _step % RobotBodies.OrbitalTubeCount;
 
@@ -435,7 +439,8 @@ namespace MaxWorlds.Enemies
             Vector3 line = dist > 1e-3f ? to / dist : Vector3.forward;
             Vector3 heading = Quaternion.AngleAxis(OrbitalTuning.LaunchAngle(_step), Vector3.up) * line;
             OrbitalMissile m = OrbitalMissile.Spawn(feet, heading, target, areaIndex,
-                                                    TubeMouth?.Invoke(NextTube), bright: Bright);
+                                                    TubeMouth?.Invoke(NextTube), bright: Bright,
+                                                    damage: Mathf.Approximately(DamageMultiplier, 1f) ? -1f : OrbitalTuning.Damage * DamageMultiplier);
             if (m == null) return 0;   // world budget spent — try again next tick
 
             _live.Add(m);

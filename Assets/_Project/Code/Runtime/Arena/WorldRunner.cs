@@ -273,6 +273,12 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-1430: the world's hazardRobotDamageMultiplier onto every canister it built.
+            float robotBlastMult = cfg.dials != null ? cfg.dials.hazardRobotDamageMultiplier : 1f;
+            if (build.Canisters != null)
+                foreach (Canister canister in build.Canisters)
+                    if (canister != null) canister.SetRobotDamageMultiplier(robotBlastMult);
+
             BuildGateIntoAreaMap(build);
             BuildHatchGateList(build);
             RefreshGateLocks(); // initial lock state before the first Update tick

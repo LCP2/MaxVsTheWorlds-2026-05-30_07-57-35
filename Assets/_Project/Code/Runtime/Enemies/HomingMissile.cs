@@ -67,6 +67,9 @@ namespace MaxWorlds.Enemies
         private IDamageable _targetDamageable;
         private float _speed;
         private float _damage;
+
+        /// <summary>The damage this missile deals on impact (resolved, after any world multiplier).</summary>
+        public float Damage => _damage;
         private float _splashRadius;
         private float _age;
         private float _stateTimer;

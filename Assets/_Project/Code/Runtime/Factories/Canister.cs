@@ -84,6 +84,12 @@ namespace MaxWorlds.Factories
         private Vector3 _blastPoint;
         private readonly HashSet<IDamageable> _blastHit = new HashSet<IDamageable>();
 
+        /// <summary>MV-1430: the world's hazardRobotDamageMultiplier - scales the blast's damage to ROBOTS only
+        /// (Max, Sentinels, cover, canisters unchanged). 1 for every world that does not author it.</summary>
+        public float RobotDamageMultiplier { get; private set; } = 1f;
+
+        public void SetRobotDamageMultiplier(float m) => RobotDamageMultiplier = m > 0f ? m : 1f;
+
         /// <summary>MV-1417: the live explosion fireball (null before the blast and once it is gone).</summary>
         public GameObject Fireball => _fx?.Fireball;
 
@@ -459,7 +465,9 @@ namespace MaxWorlds.Factories
                 if (!CombatLevel.SameLevel(map, _blastPoint, tr.position)) continue;
 
                 _blastHit.Add(d);
-                d.TakeDamage(new DamageInfo(BlastDamageAt(distance), _blastPoint, Vector3.up, Team.Neutral,
+                float blastDamage = BlastDamageAt(distance);
+                if (d is RobotEnemy) blastDamage *= RobotDamageMultiplier;   // MV-1430
+                d.TakeDamage(new DamageInfo(blastDamage, _blastPoint, Vector3.up, Team.Neutral,
                     source: DamageSource.Environment));
             }
 

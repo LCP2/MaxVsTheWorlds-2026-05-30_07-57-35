@@ -38,11 +38,12 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void CityAndReefConfigs_SecretsVaultsPadsAndRepairBayMeetSpec()
         {
-            CheckWorld(MaxWorlds.Arena.WorldLibrary.City, "City");
-            CheckWorld(MaxWorlds.Arena.WorldLibrary.World3, "Reef");
+            // MV-1430: the City's vaults and challenge pads were removed (Lee, 23 Nov: "a bust"); the Reef keeps both.
+            CheckWorld(MaxWorlds.Arena.WorldLibrary.City, "City", expectedVaults: 0, expectedPads: 0);
+            CheckWorld(MaxWorlds.Arena.WorldLibrary.World3, "Reef", expectedVaults: 2, expectedPads: 2);
         }
 
-        private static void CheckWorld(string worldKey, string label)
+        private static void CheckWorld(string worldKey, string label, int expectedVaults, int expectedPads)
         {
             var asset = Resources.Load<TextAsset>($"{MaxWorlds.Arena.WorldLibrary.ResourceRoot}/{worldKey}");
             Assert.IsNotNull(asset, $"{label}: {worldKey}.json missing from Resources");
@@ -147,7 +148,7 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             // --- Vaults: area >= 5, not excluded, 1.5 m clear, carriesKey robot in the same area ---
-            Assert.AreEqual(2, vaults.Count, $"{label}: expected 2 vaults, found {vaults.Count}");
+            Assert.AreEqual(expectedVaults, vaults.Count, $"{label}: expected {expectedVaults} vaults, found {vaults.Count}");
             foreach (MaxWorlds.Arena.MapEntity v in vaults)
             {
                 string areaId = AreaOf(v.id);
@@ -186,7 +187,7 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             // --- Challenge pads: area >= 4, not excluded, 3 m clear of solid cover at the centre ---
-            Assert.AreEqual(2, pads.Count, $"{label}: expected 2 challenge pads, found {pads.Count}");
+            Assert.AreEqual(expectedPads, pads.Count, $"{label}: expected {expectedPads} challenge pads, found {pads.Count}");
             foreach (MaxWorlds.Arena.MapEntity p in pads)
             {
                 string areaId = AreaOf(p.id);
