@@ -156,7 +156,16 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsFalse(IsExcludedArea(areaId), $"{label}: vault '{v.id}' is in a boss/entry/exit area");
 
                 Rect box = RectOf(v);
-                foreach (MaxWorlds.Arena.MapEntity c in allCover) AssertClear(box, RectOf(c), VaultMargin, label, v.id, c.id);
+                // MV-1323 originally kept 1.5 m clear of cover on every side; MV-1420 narrows that for COVER only:
+                // cover may touch a vault's walls (Lee's authored wedges sit against a7_vault1's back wall); only
+                // the door approach must stay clear (Vault.OpenRadius = 1.5 m).
+                Rect doorZone = DoorApproachRect(box, v.facing);
+                foreach (MaxWorlds.Arena.MapEntity c in allCover)
+                {
+                    Rect cr = RectOf(c);
+                    Assert.IsFalse(OverlapsStrict(box, cr), $"{label}: '{v.id}' overlaps cover '{c.id}'");
+                    Assert.IsFalse(OverlapsStrict(doorZone, cr), $"{label}: cover '{c.id}' is within {VaultMargin} m in front of '{v.id}' door");
+                }
                 foreach (MaxWorlds.Arena.MapEntity cur in currents) AssertClear(box, RectOf(cur), VaultMargin, label, v.id, cur.id);
                 foreach (MaxWorlds.Arena.MapEntity f in factories) AssertClear(box, RectOf(f), VaultMargin, label, v.id, f.id);
                 foreach (MaxWorlds.Arena.MapEntity r in replicators) AssertClear(box, PointRect(r), VaultMargin, label, v.id, r.id);
@@ -229,6 +238,21 @@ namespace MaxWorlds.Tests.EditMode
             new Rect(e.x - e.width / 2f, e.z - e.depth / 2f, e.width, e.depth);
 
         private static Rect PointRect(MaxWorlds.Arena.MapEntity e) => new Rect(e.x, e.z, 0f, 0f);
+
+        // Rect.Overlaps is already strict (touching edges do not overlap), kept as a named helper for intent.
+        private static bool OverlapsStrict(Rect a, Rect b) => a.Overlaps(b);
+
+        // Door face's full length, VaultMargin deep, on the side the vault's door faces (N=+z, S=-z, E=+x, W=-x).
+        private static Rect DoorApproachRect(Rect box, string facing)
+        {
+            switch ((facing ?? "S").ToUpperInvariant())
+            {
+                case "N": return new Rect(box.xMin, box.yMax, box.width, VaultMargin);
+                case "E": return new Rect(box.xMax, box.yMin, VaultMargin, box.height);
+                case "W": return new Rect(box.xMin - VaultMargin, box.yMin, VaultMargin, box.height);
+                default: return new Rect(box.xMin, box.yMin - VaultMargin, box.width, VaultMargin);
+            }
+        }
 
         private static void AssertClear(Rect box, Rect obstacle, float margin, string label, string boxId, string obstacleId)
         {
