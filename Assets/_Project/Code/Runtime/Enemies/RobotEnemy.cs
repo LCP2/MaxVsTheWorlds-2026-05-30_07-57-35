@@ -378,6 +378,7 @@ namespace MaxWorlds.Enemies
             // life — the common case (Level 0, no footprint) is the correct default until whoever
             // places this robot next calls SetLevel/SetDeckFootprint again.
             Level = 0;
+            SetSquad(null, false, false);   // MV-1427: nor a previous life's squad/post
             _deckRects = null;
             AreaIndex = 0; // MV-820: a pooled robot must not carry the last life's area forward either
             WelderRepairTarget = null; // MV-1244: nor a previous Welder life's cradle reference
@@ -443,6 +444,36 @@ namespace MaxWorlds.Enemies
         public int Level { get; private set; }
 
         public void SetLevel(int level) => Level = level;
+
+        // --- MV-1427: squads and posts (only live when the world's squadTactics dial is on) ---------
+
+        /// <summary>This robot's authored squad id (null/empty = a squad of one).</summary>
+        public string SquadId { get; private set; }
+
+        /// <summary>True when the world's squadTactics dial is on for this robot.</summary>
+        public bool SquadOn { get; private set; }
+
+        /// <summary>True once any ranged squad-mate has fired at Max since the squad woke (or 6 s passed).</summary>
+        public bool SquadVolleyFired { get; set; }
+
+        private bool _hasPost, _postSet;
+        private Vector3 _postPos;
+        private float _squadHoldTimer;
+        private RobotEnemy _bodyguardOf;
+
+        /// <summary>Where this post robot holds (its spawn point), valid once awake.</summary>
+        public Vector3 PostPosition => _postPos;
+
+        public void SetSquad(string squad, bool post, bool tactics)
+        {
+            SquadOn = tactics;
+            SquadId = tactics ? squad : null;
+            _hasPost = tactics && post;
+            _postSet = false;
+            SquadVolleyFired = false;
+            _squadHoldTimer = 0f;
+            _bodyguardOf = null;
+        }
 
         private List<Rect> _deckRects;
 
@@ -3013,6 +3044,9 @@ namespace MaxWorlds.Enemies
             _stateTimer = 0f;
             SetTell(windupTell);
 
+            // MV-1427: wake together - the whole squad wakes in the same call (Activate is idempotent).
+            if (SquadOn) SquadTactics.WakeSquad(this);
+
             // MV-1228: the chain snaps the instant it actually wakes (never on a refused attempt above)
             // — the look ticket (MV-1231) owns the visual, this just fires the event.
             if (Kind == EnemyKind.Breaker) ChainSignals.EmitChainSnapped(this);
@@ -3233,16 +3267,49 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
             float dist = to.magnitude;   // to the GOAL — what "arrived" and "close enough to lunge" mean
 
+            // MV-1427: squad goals - bodyguard (Bruiser/Heavy cover a shooter) outranks hold-for-the-volley.
+            bool squadHold = false, squadGuard = false;
+            if (SquadOn && _sight.HasSight)
+            {
+                if (SquadTactics.IsBodyguard(Kind))
+                {
+                    _bodyguardOf = SquadTactics.PickCharge(this, _bodyguardOf, target.position);
+                    if (_bodyguardOf != null)
+                    {
+                        goal = SquadTactics.BodyguardPoint(_bodyguardOf.transform.position, target.position);
+                        squadGuard = true;
+                    }
+                }
+                if (!squadGuard && SquadTactics.IsChaser(Kind) && !SquadVolleyFired && SquadTactics.HasLiveRangedMate(this))
+                {
+                    _squadHoldTimer += dt;
+                    if (_squadHoldTimer >= SquadTactics.HoldReleaseSeconds) SquadVolleyFired = true;
+                    else
+                    {
+                        goal = SquadTactics.HoldGoal(transform.position, target.position, GetInstanceID());
+                        squadHold = true;
+                    }
+                }
+                if (squadHold || squadGuard)
+                {
+                    to = goal - transform.position; to.y = 0f;
+                    dist = to.magnitude;
+                }
+            }
+
             // Blinker (MV-293): the one kind that cheats the distance instead of closing it. Checked
             // here, ahead of the ordinary chase, so a Blinker still out of melee range blinks rather
             // than plodding the rest of the way like a rusher.
-            if (Kind == EnemyKind.Blinker)
+            if (Kind == EnemyKind.Blinker && !squadHold)
             {
                 _teleportTimer -= dt;
                 if (_teleportTimer <= 0f && _sight.HasSight && dist > lungeRange)
                 {
                     float sign = UnityEngine.Random.value < 0.5f ? 1f : -1f;
-                    _teleportTarget = BlinkerTeleport.FlankPoint(
+                    _teleportTarget = SquadOn
+                        ? SquadTactics.BlinkBehindPoint(EnemyNavigation.Map, target.position, target.forward,
+                            _cc != null ? _cc.radius : 0.5f)   // MV-1427: land 2.5 m behind Max
+                        : BlinkerTeleport.FlankPoint(
                         target.position, transform.position, lungeRange * 0.85f, sign);
                     Current = State.Teleport;
                     _stateTimer = 0f;
@@ -3437,6 +3504,11 @@ namespace MaxWorlds.Enemies
                 else speed = 0f;
             }
 
+            // MV-1427: hold the post (a marksman Bolter's own back-off wins inside 9 m) and stop on the
+            // bodyguard point rather than shuffling off it.
+            if (SquadOn && _hasPost) TickPostHold(ref dir, ref speed, ref retreating);
+            if (squadGuard) speed = dist <= 0.3f ? 0f : EffectiveMoveSpeed;   // keep walking in past the touch-kind stop
+
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
 
             // MV-434: whatever FaceAndMove just did, this robot's centre may never end the tick
@@ -3445,6 +3517,9 @@ namespace MaxWorlds.Enemies
             // Max's live position, not the stale goal above, is what lets a robot standing its
             // ground get shoved aside as Max walks into it, rather than ever pinning him.
             ClampBodySeparation();
+
+            // MV-1427: a chaser holding for the volley never commits - it only circles.
+            if (squadHold) return;
 
             // Is it getting anywhere? Seeing Max is a new spot to walk to, so the clock starts again.
             //
@@ -3546,6 +3621,29 @@ namespace MaxWorlds.Enemies
                 Current = State.Telegraph;
                 _stateTimer = 0f;
                 SetTell(windupTell);   // visual tell: dodge window opens
+            }
+        }
+
+        /// <summary>MV-1427 "hold the post": with sight of Max the robot stays within 1.5 m of its post (walks
+        /// back if it drifts past 1 m, stands and faces Max otherwise); without sight it chases normally
+        /// until it regains sight, and walks home once Max is beyond its weapon range.</summary>
+        private void TickPostHold(ref Vector3 dir, ref float speed, ref bool retreating)
+        {
+            if (!_postSet) { _postPos = transform.position; _postSet = true; }
+            Vector3 toMax = target.position - transform.position; toMax.y = 0f;
+            if (Kind == EnemyKind.Bolter && toMax.magnitude < SquadTactics.BolterBackOffMeters) return;
+
+            Vector3 toPost = _postPos - transform.position; toPost.y = 0f;
+            float d = toPost.magnitude;
+            if (_sight.HasSight)
+            {
+                retreating = false;
+                if (d > SquadTactics.PostSettleMeters) dir = toPost / d;
+                else { dir = toMax.sqrMagnitude > 1e-4f ? toMax.normalized : dir; speed = 0f; }
+            }
+            else if (toMax.magnitude > lungeRange && d > 0.3f)
+            {
+                dir = toPost / d;
             }
         }
 
@@ -3702,6 +3800,7 @@ namespace MaxWorlds.Enemies
                 _lungeDir = transform.forward;
                 _dealtThisLunge = false;
                 _breakerRamSentinelsHit.Clear();
+                if (SquadOn) SquadTactics.NotifyFired(this);   // MV-1427: a ranged robot's commit IS its shot
                 Current = State.Lunge;
                 _stateTimer = 0f;
                 SetTell(windupTell);
@@ -4810,6 +4909,7 @@ namespace MaxWorlds.Enemies
             bool sameLevel = target != null && CombatLevel.SameLevel(EnemyNavigation.Map, transform.position, target.position);
             Vector3 feet = transform.position - Vector3.up * (_cc != null ? _cc.height * 0.5f : 0.8f);
             _arcStriker.Tick(dt, feet, sameLevel ? target : null, _sight.HasSight);
+            if (SquadOn && _arcStriker.IsMarking) SquadTactics.NotifyFired(this);   // MV-1427
         }
 
         /// <summary>Hold within 1.5 m of the spawn point until Max is within 8 m; then walk directly away from

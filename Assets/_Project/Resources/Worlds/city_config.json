@@ -56,7 +56,8 @@
    "blinkerFromArea": 9
   },
   "powerupCadence": 2,
-  "eliteChancePct": 20,
+  "squadTactics": true,
+ "eliteChancePct": 20,
   "eliteAffixes": [
    "shielded",
    "hasted",

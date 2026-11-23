@@ -114,6 +114,14 @@ namespace MaxWorlds.Arena
         /// on any removal (a kill, a clean-up safety-net kill, or a Despawn) — see
         /// <see cref="MaxWorlds.Enemies.RobotEnemy.CarriesKey"/>. Default false.</summary>
         public bool carriesKey;
+
+        /// <summary>MV-1427: squad id. Robots in the same area with the same non-empty id form one squad
+        /// (only read when <see cref="WorldDials.squadTactics"/> is on). Empty = a squad of one.</summary>
+        public string squad;
+
+        /// <summary>MV-1427: a post robot treats its spawn point as its post (only read when
+        /// <see cref="WorldDials.squadTactics"/> is on).</summary>
+        public bool post;
     }
 
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
@@ -1240,6 +1248,10 @@ namespace MaxWorlds.Arena
         /// <summary>MV-1278: percent chance (0-100) a robot spawned from this world rolls elite.
         /// 0 (every config authored before this field existed) means never.</summary>
         public float eliteChancePct = 0f;
+
+        /// <summary>MV-1427: squad/post tactics (wake together, hold for the volley, bodyguard, hold the
+        /// post, blink behind). Default false; true only in city_config.json.</summary>
+        public bool squadTactics = false;
 
         /// <summary>MV-1278: how many LIVE elites one area may hold at once before the roll stops
         /// offering a new one — not a per-world total, a per-area ceiling.</summary>

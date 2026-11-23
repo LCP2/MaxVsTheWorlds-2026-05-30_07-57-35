@@ -62,9 +62,15 @@ namespace MaxWorlds.Enemies
             /// <see cref="EnemyArchetype.CarriesKey"/>.</summary>
             public readonly bool CarriesKey;
 
-            public Seed(Vector3 position, EnemyKind? kind, int level = 0, bool carriesKey = false)
+            /// <summary>MV-1427: authored squad id (null/empty = none) and post flag.</summary>
+            public readonly string Squad;
+            public readonly bool Post;
+
+            public Seed(Vector3 position, EnemyKind? kind, int level = 0, bool carriesKey = false,
+                        string squad = null, bool post = false)
             {
                 Position = position; Kind = kind; Level = level; CarriesKey = carriesKey;
+                Squad = squad; Post = post;
             }
         }
 
@@ -114,7 +120,7 @@ namespace MaxWorlds.Enemies
             {
                 WorldGarrisonEntry entry = authored[i];
                 EnemyKind? kind = EnemyKindNames.TryParse(entry.kind, out EnemyKind k) ? k : (EnemyKind?)null;
-                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind, entry.level, entry.carriesKey);
+                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind, entry.level, entry.carriesKey, entry.squad, entry.post);
             }
 
             if (remaining > 0)
@@ -173,7 +179,7 @@ namespace MaxWorlds.Enemies
                     Debug.LogError($"[Garrison] level-1 entry in area '{area?.id}' at ({pos.x:F1}, {pos.z:F1}) " +
                         $"is not over any deck rect - config error, placing at default deck height {defaultDeckHeight:F1}m.");
 
-                slots[i] = new Seed(new Vector3(pos.x, y, pos.z), slots[i].Kind, slots[i].Level, slots[i].CarriesKey);
+                slots[i] = new Seed(new Vector3(pos.x, y, pos.z), slots[i].Kind, slots[i].Level, slots[i].CarriesKey, slots[i].Squad, slots[i].Post);
             }
 
             return slots;
