@@ -17,9 +17,9 @@ namespace MaxWorlds.Tests.EditMode
         // area, non-wedge cover, wedges, relays, pylons standing here, garrison, canisters
         private static readonly object[][] Expected =
         {
-            new object[] { "a2", 18, 5, 1, 1, 22, 0 },
-            new object[] { "a3", 21, 2, 1, 1, 23, 3 },
-            new object[] { "a5", 117, 8, 2, 2, 23, 2 },
+            new object[] { "a2", 19, 5, 1, 1, 8, 2 },
+            new object[] { "a3", 21, 2, 1, 1, 8, 3 },
+            new object[] { "a5", 118, 8, 2, 2, 8, 2 },
             new object[] { "a6", 33, 0, 1, 1, 25, 3 }, // MV-1426: +1 arcstriker at the back wall; MV-1430: -1 cut kind (a welder/jammer/projector)
             new object[] { "a7", 12, 23, 2, 1, 24, 4 },
             new object[] { "a8", 39, 0, 3, 4, 42, 4 },

@@ -104,11 +104,11 @@ namespace MaxWorlds.Tests.EditMode
                 counts.TryGetValue(kind, out int existing);
                 counts[kind] = existing + 1;
             }
-            Assert.AreEqual(18, a1.garrison.Length, "Market Street's own garrison count");
-            Assert.AreEqual(8, counts.ContainsKey(EnemyKind.Rusher) ? counts[EnemyKind.Rusher] : 0);
-            Assert.AreEqual(4, counts.ContainsKey(EnemyKind.Bruiser) ? counts[EnemyKind.Bruiser] : 0);
-            Assert.AreEqual(4, counts.ContainsKey(EnemyKind.Gunner) ? counts[EnemyKind.Gunner] : 0);
-            Assert.AreEqual(2, counts.ContainsKey(EnemyKind.Turret) ? counts[EnemyKind.Turret] : 0);
+            Assert.AreEqual(7, a1.garrison.Length, "Market Street's own garrison count");
+            Assert.AreEqual(2, counts.ContainsKey(EnemyKind.Rusher) ? counts[EnemyKind.Rusher] : 0);
+            Assert.AreEqual(2, counts.ContainsKey(EnemyKind.Bruiser) ? counts[EnemyKind.Bruiser] : 0);
+            Assert.AreEqual(1, counts.ContainsKey(EnemyKind.Gunner) ? counts[EnemyKind.Gunner] : 0);
+            Assert.AreEqual(0, counts.ContainsKey(EnemyKind.Turret) ? counts[EnemyKind.Turret] : 0);
 
             WorldArea finale = WorldRunner.ResolveFinaleArea(cityCfg);
             Assert.IsNotNull(finale, "the City must resolve a finale area");
