@@ -96,6 +96,12 @@ namespace MaxWorlds.VFX
 
             if (r.GetComponentInParent<MowerHutch>() != null) return CharacterRole.Structure;
 
+            // MV-1423: a canister and a destructible cover piece are IDamageable world props with a look of
+            // their own (flat-colour materials). Falling through to the Robot default below skinned every
+            // part of them as a robot - blue body, black outline - in the live City.
+            if (r.GetComponentInParent<MaxWorlds.Factories.Canister>() != null ||
+                r.GetComponentInParent<MaxWorlds.Factories.DestructibleCover>() != null) return null;
+
             // Falling through to here without this check is MV-246: an AreaGate is IDamageable (so it
             // isn't a WorldMaterials surface) but matched none of the roles above, so it fell all the
             // way to the Robot default below and wore the rusher's turquoise as a flat, unlit-looking

@@ -58,15 +58,12 @@ namespace MaxWorlds.Factories
         private static readonly Color FlashColor = Color.white;
         private static readonly Color ChevronColor = Color.white;
 
-        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private DestructibleHealth _health;
         private Collider _collider;
         private Renderer _bodyRenderer;
         private Renderer _bandRenderer;
         private Renderer _chevronRenderer;
-        private MaterialPropertyBlock _bandMpb;
 
         // MV-1417: the drum's red parts (body, cap, shade, band) that blend toward white on a hit, and
         // every cosmetic renderer built under Body (hidden together on destruction).
@@ -96,15 +93,12 @@ namespace MaxWorlds.Factories
         /// <summary>MV-1417: the root every transient effect hangs under (null when none is live).</summary>
         public GameObject FxRoot => _fx?.Root;
 
-        /// <summary>MV-1417: the drum body's resolved colour as last pushed through its MaterialPropertyBlock.</summary>
+        /// <summary>MV-1417: the drum body's resolved colour as its material renders it (MV-1423: flat material, no property block).</summary>
         public Color DrumResolvedColor
         {
             get
             {
-                if (_bodyRenderer == null) return Color.clear;
-                var mpb = new MaterialPropertyBlock();
-                _bodyRenderer.GetPropertyBlock(mpb);
-                return mpb.GetColor(BaseColorId);
+                return FlatColorMaterial.ResolvedColor(_bodyRenderer);
             }
         }
 
@@ -208,11 +202,8 @@ namespace MaxWorlds.Factories
             // Pylon/Replicator, which hide a cosmetic-mismatched cube root, this one just gets tinted.
             _collider = GetComponent<Collider>();
             _bodyRenderer = GetComponent<Renderer>();
-            _bandMpb = new MaterialPropertyBlock();
             if (_bodyRenderer != null)
             {
-                Material drum = MaterialLibrary.Tinted(SurfaceKind.Metal, DrumColor);
-                if (drum != null) _bodyRenderer.sharedMaterial = drum;
                 RegisterTint(_bodyRenderer, DrumColor);
             }
 
@@ -266,8 +257,6 @@ namespace MaxWorlds.Factories
             go.transform.localRotation = localRot;
             go.transform.localScale = localScale;
             var rend = go.GetComponent<MeshRenderer>();
-            Material m = MaterialLibrary.Tinted(SurfaceKind.Metal, color);
-            if (m != null) rend.sharedMaterial = m;
             SetPartColor(rend, color);
             _allParts.Add(rend);
             return rend;
@@ -283,10 +272,9 @@ namespace MaxWorlds.Factories
         private void SetPartColor(Renderer r, Color c)
         {
             if (r == null) return;
-            r.GetPropertyBlock(_bandMpb);
-            _bandMpb.SetColor(BaseColorId, c);
-            _bandMpb.SetColor(ColorId, c);
-            r.SetPropertyBlock(_bandMpb);
+            // MV-1423: the colour lives in a flat material, never a property block - see FlatColorMaterial.
+            Material m = FlatColorMaterial.Get(c);
+            if (m != null && r.sharedMaterial != m) r.sharedMaterial = m;
         }
 
         /// <summary>Blend every red part toward white by <paramref name="amount"/> (0 = its own colour).
@@ -412,11 +400,7 @@ namespace MaxWorlds.Factories
 
         private void SetBandColor(Color c)
         {
-            if (_bandRenderer == null) return;
-            _bandRenderer.GetPropertyBlock(_bandMpb);
-            _bandMpb.SetColor(BaseColorId, c);
-            _bandMpb.SetColor(ColorId, c);
-            _bandRenderer.SetPropertyBlock(_bandMpb);
+            SetPartColor(_bandRenderer, c);
         }
 
         // ---------------------------------------------------------------- Blast (ticket Change 4)

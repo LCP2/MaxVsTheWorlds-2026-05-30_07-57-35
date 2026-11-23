@@ -27,8 +27,6 @@ namespace MaxWorlds.Factories
         private const float StageTwoNormalized = 0.33f;
         public const float FlashSeconds = 0.08f;
 
-        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private sealed class Module
         {
@@ -42,7 +40,6 @@ namespace MaxWorlds.Factories
 
         private readonly List<Module> _modules = new List<Module>(8);
         private readonly List<GameObject> _fx = new List<GameObject>(24);
-        private readonly MaterialPropertyBlock _mpb = new MaterialPropertyBlock();
         private Transform _root;
         private float _flashLeft;
         private int _stage;
@@ -55,9 +52,7 @@ namespace MaxWorlds.Factories
             get
             {
                 if (_modules.Count == 0 || _modules[0].Top == null) return Color.clear;
-                var mpb = new MaterialPropertyBlock();
-                _modules[0].Top.GetPropertyBlock(mpb);
-                return mpb.GetColor(BaseColorId);
+                return FlatColorMaterial.ResolvedColor(_modules[0].Top);
             }
         }
 
@@ -144,8 +139,6 @@ namespace MaxWorlds.Factories
             go.transform.localRotation = rot;
             go.transform.localScale = scale;
             var rend = go.GetComponent<MeshRenderer>();
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Stone, color);
-            if (mat != null) rend.sharedMaterial = mat;
             rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             SetColor(rend, color);
             return rend;
@@ -154,10 +147,9 @@ namespace MaxWorlds.Factories
         private void SetColor(Renderer r, Color c)
         {
             if (r == null) return;
-            r.GetPropertyBlock(_mpb);
-            _mpb.SetColor(BaseColorId, c);
-            _mpb.SetColor(ColorId, c);
-            r.SetPropertyBlock(_mpb);
+            // MV-1423: flat untextured material per colour, never a property block (see FlatColorMaterial).
+            Material m = FlatColorMaterial.Get(c);
+            if (m != null && r.sharedMaterial != m) r.sharedMaterial = m;
         }
 
         // ------------------------------------------------------------------ damage stages
@@ -269,8 +261,6 @@ namespace MaxWorlds.Factories
             go.transform.localScale = scale;
             go.AddComponent<KeepsOwnMaterial>();
             var rend = go.GetComponent<MeshRenderer>();
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Stone, color);
-            if (mat != null) rend.sharedMaterial = mat;
             rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             SetColor(rend, color);
             _fx.RemoveAll(f => f == null);

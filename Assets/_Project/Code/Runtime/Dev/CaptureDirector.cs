@@ -687,6 +687,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1413ShieldedPlate());
             Add(BuildMv1417CanisterBlast());
             Add(BuildMv1419CityBarricades());
+            Add(BuildMv1423LiveCityA3());
             Add(BuildMv1418CityA13());
             Add(BuildMv1332HangarBloomCheck());
             Add(BuildMv1334ReefDeckBusyCheck());
@@ -2490,6 +2491,72 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = cam => WaitFrames(6),
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1419-city-barricades", Run) },
+            };
+        }
+
+        // ---- Mv1423LiveCityA3 (MV-1423 AC2) ---------------------------------------------------
+
+        /// <summary>MV-1423 AC2: ONE capture of the REAL City world (city_config, same build path as BackyardPath),
+        /// area a3, at the play camera - canisters and destructible pieces as the live game draws them. Run via
+        /// <c>cc-mv1423-capture.bat</c>; writes <c>Logs/MV-1423-city-a3.png</c>.</summary>
+        private static CapturePreset BuildMv1423LiveCityA3()
+        {
+            IEnumerator Run(Camera cam)
+            {
+                WorldConfig cfg = WorldLibrary.Load(WorldLibrary.City);
+                if (!WorldMapLoader.TryLoad(cfg, out MapData map, out string reason)) { Debug.LogWarning("[MV1423Capture] " + reason); yield break; }
+                var host = new GameObject("MV1423 Host").transform;
+                MapBuild built = MapRuntime.Build(map, host);
+                var wm = FindFirstObjectByType<MaxWorlds.Rendering.WorldMaterials>();
+                if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<MaxWorlds.Rendering.WorldMaterials>();
+                wm.Apply(WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.City)).Palette);
+                CityDressing.Dress(host, map, cfg, built.Cover);
+                for (int i = 0; i < 12; i++) yield return null;   // Start (area gate + snapshot) and the surface sweep run for real
+
+                // Max is not in a3 in this scene, so switch the live gate to a3 exactly as crossing into it would.
+                if (built.Canisters.Count > 0 && MapStaticBatchRoot.Active != null)
+                {
+                    foreach (Canister c in built.Canisters)
+                    {
+                        if (!c.Id.StartsWith("a3_")) continue;
+                        Vector3 cp = c.transform.position;
+                        MapZone z = map.ZoneAt(cp.x, cp.y, cp.z);
+                        if (z != null) { MapStaticBatchRoot.Active.ApplyAreaGate(z.id); MapStaticBatchRoot.Active.enabled = false; break; }  // frozen: nothing re-gates it back to Max's own area
+                    }
+                }
+                for (int i = 0; i < 3; i++) yield return null;
+                Vector3 focus = new Vector3(47f, 0f, 42f);
+                float pitch = 60f, distance = 24f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) pitch = fixedRig.Pitch;
+                var rot = Quaternion.Euler(pitch, 180f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1423livecity",
+                LogTag = "[MV1423Capture]",
+                Flag = "-mv1423shot",
+                ArmFile = "Temp/mv1423.arm",
+                HeadlessMarker = "Temp/mv1423.headless",
+                DoneFileName = "_mv1423_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = cam => WaitFrames(6),
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1423-city-a3", Run) },
             };
         }
 

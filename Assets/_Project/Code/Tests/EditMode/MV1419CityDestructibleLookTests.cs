@@ -19,7 +19,6 @@ namespace MaxWorlds.Tests.EditMode
     {
         private const float OriginX = 97531f;
         private const float OriginZ = 113246f;
-        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         private GameObject _root;
         private Camera[] _suppressed;
@@ -109,9 +108,7 @@ namespace MaxWorlds.Tests.EditMode
                 if (top == null) failures.Add("module has no Top renderer");
                 else
                 {
-                    var mpb = new MaterialPropertyBlock();
-                    top.GetPropertyBlock(mpb);
-                    Color c = mpb.GetColor(BaseColorId);
+                    Color c = MaxWorlds.Rendering.FlatColorMaterial.ResolvedColor(top);
                     Color want = new Color32(0xF0, 0x6E, 0x14, 255);
                     if (Mathf.Abs(c.r - want.r) > 0.05f || Mathf.Abs(c.g - want.g) > 0.05f || Mathf.Abs(c.b - want.b) > 0.05f)
                         failures.Add($"module top resolved colour {c} is not within 0.05 of #F06E14");
