@@ -576,36 +576,40 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.15f, 0.016f, 0.007f, 5), p.Dark, new Vector3(-0.1f, 1.195f, -0.11f), Quaternion.Euler(0f, 0f, 15f), Vector3.one);
         }
 
-        /// <summary>MV-1429: the City marksman Bolter — a 1.2 m rust/teal drum on three thin legs carrying a
+        /// <summary>MV-1429: the City marksman Bolter — a 1.2 m rust/teal drum on a three-wheeled base (MV-1435) carrying a
         /// forward rail with orange coils, about 1.6 m tall; one off-centre gold eye in a dark bezel on the
         /// rust half. +Z is the rail (the aim direction). Hand-authored, same exception as BuildBolter.</summary>
         private static void BuildMarksman(Transform root, in RobotPalette p,
                                     List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             const float bodyY = 1.3f, bodyH = 0.5f, bodyW = 0.6f;
-            // Tripod: one leg trailing, two splayed forward; near-black.
-            Vector3[] feet =
+            // MV-1435: a three-wheeled base (two front wheels, one rear) instead of three static legs. Each
+            // wheel is ONE wheel part (near-black tyre, radius 0.25 m, axle along X) with its gold hub as a
+            // child, so RobotRig.SpinWheels turns tyre and hub together by distance travelled. The drum stays
+            // at bodyY (MarksmanRifle.MuzzleHeight is pinned to it - the bolt must still leave the rail), so a
+            // dark chassis plate rides on the wheels and a short dark pylon carries the drum above it.
+            const float wheelR = 0.25f, wheelHalfW = 0.06f, plateTop = 0.52f;
+            Vector3[] wheelAt =
             {
-                new Vector3(0f, 0.02f, -0.9f),
-                new Vector3(-0.55f, 0.02f, 0.45f),
-                new Vector3(0.55f, 0.02f, 0.45f),
+                new Vector3(-0.4f, wheelR, 0.4f),
+                new Vector3(0.4f, wheelR, 0.4f),
+                new Vector3(0f, wheelR, -0.6f),
             };
-            Vector3[] hips =
+            Vector2[] tyre =
             {
-                new Vector3(0f, bodyY - 0.2f, -0.35f),
-                new Vector3(-0.2f, bodyY - 0.2f, 0.25f),
-                new Vector3(0.2f, bodyY - 0.2f, 0.25f),
+                new Vector2(0.06f, -wheelHalfW), new Vector2(wheelR - 0.04f, -wheelHalfW), new Vector2(wheelR, -wheelHalfW + 0.03f),
+                new Vector2(wheelR, wheelHalfW - 0.03f), new Vector2(wheelR - 0.04f, wheelHalfW), new Vector2(0.06f, wheelHalfW),
             };
+            Vector2[] hub = { new Vector2(0.14f, -wheelHalfW - 0.015f), new Vector2(0.16f, 0f), new Vector2(0.14f, wheelHalfW + 0.015f) };
             for (int i = 0; i < 3; i++)
             {
-                Vector3 mid = (hips[i] + feet[i]) * 0.5f;
-                Vector3 d = feet[i] - hips[i];
-                float len = d.magnitude;
-                Quaternion rot = Quaternion.FromToRotation(Vector3.up, d.normalized);
-                Transform beam = Add(root, CharacterMeshes.Beam(len, 0.06f, 0.045f, 6), p.Dark, mid, rot, Vector3.one, "MarksmanLeg");
-                Transform tip = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.07f, 0f), new Vector2(0.045f, 0.03f), new Vector2(0.02f, 0.07f) }, 8), p.Dark, feet[i], Quaternion.identity, Vector3.one, "MarksmanFoot");
-                legs.Add(AddLeg(root, beam, tip, len * 0.5f));
+                Transform wheel = Add(root, CharacterMeshes.Lathe(tyre, 20), p.Dark, wheelAt[i], Quaternion.Euler(0f, 0f, 90f), Vector3.one, "MarksmanWheel");
+                Add(wheel, CharacterMeshes.Lathe(hub, 14), p.Gold, Vector3.zero, Quaternion.identity, Vector3.one, "MarksmanHub");
+                wheels.Add(wheel);
             }
+            Add(root, CharacterMeshes.Bevelled(new Vector3(0.62f, 0.1f, 1.6f), 0.02f), p.Dark, new Vector3(0f, plateTop - 0.05f, -0.1f), Quaternion.identity, Vector3.one, "MarksmanChassis");
+            Add(root, CharacterMeshes.Bevelled(new Vector3(0.34f, bodyY - bodyH * 0.5f - plateTop + 0.02f, 0.5f), 0.02f), p.Dark,
+                new Vector3(0f, (plateTop + bodyY - bodyH * 0.5f) * 0.5f, -0.2f), Quaternion.identity, Vector3.one, "MarksmanPylon");
 
             // The drum: rust back half, teal front half, hard split between them (1.2 m total).
             Add(root, CharacterMeshes.Bevelled(new Vector3(bodyW, bodyH, 0.78f), 0.03f), p.Warm, new Vector3(0f, bodyY, -0.21f), Quaternion.identity, Vector3.one, "MarksmanRust");

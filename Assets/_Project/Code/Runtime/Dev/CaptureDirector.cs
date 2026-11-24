@@ -706,6 +706,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1345OrbitalLook());
             Add(BuildMv1426ArcStrikerMark());
             Add(BuildMv1429MarksmanBolter());
+            Add(BuildMv1435MarksmanWheels());
             return d;
         }
 
@@ -2722,6 +2723,73 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1429-marksman-bolter", NoSetup) },
+                ExtraReport = () => found + "\n",
+            };
+        }
+
+        /// <summary>MV-1435 AC2: ONE capture of a City marksman Bolter on its three-wheeled base at the play
+        /// camera. Run via <c>cc-mv1435-capture.bat</c>; writes <c>Logs/MV-1435-marksman-wheels.png</c>.</summary>
+        private static CapturePreset BuildMv1435MarksmanWheels()
+        {
+            string found = "no marksman Bolter found";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a6"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a6\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                var player = FindFirstObjectByType<PlayerController>();
+                var spawner = FindFirstObjectByType<EnemySpawner>();
+                if (spawner == null) spawner = new GameObject("MV1435 Spawner").AddComponent<EnemySpawner>();
+                if (player == null) throw new CaptureAbortException("MV-1435: no player after jumping to City a6");
+
+                var spawned = spawner.SpawnExact(EnemyKind.Bolter, 1, 0f, true, true);
+                if (spawned.Count == 0 || !spawned[0].IsMarksman)
+                    throw new CaptureAbortException("MV-1435: marksman Bolter missing");
+                RobotEnemy r = spawned[0];
+                Vector3 pp = player.transform.position;
+                CharacterControllerSafety.SafeReposition(r.GetComponent<CharacterController>(), pp + new Vector3(2.5f, 0f, 5f), "MV1435Capture");
+                float until = Time.time + 0.6f;   // a short drive so the wheels have turned, still near Max
+                while (Time.time < until) yield return null;
+
+                Vector3 rp = r.transform.position;
+                found = $"marksman at {rp}, Max at {pp}";
+                Time.timeScale = 0f;
+                float pitch = 60f, distance = 9f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(rp - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1435marksmanwheels",
+                LogTag = "[MV1435Capture]",
+                Flag = "-mv1435shot",
+                ArmFile = "Temp/mv1435.arm",
+                HeadlessMarker = "Temp/mv1435.headless",
+                DoneFileName = "_mv1435_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1435-marksman-wheels", NoSetup) },
                 ExtraReport = () => found + "\n",
             };
         }
