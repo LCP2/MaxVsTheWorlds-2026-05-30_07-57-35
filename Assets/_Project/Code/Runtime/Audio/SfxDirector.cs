@@ -170,7 +170,7 @@ namespace MaxWorlds.Audio
 
         private void Update()
         {
-            foreach (var loop in _loops) UpdateLoop(loop);
+            if (_loops != null) foreach (var loop in _loops) if (loop.Source != null) UpdateLoop(loop);
             ScanForNewButtons();
 
             // MV-1437: advance ducking on real (unscaled) time and push it to the mixer.
@@ -195,10 +195,10 @@ namespace MaxWorlds.Audio
         private void OnMaxTeleported(Vector3 from, Vector3 to) => PlayCue(Cue.MaxTeleported, to);
         private void OnSentinelArrived(Vector3 pos) => PlayCue(Cue.SentinelArrived, pos);
         private void OnBlinkerTeleported(Vector3 from, Vector3 to) => PlayCue(Cue.BlinkerTeleported, to);
-        private void OnBossEngaged(string name, int phases) => PlayCue(Cue.BossEngaged, transform.position);
-        private void OnBossDefeated() => PlayCue(Cue.BossDefeated, transform.position);
-        private void OnWeaponCoreCollected() => PlayCue(Cue.WeaponCoreCollected, transform.position);
-        private void OnFinaleGateCrossed() => PlayCue(Cue.FinaleGateCrossed, transform.position);
+        private void OnBossEngaged(string name, int phases) => PlayCueHere(Cue.BossEngaged);
+        private void OnBossDefeated() => PlayCueHere(Cue.BossDefeated);
+        private void OnWeaponCoreCollected() => PlayCueHere(Cue.WeaponCoreCollected);
+        private void OnFinaleGateCrossed() => PlayCueHere(Cue.FinaleGateCrossed);
         private void OnLppePulseFired(Vector3 pos, Vector3 forward) => PlayCue(Cue.LppePulseFired, pos);
         private void OnForceFieldRaised(Vector3 pos) => PlayCue(Cue.ForceFieldUp, pos);
         private void OnForceFieldPopped(Vector3 pos) => PlayCue(Cue.ForceFieldPop, pos);
@@ -206,12 +206,30 @@ namespace MaxWorlds.Audio
         private void OnDomeBlocked(Vector3 pos) => PlayCue(Cue.ShieldBlocked, pos);                  // MV-1380
         private void OnCanisterDetonated(Vector3 pos) => PlayCue(Cue.CanisterExplosion, pos);   // MV-1421
         private void OnArcStrikeLanded(Vector3 pos) => PlayCue(Cue.ArcStrikeCrack, pos);   // MV-1426
-        private void OnAnyButtonClicked() => PlayCue(Cue.UiClick, transform.position);
+        private void OnAnyButtonClicked() => PlayCueHere(Cue.UiClick);
 
         // --- playback ---
 
+        // MV-1437 leak, closed by MV-1441: an EditMode test that DestroyImmediate()s the director never gets
+        // OnDisable (not ExecuteAlways), so the static HudSignals handlers outlive it. Every entry point
+        // therefore checks the director is still alive, and a dead one unsubscribes itself.
+        private bool IsDeadAndUnsubscribe()
+        {
+            if (this != null) return false;
+            OnDisable();   // only touches statics, safe on a destroyed object
+            return true;
+        }
+
+        private void PlayCueHere(Cue cue)
+        {
+            if (IsDeadAndUnsubscribe()) return;
+            PlayCue(cue, transform.position);
+        }
+
         private void PlayCue(Cue cue, Vector3 worldPos)
         {
+            if (IsDeadAndUnsubscribe()) return;
+            if (_pool == null) return;
             if (IsCueMuted(cue)) return;   // MV-1009: OFF cues never start a voice, checked first — zero cost
             if (!TryConsumeRateLimit(cue)) return;
             if (!_clips.TryGetValue(cue, out var clip0) || clip0 == null) return;
@@ -224,9 +242,10 @@ namespace MaxWorlds.Audio
             int slot = _poolCursor;
             if (!_voices.TryStart(cue, Time.realtimeSinceStartup, clip.length, slot, out int stolen)) return;
             _lastVariant[cue] = pick;
-            if (stolen >= 0 && stolen < _pool.Length) _pool[stolen].Stop();   // oldest voice stolen at the limit
+            if (stolen >= 0 && stolen < _pool.Length && _pool[stolen] != null) _pool[stolen].Stop();   // oldest voice stolen at the limit
 
             var source = NextSource();
+            if (source == null) return;   // pooled source destroyed under us
             if (AudioDucking.Ducks(cue)) _ducking.Trigger(clip.length);
             source.outputAudioMixerGroup = AudioBus.Group(cue == Cue.UiClick ? AudioBusId.Ui : AudioBusId.Sfx);
             source.transform.position = worldPos;

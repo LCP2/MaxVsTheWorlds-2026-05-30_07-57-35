@@ -47,6 +47,7 @@ namespace MaxWorlds.Audio
 
         private void Update()
         {
+            if (_source == null) return;   // MV-1441: bed source destroyed under us
             TickWorld();
             _source.volume = Mathf.Clamp01(DevTuning.Or(DevTuning.AmbienceVolume, DefaultAmbienceVolume));
         }

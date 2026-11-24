@@ -28,7 +28,7 @@ namespace MaxWorlds.Audio
         {
             get
             {
-                if (!_loaded) { _loaded = true; _mixer = Resources.Load<AudioMixer>(MixerResource); }
+                if (!_loaded || (_mixer == null && !ReferenceEquals(_mixer, null))) { _loaded = true; _mixer = Resources.Load<AudioMixer>(MixerResource); }
                 return _mixer;
             }
         }
@@ -42,7 +42,7 @@ namespace MaxWorlds.Audio
         }
 
         /// <summary>Routes <paramref name="source"/> to <paramref name="bus"/> (no-op without a mixer).</summary>
-        public static void Route(AudioSource source, AudioBusId bus) => source.outputAudioMixerGroup = Group(bus);
+        public static void Route(AudioSource source, AudioBusId bus) { if (source != null) source.outputAudioMixerGroup = Group(bus); }
 
         /// <summary>Pushes a ducking offset (dB, 0 or negative) onto the Music and Ambience buses.</summary>
         public static void ApplyDuck(float db)

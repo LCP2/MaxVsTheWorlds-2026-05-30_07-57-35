@@ -13,6 +13,7 @@ REM   Usage:
 REM     cc-verify.bat                 - full run, exactly as before (humans, CI-adjacent callers)
 REM     cc-verify.bat compile         - step 1 only
 REM     cc-verify.bat editmode <n>    - EditMode shard n of N (see cc-verify-shards.txt)
+REM     cc-verify.bat full            - the WHOLE EditMode suite in ONE Unity process, as qa.yml runs it (MV-1441)
 REM     cc-verify.bat build           - steps 3-6
 REM     cc-verify.bat finish          - merge verdict: all parts fresh + green on this tree
 REM
@@ -49,6 +50,7 @@ if not exist "%PROJECT%\Builds" mkdir "%PROJECT%\Builds"
 if "%PART%"=="" goto :RUN_ALL
 if /i "%PART%"=="compile"  goto :PART_COMPILE
 if /i "%PART%"=="editmode" goto :PART_EDITMODE
+if /i "%PART%"=="full"     goto :PART_FULL
 if /i "%PART%"=="build"    goto :PART_BUILD
 if /i "%PART%"=="finish"   goto :PART_FINISH
 echo [cc-verify] unknown part '%PART%' - expected compile / editmode ^<n^> / build / finish, or no argument.
@@ -239,6 +241,32 @@ call :CALC_TREESTATE
 call :WRITE_STAMP editmode-%SHARDNUM%
 exit /b 0
 
+:PART_FULL
+REM   MV-1441: CI (qa.yml) runs every EditMode test in ONE Unity process; the shards each get a fresh
+REM   process, so state leaked by one test into a later one (static event handlers, cached refs to
+REM   destroyed objects) never surfaces locally. This part runs the whole suite unfiltered in one
+REM   process, and `finish` requires it green on the exact tree.
+call :CHECK_LOCK
+if errorlevel 1 exit /b 3
+set "RESULTS=%PROJECT%\Logs\editmode-results-full.xml"
+if exist "%RESULTS%" del /f /q "%RESULTS%"
+echo [full] whole EditMode suite, one process ...
+call :TIMER_START
+start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode-full.log"
+set "RC=%ERRORLEVEL%"
+call :TIMER_ELAPSED
+echo        elapsed: %ELAPSED%s
+if not "%RC%"=="0" (
+  echo        FAIL ^(exit %RC%^) - see Logs\editmode-full.log
+  exit /b 1
+)
+call :CHECK_SHARD_RESULTS full
+if errorlevel 1 exit /b 1
+call :CALC_TREESTATE
+call :WRITE_STAMP full
+echo        ok
+exit /b 0
+
 REM ============================================================
 REM   PART: build (steps 3-6 of the original sequence)
 REM ============================================================
@@ -361,6 +389,11 @@ for /l %%N in (1,1,%TOTALSHARDS%) do (
   call :CHECK_SHARD_RESULTS %%N
   if errorlevel 1 set "VERDICTFAIL=1"
 )
+
+call :CHECK_PART_STAMP full
+if errorlevel 1 set "VERDICTFAIL=1"
+call :CHECK_SHARD_RESULTS full
+if errorlevel 1 set "VERDICTFAIL=1"
 
 call :CHECK_PART_STAMP build
 if errorlevel 1 set "VERDICTFAIL=1"
