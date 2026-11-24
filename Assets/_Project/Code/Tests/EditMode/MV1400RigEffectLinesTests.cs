@@ -12,7 +12,7 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-1400 - THE RIG's detail panel effect line ("Damage per disc  12 → 15"). Sole guard on the
+    /// MV-1400 - THE RIG's detail panel effect line ("Damage per disc  12 → 20"). Sole guard on the
     /// effect line resolving from the gameplay accessors; do not cull. Resolved text only (Tier 2): every
     /// node on every world board is walked at every level, and its line must equal the effect name plus the
     /// value the gameplay accessor returns at that level and the next. Ricochet and the wallet are read off
@@ -60,11 +60,11 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var n in RigBoardLayout.PhoneAbilities) if (n.Id == "p_dmg") power = n;
             Assert.IsNotNull(power, "City board has p_dmg");
             SetLevel(power, 1);
-            Assert.AreEqual($"Damage per disc  {Ricochet.PowerDamageByLevel[0]:0} → {Ricochet.PowerDamageByLevel[1]:0}",
+            Assert.AreEqual($"Damage per disc  {Ricochet.RobotDamageByLevel[0]:0} → {Ricochet.RobotDamageByLevel[1]:0}",
                 WeaponsScreen.DetailEffectLine(power));
-            Assert.AreEqual("Damage per disc  12 → 15", WeaponsScreen.DetailEffectLine(power), "AC1 wording");
+            Assert.AreEqual("Damage per disc  12 → 20", WeaponsScreen.DetailEffectLine(power), "AC1 wording");
             SetLevel(power, 2);
-            Assert.AreEqual("Damage per disc  15 → 18", WeaponsScreen.DetailEffectLine(power), "AC1 after buying");
+            Assert.AreEqual("Damage per disc  20 → 35", WeaponsScreen.DetailEffectLine(power), "AC1 after buying");
 
             _go = new GameObject("MV1400 Ricochet");
             Ricochet disc = _go.AddComponent<Ricochet>();
@@ -106,8 +106,8 @@ namespace MaxWorlds.Tests.EditMode
                         // Live gameplay cross-checks at this level.
                         if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Ricochet && lvl >= 1)
                         {
-                            if (node.Id == "p_dmg" && !Mathf.Approximately(cur, disc.EffectiveDamagePerDisc))
-                                problems.AppendLine($"w{w} p_dmg L{lvl}: {cur} vs live {disc.EffectiveDamagePerDisc}");
+                            if (node.Id == "p_dmg" && !Mathf.Approximately(cur, disc.EffectiveRobotDamagePerDisc))
+                                problems.AppendLine($"w{w} p_dmg L{lvl}: {cur} vs live {disc.EffectiveRobotDamagePerDisc}");
                             if (node.Id == "p_rof" && !Mathf.Approximately(cur, disc.DiscsPerSecond))
                                 problems.AppendLine($"w{w} p_rof L{lvl}: {cur} vs live {disc.DiscsPerSecond}");
                         }

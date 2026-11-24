@@ -49,6 +49,10 @@ namespace MaxWorlds.Combat
         /// this pre-MV-1325 table; MV-1325's start-only lower (level 1: 8) is reverted.</summary>
         public static readonly float[] PowerDamageByLevel = { 12f, 15f, 18f, 22f, 26f, 30f, 35f, 40f };
 
+        /// <summary>MV-1446: POWER's damage against robots (<c>RobotEnemy</c>, elites included). Steeper than
+        /// <see cref="PowerDamageByLevel"/>, which structures, cover, canisters, gates and bosses keep.</summary>
+        public static readonly float[] RobotDamageByLevel = { 12f, 20f, 35f, 65f, 100f, 125f, 155f, 190f };
+
         /// <summary>RATE (<c>p_rof</c>), discs/second, levels 1..5.</summary>
         public static readonly float[] RateDiscsPerSecondByLevel = { 3.0f, 3.6f, 4.3f, 5.1f, 6.0f };
 
@@ -83,6 +87,9 @@ namespace MaxWorlds.Combat
         public int BouncesPerDisc => Mathf.Max(0, WeaponSystemState.RicochetTrackLevel(RicochetTrackKind.Ricochets));
 
         /// <summary>POWER (<c>p_dmg</c>): a disc's base damage right now, before the bank bonus.</summary>
+        public float EffectiveRobotDamagePerDisc => RobotDamageByLevel[
+            Mathf.Clamp(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), 1, RobotDamageByLevel.Length) - 1];
+
         public float EffectiveDamagePerDisc => PowerDamageByLevel[
             Mathf.Clamp(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), 1, PowerDamageByLevel.Length) - 1];
 
@@ -199,7 +206,7 @@ namespace MaxWorlds.Combat
             RicochetDisc.Spawn(transform.position, transform.forward, DefaultSpeed, BouncesPerDisc,
                 powerLevel, aimLevel,
                 EffectiveDamagePerDisc, BankBonusPerBounce, AimTurnRateDegPerSec, AimLookaheadMetres,
-                DefaultRadius, DefaultLifetimeSeconds);
+                DefaultRadius, DefaultLifetimeSeconds, EffectiveRobotDamagePerDisc);
         }
 
 #if UNITY_EDITOR
