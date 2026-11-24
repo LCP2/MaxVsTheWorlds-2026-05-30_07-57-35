@@ -136,26 +136,30 @@ namespace MaxWorlds.Audio
 
         private static float Bars(int count, float bpm) => count * 4f * 60f / bpm;
 
-        // MV-1160: loop end points for each generated track, authored into audio_manifest.json's
-        // loopEndSeconds alongside the BPM used to derive them — keep these two in sync by hand, the
-        // manifest isn't read at runtime. Index = (int)MusicWorld. Values are the last whole bar before
-        // each track's tail (or before clip end, for the two tracks with no detected tail).
-        // MV-1237: deliberately still length 3 — the Mothership has no generated track in the
-        // manifest, so EnsureGeneratedLoaded always caches null for it and SwitchToWorld/OnBossEngaged
-        // never read these two arrays at index 3 (both are only reached once a generated clip is
-        // actually found for the world in question).
+        // MV-1160/MV-1439: loop end points for each generated track, authored into audio_manifest.json's
+        // loopEndSeconds alongside the BPM used to derive them (Eleven Music v2.5 tracks, prompted at that
+        // BPM; the last whole bar before the clip's end) - keep these in sync by hand, the manifest isn't
+        // read at runtime. Index = (int)MusicWorld: Backyard, Stormdrain, Reef, Mothership, City.
         private static readonly float[] ExploreLoopEndSeconds =
         {
-            Bars(35, 96f),   // Backyard_explore: no tail detected, last whole bar before the 90.04s clip end
-            Bars(31, 84f),   // Stormdrain_explore: no tail detected, last whole bar before the 90.04s clip end
-            Bars(24, 70f),   // Reef_explore: tail starts ~82.5s
+            Bars(46, 124f),   // Backyard_explore
+            Bars(45, 120f),   // Stormdrain_explore
+            Bars(45, 122f),   // Reef_explore
+            Bars(46, 124f),   // Mothership_explore
+            Bars(48, 128f),   // City_explore
         };
         private static readonly float[] BossLoopEndSeconds =
         {
-            Bars(32, 132f),  // Backyard_boss: tail starts ~58.5s
-            Bars(28, 120f),  // Stormdrain_boss: tail starts ~56.75s
-            Bars(30, 126f),  // Reef_boss: tail starts ~58.0s
+            Bars(34, 138f),   // Backyard_boss
+            Bars(33, 132f),   // Stormdrain_boss
+            Bars(33, 134f),   // Reef_boss
+            Bars(34, 136f),   // Mothership_boss
+            Bars(35, 140f),   // City_boss
         };
+
+        /// <summary>MV-1439: the authored loop-end point (seconds) of a world's generated explore or boss clip.</summary>
+        public static float LoopEndSeconds(MusicWorld world, bool boss) =>
+            (boss ? BossLoopEndSeconds : ExploreLoopEndSeconds)[(int)world];
 
         private void OnBossDefeated() => _bossEngaged = false;
 

@@ -380,39 +380,73 @@
     "music": [
         {
             "id": "Backyard_explore",
-            "prompt": "Upbeat playful instrumental for a kid hero's backyard adventure on a sunny afternoon. 96 BPM, C major pentatonic. Bouncy plucked bass, marimba, a bright chiptune lead, light hand percussion and claps. Mischievous and adventurous family-friendly video game music. Steady energy throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "prompt": "Heroic exploration music for a kid adventurer in the Backyard world of a video game. 124 BPM, C major. Palette: bright, playful synths and plucked acoustic guitar, bouncy bass, claps. Steady driving energy throughout, melodic main motif. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 90000,
-            "loopEndSeconds": 87.5
+            "bpm": 124,
+            "loopEndSeconds": 89.032258
         },
         {
             "id": "Backyard_boss",
-            "prompt": "Urgent energetic boss battle instrumental for a cartoon action game, a playful backyard turned dangerous. 132 BPM, C minor. Driving drums, heavy synth bass, brass stabs, a fast chiptune lead. Tense but fun family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "prompt": "Intense boss battle music in the Backyard world of a video game, the same key and main motif as that world's exploration theme but faster and heavier. 138 BPM, C minor. Palette: bright, playful synths and plucked acoustic guitar, bouncy bass, claps, with heavier pounding drums. Full intensity from the first bar. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 60000,
-            "loopEndSeconds": 58.181818
+            "bpm": 138,
+            "loopEndSeconds": 59.130435
         },
         {
             "id": "Stormdrain_explore",
-            "prompt": "Sneaky instrumental for exploring a dark dripping underground storm drain. 84 BPM, D minor. Deep pulsing synth bass, echoing metallic pipe percussion, water drips, an eerie mallet melody. Murky and a little gross but fun, family-friendly video game music. Steady throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "prompt": "Heroic exploration music for a kid adventurer in the Stormdrain world of a video game. 120 BPM, D minor. Palette: wet, echoing metallic percussion, dripping reverb, darker pulsing bass, eerie mallets. Steady driving energy throughout, melodic main motif. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 90000,
-            "loopEndSeconds": 88.571429
+            "bpm": 120,
+            "loopEndSeconds": 90.0
         },
         {
             "id": "Stormdrain_boss",
-            "prompt": "Heavy grimy boss battle instrumental against a giant sludge machine in a sewer. 120 BPM, D minor. Pounding industrial drums, distorted bass, clanking metal, menacing low brass, an urgent synth arpeggio. Family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "prompt": "Intense boss battle music in the Stormdrain world of a video game, the same key and main motif as that world's exploration theme but faster and heavier. 132 BPM, D minor. Palette: wet, echoing metallic percussion, dripping reverb, darker pulsing bass, eerie mallets, with heavier pounding drums. Full intensity from the first bar. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 60000,
-            "loopEndSeconds": 56.0
+            "bpm": 132,
+            "loopEndSeconds": 60.0
+        },
+        {
+            "id": "City_explore",
+            "prompt": "Heroic exploration music for a kid adventurer in the City world of a video game. 128 BPM, F# minor. Palette: neon synthwave pulse, arpeggiated analog synths, gated reverb drums, driving bassline. Steady driving energy throughout, melodic main motif. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
+            "lengthMs": 90000,
+            "bpm": 128,
+            "loopEndSeconds": 90.0
+        },
+        {
+            "id": "City_boss",
+            "prompt": "Intense boss battle music in the City world of a video game, the same key and main motif as that world's exploration theme but faster and heavier. 140 BPM, F# minor. Palette: neon synthwave pulse, arpeggiated analog synths, gated reverb drums, driving bassline, with heavier pounding drums. Full intensity from the first bar. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
+            "lengthMs": 60000,
+            "bpm": 140,
+            "loopEndSeconds": 60.0
         },
         {
             "id": "Reef_explore",
-            "prompt": "Mysterious instrumental for exploring a strange glowing underwater reef. 70 BPM, A minor. Glassy bells, warm pads, slow bubbling arpeggios, soft sub bass. Wonder with an undercurrent of danger, family-friendly video game music. Steady throughout, no intro build-up, no ending, no fade-out, made to loop.",
+            "prompt": "Heroic exploration music for a kid adventurer in the Reef world of a video game. 122 BPM, A minor. Palette: airy pads, marimba, glassy bells, underwater low-pass filter sweeps, soft sub bass. Steady driving energy throughout, melodic main motif. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 90000,
-            "loopEndSeconds": 82.285714
+            "bpm": 122,
+            "loopEndSeconds": 88.52459
         },
         {
             "id": "Reef_boss",
-            "prompt": "Epic underwater boss battle instrumental. 126 BPM, A minor. Pounding deep drums, surging synth bass, urgent arpeggios, big dark pads. Family-friendly video game music. Full intensity from the first bar, no ending, no fade-out, made to loop.",
+            "prompt": "Intense boss battle music in the Reef world of a video game, the same key and main motif as that world's exploration theme but faster and heavier. 134 BPM, A minor. Palette: airy pads, marimba, glassy bells, underwater low-pass filter sweeps, soft sub bass, with heavier pounding drums. Full intensity from the first bar. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
             "lengthMs": 60000,
-            "loopEndSeconds": 57.142857
+            "bpm": 134,
+            "loopEndSeconds": 59.104478
+        },
+        {
+            "id": "Mothership_explore",
+            "prompt": "Heroic exploration music for a kid adventurer in the Mothership world of a video game. 124 BPM, E minor. Palette: big brass, choir pads, heavy industrial percussion, deep metallic synth bass. Steady driving energy throughout, melodic main motif. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
+            "lengthMs": 90000,
+            "bpm": 124,
+            "loopEndSeconds": 89.032258
+        },
+        {
+            "id": "Mothership_boss",
+            "prompt": "Intense boss battle music in the Mothership world of a video game, the same key and main motif as that world's exploration theme but faster and heavier. 136 BPM, E minor. Palette: big brass, choir pads, heavy industrial percussion, deep metallic synth bass, with heavier pounding drums. Full intensity from the first bar. Instrumental only, no vocals. One consistent heroic kid-adventurer theme in a driving electronic-orchestral hybrid style. Loops seamlessly: no fade-in, no intro build-up, no ending, no fade-out, the last bar leads straight back into the first bar.",
+            "lengthMs": 60000,
+            "bpm": 136,
+            "loopEndSeconds": 60.0
         }
     ]
 }

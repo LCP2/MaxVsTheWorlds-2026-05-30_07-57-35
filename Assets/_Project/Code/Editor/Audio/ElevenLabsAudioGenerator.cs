@@ -59,6 +59,7 @@ namespace MaxWorlds.Editor.Audio
         private const int SampleRate44100 = 44100;
         private const int SampleRate24000 = 24000;
         private const string SoundModelId = "eleven_text_to_sound_v3"; // MV-1438 (v2 is deprecated)
+        private const string MusicModelId = "music_v2_5";                // MV-1439: Eleven Music v2.5 (logged per track)
         private const int CreditBudget = 20000;                         // MV-1438: hard stop per run
         private const float CombatPeak = 0.891f;                        // -1 dBFS
         private const float AmbienceRmsTarget = 0.1259f;                // -18 dBFS RMS
@@ -133,7 +134,7 @@ namespace MaxWorlds.Editor.Audio
                 foreach (var entry in manifest.music)
                 {
                     string outputPath = $"{MusicOutputDir}/{entry.id}.mp3";
-                    bool forced = entry.id == regenId;
+                    bool forced = regenAll || regenSet.Contains(entry.id);
                     if (File.Exists(outputPath) && !forced) continue;
 
                     GenerateMusicOne(entry, outputPath, apiKey);
@@ -229,7 +230,7 @@ namespace MaxWorlds.Editor.Audio
 
             string json = "{\"prompt\":" + JsonStringLiteral(entry.prompt) +
                 ",\"music_length_ms\":" + entry.lengthMs.ToString(CultureInfo.InvariantCulture) +
-                ",\"force_instrumental\":true}";
+                ",\"model_id\":\"" + MusicModelId + "\",\"force_instrumental\":true}";
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             using var response = client.PostAsync($"{MusicApiUrl}?output_format=mp3_44100_128", content).GetAwaiter().GetResult();
@@ -243,7 +244,8 @@ namespace MaxWorlds.Editor.Audio
 
             File.WriteAllBytes(outputPath, bytes);
 
-            File.AppendAllText(LogPath, $"ELEVENLABS {entry.id} OK format=mp3_44100_128 bytes={bytes.Length}\n");
+            // MV-1439: /v1/music returns no cost header (key lacks user_read too): log model + seconds, credits n/a.
+            File.AppendAllText(LogPath, $"ELEVENLABS {entry.id} OK model={MusicModelId} format=mp3_44100_128 bytes={bytes.Length} seconds={entry.lengthMs / 1000f} credits=n/a\n");
         }
 
         private static (bool ok, byte[] bytes, string credits) RequestSound(SfxManifestEntry entry, string apiKey, string outputFormat)

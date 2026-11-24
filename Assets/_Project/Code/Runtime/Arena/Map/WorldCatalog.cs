@@ -670,7 +670,7 @@ namespace MaxWorlds.Arena
                 Style = new SentinelStyle(BodyColor, BodyAccent, EyeColor, emissionFactor: 0.35f,
                     boltColor: SentinelBolt.BoltColor, boltThicknessScale: 1.6f),
                 FiresWaterBeam = false,
-                Music = MusicWorld.Stormdrain,
+                Music = MusicWorld.City,
                 RingAlphaScale = StormdrainRingAlphaScale,
                 GuideLightAccent = CityKit.NeonPink,
                 // MV-1343: the City's neon reads fine LDR -- no HDR headroom needed.

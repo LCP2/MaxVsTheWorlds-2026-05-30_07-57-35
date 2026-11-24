@@ -7,7 +7,7 @@ namespace MaxWorlds.Audio
     /// <summary>Which world's loop/intensity layer to render (MV-1008) — matches
     /// <see cref="MaxWorlds.Arena.Map.WorldLibrary.Keys"/>'s 0-based ordering, so a caller holding
     /// <c>BackyardPath.ResolvedWorldIndex</c> converts with a plain cast/clamp.</summary>
-    public enum MusicWorld { Backyard = 0, Stormdrain = 1, Reef = 2, Mothership = 3 }
+    public enum MusicWorld { Backyard = 0, Stormdrain = 1, Reef = 2, Mothership = 3, City = 4 }
 
     /// <summary>
     /// MV-1008: procedural music, same "nothing originated by Lee, no outside tools" idiom as
@@ -120,6 +120,17 @@ namespace MaxWorlds.Audio
                 HasKick = false, HasHat = true, ShuffleHat = false, HatLowpassHz = 9000f,
                 BassWaveform = SfxWaveform.Sine, LeadWaveform = SfxWaveform.Square,
                 LeadOctaveMultiplier = 2f, LeadSlotBeats = 2f, LeadNoteChance = 0.5f, Seed = 22608,
+            },
+            // World 4 City (MV-1439): F# minor, 128 BPM neon-synthwave fallback — only plays if the generated
+            // City_explore/City_boss files are missing. Index 4 = (int)MusicWorld.City.
+            new WorldSpec
+            {
+                Bpm = 128f, BassRootHz = 92.50f /* F#2 */, Scale = NaturalMinor,
+                Progression = new[] { 0, 0, 5, 5, 3, 3, 4, 4 },
+                PadDegreeOffset = 4, PadDetuneCents = 8f, PadLowpassHz = 1200f, PadSwell = false,
+                HasKick = true, HasHat = true, ShuffleHat = false, HatLowpassHz = 8000f,
+                BassWaveform = SfxWaveform.Saw, LeadWaveform = SfxWaveform.Square,
+                LeadOctaveMultiplier = 2f, LeadSlotBeats = 1f, LeadNoteChance = 0.5f, Seed = 23608,
             },
         };
 
