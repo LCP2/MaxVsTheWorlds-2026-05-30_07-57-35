@@ -2,171 +2,379 @@
     "sfx": [
         {
             "id": "UiClick",
-            "prompt": "Soft short user interface button click, clean plastic tick, dry, no reverb, no tail",
+            "prompt": "clean short UI button click, crisp plastic tick with a tiny soft thock body, dry, no tail",
             "durationSeconds": 0.5,
             "promptInfluence": 0.6,
-            "loop": false
+            "loop": false,
+            "variants": 3,
+            "gainDb": -6
         },
         {
             "id": "DamageDealt",
-            "prompt": "Short wet splash of a water jet hitting metal, small quick spatter, dry, no reverb",
+            "prompt": "pressurised water jet hitting a metal plate, sharp wet slap transient, short fizzy spatter tail, dry, no reverb",
             "durationSeconds": 0.5,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "LppePulseFired",
-            "prompt": "Short sci-fi laser pulse zap, bright, falling pitch, clean and toy-like, no reverb",
-            "durationSeconds": 0.5,
+            "prompt": "compact sci-fi energy pulse blaster shot, sharp bright zap transient, punchy electrical body, quick falling-pitch tail, toy-like but powerful, no reverb",
+            "durationSeconds": 0.6,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "PlayerHit",
-            "prompt": "Low dull impact thud, cartoon punch landing on a padded jacket, short, no voice",
+            "prompt": "heavy dull impact on a padded suit, short low thump with a faint electrical crackle, no voice, no reverb",
             "durationSeconds": 0.5,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "Pickup",
-            "prompt": "Short bright rising two-note pickup blip, friendly arcade collect sound",
+            "prompt": "short bright two-note rising collect chime, clean metallic ping with soft shimmer tail, dry",
             "durationSeconds": 0.5,
             "promptInfluence": 0.6,
-            "loop": false
+            "loop": false,
+            "variants": 3,
+            "gainDb": -6
         },
         {
             "id": "SupercellCollected",
-            "prompt": "Bright sparkling three-note chime, magical energy cell collected, short",
-            "durationSeconds": 0.8,
+            "prompt": "energy cell absorbed, bright three-note rising electronic chime, sparkling shimmer tail, clean, short",
+            "durationSeconds": 0.9,
             "promptInfluence": 0.6,
-            "loop": false
+            "loop": false,
+            "variants": 3,
+            "gainDb": -6
         },
         {
             "id": "EnemyKilled",
-            "prompt": "Small robot breaking apart, short metallic crunch with a pop and a few bolts scattering, cartoon",
-            "durationSeconds": 0.7,
+            "prompt": "small robot destroyed, sharp metallic crack, short servo whine dying down, scattering metal bits tail, no reverb wash",
+            "durationSeconds": 0.8,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "FactoryDestroyed",
-            "prompt": "Large machine explosion, heavy metal debris, deep boom with a long rumbling tail",
-            "durationSeconds": 2.5,
-            "promptInfluence": 0.4,
-            "loop": false
+            "prompt": "large machine factory exploding, huge sharp crack, deep rumbling low thump body, long gritty metal debris tail with falling girders",
+            "durationSeconds": 2.8,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "FittingDestroyed",
-            "prompt": "Small metal turret bursting, compact explosion with a sharp metallic clank, short tail",
+            "prompt": "metal fitting snapping off, hard metallic crack, short ringing clank, small debris tail, dry",
             "durationSeconds": 1.0,
-            "promptInfluence": 0.4,
-            "loop": false
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "RocketMuzzle",
-            "prompt": "Small rocket launch whoosh, quick fizzing ignition and a rush of air",
-            "durationSeconds": 0.7,
+            "prompt": "compact rocket launcher firing, sharp pop transient, whooshing hiss body rushing away, short, no reverb wash",
+            "durationSeconds": 0.8,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "RocketImpact",
-            "prompt": "Small rocket impact, crunchy explosive pop with debris, short",
-            "durationSeconds": 0.8,
+            "prompt": "compact rocket explosion, sharp crack, punchy low-mid thump, short gritty debris tail, no reverb wash",
+            "durationSeconds": 0.9,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "MissileImpact",
-            "prompt": "Heavy missile impact, deep booming explosion with a low rumble",
+            "prompt": "medium missile explosion, hard crack, deep punchy boom, rolling debris tail, metallic fragments",
             "durationSeconds": 1.5,
-            "promptInfluence": 0.4,
-            "loop": false
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "ShockPulseLanded",
-            "prompt": "Electric shock burst, sharp crackling zap with a buzzing discharge",
-            "durationSeconds": 0.8,
+            "prompt": "electric shock pulse landing, sharp electrical snap, deep resonant thump body, short crackling tail",
+            "durationSeconds": 0.9,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "MaxTeleported",
-            "prompt": "Sci-fi teleport, upward rising warp sweep with a soft shimmer at the end",
-            "durationSeconds": 0.8,
+            "prompt": "quick sci-fi teleport, rising electronic sweep, sharp zap at the peak, short glittering digital tail, clean",
+            "durationSeconds": 0.9,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "BlinkerTeleported",
-            "prompt": "Sci-fi teleport, downward falling warp sweep, slightly glitchy and robotic",
-            "durationSeconds": 0.6,
+            "prompt": "robot blink-teleport, fast metallic glitch zip, short sharp electrical pop, small digital tail",
+            "durationSeconds": 0.7,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "BossEngaged",
-            "prompt": "Ominous low two-tone warning horn, big machine alarm, heavy and brassy",
-            "durationSeconds": 2.0,
+            "prompt": "giant machine boss alarm, ominous low two-tone brass-like horn, heavy metallic reverberating body, deep rumble tail",
+            "durationSeconds": 2.5,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "BossDefeated",
-            "prompt": "Huge machine destroyed, long explosion collapsing into debris, followed by a rising triumphant tone",
-            "durationSeconds": 3.5,
-            "promptInfluence": 0.4,
-            "loop": false
+            "prompt": "colossal robot boss destroyed, huge sharp explosion crack, deep sub-bass boom, long collapsing metal and sparking electrical tail",
+            "durationSeconds": 4.0,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "WeaponCoreCollected",
-            "prompt": "Triumphant five-note rising arpeggio fanfare, bright synth and bells, power-up acquired",
+            "prompt": "powerful weapon core acquired, rising electronic power-up swell, bright triumphant metallic chime, shimmering tail",
             "durationSeconds": 2.0,
-            "promptInfluence": 0.6,
-            "loop": false
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "FinaleGateCrossed",
-            "prompt": "Big airy whoosh, passing through an energy gate, rising then falling",
-            "durationSeconds": 1.2,
+            "prompt": "heavy sci-fi gate sliding open, deep servo grind, hard metallic clunk, rising energy hum tail",
+            "durationSeconds": 1.5,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "HoseLoop",
-            "prompt": "Continuous steady garden hose water jet spraying at high pressure, constant hiss and splash, even level throughout, no start and no stop",
+            "prompt": "continuous steady high-pressure water jet spraying, constant hiss and fine splash, even level throughout, no start and no stop",
             "durationSeconds": 4.0,
             "promptInfluence": 0.5,
-            "loop": true
+            "loop": true,
+            "variants": 1
         },
         {
             "id": "ForceFieldUp",
-            "prompt": "Energy force field powering up, rising shimmering hum",
-            "durationSeconds": 0.8,
+            "prompt": "energy force field switching on, rising electrical hum swell, bright crackle at the peak, steady buzzing tail",
+            "durationSeconds": 0.9,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "ForceFieldPop",
-            "prompt": "Energy shield shattering, glassy burst with sparkling fragments",
-            "durationSeconds": 0.7,
+            "prompt": "energy force field collapsing, sharp electrical pop, quick descending zap, short fizzing tail",
+            "durationSeconds": 0.8,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
         },
         {
             "id": "UndertowLoop",
-            "prompt": "Continuous sci-fi energy tractor beam, steady low humming drone with a soft watery shimmer, even level throughout, no start and no stop",
+            "prompt": "continuous low humming energy tractor beam, smooth steady electrical drone with slow wobble, even level, no start and no stop",
             "durationSeconds": 4.0,
             "promptInfluence": 0.5,
-            "loop": true
+            "loop": true,
+            "variants": 1
         },
         {
             "id": "SentinelArrived",
-            "prompt": "Big sci-fi teleport arrival: a fast rising energy whoosh that swells for two seconds into a powerful bright vroom burst and a deep bass thump as a robot ally materialises, cinematic, exciting, no voice, no music",
+            "prompt": "giant sentinel machine arriving, deep metallic stomp, servo-driven mechanical whine, ominous low rumble tail",
             "durationSeconds": 3.0,
             "promptInfluence": 0.5,
-            "loop": false
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "LightMissileLaunch",
+            "prompt": "small light missile launching from a ship, sharp pneumatic pop, quick rising whoosh, metallic, short",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "LightMissileHit",
+            "prompt": "small missile hitting metal hull, sharp crack, punchy short thump, small spark and debris tail",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "OrbitalsHit",
+            "prompt": "orbiting energy orb striking a robot, bright electrical zap crack, metallic ring body, short crackle tail",
+            "durationSeconds": 0.7,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "CradleBuildTick",
+            "prompt": "robot assembly cradle ticking, small crisp servo click with a soft metallic clack, very short",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "CradleStepOut",
+            "prompt": "new robot stepping out of an assembly cradle, heavy metal clank footfall, servo whirr, hydraulic hiss tail",
+            "durationSeconds": 1.2,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "CradleDestroyed",
+            "prompt": "assembly cradle machine destroyed, loud metallic crack, crunching collapse, sparking electrical tail",
+            "durationSeconds": 1.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "SkitterHop",
+            "prompt": "small spider-like robot hopping, quick light metallic tick-clatter, tiny servo chirp, dry, short",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "BreakerChainSnap",
+            "prompt": "heavy metal chain whipping taut, sharp metallic snap, ringing link rattle tail",
+            "durationSeconds": 0.9,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "BreakerPunch",
+            "prompt": "heavy robot piston fist punching, hydraulic hiss, hard metallic thud, short ring tail",
+            "durationSeconds": 0.8,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "BreakerRam",
+            "prompt": "big robot charging and ramming, rising servo whine, massive metallic crash, rattling debris tail",
+            "durationSeconds": 1.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "TractorBeam",
+            "prompt": "sci-fi tractor beam engaging, rising electrical hum, smooth energy swell with a gentle pulsing wobble, clean",
+            "durationSeconds": 1.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "VentFire",
+            "prompt": "steam vent erupting with fire, sharp hiss burst, whooshing flame roar body, short crackle tail",
+            "durationSeconds": 1.2,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "HelmsmanLensSweep",
+            "prompt": "robot camera lens scanning, smooth servo motor sweep, soft mechanical whirr with a small focusing click",
+            "durationSeconds": 1.2,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "ViewportRising",
+            "prompt": "large spaceship viewport shield rising, deep mechanical servo motor, heavy metal slide, final latch clunk",
+            "durationSeconds": 2.0,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "ShieldBlocked",
+            "prompt": "energy shield deflecting a hit, sharp metallic tink, bright ringing ping, short electrical shimmer tail",
+            "durationSeconds": 0.5,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "CanisterExplosion",
+            "prompt": "pressurised canister exploding, sharp crack, deep boom body, rumbling gritty debris tail, no reverb wash",
+            "durationSeconds": 1.6,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "ArcStrikeCrack",
+            "prompt": "electric arc lightning crack, sharp bright snap, fizzing electrical body, quick crackling tail",
+            "durationSeconds": 0.7,
+            "promptInfluence": 0.5,
+            "loop": false,
+            "variants": 3
+        },
+        {
+            "id": "Backyard_ambience",
+            "prompt": "seamless looping ambience, suburban backyard on a quiet afternoon, distant birds, light breeze through leaves, faint distant lawnmower, soft and steady, no sudden sounds",
+            "durationSeconds": 30.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1,
+            "dir": "Ambience"
+        },
+        {
+            "id": "Stormdrain_ambience",
+            "prompt": "seamless looping ambience, dripping concrete storm drain tunnel, distant flowing water, low steady hum, slow echoing drips, no sudden sounds",
+            "durationSeconds": 30.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1,
+            "dir": "Ambience"
+        },
+        {
+            "id": "City_ambience",
+            "prompt": "seamless looping ambience, city at night, low steady urban hum, distant traffic, faint electrical buzz, no sudden sounds",
+            "durationSeconds": 30.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1,
+            "dir": "Ambience"
+        },
+        {
+            "id": "Reef_ambience",
+            "prompt": "seamless looping ambience, underwater coral reef, gentle currents, soft rising bubbles, distant whale-like groans, no sudden sounds",
+            "durationSeconds": 30.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1,
+            "dir": "Ambience"
+        },
+        {
+            "id": "Mothership_ambience",
+            "prompt": "seamless looping ambience, inside an alien starship, deep engine drone, soft ventilation airflow, occasional distant servo clanks, steady",
+            "durationSeconds": 30.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1,
+            "dir": "Ambience"
         }
     ],
     "music": [

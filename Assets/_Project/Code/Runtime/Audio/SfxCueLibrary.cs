@@ -490,6 +490,8 @@ namespace MaxWorlds.Audio
         public static UnityEngine.AudioClip ResolveClip(Cue cue)
         {
             var generated = UnityEngine.Resources.Load<UnityEngine.AudioClip>("Audio/Sfx/" + cue);
+            // MV-1438: the single-take file is replaced by <Cue>_1.._n variants; the first stands in here.
+            if (generated == null) generated = UnityEngine.Resources.Load<UnityEngine.AudioClip>("Audio/Sfx/" + cue + "_1");
             return generated != null ? generated : RenderClip(cue);
         }
     }

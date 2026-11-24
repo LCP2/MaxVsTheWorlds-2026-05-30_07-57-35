@@ -20,7 +20,7 @@ namespace MaxWorlds.Tests.EditMode
                 "UndertowLoop's integer value must not have shifted - later cues (MV-1159's SentinelArrived) must append after it, not before");
 
             Assert.AreEqual("Beam loop", SfxCueLibrary.DisplayNames[Cue.UndertowLoop]);
-            Assert.AreEqual("UndertowLoop", SfxCueLibrary.ResolveClip(Cue.UndertowLoop).name);
+            StringAssert.StartsWith("UndertowLoop", SfxCueLibrary.ResolveClip(Cue.UndertowLoop).name);
 
             Assert.AreEqual(0.5f, SfxDirector.NextLoopVolume(0f, true, 0.05f), 1e-5f);
             Assert.AreEqual(0f, SfxDirector.NextLoopVolume(1f, false, 0.2f), 1e-5f);

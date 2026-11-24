@@ -49,7 +49,7 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             var clip = SfxCueLibrary.ResolveClip(SfxCueLibrary.Cue.SentinelArrived);
-            Assert.AreEqual(SfxCueLibrary.Cue.SentinelArrived.ToString(), clip.name,
+            StringAssert.StartsWith(SfxCueLibrary.Cue.SentinelArrived.ToString(), clip.name,
                 "ResolveClip(SentinelArrived) did not return a clip named 'SentinelArrived'");
             Assert.GreaterOrEqual(clip.length, 2.0f,
                 $"SentinelArrived resolved to a {clip.length}s clip - expected the generated clip (>= 2.0s), not the shorter synthesised fallback");

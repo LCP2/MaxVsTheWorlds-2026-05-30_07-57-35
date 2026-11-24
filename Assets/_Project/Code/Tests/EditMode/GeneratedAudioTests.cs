@@ -25,7 +25,9 @@ namespace MaxWorlds.Tests
             foreach (string path in files)
             {
                 string id = Path.GetFileNameWithoutExtension(path);
-                Assert.IsTrue(Enum.TryParse(typeof(SfxCueLibrary.Cue), id, out _),
+                // MV-1438: files are <Cue>_1.._n variants now.
+                string cueName = System.Text.RegularExpressions.Regex.Replace(id, "_[0-9]+$", "");
+                Assert.IsTrue(Enum.TryParse(typeof(SfxCueLibrary.Cue), cueName, out _),
                     $"{id}.wav is not named after a SfxCueLibrary.Cue member");
 
                 var clip = Resources.Load<AudioClip>("Audio/Sfx/" + id);
@@ -49,7 +51,7 @@ namespace MaxWorlds.Tests
 
             var uiClick = SfxCueLibrary.ResolveClip(SfxCueLibrary.Cue.UiClick);
             Assert.IsNotNull(uiClick, "ResolveClip(UiClick) returned null");
-            Assert.AreEqual("UiClick", uiClick.name, "ResolveClip(UiClick) did not return the clip named UiClick");
+            StringAssert.StartsWith("UiClick", uiClick.name, "ResolveClip(UiClick) did not return the clip named UiClick");
 
             foreach (var cue in SfxCueLibrary.AllCues)
             {

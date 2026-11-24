@@ -24,6 +24,12 @@ namespace MaxWorlds.Editor.Audio
         public float durationSeconds;
         public float promptInfluence;
         public bool loop;
+        // MV-1438: takes per cue (<id>_1..n); 0/absent = 1. Loops are always 1.
+        public int variants;
+        // MV-1438: optional sub-folder under Resources/Audio (e.g. "Ambience"); empty = Sfx, id must be a Cue.
+        public string dir;
+        // MV-1438: level trim in dB relative to the -1 dBFS combat peak (UI cues -6).
+        public float gainDb;
     }
 
     [Serializable]
@@ -52,6 +58,12 @@ namespace MaxWorlds.Editor.Audio
         private const string KeyFilePath = @"C:\Dev\MAx CCs\secrets\elevenlabs_api_key.txt";
         private const int SampleRate44100 = 44100;
         private const int SampleRate24000 = 24000;
+        private const string SoundModelId = "eleven_text_to_sound_v3"; // MV-1438 (v2 is deprecated)
+        private const int CreditBudget = 20000;                         // MV-1438: hard stop per run
+        private const float CombatPeak = 0.891f;                        // -1 dBFS
+        private const float AmbienceRmsTarget = 0.1259f;                // -18 dBFS RMS
+        private const float LoopCrossfadeSeconds = 1.5f;
+        private static int _creditsUsed;
         private static readonly TimeSpan MusicRequestTimeout = TimeSpan.FromMinutes(5);
 
         [MenuItem("MAX/Audio/Generate missing sounds")]
@@ -82,19 +94,37 @@ namespace MaxWorlds.Editor.Audio
 
             string apiKey = ResolveApiKey();
 
+            _creditsUsed = 0;
+            bool regenAll = regenId == "all";
+            var regenSet = new System.Collections.Generic.HashSet<string>(
+                (regenId ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+
             foreach (var entry in manifest.sfx)
             {
-                string outputPath = $"{OutputDir}/{entry.id}.wav";
-                bool forced = entry.id == regenId;
-                if (File.Exists(outputPath) && !forced) continue;
-
-                if (!Enum.TryParse(typeof(SfxCueLibrary.Cue), entry.id, out var cueObj))
+                bool forced = regenAll || regenSet.Contains(entry.id);
+                bool isSfx = string.IsNullOrEmpty(entry.dir);
+                SfxCueLibrary.Cue cue = default;
+                if (isSfx)
                 {
-                    throw new InvalidOperationException($"manifest id '{entry.id}' is not a SfxCueLibrary.Cue member");
+                    if (!Enum.TryParse(typeof(SfxCueLibrary.Cue), entry.id, out var cueObj))
+                        throw new InvalidOperationException($"manifest id '{entry.id}' is not a SfxCueLibrary.Cue member");
+                    cue = (SfxCueLibrary.Cue)cueObj;
                 }
-                var cue = (SfxCueLibrary.Cue)cueObj;
-
-                GenerateOne(entry, cue, outputPath, apiKey);
+                string dir = isSfx ? OutputDir : $"Assets/_Project/Resources/Audio/{entry.dir}";
+                Directory.CreateDirectory(dir);
+                int takes = entry.loop ? 1 : Mathf.Max(1, entry.variants);
+                for (int v = 1; v <= takes; v++)
+                {
+                    string outputPath = isSfx ? $"{dir}/{entry.id}_{v}.wav" : $"{dir}/{entry.id}.wav";
+                    if (File.Exists(outputPath) && !forced) continue;
+                    GenerateOne(entry, outputPath, apiKey, v);
+                }
+                // The old single-take file is replaced by the variants.
+                if (isSfx)
+                {
+                    string legacy = $"{dir}/{entry.id}.wav";
+                    if (File.Exists(legacy)) { File.Delete(legacy); if (File.Exists(legacy + ".meta")) File.Delete(legacy + ".meta"); }
+                }
             }
 
             if (manifest.music != null)
@@ -113,53 +143,83 @@ namespace MaxWorlds.Editor.Audio
             AssetDatabase.Refresh();
         }
 
-        private static void GenerateOne(SfxManifestEntry entry, SfxCueLibrary.Cue cue, string outputPath, string apiKey)
+        private static void GenerateOne(SfxManifestEntry entry, string outputPath, string apiKey, int take)
         {
-            string format;
-            int sampleRate;
-            byte[] audioBytes;
-            string credits;
+            if (_creditsUsed >= CreditBudget)
+                throw new InvalidOperationException($"credit budget {CreditBudget} reached ({_creditsUsed}); stopping before '{entry.id}' take {take}");
 
-            var (okHigh, bytesHigh, creditsHigh) = RequestSound(entry, apiKey, "pcm_44100");
-            if (okHigh)
+            int sampleRate = SampleRate44100;
+            string format = "pcm_44100";
+            var (ok, audioBytes, credits) = RequestSound(entry, apiKey, format);
+            if (!ok)
             {
-                format = "pcm_44100";
-                sampleRate = SampleRate44100;
-                audioBytes = bytesHigh;
-                credits = creditsHigh;
+                format = "pcm_24000"; sampleRate = SampleRate24000;
+                (ok, audioBytes, credits) = RequestSound(entry, apiKey, format);
+                if (!ok) throw new InvalidOperationException($"ElevenLabs sound-generation failed for '{entry.id}' on both pcm_44100 and pcm_24000");
             }
-            else
-            {
-                var (okLow, bytesLow, creditsLow) = RequestSound(entry, apiKey, "pcm_24000");
-                if (!okLow)
-                {
-                    throw new InvalidOperationException($"ElevenLabs sound-generation failed for '{entry.id}' on both pcm_44100 and pcm_24000");
-                }
-                format = "pcm_24000";
-                sampleRate = SampleRate24000;
-                audioBytes = bytesLow;
-                credits = creditsLow;
-            }
+            int cost = int.TryParse(credits, out var c) ? c : 0;
+            _creditsUsed += cost;
 
-            int channelCount = Mathf.Max(1, Mathf.RoundToInt(audioBytes.Length / (sampleRate * 2f * entry.durationSeconds)));
+            // ElevenLabs PCM is mono (the old duration-ratio channel guess broke when a model returns
+            // a different length than asked for).
+            // v3 returns interleaved stereo PCM (measured: 30 s request -> 58.5 s read as mono), so infer
+            // the channel count from byte length vs the requested duration and downmix.
+            int channelCount = Mathf.Clamp(Mathf.RoundToInt(audioBytes.Length / (sampleRate * 2f * entry.durationSeconds)), 1, 2);
             float[] samples = PcmBytesToFloat(audioBytes, channelCount);
             if (channelCount > 1) samples = GeneratedAudioDsp.ToMono(samples, channelCount);
 
-            if (!entry.loop)
+            if (entry.loop)
+            {
+                samples = MakeSeamless(samples, sampleRate);
+                if (!string.IsNullOrEmpty(entry.dir))
+                {
+                    // Beds are written at 22.05 kHz (average-pair decimation) to keep Resources/Audio <= 25 MB.
+                    var half = new float[samples.Length / 2];
+                    for (int i = 0; i < half.Length; i++) half[i] = 0.5f * (samples[2 * i] + samples[2 * i + 1]);
+                    samples = half; sampleRate /= 2;
+                    ScaleToRms(samples, AmbienceRmsTarget);
+                }
+                else GeneratedAudioDsp.ScaleToPeak(samples, CombatPeak * Mathf.Pow(10f, entry.gainDb / 20f));
+            }
+            else
             {
                 samples = GeneratedAudioDsp.TrimLeadingSilence(samples, sampleRate);
                 samples = GeneratedAudioDsp.TrimTrailingSilence(samples);
                 GeneratedAudioDsp.FadeInOut(samples, sampleRate);
+                GeneratedAudioDsp.ScaleToPeak(samples, CombatPeak * Mathf.Pow(10f, entry.gainDb / 20f));
             }
-
-            float targetPeak = SfxCueLibrary.Presets[cue][0].Volume;
-            GeneratedAudioDsp.ScaleToPeak(samples, targetPeak);
 
             WriteWav(outputPath, samples, sampleRate);
 
             float seconds = samples.Length / (float)sampleRate;
             File.AppendAllText(LogPath,
-                $"ELEVENLABS {entry.id} OK format={format} seconds={seconds.ToString("0.###", CultureInfo.InvariantCulture)} credits={credits}\n");
+                $"ELEVENLABS {entry.id} take={take} OK model={SoundModelId} format={format} seconds={seconds.ToString("0.###", CultureInfo.InvariantCulture)} credits={credits} total={_creditsUsed}/{CreditBudget}\n");
+        }
+
+        // Equal-power crossfade of the tail into the head so the loop point is click-free.
+        private static float[] MakeSeamless(float[] x, int sampleRate)
+        {
+            int n = Mathf.Min((int)(LoopCrossfadeSeconds * sampleRate), x.Length / 3);
+            var y = new float[x.Length - n];
+            Array.Copy(x, y, y.Length);
+            for (int i = 0; i < n; i++)
+            {
+                float t = (i + 0.5f) / n;
+                float head = Mathf.Sin(t * Mathf.PI * 0.5f), tail = Mathf.Cos(t * Mathf.PI * 0.5f);
+                y[i] = x[i] * head + x[y.Length + i] * tail;
+            }
+            return y;
+        }
+
+        private static void ScaleToRms(float[] x, float targetRms)
+        {
+            double sum = 0; foreach (var v in x) sum += v * v;
+            float rms = (float)Math.Sqrt(sum / Math.Max(1, x.Length));
+            if (rms < 1e-6f) return;
+            float g = targetRms / rms;
+            float peak = 0f; foreach (var v in x) peak = Mathf.Max(peak, Mathf.Abs(v));
+            g = Mathf.Min(g, 0.98f / Mathf.Max(peak, 1e-6f));
+            for (int i = 0; i < x.Length; i++) x[i] *= g;
         }
 
         private static void GenerateMusicOne(MusicManifestEntry entry, string outputPath, string apiKey)
@@ -194,7 +254,8 @@ namespace MaxWorlds.Editor.Audio
             string json = "{\"text\":" + JsonStringLiteral(entry.prompt) +
                 ",\"duration_seconds\":" + entry.durationSeconds.ToString(CultureInfo.InvariantCulture) +
                 ",\"prompt_influence\":" + entry.promptInfluence.ToString(CultureInfo.InvariantCulture) +
-                ",\"loop\":" + (entry.loop ? "true" : "false") + "}";
+                ",\"loop\":" + (entry.loop ? "true" : "false") +
+                ",\"model_id\":\"" + SoundModelId + "\"}";
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             using var response = client.PostAsync($"{ApiUrl}?output_format={outputFormat}", content).GetAwaiter().GetResult();

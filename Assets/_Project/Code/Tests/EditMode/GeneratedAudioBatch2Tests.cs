@@ -28,7 +28,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var cue in SfxCueLibrary.AllCues)
             {
                 var clip = SfxCueLibrary.ResolveClip(cue);
-                Assert.AreEqual(cue.ToString(), clip.name,
+                StringAssert.StartsWith(cue.ToString(), clip.name,
                     $"ResolveClip({cue}) did not return a clip named '{cue}'");
             }
 
