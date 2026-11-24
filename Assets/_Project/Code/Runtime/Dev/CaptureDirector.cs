@@ -707,6 +707,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1426ArcStrikerMark());
             Add(BuildMv1429MarksmanBolter());
             Add(BuildMv1435MarksmanWheels());
+            Add(BuildMv1436A5TopDown());
             return d;
         }
 
@@ -2790,6 +2791,62 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1435-marksman-wheels", NoSetup) },
+                ExtraReport = () => found + "\n",
+            };
+        }
+
+        /// <summary>MV-1436 AC2: ONE straight-down orthographic capture of City a5 (Back Alleys) from the real
+        /// City build. Run via <c>cc-mv1436-capture.bat</c>; writes <c>Logs/MV-1436-a5-top-down.png</c>.</summary>
+        private static CapturePreset BuildMv1436A5TopDown()
+        {
+            string found = "a5 not framed";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a5"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a5\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                for (int i = 0; i < 30; i++) yield return null;
+
+                WorldConfig city = WorldLibrary.Load(WorldLibrary.City);
+                Rect fp = city.Area("a5").Footprint;
+                Time.timeScale = 0f;
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) fixedRig.enabled = false;
+                cam.orthographic = true;
+                cam.orthographicSize = Mathf.Max(fp.height * 0.5f, fp.width * 0.5f / cam.aspect) + 1f;
+                cam.transform.SetPositionAndRotation(new Vector3(fp.center.x, 60f, fp.center.y), Quaternion.Euler(90f, 0f, 0f));
+                found = $"a5 footprint {fp}, ortho size {cam.orthographicSize:F1}";
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1436a5topdown",
+                LogTag = "[MV1436Capture]",
+                Flag = "-mv1436shot",
+                ArmFile = "Temp/mv1436.arm",
+                HeadlessMarker = "Temp/mv1436.headless",
+                DoneFileName = "_mv1436_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1436-a5-top-down", NoSetup) },
                 ExtraReport = () => found + "\n",
             };
         }

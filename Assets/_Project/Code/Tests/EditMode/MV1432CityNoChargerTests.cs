@@ -21,17 +21,32 @@ namespace MaxWorlds.Tests.EditMode
         private static readonly object[][] Expected =
         {
             new object[] { "a2", new[] {
-                "rusher 18.2 36.0 - a2_r", "rusher 18.2 41.0 - a2_r", "bolter 23.0 63.5 P a2_n",
-                "launcher 20.5 63.5 P a2_n", "gunner 19.0 57.5 P a2_n", "turret 21.0 58.0 P a2_n",
-                "bruiser 16.5 58.0 - a2_n", "bolter 13.5 56.0 P a2_n" } },
+                "rusher 18.0 41.5 - a2_r",
+                "bolter 10.7 63.5 P a2_n",
+                "bolter 22.0 63.5 P a2_n",
+                "launcher 10.7 61.5 P a2_n",
+                "gunner 24.5 56.8 P a2_n",
+                "gunner 25.5 58.5 P a2_n",
+                "turret 21.5 60.5 P a2_n",
+                "bruiser 17.0 57.5 - a2_n" } },
             new object[] { "a3", new[] {
-                "gunner 64.5 50.0 P a3_k", "bolter 60.0 34.0 P a3_k", "launcher 61.5 37.0 P a3_k",
-                "turret 64.3 46.45 P a3_k", "bruiser 58.0 38.5 - a3_k", "bruiser 62.5 40.5 - a3_k",
-                "blinker 56.0 41.0 - a3_k", "bolter 51.5 40.0 P a3_l" } },
+                "turret 64.3 46.45 P a3_k",
+                "gunner 64.5 50.0 P a3_k",
+                "bolter 52.5 33.5 P a3_k",
+                "launcher 63.0 42.0 P a3_k",
+                "bolter 49.0 33.5 P a3_l",
+                "bruiser 59.0 38.0 - a3_k",
+                "bruiser 62.17 40.35 - a3_k",
+                "blinker 56.5 41.6 - a3_k" } },
             new object[] { "a5", new[] {
-                "launcher 7.15 69.65 P a5_s", "gunner -2.39 91.19 P a5_n", "bruiser 19.29 86.74 - a5_c",
-                "blinker -2.5 80.4 - a5_d", "bruiser 22.0 85.0 - a5_m", "bruiser 9.57 79.75 - a5_m",
-                "blinker 23.0 78.5 - a5_m", "bruiser 5.5 74.5 - a5_s" } },
+                "launcher 2.15 70.15 P a5_s",
+                "gunner -3.39 90.69 P a5_n",
+                "bruiser 15.23 82.26 - a5_m",
+                "bruiser 29.3 85.5 - a5_c",
+                "blinker 20.2 89.3 - a5_c",
+                "bruiser 10.5 73.5 - a5_s",
+                "blinker 10.0 80.5 - a5_d",
+                "bruiser 24.2 74.2 - a5_m" } },
         };
 
         private static readonly FieldInfo HasPostField =
