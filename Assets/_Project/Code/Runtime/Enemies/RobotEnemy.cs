@@ -738,7 +738,7 @@ namespace MaxWorlds.Enemies
             Vector3 rawTo = ReplicatorSeekTarget - transform.position;
             rawTo.y = 0f;
             float rawDist = rawTo.magnitude;
-            if (rawDist <= 0.001f) return;
+            if (rawDist <= 0.001f) { NudgeApart(dt, SeparationPush()); return; }   // MV-1442: parked on a slot, still shoved clear of a crowd
 
             _seekElapsedSeconds += dt; // MV-1066
 
@@ -774,7 +774,7 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
             float dist = to.magnitude;
             if (dist <= 0.001f) return;
-            Vector3 dir = to / dist;
+            Vector3 dir = EnemySeparation.Steer(to / dist, SeparationPush());   // MV-1442
 
             // MV-820 R4: seeking speed is the speed this kind attacks at, not its ordinary chase speed
             // — the Charger's own committed charge lungeSpeed in a straight line, every other kind its
@@ -2707,7 +2707,7 @@ namespace MaxWorlds.Enemies
 
             // Deliberately slower than a chase. It is heaving itself out of a shed, not sprinting;
             // the step up to full speed as it clears the door is what sells the hand-off.
-            FaceAndMove(to.normalized, EffectiveMoveSpeed * emergeSpeedScale, dt);
+            FaceAndMove(EnemySeparation.Steer(to.normalized, SeparationPush()), EffectiveMoveSpeed * emergeSpeedScale, dt);   // MV-1442
         }
 
         /// <summary>MV-998 (Change 1): the walk-out beat between clearing the doorway and actually
@@ -2740,7 +2740,7 @@ namespace MaxWorlds.Enemies
             // for the doorway beat only (TickEmerge) — this robot has already cleared it and is just
             // relocating a further FactoryMouth.MusterDistance (4 m) clear, which the same EmergeTimeout
             // budget this shares with TickEmerge would not otherwise leave enough time to cover.
-            FaceAndMove(to.normalized, EffectiveMoveSpeed, dt);
+            FaceAndMove(EnemySeparation.Steer(to.normalized, SeparationPush()), EffectiveMoveSpeed, dt);   // MV-1442
         }
 
         /// <summary>Rebases this robot's health/damage to a fresh archetype (MV-514) WITHOUT the reset
@@ -3429,8 +3429,7 @@ namespace MaxWorlds.Enemies
             // just chasers) so this query only ever visits the 3x3 cell block around this robot — both
             // the scan AND Push()'s more expensive per-neighbour work below are bounded by local
             // density, not by how large the level's accumulated population has grown.
-            _separationGrid.CollectNearby(GetInstanceID(), transform.position, EffectiveMinSeparation, _separationScratch);
-            Vector3 separation = EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation);
+            Vector3 separation = SeparationPush();   // MV-1442: shared with every other moving state
             dir = EnemySeparation.Steer(dir, separation);
 
             // The lawn has cover in it (YT-68). Beelining (or being shoved by a crowded neighbour)
@@ -3530,10 +3529,21 @@ namespace MaxWorlds.Enemies
 
             // MV-1427: hold the post (a marksman Bolter's own back-off wins inside 9 m) and stop on the
             // bodyguard point rather than shuffling off it.
-            if (SquadOn && _hasPost) TickPostHold(ref dir, ref speed, ref retreating);
+            if (SquadOn && _hasPost)
+            {
+                TickPostHold(ref dir, ref speed, ref retreating);
+                if (speed > 0.01f) dir = EnemySeparation.Steer(dir, separation);   // MV-1442: walking back to the post
+            }
             if (squadGuard) speed = dist <= 0.3f ? 0f : EffectiveMoveSpeed;   // keep walking in past the touch-kind stop
 
+            bool standingStill = speed <= 0.01f;
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
+
+            // MV-1442: a robot standing in its standoff band or on its post is shoved clear of a crowd (the
+            // post by at most 1.0 m; it walks back once clear). A touch kind pressed against Max is left to
+            // ClampBodySeparation below, so it does not jitter off its contact.
+            if (standingStill && (inStandoffBand || (SquadOn && _hasPost)))
+                NudgeApart(dt, separation, SquadOn && _hasPost ? _postPos : (Vector3?)null, 1.0f);
 
             // MV-434: whatever FaceAndMove just did, this robot's centre may never end the tick
             // closer to Max's CURRENT position than MinBodyDistance — Physics.IgnoreCollision (see
@@ -4962,11 +4972,14 @@ namespace MaxWorlds.Enemies
                 _rifleBackingOff = false;
             }
 
+            Vector3 sepPush = SeparationPush();   // MV-1442
+
             if (_rifleBackingOff)
             {
                 Vector3 before = transform.position;
                 RotateToward(toMax, dt);
-                CharacterControllerMotion.SafeMove(_cc, (away / Mathf.Max(dist, 1e-3f)) * (EffectiveMoveSpeed * dt));
+                CharacterControllerMotion.SafeMove(_cc,
+                    EnemySeparation.Steer(away / Mathf.Max(dist, 1e-3f), sepPush) * (EffectiveMoveSpeed * dt));
                 Vector3 moved = transform.position - before; moved.y = 0f;
                 if (moved.magnitude < EffectiveMoveSpeed * dt * 0.25f) _rifleBlockedTimer += dt;
                 else _rifleBlockedTimer = 0f;
@@ -4978,6 +4991,7 @@ namespace MaxWorlds.Enemies
             if (aiming || inBand)
             {
                 RotateToward(toMax, dt);   // stands and faces Max
+                NudgeApart(dt, sepPush);   // MV-1442
                 return;
             }
 
@@ -4988,8 +5002,8 @@ namespace MaxWorlds.Enemies
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
                 false, _zoneRouteBudget, dt);
             Vector3 d = waypoint - transform.position; d.y = 0f;
-            if (d.sqrMagnitude < 1e-4f) { RotateToward(toMax, dt); return; }
-            Vector3 dirToGoal = d.normalized;
+            if (d.sqrMagnitude < 1e-4f) { RotateToward(toMax, dt); NudgeApart(dt, sepPush); return; }
+            Vector3 dirToGoal = EnemySeparation.Steer(d.normalized, sepPush);   // MV-1442
             RotateToward(dirToGoal, dt);
             CharacterControllerMotion.SafeMove(_cc, dirToGoal * (EffectiveMoveSpeed * dt));
         }
@@ -5037,7 +5051,8 @@ namespace MaxWorlds.Enemies
             Vector3 maxPos = target.position; maxPos.y = 0f;
             float dist = (maxPos - here).magnitude;
 
-            if (dist <= ArcStrikerHoldWithinMeters && _sight.HasSight) { FaceMax(dt, maxPos, here); return; }
+            Vector3 sepPush = SeparationPush();   // MV-1442
+            if (dist <= ArcStrikerHoldWithinMeters && _sight.HasSight) { FaceMax(dt, maxPos, here); NudgeApart(dt, sepPush); return; }
 
             Vector3 goal = _sight.HasSight || !_sight.HasTrail ? maxPos : _sight.LastKnown;
             MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
@@ -5045,8 +5060,8 @@ namespace MaxWorlds.Enemies
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
                 false, _zoneRouteBudget, dt);
             Vector3 d = waypoint - transform.position; d.y = 0f;
-            if (d.sqrMagnitude < 1e-4f) { FaceMax(dt, maxPos, here); return; }
-            Vector3 dir = d.normalized;
+            if (d.sqrMagnitude < 1e-4f) { FaceMax(dt, maxPos, here); NudgeApart(dt, sepPush); return; }
+            Vector3 dir = EnemySeparation.Steer(d.normalized, sepPush);   // MV-1442
             RotateToward(dir, dt);
             CharacterControllerMotion.SafeMove(_cc, dir * (EffectiveMoveSpeed * dt));
         }
@@ -5211,6 +5226,44 @@ namespace MaxWorlds.Enemies
             if (!targetTransform.TryGetComponent(out PlayerController player)) return;
             player.ApplyForcedMove(direction * BreakerForcedMoveSpeed, distance / BreakerForcedMoveSpeed,
                 ForcedMoveSource.Knockback);
+        }
+
+        /// <summary>MV-1442: the neighbour push-apart (MV-321) for THIS robot right now, from the shared
+        /// grid at <see cref="EffectiveMinSeparation"/>. Every state that moves the robot itself reads it,
+        /// not only <see cref="TickChase"/>. Every robot is in the grid whatever its state (Telegraph, Lunge
+        /// and Recover included), so none is ever exempt as a neighbour.</summary>
+        private Vector3 SeparationPush()
+        {
+            _separationGrid.CollectNearby(GetInstanceID(), transform.position, EffectiveMinSeparation, _separationScratch);
+            return EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation, GetInstanceID()) * SeparationGain;
+        }
+
+        /// <summary>MV-1442: weight of the push against a robot's own heading. The raw push is at most
+        /// (min distance - distance) per neighbour, which a slow body (Bruiser, 0.46 m/s) on a unit heading
+        /// could not outrun from a heap; quadrupled, an overlapped robot sidesteps instead of shuffling forward.</summary>
+        private const float SeparationGain = 4f;
+
+        /// <summary>MV-1442: a robot that is standing (holding a band, a post or an Arc Striker hold) is still
+        /// shoved clear of whoever crowds it — a slide along the push at up to move speed, without turning it
+        /// away from Max. <paramref name="anchor"/>/<paramref name="maxOffset"/>: a robot holding a post is
+        /// never pushed more than <paramref name="maxOffset"/> from it (the outward part of the push is dropped
+        /// at the limit), and walks back once clear.</summary>
+        private void NudgeApart(float dt, Vector3 push, Vector3? anchor = null, float maxOffset = 0f)
+        {
+            push.y = 0f;
+            if (anchor.HasValue)
+            {
+                Vector3 off = transform.position - anchor.Value; off.y = 0f;
+                if (off.magnitude >= maxOffset && off.sqrMagnitude > 1e-6f)
+                {
+                    Vector3 outward = off.normalized;
+                    float along = Vector3.Dot(push, outward);
+                    if (along > 0f) push -= outward * along;
+                }
+            }
+            if (push.sqrMagnitude < 1e-6f) return;
+            float mag = Mathf.Min(1f, push.magnitude);
+            CharacterControllerMotion.SafeMove(_cc, push.normalized * (EffectiveMoveSpeed * mag * dt));
         }
 
         private void FaceAndMove(Vector3 dir, float speed, float dt)

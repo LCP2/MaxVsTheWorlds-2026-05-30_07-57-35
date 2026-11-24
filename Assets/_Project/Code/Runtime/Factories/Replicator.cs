@@ -61,7 +61,7 @@ namespace MaxWorlds.Factories
         /// <summary>MV-807: metres between consecutive queue slots along <see cref="HatchOutwardNormal"/>,
         /// and between the hatch itself and slot 0. Lee's own "queue 2 deep" is a line, not a pile —
         /// this is what keeps two queued robots from ever being steered at the same point.</summary>
-        public const float QueueSlotSpacing = 1.2f;
+        public const float QueueSlotSpacing = 1.8f;   // MV-1442: 1.2 -> 1.8, the robot separation distance
 
         /// <summary>MV-775 Intake beat: superseded by MV-823's own walk-speed-derived duration (see
         /// <see cref="TickIntake"/> — the walk step is now distance / max(the robot's own MoveSpeed,
@@ -699,17 +699,62 @@ namespace MaxWorlds.Factories
         /// overriding wherever <see cref="EnemySpawner.SpawnKind"/> put it — <paramref name="spawned"/>
         /// is <see cref="EnemySpawner.SpawnExact"/>'s own return, empty when a population cap ate the
         /// spawn (nothing to place in that case).</summary>
-        private void PlaceAtOutRamp(List<RobotEnemy> spawned, int twinIndex)
+        private void PlaceAtOutRamp(List<RobotEnemy> spawned, int twinIndex, Vector3 spot)
         {
             if (spawned.Count == 0) return;
             RobotEnemy e = spawned[0];
-            e.transform.position = TwinPlacement(twinIndex);
+            e.transform.position = spot;
             Vector3 face = OutputOutwardNormal;
             if (face.sqrMagnitude > 0.0001f) e.transform.rotation = Quaternion.LookRotation(face, Vector3.up);
             // MV-828 D3: Apply() reset the twin's AreaIndex to 0 (SpawnKind -> Take -> Apply) — a twin
             // belongs to the box that made it, or it can never be re-assigned once its own
             // TwinNoReplicateSeconds window lapses.
             e.SetAreaIndex(AreaIndex);
+        }
+
+        /// <summary>MV-1442: how far from the OUT pad a twin may be placed to find a free spot.</summary>
+        public const float TwinSpotSearchRadius = 3f;
+        /// <summary>MV-1442: how long an emission waits before retrying when no free spot exists.</summary>
+        public const float TwinSpotRetrySeconds = 0.5f;
+        private const float TwinSpotCoverMargin = 0.1f;
+        private const float TwinSpotColliderRadius = 0.55f;   // the largest robot collider (Bruiser)
+        private float _twinHoldTimer;
+
+        /// <summary>MV-1442: the nearest spot within <see cref="TwinSpotSearchRadius"/> of the OUT pad that is
+        /// at least <see cref="EnemySeparation.DefaultMinDistance"/> from every live robot and clear of cover
+        /// by a robot's collider radius + 0.1 m. False when there is none — the caller delays and retries,
+        /// never stacks a twin.</summary>
+        public bool TryFindTwinSpot(out Vector3 spot)
+        {
+            Vector3 foot = OutRampFootPosition;
+            IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
+            const int Angles = 12;
+            for (int ring = 0; ring <= 5; ring++)
+            {
+                float r = ring * 0.6f;
+                int n = ring == 0 ? 1 : Angles;
+                for (int a = 0; a < n; a++)
+                {
+                    float ang = a * (Mathf.PI * 2f / Angles);
+                    Vector3 c = foot + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * r;
+                    bool clear = true;
+                    for (int i = 0; i < active.Count && clear; i++)
+                    {
+                        RobotEnemy o = active[i];
+                        if (o == null || !o.IsAlive) continue;
+                        Vector3 d = o.transform.position - c; d.y = 0f;
+                        if (d.magnitude < EnemySeparation.DefaultMinDistance) clear = false;
+                    }
+                    if (!clear) continue;
+                    if (Physics.CheckSphere(c + Vector3.up * (TwinSpotColliderRadius + 0.05f),
+                            TwinSpotColliderRadius + TwinSpotCoverMargin, CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+                        continue;
+                    spot = c;
+                    return true;
+                }
+            }
+            spot = foot;
+            return false;
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -975,11 +1020,24 @@ namespace MaxWorlds.Factories
             // through, but the hatch still has HatchCloseDelaySeconds + HatchCloseSeconds left to run.
             if (_intakeRobot != null || _intakeSeq != null) TickIntake(dt);
 
+            if (_twinHoldTimer > 0f) _twinHoldTimer -= dt;
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
                 PendingEmission p = _pending[i];
                 float timer = p.Timer + dt;
                 bool firstEmitted = p.FirstEmitted;
+
+                // MV-1442: a twin is never placed on top of another robot — with no free spot near the OUT pad
+                // the emission waits TwinSpotRetrySeconds and tries again.
+                Vector3 twinSpot = default;
+                bool emissionDue = (!firstEmitted && timer >= CycleSeconds)
+                                   || (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds);
+                if (emissionDue && (_twinHoldTimer > 0f || !TryFindTwinSpot(out twinSpot)))
+                {
+                    if (_twinHoldTimer <= 0f) _twinHoldTimer = TwinSpotRetrySeconds;
+                    _pending[i] = new PendingEmission(p.Kind, timer, firstEmitted, p.InputNoDrops);
+                    continue;
+                }
 
                 // MV-1430: the cycle holds (never drops) while the area is at the world's aliveCap.
                 if (timer >= CycleSeconds && !firstEmitted && !HasRoomUnderAliveCap())
@@ -1007,13 +1065,19 @@ namespace MaxWorlds.Factories
                         ignorePerFactoryCap: true, ignoreGlobalRoom: true);
                     // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
                     // placement is for the ordinary emergence walk, not this box's own theatre.
-                    PlaceAtOutRamp(firstSpawn, twinIndex: 0);
+                    PlaceAtOutRamp(firstSpawn, twinIndex: 0, twinSpot);
                     if (p.InputNoDrops && firstSpawn.Count > 0) firstSpawn[0].TagNoDrops(); // MV-1396
                     firstEmitted = true;
                 }
 
                 if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
                 {
+                    if (!p.FirstEmitted && !TryFindTwinSpot(out twinSpot))   // MV-1442: the first twin took the spot above
+                    {
+                        _twinHoldTimer = TwinSpotRetrySeconds;
+                        _pending[i] = new PendingEmission(p.Kind, timer, true, p.InputNoDrops);
+                        continue;
+                    }
                     // MV-809: the second twin is opportunistic, never guaranteed — only spawns if
                     // genuine room exists beyond what's already reserved elsewhere. Measured via
                     // Emitted (monotonic, this spawner only) rather than assuming success, since
@@ -1027,7 +1091,7 @@ namespace MaxWorlds.Factories
                         requeue ? 0f : TwinNoReplicateSeconds, ignorePerFactoryCap: true);
                     if (_spawner.Emitted > emittedBefore)
                     {
-                        PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808
+                        PlaceAtOutRamp(spawned, twinIndex: 1, twinSpot); // MV-808
                         if (spawned.Count > 0) spawned[0].TagNoDrops(); // MV-1396: the added robot never drops
                         _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
                         CompletedPairs++;

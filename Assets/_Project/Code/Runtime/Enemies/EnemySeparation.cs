@@ -29,7 +29,7 @@ namespace MaxWorlds.Enemies
         /// <paramref name="minDistance"/> to <paramref name="selfPos"/> — bigger the closer they are,
         /// zero once they're clear. XZ-plane only; Y is ignored so a step or slope doesn't skew it.
         /// </summary>
-        public static Vector3 Push(Vector3 selfPos, IReadOnlyList<Vector3> others, float minDistance)
+        public static Vector3 Push(Vector3 selfPos, IReadOnlyList<Vector3> others, float minDistance, int selfId = 0)
         {
             Vector3 total = Vector3.zero;
             for (int i = 0; i < others.Count; i++)
@@ -37,7 +37,18 @@ namespace MaxWorlds.Enemies
                 Vector3 away = selfPos - others[i];
                 away.y = 0f;
                 float dist = away.magnitude;
-                if (dist < 1e-4f || dist >= minDistance) continue;
+                if (dist >= minDistance) continue;
+                if (dist < 1e-4f)
+                {
+                    if (selfId == 0) continue;   // no id supplied (pure-maths callers): a coincident neighbour is ignored
+                    // MV-1442: two bodies exactly coincident have no "away" - without this they never part.
+                    // Each leaves along its own id-derived bearing, so two different robots take different ways.
+                    float ang = selfId * 2.399963f;
+                    away = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang));
+                    dist = 0f;
+                    total += away * minDistance;
+                    continue;
+                }
                 total += (away / dist) * (minDistance - dist);
             }
             return total;

@@ -124,10 +124,14 @@ namespace MaxWorlds.Tests.EditMode
             float secondTwinElapsed = -1f;
             Color? capturedBeaconColor = null;
 
-            const float dt = 0.02f;
+            // MV-1442: 0.005 s, not 0.02 s. The pass-through shrink is InQuad, so the window where scale <= 5%
+            // and the robot is still alive is only ~2.5% of its duration - narrower than one 0.02 s tick, so
+            // whether any tick landed in it depended on the walk-in's phase (which MV-1442's longer 1.8 m queue
+            // spacing shifted). A finer step samples that window whatever the phase.
+            const float dt = 0.005f;
             float elapsed = 0f;
 
-            for (int i = 0; i < 600; i++) // up to 12 s — generous margin either side of the ~3.5 s cycle
+            for (int i = 0; i < 2400; i++) // up to 12 s — generous margin either side of the ~3.5 s cycle
             {
                 replicator.TickConsumption(dt);
                 elapsed += dt;
