@@ -377,6 +377,17 @@ namespace MaxWorlds.Audio
                 return;
             }
 
+            // MV-1443: weapons keep ticking on Update while the RIG/any modal holds timeScale at 0, and a
+            // fire input whose release the modal swallowed leaves IsEmitting latched true, so the beam
+            // loop droned through the RIG and resumed on close. Paused = silent, snapped, not faded.
+            if (Time.timeScale <= 0f)
+            {
+                loop.Volume = 0f;
+                loop.Source.volume = 0f;
+                if (loop.Source.isPlaying) loop.Source.Stop();
+                return;
+            }
+
             loop.Volume = NextLoopVolume(loop.Volume, loop.IsEmitting(), Time.unscaledDeltaTime);
 
             if (loop.Volume <= 0f)

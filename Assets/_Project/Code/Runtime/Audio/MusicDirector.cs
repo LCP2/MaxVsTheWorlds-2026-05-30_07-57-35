@@ -271,6 +271,10 @@ namespace MaxWorlds.Audio
             }
         }
 
+        /// <summary>MV-1443: true when a seam player's active pass should be playing but is not.</summary>
+        public static bool NeedsRestart(bool crossfading, bool activeIsPlaying, float targetVolume) =>
+            !crossfading && !activeIsPlaying && targetVolume > 0f;
+
         /// <summary>MV-1137: a generated explore/boss pair crossfades instead of layering (two
         /// independently generated tracks can't be sample-aligned, so layering them would phase-beat
         /// against each other) — a pure function so the EditMode test can assert it without a running
@@ -402,6 +406,18 @@ namespace MaxWorlds.Audio
                 AudioClip clip = Active.clip;
                 if (clip == null) return;
 
+                // MV-1443: self-heal. A non-looping pass that ended (a stalled/throttled frame loop past its
+                // hand-off, a browser suspending the audio context) leaves the active source stopped with
+                // nothing left to ever restart it - silence until the next world switch.
+                if (NeedsRestart(_crossfading, Active.isPlaying, targetVolume))
+                {
+                    Inactive.Stop();
+                    Inactive.volume = 0f;
+                    _crossfading = false;
+                    _crossfadeT = 0f;
+                    Active.time = 0f;
+                    Active.Play();
+                }
                 float wrapAt = _loopEndSeconds.HasValue
                     ? _loopEndSeconds.Value - SeamCrossfadeHalfSeconds
                     : clip.length - LegacyWrapLeadSeconds;
