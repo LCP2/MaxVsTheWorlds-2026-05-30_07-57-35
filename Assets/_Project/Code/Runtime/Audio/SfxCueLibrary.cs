@@ -471,6 +471,22 @@ namespace MaxWorlds.Audio
         /// one has been committed, falling back to the synthesised <see cref="RenderClip"/> for every
         /// cue that hasn't been generated yet — the synthesised sound is the permanent fallback, not a
         /// placeholder being phased out.</summary>
+        /// <summary>MV-1437: every generated variant <c>Audio/Sfx/&lt;Cue&gt;_1</c>, <c>_2</c>, ... in order
+        /// (stops at the first gap); when none exist, the single <see cref="ResolveClip"/> result (the
+        /// plain <c>&lt;Cue&gt;</c> clip, else the procedural synth) as a one-element array.</summary>
+        public static UnityEngine.AudioClip[] ResolveVariants(Cue cue)
+        {
+            var found = new List<UnityEngine.AudioClip>();
+            for (int i = 1; i < 32; i++)
+            {
+                var clip = UnityEngine.Resources.Load<UnityEngine.AudioClip>("Audio/Sfx/" + cue + "_" + i);
+                if (clip == null) break;
+                found.Add(clip);
+            }
+            if (found.Count == 0) found.Add(ResolveClip(cue));
+            return found.ToArray();
+        }
+
         public static UnityEngine.AudioClip ResolveClip(Cue cue)
         {
             var generated = UnityEngine.Resources.Load<UnityEngine.AudioClip>("Audio/Sfx/" + cue);

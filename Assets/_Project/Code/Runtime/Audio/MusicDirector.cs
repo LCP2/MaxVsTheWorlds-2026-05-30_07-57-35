@@ -92,6 +92,7 @@ namespace MaxWorlds.Audio
             var src = go.AddComponent<AudioSource>();
             src.spatialBlend = 0f;   // 2D — fixed top-down camera, no listener panning
             src.playOnAwake = false;
+            AudioBus.Route(src, AudioBusId.Music);   // MV-1437
             src.loop = true;
             src.volume = 0f;
             return src;

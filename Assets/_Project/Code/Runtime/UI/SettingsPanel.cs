@@ -815,6 +815,11 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.MusicVolume, MusicDirector.DefaultMusicVolume),
                 v => DevTuning.MusicVolume = v, tab: TabSound);
 
+            // MV-1437: volume of the per-world ambience bed (AmbienceDirector), on the Ambience bus.
+            Add("Ambience volume", "x", 0f, 1f, AmbienceDirector.DefaultAmbienceVolume,
+                () => DevTuning.Or(DevTuning.AmbienceVolume, AmbienceDirector.DefaultAmbienceVolume),
+                v => DevTuning.AmbienceVolume = v, tab: TabSound);
+
             // ---- SOUND tab (MV-1009): Music on/off, then one ON/OFF switch per SfxDirector-registered
             // cue. Sourced from SfxCueLibrary.AllCues (not a hand-typed list), so a cue added later gets
             // a row automatically as long as it's given a label in SfxCueLibrary.DisplayNames. ----

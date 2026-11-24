@@ -389,6 +389,9 @@ namespace MaxWorlds.Core
         /// <see cref="MaxWorlds.Audio.MusicDirector.DefaultMusicVolume"/> (0.5).</summary>
         public static float? MusicVolume { get; set; }
 
+        /// <summary>MV-1437: the Settings SOUND tab's "Ambience volume" knob (0..1, default 0.5).</summary>
+        public static float? AmbienceVolume { get; set; }
+
         /// <summary>Bitmask of muted SFX cues, ordinals 0-23 (MV-1009): bit <c>1 &lt;&lt; (int)cue</c>
         /// set means that cue is OFF. Default 0 (every cue ON) — a float's mantissa only represents
         /// integers exactly up to 2^24, so this covers ordinals 0-23 and
@@ -490,7 +493,7 @@ namespace MaxWorlds.Core
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
             ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
             MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue ||
-            SfxVolume.HasValue || MusicVolume.HasValue ||
+            SfxVolume.HasValue || MusicVolume.HasValue || AmbienceVolume.HasValue ||
             MutedSfxCuesMask.HasValue || MutedSfxCuesMaskHigh.HasValue || MusicOn.HasValue ||
             OrbitalMissileSpeed.HasValue ||
             OrbitalTurnAtLaunch.HasValue ||
@@ -595,6 +598,7 @@ namespace MaxWorlds.Core
             MobileSoftShadows = null;
             SfxVolume = null;
             MusicVolume = null;
+            AmbienceVolume = null;
             MutedSfxCuesMask = null;
             MutedSfxCuesMaskHigh = null;
             MusicOn = null;
@@ -709,6 +713,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(MobileSoftShadows), () => MobileSoftShadows, v => MobileSoftShadows = v),
             (PrefsPrefix + nameof(SfxVolume), () => SfxVolume, v => SfxVolume = v),
             (PrefsPrefix + nameof(MusicVolume), () => MusicVolume, v => MusicVolume = v),
+            (PrefsPrefix + nameof(AmbienceVolume), () => AmbienceVolume, v => AmbienceVolume = v),
             (PrefsPrefix + nameof(MutedSfxCuesMask), () => MutedSfxCuesMask, v => MutedSfxCuesMask = v),
             (PrefsPrefix + nameof(MutedSfxCuesMaskHigh), () => MutedSfxCuesMaskHigh, v => MutedSfxCuesMaskHigh = v),
             (PrefsPrefix + nameof(MusicOn), () => MusicOn, v => MusicOn = v),

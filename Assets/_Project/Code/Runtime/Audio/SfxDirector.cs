@@ -44,6 +44,14 @@ namespace MaxWorlds.Audio
         }
 
         private readonly Dictionary<Cue, AudioClip> _clips = new Dictionary<Cue, AudioClip>();
+        // MV-1437: every variant per cue, round-robin; voice limits; ducking of the Music/Ambience buses.
+        private readonly Dictionary<Cue, AudioClip[]> _variants = new Dictionary<Cue, AudioClip[]>();
+        private readonly Dictionary<Cue, int> _lastVariant = new Dictionary<Cue, int>();
+        private readonly SfxVoiceTracker _voices = new SfxVoiceTracker();
+        private readonly AudioDucking _ducking = new AudioDucking();
+
+        /// <summary>MV-1437: the ducking state machine (test/inspection access).</summary>
+        public AudioDucking Ducking => _ducking;
         private AudioSource[] _pool;
         private int _poolCursor;
 
@@ -72,7 +80,12 @@ namespace MaxWorlds.Audio
 
         private void Awake()
         {
-            foreach (var cue in SfxCueLibrary.AllCues) _clips[cue] = SfxCueLibrary.ResolveClip(cue);
+            foreach (var cue in SfxCueLibrary.AllCues)
+            {
+                var variants = SfxCueLibrary.ResolveVariants(cue);
+                _variants[cue] = variants;
+                _clips[cue] = variants[0];
+            }
 
             _pool = new AudioSource[PoolSize];
             for (int i = 0; i < PoolSize; i++)
@@ -82,6 +95,7 @@ namespace MaxWorlds.Audio
                 var src = go.AddComponent<AudioSource>();
                 src.spatialBlend = 0f;   // 2D — fixed top-down camera, no listener panning
                 src.playOnAwake = false;
+                AudioBus.Route(src, AudioBusId.Sfx);   // MV-1437
                 _pool[i] = src;
             }
 
@@ -158,6 +172,11 @@ namespace MaxWorlds.Audio
         {
             foreach (var loop in _loops) UpdateLoop(loop);
             ScanForNewButtons();
+
+            // MV-1437: advance ducking on real (unscaled) time and push it to the mixer.
+            float before = _ducking.CurrentDb;
+            _ducking.Advance(Time.unscaledDeltaTime);
+            if (_ducking.CurrentDb != before) AudioBus.ApplyDuck(_ducking.CurrentDb);
         }
 
         // --- event handlers ---
@@ -195,13 +214,25 @@ namespace MaxWorlds.Audio
         {
             if (IsCueMuted(cue)) return;   // MV-1009: OFF cues never start a voice, checked first — zero cost
             if (!TryConsumeRateLimit(cue)) return;
-            if (!_clips.TryGetValue(cue, out var clip) || clip == null) return;
+            if (!_clips.TryGetValue(cue, out var clip0) || clip0 == null) return;
+
+            if (!_variants.TryGetValue(cue, out var variants) || variants.Length == 0) return;
+            int last = _lastVariant.TryGetValue(cue, out var lv) ? lv : -1;
+            int pick = SfxVariants.Next(variants.Length, last);
+            var clip = variants[pick] != null ? variants[pick] : clip0;
+
+            int slot = _poolCursor;
+            if (!_voices.TryStart(cue, Time.realtimeSinceStartup, clip.length, slot, out int stolen)) return;
+            _lastVariant[cue] = pick;
+            if (stolen >= 0 && stolen < _pool.Length) _pool[stolen].Stop();   // oldest voice stolen at the limit
 
             var source = NextSource();
+            if (AudioDucking.Ducks(cue)) _ducking.Trigger(clip.length);
+            source.outputAudioMixerGroup = AudioBus.Group(cue == Cue.UiClick ? AudioBusId.Ui : AudioBusId.Sfx);
             source.transform.position = worldPos;
             source.clip = clip;
             source.pitch = 1f + UnityEngine.Random.Range(-PitchVariance, PitchVariance);
-            source.volume = MasterVolume();
+            source.volume = MasterVolume() * SfxVariants.GainFromUnit(UnityEngine.Random.value);
             source.Play();
         }
 
@@ -290,6 +321,7 @@ namespace MaxWorlds.Audio
             var source = go.AddComponent<AudioSource>();
             source.spatialBlend = 0f;
             source.playOnAwake = false;
+            AudioBus.Route(source, AudioBusId.Sfx);   // MV-1437
             source.loop = true;
             source.clip = _clips[cue];
             source.volume = 0f;
