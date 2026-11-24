@@ -110,7 +110,7 @@ namespace MaxWorlds.Tests.EditMode
                 var screen2 = go2.GetComponent<WeaponsScreen>();
                 var dmgPill = screen2.NodePillText("p_dmg");
                 Assert.That(dmgPill, Is.Not.Null, "p_dmg built no pill-text component");
-                Assert.That(dmgPill.text, Is.EqualTo($"{RigState.Level("p_dmg")} / {RigBoard.MaxLevel("p_dmg")}"),
+                Assert.That(dmgPill.text, Does.StartWith($"{RigState.Level("p_dmg")} / {RigBoard.MaxLevel("p_dmg")}")   /* MV-1440: the sub line adds " · price" */,
                     "p_dmg's pill must stay the generic level/maxLevel read, untouched by the u_slt special-case");
             }
             finally { Object.DestroyImmediate(go2); }

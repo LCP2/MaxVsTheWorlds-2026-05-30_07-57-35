@@ -713,7 +713,7 @@ namespace MaxWorlds.UI
             float px = x0 + TreeMargin + RailWidth + TreeMargin;
             f.Panel = new Rect(px, TreeMargin, Mathf.Max(200f, w - (px - x0) - DetailReserve - TreeMargin), h - 2f * TreeMargin);
             f.Detail = new Rect(f.Panel.xMax + TreeMargin, TreeMargin, DetailReserve - 2f * TreeMargin, f.Panel.height);   // MV-1411: right of the tree panel, same height
-            f.Area = new Rect(f.Panel.x + 24f, f.Panel.y + TreeHeaderH, f.Panel.width - 48f, f.Panel.height - TreeHeaderH - 16f);
+            f.Area = new Rect(f.Panel.x + 24f, f.Panel.y + TreeHeaderH, f.Panel.width - 48f, f.Panel.height - TreeHeaderH - 16f - LegendH);
             return f;
         }
 
@@ -930,13 +930,13 @@ namespace MaxWorlds.UI
                 if (v.HexFill != null)
                 {
                     var fc = v.HexFill.color;
-                    fc.a = NodeActionPulseAlpha(Time.unscaledTime, v.FillBaseAlpha, spendable);
+                    fc.a = v.FillBaseAlpha;
                     v.HexFill.color = fc;
                 }
                 if (v.HexOutline != null)
                 {
                     var oc = v.HexOutline.color;
-                    oc.a = NodeActionPulseAlpha(Time.unscaledTime, v.OutlineBaseAlpha, spendable);
+                    oc.a = v.OutlineBaseAlpha;
                     v.HexOutline.color = oc;
                 }
             }
@@ -1595,138 +1595,78 @@ namespace MaxWorlds.UI
             // player sitting on affordable cells sees the same "something's waiting" tell everywhere one
             // applies. CapMarker's own presence (rather than a flat colour) IS the "affordable now" read;
             // Update() only ever pulses it while cellAffordable stays true.
-            // MV-1424: ONE outline per node - no dashed outer ring, no affordability dot, no progress ring/track
-            // (level progress is the "n / m" label and the detail panel's pips).
+            // MV-1440: three independent signals. STATE = fill / outline / icon (locked, available = hollow,
+            // owned = solid, maxed = solid + gold outline); AFFORDABILITY = green badge + green price on available /
+            // owned nodes only; SELECTION = the corner brackets (BuildSelectionRing) + a white name. No dashed
+            // outline, glow, ring, dot or teal outline remains for state (MV-1424 already removed the rings).
             v.OuterRing.gameObject.SetActive(false);
             v.CapMarker.gameObject.SetActive(false);
-            v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
-
-            // MV-470: the progress ring stays scoped to a live cell action — accumulation only means
-            // something for a node you can currently act on. MV-538 AC4: ProgressTrack is the dim
-            // full-circle track drawn behind the fill, same scope as the fill itself, so a partial arc
-            // always reads as "part of a whole" rather than a stray arc with nothing to measure against.
             v.ProgressRing.gameObject.SetActive(false);
             v.ProgressTrack.gameObject.SetActive(false);
-
-            // MV-1415: no cost tag beside the node any more - the first-purchase price rides on the sub line
-            // ("25 · NEW") and every other price lives on the detail panel's button.
             v.CostIcon.gameObject.SetActive(false);
             v.CostText.gameObject.SetActive(false);
+            v.Glow.gameObject.SetActive(false);
 
-            // MV-1117: u_slt's own generic cost tag would read the NODE's unlock/upgrade price (and
-            // disappear once maxed, hasCostToShow's own rule) — a different number from what a Sentinel
-            // deploy itself costs, which never goes away. u_slt carries its OWN price line instead (see
-            // RefreshSentinelPriceLine, called from the owned/draftable branches below), so the generic
-            // tag is always off for this one node to avoid showing two different "price" numbers at once.
+            bool selected = ab.Id == _selectedNodeId;
+            bool afford = NodeAffordable(ab.Id) && !IsCeremonySuppressing(ab.Category);
+            Color light = Color.Lerp(family, Color.white, 0.45f);
+            string priceHex = HexStr(afford ? AffordGreen : PriceGrey);
+            Color nameColour = selected ? Color.white : new Color(0.70f, 0.73f, 0.80f, 1f);   // white only on the selected node
+            bool isSlt = ab.Id == "u_slt";
+
             if (owned)
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
-                v.HexOutline.color = maxed ? GoldColor : family;   // MV-1424: maxed = owned look + gold outline
-                v.Glow.gameObject.SetActive(true);
-                v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
-                v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
-                v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaOwned);
-                // MV-654: u_slt's own level number is never what the player cares about — its pill
-                // reads deployable sentinels (AbilityTuning.SentinelDeploymentSlots), not the raw
-                // node level, in both this owned branch and the draftable branch below.
-                v.PillText.text = ab.Id == "u_slt"
-                    ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
-                    : $"{RigState.Level(ab.Id)} / {ab.MaxLevel}";
-                if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
+                v.Symbol = maxed ? RigNodeSymbol.Maxed : RigNodeSymbol.Owned;
+                v.HexFill.color = family;
+                v.HexOutline.sprite = HexOutlineSprite(v.Radius, maxed ? OutlineMaxed : OutlineAvailable);
+                v.HexOutline.color = maxed ? GoldColor : family;
+                int lvl = RigState.Level(ab.Id);
+                // MV-654: u_slt's own pill reads deployable sentinels, not the raw node level.
+                v.PillText.text = isSlt
+                    ? $"{AbilityTuning.SentinelDeploymentSlots(lvl)}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
+                    : maxed ? $"<color=#{HexStr(GoldColor)}>MAX</color>"
+                    : $"{lvl} / {ab.MaxLevel} \u00B7 <color=#{priceHex}>{CellSpend.UpgradeCostFor(ab.Id, lvl)}</color>";
+                if (isSlt) RefreshSentinelPriceLine(v);
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
-                // MV-516 item 4: a mid-saturation family hue on PillBackdrop's near-black read as
-                // "too faint to see" (Lee, 2000x900 screenshot). Ink (near-white/bone) on that same
-                // backdrop clears WCAG's 4.5:1 floor at every family hue, unconditionally — the family
-                // identity stays on the border, which never had a legibility job to do.
-                v.PillText.color = ab.Id == "u_slt" ? ink : SubGrey;
+                v.PillText.color = isSlt ? ink : SubGrey;
                 v.Label.text = ab.Label;
-                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.95f);
-                v.Icon.color = ink;
-                // MV-470: an owned-and-upgradeable node's own OuterRing/CapMarker read exactly like a
-                // draftable node's — same module cyan, same live/inert rule — so the ring colour is set
-                // here too, not left at BuildNodeShell's Color.clear (which only OuterRing's ALPHA gets
-                // touched by Update()'s pulse; its RGB has to be set at least once per state, same
-                // reasoning as MV-445 defect 4 below).
-                v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
-                v.CapMarker.color = module;
+                v.Label.color = nameColour;
+                v.Icon.color = Color.white;
             }
             else if (draftable)
             {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.16f), categoryUnlocked);
-                // MV-1410: affordable-but-unbought reads as a dashed GOLD outline; unaffordable keeps the cyan.
-                v.HexOutline.color = DimIfUnlit(cellAffordable ? SupercellColor : module, categoryUnlocked);
-                // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
-                // (was module cyan) — the module tint lives on the border/dot instead so it still reads
-                // "draftable", pulsing in Update() alongside the ring itself. MV-446 defect 2: hex-tight
-                // (NodeGlowSprite/NodeGlowSize), not a circle sized to the dashed ring's own radius —
-                // that circle was wider than the hex on every axis the hex's flat edges don't reach.
-                v.Glow.gameObject.SetActive(true);
-                v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurDraft);
-                v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
-                v.Glow.color = DimIfUnlit(new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft), categoryUnlocked);
-                // MV-445 defect 4: OuterRing's RGB was never set here — Update()'s pulse only ever
-                // touched its alpha, leaving the dashed ring stuck at Color.clear's (0,0,0) RGB from
-                // BuildNodeShell, i.e. black dashes instead of the module cyan every other draftable
-                // tell uses. MV-462/MV-538: Update() itself applies the same category-unlocked dim to
-                // the pulsed alpha (see its own comment) — the alpha set here is only ever the pre-pulse
-                // 0f, nothing to dim on this line.
-                v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
-                v.CapMarker.color = DimIfUnlit(module, categoryUnlocked);
-                // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
-                // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
-                // MV-654: same u_slt special-case as the owned branch above — the draftable pill
-                // shows deployable sentinels (here 1/3, since the player already has one sentinel
-                // before ever spending on this node), not the unlock cost. MV-520's always-on cost
-                // tag already carries the price, so dropping it from this pill costs nothing.
-                v.PillText.text = ab.Id == "u_slt"
+                v.Symbol = RigNodeSymbol.Available;
+                v.HexFill.color = new Color(0.05f, 0.04f, 0.09f, 1f);
+                v.HexOutline.sprite = HexOutlineSprite(v.Radius, OutlineAvailable);
+                v.HexOutline.color = light;
+                v.PillText.text = isSlt
                     ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
-                    : $"{CellSpend.PotentialCellCost(ab.Id)} · NEW";   // MV-1415: first purchase: price and NEW, in gold, on the sub line
-                if (ab.Id == "u_slt") RefreshSentinelPriceLine(v);
-                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
-                v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
-                v.PillText.color = DimIfUnlit(ab.Id == "u_slt" ? module : GoldColor, categoryUnlocked);
+                    : $"NEW \u00B7 <color=#{priceHex}>{CellSpend.PotentialCellCost(ab.Id)}</color>";
+                if (isSlt) RefreshSentinelPriceLine(v);
+                v.PillBg.color = PillBackdrop;
+                v.PillBorder.color = light;
+                v.PillText.color = isSlt ? light : SubGrey;
                 v.Label.text = ab.Label;
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), categoryUnlocked);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), categoryUnlocked);
+                v.Label.color = nameColour;
+                v.Icon.color = light;
             }
-            else if (parentGated)
+            else   // LOCKED - its parent is not bought yet (or its whole family is still closed)
             {
-                // MV-470: the trap the ticket was filed over — a node whose family is wide open but
-                // whose own PARENT hasn't reached level 2 yet must not read identically to a node whose
-                // whole family is still locked. Same LOCK/??? text (no new prose), but tinted the same
-                // module cyan the cell economy uses everywhere else on the board, so the eye can trace
-                // "this needs a cell spend upstream" straight to the parent's own pulsing cost tag.
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
-                v.HexOutline.color = new Color(module.r, module.g, module.b, 0.40f);
-                v.Glow.gameObject.SetActive(false);
+                v.Symbol = RigNodeSymbol.Locked;
+                v.HexFill.color = LockedFill;
+                v.HexOutline.sprite = HexOutlineSprite(v.Radius, OutlineLocked);
+                v.HexOutline.color = LockedOutline;
                 v.PillText.text = "";
-                v.PillBg.gameObject.SetActive(false);   // MV-1410: locked = a padlock, no pill and no "???"
+                v.PillBg.gameObject.SetActive(false);   // MV-1410: locked = a padlock, no pill, no price
                 v.PillBorder.gameObject.SetActive(false);
                 v.Icon.sprite = v.LockIcon;
-                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
-                v.PillBorder.color = new Color(module.r, module.g, module.b, 0.35f);
-                v.PillText.color = new Color(module.r, module.g, module.b, 0.55f);
                 v.Label.text = "";
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
+                v.Label.color = nameColour;
+                v.Icon.color = new Color(LockedOutline.r * 1.6f, LockedOutline.g * 1.6f, LockedOutline.b * 1.6f, 1f);
             }
-            else   // family not unlocked — the deepest lock, unchanged from before MV-470
-            {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
-                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), categoryUnlocked);
-                v.Glow.gameObject.SetActive(false);
-                v.PillText.text = "";
-                v.PillBg.gameObject.SetActive(false);   // MV-1410: locked = a padlock, no pill and no "???"
-                v.PillBorder.gameObject.SetActive(false);
-                v.Icon.sprite = v.LockIcon;
-                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
-                v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.22f), categoryUnlocked);
-                v.PillText.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.34f), categoryUnlocked);
-                v.Label.text = "";
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
-            }
+            v.AffordBadge.gameObject.SetActive(afford);
+
 
             // MV-516: the base (pre-pulse) alpha Update() pulses the hex FILL/OUTLINE around — captured
             // after every branch above has set its own final colour, so this always matches whichever
@@ -2382,7 +2322,7 @@ namespace MaxWorlds.UI
         {
             public string Id, Family;
             public RectTransform Root;
-            public Image Bg, Border, Hex, Icon, BarTrack, BarFill, Padlock;
+            public Image Bg, Border, Hex, Icon, BarTrack, BarFill, Padlock, Badge;   // MV-1440: Badge = green can-afford arrow
             public TextMeshProUGUI Top, Name, Count;
             public Button Button;
             public CanvasGroup Group;
@@ -2500,6 +2440,7 @@ namespace MaxWorlds.UI
             if (_draftActive || _ceremonyActive) return;   // MV-1407: the modal / reveal owns the tree until it ends
             _selectedCategory = categoryId;
             _selectedNodeId = RootNodeOf(categoryId);
+            foreach (var nb in Abilities) RefreshAbilityNode(nb);   // MV-1440: the selected node's name turns white
             ApplyTreeSelection();
             RefreshRail();
             RefreshDetail();
@@ -2523,7 +2464,65 @@ namespace MaxWorlds.UI
         {
             if (id == null || !_treeSpots.TryGetValue(id, out var spot) || spot.Category != _selectedCategory) return;
             _selectedNodeId = id;
+            foreach (var nb in Abilities) RefreshAbilityNode(nb);   // MV-1440: the selected node's name turns white
+            RefreshRail();
             RefreshDetail();
+        }
+
+        private const float LegendH = 44f;
+
+        /// <summary>MV-1440: one line along the bottom of the tree panel - SELECTED, CAN AFFORD, OWNED, AVAILABLE,
+        /// MAXED, LOCKED - each with its icon drawn exactly as on the nodes (same sprites, colours, strokes).</summary>
+        private void BuildLegend(RectTransform parent)
+        {
+            var p = _treeFrame.Panel;
+            string[] names = { "SELECTED", "CAN AFFORD", "OWNED", "AVAILABLE", "MAXED", "LOCKED" };
+            int chars = 0; foreach (var n in names) chars += n.Length;
+            float avail = p.width - 56f;
+            float font = Mathf.Clamp((avail - 5f * 12f - 6f * 12f) / (0.78f * chars + 6f * 1.5f), 10f, 24f);
+            float icon = font * 1.5f, gap = 12f, cy = p.yMax - LegendH * 0.5f - 6f;
+            Color fam = new Color(0.58f, 0.38f, 0.95f);
+            Color light = Color.Lerp(fam, Color.white, 0.45f);
+            float x = p.x + 28f;
+            for (int i = 0; i < names.Length; i++)
+            {
+                var cell = new Rect(x, cy - icon * 0.5f, icon, icon);
+                int hw = Mathf.CeilToInt(icon * 0.866f), hh = Mathf.CeilToInt(icon);
+                var holder = NewRect("Legend " + names[i], parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
+                PlaceTopLeft(holder, cell);
+                RectTransform at(string n, float w, float h) { var im = AddImage(holder, null, Color.white, n); Anchor(im.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f)); im.rectTransform.sizeDelta = new Vector2(w, h); im.raycastTarget = false; return im.rectTransform; }
+                switch (i)
+                {
+                    case 0:
+                        for (int k = 0; k < 4; k++)
+                        {
+                            var corner = new Vector2(k & 1, (k >> 1) & 1);
+                            foreach (var size in new[] { new Vector2(icon * 0.4f, 3f), new Vector2(3f, icon * 0.4f) })
+                            {
+                                var bar = AddImage(holder, CrispUi.Solid(), Color.white, "Bar");
+                                Anchor(bar.rectTransform, corner, corner, corner);
+                                bar.rectTransform.sizeDelta = size; bar.rectTransform.anchoredPosition = Vector2.zero; bar.raycastTarget = false;
+                            }
+                        }
+                        break;
+                    case 1:
+                        var b = AddAffordBadge(holder, Vector2.zero, icon);
+                        break;
+                    default:
+                        Color fill = i == 2 || i == 4 ? fam : i == 3 ? new Color(0.05f, 0.04f, 0.09f, 1f) : LockedFill;
+                        Color line = i == 2 ? fam : i == 3 ? light : i == 4 ? GoldColor : LockedOutline;
+                        float stroke = i == 4 ? 3f : 2.5f;
+                        var f = at("Fill", hw, hh).GetComponent<Image>(); f.sprite = CrispUi.Polygon(HexSides, HexRotationDeg, hw, hh); f.color = fill;
+                        var o = at("Outline", hw, hh).GetComponent<Image>(); o.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, hw, hh, stroke); o.color = line;
+                        break;
+                }
+                var t = AddText(parent, Mathf.RoundToInt(font), Color.white, TextAnchor.MiddleLeft);
+                t.text = names[i]; t.fontStyle = FontStyles.Bold; t.raycastTarget = false;
+                t.textWrappingMode = TextWrappingModes.NoWrap; t.color = new Color(0.78f, 0.80f, 0.86f, 1f);
+                float tw = names[i].Length * font * 0.78f + 6f;
+                PlaceTopLeft(t.rectTransform, new Rect(x + icon + 6f, cy - font, tw, font * 2f));
+                x += icon + 6f + tw + gap;
+            }
         }
 
         private void BuildTreePanel(RectTransform parent)
@@ -2558,6 +2557,7 @@ namespace MaxWorlds.UI
             _treeNameText.raycastTarget = false;
 
             for (int i = 0; i < ids.Count; i++) _railTabs[ids[i]] = BuildRailTab(parent, ids[i], _treeFrame.Tabs[i]);
+            BuildLegend(parent);   // MV-1440
             BuildRailQuit(parent);
             BuildDetailPanel(parent);
         }
@@ -2850,8 +2850,25 @@ namespace MaxWorlds.UI
 
         private void BuildSelectionRing(RectTransform parent)
         {
+            // MV-1440: the selection reticle - four white corner brackets (3 pt stroke) drawn OUTSIDE the hex.
+            // The ring itself is an invisible rect sized to the hex's box plus the gap (see RefreshDetail).
             _selectionRing = AddImage(parent, CrispUi.Solid(), Color.clear, "Selection Ring");
             _selectionRing.raycastTarget = false;
+            for (int i = 0; i < 4; i++)
+            {
+                float cx = (i & 1) == 0 ? 0f : 1f, cy = (i & 2) == 0 ? 0f : 1f;
+                var corner = new Vector2(cx, cy);
+                var group = NewRect("Bracket " + i, _selectionRing.transform, corner, corner);
+                group.pivot = corner; group.sizeDelta = new Vector2(BracketLen, BracketLen); group.anchoredPosition = Vector2.zero;
+                foreach (var size in new[] { new Vector2(BracketLen, BracketStroke), new Vector2(BracketStroke, BracketLen) })
+                {
+                    var bar = AddImage(group, CrispUi.Solid(), Color.white, "Bar");
+                    Anchor(bar.rectTransform, corner, corner, corner);
+                    bar.rectTransform.sizeDelta = size;
+                    bar.rectTransform.anchoredPosition = Vector2.zero;
+                    bar.raycastTarget = false;
+                }
+            }
             _selectionRing.gameObject.SetActive(false);
         }
 
@@ -3009,10 +3026,9 @@ namespace MaxWorlds.UI
             if (_treeSpots.TryGetValue(id, out var spot) && _selectionRing != null)
             {
                 float rr = spot.R;
-                float ringW = rr * Sqrt3, ringH = rr * 2f;
-                _selectionRing.sprite = CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 5.2f);
-                _selectionRing.color = Color.white;
-                PlaceTopLeft(_selectionRing.rectTransform, new Rect(spot.X - ringW * 0.5f, spot.Y - rr, ringW, ringH));
+                float ringW = rr * Sqrt3 + 2f * BracketGap, ringH = rr * 2f + 2f * BracketGap;
+                _selectionRing.color = Color.clear;
+                PlaceTopLeft(_selectionRing.rectTransform, new Rect(spot.X - ringW * 0.5f, spot.Y - ringH * 0.5f, ringW, ringH));
             }
         }
 
@@ -3123,6 +3139,10 @@ namespace MaxWorlds.UI
             tab.Padlock.rectTransform.sizeDelta = new Vector2(40f, 40f);
             tab.Padlock.rectTransform.anchoredPosition = new Vector2(-18f, 0f);
             tab.Padlock.raycastTarget = false;
+            tab.Badge = AddAffordBadge(tab.Root, Vector2.zero, 30f);   // MV-1440: top-right corner, beside the level count
+            Anchor(tab.Badge.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f));
+            tab.Badge.rectTransform.anchoredPosition = new Vector2(-24f, -22f);
+            tab.Badge.gameObject.SetActive(false);
             tab.Group = tab.Root.gameObject.AddComponent<CanvasGroup>();
             return tab;
         }
@@ -3162,6 +3182,7 @@ namespace MaxWorlds.UI
                 tab.Group.alpha = st.Locked ? 0.45f : 1f;
                 tab.Padlock.gameObject.SetActive(st.Locked);
                 tab.Count.gameObject.SetActive(!st.Locked);
+                tab.Badge.gameObject.SetActive(!st.Locked && !IsCeremonySuppressing(tab.Id) && CategoryHasAffordableNode(tab.Id));   // MV-1440
                 tab.BarTrack.gameObject.SetActive(!st.Locked);
                 tab.Count.text = st.Maxed ? "MAX" : $"{st.Owned}/{st.Total}";
                 tab.Count.color = st.Maxed ? GoldColor : new Color(ink.r, ink.g, ink.b, 0.8f);
@@ -3722,6 +3743,10 @@ namespace MaxWorlds.UI
 
             shell.Label.text = ab.Label;
 
+            // MV-1440: the "can afford" badge - a green disc with an up-arrow on the hex's top-right corner.
+            shell.AffordBadge = AddAffordBadge(shell.Root, new Vector2(r * Sqrt3 * 0.5f - 2f, r * 0.5f + 2f), AffordBadgeSize);
+            shell.AffordBadge.gameObject.SetActive(false);
+
             string id = ab.Id;   // capture by value, not the loop variable
             shell.Button.onClick.AddListener(() => OnNodeTapped(id));
             AddSelectHit(shell, id);
@@ -3912,6 +3937,94 @@ namespace MaxWorlds.UI
                 RigBoardLayout.StrokeActive, true, DraftableDashLength, DraftableGapLength);
         }
 
+        // ------------------------------------------------------------------ MV-1440: node symbology
+        // Three independent signals: STATE (locked / available / owned / maxed - fill + outline + icon),
+        // AFFORDABILITY (green up-arrow badge + green price; only on available / owned nodes) and
+        // SELECTION (four white corner brackets outside the hex + white name). 1 pt = 2 frame units.
+
+        /// <summary>MV-1440: the four mutually exclusive node states.</summary>
+        public enum RigNodeSymbol { Locked, Available, Owned, Maxed }
+
+        private static readonly Color AffordGreen = new Color32(0x4F, 0xE0, 0x8A, 0xFF);
+        private static readonly Color PriceGrey = new Color32(0x7D, 0x85, 0x99, 0xFF);
+        private static readonly Color LockedOutline = new Color32(0x3B, 0x33, 0x55, 0xFF);
+        private static readonly Color LockedFill = new Color(0.035f, 0.03f, 0.06f, 1f);
+        private const float AffordBadgeSize = 38f;          // ~19 pt
+        private const float OutlineAvailable = 4f, OutlineMaxed = 6f, OutlineLocked = 3f;   // 2 / 3 pt
+        private const float BracketStroke = 6f, BracketGap = 18f, BracketLen = 26f;   // 3 pt stroke, 9 pt beyond the hex edge
+
+        private static string HexStr(Color c) => ColorUtility.ToHtmlStringRGB(c);
+
+        private Sprite HexOutlineSprite(float r, float stroke)
+        {
+            float w = r * Sqrt3, h = r * 2f;
+            return CrispUi.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), stroke);
+        }
+
+        private const string ArrowUpSvg = "<path d=\"M0,-10 L0,9 M-8,1 L0,9 L8,1\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>";
+
+        /// <summary>A green disc with a dark up-arrow, centred at <paramref name="at"/> under <paramref name="parent"/>.</summary>
+        private static Image AddAffordBadge(RectTransform parent, Vector2 at, float size)
+        {
+            var disc = AddImage(parent, CrispUi.Disc(64), AffordGreen, "Afford Badge");
+            Anchor(disc.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            disc.rectTransform.sizeDelta = new Vector2(size, size);
+            disc.rectTransform.anchoredPosition = at;
+            disc.raycastTarget = false;
+            int px = Mathf.RoundToInt(size * 0.7f);
+            var arrow = AddImage(disc.rectTransform, CrispUi.VectorIcon(ArrowUpSvg, px), new Color(0.05f, 0.09f, 0.07f, 1f), "Arrow");
+            Anchor(arrow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            arrow.rectTransform.sizeDelta = new Vector2(size * 0.7f, size * 0.7f);
+            arrow.raycastTarget = false;
+            return disc;
+        }
+
+        /// <summary>MV-1440: test access - a tree node's resolved state symbol.</summary>
+        public RigNodeSymbol NodeSymbolOf(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Symbol : RigNodeSymbol.Locked;
+        /// <summary>MV-1440: test access - whether a node shows the green can-afford badge right now.</summary>
+        public bool NodeAffordBadgeShown(string id) => _abilityNodes.TryGetValue(id, out var v) && v.AffordBadge != null && v.AffordBadge.gameObject.activeSelf;
+        /// <summary>MV-1440: test access - a node's name label (colour = white while selected).</summary>
+        public TextMeshProUGUI NodeNameText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Label : null;
+        /// <summary>MV-1440: test access - a node's second label line (rich text; the price carries its own colour tag).</summary>
+        public string NodeSubLineText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText.text : null;
+        /// <summary>MV-1440: test access - a node's hex outline image (colour = gold when maxed).</summary>
+        public Image NodeOutlineImage(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.HexOutline : null;
+        /// <summary>MV-1440: the hex colour of the green used for the badge and affordable prices.</summary>
+        public static Color AffordColour => AffordGreen;
+        /// <summary>MV-1440: how many corner brackets are drawn right now (4 on the selected node, 0 with no selection).</summary>
+        public int SelectionBracketCount()
+        {
+            if (_selectionRing == null || !_selectionRing.gameObject.activeSelf) return 0;
+            int n = 0;
+            foreach (Transform t in _selectionRing.transform) if (t.gameObject.activeSelf && t.name.StartsWith("Bracket", StringComparison.Ordinal)) n++;
+            return n;
+        }
+        /// <summary>MV-1440: whether a rail tab shows the green can-afford badge (its tree has an affordable node).</summary>
+        public bool RailTabAffordBadgeShown(string id) => _railTabs.TryGetValue(id, out var t) && t.Badge != null && t.Badge.gameObject.activeSelf;
+
+        /// <summary>MV-1440: true when any node of <paramref name="categoryId"/>'s tree is available/owned and payable now.</summary>
+        private bool CategoryHasAffordableNode(string categoryId)
+        {
+            if (categoryId == ForgeTabId)
+            {
+                foreach (var fu in Fusions) if (!RigFusionState.IsForged(fu.Id) && PickupWallet.PowerCells >= fu.CellCost) return true;
+                return false;
+            }
+            foreach (var ab in Abilities)
+                if (ab.Category == categoryId && NodeAffordable(ab.Id)) return true;
+            return false;
+        }
+
+        /// <summary>MV-1440: an AVAILABLE or OWNED-below-max node whose next step the wallet covers now.</summary>
+        private static bool NodeAffordable(string id)
+        {
+            bool owned = RigState.IsOwned(id);
+            bool maxed = owned && !RigState.CanSpendPart(id);
+            bool draftable = RigState.IsCellUnlockable(id) && !owned;
+            if (maxed || !(draftable || owned)) return false;
+            return CellSpend.IsCellActionAffordable(id, PickupWallet.PowerCells);
+        }
+
         /// <summary>MV-443 defect 5: a locked ability's hex outline draws at <c>strokeLocked</c> (2px),
         /// not the owned state's <c>strokeOwned</c> (4px) <see cref="SolidHexOutlineSprite"/> uses.</summary>
         private Sprite LockedHexOutlineSprite(float r)
@@ -3934,6 +4047,10 @@ namespace MaxWorlds.UI
             public float Radius;
             /// <summary>MV-1410: an ability's own icon, and the padlock it swaps to while locked.</summary>
             public Sprite NormalIcon, LockIcon;
+
+            /// <summary>MV-1440: the resolved state symbol, and the green "can afford" badge (a disc with an up-arrow child) on the hex's top-right corner.</summary>
+            public RigNodeSymbol Symbol;
+            public Image AffordBadge;
 
             /// <summary>MV-516: the hex FILL/OUTLINE alpha <see cref="WeaponsScreen.RefreshAbilityNode"/>
             /// (or <see cref="WeaponsScreen.RefreshCandidateNode"/>) most recently set for this node's
