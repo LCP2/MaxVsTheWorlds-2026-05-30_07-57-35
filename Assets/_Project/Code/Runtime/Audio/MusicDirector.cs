@@ -140,21 +140,22 @@ namespace MaxWorlds.Audio
         // loopEndSeconds alongside the BPM used to derive them (Eleven Music v2.5 tracks, prompted at that
         // BPM; the last whole bar before the clip's end) - keep these in sync by hand, the manifest isn't
         // read at runtime. Index = (int)MusicWorld: Backyard, Stormdrain, Reef, Mothership, City.
+        // MV-1445: the boss tracks are the former 120-128 BPM explore tracks; explore is regenerated at 96-104 BPM.
         private static readonly float[] ExploreLoopEndSeconds =
         {
-            Bars(46, 124f),   // Backyard_explore
-            Bars(45, 120f),   // Stormdrain_explore
-            Bars(45, 122f),   // Reef_explore
-            Bars(46, 124f),   // Mothership_explore
-            Bars(48, 128f),   // City_explore
+            Bars(37, 100f),   // Backyard_explore
+            Bars(35, 96f),    // Stormdrain_explore
+            Bars(36, 98f),    // Reef_explore
+            Bars(37, 100f),   // Mothership_explore
+            Bars(38, 104f),   // City_explore
         };
         private static readonly float[] BossLoopEndSeconds =
         {
-            Bars(34, 138f),   // Backyard_boss
-            Bars(33, 132f),   // Stormdrain_boss
-            Bars(33, 134f),   // Reef_boss
-            Bars(34, 136f),   // Mothership_boss
-            Bars(35, 140f),   // City_boss
+            Bars(46, 124f),   // Backyard_boss
+            Bars(45, 120f),   // Stormdrain_boss
+            Bars(45, 122f),   // Reef_boss
+            Bars(46, 124f),   // Mothership_boss
+            Bars(48, 128f),   // City_boss
         };
 
         /// <summary>MV-1439: the authored loop-end point (seconds) of a world's generated explore or boss clip.</summary>

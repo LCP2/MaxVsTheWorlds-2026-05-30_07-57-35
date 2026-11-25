@@ -32,7 +32,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsNotNull(boss, $"{world}: no generated boss clip (ProcMusic fallback would play)");
 
                 Assert.That(explore.length, Is.InRange(60f, 120f), $"{world} explore length {explore.length}s");
-                Assert.That(boss.length, Is.InRange(40f, 90f), $"{world} boss length {boss.length}s");
+                Assert.That(boss.length, Is.InRange(40f, 120f), $"{world} boss length {boss.length}s");
 
                 float exploreEnd = MusicDirector.LoopEndSeconds(world, boss: false);
                 float bossEnd = MusicDirector.LoopEndSeconds(world, boss: true);
