@@ -176,5 +176,55 @@ namespace MaxWorlds.Tests.EditMode
                             "relay cycle " + cycle + ": queue slots " + i + " and " + j + " are closer than 1.8 m");
             }
         }
+
+        /// <summary>MV-1466: the 1.5 m guarantee of the mixed pile must hold for EVERY tie-break id ordering,
+        /// not only the instance ids a given test order happens to produce. Sweeps id bases 0-29 through the
+        /// test-only RobotEnemy.DeterministicIds seam (same pile, same 3 s window, same 1.5 m threshold).</summary>
+        [Test]
+        public void MixedPile_ReachesOnePointFiveMetresWithin3s_OnEveryIdBase0To29_MV1466()
+        {
+            LogAssert.ignoreFailingMessages = true;
+            WorldConfig city = WorldLibrary.Load(WorldLibrary.City);
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _spawned.Add(ground);
+            ground.transform.position = new Vector3(PileOrigin.x, -1f, PileOrigin.z);
+            ground.transform.localScale = new Vector3(200f, 2f, 200f);
+            var maxGo = new GameObject("MV1466 Max", typeof(CharacterController)) { tag = "Player" };
+            _spawned.Add(maxGo);
+            maxGo.AddComponent<PlayerHealth>().Initialize();
+            maxGo.transform.position = PileOrigin + new Vector3(12f, 0f, 0f);
+            var kinds = new[] { EnemyKind.Bolter, EnemyKind.ArcStriker, EnemyKind.Gunner, EnemyKind.Launcher,
+                                EnemyKind.Bruiser, EnemyKind.Bruiser };
+            var failures = new List<string>();
+            try
+            {
+                RobotEnemy.DeterministicIds = true;
+                for (int idBase = 0; idBase < 30; idBase++)
+                {
+                    RobotEnemy.ResetRegistry();
+                    RobotEnemy.DeterministicIdBase = idBase;
+                    var pile = new List<RobotEnemy>();
+                    for (int i = 0; i < kinds.Length; i++)
+                    {
+                        float ang = i * Mathf.PI * 2f / kinds.Length;
+                        Vector3 at = PileOrigin + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * 0.3f;
+                        RobotEnemy r = NewRobot(EnemyArchetype.For(kinds[i], city), at);
+                        if (kinds[i] == EnemyKind.Gunner) r.SetSquad("pile", true, true);
+                        pile.Add(r);
+                    }
+                    Physics.SyncTransforms();
+                    for (int step = 0; step < 150; step++)
+                    {
+                        foreach (RobotEnemy r in pile) r.Tick(Dt);
+                        Physics.SyncTransforms();
+                    }
+                    float min = MinPairwise(pile, out string worst);
+                    if (min < 1.5f) failures.Add("base " + idBase + ": " + worst + " " + min.ToString("F2") + " m");
+                    foreach (RobotEnemy r in pile) Object.DestroyImmediate(r.gameObject);
+                }
+            }
+            finally { RobotEnemy.DeterministicIds = false; RobotEnemy.DeterministicIdBase = 0; }
+            Assert.IsEmpty(failures, "id bases whose 3 s mixed pile is under 1.5 m: " + string.Join("; ", failures));
+        }
     }
 }

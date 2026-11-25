@@ -240,6 +240,7 @@ namespace MaxWorlds.Enemies
         public static void ResetRegistry()
         {
             _active.Clear();
+            _nextDeterministicId = 0;   // MV-1466
             _separationGrid.Clear();   // MV-611: test/level-reset hygiene — see SeparationGrid's own doc comment
             _converted.Clear();        // MV-716: same test/level-reset hygiene for the conversion cap
         }
@@ -506,6 +507,48 @@ namespace MaxWorlds.Enemies
         /// <summary>MV-697's leash: holds this robot's X/Z to the nearest point inside the union of its
         /// deck rects — the one thing ordinary wall collision does not stop it walking off (a deck has
         /// no railing on the edge a ramp climbs into). A no-op with no footprint set.</summary>
+        /// <summary>MV-1466: tie-break id for every id-keyed steering/separation choice. The Unity instance id
+        /// outside tests; under <see cref="DeterministicIds"/> a per-robot creation counter, so an EditMode
+        /// sweep can reproduce every id ordering instead of whichever one earlier tests happened to leave.</summary>
+        private int _uid;
+        private int Uid => _uid != 0 ? _uid : (_uid = DeterministicIds ? DeterministicIdBase + (++_nextDeterministicId) : GetInstanceID());   // lazy: Awake does not run for AddComponent in EditMode
+        public static bool DeterministicIds;
+        public static int DeterministicIdBase;
+        private static int _nextDeterministicId;
+
+        /// <summary>MV-1466: hard floor on centre spacing. Below this a robot is slid clear directly,
+        /// independent of walk speed (the steering push alone could not outrun a heap for slow kinds).</summary>
+        private const float HardSpacing = 1.55f;
+        private const float HardSpacingMaxSpeed = 3f;
+
+        private void HardDeOverlap(float dt)
+        {
+            if (_cc == null || !_cc.enabled) return;
+            _separationGrid.CollectNearby(Uid, transform.position, HardSpacing, _separationScratch);
+            Vector3 shove = Vector3.zero;
+            Vector3 p = transform.position;
+            for (int i = 0; i < _separationScratch.Count; i++)
+            {
+                Vector3 away = p - _separationScratch[i]; away.y = 0f;
+                float d = away.magnitude;
+                if (d >= HardSpacing) continue;
+                if (d < 1e-4f)
+                {
+                    float ang = Uid * 2.399963f;
+                    away = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)); d = 0f;
+                }
+                else away /= d;
+                shove += away * ((HardSpacing - d) * 0.5f);   // each of the pair takes half the deficit
+            }
+            if (shove.sqrMagnitude < 1e-8f) return;
+            float maxStep = HardSpacingMaxSpeed * dt;
+            if (shove.magnitude > maxStep) shove = shove.normalized * maxStep;
+            CharacterControllerMotion.SafeMove(_cc, shove);
+        }
+
+        /// <summary>MV-1466: Rect.Contains excludes xMax/yMax, so the leash pins strictly inside.</summary>
+        private const float DeckEdgeInset = 0.01f;
+
         private void ClampToDeckFootprint(float dt)
         {
             if (_deckRects == null || _deckRects.Count == 0) return;
@@ -1924,7 +1967,7 @@ namespace MaxWorlds.Enemies
         {
             _cc = GetComponent<CharacterController>();
             _mpb = new MaterialPropertyBlock();
-            _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
+            _preferSign = ObstacleSteering.PreferSignFor(Uid);
             ResetState();
 
             // A child of the body, so it deactivates and comes back with a POOLED robot instead of
@@ -1974,7 +2017,7 @@ namespace MaxWorlds.Enemies
         private void OnDisable()
         {
             _active.Remove(this);
-            _separationGrid.Remove(GetInstanceID());   // MV-611: else a dead/pooled robot stays a phantom neighbour forever
+            _separationGrid.Remove(Uid);   // MV-611: else a dead/pooled robot stays a phantom neighbour forever
         }
 
         /// <summary>MV-981: this robot is pooled/parked for the lifetime of a loaded map (see
@@ -2566,7 +2609,7 @@ namespace MaxWorlds.Enemies
             // directly; only TickChase's own QUERY is state-gated (nothing but a chaser needs to
             // ask). O(1) amortized — see SeparationGrid.UpdatePosition's own doc comment.
             FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Separation);
-            _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
+            _separationGrid.UpdatePosition(Uid, transform.position);
             FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Separation);
         }
 
@@ -2872,7 +2915,7 @@ namespace MaxWorlds.Enemies
         /// <summary>A cheap, allocation-free, per-instance-stable lateral muster slot for callers (the
         /// safety sweep, a garrison placement) that have no spawn-order index of their own to spread
         /// against — see <see cref="FactoryMouth.MusterPoint"/>.</summary>
-        private int MusterSlot() => (GetInstanceID() & 0x7fffffff) % 3;
+        private int MusterSlot() => (Uid & 0x7fffffff) % 3;
 
         /// <summary>Wires this Lurker to its home grate and every grate in its own area (MV-688) —
         /// called once at placement, before <see cref="BeginDormant"/>/<see cref="BeginSubmerged"/>.
@@ -3338,7 +3381,7 @@ namespace MaxWorlds.Enemies
                     if (_squadHoldTimer >= SquadTactics.HoldReleaseSeconds) SquadVolleyFired = true;
                     else
                     {
-                        goal = SquadTactics.HoldGoal(transform.position, target.position, GetInstanceID());
+                        goal = SquadTactics.HoldGoal(transform.position, target.position, Uid);
                         squadHold = true;
                     }
                 }
@@ -3429,8 +3472,8 @@ namespace MaxWorlds.Enemies
             MapZone goalZone = EnemyNavigation.Map?.ZoneAt(goal.x, goal.z);
             bool lastLeg = routedZone == null || goalZone == null || routedZone.id == goalZone.id;
             waypoint = lastLeg
-                ? EnemyFormation.ApproachPoint(goal, transform.position, GetInstanceID())
-                : EnemyFormation.ApproachPoint(waypoint, transform.position, GetInstanceID(),
+                ? EnemyFormation.ApproachPoint(goal, transform.position, Uid)
+                : EnemyFormation.ApproachPoint(waypoint, transform.position, Uid,
                     EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
 
             Vector3 step = waypoint - transform.position;
@@ -3510,7 +3553,7 @@ namespace MaxWorlds.Enemies
             if (Kind == EnemyKind.Rusher && Skin == ReefSkinTag)
             {
                 Vector3 perp = new Vector3(-dir.z, 0f, dir.x);
-                float wobble = Mathf.Sin((Time.time + GetInstanceID() * 0.173f) * ScrapEelWobbleFrequency)
+                float wobble = Mathf.Sin((Time.time + Uid * 0.173f) * ScrapEelWobbleFrequency)
                                * ScrapEelWobbleAmplitude;
                 dir = (dir + perp * wobble).normalized;
             }
@@ -3520,7 +3563,7 @@ namespace MaxWorlds.Enemies
             else if (Kind == EnemyKind.Bruiser && Skin == ReefSkinTag)
             {
                 Vector3 perp = new Vector3(-dir.z, 0f, dir.x);
-                float sign = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+                float sign = (Uid & 1) == 0 ? 1f : -1f;
                 dir = (dir + perp * sign * SalvageCrabSidewaysBias).normalized;
             }
 
@@ -3548,7 +3591,7 @@ namespace MaxWorlds.Enemies
                     // MV-1344: ORBITAL "circles slowly" inside its 7-9 m standoff band instead of
                     // standing still: a tangent around Max at a fraction of its walk speed.
                     Vector3 radial = to.normalized;
-                    float sign = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+                    float sign = (Uid & 1) == 0 ? 1f : -1f;
                     dir = new Vector3(-radial.z, 0f, radial.x) * sign;
                     speed *= OrbitalCircleSpeedFraction;
                 }
@@ -5262,8 +5305,8 @@ namespace MaxWorlds.Enemies
         /// and Recover included), so none is ever exempt as a neighbour.</summary>
         private Vector3 SeparationPush()
         {
-            _separationGrid.CollectNearby(GetInstanceID(), transform.position, EffectiveMinSeparation, _separationScratch);
-            return EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation, GetInstanceID()) * SeparationGain;
+            _separationGrid.CollectNearby(Uid, transform.position, EffectiveMinSeparation, _separationScratch);
+            return EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation, Uid) * SeparationGain;
         }
 
         /// <summary>MV-1442: weight of the push against a robot's own heading. The raw push is at most
