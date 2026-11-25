@@ -108,7 +108,7 @@ Shader "MaxWorlds/CurrentLaneBand"
 
             half4 Frag(Varyings IN) : SV_Target
             {
-                float along = IN.uv.x + _ScrollOffset;   // metres along the flow axis, tile-local
+                float along = IN.uv.x - _ScrollOffset;   // metres along the flow axis, tile-local
                 float across = IN.uv.y;                  // metres across the flow axis, tile-local
                 float halfSpan = max(_Span * 0.5, 1e-4);
 
