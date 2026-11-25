@@ -79,6 +79,10 @@ namespace MaxWorlds.Tests.EditMode
                 Physics.SyncTransforms();
                 Color dreadColorBefore = dread.GetComponent<CharacterSkin>().BodyColor;
 
+                trap.Tick(Dt);
+                Assert.IsTrue(crab.IsTrapHeld, "fixture: the Crab inside the radius is caught");
+                Assert.IsFalse(dread.IsTrapHeld, "a Dreadnought must never be held by the trap");
+
                 // Run the trap through catch -> 8s timeout -> 4.5s conversion.
                 int frames = Mathf.CeilToInt(13.2f / Dt);
                 for (int i = 0; i < frames && trap != null; i++) trap.Tick(Dt);
