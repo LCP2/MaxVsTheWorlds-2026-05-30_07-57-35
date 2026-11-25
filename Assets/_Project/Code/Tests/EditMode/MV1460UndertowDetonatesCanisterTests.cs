@@ -45,6 +45,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(cfg, $"'{key}' must load");
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
+            // MapRuntime.Build parents some objects at the scene top level ON PURPOSE; destroying our own root
+            // never touches them, so snapshot the scene's roots now and destroy every new one afterwards.
+            var before0 = new System.Collections.Generic.HashSet<GameObject>(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects());
             var root = new GameObject("MV1460 Root");
             var undertowGo = new GameObject("MV1460 Undertow");
             try
@@ -88,6 +92,8 @@ namespace MaxWorlds.Tests.EditMode
                 UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
                 Object.DestroyImmediate(undertowGo);
                 Object.DestroyImmediate(root);
+                foreach (GameObject g in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+                    if (!before0.Contains(g)) Object.DestroyImmediate(g);
             }
         }
 
