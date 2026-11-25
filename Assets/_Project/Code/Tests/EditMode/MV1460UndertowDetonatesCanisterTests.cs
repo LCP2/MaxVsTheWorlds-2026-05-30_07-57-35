@@ -46,6 +46,7 @@ namespace MaxWorlds.Tests.EditMode
                 Physics.SyncTransforms();
                 Assert.Greater(built.Canisters.Count, 0, $"{key}: no canister built");
                 Canister canister = built.Canisters[0];
+                canister.Build(); // AddComponent never fires Awake in the EditMode harness (see MV1395's own test)
                 var col = canister.GetComponent<Collider>();
                 Vector3 target = col != null ? col.bounds.center : canister.transform.position;
                 float before = canister.HealthCurrent;
