@@ -59,7 +59,8 @@
   "squadTactics": true,
   "brightHostileProjectiles": true,
   "rangedNeverShielded": true,
-  "eliteChancePct": 20,
+  "eliteChanceFromPct": 0,
+  "eliteChanceToPct": 30,
   "eliteAffixes": [
    "shielded",
    "hasted",

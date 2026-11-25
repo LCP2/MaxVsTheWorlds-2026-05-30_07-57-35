@@ -1269,8 +1269,23 @@ namespace MaxWorlds.Arena
         /// 0 (every config authored before this field existed) means never.</summary>
         public float eliteChancePct = 0f;
 
-        /// <summary>MV-1456 fail-first stub: flat, the pre-ramp behaviour.</summary>
-        public float EliteChancePctForArea(int areaIndex) => eliteChancePct;
+        /// <summary>MV-1456: optional elite-chance ramp, percent at area 1 / at the last area. Negative
+        /// (absent in JSON) means "no ramp" - <see cref="eliteChancePct"/> applies flat. Both must be
+        /// authored (>= 0) for the ramp to take effect.</summary>
+        public float eliteChanceFromPct = -1f;
+        /// <summary>MV-1456: see <see cref="eliteChanceFromPct"/>.</summary>
+        public float eliteChanceToPct = -1f;
+
+        /// <summary>MV-1456: the elite chance (0-100) for 1-based <paramref name="areaIndex"/>. With both ramp
+        /// dials authored: from + (to - from) x (n - 1) / (areaCount - 1); otherwise the flat
+        /// <see cref="eliteChancePct"/>.</summary>
+        public float EliteChancePctForArea(int areaIndex)
+        {
+            if (eliteChanceFromPct < 0f || eliteChanceToPct < 0f) return eliteChancePct;
+            if (areaCount <= 1) return eliteChanceFromPct;
+            float t = Mathf.Clamp01((areaIndex - 1) / (float)(areaCount - 1));
+            return eliteChanceFromPct + (eliteChanceToPct - eliteChanceFromPct) * t;
+        }
 
         /// <summary>MV-1427: squad/post tactics (wake together, hold for the volley, bodyguard, hold the
         /// post, blink behind). Default false; true only in city_config.json.</summary>

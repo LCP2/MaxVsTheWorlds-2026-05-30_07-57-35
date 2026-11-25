@@ -120,10 +120,10 @@ namespace MaxWorlds.Pickups
                 }
 
                 // --- elites: the chance an area spawns at least one, spent only if the budget is still open ---
-                if (!budgetClaimed && cfg.dials != null && cfg.dials.eliteChancePct > 0f)
+                if (!budgetClaimed && cfg.dials != null && cfg.dials.EliteChancePctForArea(n) > 0f)
                 {
                     int eligible = comp.TotalCount - comp.Turret - comp.Dreadnought - comp.Lurker - comp.Skitter;
-                    float p = Mathf.Clamp01(cfg.dials.eliteChancePct / 100f);
+                    float p = Mathf.Clamp01(cfg.dials.EliteChancePctForArea(n) / 100f);
                     areaSuper = Mathf.Max(areaSuper, 1f - Mathf.Pow(1f - p, Mathf.Max(0, eligible)));
                 }
                 Add(m, n, "areaSupercell", areaSuper * supercell);

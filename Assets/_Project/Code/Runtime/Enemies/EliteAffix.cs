@@ -63,10 +63,12 @@ namespace MaxWorlds.Enemies
         public static bool TryRoll(WorldDials dials, EnemyKind kind, int areaIndex, out EliteAffix affix)
         {
             affix = EliteAffix.None;
-            if (dials == null || dials.eliteChancePct <= 0f) return false;
+            if (dials == null) return false;
+            float chancePct = dials.EliteChancePctForArea(areaIndex);
+            if (chancePct <= 0f) return false;
             if (areaIndex <= 0 || !IsEligibleKind(kind)) return false;
             if (RobotEnemy.LiveEliteCountInArea(areaIndex) >= Mathf.Max(0, dials.eliteMaxPerArea)) return false;
-            if (Random.value >= dials.eliteChancePct / 100f) return false;
+            if (Random.value >= chancePct / 100f) return false;
 
             affix = RollAffix(dials.eliteAffixes, kind, EliteAffix.None, dials.rangedNeverShielded, areaIndex);
             return true;

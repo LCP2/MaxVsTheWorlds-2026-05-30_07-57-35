@@ -98,6 +98,8 @@ namespace MaxWorlds.Tests.EditMode
             // 4. City elites: ranged kinds never Shielded; a Rusher still can.
             float chance = city.dials.eliteChancePct;
             int cap = city.dials.eliteMaxPerArea;
+            float rf = city.dials.eliteChanceFromPct, rt = city.dials.eliteChanceToPct;
+            city.dials.eliteChanceFromPct = -1f; city.dials.eliteChanceToPct = -1f;
             city.dials.eliteChancePct = 100f;
             city.dials.eliteMaxPerArea = 100000;
             try
@@ -113,6 +115,7 @@ namespace MaxWorlds.Tests.EditMode
             finally
             {
                 city.dials.eliteChancePct = chance;
+                city.dials.eliteChanceFromPct = rf; city.dials.eliteChanceToPct = rt;
                 city.dials.eliteMaxPerArea = cap;
             }
         }
