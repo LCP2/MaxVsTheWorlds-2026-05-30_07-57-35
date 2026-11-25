@@ -1209,6 +1209,27 @@ namespace MaxWorlds.Enemies
         /// here — a trap can only ever iterate this type.</summary>
         public bool IsTrapCatchable => IsAlive && Team == Team.Enemy && !IsConverted && !_trapHeld && !IsChannelingSplice;
 
+        /// <summary>MV-1465: what a <see cref="MaxWorlds.Weapons.RobotTrap"/> actually checks before it
+        /// catches: <see cref="IsTrapCatchable"/> AND not a Dreadnought (MV-1217 makes it immune to
+        /// capture; <see cref="IsTrapCatchable"/> itself stays truthful for its read-only users). A
+        /// robot the trap can never convert must never be caught — no hold, tether, tint or slot.</summary>
+        public bool CanBeCaughtByTrap => IsTrapCatchable && Kind != EnemyKind.Dreadnought;
+
+        /// <summary>MV-1465: clean release of a robot a trap holds but will not (or can no longer)
+        /// convert — conversion refused (cap full / immune kind), or the trap ending. Clears the hold
+        /// and any conversion in progress, restores the body colour and the hold marker, so normal AI
+        /// resumes. No-op on a robot that is not held.</summary>
+        public void ReleaseTrapHold()
+        {
+            if (!_trapHeld && !_trapConverting) return;
+            _trapHeld = false;
+            _trapConverting = false;
+            _trapConvertElapsed = 0f;
+            if (_skin == null) _skin = GetComponent<CharacterSkin>();
+            _skin?.SetAllyOverrideColor(null);
+            _bar?.SetTrapMarker(false, false);
+        }
+
         /// <summary>Caught: frozen, untargetable, undamageable from this instant (MV-1035). Releases any
         /// held lunge-attack token immediately, the same "never leak a token" idiom <see cref="Die"/>/
         /// <see cref="Despawn"/> already use, since a caught robot may never reach either of those to
@@ -1259,6 +1280,8 @@ namespace MaxWorlds.Enemies
             _trapConverting = false;
             _trapHeld = false;
             bool converted = TryConvert(requirePortExposed: false);
+            // MV-1465: a refused conversion (cap full / immune kind) is a clean release, not a half-capture.
+            if (!converted) _skin?.SetAllyOverrideColor(null);
             _bar?.SetTrapMarker(converted, converted);
             return converted;
         }

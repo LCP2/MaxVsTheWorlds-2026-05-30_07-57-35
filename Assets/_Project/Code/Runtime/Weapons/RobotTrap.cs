@@ -81,6 +81,8 @@ namespace MaxWorlds.Weapons
                 return;
             }
 
+            PruneHeld();
+            if (_despawned) return;
             TickCatch();
             TickDrag(dt);
             TickTethers();
@@ -111,7 +113,7 @@ namespace MaxWorlds.Weapons
             for (int i = 0; i < active.Count && _held.Count < _capacity; i++)
             {
                 RobotEnemy robot = active[i];
-                if (robot == null || !robot.IsTrapCatchable) continue;
+                if (robot == null || !robot.CanBeCaughtByTrap) continue;   // MV-1465: never a Dreadnought
 
                 Vector3 rp = robot.transform.position;
                 float dx = rp.x - origin.x, dz = rp.z - origin.z;
@@ -156,15 +158,48 @@ namespace MaxWorlds.Weapons
         private void TickConversion(float dt)
         {
             bool allDone = true;
+            bool anyConverted = false;
             for (int i = 0; i < _held.Count; i++)
             {
                 RobotEnemy robot = _held[i];
                 if (robot == null) continue;
-                if (!robot.TickTrapConversion(dt)) allDone = false;
+                // MV-1465: a held robot that died/despawned mid-conversion, or whose conversion was
+                // refused, is finished — never leave the trap waiting on it forever.
+                if (!robot.IsAlive) { robot.ReleaseTrapHold(); continue; }
+                if (robot.TickTrapConversion(dt)) anyConverted = true;
+                else if (robot.IsTrapConverting) allDone = false;
+                else robot.ReleaseTrapHold();   // refused: clear hold/colour (no-op if already clean)
+                if (robot.IsConverted) anyConverted = true;
             }
             TickTethers();
 
-            if (allDone) Despawn(true);
+            if (allDone) Despawn(anyConverted);
+        }
+
+        /// <summary>MV-1465: drops any held robot that died or despawned before conversion started,
+        /// removing its tether. If that empties the trap it ends at once (no cooldown).</summary>
+        private void PruneHeld()
+        {
+            bool pruned = false;
+            for (int i = _held.Count - 1; i >= 0; i--)
+            {
+                RobotEnemy robot = _held[i];
+                if (robot != null && robot.IsAlive && robot.IsTrapHeld) continue;
+                if (robot != null)
+                {
+                    robot.ReleaseTrapHold();
+                    if (_tethers.TryGetValue(robot, out LineRenderer lr) && lr != null)
+                    {
+                        if (Application.isPlaying) Destroy(lr.gameObject); else DestroyImmediate(lr.gameObject);
+                    }
+                    _tethers.Remove(robot);
+                    _dragFrom.Remove(robot);
+                    _dragElapsed.Remove(robot);
+                }
+                _held.RemoveAt(i);
+                pruned = true;
+            }
+            if (pruned && _held.Count == 0) Despawn(false);
         }
 
         private void Despawn(bool converted)
