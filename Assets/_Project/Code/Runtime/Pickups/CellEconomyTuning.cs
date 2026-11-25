@@ -63,6 +63,12 @@ namespace MaxWorlds.Pickups
         /// Calibrated (MV-1455) against <see cref="WorldEconomyModel"/>.</summary>
         public const float DefaultCityPartsPerLargeKill = 2.3f;
 
+        /// <summary>MV-1462: the Reef's flat Parts per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.PartsPerLargeKill"/>).</summary>
+        public const float DefaultReefPartsPerLargeKill = 0.57f;
+
+        /// <summary>MV-1462: the Reef's rockets per large kill.</summary>
+        public const float DefaultReefRocketsPerLargeKill = 0.8f;
+
         /// <summary>MV-1455: the City's rockets per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.RocketsPerLargeKill"/>);
         /// Lee tunes after playing.</summary>
         public const float DefaultCityRocketsPerLargeKill = 0.8f;

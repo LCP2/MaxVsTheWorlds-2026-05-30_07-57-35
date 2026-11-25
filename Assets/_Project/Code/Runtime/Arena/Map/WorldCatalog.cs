@@ -794,6 +794,10 @@ namespace MaxWorlds.Arena
                 // parts x" knob -- see PartsMultiplier's own doc comment.
                 PartsMultiplier = () => DevTuning.Or(DevTuning.World3PartsMultiplier, CellEconomyTuning.DefaultWorld3PartsMultiplier),
                 SupercellCadenceAreas = 2,
+                // MV-1462 (Lee, 25 Nov): one flat rate per robot instead of the back-loaded per-area budget,
+                // set so the world's Parts max every RIG node by a30 (MV1462ReefEconomyTests).
+                PartsPerLargeKill = CellEconomyTuning.DefaultReefPartsPerLargeKill,
+                RocketsPerLargeKill = CellEconomyTuning.DefaultReefRocketsPerLargeKill,
                 RackModuleDropsHere = false,
                 // MV-1155: untouched — stays at BossTuning.VolleyInterval's own default.
                 BossVolleyIntervalSeconds = BossTuning.VolleyInterval,
