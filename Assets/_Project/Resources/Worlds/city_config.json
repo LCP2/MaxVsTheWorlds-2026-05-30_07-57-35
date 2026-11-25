@@ -625,6 +625,13 @@
     "d": 24
    },
    "hasShed": false,
+   "rocketCrates": [
+    {
+     "id": "a1_rocketcrate1",
+     "x": 9.0,
+     "z": 22.5
+    }
+   ],
    "garrisonDensity": "light",
    "composition": {
     "bolter": 2,
@@ -1243,6 +1250,13 @@
     "d": 40
    },
    "hasShed": false,
+   "rocketCrates": [
+    {
+     "id": "a2_rocketcrate1",
+     "x": 17.5,
+     "z": 62.8
+    }
+   ],
    "garrisonDensity": "normal",
    "composition": {
     "rusher": 1,
@@ -1631,6 +1645,13 @@
     "d": 22
    },
    "hasShed": false,
+   "rocketCrates": [
+    {
+     "id": "a3_rocketcrate1",
+     "x": 64.2,
+     "z": 48.6
+    }
+   ],
    "garrisonDensity": "normal",
    "composition": {
     "turret": 1,
@@ -1998,6 +2019,13 @@
     "d": 30
    },
    "hasShed": false,
+   "rocketCrates": [
+    {
+     "id": "a4_rocketcrate1",
+     "x": 50.5,
+     "z": 73.5
+    }
+   ],
    "garrisonDensity": "normal",
    "composition": {
     "bolter": 1,
@@ -2379,6 +2407,13 @@
     "d": 25.4
    },
    "hasShed": false,
+   "rocketCrates": [
+    {
+     "id": "a5_rocketcrate1",
+     "x": 3.5,
+     "z": 69.5
+    }
+   ],
    "garrisonDensity": "normal",
    "composition": {
     "launcher": 1,

@@ -53,7 +53,8 @@ namespace MaxWorlds.Tests.EditMode
             _host = new GameObject("MV1449 Host");
             MapRuntime.Build(map, _host.transform);
 
-            var crates = Pickup.Active.Where(p => p != null && p.Kind == PickupKind.RocketCrate).ToList();
+            var crates = Object.FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(p => p.Kind == PickupKind.RocketCrate).ToList();
             foreach (string c in Crates)
             {
                 string[] t = c.Split(' ');
