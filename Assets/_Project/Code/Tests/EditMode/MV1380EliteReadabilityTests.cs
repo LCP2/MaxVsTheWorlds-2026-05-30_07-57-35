@@ -35,7 +35,7 @@ namespace MaxWorlds.Tests.EditMode
                     .Invoke(robot, null);
                 robot.Apply(EnemyArchetype.Of(EnemyKind.Rusher).WithElite(EliteAffix.Shielded));
 
-                robot.TakeDamage(new DamageInfo(100f, go.transform.position, Vector3.back, Team.Player));
+                robot.TakeDamage(new DamageInfo(1f, go.transform.position, Vector3.back, Team.Player));
                 robot.SyncEliteMarker();
                 WorldHealthBar bar = robot.HealthBar;
                 Assert.IsNotNull(bar);

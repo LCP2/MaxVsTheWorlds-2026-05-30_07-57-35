@@ -587,7 +587,7 @@ namespace MaxWorlds.Enemies
                 // MV-1321: the KEY elite always spawns elite, bypassing the chance roll AND the per-area
                 // cap entirely — never falls through to the ordinary EliteRoll.TryRoll below.
                 if (slots[i].CarriesKey)
-                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind, areaIndex)).WithCarriesKey();
                 else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 
@@ -980,7 +980,7 @@ namespace MaxWorlds.Enemies
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
                 // MV-1321: see RestoreAreaAtLevel's own identical comment above.
                 if (slots[i].CarriesKey)
-                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind, areaIndex)).WithCarriesKey();
                 else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 
@@ -1108,7 +1108,7 @@ namespace MaxWorlds.Enemies
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
                 // MV-1321: see RestoreAreaAtLevel's own identical comment above.
                 if (slots[i].CarriesKey)
-                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind)).WithCarriesKey();
+                    archetype = archetype.WithElite(EliteRoll.RollAffixForced(_worldCfg?.dials, kind, areaIndex)).WithCarriesKey();
                 else if (EliteRoll.TryRoll(_worldCfg?.dials, kind, areaIndex, out EliteAffix rolledAffix))
                     archetype = archetype.WithElite(rolledAffix);
 

@@ -42,6 +42,9 @@ namespace MaxWorlds.Enemies
         /// itself.</summary>
         public const float MaxHealthMultiplier = 2.0f;
 
+        /// <summary>MV-1457: first 1-based area index in which the Shielded affix may roll.</summary>
+        public const int ShieldedMinAreaIndex = 3;
+
         /// <summary>Kinds that may never roll elite (MV-1278 point 4), regardless of world/area —
         /// Turret and Dreadnought are stationary/garrison-only emplacements, Lurker's whole kit is a
         /// hide-and-strike gimmick an elite ring would spoil, Skitter is a tiny phase-hopper the ring
@@ -65,7 +68,7 @@ namespace MaxWorlds.Enemies
             if (RobotEnemy.LiveEliteCountInArea(areaIndex) >= Mathf.Max(0, dials.eliteMaxPerArea)) return false;
             if (Random.value >= dials.eliteChancePct / 100f) return false;
 
-            affix = RollAffix(dials.eliteAffixes, kind, EliteAffix.None, dials.rangedNeverShielded);
+            affix = RollAffix(dials.eliteAffixes, kind, EliteAffix.None, dials.rangedNeverShielded, areaIndex);
             return true;
         }
 
@@ -75,8 +78,8 @@ namespace MaxWorlds.Enemies
         /// an elite... bypasses the elite % roll and the per-area elite cap"), but still asks
         /// <see cref="RollAffix"/> for its affix "normally from the world's list", exactly like an
         /// ordinary elite roll would.</summary>
-        public static EliteAffix RollAffixForced(WorldDials dials, EnemyKind kind) =>
-            RollAffix(dials?.eliteAffixes, kind, EliteAffix.None, dials != null && dials.rangedNeverShielded);
+        public static EliteAffix RollAffixForced(WorldDials dials, EnemyKind kind, int areaIndex = 0) =>
+            RollAffix(dials?.eliteAffixes, kind, EliteAffix.None, dials != null && dials.rangedNeverShielded, areaIndex);
 
         /// <summary>Picks one IMPLEMENTED affix at random from <paramref name="authoredAffixes"/>
         /// (MV-1278 point 2) — <see cref="EliteAffix.None"/> (a plain elite) when the authored list is
@@ -91,7 +94,7 @@ namespace MaxWorlds.Enemies
         /// the same "incoherent on a body that never moves" footing. MV-1283 point 1: Molten is excluded
         /// by the identical zero-move-speed test — a robot that never walks can never trail a patch.</summary>
         private static EliteAffix RollAffix(string[] authoredAffixes, EnemyKind kind, EliteAffix exclude = EliteAffix.None,
-            bool rangedNeverShielded = false)
+            bool rangedNeverShielded = false, int areaIndex = 0)
         {
             if (authoredAffixes == null || authoredAffixes.Length == 0) return EliteAffix.None;
 
@@ -113,6 +116,8 @@ namespace MaxWorlds.Enemies
                 implemented.Remove(EliteAffix.Hasted);
                 implemented.Remove(EliteAffix.Molten);
             }
+            // MV-1457: no Shielded elites early - areas 1-2 of any world (areaIndex is 1-based; 0 = unknown, unfiltered).
+            if (areaIndex >= 1 && areaIndex <= ShieldedMinAreaIndex - 1) implemented.Remove(EliteAffix.Shielded);
             if (exclude != EliteAffix.None) implemented.Remove(exclude);
 
             return implemented.Count == 0 ? EliteAffix.None : implemented[Random.Range(0, implemented.Count)];
@@ -123,7 +128,7 @@ namespace MaxWorlds.Enemies
         /// <see cref="EliteAffix.Linked"/> — the same pick <see cref="RollAffix"/> makes for a fresh
         /// spawn, minus Linked itself (a Linked elite that failed to pair never retries pairing a
         /// second time as some other affix).</summary>
-        public static EliteAffix RerollExcludingLinked(string[] authoredAffixes, EnemyKind kind, bool rangedNeverShielded = false) =>
-            RollAffix(authoredAffixes, kind, EliteAffix.Linked, rangedNeverShielded);
+        public static EliteAffix RerollExcludingLinked(string[] authoredAffixes, EnemyKind kind, bool rangedNeverShielded = false, int areaIndex = 0) =>
+            RollAffix(authoredAffixes, kind, EliteAffix.Linked, rangedNeverShielded, areaIndex);
     }
 }

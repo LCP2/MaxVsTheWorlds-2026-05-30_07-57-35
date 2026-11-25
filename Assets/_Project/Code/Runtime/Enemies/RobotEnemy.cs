@@ -421,6 +421,8 @@ namespace MaxWorlds.Enemies
             // MV-1282 point 3: a Hasted elite does NOT get the x2.0 health bonus — its max health
             // stays its kind's normal resolved value, the speed is the whole trade-off.
             if (IsElite && Affix != EliteAffix.Hasted) maxHealth *= EliteRoll.MaxHealthMultiplier;
+            // MV-1457: a Shielded elite's front plate has its own HP, 50% of the resolved max.
+            PlateHealthCurrent = (IsElite && Affix == EliteAffix.Shielded) ? maxHealth * 0.5f : 0f;
             // MV-1283: a pooled instance must not carry a previous life's molten patches/trail timer
             // into this one — same "pooled robot, last life leaks forward" footing as AreaIndex/the
             // Breaker ram hit-list above.
@@ -1425,7 +1427,7 @@ namespace MaxWorlds.Enemies
         /// rule"), so there is no separate path to special-case.</summary>
         private float ShieldedFrontArcMultiplier(Vector3 hitDirection)
         {
-            if (!IsElite || Affix != EliteAffix.Shielded || Team != Team.Enemy) return 1f;
+            if (!IsElite || Affix != EliteAffix.Shielded || Team != Team.Enemy || PlateHealthCurrent <= 0f) return 1f;
             return IsFrontArcHit(hitDirection) ? 0f : 1f;
         }
 
@@ -1606,7 +1608,7 @@ namespace MaxWorlds.Enemies
                 return;
             }
 
-            Affix = dials != null ? EliteRoll.RerollExcludingLinked(dials.eliteAffixes, Kind, dials.rangedNeverShielded) : EliteAffix.None;
+            Affix = dials != null ? EliteRoll.RerollExcludingLinked(dials.eliteAffixes, Kind, dials.rangedNeverShielded, AreaIndex) : EliteAffix.None;
         }
 
         /// <summary>Point 2: turns an ordinary robot into this Linked elite's paired partner —
@@ -1794,6 +1796,9 @@ namespace MaxWorlds.Enemies
         // --- IHealthReadout (YT-111): what the floating bar over this robot reads. ---
         public float HealthNormalized => maxHealth > 0f ? Mathf.Clamp01(_health / maxHealth) : 0f;
         public float HealthCurrent => _health;
+
+        /// <summary>MV-1457: remaining HP of a Shielded elite's breakable front plate (0 = none/broken).</summary>
+        public float PlateHealthCurrent { get; private set; }
         // MV-701: reads the archetype's own DisplayName (stamped by Apply) rather than switching on
         // Kind directly — a world's enemyOverrides can rename a kind (Scrap Rat) without this needing
         // its own second copy of the name table to keep in step.
@@ -5443,7 +5448,17 @@ namespace MaxWorlds.Enemies
             // hit flash. See ShieldedFrontArcMultiplier's own doc comment.
             if (ShieldedFrontArcMultiplier(info.Direction) <= 0f)
             {
-                HudSignals.EmitShieldDeflected(transform.position, info.Direction);
+                // MV-1457: the plate has its own HP; a front hit damages it, never the body. Overflow is
+                // not carried to the body. At 0 the plate falls off and this becomes a plain elite.
+                float plateHit = Mathf.Min(PlateHealthCurrent, info.Amount * DamageTakenMultiplier);
+                PlateHealthCurrent -= plateHit;
+                HudSignals.EmitDamage(transform.position, plateHit);
+                HudSignals.EmitShieldDeflected(transform.position, info.Direction); // spark + clang
+                if (PlateHealthCurrent <= 0f)
+                {
+                    PlateHealthCurrent = 0f;
+                    Affix = EliteAffix.None; // drops "SHIELDED" label, plate visual and the turn cap
+                }
                 return;
             }
             // MV-1284: a Shield Projector's dome deflects a player-side hit entirely (x0, never
