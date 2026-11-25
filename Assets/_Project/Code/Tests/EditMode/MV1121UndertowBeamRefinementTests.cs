@@ -114,9 +114,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             float w0 = line.widthCurve.Evaluate(0f) * line.widthMultiplier;
             float wMid = line.widthCurve.Evaluate(0.5f) * line.widthMultiplier;
-            float w1 = line.widthCurve.Evaluate(1f) * line.widthMultiplier;
+            // MV-1458: the last <=12% of the beam now tapers to a point, so constancy is asserted up to 85%.
+            float w85 = line.widthCurve.Evaluate(0.85f) * line.widthMultiplier;
             Assert.AreEqual(w0, wMid, 0.01f, $"{label} width must be constant from its first point to its mid point");
-            Assert.AreEqual(wMid, w1, 0.01f, $"{label} width must be constant from its mid point to its last point");
+            Assert.AreEqual(wMid, w85, 0.01f, $"{label} width must be constant from its mid point to 85% along");
             Assert.Greater(w0, 0f, $"{label} must have a positive width");
         }
 

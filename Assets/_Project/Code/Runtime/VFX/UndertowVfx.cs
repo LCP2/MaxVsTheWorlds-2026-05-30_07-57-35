@@ -153,6 +153,13 @@ namespace MaxWorlds.VFX
         private const float LateralTermWeight2 = 0.45f;
         private const float TaperExponent = 0.7f;
 
+        /// <summary>MV-1458: the last 0.6 m of the beam (or the last 12% of its length, whichever is
+        /// shorter) tapers to <see cref="TipWidthFraction"/> of full width — a slight point, not a flat cut.</summary>
+        private const float TipTaperMeters = 0.6f;
+        private const float TipTaperMaxFraction = 0.12f;
+        private const float TipWidthFraction = 0.15f;
+        private const int TipTaperKeys = 6;
+
         /// <summary>Vertical offset amplitude (spec: "a second, smaller vertical offset (0.25 m,
         /// different phase) makes it corkscrew"). Driven in quadrature with the primary lateral term
         /// (<see cref="LateralFreq1"/>/<see cref="LateralK1"/>, phase +90°) rather than a second
@@ -220,6 +227,7 @@ namespace MaxWorlds.VFX
 
             public Vector3[] Centerline;
             public bool CenterlineValid;
+            public float TaperFraction = -1f;
             public float BeamTime;
             public float Phase;
             public bool Streaming;
@@ -437,6 +445,8 @@ namespace MaxWorlds.VFX
             }
             beam.CenterlineValid = true;
 
+            ApplyTipTaper(beam, length);
+
             beam.Core.SetPositions(beam.Centerline);
             beam.Core.startColor = CoreColor;
             beam.Core.endColor = CoreColor;
@@ -468,6 +478,32 @@ namespace MaxWorlds.VFX
                 strand.startColor = c;
                 strand.endColor = c;
             }
+        }
+
+        /// <summary>MV-1458: eases every beam line's width from 100% to <see cref="TipWidthFraction"/> over
+        /// the last <c>min(0.6 m, 12% of length)</c>, through the width curve (widthMultiplier untouched).
+        /// The taper fraction is quantised so the curve is only rebuilt when it visibly changes.</summary>
+        private static void ApplyTipTaper(BeamVisual beam, float length)
+        {
+            float fraction = length > 1e-3f ? Mathf.Min(TipTaperMeters / length, TipTaperMaxFraction) : TipTaperMaxFraction;
+            fraction = Mathf.Round(fraction / 0.005f) * 0.005f;
+            if (Mathf.Approximately(fraction, beam.TaperFraction)) return;
+            beam.TaperFraction = fraction;
+
+            float start = 1f - fraction;
+            var curve = new AnimationCurve();
+            curve.AddKey(new Keyframe(0f, 1f, 0f, 0f));
+            curve.AddKey(new Keyframe(start, 1f, 0f, 0f));
+            for (int k = 1; k <= TipTaperKeys; k++)
+            {
+                float s = (float)k / TipTaperKeys;                      // 0..1 across the taper
+                float w = 1f - (1f - TipWidthFraction) * s * s;         // ease-in: slow start, quicker finish
+                curve.AddKey(new Keyframe(start + fraction * s, w));
+            }
+
+            beam.Core.widthCurve = curve;
+            beam.Sheath.widthCurve = curve;
+            for (int i = 0; i < beam.Strands.Length; i++) beam.Strands[i].widthCurve = curve;
         }
 
         /// <summary>The combined world-space renderer bounds of every renderer under
