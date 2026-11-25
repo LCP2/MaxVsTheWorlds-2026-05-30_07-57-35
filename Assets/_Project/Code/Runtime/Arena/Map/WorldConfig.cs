@@ -1269,6 +1269,9 @@ namespace MaxWorlds.Arena
         /// 0 (every config authored before this field existed) means never.</summary>
         public float eliteChancePct = 0f;
 
+        /// <summary>MV-1456 fail-first stub: flat, the pre-ramp behaviour.</summary>
+        public float EliteChancePctForArea(int areaIndex) => eliteChancePct;
+
         /// <summary>MV-1427: squad/post tactics (wake together, hold for the volley, bodyguard, hold the
         /// post, blink behind). Default false; true only in city_config.json.</summary>
         public bool squadTactics = false;
