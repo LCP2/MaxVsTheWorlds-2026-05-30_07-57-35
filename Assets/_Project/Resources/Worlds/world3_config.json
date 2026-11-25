@@ -734,6 +734,13 @@
     "w": 28,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a1_rocketcrate1",
+     "x": 11.5,
+     "z": 39.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -1136,6 +1143,13 @@
     "w": 28,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a2_rocketcrate1",
+     "x": 21.0,
+     "z": 9.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -1599,6 +1613,13 @@
     "w": 34,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a3_rocketcrate1",
+     "x": 57.0,
+     "z": 17.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -1943,6 +1964,13 @@
     "w": 38,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a4_rocketcrate1",
+     "x": 83.0,
+     "z": 10.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -2282,6 +2310,13 @@
     "w": 36,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a5_rocketcrate1",
+     "x": 110.5,
+     "z": 5.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -2632,6 +2667,13 @@
     "w": 36,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a6_rocketcrate1",
+     "x": 149.0,
+     "z": 14.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -3088,6 +3130,13 @@
     "w": 28,
     "d": 36
    },
+   "rocketCrates": [
+    {
+     "id": "a7_rocketcrate1",
+     "x": 186.5,
+     "z": 22.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -3567,6 +3616,13 @@
     "w": 28,
     "d": 36
    },
+   "rocketCrates": [
+    {
+     "id": "a8_rocketcrate1",
+     "x": 186.0,
+     "z": 68.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -4334,6 +4390,13 @@
     "w": 28,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a9_rocketcrate1",
+     "x": 187.0,
+     "z": 83.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -4704,6 +4767,13 @@
     "w": 28,
     "d": 36
    },
+   "rocketCrates": [
+    {
+     "id": "a10_rocketcrate1",
+     "x": 182.0,
+     "z": 118.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -5216,6 +5286,13 @@
     "w": 42,
     "d": 42
    },
+   "rocketCrates": [
+    {
+     "id": "a11_rocketcrate1",
+     "x": 159.0,
+     "z": 123.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -5644,6 +5721,13 @@
     "w": 42,
     "d": 42
    },
+   "rocketCrates": [
+    {
+     "id": "a12_rocketcrate1",
+     "x": 90.0,
+     "z": 117.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -6056,6 +6140,13 @@
     "w": 60,
     "d": 42
    },
+   "rocketCrates": [
+    {
+     "id": "a13_rocketcrate1",
+     "x": 71.0,
+     "z": 106.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -6599,6 +6690,13 @@
     "w": 44,
     "d": 44
    },
+   "rocketCrates": [
+    {
+     "id": "a14_rocketcrate1",
+     "x": 78.5,
+     "z": 72.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -7118,6 +7216,13 @@
     "w": 44,
     "d": 44
    },
+   "rocketCrates": [
+    {
+     "id": "a15_rocketcrate1",
+     "x": 128.0,
+     "z": 78.0
+    }
+   ],
    "garrisonDensity": "none",
    "cover": [
     {
@@ -7690,6 +7795,13 @@
     "w": 28,
     "d": 44
    },
+   "rocketCrates": [
+    {
+     "id": "a16_rocketcrate1",
+     "x": 156.0,
+     "z": 73.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -8223,6 +8335,13 @@
     "w": 34,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a17_rocketcrate1",
+     "x": 143.5,
+     "z": 46.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -8787,6 +8906,13 @@
     "w": 38,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a18_rocketcrate1",
+     "x": 125.0,
+     "z": 42.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -9391,6 +9517,13 @@
     "w": 36,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a19_rocketcrate1",
+     "x": 79.5,
+     "z": 43.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -9727,6 +9860,13 @@
     "w": 36,
     "d": 28
    },
+   "rocketCrates": [
+    {
+     "id": "a20_rocketcrate1",
+     "x": 51.0,
+     "z": 34.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -10388,6 +10528,13 @@
     "w": 28,
     "d": 44
    },
+   "rocketCrates": [
+    {
+     "id": "a21_rocketcrate1",
+     "x": 46.0,
+     "z": 74.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -10993,6 +11140,13 @@
     "w": 28,
     "d": 40
    },
+   "rocketCrates": [
+    {
+     "id": "a22_rocketcrate1",
+     "x": 11.0,
+     "z": 67.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -11623,6 +11777,13 @@
     "w": 28,
     "d": 40
    },
+   "rocketCrates": [
+    {
+     "id": "a23_rocketcrate1",
+     "x": 18.5,
+     "z": 134.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -12315,6 +12476,13 @@
     "w": 36,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a24_rocketcrate1",
+     "x": 18.0,
+     "z": 155.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -13164,6 +13332,13 @@
     "w": 36,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a25_rocketcrate1",
+     "x": 42.5,
+     "z": 165.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -13909,6 +14084,13 @@
     "w": 60,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a26_rocketcrate1",
+     "x": 128.0,
+     "z": 163.5
+    }
+   ],
    "garrisonDensity": "none",
    "cover": [
     {
@@ -14110,6 +14292,13 @@
     "w": 34,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a27_rocketcrate1",
+     "x": 139.0,
+     "z": 156.0
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -14964,6 +15153,13 @@
     "w": 34,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a28_rocketcrate1",
+     "x": 183.5,
+     "z": 167.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -16052,6 +16248,13 @@
     "w": 32,
     "d": 34
    },
+   "rocketCrates": [
+    {
+     "id": "a29_rocketcrate1",
+     "x": 219.5,
+     "z": 148.5
+    }
+   ],
    "garrisonDensity": "normal",
    "cover": [
     {
@@ -17096,6 +17299,13 @@
     "w": 44,
     "d": 56
    },
+   "rocketCrates": [
+    {
+     "id": "a30_rocketcrate1",
+     "x": 249.5,
+     "z": 160.0
+    }
+   ],
    "garrisonDensity": "none",
    "cover": [
     {
