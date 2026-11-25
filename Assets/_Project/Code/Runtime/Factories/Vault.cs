@@ -38,8 +38,8 @@ namespace MaxWorlds.Factories
         private const float LabelCharacterSize = 0.14f; // with fontSize 100 -> capitals ~1 m tall = ~48 px at 48 px/m (>= the 32 px world-icon floor)
         private const int LabelFontSize = 100;
         private const float PadlockPitchDegrees = 72f;  // faces the fixed ~72 degree top-down camera
-        private const int SupercellCount = 2;           // ticket: "2 Supercell"
-        private const int PowerCellCount = 6;           // ticket: "6 PowerCell"
+        public const int SupercellCount = 2;           // ticket: "2 Supercell"
+        public const int PowerCellCount = 6;           // ticket: "6 PowerCell"
         private const float CacheScatterRadius = 0.9f;  // same ring spacing DestructibleCover's own secret cache uses
 
         private static readonly Color ClosedIconColor = new Color(0.90f, 0.70f, 0.18f); // gold padlock

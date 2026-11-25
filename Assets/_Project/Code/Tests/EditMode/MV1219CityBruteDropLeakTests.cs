@@ -69,9 +69,12 @@ namespace MaxWorlds.Tests.EditMode
             foreach (Pickup p in Object.FindObjectsByType<Pickup>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
                 if (p.Kind == PickupKind.PowerCell) powerCells++;
 
-            Assert.AreEqual(1, powerCells,
-                "a City Brute must drop only the normal per-kill roll (1, the flat " +
-                "CellEconomyTuning.DefaultCellsPerLargeKill fallback with no live area context) — never " +
+            // MV-1455: the City pays a flat per-kill rate now (WorldDefinition.PartsPerLargeKill), so the first
+            // kill's roll is floor(rate) - not the old no-area-context fallback of 1. The leak this guards would
+            // add the Reef's guaranteed 2 on top of it.
+            int normalRoll = Mathf.FloorToInt(WorldCatalog.Get(WorldCatalog.IndexOf(WorldIds.City)).PartsPerLargeKill);
+            Assert.AreEqual(normalRoll, powerCells,
+                "a City Brute must drop only the normal per-kill roll - never " +
                 "the Reef-only Dredge Hulk guaranteed 2 extra (DredgeHulkGuaranteedPartDrops)");
         }
     }

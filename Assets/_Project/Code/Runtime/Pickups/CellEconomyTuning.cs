@@ -59,6 +59,14 @@ namespace MaxWorlds.Pickups
         /// <summary>MV-1359: World 5's idle-destroy cradle Parts payout (was 10 for every world).</summary>
         public const int DefaultWorld5CradlePayoutParts = 7;
 
+        /// <summary>MV-1455: the City's flat Parts per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.PartsPerLargeKill"/>).
+        /// Calibrated (MV-1455) against <see cref="WorldEconomyModel"/>.</summary>
+        public const float DefaultCityPartsPerLargeKill = 2.3f;
+
+        /// <summary>MV-1455: the City's rockets per large kill (<see cref="MaxWorlds.Arena.WorldDefinition.RocketsPerLargeKill"/>);
+        /// Lee tunes after playing.</summary>
+        public const float DefaultCityRocketsPerLargeKill = 0.8f;
+
         /// <summary>The per-area cell budget's world-scale multiplier (MV-1029) — read off
         /// <see cref="MaxWorlds.Arena.WorldCatalog"/>'s own row (MV-1142): 1.0 for World 1 and World 2
         /// (untouched: "Worlds 1 and 2 must not change"), <see cref="DefaultWorld3PartsMultiplier"/> (or

@@ -181,6 +181,10 @@ namespace MaxWorlds.Pickups
         private int _cellBudgetArea = -1;
         private float _cellAccum;
 
+        /// <summary>MV-1455: fractional carry for a world's flat <see cref="WorldDefinition.PartsPerLargeKill"/>
+        /// (run-scoped: a flat rate has no per-area budget to reset against).</summary>
+        private float _flatPartsAccum;
+
         /// <summary>MV-672: a running fractional accumulator for Power Cells (the new secondary
         /// currency) — same idiom as <see cref="_cellAccum"/>, but scoped to the whole run rather than
         /// per-area, since the drop ratio is a flat fraction of Parts drops, not an authored per-area
@@ -266,7 +270,13 @@ namespace MaxWorlds.Pickups
             // rate above — a running fractional accumulator, same idiom as _cellAccum, so a non-integer
             // ratio (the authored default, 0.1) still lands on the right long-run average instead of
             // rounding away every kill.
-            _powerCellSecondaryAccum += cells * DevTuning.Or(DevTuning.PowerCellDropRatio, CellEconomyTuning.DefaultPowerCellDropRatio);
+            // MV-1455: a world with its own rocket dial (the City) drops that many per large kill, whatever the
+            // Parts roll came to; every other world (RocketsPerLargeKill < 0) keeps the Parts-linked ratio.
+            // The Settings "Power Cell drop ratio" dev knob still wins when set.
+            float rocketsPerKill = WorldCatalog.Get(ResolvePlayedWorldIndex()).RocketsPerLargeKill;
+            _powerCellSecondaryAccum += rocketsPerKill >= 0f && !DevTuning.PowerCellDropRatio.HasValue
+                ? rocketsPerKill
+                : cells * DevTuning.Or(DevTuning.PowerCellDropRatio, CellEconomyTuning.DefaultPowerCellDropRatio);
             int powerCellSecondaries = Mathf.FloorToInt(_powerCellSecondaryAccum);
             _powerCellSecondaryAccum -= powerCellSecondaries;
             for (int i = 0; i < powerCellSecondaries; i++)
@@ -343,6 +353,17 @@ namespace MaxWorlds.Pickups
         private int ResolveCellDrop()
         {
             bool devOverride = DevTuning.CellsPerLargeKill.HasValue;
+
+            // MV-1455: a world with a flat per-kill rate (the City) skips the per-area budget entirely.
+            float flatRate = WorldCatalog.Get(ResolvePlayedWorldIndex()).PartsPerLargeKill;
+            if (flatRate > 0f && !devOverride)
+            {
+                _flatPartsAccum += flatRate;
+                int flat = Mathf.FloorToInt(_flatPartsAccum);
+                _flatPartsAccum -= flat;
+                return flat;
+            }
+
             int areaIndex = devOverride ? 0 : ResolveCurrentArea();
             int largeCountForArea = areaIndex > 0 ? ResolveLargeCountForArea(areaIndex) : 0;
 

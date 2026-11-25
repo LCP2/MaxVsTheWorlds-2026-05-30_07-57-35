@@ -302,6 +302,19 @@ namespace MaxWorlds.Arena
         /// world-start band, whose bottom is <see cref="DevStartCells"/> (the field keeps its name: since
         /// MV-1448 it is the floor of EVERY world start, not just a DEV one).</summary>
         public int RocketCapacity;
+
+        /// <summary>MV-1455: Parts one large kill drops in this world, a flat rate through the same
+        /// fractional accumulator the per-area budget uses (so 1.4 averages 1.4). 0 (the default) = this
+        /// world keeps today's per-area budget (<see cref="MaxWorlds.Pickups.CellEconomyTuning.CellsForArea"/> x
+        /// <see cref="PartsMultiplier"/>, spread over the area's solved large count). Only the City sets it.
+        /// Calibrated with <see cref="MaxWorlds.Pickups.WorldEconomyModel"/>.</summary>
+        public float PartsPerLargeKill;
+
+        /// <summary>MV-1455: Shoulder Rack rockets one large kill drops in this world (same fractional
+        /// accumulator, same <see cref="RocketCapacity"/> cap). Negative (the default, -1) = today's rule:
+        /// 1 rocket per Part dropped (<see cref="MaxWorlds.Pickups.CellEconomyTuning.DefaultPowerCellDropRatio"/>),
+        /// so every world but the City reproduces its current behaviour exactly.</summary>
+        public float RocketsPerLargeKill = -1f;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -742,6 +755,10 @@ namespace MaxWorlds.Arena
                 DevStartParts = 30,
                 DevStartCells = 20,
                 RocketCapacity = 30,
+                // MV-1455 (Lee, 25 Nov): one flat rate per robot instead of the rising per-area budget, set
+                // so the world's total Parts max every RIG node by a30 (WorldEconomyModel / MV1455WorldEconomyTests).
+                PartsPerLargeKill = CellEconomyTuning.DefaultCityPartsPerLargeKill,
+                RocketsPerLargeKill = CellEconomyTuning.DefaultCityRocketsPerLargeKill,
             },
             new WorldDefinition
             {

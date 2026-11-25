@@ -36,7 +36,7 @@ namespace MaxWorlds.Factories
         private const float HairlineWorldWidth = 0.04f;       // "~2 px wide at the play camera" (48 px/m)
         private const float HairlineHeightFraction = 0.7f;    // "60-80% of the piece's height"
         private static readonly Color HairlineColor = new Color(0.46f, 0.44f, 0.41f); // subtly darker than IntactColor, not as dark as DamagedColor — findable, not obvious
-        private const int SecretPowerCellCount = 4;            // ticket: "4 PickupKind.PowerCell"
+        public const int SecretPowerCellCount = 4;            // ticket: "4 PickupKind.PowerCell"
         private const float SecretScatterRadius = 0.9f;        // same ring spacing PickupDirector's own ScatterRadius uses
 
         private DestructibleHealth _health;
