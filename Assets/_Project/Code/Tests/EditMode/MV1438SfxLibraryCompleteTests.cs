@@ -24,8 +24,9 @@ namespace MaxWorlds.Tests.EditMode
                 int n = 0;
                 for (int i = 1; i <= 3; i++)
                     if (Resources.Load<AudioClip>("Audio/Sfx/" + cue + "_" + i) != null) n++;
-                int expected = (cue == Cue.HoseLoop || cue == Cue.UndertowLoop) ? 1 : 3;
-                if (cue == Cue.HoseLoop || cue == Cue.UndertowLoop) n = Resources.Load<AudioClip>("Audio/Sfx/" + cue + "_1") != null ? 1 : 0;
+                bool isLoop = cue == Cue.HoseLoop || cue == Cue.UndertowLoop || cue == Cue.RigHum;   // MV-1444: RigHum is a one-take loop
+                int expected = isLoop ? 1 : 3;
+                if (isLoop) n = Resources.Load<AudioClip>("Audio/Sfx/" + cue + "_1") != null ? 1 : 0;
                 if (n != expected) problems.AppendLine($"{cue}: {n} generated variant clips, expected {expected}");
                 Assert.AreEqual(expected, SfxCueLibrary.ResolveVariants(cue).Length, $"{cue} resolved variant count");
             }

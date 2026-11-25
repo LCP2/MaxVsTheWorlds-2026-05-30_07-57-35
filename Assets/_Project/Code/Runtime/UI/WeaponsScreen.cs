@@ -245,7 +245,13 @@ namespace MaxWorlds.UI
         private readonly List<Image> _ceremonyChildGlows = new List<Image>();   // stage d: one per child, pooled
         private Button _ceremonySkipCatcher;            // full-board invisible tap target while a ceremony plays
 
-        private bool _open;
+        private bool _openField;
+        // MV-1444: every path that opens/closes THE RIG goes through here, so the RIG soundscape follows.
+        private bool _open
+        {
+            get => _openField;
+            set { _openField = value; MaxWorlds.Audio.RigAudioMix.RigOpen = value; }
+        }
         private float _prevTimeScale = 1f;
 
         /// <summary>Is THE RIG currently up (and the game paused)?</summary>
@@ -416,6 +422,7 @@ namespace MaxWorlds.UI
             {
                 Time.timeScale = _prevTimeScale;
                 ModalFrameRateGate.Exit();
+                MaxWorlds.Audio.RigAudioMix.RigOpen = false;
             }
             if (_canvas != null) Destroy(_canvas.gameObject);
         }

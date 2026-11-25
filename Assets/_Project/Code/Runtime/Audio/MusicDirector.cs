@@ -257,6 +257,7 @@ namespace MaxWorlds.Audio
 
             float master = Mathf.Clamp01(DevTuning.Or(DevTuning.MusicVolume, DefaultMusicVolume));
             if (!IsMusicOn) master = 0f;   // MV-1009: OFF stops the music source immediately, same frame
+            master *= RigAudioMix.GameGain;   // MV-1444: silent while the RIG is open; sources keep playing, so no restart
 
             if (_generatedModeActive)
             {

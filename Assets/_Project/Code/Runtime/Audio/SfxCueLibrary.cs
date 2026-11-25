@@ -66,6 +66,9 @@ namespace MaxWorlds.Audio
 
             // MV-1426: an ARC STRIKER's lightning crack - appended, never inserted.
             ArcStrikeCrack,
+
+            // MV-1444: the RIG's own looping electrical hum - appended, never inserted.
+            RigHum,
         }
 
         public static readonly Cue[] AllCues = (Cue[])Enum.GetValues(typeof(Cue));
@@ -118,6 +121,7 @@ namespace MaxWorlds.Audio
             { Cue.ShieldBlocked, "Blocked hit" },
             { Cue.CanisterExplosion, "Canister explosion" },
             { Cue.ArcStrikeCrack, "Arc strike crack" },
+            { Cue.RigHum, "RIG hum" },
         };
 
         /// <summary>Voices per second the table caps a cue at. A cue with no explicit table limit
@@ -419,6 +423,13 @@ namespace MaxWorlds.Audio
             [Cue.TractorBeam] = new[]
             {
                 P(SfxWaveform.Saw, freq: 180f, vibDepth: 20f, vibRate: 6f, attack: 0.05f, sustain: 0.3f, decay: 0.05f, lowPass: 2200f, volume: 0.4f),
+            },
+
+            // MV-1444: fallback only (the generated RigHum loop replaces it) - a low 60 Hz saw with a slow
+            // 0.33 Hz wobble, looped by SfxDirector's RIG hook like HoseLoop/UndertowLoop.
+            [Cue.RigHum] = new[]
+            {
+                P(SfxWaveform.Saw, freq: 60f, vibDepth: 4f, vibRate: 0.33f, attack: 0.05f, sustain: 0.3f, decay: 0.05f, lowPass: 400f, volume: 0.4f),
             },
 
             // "gas vent hiss/burst" — shares DamageDealt's noise-tss shape, longer and lower.

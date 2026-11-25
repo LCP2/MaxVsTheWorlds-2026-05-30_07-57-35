@@ -375,6 +375,14 @@
             "loop": true,
             "variants": 1,
             "dir": "Ambience"
+        },
+        {
+            "id": "RigHum",
+            "prompt": "seamless loop, low warm electrical hum of current through an old resistor, very slow gentle pulsing (about one swell every 3 seconds), faint crackle, workshop-quiet, no melody, no sudden sounds",
+            "durationSeconds": 24.0,
+            "promptInfluence": 0.4,
+            "loop": true,
+            "variants": 1
         }
     ],
     "music": [

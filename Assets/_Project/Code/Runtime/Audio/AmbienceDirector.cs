@@ -49,7 +49,7 @@ namespace MaxWorlds.Audio
         {
             if (_source == null) return;   // MV-1441: bed source destroyed under us
             TickWorld();
-            _source.volume = Mathf.Clamp01(DevTuning.Or(DevTuning.AmbienceVolume, DefaultAmbienceVolume));
+            _source.volume = Mathf.Clamp01(DevTuning.Or(DevTuning.AmbienceVolume, DefaultAmbienceVolume)) * RigAudioMix.GameGain;   // MV-1444
         }
 
         private void TickWorld()

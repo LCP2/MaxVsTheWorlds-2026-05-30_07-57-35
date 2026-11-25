@@ -67,6 +67,7 @@ namespace MaxWorlds.Audio
         }
 
         private LoopVoice[] _loops;
+        private AudioSource _rigHum;   // MV-1444
 
         private readonly HashSet<Button> _wiredButtons = new HashSet<Button>();
         private UnityEngine.Events.UnityAction _onButtonClicked;
@@ -105,7 +106,35 @@ namespace MaxWorlds.Audio
                 MakeLoop(Cue.UndertowLoop, "SfxUndertowLoop", FindIsEmitting<Undertow>(u => u.IsEmitting)),
             };
 
+            // MV-1444: the RIG's hum - on the Ui bus, driven by RigAudioMix rather than a weapon.
+            var humGo = new GameObject("SfxRigHum");
+            humGo.transform.SetParent(transform, false);
+            _rigHum = humGo.AddComponent<AudioSource>();
+            _rigHum.spatialBlend = 0f;
+            _rigHum.playOnAwake = false;
+            _rigHum.loop = true;
+            _rigHum.volume = 0f;
+            _rigHum.clip = _clips[Cue.RigHum];
+            AudioBus.Route(_rigHum, AudioBusId.Ui);
+
             _onButtonClicked = OnAnyButtonClicked;
+        }
+
+        /// <summary>MV-1444: the RIG hum's source (test/inspection access).</summary>
+        public AudioSource RigHumSource => _rigHum;
+
+        /// <summary>MV-1444: one frame of the RIG soundscape - advances the shared fade and applies the hum.</summary>
+        public void TickRigAudio(bool rigOpen, float dt)
+        {
+            RigAudioMix.Advance(rigOpen, dt);
+            if (_rigHum == null) return;
+            float v = IsCueMuted(Cue.RigHum) ? 0f : RigAudioMix.HumGain * RigAudioMix.HumTargetVolume;
+            _rigHum.volume = v;
+            if (v <= 0f)
+            {
+                if (_rigHum.isPlaying) _rigHum.Stop();
+            }
+            else if (!_rigHum.isPlaying) _rigHum.Play();
         }
 
         private void OnEnable()
@@ -172,6 +201,7 @@ namespace MaxWorlds.Audio
         {
             if (_loops != null) foreach (var loop in _loops) if (loop.Source != null) UpdateLoop(loop);
             ScanForNewButtons();
+            TickRigAudio(RigAudioMix.RigOpen, Time.unscaledDeltaTime);   // MV-1444
 
             // MV-1437: advance ducking on real (unscaled) time and push it to the mixer.
             float before = _ducking.CurrentDb;
