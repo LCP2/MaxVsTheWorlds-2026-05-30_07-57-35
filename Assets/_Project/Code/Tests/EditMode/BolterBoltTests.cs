@@ -212,5 +212,33 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(targetGo);
             }
         }
+
+        // ---------------------------------------------------------------- MV-1461: bolt readable on a dark deck
+
+        [Test]
+        public void AnOrdinaryBoltIsUnlitAdditiveWithAShortFadingTrail_MV1461()
+        {
+            BolterBolt bolt = BolterBolt.Fire(Vector3.zero, null, 14f, 9f, 0.35f);
+            try
+            {
+                var meshes = bolt.GetComponentsInChildren<MeshRenderer>();
+                Assert.Greater(meshes.Length, 0, "test setup: the bolt has no mesh renderers");
+                foreach (var r in meshes)
+                {
+                    Material m = r.sharedMaterial;
+                    Assert.IsNotNull(m, r.name + " has no material");
+                    Assert.IsTrue(m.HasProperty("_DstBlend") && Mathf.Approximately(m.GetFloat("_DstBlend"), (float)UnityEngine.Rendering.BlendMode.One),
+                        r.name + " resolved material is not additive/unlit (shader " + m.shader.name + ") - scene lights would darken it");
+                }
+
+                var trail = bolt.GetComponent<TrailRenderer>();
+                Assert.IsNotNull(trail, "the bolt has no trail renderer");
+                Assert.That(trail.time, Is.InRange(0.25f, 0.35f), "resolved trail time (s)");
+            }
+            finally
+            {
+                Object.DestroyImmediate(bolt.gameObject);
+            }
+        }
     }
 }
