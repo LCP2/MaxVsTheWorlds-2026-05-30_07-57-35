@@ -70,7 +70,12 @@ namespace MaxWorlds.VFX
     public sealed class WorldFinaleGate : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
+        private static void Install() => EnsureInstalled();
+
+        /// <summary>MV-1454: AfterSceneLoad runs once, at app boot, so a world entered by a later scene
+        /// reload relied on this finding a gate that was already there. <c>BackyardPath.Awake</c> calls
+        /// this once the map, exit gate and area director exist.</summary>
+        public static void EnsureInstalled()
         {
             if (FindFirstObjectByType<WorldFinaleGate>() != null) return;
 

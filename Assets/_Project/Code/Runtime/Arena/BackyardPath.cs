@@ -174,6 +174,10 @@ namespace MaxWorlds.Arena
             _worldRunner.Configure(cfg, _map, _build, _areaDirector);
 
             WireAreaGatesToPopulation();
+
+            // MV-1454: the finale directors must exist for THIS world however it was entered.
+            MaxWorlds.Bosses.BossVictoryPayoff.EnsureInstalledFor(cfg);
+            MaxWorlds.VFX.WorldFinaleGate.EnsureInstalled();
         }
 
         /// <summary>Which world the active save is up to (MV-687) — 0 with no active profile (tests,

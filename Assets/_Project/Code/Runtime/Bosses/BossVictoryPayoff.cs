@@ -45,6 +45,20 @@ namespace MaxWorlds.Bosses
             new GameObject("BossVictoryPayoff").AddComponent<BossVictoryPayoff>();
         }
 
+        /// <summary>MV-1454: AfterSceneLoad above runs once, at app boot -- a world entered by a scene
+        /// reload (a crossing, a RESUME, a DEV start into the City) never re-runs it, and it only knew two
+        /// boss classes, so GRIDLOCK's death dropped no Weapon Core and the City's exit never opened.
+        /// <c>BackyardPath.Awake</c> calls this once the world's own config is known: present whenever
+        /// the world's final area authors a boss of ANY kind (no class list to keep in step).</summary>
+        public static void EnsureInstalledFor(WorldConfig cfg)
+        {
+            if (cfg?.dials == null) return;
+            if (FindFirstObjectByType<BossVictoryPayoff>() != null) return;
+            WorldArea finalArea = cfg.AreaByIndex(cfg.dials.areaCount);
+            if (finalArea == null || finalArea.Bosses().Length <= 0) return;
+            new GameObject("BossVictoryPayoff").AddComponent<BossVictoryPayoff>();
+        }
+
         // ---- tunables (public so a test can shorten the wait, and so the beat is easy to retune) ----
 
         /// <summary>How many parts fling out. The ticket asks for at least four; five is one of each
