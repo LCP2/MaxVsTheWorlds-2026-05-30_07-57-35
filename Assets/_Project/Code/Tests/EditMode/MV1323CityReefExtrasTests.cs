@@ -292,7 +292,8 @@ namespace MaxWorlds.Tests.EditMode
                 {
                     ["a3_c4"] = new PreExistingCoverFields(42.25f, 37.0f, 1.2f, 1.0f, 1.2f, "box", "pallet"),
                     ["a9_c17"] = new PreExistingCoverFields(85.57f, 136.2f, 1.9f, 1.4f, 0.5f, "box", "roadSign"),
-                    ["a13_c28"] = new PreExistingCoverFields(115.15f, 208.53f, 0.6f, 0.9f, 0.6f, "cylinder", "bin"),
+                    ["a13_c28"] = new PreExistingCoverFields(116.15f, // MV-1450: moved 1 m east, clear of the translated maze wall
+                         208.53f, 0.6f, 0.9f, 0.6f, "cylinder", "bin"),
                     ["a17_c5"] = new PreExistingCoverFields(87.45f, 289.0f, 1.7f, 1.0f, 0.6f, "box", "barrier"),
                     ["a23_c10"] = new PreExistingCoverFields(219f, 393.0f, 0.65f, 1.0f, 0.6f, "box", "aBoard"),
                     ["a27_c16"] = new PreExistingCoverFields(200.0f, 470.5f, 2.0f, 1.0f, 0.6f, "box", "barrier"),
