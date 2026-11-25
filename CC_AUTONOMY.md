@@ -88,6 +88,8 @@ cc-verify.bat editmode 1
 cc-verify.bat editmode 2
 ...
 cc-verify.bat editmode <N>
+cc-verify.bat full 1
+cc-verify.bat full 2
 cc-verify.bat build
 cc-verify.bat finish
 ```
@@ -100,13 +102,14 @@ cc-verify.bat finish
   jointly partition every MV-ticket number up to 9999 and the full A-Z + `_` first-character space, so a
   test in a new namespace or fixture still always lands in exactly one shard. Find `N` by counting
   non-empty lines in `cc-verify-shards.txt`; run every shard 1..N. Writes `Logs\editmode-results-<n>.xml`.
+* `full <k>` (k = 1, 2; MV-1468) — half of the EditMode suite run many-per-process in ONE Unity process, as `qa.yml` does, so cross-test pollution shows up locally. `full 1` = the tests of shards 2, 3, 5 and 6 (the slow fixtures, split for balance), `full 2` = every other shard, via an alternation of the explicit shard patterns. Each must finish under 450s. Writes `Logs\editmode-results-full-<k>.xml`. If a test fails here but passes alone and in its shard, it is pollution - bisect per the "When to run what" notes, do not retry.
 * `build` — the old steps 3-6 (Windows standalone build, log assertions, frame-time gate, UI conformance).
-* `finish` — the merge verdict. Exits 0 only when every part above has a stamp matching the exact current
+* `finish` — the merge verdict. Exits 0 only when every part above (including `full 1` and `full 2`) has a stamp matching the exact current
   tree (HEAD sha + a hash of `git status --porcelain` and `git diff`, excluding `docs/press/` and
   `ProjectSettings/ProjectSettings.asset` - both are regenerated OUTPUTS of the `build` part itself
   (screenshot/report PNGs, and Unity's own timestamp-stamped `bundleVersion`), not source, and including
   them made every earlier part go stale the instant `build` ran, see MV-1271's fix comment), every shard's
-  results file has `total > 0` and `failed == 0`, and no test full name appears in two shards. Exits 1 and
+  results file has `total > 0` and `failed == 0`, no test full name appears in two shards, and every test in the `editmode <n>` results appears in exactly one of the `full <k>` results. Exits 1 and
   names the missing, stale, or failing part otherwise. **`cc-verify.bat finish` exiting 0 is what gates
   every merge** — not the individual parts passing.
 

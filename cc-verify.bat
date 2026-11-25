@@ -4,7 +4,7 @@ REM   cc-verify (MV-game / Unity 6 LTS)
 REM
 REM   Runs after every code change. Exit 0 = pass.
 REM   Target runtime: no-argument form runs everything in one go, as before,
-REM   with no fixed budget. Each PART (compile / editmode <n> / build /
+REM   with no fixed budget. Each PART (compile / editmode <n> / full <k> / build /
 REM   finish) is a separate tool call and must finish under 450s on the dev
 REM   PC - see MV-1271. Steps 1-4 ~90s; step 5 runs the just-built standalone
 REM   player for a real frame-time sample (MV-494).
@@ -13,7 +13,8 @@ REM   Usage:
 REM     cc-verify.bat                 - full run, exactly as before (humans, CI-adjacent callers)
 REM     cc-verify.bat compile         - step 1 only
 REM     cc-verify.bat editmode <n>    - EditMode shard n of N (see cc-verify-shards.txt)
-REM     cc-verify.bat full            - the WHOLE EditMode suite in ONE Unity process, as qa.yml runs it (MV-1441)
+REM     cc-verify.bat full <1|2>      - half of the EditMode suite (shards 2,3,5,6, then the rest) in ONE
+REM                                     Unity process each, many-per-process as qa.yml runs it (MV-1441, MV-1468)
 REM     cc-verify.bat build           - steps 3-6
 REM     cc-verify.bat finish          - merge verdict: all parts fresh + green on this tree
 REM
@@ -53,7 +54,7 @@ if /i "%PART%"=="editmode" goto :PART_EDITMODE
 if /i "%PART%"=="full"     goto :PART_FULL
 if /i "%PART%"=="build"    goto :PART_BUILD
 if /i "%PART%"=="finish"   goto :PART_FINISH
-echo [cc-verify] unknown part '%PART%' - expected compile / editmode ^<n^> / build / finish, or no argument.
+echo [cc-verify] unknown part '%PART%' - expected compile / editmode ^<n^> / full ^<1^|2^> / build / finish, or no argument.
 exit /b 2
 
 REM ============================================================
@@ -244,26 +245,46 @@ exit /b 0
 :PART_FULL
 REM   MV-1441: CI (qa.yml) runs every EditMode test in ONE Unity process; the shards each get a fresh
 REM   process, so state leaked by one test into a later one (static event handlers, cached refs to
-REM   destroyed objects) never surfaces locally. This part runs the whole suite unfiltered in one
-REM   process, and `finish` requires it green on the exact tree.
+REM   destroyed objects) never surfaces locally. MV-1468: the whole suite in one process took 584-600s,
+REM   over the 450s part budget, so it runs as two halves - `full 1` = shards 2,3,5,6, `full 2` =
+REM   all the others (balanced by measured time) - each ONE process over the alternation of the explicit shard patterns. `finish`
+REM   requires both green on the exact tree and that together they cover every test exactly once.
 call :CHECK_LOCK
 if errorlevel 1 exit /b 3
-set "RESULTS=%PROJECT%\Logs\editmode-results-full.xml"
+set "HALF=%~2"
+if not "%HALF%"=="1" if not "%HALF%"=="2" (
+  echo [cc-verify] usage: cc-verify.bat full ^<1^|2^>
+  exit /b 2
+)
+set "RESULTS=%PROJECT%\Logs\editmode-results-full-%HALF%.xml"
 if exist "%RESULTS%" del /f /q "%RESULTS%"
-echo [full] whole EditMode suite, one process ...
+del /f /q "%PROJECT%\Logs\cc-verify-part-full-%HALF%.stamp" 2>nul
+echo [full %HALF%/2] half of the EditMode suite, one process ...
 call :TIMER_START
-start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode-full.log"
-set "RC=%ERRORLEVEL%"
+REM   Same ^ / ! quoting rule as :PART_EDITMODE - use the for /f metavariable directly, delayed expansion off.
+set "RC0=9"
+set "RAN=0"
+setlocal disabledelayedexpansion
+for /f "usebackq delims=" %%F in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJECT%\cc-verify-shard-filter.ps1" -ShardsFile "%SHARDS%" -Half %HALF%`) do (
+  start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testFilter "%%F" -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode-full-%HALF%.log"
+  set "RC0=%ERRORLEVEL%"
+  set "RAN=1"
+)
+endlocal & set "RC=%RC0%" & set "RAN=%RAN%"
 call :TIMER_ELAPSED
 echo        elapsed: %ELAPSED%s
-if not "%RC%"=="0" (
-  echo        FAIL ^(exit %RC%^) - see Logs\editmode-full.log
+if "%RAN%"=="0" (
+  echo        FAIL - could not resolve the -testFilter regex for full %HALF%
   exit /b 1
 )
-call :CHECK_SHARD_RESULTS full
+if not "%RC%"=="0" (
+  echo        FAIL ^(exit %RC%^) - see Logs\editmode-full-%HALF%.log
+  exit /b 1
+)
+call :CHECK_SHARD_RESULTS full-%HALF%
 if errorlevel 1 exit /b 1
 call :CALC_TREESTATE
-call :WRITE_STAMP full
+call :WRITE_STAMP full-%HALF%
 echo        ok
 exit /b 0
 
@@ -390,15 +411,19 @@ for /l %%N in (1,1,%TOTALSHARDS%) do (
   if errorlevel 1 set "VERDICTFAIL=1"
 )
 
-call :CHECK_PART_STAMP full
-if errorlevel 1 set "VERDICTFAIL=1"
-call :CHECK_SHARD_RESULTS full
-if errorlevel 1 set "VERDICTFAIL=1"
+for %%K in (1,2) do (
+  call :CHECK_PART_STAMP full-%%K
+  if errorlevel 1 set "VERDICTFAIL=1"
+  call :CHECK_SHARD_RESULTS full-%%K
+  if errorlevel 1 set "VERDICTFAIL=1"
+)
 
 call :CHECK_PART_STAMP build
 if errorlevel 1 set "VERDICTFAIL=1"
 
 call :CHECK_SHARD_OVERLAP
+call :CHECK_FULL_UNION
+if errorlevel 1 set "VERDICTFAIL=1"
 
 if "%VERDICTFAIL%"=="1" (
   echo === cc-verify finish: FAIL ===
@@ -465,6 +490,29 @@ set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
   echo [finish] FAIL - a test full name appears in more than one shard:
   type "%PROJECT%\Logs\finish-overlap.txt"
+  exit /b 1
+)
+exit /b 0
+
+:CHECK_FULL_UNION
+REM   MV-1468: every test full name in the editmode <n> results must appear in exactly one full <k> result.
+REM   Skipped (already reported) when a full results file is missing.
+set "ONEFILES="
+for /l %%N in (1,1,%TOTALSHARDS%) do set "ONEFILES=!ONEFILES!%PROJECT%\Logs\editmode-results-%%N.xml;"
+set "F1=%PROJECT%\Logs\editmode-results-full-1.xml"
+set "F2=%PROJECT%\Logs\editmode-results-full-2.xml"
+if not exist "%F1%" exit /b 0
+if not exist "%F2%" exit /b 0
+powershell -NoProfile -Command ^
+  "$names = @{}; foreach ($f in '%F1%','%F2%') { $x = [xml](Get-Content -LiteralPath $f -Raw); foreach ($c in $x.SelectNodes('//test-case')) { $names[$c.fullname] += 1 } };" ^
+  "$bad = $false; foreach ($f in '%ONEFILES%'.Trim(';').Split(';')) { if (-not (Test-Path -LiteralPath $f)) { continue }; $x = [xml](Get-Content -LiteralPath $f -Raw);" ^
+  "  foreach ($c in $x.SelectNodes('//test-case')) { if (-not $names[$c.fullname]) { Write-Output ('MISSING from full 1 and full 2: ' + $c.fullname); $bad = $true } } };" ^
+  "foreach ($k in $names.Keys) { if ($names[$k] -gt 1) { Write-Output ('IN BOTH full 1 and full 2 (or twice): ' + $k); $bad = $true } };" ^
+  "if ($bad) { exit 1 } else { exit 0 }" > "%PROJECT%\Logs\finish-full-union.txt" 2>&1
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo [finish] FAIL - full 1 + full 2 do not cover every editmode test exactly once:
+  type "%PROJECT%\Logs\finish-full-union.txt"
   exit /b 1
 )
 exit /b 0
