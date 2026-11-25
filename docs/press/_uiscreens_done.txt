@@ -4,7 +4,7 @@ probe6 (outside-background==composited-base): FAIL — expected #000000, got #16
 -- conformance: rig-16x9 (1920x1080) --
 PASS node-position: 4/4 nodes present at their json coordinate
 PASS hex-orientation: 0/0 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.659 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.709 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 3/3 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor
@@ -15,7 +15,7 @@ rig-phone.png (2340x1080)
 -- conformance: rig-phone (2340x1080) --
 PASS node-position: 4/4 nodes present at their json coordinate
 PASS hex-orientation: 0/0 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.591 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.687 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 3/3 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor
@@ -24,7 +24,7 @@ rig-ipad-mini.png (1078x815)
 -- conformance: rig-ipad-mini (1078x815) --
 PASS node-position: 4/4 nodes present at their json coordinate
 PASS hex-orientation: 0/0 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.66 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.715 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 3/3 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor
@@ -48,7 +48,7 @@ rig-world2-16x9.png (1920x1080)
 -- conformance: rig-world2-16x9 (1920x1080) --
 PASS node-position: 5/5 nodes present at their json coordinate
 PASS hex-orientation: 0/0 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.627 unlit=0.378 ratio=1.659 (need >=1.5)
+PASS family-contrast: lit=0.676 unlit=0.417 ratio=1.62 (need >=1.5)
 PASS glow-containment: 1/1 owned nodes under 25% annulus ink
 PASS colour-probes: 1/1 sampled points match rig_board.json
 PASS glyph-height: 0/0 category labels clear 18px-at-ref floor

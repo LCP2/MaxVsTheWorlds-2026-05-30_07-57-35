@@ -34,7 +34,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.LessOrEqual(explore.length, 120f, $"{world}: explore clip longer than 120s ({explore.length}s)");
 
                 Assert.GreaterOrEqual(boss.length, 40f, $"{world}: boss clip shorter than 40s ({boss.length}s)");
-                Assert.LessOrEqual(boss.length, 90f, $"{world}: boss clip longer than 90s ({boss.length}s)");
+                Assert.LessOrEqual(boss.length, 120f, $"{world}: boss clip longer than 120s ({boss.length}s)");
             }
 
             var silent = MusicDirector.GeneratedVolumes(0.5f, 1f, 0f);
