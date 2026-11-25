@@ -47,8 +47,46 @@ namespace MaxWorlds.VFX
         /// <summary>MV-1064 spec: "SheathWidth 0.35 -&gt; 0.70 m" (keep white-hot core, cyan sheath).</summary>
         public const float SheathWidth = 0.70f;
 
-        /// <summary>MV-1064 spec: "5 strands (was 3)".</summary>
+        /// <summary>MV-1064 spec: "5 strands (was 3)" - the count at POWER 0; MV-1464 adds one per 4 levels.</summary>
         public const int StrandCount = 5;
+
+        /// <summary>MV-1464: strands built per beam (5 + floor(8/4)); how many are ACTIVE depends on POWER.</summary>
+        private const int MaxStrandCount = 7;
+
+        /// <summary>MV-1464: POWER (p_dmg) levels the look scales over (0..8).</summary>
+        public const int MaxPowerLevel = 8;
+
+        /// <summary>MV-1464: escaping arcs built per beam (floor(8/2)); active count is floor(L/2).</summary>
+        private const int MaxArcs = 4;
+        private const int ArcSegments = 14;
+        private const float StrandReachMin = 0.25f;
+        private const float StrandReachFadeFraction = 0.06f;
+        private const float SheathAlphaMin = 0.55f, SheathAlphaMax = 0.85f;
+        private const float StrandAlphaMin = 0.6f, StrandAlphaMax = 0.95f;
+        private const float StrandWidthGrowth = 1.5f;   // 2.0 -> 3.0 px-equivalent
+        private const float ArcSpanMin = 0.08f, ArcSpanMax = 0.16f;
+        private const float ArcRiseMin = 0.5f, ArcRiseMax = 0.9f;
+        private const float ArcReseedMin = 0.15f, ArcReseedMax = 0.3f;
+        private const float ArcLandChance = 2f / 3f;
+        private const float SparkIntervalSeconds = 0.25f;
+        private static readonly Color SheathHotTint = new Color(0.784f, 0.969f, 1f, 1f);   // #C8F7FF
+        private static readonly Color ArcInnerColor = new Color(1f, 0.902f, 0.761f, 1f);   // #FFE6C2
+        private static readonly Color[] EmberColorsL0 =
+        {
+            new Color(0.910f, 0.529f, 0.247f, 1f),   // #E8873F
+            new Color(0.851f, 0.314f, 0.235f, 1f),   // #D9503C
+            new Color(0.914f, 0.702f, 0.337f, 1f),   // #E9B356
+        };
+        private static readonly Color[] EmberColorsL8 =
+        {
+            new Color(1f, 0.353f, 0f, 1f),           // #FF5A00
+            new Color(1f, 0.118f, 0.039f, 1f),       // #FF1E0A
+            new Color(1f, 0.761f, 0.102f, 1f),       // #FFC21A
+        };
+
+        /// <summary>MV-1464: the current POWER (p_dmg) level 0..8 the beam's look scales with.
+        /// Set by the owner each frame (Undertow) or directly by a test; purely visual.</summary>
+        public int PowerLevel { get; set; }
 
         /// <summary>MV-1121: "The strands wrap at a constant 0.24 m from the centre-line (so the bundle
         /// stays inside the 0.70 m sheath)" — down from MV-1064's 0.45m, which peaked only at mid-beam;
@@ -222,6 +260,11 @@ namespace MaxWorlds.VFX
             public LineRenderer Sheath;
             public LineRenderer[] Strands;
             public LineRenderer[] Coils;
+            public LineRenderer[] Arcs;
+            public LineRenderer[] ArcCores;
+            public ArcState[] ArcStates;
+            public float Scale = 1f;
+            public float SparkTimer;
             public LineRenderer LockRingOuter;
             public LineRenderer LockRingInner;
 
@@ -242,7 +285,15 @@ namespace MaxWorlds.VFX
             public float LockRadius;
         }
 
+        /// <summary>MV-1464: one escaping arc's current (re-seeded) shape.</summary>
+        private struct ArcState
+        {
+            public float Timer, StartFrac, SpanFrac, Rise, Side;
+            public bool Lands;
+        }
+
         private BeamVisual[] _beams;
+        private VfxBurst _impactSparks;
         private VfxBurst _muzzleFlare;
         private VfxBurst _latchSparks;
         private VfxBurst _latchFlare;
@@ -282,9 +333,19 @@ namespace MaxWorlds.VFX
                 beam.Core = BuildLine($"UndertowCore{suffix}", CoreWidth * scale, lineGlow, positionCount: Segments + 1);
                 beam.Centerline = new Vector3[Segments + 1];
 
-                beam.Strands = new LineRenderer[StrandCount];
-                for (int i = 0; i < StrandCount; i++)
+                beam.Scale = scale;
+                beam.Strands = new LineRenderer[MaxStrandCount];
+                for (int i = 0; i < MaxStrandCount; i++)
                     beam.Strands[i] = BuildLine($"UndertowStrand{suffix}{i}", StrandWidth * scale, lineGlow, positionCount: Segments + 1);
+
+                beam.Arcs = new LineRenderer[MaxArcs];
+                beam.ArcCores = new LineRenderer[MaxArcs];
+                beam.ArcStates = new ArcState[MaxArcs];
+                for (int i = 0; i < MaxArcs; i++)
+                {
+                    beam.Arcs[i] = BuildLine($"UndertowArc{suffix}{i}", StrandWidth * scale, lineGlow, positionCount: ArcSegments + 1);
+                    beam.ArcCores[i] = BuildLine($"UndertowArcCore{suffix}{i}", StrandWidth * 0.4f * scale, lineGlow, positionCount: ArcSegments + 1);
+                }
 
                 beam.Coils = new LineRenderer[CoilCount];
                 for (int i = 0; i < CoilCount; i++)
@@ -299,6 +360,7 @@ namespace MaxWorlds.VFX
                 _beams[bi] = beam;
             }
 
+            _impactSparks = new VfxBurst("UndertowImpactSparks", burstGlow, 96, 0f, perFrameCap: 8);
             _muzzleFlare = new VfxBurst("UndertowMuzzleFlare", burstGlow, 24, 0f, perFrameCap: 4);
             _latchSparks = new VfxBurst("UndertowLatchSparks", burstGlow, 64, 0f, perFrameCap: 6);
             _latchFlare = new VfxBurst("UndertowLatchFlare", burstGlow, 16, 0f, perFrameCap: 2);
@@ -339,8 +401,16 @@ namespace MaxWorlds.VFX
 
             beam.Sheath.enabled = on;
             beam.Core.enabled = on;
-            for (int i = 0; i < beam.Strands.Length; i++) beam.Strands[i].enabled = on;
+            for (int i = 0; i < beam.Strands.Length; i++) beam.Strands[i].enabled = on && i < StrandsActive(PowerLevelClamped);
+            if (!on)
+                for (int i = 0; i < beam.Arcs.Length; i++) { beam.Arcs[i].enabled = false; beam.ArcCores[i].enabled = false; }
         }
+
+        private int PowerLevelClamped => Mathf.Clamp(PowerLevel, 0, MaxPowerLevel);
+        private static int StrandsActive(int level) => StrandCount + level / 4;
+        private static int ArcsActive(int level, bool secondary) => secondary ? level / 2 / 2 : level / 2;
+        private static int SparksActive(int level, bool secondary) =>
+            level < 4 ? 0 : (secondary ? (4 + (level - 4)) / 2 : 4 + (level - 4));
 
         /// <summary>Re-lay beam 0's core/sheath/strand geometry between <paramref name="muzzle"/> and
         /// <paramref name="endPoint"/>, advancing the crackle strands' animation phase by
@@ -447,36 +517,130 @@ namespace MaxWorlds.VFX
 
             ApplyTipTaper(beam, length);
 
+            int level = PowerLevelClamped;
+            float lf = (float)level / MaxPowerLevel;
+            bool secondary = beamIndex > 0;
+
+            // MV-1464: core widens slightly with POWER; sheath width never does, only its opacity/tint.
+            beam.Core.widthMultiplier = CoreWidth * (1f + level / 32f) * beam.Scale;
             beam.Core.SetPositions(beam.Centerline);
             beam.Core.startColor = CoreColor;
             beam.Core.endColor = CoreColor;
 
+            Color sheath = Color.Lerp(SheathColor, SheathHotTint, 0.7f * lf);
+            sheath.a = Mathf.Lerp(SheathAlphaMin, SheathAlphaMax, lf);
             beam.Sheath.SetPositions(beam.Centerline);
-            beam.Sheath.startColor = SheathColor;
-            beam.Sheath.endColor = SheathColor;
+            beam.Sheath.startColor = sheath;
+            beam.Sheath.endColor = sheath;
 
             // --- The crackle strands wrap the snaking centreline (offset from it, not the straight line).
-            // MV-1121: constant 0.24m wrap, ramped up from zero only over the first 6% of the beam —
-            // replaces MV-1064's sin(t*pi) taper, which peaked at mid-beam and fell back to zero at the
-            // tip (the beam must now end at a PLAIN CUT, full width).
+            // MV-1464: they start at the muzzle and reach 25% + 75% * L/8 of the beam; wobble swells toward
+            // the far end (up to 1.4x at L8) and fades out over the last 6% of the reach.
+            float reach = StrandReachMin + (1f - StrandReachMin) * lf;
+            int strandsActive = StrandsActive(level);
+            float strandWidth = StrandWidth * Mathf.Lerp(1f, StrandWidthGrowth, lf) * beam.Scale;
+            float swell = 0.4f * lf;
+            float strandAlpha = Mathf.Lerp(StrandAlphaMin, StrandAlphaMax, lf);
             for (int s = 0; s < beam.Strands.Length; s++)
             {
                 LineRenderer strand = beam.Strands[s];
-                float wrapAngle = (360f / beam.Strands.Length) * s * Mathf.Deg2Rad;
+                bool active = s < strandsActive;
+                strand.enabled = active;
+                if (!active) continue;
+
+                float wrapAngle = (360f / strandsActive) * s * Mathf.Deg2Rad;
                 Vector3 wrapDir = right * Mathf.Cos(wrapAngle) + wrapUp * Mathf.Sin(wrapAngle);
 
                 for (int i = 0; i <= Segments; i++)
                 {
-                    float t = (float)i / Segments;
+                    float f = (float)i / Segments;            // 0..1 along the strand's own reach
+                    float t = f * reach;                      // 0..reach along the beam
                     float strandTaper = t < StrandRampFraction ? (t / StrandRampFraction) : 1f;
+                    float fadeOut = Mathf.Clamp01((1f - f) / StrandReachFadeFraction);
+                    float amp = StrandAmplitude * strandTaper * fadeOut * (1f + swell * f);
                     float wave = Mathf.Sin(t * WaveCyclesPerBeam * Mathf.PI * 2f + beam.Phase + s * 2.1f);
-                    Vector3 point = beam.Centerline[i] + wrapDir * (StrandAmplitude * strandTaper * wave);
-                    strand.SetPosition(i, point);
+                    strand.SetPosition(i, SampleCenterline(beam, t) + wrapDir * (amp * wave));
                 }
 
-                Color c = EmberColors[s % EmberColors.Length];
+                strand.widthMultiplier = strandWidth;
+                Color c = Color.Lerp(EmberColorsL0[s % 3], EmberColorsL8[s % 3], lf);
+                c.a = strandAlpha;
                 strand.startColor = c;
                 strand.endColor = c;
+            }
+
+            LayArcs(beam, level, secondary, reach, right, strandAlpha, dt);
+
+            // MV-1464: impact sparks at the hit point from L4 (orange/amber), a burst every interval.
+            int sparks = SparksActive(level, secondary);
+            if (sparks > 0)
+            {
+                beam.SparkTimer += dt;
+                if (beam.SparkTimer >= SparkIntervalSeconds)
+                {
+                    beam.SparkTimer = 0f;
+                    _impactSparks.Emit(endPoint, sparks, Vector3.up, 180f,
+                        speedMin: 1.5f, speedMax: 3.5f, sizeMin: 0.05f, sizeMax: 0.09f,
+                        lifeMin: 0.2f, lifeMax: 0.35f, colorA: SparkColorA, colorB: EmberColorsL8[2]);
+                }
+            }
+        }
+
+        private static Vector3 SampleCenterline(BeamVisual beam, float t)
+        {
+            float f = Mathf.Clamp01(t) * Segments;
+            int i = Mathf.Min((int)f, Segments - 1);
+            return Vector3.Lerp(beam.Centerline[i], beam.Centerline[i + 1], f - i);
+        }
+
+        /// <summary>MV-1464: smooth, long escaping arcs (from L2) - leave the sheath edge perpendicular to the
+        /// beam, span 8-16% of its length, rise 0.5-0.9 x sheath width x (0.75 + 0.5 L/8); ~2/3 land back on
+        /// the beam, the rest trail off. Alternate sides, spread along the crackle reach, re-seed 0.15-0.3 s.</summary>
+        private static void LayArcs(BeamVisual beam, int level, bool secondary, float reach, Vector3 right, float alpha, float dt)
+        {
+            int active = ArcsActive(level, secondary);
+            float edge = SheathWidth * beam.Scale * 0.5f;
+            float riseScale = SheathWidth * beam.Scale * (0.75f + 0.5f * level / MaxPowerLevel);
+            for (int a = 0; a < beam.Arcs.Length; a++)
+            {
+                bool on = a < active;
+                beam.Arcs[a].enabled = on;
+                beam.ArcCores[a].enabled = on;
+                if (!on) continue;
+
+                ArcState st = beam.ArcStates[a];
+                st.Timer -= dt;
+                if (st.Timer <= 0f)
+                {
+                    st.Timer = Random.Range(ArcReseedMin, ArcReseedMax);
+                    float slotLo = reach * a / active, slotHi = reach * (a + 1) / active;
+                    st.SpanFrac = Random.Range(ArcSpanMin, ArcSpanMax);
+                    st.StartFrac = Mathf.Clamp(Random.Range(slotLo, slotHi), 0f, Mathf.Max(0f, 1f - st.SpanFrac));
+                    st.Rise = Random.Range(ArcRiseMin, ArcRiseMax) * riseScale;
+                    st.Side = (a % 2 == 0) ? 1f : -1f;
+                    st.Lands = Random.value < ArcLandChance;
+                }
+                beam.ArcStates[a] = st;
+
+                Color outer = Color.Lerp(EmberColorsL0[a % 3], EmberColorsL8[a % 3], (float)level / MaxPowerLevel);
+                outer.a = alpha;
+                Color inner = ArcInnerColor; inner.a = alpha;
+                Color outerEnd = st.Lands ? outer : new Color(outer.r, outer.g, outer.b, 0f);
+                Color innerEnd = st.Lands ? inner : new Color(inner.r, inner.g, inner.b, 0f);
+                beam.Arcs[a].startColor = outer; beam.Arcs[a].endColor = outerEnd;
+                beam.ArcCores[a].startColor = inner; beam.ArcCores[a].endColor = innerEnd;
+                beam.Arcs[a].widthMultiplier = StrandWidth * beam.Scale;
+                beam.ArcCores[a].widthMultiplier = StrandWidth * 0.4f * beam.Scale;
+
+                for (int i = 0; i <= ArcSegments; i++)
+                {
+                    float u = (float)i / ArcSegments;
+                    float off = st.Lands ? edge * (1f - u) : edge;
+                    off += st.Rise * Mathf.Sin(u * Mathf.PI);
+                    Vector3 p = SampleCenterline(beam, st.StartFrac + st.SpanFrac * u) + right * (st.Side * off);
+                    beam.Arcs[a].SetPosition(i, p);
+                    beam.ArcCores[a].SetPosition(i, p);
+                }
             }
         }
 
@@ -651,7 +815,7 @@ namespace MaxWorlds.VFX
             // Spec: "a pulsing impact flare ... at the contact point" -- clamped to ImpactFlareSize,
             // itself capped at the sheath's own 0.70m by MV-1070 AC3 ("no renderer at the tip wider
             // than the sheath -- no ball").
-            float pulse = ImpactFlareSize * (0.85f + 0.15f * Mathf.Sin(Time.time * ImpactPulseHz * 2f * Mathf.PI));
+            float pulse = ImpactFlareSize * (0.75f + 0.25f * PowerLevelClamped / MaxPowerLevel) * (0.85f + 0.15f * Mathf.Sin(Time.time * ImpactPulseHz * 2f * Mathf.PI));
             _latchFlare.Emit(centre, 1, Vector3.up, 180f,
                 speedMin: 0f, speedMax: 0f,
                 sizeMin: pulse, sizeMax: pulse,
@@ -677,6 +841,7 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (!_initialized) return;
+            _impactSparks.EndFrame();
             _muzzleFlare.EndFrame();
             _latchSparks.EndFrame();
             _latchFlare.EndFrame();
@@ -691,6 +856,8 @@ namespace MaxWorlds.VFX
                     if (beam == null) continue;
                     DestroyLine(beam.Core);
                     DestroyLine(beam.Sheath);
+                    if (beam.Arcs != null)
+                        for (int i = 0; i < beam.Arcs.Length; i++) { DestroyLine(beam.Arcs[i]); DestroyLine(beam.ArcCores[i]); }
                     if (beam.Strands != null)
                         for (int i = 0; i < beam.Strands.Length; i++) DestroyLine(beam.Strands[i]);
                     if (beam.Coils != null)
@@ -699,6 +866,7 @@ namespace MaxWorlds.VFX
                     DestroyLine(beam.LockRingInner);
                 }
             }
+            Dispose(_impactSparks);
             Dispose(_muzzleFlare);
             Dispose(_latchSparks);
             Dispose(_latchFlare);

@@ -437,7 +437,8 @@ namespace MaxWorlds.Combat
                 // Animate the crackle strands/prongs every frame the stream is up, not just on the tick
                 // cadence — the fire tick above (if it ran this frame) already refreshed StreamEndPoint
                 // indirectly via the tip, but UpdateStream also needs to run every frame regardless.
-                _vfx.WhipLagScale = _branch.LaunchElapsed < LaunchSeconds + LaunchSettleSeconds ? 0f : 1f;
+                _vfx.PowerLevel = WeaponSystemState.TrackLevel(WeaponTrackKind.Damage);   // MV-1464: visual only
+                _vfx.WhipLagScale =_branch.LaunchElapsed < LaunchSeconds + LaunchSettleSeconds ? 0f : 1f;
                 _vfx.UpdateStream(transform.position, StreamEndPoint, dir, dt);
 
                 for (int i = 1; i < MaxBeamCount; i++)

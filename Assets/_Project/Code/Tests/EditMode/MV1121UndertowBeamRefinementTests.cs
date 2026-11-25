@@ -125,6 +125,11 @@ namespace MaxWorlds.Tests.EditMode
         public void ConstantBrightnessNoJawCurveBendAndRobotSizedLock_MV1121()
         {
             WeaponSystemState.ApplyWorldLoadout(WorldCatalog.IndexOf(WorldIds.Reef)); // World 3 -> UNDERTOW is the active primary
+            // MV-1464: strands only span the whole beam at POWER 8 (reach 25% + 75%*L/8), which is what
+            // this test's index-for-index centreline comparison assumes, so raise p_dmg to its cap.
+            var levels = new System.Collections.Generic.Dictionary<string, int>(RigState.SnapshotLevels());
+            levels["p_dmg"] = 8;
+            RigState.RestoreSnapshot(levels, RigState.SnapshotUnlockedCategories());
             DevMode.Enabled = true;
             DevMode.InfiniteEnergy = true; // isolate from tank depletion
 
@@ -183,14 +188,15 @@ namespace MaxWorlds.Tests.EditMode
 
             int segCount = core.positionCount;
             int midIdx = Mathf.RoundToInt((segCount - 1) * 0.5f);
-            int tailIdx = Mathf.RoundToInt((segCount - 1) * 0.98f);
+            int tailIdx = Mathf.RoundToInt((segCount - 1) * 0.9f); // MV-1464: strand wobble now fades out over the last 6% of its reach, so sample just inside it
             float maxAtMid = 0f, maxAtTail = 0f;
             for (int s = 0; s < 5; s++)
             {
                 float distMid = Vector3.Distance(strands[s].GetPosition(midIdx), core.GetPosition(midIdx));
                 float distTail = Vector3.Distance(strands[s].GetPosition(tailIdx), core.GetPosition(tailIdx));
-                Assert.LessOrEqual(distMid, 0.25f, $"strand {s} at 50% must stay within 0.24m of the centreline, was {distMid:0.000}m");
-                Assert.LessOrEqual(distTail, 0.25f, $"strand {s} at 98% must stay within 0.24m of the centreline, was {distTail:0.000}m");
+                Assert.LessOrEqual(distMid, 0.34f, // MV-1464: wobble swells up to 1.4x toward the far end at POWER 8
+                     $"strand {s} at 50% must stay within 0.24m of the centreline, was {distMid:0.000}m");
+                Assert.LessOrEqual(distTail, 0.34f, $"strand {s} at 98% must stay within 0.24m of the centreline, was {distTail:0.000}m");
                 if (distMid > maxAtMid) maxAtMid = distMid;
                 if (distTail > maxAtTail) maxAtTail = distTail;
             }

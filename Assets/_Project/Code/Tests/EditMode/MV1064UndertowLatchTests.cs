@@ -152,7 +152,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.GreaterOrEqual(strand.widthMultiplier, 0.12f, $"strand {s} must be >=0.12m wide");
                 AssertEmberFamily(strand.startColor, $"strand {s}");
             }
-            Assert.IsNull(_playerGo.transform.Find("UndertowStrand5"), "exactly 5 strands must be built, not 6");
+            // MV-1464: strands are built up to 7 (POWER adds one per 4 levels); at this low POWER only 5 are ACTIVE.
+            Transform sixth = _playerGo.transform.Find("UndertowStrand5");
+            Assert.IsTrue(sixth == null || !sixth.GetComponent<LineRenderer>().enabled, "exactly 5 strands must be active at low POWER, not 6");
 
             for (int c = 0; c < 3; c++)
             {
