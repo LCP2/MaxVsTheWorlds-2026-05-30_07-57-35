@@ -2383,8 +2383,9 @@
    "composition": {
     "launcher": 1,
     "gunner": 1,
-    "bruiser": 4,
-    "blinker": 2
+    "rusher": 4,
+    "bruiser": 2,
+    "blinker": 1
    },
    "surfaces": [],
    "cover": [
@@ -2540,68 +2541,68 @@
     },
     {
      "id": "a5_k16",
-     "x": 1.8,
-     "z": 77.5,
-     "width": 12.4,
-     "depth": 1,
+     "x": 8.5,
+     "z": 72.4,
+     "width": 1,
+     "depth": 9.2,
      "height": 1.5,
      "shape": "box",
      "dressing": "barrier"
     },
     {
      "id": "a5_k17",
-     "x": 1.8,
+     "x": 3.0,
+     "z": 77.5,
+     "width": 10,
+     "depth": 1,
+     "height": 1.5,
+     "shape": "box",
+     "dressing": "barrier"
+    },
+    {
+     "id": "a5_k18",
+     "x": 3.0,
      "z": 81.25,
-     "width": 12.4,
+     "width": 10,
      "depth": 6.5,
      "height": 1.5,
      "shape": "box",
      "dressing": "barrier"
     },
     {
-     "id": "a5_w18",
-     "x": 18.5,
-     "z": 72.5,
-     "width": 1.0,
-     "depth": 1.0,
-     "height": 1.2,
-     "shape": "wedge",
-     "corner": "SW"
+     "id": "a5_k19",
+     "x": 4.0,
+     "z": 75.6,
+     "width": 1.2,
+     "depth": 1.2,
+     "height": 1.0,
+     "shape": "box",
+     "dressing": "pallet"
     },
     {
-     "id": "a5_w19",
-     "x": 20.0,
-     "z": 76.0,
-     "width": 1.0,
-     "depth": 1.0,
-     "height": 1.2,
-     "shape": "wedge",
-     "corner": "NE"
+     "id": "a5_k20",
+     "x": -3.3,
+     "z": 86.2,
+     "width": 0.72,
+     "depth": 0.72,
+     "height": 1.0,
+     "shape": "cylinder",
+     "dressing": "tub"
     },
     {
-     "id": "a5_w20",
-     "x": 25.5,
-     "z": 76.0,
-     "width": 1.0,
-     "depth": 1.0,
-     "height": 1.2,
-     "shape": "wedge",
-     "corner": "NW"
-    },
-    {
-     "id": "a5_w21",
-     "x": 15.5,
-     "z": 76.0,
-     "width": 1.0,
-     "depth": 1.0,
-     "height": 1.2,
-     "shape": "wedge",
-     "corner": "NW"
+     "id": "a5_k21",
+     "x": 3.6,
+     "z": 89.2,
+     "width": 1.2,
+     "depth": 1.2,
+     "height": 1.0,
+     "shape": "box",
+     "dressing": "pallet"
     },
     {
      "id": "a5_w22",
-     "x": 24.0,
-     "z": 81.0,
+     "x": 26.5,
+     "z": 68.5,
      "width": 1.0,
      "depth": 1.0,
      "height": 1.2,
@@ -2610,73 +2611,23 @@
     },
     {
      "id": "a5_w23",
-     "x": 19.5,
-     "z": 82.5,
+     "x": 25.5,
+     "z": 76.5,
      "width": 1.0,
      "depth": 1.0,
      "height": 1.2,
      "shape": "wedge",
-     "corner": "NW"
+     "corner": "SW"
     },
     {
      "id": "a5_w24",
-     "x": 28.5,
+     "x": 11.5,
      "z": 82.5,
      "width": 1.0,
      "depth": 1.0,
      "height": 1.2,
      "shape": "wedge",
-     "corner": "NE"
-    },
-    {
-     "id": "a5_w25",
-     "x": 30.0,
-     "z": 88.5,
-     "width": 1.0,
-     "depth": 1.0,
-     "height": 1.2,
-     "shape": "wedge",
-     "corner": "SE"
-    },
-    {
-     "id": "a5_k26",
-     "x": 4.0,
-     "z": 69.0,
-     "width": 1.2,
-     "depth": 1.2,
-     "height": 1.0,
-     "shape": "box",
-     "dressing": "pallet"
-    },
-    {
-     "id": "a5_k27",
-     "x": -3.0,
-     "z": 75.6,
-     "width": 0.6,
-     "depth": 0.6,
-     "height": 0.9,
-     "shape": "cylinder",
-     "dressing": "bin"
-    },
-    {
-     "id": "a5_k28",
-     "x": 3.6,
-     "z": 89.1,
-     "width": 1.2,
-     "depth": 1.2,
-     "height": 1.0,
-     "shape": "box",
-     "dressing": "pallet"
-    },
-    {
-     "id": "a5_k29",
-     "x": -3.6,
-     "z": 86.0,
-     "width": 0.72,
-     "depth": 0.72,
-     "height": 1.0,
-     "shape": "cylinder",
-     "dressing": "tub"
+     "corner": "SW"
     }
    ],
    "replicators": [
@@ -2698,68 +2649,75 @@
    "garrison": [
     {
      "kind": "launcher",
-     "x": 2.15,
-     "z": 70.15,
+     "x": 6.0,
+     "z": 68.3,
      "level": 0,
      "post": true,
      "squad": "a5_s"
     },
     {
      "kind": "gunner",
-     "x": -3.39,
-     "z": 90.69,
+     "x": 2.0,
+     "z": 91.0,
      "level": 0,
      "post": true,
      "squad": "a5_n"
     },
     {
-     "kind": "bruiser",
-     "x": 15.23,
-     "z": 82.26,
-     "level": 0,
-     "squad": "a5_m"
-    },
-    {
-     "kind": "bruiser",
-     "x": 29.3,
-     "z": 85.5,
-     "level": 0,
-     "squad": "a5_c"
-    },
-    {
-     "kind": "blinker",
-     "x": 20.2,
-     "z": 89.3,
-     "level": 0,
-     "squad": "a5_c"
-    },
-    {
-     "kind": "bruiser",
-     "x": 10.5,
-     "z": 73.5,
+     "kind": "rusher",
+     "x": 2.9,
+     "z": 74.6,
      "level": 0,
      "squad": "a5_s"
     },
     {
-     "kind": "blinker",
-     "x": 10.0,
-     "z": 80.5,
+     "kind": "rusher",
+     "x": -3.3,
+     "z": 72.8,
      "level": 0,
-     "squad": "a5_d"
+     "squad": "a5_s"
+    },
+    {
+     "kind": "rusher",
+     "x": 5.6,
+     "z": 86.2,
+     "level": 0,
+     "squad": "a5_n"
+    },
+    {
+     "kind": "rusher",
+     "x": 11.0,
+     "z": 86.6,
+     "level": 0,
+     "squad": "a5_n"
     },
     {
      "kind": "bruiser",
-     "x": 24.2,
-     "z": 74.2,
+     "x": 27.5,
+     "z": 69.6,
      "level": 0,
-     "squad": "a5_m"
+     "squad": "a5_h"
+    },
+    {
+     "kind": "bruiser",
+     "x": 24.75,
+     "z": 81.05,
+     "level": 0,
+     "squad": "a5_h"
+    },
+    {
+     "kind": "blinker",
+     "x": 13.6,
+     "z": 81.8,
+     "level": 0,
+     "squad": "a5_h"
     }
    ],
    "canisters": [
     {
      "id": "a5_canister1",
-     "x": 19.25,
-     "z": 74.2
+     "x": 10.5,
+     "z": 74.5
     },
     {
      "id": "a5_canister2",
@@ -2768,8 +2726,8 @@
     },
     {
      "id": "a5_canister3",
-     "x": 10.5,
-     "z": 86.5
+     "x": -3.2,
+     "z": 80.5
     }
    ],
    "pylons": [

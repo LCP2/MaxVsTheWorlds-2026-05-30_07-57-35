@@ -39,14 +39,15 @@ namespace MaxWorlds.Tests.EditMode
                 "bruiser 62.17 40.35 - a3_k",
                 "blinker 56.5 41.6 - a3_k" } },
             new object[] { "a5", new[] {
-                "launcher 2.15 70.15 P a5_s",
-                "gunner -3.39 90.69 P a5_n",
-                "bruiser 15.23 82.26 - a5_m",
-                "bruiser 29.3 85.5 - a5_c",
-                "blinker 20.2 89.3 - a5_c",
-                "bruiser 10.5 73.5 - a5_s",
-                "blinker 10.0 80.5 - a5_d",
-                "bruiser 24.2 74.2 - a5_m" } },
+                "launcher 6.0 68.3 P a5_s",
+                "gunner 2.0 91.0 P a5_n",
+                "rusher 2.9 74.6 - a5_s",
+                "rusher -3.3 72.8 - a5_s",
+                "rusher 5.6 86.2 - a5_n",
+                "rusher 11.0 86.6 - a5_n",
+                "bruiser 27.5 69.6 - a5_h",
+                "bruiser 24.75 81.05 - a5_h",
+                "blinker 13.6 81.8 - a5_h" } },
         };
 
         private static readonly FieldInfo HasPostField =
