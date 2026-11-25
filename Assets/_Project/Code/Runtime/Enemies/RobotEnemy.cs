@@ -524,6 +524,11 @@ namespace MaxWorlds.Enemies
         private void HardDeOverlap(float dt)
         {
             if (_cc == null || !_cc.enabled) return;
+            // Only free-walking states: a lured/queued/emerging/submerged/teleporting/dormant robot's position
+            // is owned by its own mechanic, and a lunge by its own dash.
+            if (Current == State.Dead || Current == State.Dormant || Current == State.ReplicatorSeeking
+                || Current == State.Submerged || Current == State.Emerging || Current == State.Teleport
+                || Current == State.Lunge) return;
             _separationGrid.CollectNearby(Uid, transform.position, HardSpacing, _separationScratch);
             Vector3 shove = Vector3.zero;
             Vector3 p = transform.position;
@@ -562,7 +567,7 @@ namespace MaxWorlds.Enemies
             float bestDistSq = float.MaxValue;
             foreach (Rect r in _deckRects)
             {
-                var candidate = new Vector2(Mathf.Clamp(p.x, r.xMin, r.xMax), Mathf.Clamp(p.z, r.yMin, r.yMax));
+                var candidate = new Vector2(Mathf.Clamp(p.x, r.xMin, r.xMax - DeckEdgeInset), Mathf.Clamp(p.z, r.yMin, r.yMax - DeckEdgeInset));
                 float distSq = (candidate - point).sqrMagnitude;
                 if (distSq < bestDistSq) { bestDistSq = distSq; nearest = candidate; }
             }
@@ -2600,6 +2605,7 @@ namespace MaxWorlds.Enemies
 
             // MV-697: applied after every state's own movement, regardless of state.
             FrameCost.BeginRobotSub(FrameCost.RobotSubPhase.Movement);
+            HardDeOverlap(dt);   // MV-1466
             ClampToDeckFootprint(dt);
             FrameCost.EndRobotSub(FrameCost.RobotSubPhase.Movement);
 
