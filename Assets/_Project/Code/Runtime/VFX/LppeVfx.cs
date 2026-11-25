@@ -57,6 +57,28 @@ namespace MaxWorlds.VFX
         private VfxBurst _boltStreaks;
         private bool _initialized;
 
+        private static LppeVfx s_shared;
+
+        /// <summary>MV-1451: one shared, initialised instance for callers that have no weapon-attached
+        /// LppeVfx of their own (RICOCHET's chain lightning draws its arcs through <see cref="Arc"/>
+        /// rather than a second copy of it). Rebuilt if a scene reload destroyed it.</summary>
+        public static LppeVfx GetShared()
+        {
+            if (s_shared == null)
+            {
+                var go = new GameObject("SharedArcVfx");
+                s_shared = go.AddComponent<LppeVfx>();
+                s_shared.Init();
+            }
+            return s_shared;
+        }
+
+        public static void DestroySharedForTests()
+        {
+            if (s_shared != null) DestroyImmediate(s_shared.gameObject);
+            s_shared = null;
+        }
+
         /// <summary>How many muzzle flashes this instance has ever emitted — the resolved count a
         /// test reads for "one FireTick, one muzzle flash", since a ParticleSystem's own particleCount
         /// can't tell "one Emit call" from "one particle happened to still be alive".</summary>

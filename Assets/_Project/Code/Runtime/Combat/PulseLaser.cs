@@ -336,7 +336,7 @@ namespace MaxWorlds.Combat
             if (WeaponSystemState.LppeTrackLevel(LppeTrackKind.Arc) < 1) return;
 
             Vector3 hitPoint = hitTarget.transform.position;
-            RobotEnemy next = NearestOtherAliveRobotWithLineOfSight(hitTarget, hitPoint, ArcRange);
+            RobotEnemy next = ArcTargeting.NearestOtherAliveRobotWithLineOfSight(hitTarget, hitPoint, ArcRange);
             if (next == null) return;
 
             // MV-858: dormant robots count as valid arc targets, and the arc wakes them (spec) —
@@ -348,34 +348,6 @@ namespace MaxWorlds.Combat
                 (targetPoint - hitPoint).normalized, Team.Player, source: DamageSource.PrimaryWeapon));
 
             if (_vfx != null) _vfx.Arc(hitPoint, targetPoint);
-        }
-
-        /// <summary>The nearest alive robot other than <paramref name="exclude"/> within
-        /// <paramref name="range"/> of <paramref name="from"/> with a clear line of sight from it (MV-858
-        /// spec: "with a clear line of sight from it"), ON THE SAME COMBAT LEVEL as <paramref name="from"/>
-        /// (MV-944) — ARC's own target pick. Dormant candidates are included on purpose (spec: "Dormant
-        /// robots count"); no lock-cone angle check, same reasoning the old FORK search used: the cone
-        /// gates the ORIGINAL shot's acquisition, an arc is a direct release at whatever else is nearby.</summary>
-        private static RobotEnemy NearestOtherAliveRobotWithLineOfSight(RobotEnemy exclude, Vector3 from, float range)
-        {
-            var active = RobotEnemy.Active;
-            MapData map = EnemyNavigation.Map;
-            RobotEnemy best = null;
-            float bestSq = float.MaxValue;
-            float rangeSq = range * range;
-
-            for (int i = 0; i < active.Count; i++)
-            {
-                RobotEnemy candidate = active[i];
-                if (candidate == null || candidate == exclude || !candidate.IsAlive) continue;
-                if (!CombatLevel.SameLevel(map, from, candidate.transform.position)) continue;
-
-                float distSq = (candidate.transform.position - from).sqrMagnitude;
-                if (distSq > rangeSq) continue;
-                if (HomingSteering.BlockedByGeometry(from, candidate.transform.position, out _)) continue;
-                if (distSq < bestSq) { bestSq = distSq; best = candidate; }
-            }
-            return best;
         }
 
 #if UNITY_EDITOR

@@ -31,6 +31,10 @@ namespace MaxWorlds.VFX
         private float _elapsed;
         private bool _rerandomized;
 
+        /// <summary>The arc's far endpoint (MV-1451: a resolved value a test reads to prove where an arc went).</summary>
+        public Vector3 To => _to;
+        public Vector3 From => _from;
+
         private LineRenderer _sleeve;
         private LineRenderer _core;
         private Color _sleeveBaseColor;

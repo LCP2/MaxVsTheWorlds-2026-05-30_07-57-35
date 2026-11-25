@@ -3447,19 +3447,35 @@ namespace MaxWorlds.Dev
                 Vector3 focus = CaptureDirector.OpenZoneCenter() ?? (maxGo.transform.position + maxGo.transform.forward * 4f);
                 focus.y = 1f;
 
-                // MV-1414 AC2: POWER 1, 4 and 8 side by side.
-                int[] powerLevels = { 1, 4, 8 };
-                for (int i = 0; i < powerLevels.Length; i++)
+                // MV-1451 AC2: ONE shot at the play camera -- a POWER 8 disc that has flown 8 m (so its
+                // lightning trail has a path to follow) beside four frozen robots 3 m apart; the chain
+                // lightning runs from the first robot across the next three (visual only).
+                var robots = new List<RobotEnemy>();
+                Vector3[] offsets =
                 {
-                    Vector3 at = focus + new Vector3((i - 1f) * 1.1f, 0f, 0f);
-                    RicochetDisc.Spawn(at, Vector3.forward, speed: 0f, bounces: 2,
-                        powerLevel: powerLevels[i], aimLevel: 0,
-                        damage: 0f, bankBonusPerBounce: 0f, turnRateDegPerSec: 0f, lookaheadMetres: 0f,
-                        radius: 0.25f, lifetime: 120f);
-                }
+                    new Vector3(1.5f, 0f, 1.2f), new Vector3(4.5f, 0f, 2.2f),
+                    new Vector3(7.5f, 0f, 0.8f), new Vector3(10.5f, 0f, 2.0f),
+                };
+                foreach (Vector3 o in offsets)
+                    robots.Add(BuildClusterRobot(EnemyKind.Rusher, focus + o).GetComponent<RobotEnemy>());
+                Physics.SyncTransforms();
 
-                var rot = Quaternion.Euler(discPitch, 0f, 0f);
-                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * discDistance, rot);
+                RicochetDisc disc = RicochetDisc.Spawn(focus + new Vector3(-6f, 0f, -1f), Vector3.right, speed: 8f, bounces: 2,
+                    powerLevel: 8, aimLevel: 0,
+                    damage: 0f, bankBonusPerBounce: 0f, turnRateDegPerSec: 0f, lookaheadMetres: 0f,
+                    radius: 0.25f, lifetime: 120f);
+                for (int i = 0; i < 60 && disc != null && disc.IsActiveDisc; i++) disc.Tick(1f / 60f);
+
+                var rot = Quaternion.Euler(72f, 0f, 0f);
+                Vector3 camFocus = focus + new Vector3(5.5f, 0f, 1.0f);
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * 14f, rot);
+                for (int i = 0; i < 2; i++) yield return null;
+
+                int arcs = RicochetChain.Run(robots[0], 8);
+                MaxWorlds.VFX.RobotFrazzleVfx.Trigger(robots[0]);
+                Debug.Log($"[MV1451Capture] chain arcs drawn: {arcs}");
+                CaptureDirector.WarmUpRender(cam);
+                RicochetChain.Run(robots[0], 8);
                 yield return null;
             }
 
@@ -3496,7 +3512,7 @@ namespace MaxWorlds.Dev
                 Prepare = Prepare,
                 Shots = new List<CaptureShot>
                 {
-                    new CaptureShot("MV-1414-discs", DiscsSetup),
+                    new CaptureShot("MV-1451-chain", DiscsSetup),
                 },
                 Cleanup = () => RicochetDisc.DestroyPoolForTests(),
             };

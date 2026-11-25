@@ -47,7 +47,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DiscIsOneShapeThatEvolvesByLayersWithPower()
         {
-            float prevDiameter = 0f, prevTrail = 0f;
+            float prevTrail = 0f;
             for (int power = 1; power <= 8; power++)
             {
                 RicochetDisc disc = SpawnAt(power);
@@ -74,15 +74,13 @@ namespace MaxWorlds.Tests.EditMode
 
                 AssertColour(new Color(0.35f, 0.65f, 1.0f), disc.BodyColor, "body colour", power);
 
-                Assert.Greater(disc.VisualDiameter, prevDiameter, $"POWER {power}: diameter must grow every level");
+                // MV-1451: size is nearly fixed now (0.40 -> 0.60 m); only the trail still grows every level.
                 Assert.Greater(disc.TrailTime, prevTrail, $"POWER {power}: trail time must grow every level");
-                prevDiameter = disc.VisualDiameter;
                 prevTrail = disc.TrailTime;
 
                 RicochetDisc.DestroyPoolForTests();
             }
 
-            Assert.LessOrEqual(prevDiameter, 0.55f + 1e-4f, "POWER 8 diameter must be at most 0.55 m");
         }
     }
 }

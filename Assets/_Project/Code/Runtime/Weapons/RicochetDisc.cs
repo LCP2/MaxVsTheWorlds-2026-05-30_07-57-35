@@ -108,6 +108,8 @@ namespace MaxWorlds.Weapons
                 disc._blueHalo = parts.BlueHalo;
                 disc._redHalo = parts.RedHalo;
                 disc._embers = parts.Embers;
+                disc._rimBolts = parts.RimBolts;
+                disc._trailBolt = parts.TrailBolt;
                 s_pool.Add(disc);
             }
 
@@ -134,6 +136,8 @@ namespace MaxWorlds.Weapons
             disc.SecondBouncePoint = Vector3.zero;
             // Spec: "Trails are cleared on reuse" -- cleared here, at the NEXT spawn, not at retire.
             if (disc._trail != null) disc._trail.Clear();
+            disc._history.Clear();
+            disc._history.Add(origin);
 
             // MV-1414: the look resolves off POWER alone; re-applied every Spawn since a pooled disc
             // can carry a different POWER on every reuse. aimLevel no longer changes the look.
@@ -191,6 +195,7 @@ namespace MaxWorlds.Weapons
             for (int i = 0; i < s_pool.Count; i++)
                 if (s_pool[i] != null) DestroyImmediate(s_pool[i].gameObject);
             s_pool.Clear();
+            LppeVfx.DestroySharedForTests();
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -202,6 +207,7 @@ namespace MaxWorlds.Weapons
             if (!_active) return;
             _age += dt;
             Flicker(dt);
+            TickCrackle();
 
             // MV-1425: the first leg is dead straight; AIMING only steers once the disc has banked.
             if (_turnRateDegPerSec > 0f && _bouncesTaken >= 1) Steer(dt);
@@ -220,6 +226,8 @@ namespace MaxWorlds.Weapons
                     float multiplier = 1f + _bankBonusPerBounce * _bouncesTaken;
                     target.TakeDamage(new DamageInfo(_damage * multiplier, contact.point, _direction,
                         Team.Player, source: DamageSource.PrimaryWeapon));
+                    // MV-1451: look only - frazzle from POWER 4, chain lightning from POWER 6.
+                    if (target is RobotEnemy hitRobot) OnRobotHit(hitRobot);
                 }
 
                 if (_bouncesRemaining > 0)
@@ -229,6 +237,7 @@ namespace MaxWorlds.Weapons
                     if (_bouncesTaken == 1) FirstBouncePoint = contact.point;
                     else if (_bouncesTaken == 2) SecondBouncePoint = contact.point;
                     Vector3 priorDirection = _direction;
+                    RicochetBounceFx.Spawn(contact.point, contact.normal, PowerLevel);
                     _direction = ReflectHorizontal(_direction, contact.normal);
                     // Offset along the HIT'S OWN NORMAL (not the new travel direction) by just past the
                     // disc's own radius -- a shallow-angle bounce only advances a little along its own
@@ -253,6 +262,8 @@ namespace MaxWorlds.Weapons
             }
 
             if (_age >= _lifetime) Retire();
+            else if (_active) _history.Add(transform.position);
+            if (_history.Count > MaxHistory) _history.RemoveRange(0, _history.Count - MaxHistory);
         }
 
         /// <summary>Reflects <paramref name="direction"/> off <paramref name="normal"/>, flattened to
@@ -455,15 +466,22 @@ namespace MaxWorlds.Weapons
         private static readonly Color FlameRed = new Color(0.9f, 0.22f, 0.21f);
         private static readonly Color CoreBlueWhite = new Color(0.85f, 0.93f, 1.0f);
         private static readonly Color CoreWhiteHot = new Color(1.0f, 1.0f, 0.95f);
+        private static readonly Color PaleCyan = new Color(0.749f, 0.937f, 1f);
 
         public const int MaxPowerLevel = 8;
         private const float MinDiscDiameter = 0.40f;
-        private const float MaxDiscDiameter = 0.55f;
+        private const float MaxDiscDiameter = 0.60f;
         private const float DiscThickness = 0.06f;
         private const float MinTrailSeconds = 0.15f;
         private const float MaxTrailSeconds = 0.30f;
         private const int MaxEmbers = 8;
         private const int RingSegments = 40;
+        private const int MaxHistory = 400;
+        private const int MaxRimCrackles = 6;
+        private const int TrailBoltPoints = JaggedBolt.Segments + 1;
+        private const float MinGlowDiameter = 0.6f;
+        private const float MaxGlowDiameter = 1.0f;
+        private static readonly float[] TrailBoltMetres = { 1.0f, 1.5f, 2.0f, 3.0f };
 
         private static readonly Quaternion DiscPlaneRotation = Quaternion.Euler(90f, 0f, 0f);
 
@@ -477,6 +495,12 @@ namespace MaxWorlds.Weapons
         private Transform _redHalo;
         private Transform[] _embers;
         private float _flickerSeed;
+        private JaggedBolt[] _rimBolts;
+        private JaggedBolt _trailBolt;
+        private readonly List<Vector3> _history = new List<Vector3>(MaxHistory + 8);
+        private readonly float[] _trailJitter = new float[TrailBoltPoints];
+        private readonly Vector3[] _trailPoints = new Vector3[TrailBoltPoints];
+        private int _crackleCountdown;
         private float _spinDeg;
 
         /// <summary>POWER's position along 0..1: 0 at POWER 1, 1 at POWER 8.</summary>
@@ -485,6 +509,18 @@ namespace MaxWorlds.Weapons
 
         public static float DiameterForPower(int powerLevel) =>
             Mathf.Lerp(MinDiscDiameter, MaxDiscDiameter, PowerT(powerLevel));
+
+        /// <summary>MV-1451: rim crackles per POWER 1..8 = 0, 0, 1, 2, 3, 4, 5, 6.</summary>
+        public static int RimCrackleCountForPower(int powerLevel) =>
+            Mathf.Clamp(Mathf.Clamp(powerLevel, 1, MaxPowerLevel) - 2, 0, MaxRimCrackles);
+
+        /// <summary>MV-1451: length of the lightning bolt along the recent path (0 below POWER 5).</summary>
+        public static float TrailBoltLengthForPower(int powerLevel) =>
+            powerLevel < 5 ? 0f : TrailBoltMetres[Mathf.Clamp(powerLevel, 5, MaxPowerLevel) - 5];
+
+        /// <summary>The soft glow's diameter (the widest halo): 0.6 m at POWER 1 to at most 1.0 m at POWER 8.</summary>
+        public static float GlowDiameterForPower(int powerLevel) =>
+            Mathf.Lerp(MinGlowDiameter, MaxGlowDiameter, PowerT(powerLevel));
 
         public static float TrailSecondsForPower(int powerLevel) =>
             Mathf.Lerp(MinTrailSeconds, MaxTrailSeconds, PowerT(powerLevel));
@@ -499,6 +535,31 @@ namespace MaxWorlds.Weapons
         public int PowerLevel { get; private set; }
 
         public int EmberCount { get; private set; }
+
+        /// <summary>How many rim-crackle bolts are currently switched on.</summary>
+        public int ActiveRimCrackleCount
+        {
+            get
+            {
+                int n = 0;
+                if (_rimBolts != null) for (int i = 0; i < _rimBolts.Length; i++) if (_rimBolts[i].Active) n++;
+                return n;
+            }
+        }
+
+        public bool LightningTrailActive => _trailBolt != null && _trailBolt.Active;
+
+        /// <summary>The widest currently-drawn glow (halo) diameter, read back off the halo transforms.</summary>
+        public float GlowDiameter
+        {
+            get
+            {
+                float w = 0f;
+                if (_blueHalo != null && _blueHalo.gameObject.activeSelf) w = Mathf.Max(w, _blueHalo.localScale.x);
+                if (_redHalo != null && _redHalo.gameObject.activeSelf) w = Mathf.Max(w, _redHalo.localScale.x);
+                return w;
+            }
+        }
 
         /// <summary>Opacity of the blue glow (1 - t) and the red flame halo (t).</summary>
         public float BlueHaloOpacity { get; private set; }
@@ -551,6 +612,8 @@ namespace MaxWorlds.Weapons
             public MeshFilter RingFilter;
             public Transform[] Embers;
             public TrailRenderer Trail;
+            public JaggedBolt[] RimBolts;
+            public JaggedBolt TrailBolt;
         }
 
         private static Parts BuildVisual(Transform parent)
@@ -588,6 +651,11 @@ namespace MaxWorlds.Weapons
             trail.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Solid());
             trail.time = MinTrailSeconds;
             parts.Trail = trail;
+
+            parts.RimBolts = new JaggedBolt[MaxRimCrackles];
+            for (int i = 0; i < MaxRimCrackles; i++)
+                parts.RimBolts[i] = new JaggedBolt(parent, "RimCrackle" + i, false, 0.07f, 0.02f);
+            parts.TrailBolt = new JaggedBolt(parent, "LightningTrail", true, 0.12f, 0.035f);
             return parts;
         }
 
@@ -676,7 +744,7 @@ namespace MaxWorlds.Weapons
             {
                 _coreVisual.gameObject.SetActive(true);
                 _coreVisual.localScale = Vector3.one * (d * 0.30f);
-                SetMaterial(_coreVisual, VfxMaterials.AdditiveTinted(PowerLevel >= 3 ? CoreWhiteHot : CoreBlueWhite));
+                SetMaterial(_coreVisual, VfxMaterials.AdditiveTinted(PowerLevel >= 7 ? CoreWhiteHot : CoreBlueWhite));
             }
 
             // Halos: the blue glow fades out as the red flame halo fades in. Additive, so opacity scales
@@ -686,7 +754,7 @@ namespace MaxWorlds.Weapons
             if (_blueHalo != null)
             {
                 _blueHalo.gameObject.SetActive(BlueHaloOpacity > 1e-3f);
-                _blueHalo.localScale = Vector3.one * (d * 1.35f);
+                _blueHalo.localScale = Vector3.one * Mathf.Min(d * 1.35f, MaxGlowDiameter);
                 SetMaterial(_blueHalo, VfxMaterials.AdditiveTinted(DiscColor * (0.28f * BlueHaloOpacity)));
             }
             if (_redHalo != null)
@@ -701,7 +769,7 @@ namespace MaxWorlds.Weapons
             {
                 _trail.time = TrailSecondsForPower(PowerLevel);
                 _trail.widthMultiplier = d * 0.6f;
-                _trail.colorGradient = TrailGradient(t);
+                _trail.colorGradient = TrailGradient(t, TrailCyanTint(PowerLevel));
             }
 
             // Embers: 0 at POWER 1 up to 8 at POWER 8.
@@ -718,9 +786,85 @@ namespace MaxWorlds.Weapons
             }
             _flickerSeed = Random.value * 10f;
             Flicker(0f);
+
+            // MV-1451: rim crackles (count by POWER) and the lightning trail bolt (POWER 5+).
+            int crackles = RimCrackleCountForPower(PowerLevel);
+            if (_rimBolts != null)
+                for (int i = 0; i < _rimBolts.Length; i++) _rimBolts[i].SetActive(i < crackles);
+            if (_trailBolt != null) _trailBolt.SetActive(PowerLevel >= 5);
+            RandomizeCrackle();
         }
 
-        private static Gradient TrailGradient(float t)
+        /// <summary>From POWER 6 the fire part of the trail tints toward pale cyan (0 below POWER 6).</summary>
+        private static float TrailCyanTint(int powerLevel) =>
+            powerLevel < 6 ? 0f : Mathf.Lerp(0.6f, 1f, (powerLevel - 6) / 2f);
+
+        /// <summary>The rim crackles and trail bolt re-randomise every 2-3 frames.</summary>
+        private void TickCrackle()
+        {
+            if (--_crackleCountdown <= 0) RandomizeCrackle();
+            UpdateTrailBolt();
+        }
+
+        private void RandomizeCrackle()
+        {
+            _crackleCountdown = Random.Range(2, 4);
+            float r = VisualDiameter * 0.5f;
+            if (_rimBolts != null)
+            {
+                for (int i = 0; i < _rimBolts.Length; i++)
+                {
+                    if (!_rimBolts[i].Active) continue;
+                    float a = Random.value * Mathf.PI * 2f;
+                    Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                    Vector3 start = dir * r;
+                    Vector3 end = start + dir * Random.Range(0.25f, 0.5f);
+                    _rimBolts[i].Randomize(start, end, 0.05f);
+                }
+            }
+            for (int i = 0; i < _trailJitter.Length; i++)
+                _trailJitter[i] = (i == 0 || i == _trailJitter.Length - 1) ? 0f : Random.Range(-0.09f, 0.09f);
+        }
+
+        /// <summary>Walks back along the disc's recorded path for the bolt's length, so the bolt follows
+        /// the disc's recent route round bounces rather than a straight line behind it.</summary>
+        private void UpdateTrailBolt()
+        {
+            if (_trailBolt == null || !_trailBolt.Active || _history.Count == 0) return;
+            float length = TrailBoltLengthForPower(PowerLevel);
+            Vector3 side = Vector3.Cross(_direction, Vector3.up);
+            int seg = _history.Count - 1;
+            Vector3 segFrom = transform.position;
+            float walked = 0f;
+            for (int i = 0; i < TrailBoltPoints; i++)
+            {
+                float want = length * i / (TrailBoltPoints - 1);
+                while (seg >= 0 && walked + Vector3.Distance(segFrom, _history[seg]) < want)
+                {
+                    walked += Vector3.Distance(segFrom, _history[seg]);
+                    segFrom = _history[seg];
+                    seg--;
+                }
+                Vector3 p;
+                if (seg < 0) p = segFrom;
+                else
+                {
+                    float segLen = Vector3.Distance(segFrom, _history[seg]);
+                    p = segLen < 1e-6f ? segFrom : Vector3.Lerp(segFrom, _history[seg], (want - walked) / segLen);
+                }
+                _trailPoints[i] = p + side * _trailJitter[i];
+            }
+            _trailBolt.SetPath(_trailPoints);
+        }
+
+        /// <summary>MV-1451: look only. Frazzle from POWER 4; chain lightning from POWER 6.</summary>
+        private void OnRobotHit(RobotEnemy robot)
+        {
+            if (PowerLevel >= 4) RobotFrazzleVfx.Trigger(robot);
+            if (PowerLevel >= 6) RicochetChain.Run(robot, PowerLevel);
+        }
+
+        private static Gradient TrailGradient(float t, float cyanTint)
         {
             var g = new Gradient();
             var alpha = new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) };
@@ -732,8 +876,8 @@ namespace MaxWorlds.Weapons
             // Fire (orange -> red) over [0, t], then a short step into the blue remainder.
             var keys = new List<GradientColorKey>
             {
-                new GradientColorKey(FlameOrange, 0f),
-                new GradientColorKey(FlameRed, t),
+                new GradientColorKey(Color.Lerp(FlameOrange, PaleCyan, cyanTint), 0f),
+                new GradientColorKey(Color.Lerp(FlameRed, PaleCyan, cyanTint), t),
             };
             float step = Mathf.Min(1f, t + 0.04f);
             if (t < 1f)
@@ -759,7 +903,7 @@ namespace MaxWorlds.Weapons
             float d = VisualDiameter;
             float t = PowerT(PowerLevel);
             if (_redHalo != null && _redHalo.gameObject.activeSelf)
-                _redHalo.localScale = Vector3.one * (d * Mathf.Lerp(1.3f, 2.0f, t) * f);
+                _redHalo.localScale = Vector3.one * (GlowDiameterForPower(PowerLevel) * (f - 0.09f));
             if (_embers == null) return;
             for (int i = 0; i < EmberCount; i++)
             {
