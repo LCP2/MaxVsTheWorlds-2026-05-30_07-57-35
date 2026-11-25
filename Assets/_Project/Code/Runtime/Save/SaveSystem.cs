@@ -326,6 +326,7 @@ namespace MaxWorlds.Save
             data.CheckpointFailedChallengeIds = ChallengePad.FailedIds();
             data.CheckpointUsedRepairBayIds = RepairBay.UsedIds();
             data.CheckpointFoundSecretIds = SecretCensus.FoundIds();
+            data.CheckpointCollectedRocketCrateIds = RocketCrateCensus.CollectedIds();   // MV-1448
             data.CheckpointOpenedVaultIds = Vault.OpenedIds();
             data.CheckpointHeldVaultKeyId = VaultKeyState.HeldVaultId ?? "";
 
@@ -410,6 +411,7 @@ namespace MaxWorlds.Save
             FactoryCensus.ApplyCheckpointDestroyedCradleIds(data.CheckpointDestroyedCradleIds);
             Pylon.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedPylonIds);
             Canister.ApplyCheckpointDestroyedIds(data.CheckpointDestroyedCanisterIds);
+            PickupDirector.ApplyCheckpointCollectedRocketCrates(data.CheckpointCollectedRocketCrateIds);   // MV-1448
             // MV-1320: must run BEFORE DestructibleCover's own restore below — a secret's
             // ApplyCheckpointDestroyed re-places its cache only when SecretCensus does not already
             // report it FOUND, so the found set has to be in place first.
@@ -557,6 +559,7 @@ namespace MaxWorlds.Save
             data.CheckpointDestroyedCradleIds = Array.Empty<string>();
             data.CheckpointDestroyedPylonIds = Array.Empty<string>();
             data.CheckpointDestroyedCanisterIds = Array.Empty<string>();
+            data.CheckpointCollectedRocketCrateIds = Array.Empty<string>();   // MV-1448
             data.CheckpointDestroyedCoverIds = Array.Empty<string>();
             data.CheckpointDefeatedBossAreas = Array.Empty<int>();
             data.CheckpointWonChallengeIds = Array.Empty<string>();

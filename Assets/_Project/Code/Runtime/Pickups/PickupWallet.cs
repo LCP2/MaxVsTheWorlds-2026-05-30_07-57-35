@@ -172,11 +172,48 @@ namespace MaxWorlds.Pickups
         /// <summary>Fired when the Power Cells count changes. Arg = the new total.</summary>
         public static event Action<int> PowerCellsSecondaryChanged;
 
-        /// <summary>Bank one collected Power Cell.</summary>
-        public static void AddPowerCellSecondary()
+        /// <summary>MV-1448: how many rockets the Shoulder Rack holds in the world being played — set by
+        /// <see cref="MaxWorlds.Arena.WorldCatalog.ApplyWorldStartLevelling"/> when a world starts.
+        /// <see cref="int.MaxValue"/> (uncapped) until one has, and after <see cref="Reset"/>.</summary>
+        public static int RocketCapacity { get; private set; } = int.MaxValue;
+
+        /// <summary>Rockets one Rocket Crate grants (MV-1448).</summary>
+        public const int RocketCrateRockets = 10;
+
+        /// <summary>Fired when <see cref="RocketCapacity"/> changes, so the HUD's n/cap re-reads.</summary>
+        public static event Action<int> RocketCapacityChanged;
+
+        public static void SetRocketCapacity(int capacity)
         {
+            int c = capacity > 0 ? capacity : int.MaxValue;
+            if (c == RocketCapacity) return;
+            RocketCapacity = c;
+            RocketCapacityChanged?.Invoke(c);
+        }
+
+        /// <summary>True while the rack has room for one more rocket (MV-1448).</summary>
+        public static bool HasRocketRoom => PowerCellsSecondary < RocketCapacity;
+
+        /// <summary>True while a whole Rocket Crate fits: <c>count &lt;= capacity - 10</c> (MV-1448).</summary>
+        public static bool RocketCrateFits => RocketCapacity == int.MaxValue || PowerCellsSecondary <= RocketCapacity - RocketCrateRockets;
+
+        /// <summary>Bank one collected Power Cell (rocket). MV-1448: returns false and changes nothing at
+        /// <see cref="RocketCapacity"/> - the caller must leave the pickup on the ground.</summary>
+        public static bool AddPowerCellSecondary()
+        {
+            if (!HasRocketRoom) return false;
             PowerCellsSecondary++;
             PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+            return true;
+        }
+
+        /// <summary>MV-1448: bank a Rocket Crate's <see cref="RocketCrateRockets"/>, only while they all fit.</summary>
+        public static bool TryAddRocketCrate()
+        {
+            if (!RocketCrateFits) return false;
+            PowerCellsSecondary += RocketCrateRockets;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+            return true;
         }
 
         /// <summary>Set the banked total directly — a save slot restoring what was on disk, not a pickup.</summary>
@@ -240,6 +277,7 @@ namespace MaxWorlds.Pickups
         {
             PowerCells = 0;
             PowerCellsSecondary = 0;
+            RocketCapacity = int.MaxValue;   // MV-1448: re-set by the next world start
             RigState.Reset();
             RigFusionState.Reset();
             PowerCellsChanged?.Invoke(0);

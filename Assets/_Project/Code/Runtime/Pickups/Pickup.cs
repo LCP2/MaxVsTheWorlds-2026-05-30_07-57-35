@@ -65,7 +65,24 @@ namespace MaxWorlds.Pickups
         /// stale id forward, same reasoning as <see cref="SecretId"/>.</summary>
         public string VaultId { get; set; }
 
+        /// <summary>For a Rocket Crate (MV-1448), its authored map id - what a checkpoint records as
+        /// collected. Null/empty for every other kind; reset on every placement.</summary>
+        public string CrateId { get; set; }
+
+        /// <summary>MV-1448: true while this Rocket Crate is LIT (collectable). Always true for any other kind.</summary>
+        public bool IsCrateLit { get; private set; } = true;
+
+        private const float CrateBobAmplitude = 0.1f;        // MV-1448: "bobs 0.1 m"
+        private const float CrateSpinDegreesPerSecond = 40f; // MV-1448: "spins slowly"
+        private const float CrateScale = 1.6f;
+        private const float CrateRingRadius = 0.95f;
+        private const float CrateLabelHeight = 0.95f;
+
         private Transform _spin;
+        private Transform _crateArt;
+        private TextMesh _rackFullLabel;
+        private float _bobAmplitude = 0.12f;
+        private float _spinSpeed = 140f;
         private float _baseY = FloatHeight;
         private GroundRing _glowRing;   // MV-698: only the Weapon Core carries one of its own
 
@@ -145,6 +162,12 @@ namespace MaxWorlds.Pickups
                 return;
             }
 
+            if (Kind == PickupKind.RocketCrate)
+            {
+                BuildRocketCrateVisual();
+                return;
+            }
+
             bool cell = Kind == PickupKind.PowerCell;
             var prim = GameObject.CreatePrimitive(cell ? PrimitiveType.Sphere : PrimitiveType.Cube);
             prim.name = "Visual";
@@ -198,6 +221,72 @@ namespace MaxWorlds.Pickups
             bmr.sharedMaterial = VfxMaterials.AlphaBlendTinted(VfxMaterials.Glow(), new Color(1f, 0.85f, 0.3f, 0.35f));
             bmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             bmr.receiveShadows = false;
+        }
+
+        /// <summary>MV-1448: the Rocket Crate - <see cref="WeaponPartArt.BuildRocketCrate"/> as the spinning
+        /// art, a floor ring in the rocket-cell colour (lit only), and a "RACK FULL" label floating above it
+        /// (dim only) that does not spin. Lit by default; <see cref="SetCrateLit"/> switches the look.</summary>
+        private void BuildRocketCrateVisual()
+        {
+            var art = WeaponPartArt.BuildRocketCrate(transform);
+            art.name = "PartArt:" + WeaponPartArt.Keys.RocketCrate;
+            art.transform.localScale = Vector3.one * CrateScale;   // chunky: legible on a 6-inch screen at the play camera
+            _crateArt = art.transform;
+            _spin = art.transform;
+            _bobAmplitude = CrateBobAmplitude;
+            _spinSpeed = CrateSpinDegreesPerSecond;
+
+            var label = new GameObject("RackFullLabel");
+            label.transform.SetParent(transform, false);
+            label.transform.localPosition = new Vector3(0f, CrateLabelHeight, 0f);
+            label.transform.localRotation = Quaternion.Euler(72f, 0f, 0f);
+            _rackFullLabel = label.AddComponent<TextMesh>();
+            _rackFullLabel.font = MaxWorlds.UI.HudFont.Get();
+            _rackFullLabel.fontSize = 64;
+            _rackFullLabel.characterSize = 0.07f;
+            _rackFullLabel.fontStyle = FontStyle.Bold;
+            _rackFullLabel.anchor = TextAnchor.MiddleCenter;
+            _rackFullLabel.alignment = TextAlignment.Center;
+            _rackFullLabel.color = new Color(0.92f, 0.36f, 0.27f);
+            _rackFullLabel.text = "RACK FULL";
+            var lmr = label.GetComponent<MeshRenderer>();
+            if (lmr != null)
+            {
+                lmr.sharedMaterial = _rackFullLabel.font.material;
+                lmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                lmr.receiveShadows = false;
+            }
+
+            _glowRing = GroundRing.Create("CrateRing");
+            _glowRing.transform.SetParent(transform, false);
+            _glowRing.Lift = 0.016f;   // the pickup-ring lift (PickupArtDirector.RingLift), below every danger telegraph
+            ApplyCrateLook(true);
+        }
+
+        /// <summary>MV-1448: lit (collectable, glowing, spinning) or dim (greyed, "RACK FULL", still). No-op
+        /// for any other kind or when already in that state.</summary>
+        public void SetCrateLit(bool lit)
+        {
+            if (Kind != PickupKind.RocketCrate || _crateArt == null || IsCrateLit == lit) return;
+            ApplyCrateLook(lit);
+        }
+
+        private void ApplyCrateLook(bool lit)
+        {
+            IsCrateLit = lit;
+            WeaponPartArt.SetRocketCrateLit(_crateArt, lit);
+            _spinSpeed = lit ? CrateSpinDegreesPerSecond : 0f;
+            if (_rackFullLabel != null) _rackFullLabel.gameObject.SetActive(!lit);
+            ShowCrateRing();
+        }
+
+        private void ShowCrateRing()
+        {
+            if (_glowRing == null || Kind != PickupKind.RocketCrate) return;
+            if (!IsCrateLit) { _glowRing.gameObject.SetActive(false); return; }
+            _glowRing.gameObject.SetActive(true);
+            Vector3 g = GroundMarkHeights.SurfaceAt(transform.position);
+            _glowRing.Show(new Vector3(transform.position.x, g.y, transform.position.z), CrateRingRadius, WeaponPartArt.PowerCellSecondaryGlow);
         }
 
         private static void AddKeyPart(Transform parent, string partName, PrimitiveType type, Vector3 localPos, Vector3 scale, Material mat)
@@ -268,7 +357,8 @@ namespace MaxWorlds.Pickups
             // MV-698: the glow ring is a flat ground quad, not a child riding the pickup's own
             // transform (see GroundRing's own doc comment on why — it must not inherit the bob) — so it
             // needs its own explicit re-place on every placement, fresh drop or pooled reuse alike.
-            if (_glowRing != null)
+            if (Kind == PickupKind.RocketCrate) { ShowCrateRing(); }
+            else if (_glowRing != null)
                 _glowRing.Show(new Vector3(groundPos.x, 0f, groundPos.z), WeaponCoreRingRadius, WeaponCoreColor);
             Registered?.Invoke(this);
         }
@@ -277,10 +367,14 @@ namespace MaxWorlds.Pickups
         {
             // A slow spin + gentle bob is the whole reason a small greybox reads as "pick me up" from
             // above rather than as a bit of dropped debris.
-            if (_spin != null) _spin.Rotate(0f, 140f * Time.deltaTime, 0f, Space.Self);
+            if (_spin != null && _spinSpeed > 0f) _spin.Rotate(0f, _spinSpeed * Time.deltaTime, 0f, Space.Self);
             Vector3 pos = transform.position;
-            pos.y = _baseY + Mathf.Sin(Time.unscaledTime * 3f) * 0.12f;
+            pos.y = _baseY + Mathf.Sin(Time.unscaledTime * 3f) * _bobAmplitude;
             transform.position = pos;
+            // MV-1448: the crate's floor ring is a child of this bobbing transform but must stay pinned to
+            // the ground (a ring that bobs dips under the floor and vanishes) - re-pin it every frame, the
+            // same way PickupArtDirector re-pins every other pickup's ring.
+            if (Kind == PickupKind.RocketCrate) ShowCrateRing();
         }
     }
 }

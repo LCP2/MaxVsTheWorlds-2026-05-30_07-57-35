@@ -101,6 +101,7 @@ namespace MaxWorlds.VFX
             public const string PowerCell = "power_cell";
             public const string PowerCellSecondary = "power_cell_secondary";
             public const string RackModule = "rack_module";
+            public const string RocketCrate = "rocket_crate";   // MV-1448
 
             // WV-237 — the machine-internals designs a dropped part is randomly dressed as. Purely
             // cosmetic (see MachineInternalsKeys below, which PickupArtDirector draws from); unlike
@@ -157,6 +158,7 @@ namespace MaxWorlds.VFX
                 case Keys.PowerCell: return BuildPowerCell(parent);
                 case Keys.PowerCellSecondary: return BuildPowerCellSecondary(parent);
                 case Keys.RackModule: return BuildRackModule(parent);
+                case Keys.RocketCrate: return BuildRocketCrate(parent);
                 case Keys.Gear: return BuildGear(parent);
                 case Keys.Coil: return BuildCoil(parent);
                 case Keys.CircuitBlock: return BuildCircuitBlock(parent);
@@ -500,6 +502,119 @@ namespace MaxWorlds.VFX
             Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.32f, 0.20f), 0.05f);
             Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.14f, 0.20f), 0.045f);
             return root;
+        }
+
+        // ---------------------------------------------------------------- Rocket Crate (MV-1448)
+
+        public const string RocketCrateGlowName = "CrateGlow";
+        private const string CrateBodyName = "CrateBody";
+        private const string CrateSymbolPrefix = "CrateSymbol";
+        private const string CrateBandYellowPrefix = "CrateBandY";
+        private const string CrateLabelName = "CrateLabel";
+
+        private static readonly Color CrateBodyLit = new Color(0.15f, 0.17f, 0.21f);
+        private static readonly Color CrateBodyDim = new Color(0.27f, 0.28f, 0.30f);
+        private static readonly Color CrateSymbolLit = Color.white;
+        private static readonly Color CrateSymbolDim = new Color(0.46f, 0.47f, 0.50f);
+        private static readonly Color CrateYellowLit = new Color(1f, 0.78f, 0.04f);
+        private static readonly Color CrateYellowDim = new Color(0.36f, 0.33f, 0.21f);
+        private static readonly Color CrateBlack = new Color(0.04f, 0.04f, 0.05f);
+        private static readonly Color CrateTextDim = new Color(0.55f, 0.56f, 0.60f);
+
+        /// <summary>A Rocket Crate (MV-1448; design image MV-1448.png): a chunky dark crate, a big white
+        /// rocket symbol and "x10" lying on its top face (the fixed ~72 degree camera sees the top), a
+        /// yellow-black hazard band round the sides, and an additive glow in the rocket-cell colour
+        /// (<see cref="PowerCellSecondaryGlow"/>). Authored base-centred on the origin; the caller sets
+        /// the look with <see cref="SetRocketCrateLit"/>.</summary>
+        public static GameObject BuildRocketCrate(Transform parent = null)
+        {
+            var root = Root("RocketCrate", parent);
+            const float w = 0.62f, h = 0.40f, d = 0.46f;
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, CrateBodyLit);
+            Material black = MaterialLibrary.Tinted(SurfaceKind.Metal, CrateBlack);
+            Material yellow = MaterialLibrary.Tinted(SurfaceKind.Metal, CrateYellowLit);
+            Material white = MaterialLibrary.Tinted(SurfaceKind.Metal, CrateSymbolLit);
+
+            Part(root, CrateBodyName, PrimitiveType.Cube, Vector3.zero, new Vector3(w, h, d), null, body);
+
+            // Hazard band: alternating yellow/black blocks round all four faces, low on the crate.
+            const int blocks = 7;
+            for (int face = 0; face < 4; face++)
+            {
+                bool alongX = face < 2;
+                float length = alongX ? w : d;
+                float sign = (face % 2 == 0) ? 1f : -1f;
+                float step = length / blocks;
+                for (int i = 0; i < blocks; i++)
+                {
+                    float along = -length * 0.5f + step * (i + 0.5f);
+                    Vector3 pos = alongX
+                        ? new Vector3(along, -0.10f, sign * (d * 0.5f + 0.004f))
+                        : new Vector3(sign * (w * 0.5f + 0.004f), -0.10f, along);
+                    Vector3 scale = alongX ? new Vector3(step, 0.07f, 0.012f) : new Vector3(0.012f, 0.07f, step);
+                    bool yel = i % 2 == 0;
+                    Part(root, (yel ? CrateBandYellowPrefix : "CrateBandK") + face + "_" + i, PrimitiveType.Cube, pos, scale, null, yel ? yellow : black);
+                }
+            }
+
+            // The rocket symbol, flat on the top face, nose to the upper right.
+            var symbol = new GameObject("CrateSymbolRoot").transform;
+            symbol.SetParent(root.transform, false);
+            symbol.localPosition = new Vector3(-0.12f, h * 0.5f + 0.045f, 0.01f);
+            symbol.localRotation = Quaternion.Euler(0f, -30f, 0f);
+            var symbolGo = symbol.gameObject;
+            Part(symbolGo, CrateSymbolPrefix + "Body", PrimitiveType.Capsule, Vector3.zero, new Vector3(0.10f, 0.15f, 0.10f), Quaternion.Euler(0f, 0f, 90f), white);
+            Part(symbolGo, CrateSymbolPrefix + "Nose", PrimitiveType.Sphere, new Vector3(0.17f, 0f, 0f), new Vector3(0.10f, 0.10f, 0.10f), null, white);
+            Part(symbolGo, CrateSymbolPrefix + "FinA", PrimitiveType.Cube, new Vector3(-0.12f, 0f, 0.075f), new Vector3(0.10f, 0.02f, 0.07f), Quaternion.Euler(0f, 25f, 0f), white);
+            Part(symbolGo, CrateSymbolPrefix + "FinB", PrimitiveType.Cube, new Vector3(-0.12f, 0f, -0.075f), new Vector3(0.10f, 0.02f, 0.07f), Quaternion.Euler(0f, -25f, 0f), white);
+
+            // "x10", lying on the top face beside the rocket, readable from above.
+            var label = new GameObject(CrateLabelName);
+            label.transform.SetParent(root.transform, false);
+            label.transform.localPosition = new Vector3(0.14f, h * 0.5f + 0.006f, 0f);
+            label.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var tm = label.AddComponent<TextMesh>();
+            tm.font = MaxWorlds.UI.HudFont.Get();
+            tm.fontSize = 64;
+            tm.characterSize = 0.04f;
+            tm.fontStyle = FontStyle.Bold;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = PowerCellSecondaryGlow;
+            tm.text = "x10";
+            var lmr = label.GetComponent<MeshRenderer>();
+            if (lmr != null)
+            {
+                lmr.sharedMaterial = tm.font.material;
+                lmr.shadowCastingMode = ShadowCastingMode.Off;
+                lmr.receiveShadows = false;
+            }
+
+            Glow(root, RocketCrateGlowName, new Vector3(0f, -0.46f, 0f), 1.5f, PowerCellSecondaryGlow);   // a halo under the crate, not a lamp over it
+            root.transform.Find(RocketCrateGlowName).localScale = new Vector3(1.5f, 0.02f, 1.5f);
+            return root;
+        }
+
+        /// <summary>Switches a built Rocket Crate between its LIT look (dark crate, white rocket, yellow
+        /// band, glow) and its DIM look (greyed, no glow) - MV-1448. Idempotent.</summary>
+        public static void SetRocketCrateLit(Transform art, bool lit)
+        {
+            if (art == null) return;
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, lit ? CrateBodyLit : CrateBodyDim);
+            Material white = MaterialLibrary.Tinted(SurfaceKind.Metal, lit ? CrateSymbolLit : CrateSymbolDim);
+            Material yellow = MaterialLibrary.Tinted(SurfaceKind.Metal, lit ? CrateYellowLit : CrateYellowDim);
+
+            foreach (MeshRenderer r in art.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                string n = r.name;
+                if (n == CrateBodyName) r.sharedMaterial = body;
+                else if (n.StartsWith(CrateSymbolPrefix)) r.sharedMaterial = white;
+                else if (n.StartsWith(CrateBandYellowPrefix)) r.sharedMaterial = yellow;
+                else if (n == RocketCrateGlowName) r.gameObject.SetActive(lit);   // not Renderer.enabled: the area gate re-enables renderers
+            }
+
+            Transform label = art.Find(CrateLabelName);
+            if (label != null && label.TryGetComponent(out TextMesh tm)) tm.color = lit ? PowerCellSecondaryGlow : CrateTextDim;
         }
 
         /// <summary>A point on a circle — <paramref name="angleDeg"/> around the vertical axis at height

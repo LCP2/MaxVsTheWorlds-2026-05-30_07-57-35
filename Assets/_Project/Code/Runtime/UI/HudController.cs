@@ -432,6 +432,7 @@ namespace MaxWorlds.UI
             HudSignals.Objective += OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged += OnPowerCellsSecondary;
+            MaxWorlds.Pickups.PickupWallet.RocketCapacityChanged += OnRocketCapacity;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
@@ -475,6 +476,7 @@ namespace MaxWorlds.UI
             HudSignals.Objective -= OnObjective;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged -= OnPowerCellsSecondary;
+            MaxWorlds.Pickups.PickupWallet.RocketCapacityChanged -= OnRocketCapacity;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
@@ -529,10 +531,16 @@ namespace MaxWorlds.UI
         private void RefreshPowerCellSecondaryDisplay(int total)
         {
             if (_cellSecondaryCount == null) return;
+            // MV-1448: "n/cap" once a world has set the rack's capacity (before that - tests, captures -
+            // the bare count).
+            int cap = MaxWorlds.Pickups.PickupWallet.RocketCapacity;
             _cellSecondaryCount.text = total <= 0 && WeaponSystemState.SecondaryKind == SecondaryKind.ShoulderRack
                 ? "EMPTY"
-                : total.ToString();
+                : cap == int.MaxValue ? total.ToString() : $"{total}/{cap}";
         }
+
+        private void OnRocketCapacity(int capacity) =>
+            RefreshPowerCellSecondaryDisplay(MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary);
 
         /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
         /// didn't change, but the "current/max" text still needs to redraw for the new max.</summary>

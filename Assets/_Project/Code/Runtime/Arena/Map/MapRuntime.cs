@@ -1402,6 +1402,10 @@ namespace MaxWorlds.Arena
                 if (e != null && e.secret) secretTotal++;
             SecretCensus.SeedTotal(secretTotal);
 
+            // MV-1448: and again for Rocket Crates - a level built a second time starts with none collected
+            // (a checkpoint restore re-applies its own collected set after the build).
+            RocketCrateCensus.Reset();
+
             // MV-1321: same reasoning again — a level loaded a second time must count its own vaults,
             // not the previous level's (or the previous test's) ghosts.
             Vault.ResetRegistry();
@@ -1726,6 +1730,15 @@ namespace MaxWorlds.Arena
                         // not designed around it (the posts flanking the shed). Never moves — batches.
                         GameObject propGo = Box(root, e.id, e.GroundedCenter, e.Size, blocksSight: true, isStatic: true);
                         AddStatic(map, propGo, staticGeometry, rendererZones);
+                        break;
+                    }
+
+                    case EntityKind.RocketCrate:
+                    {
+                        // MV-1448: a walk-over Rocket Crate, placed through the director (it pools and lights
+                        // it), tagged for the area gate exactly like the map-authored cache below.
+                        Pickup crate = PickupDirector.EnsureInstalled().PlaceRocketCrate(e.GroundedCenter, e.id);
+                        if (crate != null) TagStatic(map, crate.gameObject, rendererZones);
                         break;
                     }
 

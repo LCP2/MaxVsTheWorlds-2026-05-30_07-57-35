@@ -707,6 +707,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv1426ArcStrikerMark());
             Add(BuildMv1429MarksmanBolter());
             Add(BuildMv1435MarksmanWheels());
+            Add(BuildMv1448RocketCrate());
             Add(BuildMv1436A5TopDown());
             return d;
         }
@@ -2847,6 +2848,73 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-1436-a5-top-down", NoSetup) },
+                ExtraReport = () => found + "\n",
+            };
+        }
+
+        /// <summary>MV-1448 AC2: ONE capture of a lit and a dim Rocket Crate side by side at the play camera.
+        /// Run via <c>cc-mv1448-capture.bat</c>; writes <c>Logs/MV-1448-rocket-crate.png</c>.</summary>
+        private static CapturePreset BuildMv1448RocketCrate()
+        {
+            string found = "no crates placed";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;
+                if (!DevModeController.TryJumpToArea("a6"))
+                    throw new CaptureAbortException("DevModeController.TryJumpToArea(\"a6\") found no map/player to jump");
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("MV-1448: no player after jumping to City a6");
+
+                PickupDirector director = PickupDirector.EnsureInstalled();
+                Vector3 pp = player.transform.position;
+                PickupWallet.SetPowerCellSecondary(5);   // lit: 5 <= 30 - 10
+                Pickup lit = director.PlaceRocketCrate(pp + new Vector3(-1.0f, 0f, -2.6f), "mv1448_capture_lit");
+                Pickup dim = director.PlaceRocketCrate(pp + new Vector3(1.0f, 0f, -2.6f), "mv1448_capture_dim");
+                if (lit == null || dim == null) throw new CaptureAbortException("MV-1448: crates not placed");
+                director.enabled = false;   // stop its per-frame re-light so the dim one stays dim
+                dim.SetCrateLit(false);
+                float until = Time.time + 0.5f;
+                while (Time.time < until) yield return null;
+
+                found = $"lit crate lit={lit.IsCrateLit} dim crate lit={dim.IsCrateLit}, Max at {pp}";
+                Vector3 mid = (lit.transform.position + dim.transform.position) * 0.5f;
+                Time.timeScale = 0f;
+                float pitch = 60f, distance = 4.5f;   // the play camera's own pitch, pulled in so the pair is legible
+                var fixedRig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (fixedRig != null) { pitch = fixedRig.Pitch; fixedRig.enabled = false; }
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(mid - rot * Vector3.forward * distance, rot);
+                yield return null;
+                CaptureDirector.WarmUpRender(cam);
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv1448rocketcrate",
+                LogTag = "[MV1448Capture]",
+                Flag = "-mv1448shot",
+                ArmFile = "Temp/mv1448.arm",
+                HeadlessMarker = "Temp/mv1448.headless",
+                DoneFileName = "_mv1448_done.txt",
+                Width = 1600,
+                Height = 1000,
+                DisableBrain = false,
+                QualityLevelName = "Mobile",
+                OutputDirs = new[] { "Logs" },
+                TimeoutSeconds = 120,
+                BeforeSceneLoad = () =>
+                {
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = WorldCatalog.IndexOf(WorldIds.City);
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-1448-rocket-crate", NoSetup) },
                 ExtraReport = () => found + "\n",
             };
         }

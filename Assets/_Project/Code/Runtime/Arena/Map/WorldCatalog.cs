@@ -296,6 +296,12 @@ namespace MaxWorlds.Arena
         /// floor a DEV world start raises the bank to, if it's lower. Same "never reduces" rule as
         /// <see cref="DevStartParts"/>.</summary>
         public int DevStartCells;
+
+        /// <summary>MV-1448: the most Shoulder Rack rockets (<see cref="MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary"/>)
+        /// the rack holds in this world — no source can raise the count above it. Also the top of the
+        /// world-start band, whose bottom is <see cref="DevStartCells"/> (the field keeps its name: since
+        /// MV-1448 it is the floor of EVERY world start, not just a DEV one).</summary>
+        public int RocketCapacity;
     }
 
     /// <summary>The one table of worlds (MV-1141) — introduced so a fourth world (the City) can be
@@ -531,6 +537,12 @@ namespace MaxWorlds.Arena
                 // MV-1185
                 if (row.DevStartParts < 0) problems.Add($"row {i} ('{row.Id}'): DevStartParts negative");
                 if (row.DevStartCells < 0) problems.Add($"row {i} ('{row.Id}'): DevStartCells negative");
+                // MV-1448: the world-start band needs a floor under its ceiling, and a crate (+10) must fit.
+                // (0 = a row that authors no capacity, i.e. uncapped - test rows only; see ApplyWorldStartLevelling.)
+                if (row.RocketCapacity < 0 || (row.RocketCapacity > 0 && row.RocketCapacity < 10))
+                    problems.Add($"row {i} ('{row.Id}'): RocketCapacity below one Rocket Crate (10)");
+                if (row.RocketCapacity > 0 && row.DevStartCells > row.RocketCapacity)
+                    problems.Add($"row {i} ('{row.Id}'): DevStartCells above RocketCapacity");
             }
 
             return problems;
@@ -546,7 +558,23 @@ namespace MaxWorlds.Arena
         {
             WorldDefinition row = Get(worldIndex);
             if (PickupWallet.PowerCells < row.DevStartParts) PickupWallet.SetPowerCells(row.DevStartParts);
-            if (PickupWallet.PowerCellsSecondary < row.DevStartCells) PickupWallet.SetPowerCellSecondary(row.DevStartCells);
+            ApplyWorldStartLevelling(worldIndex);   // MV-1448: the rocket half is the same band a normal start lands in
+        }
+
+        /// <summary>MV-1448: a world is starting (normal play, a DEV start or a jump) - sets the rack's
+        /// capacity to <paramref name="worldIndex"/>'s <see cref="WorldDefinition.RocketCapacity"/> and
+        /// levels the count into that world's band: <c>clamp(current, DevStartCells, RocketCapacity)</c>.
+        /// Arriving from the previous world and starting fresh therefore land in the same place.</summary>
+        public static void ApplyWorldStartLevelling(int worldIndex, bool raiseToFloor = true)
+        {
+            WorldDefinition row = Get(worldIndex);
+            // A test row that authors no capacity (0) is uncapped; every shipped row is validated >= 10.
+            int cap = row.RocketCapacity > 0 ? row.RocketCapacity : int.MaxValue;
+            PickupWallet.SetRocketCapacity(cap);
+            // raiseToFloor false = a checkpoint RESUME into this world: only the ceiling applies, so dying
+            // and resuming mid-world never refills an empty rack up to the world-start floor.
+            int floor = raiseToFloor ? row.DevStartCells : 0;
+            PickupWallet.SetPowerCellSecondary(Mathf.Clamp(PickupWallet.PowerCellsSecondary, floor, cap));
         }
 
         /// <summary>Test seam (MV-1141). No <c>InternalsVisibleTo</c> back to the EditMode test assembly
@@ -605,6 +633,7 @@ namespace MaxWorlds.Arena
                 // MV-1185: a fresh run is unchanged -- FreshRun already lands PickupWallet at 0/0.
                 DevStartParts = 0,
                 DevStartCells = 0,
+                RocketCapacity = 10,
             },
             new WorldDefinition
             {
@@ -656,6 +685,7 @@ namespace MaxWorlds.Arena
                 // board), so Capacity resolves to DefaultCapacity(20) + 4*10 = 60 -- 50% rounded down = 30.
                 DevStartParts = 30,
                 DevStartCells = 15,
+                RocketCapacity = 20,
             },
             new WorldDefinition
             {
@@ -711,6 +741,7 @@ namespace MaxWorlds.Arena
                 // every board), so Capacity resolves to 60 the same as every other row here -- 50% = 30.
                 DevStartParts = 30,
                 DevStartCells = 20,
+                RocketCapacity = 30,
             },
             new WorldDefinition
             {
@@ -773,6 +804,7 @@ namespace MaxWorlds.Arena
                 // other board), so Capacity resolves to 60 here as well -- 50% = 30.
                 DevStartParts = 30,
                 DevStartCells = 25,
+                RocketCapacity = 40,
             },
             new WorldDefinition
             {
@@ -836,6 +868,7 @@ namespace MaxWorlds.Arena
                 DevStart = DevStartLoadout.PreviousWorldExitRig,
                 DevStartParts = 30,
                 DevStartCells = 25,
+                RocketCapacity = 40,
             },
         };
     }

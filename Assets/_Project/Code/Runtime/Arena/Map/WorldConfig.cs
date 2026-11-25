@@ -686,6 +686,18 @@ namespace MaxWorlds.Arena
         public float z;
     }
 
+    /// <summary>A Rocket Crate (MV-1448) — a walk-over pickup worth +10 Shoulder Rack rockets, lit and
+    /// collectable only while all 10 fit under the world's <see cref="WorldDefinition.RocketCapacity"/>.
+    /// Same shape and absolute-world-metres convention as <see cref="WorldCanister"/>; collected once per
+    /// run by id. <see cref="WorldArea.rocketCrates"/> defaults empty; placing them is a data ticket.</summary>
+    [Serializable]
+    public sealed class WorldRocketCrate
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>A Mothership airlock panel (MV-1305) — rule AIRLOCKS (Lee, 27 Oct 2026). Another
     /// PLAYER-triggered hazard, same footing as <see cref="WorldCanister"/>: any player-side hit while
     /// READY blows it, and the resulting pull is explicitly licensed to remove robots too
@@ -810,6 +822,9 @@ namespace MaxWorlds.Arena
         /// <summary>Explosive canisters authored into this area (MV-1296). Optional; no config authors
         /// any yet — placement is a separate ticket (MV-1302).</summary>
         public WorldCanister[] canisters = Array.Empty<WorldCanister>();
+
+        /// <summary>Rocket Crates authored into this area (MV-1448). Optional; none authored yet.</summary>
+        public WorldRocketCrate[] rocketCrates = Array.Empty<WorldRocketCrate>();
 
         /// <summary>Airlock panels authored into this area (MV-1305). Optional; no config authors any
         /// yet — placement is a separate ticket (MV-1310).</summary>

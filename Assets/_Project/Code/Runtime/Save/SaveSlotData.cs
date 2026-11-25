@@ -258,6 +258,10 @@ namespace MaxWorlds.Save
         /// while one already found correctly places nothing.</summary>
         public string[] CheckpointFoundSecretIds = Array.Empty<string>();
 
+        /// <summary>Map ids of every Rocket Crate collected by the time this checkpoint was captured
+        /// (MV-1448) - a resume never places one of them again (one collect per crate per run).</summary>
+        public string[] CheckpointCollectedRocketCrateIds = Array.Empty<string>();
+
         /// <summary>Stable ids (<c>Vault.Id</c>) of every vault already OPEN by the time this checkpoint
         /// was captured (MV-1321) — restored the same way as <see cref="CheckpointUsedRepairBayIds"/>:
         /// silently re-applying OPEN onto whichever of the freshly-rebuilt level's vaults carry a

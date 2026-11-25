@@ -135,6 +135,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _rackModulePool = new Stack<Pickup>(1);
         private readonly Stack<Pickup> _helmKeyPool = new Stack<Pickup>(1);
         private readonly Stack<Pickup> _vaultKeyPool = new Stack<Pickup>(1);
+        private readonly Stack<Pickup> _rocketCratePool = new Stack<Pickup>(2);   // MV-1448
 
         /// <summary>MV-727: true once this run's ONE Rack Module has dropped — gates every Replicator
         /// after the first. Run-scoped like every other per-run flag in this codebase (RigState,
@@ -479,6 +480,43 @@ namespace MaxWorlds.Pickups
         /// <see cref="MaxWorlds.Factories.VaultKeyState"/>'s held key to that vault.</summary>
         public Pickup PlaceVaultKeyAt(Vector3 pos, string vaultId) => SpawnDrop(PickupKind.VaultKey, pos, vaultId: vaultId);
 
+        /// <summary>MV-1448: places an authored Rocket Crate at <paramref name="pos"/> - unless this run has
+        /// already collected it (<see cref="RocketCrateCensus"/>), in which case nothing is placed and null
+        /// returns. Never ages, never pulled by Magneto.</summary>
+        public Pickup PlaceRocketCrate(Vector3 pos, string id)
+        {
+            if (RocketCrateCensus.IsCollected(id)) return null;
+            Pickup p = SpawnDrop(PickupKind.RocketCrate, pos);   // (SpawnDrop's signature is reflected into by older tests - don't widen it)
+            if (p == null) return null;
+            p.CrateId = id;
+            p.SetCrateLit(PickupWallet.RocketCrateFits);
+            return p;
+        }
+
+        /// <summary>MV-1448: a checkpoint restore - records <paramref name="collectedIds"/> as collected and
+        /// removes any matching crate the level's rebuild just placed, so a collected crate never returns.</summary>
+        public static void ApplyCheckpointCollectedRocketCrates(IReadOnlyList<string> collectedIds)
+        {
+            if (collectedIds == null || collectedIds.Count == 0) return;
+            RocketCrateCensus.ApplyCheckpointCollectedIds(collectedIds);
+            PickupDirector director = FindFirstObjectByType<PickupDirector>();
+            if (director == null) return;
+            for (int i = director._live.Count - 1; i >= 0; i--)
+            {
+                Pickup p = director._live[i];
+                if (p != null && p.Kind == PickupKind.RocketCrate && RocketCrateCensus.IsCollected(p.CrateId))
+                    director.RetireCrate(i, p);
+            }
+        }
+
+        private void RetireCrate(int index, Pickup p)
+        {
+            MapStaticBatchRoot.Active?.Unregister(p.GetComponentsInChildren<Renderer>(true));
+            p.gameObject.SetActive(false);
+            _live.RemoveAt(index);
+            _rocketCratePool.Push(p);
+        }
+
         /// <summary>MV-964: banks any Weapon Core still on the ground exactly as if Max had walked over
         /// it — <see cref="MaxWorlds.Intro.WorldJoinSequence"/> calls this the instant Max crosses the
         /// world's finale door, so a core he never walked over in the open can't block progress into the
@@ -578,6 +616,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.RackModule => _rackModulePool,
                 PickupKind.HelmKey => _helmKeyPool,
                 PickupKind.VaultKey => _vaultKeyPool,
+                PickupKind.RocketCrate => _rocketCratePool,
                 _ => _cellPool,
             };
             // MV-1147: a pooled entry can have been destroyed out from under the director while sitting
@@ -734,6 +773,15 @@ namespace MaxWorlds.Pickups
 
             _pullingThisTick.Clear();
 
+            // MV-1448: a Rocket Crate is lit exactly while all 10 rockets fit - re-read every tick so it
+            // re-lights the moment the count drops (and dims the moment it would overflow).
+            bool crateFits = PickupWallet.RocketCrateFits;
+            for (int ci = 0; ci < _live.Count; ci++)
+            {
+                Pickup cp = _live[ci];
+                if (cp != null && cp.Kind == PickupKind.RocketCrate) cp.SetCrateLit(crateFits);
+            }
+
             if (_max != null && _live.Count > 0)
             {
                 Vector3 m = _max.position;
@@ -851,7 +899,8 @@ namespace MaxWorlds.Pickups
         /// "below its cap".</summary>
         public static bool CellMagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
             kind == PickupKind.PowerCellSecondary && magnetoRadius > 0f
-            && squaredDistance <= magnetoRadius * magnetoRadius;
+            && squaredDistance <= magnetoRadius * magnetoRadius
+            && PickupWallet.HasRocketRoom;   // MV-1448: a rack at capacity never reels a rocket in; a Rocket Crate is never pulled
 
         private void Collect(int index, Pickup p)
         {
@@ -889,8 +938,23 @@ namespace MaxWorlds.Pickups
                 case PickupKind.PowerCellSecondary:
                     // MV-672: a separate, scarcer currency — banks unconditionally (no reserve cap
                     // authored for it yet, unlike PickupKind.PowerCell above).
-                    PickupWallet.AddPowerCellSecondary();
+                    // MV-1448: capped at the world's rack capacity - at capacity it stays on the ground,
+                    // unclaimed, exactly as a Parts cell at capacity does (MV-439), one tell per walk-over.
+                    if (!PickupWallet.AddPowerCellSecondary())
+                    {
+                        if (_reserveFullTold.Add(p))
+                            HudSignals.EmitPickup(p.transform.position, "RACK FULL", new Color(0.9f, 0.35f, 0.25f));
+                        return;
+                    }
                     HudSignals.EmitPickup(p.transform.position, "+1 POWER CELL",
+                        MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow);
+                    break;
+                case PickupKind.RocketCrate:
+                    // MV-1448: lit only while all 10 rockets fit; dim, walking over it does nothing and the
+                    // crate stays put (it re-lights once the count drops).
+                    if (!PickupWallet.TryAddRocketCrate()) return;
+                    RocketCrateCensus.MarkCollected(p.CrateId);
+                    HudSignals.EmitPickup(p.transform.position, "+10 ROCKETS",
                         MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow);
                     break;
                 case PickupKind.WeaponCore:
@@ -964,6 +1028,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.RackModule => _rackModulePool,
                 PickupKind.HelmKey => _helmKeyPool,
                 PickupKind.VaultKey => _vaultKeyPool,
+                PickupKind.RocketCrate => _rocketCratePool,
                 _ => _cellPool,
             };
             pool.Push(p);

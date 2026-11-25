@@ -60,6 +60,9 @@ namespace MaxWorlds.Arena
         /// <summary>An explosive canister's built height, in metres (MV-1296 ticket: "1.0 m tall").</summary>
         public const float CanisterHeight = 1f;
 
+        /// <summary>A Rocket Crate's footprint, metres (MV-1448) — the clearance box a placement checks.</summary>
+        public const float RocketCrateFootprint = 0.8f;
+
         /// <summary>An airlock panel's built width, in metres (MV-1305 ticket: "a 3 m-wide hull
         /// door").</summary>
         public const float AirlockWidth = 3f;
@@ -727,6 +730,27 @@ namespace MaxWorlds.Arena
                         width = CanisterFootprint,
                         height = CanisterHeight,
                         depth = CanisterFootprint,
+                    });
+                }
+            }
+
+            // MV-1448: an area's Rocket Crates — per-entity, id defaulted like a canister's.
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldRocketCrate[] crates = a.rocketCrates ?? Array.Empty<WorldRocketCrate>();
+                for (int i = 0; i < crates.Length; i++)
+                {
+                    WorldRocketCrate c = crates[i];
+                    if (c == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(c.id) ? $"{a.id}_rocketcrate{i + 1}" : c.id,
+                        kind = "rocketcrate",
+                        x = c.x,
+                        z = c.z,
+                        width = RocketCrateFootprint,
+                        height = RocketCrateFootprint,
+                        depth = RocketCrateFootprint,
                     });
                 }
             }

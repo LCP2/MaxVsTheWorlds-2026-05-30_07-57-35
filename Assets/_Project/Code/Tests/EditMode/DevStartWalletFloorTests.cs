@@ -119,8 +119,10 @@ namespace MaxWorlds.Tests.EditMode
                 bool jumped = runner.JumpToFinaleArea();
                 Assert.IsTrue(jumped, "MV-1185: JumpToFinaleArea must succeed for the City");
 
-                Assert.AreEqual(40, PickupWallet.PowerCellsSecondary,
-                    "MV-1185: the DEV-start floor must never reduce an existing higher balance");
+                // MV-1448: the rocket half of the floor is now a band - an existing higher balance is
+                // levelled DOWN to the City's capacity (30), no longer left untouched.
+                Assert.AreEqual(30, PickupWallet.PowerCellsSecondary,
+                    "MV-1448: a DEV jump levels the rocket count into the City's 20..30 band");
             }
             finally
             {

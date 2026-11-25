@@ -29,6 +29,7 @@ namespace MaxWorlds.Arena
         Challenge,            // MV-1318
         RepairBay,            // MV-1319
         Vault,                // MV-1321
+        RocketCrate,          // MV-1448
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size

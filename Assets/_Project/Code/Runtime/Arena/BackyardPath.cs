@@ -108,6 +108,9 @@ namespace MaxWorlds.Arena
             int worldIndex = ActiveWorldIndex();
             ResolvedWorldIndex = worldIndex;
             ApplyPendingMorphAtRunStart(worldIndex);
+            // MV-1448: a world is starting - set the rack's capacity and level the rocket count into this
+            // world's band (a checkpoint resume keeps its own count, only capped).
+            WorldCatalog.ApplyWorldStartLevelling(worldIndex, raiseToFloor: !SaveSystem.PendingResume.HasValue);
             string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(worldIndex) : worldKey;
 
             WorldConfig cfg = WorldLibrary.Load(key);

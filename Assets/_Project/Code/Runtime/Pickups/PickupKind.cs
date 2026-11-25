@@ -35,5 +35,7 @@ namespace MaxWorlds.Pickups
         RackModule,
         HelmKey,
         VaultKey,
+        /// <summary>MV-1448: a map-authored +10 rockets crate, lit only while all 10 fit the rack.</summary>
+        RocketCrate,
     }
 }
