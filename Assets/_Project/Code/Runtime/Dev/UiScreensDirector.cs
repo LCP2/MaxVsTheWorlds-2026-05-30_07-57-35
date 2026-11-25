@@ -244,6 +244,20 @@ namespace MaxWorlds.Dev
                 () => { weapons.RebuildBoard(); weapons.Open(); }, weapons.Close, canvas, ScaleBoardTo);
             RigBoard.UseWorld(0);
             weapons.RebuildBoard();
+            // MV-1453: the City board with RICOCHETS (a KEY node) selected, 852x393 at 3x (2556x1179), ONE capture.
+            yield return CaptureFixtureScreen("rig-mv1453-city-2556x1179", 2556, 1179, ApplyRigFixtureCityRicochet,
+                () => { weapons.RebuildBoard(); weapons.Open(); weapons.SelectNode("p_ric"); }, weapons.Close, canvas, ScaleBoardTo);
+            RigBoard.UseWorld(0);
+            weapons.RebuildBoard();
+        }
+
+        /// <summary>MV-1453: the City's board (Ricochet discs), PRIMARY open, every node left at its baseline.</summary>
+        public static void ApplyRigFixtureCityRicochet()
+        {
+            WeaponSystemState.Reset();
+            PickupWallet.Reset();
+            WeaponSystemState.ApplyWeaponCoreMorph(WorldCatalog.IndexOf(WorldIds.City));
+            PickupWallet.SetPowerCells(30);
         }
 
         /// <summary>MV-689 AC2's fixture: a player who unlocked every non-PRIMARY category and invested

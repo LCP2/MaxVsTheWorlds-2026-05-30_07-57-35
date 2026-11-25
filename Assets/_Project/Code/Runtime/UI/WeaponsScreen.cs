@@ -2297,7 +2297,7 @@ namespace MaxWorlds.UI
             _railTabs.Clear();
             _railOrder.Clear();
             _treePanel = null; _treePanelBorder = null; _treeSlotText = null; _treeNameText = null;
-            _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailValue = null; _detailLevel = null;
+            _detailDesc = null; _detailKeyChip = null; _detailKeyNote = null; _detailPanel = null; _detailPath = null; _detailName = null; _detailEffect = null; _detailValue = null; _detailLevel = null;
             _detailUpgrade = null; _detailUpgradeBg = null; _detailUpgradeText = null; _selectionRing = null; _detailPips.Clear();
             for (int i = 0; i < 3; i++) { _costLabel[i] = null; _costValue[i] = null; _costIcon[i] = null; }
             if (_quitDialog != null)
@@ -2716,6 +2716,14 @@ namespace MaxWorlds.UI
         private Image _detailPanel, _detailUpgradeBg, _selectionRing;
         private TextMeshProUGUI _detailPath, _detailName, _detailEffect, _detailValue, _detailLevel, _detailUpgradeText;
         private Button _detailUpgrade;
+        private TextMeshProUGUI _detailDesc, _detailKeyNote;
+        private Image _detailKeyChip;
+        private static readonly Color KeyChipFill = new Color32(0xFF, 0xC4, 0x28, 0xFF);
+        private static readonly Color KeyChipText = new Color32(0x1A, 0x12, 0x00, 0xFF);
+        private static readonly Color KeyNoteColor = new Color32(0xFF, 0xE3, 0x9A, 0xFF);
+        /// <summary>MV-1453: the detail panel's description line and KEY chip (null when no node is selected).</summary>
+        public TextMeshProUGUI DetailDescriptionText => _detailDesc;
+        public Image DetailKeyChip => _detailKeyChip;
         private readonly List<Image> _detailPips = new List<Image>();
         // MV-1424: the cost block - three rows (Cost / You have / Need), label left, parts icon + value right.
         private readonly TextMeshProUGUI[] _costLabel = new TextMeshProUGUI[3], _costValue = new TextMeshProUGUI[3];
@@ -2821,6 +2829,33 @@ namespace MaxWorlds.UI
             _detailLevel.fontSizeMin = 14f; _detailLevel.fontSizeMax = 28f;
             _detailLevel.overflowMode = TextOverflowModes.Ellipsis;
             _detailLevel.raycastTarget = false;
+
+            // MV-1453: the description sits in the band under the level line (0.85x its size, light grey), the KEY
+            // chip under it; both end above the cost block.
+            _detailDesc = AddText(tr, 24, new Color32(0xC8, 0xCB, 0xD6, 0xFF), TextAnchor.UpperLeft);
+            PlaceTopLeft(_detailDesc.rectTransform, new Rect(DetailPad, 284f, inner, 64f));
+            _detailDesc.textWrappingMode = TextWrappingModes.Normal;
+            _detailDesc.enableAutoSizing = false;
+            _detailDesc.fontSize = 28f * 0.85f;
+            _detailDesc.overflowMode = TextOverflowModes.Truncate;
+            _detailDesc.raycastTarget = false;
+            _detailDesc.text = "";
+            _detailKeyChip = AddImage(tr, CrispUi.RoundedBox(32, 0.5f), KeyChipFill, "Key Chip");
+            _detailKeyChip.type = Image.Type.Sliced;
+            _detailKeyChip.raycastTarget = false;
+            PlaceTopLeft(_detailKeyChip.rectTransform, new Rect(DetailPad, 354f, 100f, 32f));
+            var keyTxt = AddText(_detailKeyChip.rectTransform, 22, KeyChipText, TextAnchor.MiddleCenter);
+            Stretch(keyTxt.rectTransform);
+            keyTxt.fontStyle = FontStyles.Bold;
+            keyTxt.textWrappingMode = TextWrappingModes.NoWrap;
+            keyTxt.raycastTarget = false;
+            keyTxt.text = "* KEY";
+            _detailKeyNote = AddText(tr, 22, KeyNoteColor, TextAnchor.MiddleLeft);
+            PlaceTopLeft(_detailKeyNote.rectTransform, new Rect(DetailPad + 108f, 354f, inner - 108f, 32f));
+            _detailKeyNote.textWrappingMode = TextWrappingModes.NoWrap;
+            _detailKeyNote.raycastTarget = false;
+            _detailKeyNote.text = "a top upgrade";
+            _detailKeyChip.gameObject.SetActive(false); _detailKeyNote.gameObject.SetActive(false);
 
             // MV-1424: cost block above the button - 3 rows of CostRowH, label left, parts icon + value right-aligned.
             float rowsTop = d.height - DetailPad - DetailButtonH - 14f - 3f * CostRowH;
@@ -2957,6 +2992,8 @@ namespace MaxWorlds.UI
             _detailLevel.gameObject.SetActive(has); _detailUpgradeBg.gameObject.SetActive(has); _detailEffect.gameObject.SetActive(has); _detailValue.gameObject.SetActive(has);
             if (_selectionRing != null) _selectionRing.gameObject.SetActive(has);
             foreach (var pip in _detailPips) pip.gameObject.SetActive(false);
+            _detailDesc.gameObject.SetActive(false); _detailDesc.text = "";
+            _detailKeyChip.gameObject.SetActive(false); _detailKeyNote.gameObject.SetActive(false);
             for (int i = 0; i < 3; i++)
             {
                 _costLabel[i].gameObject.SetActive(false); _costValue[i].gameObject.SetActive(false); _costIcon[i].gameObject.SetActive(false);
@@ -2972,6 +3009,11 @@ namespace MaxWorlds.UI
             _detailPath.color = fam;
             _detailName.text = node != null ? node.Label : fusion.Label;
             SetDetailEffect(node != null ? DetailEffectLine(node) : "");   // MV-1400 / MV-1415
+            if (node != null && RigDescriptions.TryGet(WeaponSystemState.ActivePrimary, WeaponSystemState.SecondaryKind, id, out var desc))
+            {
+                _detailDesc.text = desc.Text; _detailDesc.gameObject.SetActive(true);
+                _detailKeyChip.gameObject.SetActive(desc.Key); _detailKeyNote.gameObject.SetActive(desc.Key);
+            }
 
             string buttonText; bool live;
             int costShown = -1;   // MV-1424: the price the cost block shows (-1 = no block: maxed / forged)
@@ -3596,6 +3638,24 @@ namespace MaxWorlds.UI
                 }
             }
 
+            // MV-1453: KEY nodes carry a small gold chip under the label block.
+            if (RigDescriptions.IsKey(WeaponSystemState.ActivePrimary, WeaponSystemState.SecondaryKind, ab.Id))
+            {
+                var lrect = _treeLabelRects.TryGetValue(ab.Id, out var kr) ? kr : new Rect(spot.X - 90f, spot.Y + r + 2f, 180f, LabelBlockH - 2f);
+                bool rightAligned = spot.RootAlone;
+                var chip = AddImage(shell.Root, CrispUi.RoundedBox(32, 0.5f), KeyChipFill, "Key Chip");
+                chip.type = Image.Type.Sliced; chip.raycastTarget = false;
+                Anchor(chip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                chip.rectTransform.sizeDelta = new Vector2(70f, 24f);
+                float chipCx = rightAligned ? lrect.x + 35f - spot.X : lrect.center.x - spot.X;
+                chip.rectTransform.anchoredPosition = new Vector2(chipCx, -(lrect.yMax + 12f - spot.Y));
+                var ct = AddText(chip.rectTransform, 18, KeyChipText, TextAnchor.MiddleCenter);
+                Stretch(ct.rectTransform);
+                ct.fontStyle = FontStyles.Bold; ct.textWrappingMode = TextWrappingModes.NoWrap; ct.raycastTarget = false;
+                ct.text = "* KEY";
+                shell.KeyChip = chip;
+            }
+
             // MV-1117 (Lee, 6 Oct 2026 device playtest): "Make the x/y sentinels text in the add circle
             // much bigger and indicate how many parts are needed to add a sentinel." u_slt is the one
             // node whose own level pill the player reads as "how many sentinels can I field" — doubled
@@ -4058,6 +4118,8 @@ namespace MaxWorlds.UI
             /// <summary>MV-1440: the resolved state symbol, and the green "can afford" badge (a disc with an up-arrow child) on the hex's top-right corner.</summary>
             public RigNodeSymbol Symbol;
             public Image AffordBadge;
+            /// <summary>MV-1453: the gold "KEY" chip under a KEY node's label (null otherwise).</summary>
+            public Image KeyChip;
 
             /// <summary>MV-516: the hex FILL/OUTLINE alpha <see cref="WeaponsScreen.RefreshAbilityNode"/>
             /// (or <see cref="WeaponsScreen.RefreshCandidateNode"/>) most recently set for this node's
