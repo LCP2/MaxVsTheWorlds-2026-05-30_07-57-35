@@ -51,7 +51,6 @@ namespace MaxWorlds.Weapons
         private int _bouncesRemaining;
         private int _bouncesTaken;
         private float _damage;
-        private float _robotDamage;
         private float _bankBonusPerBounce;
         private float _turnRateDegPerSec;
         private float _lookaheadMetres;
@@ -84,7 +83,7 @@ namespace MaxWorlds.Weapons
         public static RicochetDisc Spawn(Vector3 origin, Vector3 direction, float speed, int bounces,
             int powerLevel, int aimLevel,
             float damage, float bankBonusPerBounce, float turnRateDegPerSec, float lookaheadMetres,
-            float radius, float lifetime, float robotDamage = -1f)
+            float radius, float lifetime)
         {
             PruneDestroyedPoolEntries();
 
@@ -124,7 +123,6 @@ namespace MaxWorlds.Weapons
             disc._bouncesRemaining = Mathf.Max(0, bounces);
             disc._bouncesTaken = 0;
             disc._damage = damage;
-            disc._robotDamage = robotDamage >= 0f ? robotDamage : damage;
             disc._bankBonusPerBounce = bankBonusPerBounce;
             disc._turnRateDegPerSec = turnRateDegPerSec;
             disc._lookaheadMetres = lookaheadMetres;
@@ -220,7 +218,7 @@ namespace MaxWorlds.Weapons
                 {
                     if (target is RobotEnemy robot && robot.IsDormant) robot.Activate();
                     float multiplier = 1f + _bankBonusPerBounce * _bouncesTaken;
-                    target.TakeDamage(new DamageInfo((target is RobotEnemy ? _robotDamage : _damage) * multiplier, contact.point, _direction,
+                    target.TakeDamage(new DamageInfo(_damage * multiplier, contact.point, _direction,
                         Team.Player, source: DamageSource.PrimaryWeapon));
                 }
 

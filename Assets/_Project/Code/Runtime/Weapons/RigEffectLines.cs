@@ -69,7 +69,7 @@ namespace MaxWorlds.Weapons
                 case WeaponCatalog.PrimaryKind.Ricochet:
                     switch (id)
                     {
-                        case "p_dmg": v = Ricochet.RobotDamageByLevel[Mathf.Clamp(l, 1, Ricochet.RobotDamageByLevel.Length) - 1]; return true;
+                        case "p_dmg": v = Ricochet.PowerDamageByLevel[Mathf.Clamp(l, 1, Ricochet.PowerDamageByLevel.Length) - 1]; return true;
                         case "p_ric": v = l; return true;   // the board's own level IS the bounce count (Ricochet.BouncesPerDisc)
                         case "p_aim": v = Ricochet.AimTurnRateDegPerSecByLevel[Mathf.Clamp(l, 0, Ricochet.AimTurnRateDegPerSecByLevel.Length - 1)]; u = "°/s"; return true;
                         case "p_rof": v = Ricochet.RateDiscsPerSecondByLevel[Mathf.Clamp(l, 1, Ricochet.RateDiscsPerSecondByLevel.Length) - 1]; u = "/s"; return true;
